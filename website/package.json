@@ -16,13 +16,12 @@
     "@fontsource-variable/bricolage-grotesque": "^5.2.10",
     "@fontsource-variable/hanken-grotesk": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
-    "@fontsource-variable/onest": "^5.3.1",
-    "@fontsource/martian-mono": "^5.3.0",
+    "@fontsource/geist": "^5.3.0",
+    "@fontsource/geist-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.3.0",
     "astro": "^6.4.2",
     "preact": "^10.29.2",
-    "tailwindcss": "^4.3.0",
-    "three": "^0.186.1"
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "wrangler": "^4.96.0"

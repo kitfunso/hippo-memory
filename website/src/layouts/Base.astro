@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { Font } from 'astro:assets';
 import { site, faq } from '../content/site';
 import BackgroundFx from '../components/BackgroundFx.astro';
 
@@ -9,7 +10,7 @@ interface Props {
 }
 
 const {
-  title = `${site.name}: memory for AI agents that learns what is wrong`,
+  title = `${site.name}: ${site.positioning}`,
   description = site.description,
 } = Astro.props;
 
@@ -71,7 +72,10 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <meta name="theme-color" content="#08080b" />
+    <!-- preload only the faces the first screen paints; 600 loads on use -->
+    <Font cssVariable="--font-geist" preload={[{ weight: '400' }, { weight: '500' }]} />
+    <Font cssVariable="--font-geist-mono" preload={[{ weight: '400' }]} />
+    <meta name="theme-color" content="#0b0f0c" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

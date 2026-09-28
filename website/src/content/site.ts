@@ -13,6 +13,7 @@ export const site = {
   name: 'hippo',
   pkg: 'hippo-memory',
   version: pkg.version, // npm-published hippo-memory version, imported at build time from the repo-root package.json
+  positioning: 'memory for AI agents that learns what is wrong', // page title and hero eyebrow
   // Hero headline (2026-09-24 Terminal Native direction), split for accent emphasis.
   tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
   description:
@@ -49,33 +50,39 @@ export const proofs = [
   },
 ] as const;
 
+// Quickstart is the nav's install button, so it is not repeated here.
 export const nav = [
   { label: 'How it works', href: '/#how' },
   { label: 'Teams', href: '/teams/' },
   { label: 'Benchmarks', href: '/benchmarks/' },
-  { label: 'Quickstart', href: '/quickstart/' },
   { label: 'Compare', href: '/#compare' },
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-/** A two-day Claude Code session with hippo's hooks installed. The hippo lines are the
- *  messages hippo really prints (capture-error, the per-prompt hook, post-compact); the
- *  project and commands are an illustration. `note` = a day label, `cmd` = a prompt,
- *  `err` = a failed tool call, `ok` = hippo, `out` = agent output. */
-export const terminal: Array<{ kind: 'note' | 'cmd' | 'err' | 'ok' | 'out'; text: string; chip?: 'verified' | 'observed' }> = [
+/** A two-day Claude Code session with hippo's hooks. The hippo lines are what hippo really prints;
+ *  the project and commands are an illustration. Kinds: note = day label, cmd = prompt, out = agent
+ *  output, err = failed tool call, caught = hippo storing it, ok = hippo, mem = a memory in context. */
+export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' | 'ok' | 'mem'; text: string }> = [
   { kind: 'note', text: 'Monday · billing-service' },
   { kind: 'cmd', text: 'add the refunds endpoint' },
   { kind: 'out', text: 'Bash(npm install stripe)' },
   { kind: 'err', text: 'lockfile is pnpm-lock.yaml; npm install would rewrite it' },
-  { kind: 'ok', text: 'hippo · stored error memory', chip: 'observed' },
+  { kind: 'caught', text: 'hippo · stored error memory (observed)' },
   { kind: 'note', text: 'Tuesday · new session' },
   { kind: 'cmd', text: 'add a webhook for failed payments' },
   { kind: 'ok', text: 'hippo · 2 memories in context' },
-  { kind: 'out', text: 'billing uses pnpm; never run npm install here' },
+  { kind: 'mem', text: 'billing uses pnpm; never run npm install here' },
   { kind: 'out', text: 'Bash(pnpm add stripe)  ✓' },
   { kind: 'cmd', text: '/compact' },
   { kind: 'ok', text: 'Hippo saved your task snapshot and 2 new memories before compacting.' },
 ];
+
+/** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */
+export const commands = [
+  { cmd: 'hippo capture-error', body: 'Real failures become lessons. Interrupts, declined permissions and empty searches are skipped.' },
+  { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and it stops coming back.' },
+  { cmd: 'hippo doctor', body: 'One command checks the install and names the fix for anything missing.' },
+] as const;
 
 export const problem = {
   kicker: 'The problem',

@@ -1,5 +1,5 @@
 ---
-import { site, proofs, worksWith } from '../content/site';
+import { site, proofs, worksWith, commands } from '../content/site';
 import Terminal from './Terminal.astro';
 import CopyCommand from './CopyCommand.astro';
 import { getStats } from '../lib/stats';
@@ -11,149 +11,72 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
   <div class="pointer-events-none absolute inset-0 -z-10 hero-glow"></div>
   <div class="pointer-events-none absolute inset-0 -z-10 dot-grid opacity-70"></div>
 
-  <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 lg:grid-cols-2 lg:gap-10 lg:py-28">
-    <div class="min-w-0">
-      <span
-        class="reveal inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-xs text-zinc-400"
-        style="animation-delay: 0ms"
-      >
-        <span class="h-1.5 w-1.5 rounded-full bg-acc-violet"></span>
-        v{site.version} · MIT
-      </span>
+  <div class="mx-auto max-w-6xl px-5 pb-24 pt-10 sm:pt-12">
+    <!-- Terminal Native mockup: the pitch and install on the left, the session on the right. -->
+    <div class="grid items-start gap-12 lg:grid-cols-[minmax(0,32.5rem)_minmax(0,1fr)]">
+      <div class="flex min-w-0 max-w-xl flex-col gap-6">
+        <p class="reveal font-mono text-xs text-zinc-400 sm:text-[13px]" style="animation-delay: 0ms">{site.positioning}</p>
 
-      <h1
-        class="reveal mt-6 font-display text-4xl font-medium leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl"
-        style="animation-delay: 70ms"
-      >
-        {site.tagline.lead}<br /><span class="text-gradient">{site.tagline.accent}</span>
-      </h1>
-
-      <p
-        class="reveal mt-6 max-w-md text-lg leading-relaxed text-zinc-400"
-        style="animation-delay: 140ms"
-      >
-        {site.description}
-      </p>
-
-      <div class="reveal mt-4 flex max-w-md flex-col gap-1.5" style="animation-delay: 170ms">
-        {proofs.map((p) => (
-          <p class="text-sm leading-relaxed text-zinc-400">
-            {'href' in p && p.href ? (
-              <a
-                class="link font-medium tabular-nums"
-                href={p.href}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {p.stat}<span class="sr-only"> ({p.hrefLabel}, opens in new tab)</span>
-              </a>
-            ) : (
-              <span class="font-medium text-zinc-200 tabular-nums">{p.stat}</span>
-            )}{' '}{p.text}
-          </p>
-        ))}
-      </div>
-
-      <div class="reveal mt-8 max-w-md" style="animation-delay: 210ms">
-        <CopyCommand command={site.installCmd} size="lg" />
-      </div>
-
-      <div class="reveal mt-5 flex flex-wrap items-center gap-3" style="animation-delay: 280ms">
-        <a
-          href="/quickstart/"
-          class="inline-flex items-center gap-2 rounded-xl bg-acc-violet px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90"
+        <h1
+          class="reveal text-[2.5rem] leading-[1.1] tracking-[-0.03em] sm:text-5xl lg:text-[3.25rem]"
+          style="animation-delay: 60ms"
         >
-          Get started
-        </a>
-        <a
-          href={site.links.docs}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 rounded-xl border border-white/12 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/5"
-        >
-          Read the docs
-        </a>
-      </div>
+          {site.tagline.lead}<br /><span class="text-gradient">{site.tagline.accent}</span>
+        </h1>
 
-      <div class="reveal mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400" style="animation-delay: 310ms">
-        <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 transition hover:text-zinc-100">
-          <span aria-hidden="true" class="text-amber-300">★</span>
-          <span class="font-medium text-zinc-200 tabular-nums">{stats.starsLabel}</span> stars
-        </a>
-        <span aria-hidden="true" class="text-zinc-600">·</span>
-        <a href={site.links.npm} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
-          <span class="font-medium text-zinc-200 tabular-nums">{stats.downloadsLabel}</span> downloads
-        </a>
-        <span aria-hidden="true" class="text-zinc-600">·</span>
-        <a href={site.links.atlas} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
-          compared in the agent-memory-atlas
-        </a>
-      </div>
+        <p class="reveal text-lg leading-relaxed text-zinc-300" style="animation-delay: 120ms">
+          {site.description}
+        </p>
 
-      <div class="reveal mt-9" style="animation-delay: 340ms">
-        <p class="mb-2 font-mono text-xs uppercase tracking-wider text-zinc-400">Works with</p>
-        <div class="works-marquee relative w-full overflow-hidden" aria-label={`Works with ${worksWith.join(', ')}`}>
-          <div class="works-track flex w-max">
-            <ul class="works-group flex shrink-0 list-none p-0 text-sm text-zinc-400">
-              {worksWith.map((tool) => (
-                <li class="flex items-center gap-1.5 whitespace-nowrap">
-                  <span class="h-1 w-1 rounded-full bg-zinc-600"></span>{tool}
-                </li>
-              ))}
-            </ul>
-            <ul class="works-group flex shrink-0 list-none p-0 text-sm text-zinc-400" aria-hidden="true">
-              {worksWith.map((tool) => (
-                <li class="flex items-center gap-1.5 whitespace-nowrap">
-                  <span class="h-1 w-1 rounded-full bg-zinc-600"></span>{tool}
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div class="reveal" style="animation-delay: 180ms">
+          <CopyCommand command={site.installCmd} size="lg" />
+          <ul aria-label="Works with" class="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs text-zinc-400">
+            {worksWith.map((tool) => <li>{tool}</li>)}
+          </ul>
         </div>
+
+        <ul class="reveal space-y-2 text-sm leading-6 text-zinc-400" style="animation-delay: 240ms">
+          {proofs.map((p) => (
+            <li>
+              {'href' in p && p.href ? (
+                <a class="link font-medium tabular-nums" href={p.href} target="_blank" rel="noopener noreferrer">
+                  {p.stat}<span class="sr-only"> ({p.hrefLabel}, opens in new tab)</span>
+                </a>
+              ) : (
+                <span class="font-medium text-zinc-200 tabular-nums">{p.stat}</span>
+              )}{' '}{p.text}
+            </li>
+          ))}
+        </ul>
+
+        <p class="reveal flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-400" style="animation-delay: 280ms">
+          <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
+            <span class="font-medium text-zinc-200 tabular-nums">{stats.starsLabel}</span> stars
+          </a>
+          <span aria-hidden="true" class="text-zinc-600">·</span>
+          <a href={site.links.npm} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
+            <span class="font-medium text-zinc-200 tabular-nums">{stats.downloadsLabel}</span> downloads
+          </a>
+          <span aria-hidden="true" class="text-zinc-600">·</span>
+          <a href={site.links.atlas} target="_blank" rel="noopener noreferrer" class="transition hover:text-zinc-100">
+            compared in the agent-memory-atlas
+          </a>
+        </p>
+      </div>
+
+      <div class="reveal min-w-0" style="animation-delay: 200ms">
+        <Terminal />
+        <p class="mt-3 text-balance text-center font-mono text-xs text-zinc-400">an illustrated session · the hippo lines are real hippo output</p>
       </div>
     </div>
 
-    <div class="reveal min-w-0 lg:pl-4" style="animation-delay: 220ms">
-      <Terminal />
-      <p class="mt-3 text-center font-mono text-xs text-zinc-400">an illustrated session · the hippo lines are real hippo output</p>
-    </div>
+    <ul class="reveal mt-16 grid gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800 md:grid-cols-3" style="animation-delay: 320ms">
+      {commands.map((c) => (
+        <li class="flex flex-col gap-2 bg-zinc-950 p-6">
+          <code class="font-mono text-[13px] text-acc-violet">{c.cmd}</code>
+          <p class="text-[15px] leading-6 text-zinc-300">{c.body}</p>
+        </li>
+      ))}
+    </ul>
   </div>
 </section>
-
-<style>
-  /* "Works with" infinite marquee. Two identical groups; translateX(-50%) loops seamlessly. */
-  .works-track {
-    animation: works-marquee 26s linear infinite;
-  }
-  .works-marquee:hover .works-track {
-    animation-play-state: paused;
-  }
-  .works-group {
-    gap: 1.25rem;
-    padding-right: 1.25rem;
-  }
-  @keyframes works-marquee {
-    to {
-      transform: translateX(-50%);
-    }
-  }
-  .works-marquee {
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
-    mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .works-track {
-      animation: none;
-      width: auto;
-      flex-wrap: wrap;
-    }
-    .works-group {
-      flex-wrap: wrap;
-      gap: 1rem 0.375rem;
-      padding-right: 0;
-    }
-    .works-group[aria-hidden="true"] {
-      display: none;
-    }
-  }
-</style>

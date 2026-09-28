@@ -3,8 +3,8 @@
  * The hippo mark, flat: the "Spiral" logo study (a hippocampus curl drawn with
  * memories) reduced to dots that survive 16 px. Bright mint dots are recalled
  * memories, dim ones are fading, the amber dot is a memory marked wrong.
- * Writes src/content/logo-mark.json (used by Logo.astro) and public/favicon.svg.
- * Deterministic: re-running produces the same files.
+ * Writes public/favicon.svg only; the site itself uses the ~/hippo wordmark.
+ * Deterministic: re-running produces the same file.
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -32,9 +32,7 @@ for (let i = 0; i < N; i++) {
 }
 dots.forEach((d) => { d.r = +d.r.toFixed(2); });
 
-writeFileSync(join(root, 'src', 'content', 'logo-mark.json'), JSON.stringify(dots, null, 2) + '\n');
-
 const circles = dots.map((d) => `<circle cx="${d.x}" cy="${d.y}" r="${d.r}" fill="${d.fill}"${d.opacity < 1 ? ` fill-opacity="${d.opacity}"` : ''}/>`).join('');
 writeFileSync(join(root, 'public', 'favicon.svg'),
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${INK}"/>${circles}</svg>\n`);
-console.log(`wrote logo-mark.json and favicon.svg (${dots.length} dots)`);
+console.log(`wrote favicon.svg (${dots.length} dots)`);

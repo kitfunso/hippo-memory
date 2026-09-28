@@ -38,12 +38,12 @@ const kpis = [
   <main id="main">
     <section class="relative overflow-hidden">
       <div class="pointer-events-none absolute inset-0 -z-10 hero-glow"></div>
-      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 lg:grid-cols-2 lg:py-24">
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-24 pt-10 sm:pt-12 lg:grid-cols-2">
         <div class="min-w-0">
           <span class="inline-flex items-center gap-2 rounded-full border border-acc-amber/40 bg-acc-amber/10 px-3 py-1 font-mono text-xs text-acc-amber">
             Enterprise v1 · in development · pilots open
           </span>
-          <h1 class="mt-6 font-display text-4xl font-medium leading-[1.08] tracking-tight sm:text-5xl">
+          <h1 class="mt-6 font-display text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">
             The memory layer your <span class="text-gradient">platform team</span> can approve.
           </h1>
           <p class="mt-6 max-w-lg text-lg leading-relaxed text-zinc-400">
@@ -77,7 +77,7 @@ const kpis = [
     </section>
 
     <section class="border-t border-white/5">
-      <div class="mx-auto grid max-w-6xl gap-4 px-5 py-20 md:grid-cols-3">
+      <div class="mx-auto grid max-w-6xl gap-4 px-5 py-24 md:grid-cols-3">
         {pillars.map((p) => (
           <div class="glass flex flex-col gap-3 rounded-2xl p-6">
             <span class:list={['self-start rounded px-2 py-0.5 font-mono text-xs', p.status === 'shipped' ? 'bg-acc-violet/15 text-acc-violet' : 'bg-acc-amber/15 text-acc-amber']}>{p.status}</span>

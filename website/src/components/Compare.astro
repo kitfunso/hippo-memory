@@ -50,7 +50,7 @@ const rows = homeFeatures.map((f) => {
             <tr class="border-b border-white/10">
               <th
                 scope="col"
-                class="sticky left-0 z-20 w-40 border-r border-white/10 bg-[#0c0c11] px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-400"
+                class="sticky left-0 z-20 w-40 border-r border-white/10 bg-zinc-900 px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-400"
               >
                 Feature
               </th>
@@ -74,7 +74,7 @@ const rows = homeFeatures.map((f) => {
               <tr class:list={['border-b border-white/5', i % 2 === 1 ? 'bg-white/[0.015]' : '']}>
                 <th
                   scope="row"
-                  class="sticky left-0 z-10 w-40 border-r border-white/10 bg-[#0c0c11] px-4 py-3 text-left font-normal text-zinc-200"
+                  class="sticky left-0 z-10 w-40 border-r border-white/10 bg-zinc-900 px-4 py-3 text-left font-normal text-zinc-200"
                 >
                   {row.feature}
                 </th>
@@ -94,11 +94,11 @@ const rows = homeFeatures.map((f) => {
       </div>
       <!-- mobile scroll cue: right-edge fade over the scroll container -->
       <div
-        class="pointer-events-none absolute inset-y-0 right-0 w-14 rounded-r-2xl bg-gradient-to-l from-[#08080b]/90 to-transparent sm:hidden"
+        class="pointer-events-none absolute inset-y-0 right-0 w-14 rounded-r-2xl bg-gradient-to-l from-zinc-950/90 to-transparent sm:hidden"
         aria-hidden="true"
       ></div>
     </div>
-    <p class="mt-2.5 font-mono text-xs text-zinc-400 sm:hidden">{compare.scrollCue} →</p>
+    <p class="mt-2 font-mono text-xs text-zinc-400 sm:hidden">{compare.scrollCue} →</p>
 
     <p class="mt-5 text-sm">
       <a href={compare.sourceHref} target="_blank" rel="noopener noreferrer" class="link">
@@ -106,11 +106,11 @@ const rows = homeFeatures.map((f) => {
       </a>
     </p>
 
-    <div class="mt-4 space-y-1.5" data-reveal>
-      {comparison.footnotes.map((f) => <p class="max-w-2xl text-sm leading-relaxed text-zinc-400">{f}</p>)}
-      <p class="max-w-2xl text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
+    <div class="mt-4 space-y-2" data-reveal>
+      {comparison.footnotes.map((f) => <p class="max-w-lg text-sm leading-relaxed text-zinc-400">{f}</p>)}
+      <p class="max-w-lg text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
     </div>
 
-    <p class="mt-6 max-w-2xl text-sm leading-relaxed text-zinc-400" data-reveal>{comparison.closing}</p>
+    <p class="mt-6 max-w-lg text-sm leading-relaxed text-zinc-400" data-reveal>{comparison.closing}</p>
   </div>
 </section>

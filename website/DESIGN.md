@@ -1,13 +1,14 @@
 ---
 name: hippo-memory.com
 direction: terminal-native, receipts-led developer marketing (2026-09-24 redesign)
-updated: 2026-09-24
+updated: 2026-09-28
 source_of_truth: true
 tokens:
   font:
-    display: "Martian Mono"                   # h1-h3, code, numbers, eyebrows, stats
-    sans: "Onest Variable"                    # body
-    mono: "Martian Mono"
+    display: "Geist"                          # h1-h3, weight 500
+    sans: "Geist"                             # body
+    mono: "Geist Mono"                        # code, terminal, nav, eyebrows, numbers, stats
+    loading: "self-hosted via astro.config fonts: latin woff2, weights 400/500/600, display swap, metric-matched fallbacks"
   color:
     bg: "#0b0f0c"                   # ink
     accent_mint: "#7ce38b"          # recalled; token names acc-violet/acc-cyan kept, both resolve to mint
@@ -23,10 +24,10 @@ tokens:
   layout:
     container: "72rem"              # max-w-6xl. ONE container token sitewide: nav, footer, every section. No max-w-5xl wrappers.
     section_padding_y: "6rem"       # py-24 rhythm on all pages
-    prose_measure: "65-75ch"        # cap footnotes/summaries at max-w-2xl
+    prose_measure: "65-75ch"        # text-sm footnotes, FAQ answers and summaries cap at max-w-lg
   type_scale:
     floor: "0.75rem"                # 12px. No text-[10px]/[11px] anywhere
-    h1_leading: "1.03"              # one display leading token
+    h1_leading: "1.1"               # one display leading token
     h2: "text-3xl sm:text-4xl"      # one h2 pair sitewide; h1 always a clear step above; no h2 may match another page's h1
   links:
     color: "#22d3ee"
@@ -42,7 +43,9 @@ tokens:
 
 # hippo-memory.com design system
 
-**2026-09-24 redesign:** Terminal Native direction. The hero shows the product (a Claude Code session with hippo's real output), the brand mark is the Spiral (a hippocampus drawn with memories: mint recalled, dim fading, amber marked wrong; `scripts/make-logo.mjs` for the flat mark, `MemorySpiral.astro` for the three.js one, loaded lazily), receipts include published losses, and `/teams` carries the company pitch. Rules below still apply where they do not name the old violet/cyan palette.
+**2026-09-24 redesign:** Terminal Native direction. The hero shows the product (a Claude Code session with hippo's real output), receipts include published losses, and `/teams` carries the company pitch. Rules below still apply where they do not name the old violet/cyan palette.
+
+**2026-09-28:** the hero follows the Terminal Native mockup: positioning line, h1, lead, install command and agent names on the left, the session on the right, three commands below. The brand mark on the site is the `~/hippo` wordmark in Geist Mono. The three.js Spiral is gone; `scripts/make-logo.mjs` only draws the favicon.
 
 Codified from the shipped site plus the 2026-06-10 design audit
 (C:/Users/skf_s/design-audits/hippo-memory-2026-06-10/REPORT.md). The audit's
@@ -59,9 +62,10 @@ gradient is a scalpel, not a wash.
 
 Mono uppercase eyebrow, display h2, muted body. Gradient marks exactly one
 keyword per h1, always on the brand side of a comparison (hippo, never the
-competitor). Primary CTA above the fold is adoption ("Get started" ->
-/quickstart/), never vanity (GitHub stars live in the nav badge). One proof
-line under the hero subhead.
+competitor). One primary CTA per view: the filled nav `install` button
+(-> /quickstart/) is adoption, never vanity (GitHub stars sit quietly in the
+nav). A page with its own primary action (/teams: the pilot) turns the nav
+button to an outline. Proof lines sit under the hero install command.
 
 ## Copy rules
 
@@ -76,7 +80,7 @@ means wrong, superseded or unused, never age (ROADMAP FE4).
 AA 4.5:1 for all prose (zinc-400 minimum on bg), 3:1 for non-text glyphs.
 Skip link, landmarks (labeled when repeated), one h1 per page, no skipped
 heading levels, scope attrs on all comparison tables, aria-current on the
-active nav item, logo links home, visible focus (cyan outline), full
+active nav item, the wordmark links home, visible focus (cyan outline), full
 prefers-reduced-motion handling, 44px touch targets.
 
 ## Comparison surfaces

@@ -66,20 +66,20 @@ export default function DecayCurve() {
     >
       <defs>
         <linearGradient id="decayStroke" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#a78bfa" />
-          <stop offset="100%" stop-color="#22d3ee" />
+          <stop offset="0%" stop-color="#7ce38b" />
+          <stop offset="100%" stop-color="#a7f0b1" />
         </linearGradient>
         <linearGradient id="decayFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="rgba(167,139,250,0.18)" />
-          <stop offset="100%" stop-color="rgba(34,211,238,0)" />
+          <stop offset="0%" stop-color="rgba(124,227,139,0.18)" />
+          <stop offset="100%" stop-color="rgba(124,227,139,0)" />
         </linearGradient>
       </defs>
 
       {/* axes */}
       <line x1="24" y1="184" x2="464" y2="184" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
       <line x1="24" y1="20" x2="24" y2="184" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
-      <text x="8" y="30" fill="#a1a1aa" font-size="9" font-family="monospace" transform="rotate(-90 8 30)" style="transform-box: fill-box;">strength</text>
-      <text x="430" y="200" fill="#a1a1aa" font-size="9" font-family="monospace">time</text>
+      <text x="8" y="30" fill="#9aa79e" font-size="9" class="font-mono" transform="rotate(-90 8 30)" style="transform-box: fill-box;">strength</text>
+      <text x="430" y="200" fill="#9aa79e" font-size="9" class="font-mono">time</text>
 
       {/* area fill under curve */}
       <path
@@ -104,8 +104,8 @@ export default function DecayCurve() {
       {/* recall markers */}
       {recalls.map((r, i) => (
         <g opacity={drawn ? 1 : 0} style={{ transition: animating ? `opacity 0.5s ease ${0.9 + i * 0.4}s` : 'none' }}>
-          <circle cx={r.x} cy={r.y} r="4.5" fill="#22d3ee" class="decay-dot" />
-          <text x={r.x + 8} y={r.y - 4} fill="#a1a1aa" font-size="9.5" font-family="monospace">recall</text>
+          <circle cx={r.x} cy={r.y} r="4.5" fill="#7ce38b" class="decay-dot" />
+          <text x={r.x + 8} y={r.y - 4} fill="#9aa79e" font-size="9.5" class="font-mono">recall</text>
         </g>
       ))}
     </svg>

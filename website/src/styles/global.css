@@ -1,19 +1,13 @@
-/* hippo-memory landing page - design system (2026-09-24 "Terminal Native" direction)
-   Ink ground, one mint accent for what is recalled, amber for what was marked
-   wrong. Martian Mono carries the display and code, Onest the body. The old
-   acc-violet / acc-cyan token names are kept so every component re-themes
-   without edits; both now resolve to the mint family. */
+/* hippo-memory design system, "Terminal Native": ink ground, mint = recalled, amber = marked wrong.
+   Geist sets text and headings, Geist Mono code, terminal and nav (faces come from astro.config fonts).
+   acc-violet / acc-cyan keep their old names so components re-theme without edits; both are mint. */
 
-@import '@fontsource/martian-mono/400.css';
-@import '@fontsource/martian-mono/500.css';
-@import '@fontsource/martian-mono/700.css';
-@import '@fontsource-variable/onest';
 @import 'tailwindcss';
 
 @theme {
-  --font-display: 'Martian Mono', ui-monospace, 'SFMono-Regular', monospace;
-  --font-sans: 'Onest Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Martian Mono', ui-monospace, 'SFMono-Regular', monospace;
+  --font-display: var(--font-geist);
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
 
   /* brand accents: mint = recalled, amber = marked wrong */
   --color-acc-violet: #7ce38b;
@@ -37,7 +31,6 @@
   --color-term-bg: #0f1411;
   --color-term-prompt: #7ce38b;
   --color-term-ok: #7ce38b;
-  --color-term-dim: #9aa79e;
   --color-term-fg: #e6ede7;
   --color-term-err: #f2837b;
 }
@@ -66,7 +59,7 @@
 
   h1, h2, h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.035em;
+    letter-spacing: -0.025em;
     font-weight: 500;
   }
 
@@ -134,7 +127,7 @@ header.glass {
 }
 
 /* ---- current-page nav markers (aria-current set in Nav.astro) ---- */
-header a[aria-current='page'] {
+nav a[aria-current='page'] {
   color: var(--color-acc-cyan);
 }
 /* the mobile chip rail additionally gets a mint border + faint fill */
