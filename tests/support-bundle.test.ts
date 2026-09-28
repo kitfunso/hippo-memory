@@ -269,6 +269,25 @@ describe('buildSupportBundle', () => {
     }
   });
 
+  it.skipIf(process.platform !== 'win32')('swaps a short Windows home only after its drive, and a drive root never', () => {
+    const s = seed();
+    // A custom HOME of Q:\x leaves too little below the drive to find alone; the home need not exist to be swapped.
+    const lines = [
+      'Q:\\x\\proj', 'q:/x/proj', 'Q:\\\\x\\\\proj', '/q/x/proj', '/cygdrive/q/x/proj', '/mnt/q/x/proj', 'Q--x-proj',
+      '/usr/x/proj', 'C:\\x\\proj', 'Q:\\xy\\proj', 'foo-q-x-proj',
+    ];
+    writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: lines }));
+    const swapped = (home: string): string[] => {
+      const bundle = buildSupportBundle({ cwd: s.cwd, home, version: 'test', includeLogs: false, now: new Date() });
+      return JSON.parse(JSON.stringify(bundle)).stores[0].config.gitLearnPatterns;
+    };
+    expect(swapped('Q:\\x')).toEqual([
+      '~\\proj', '~/proj', '~\\\\proj', '~/proj', '~/proj', '~/proj', '~-proj',
+      '/usr/x/proj', 'C:\\x\\proj', 'Q:\\xy\\proj', 'foo-q-x-proj',
+    ]);
+    expect(swapped('Q:\\')).toEqual(lines);
+  });
+
   it('a log tail that starts inside a private key drops the rest of the key', () => {
     const s = seed();
     // About 325 KB of key body, so the 256 KiB tail window starts after the BEGIN line.

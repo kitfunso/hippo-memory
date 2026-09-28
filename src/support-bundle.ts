@@ -260,9 +260,11 @@ function spellingPattern(spelling: string): string | null {
   // any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
   const drive = /^([A-Za-z])[:-]/.exec(spelling);
   const below = drive === null ? spelling : spelling.slice(2);
-  if (below.length < 3) return null;
   const body = below.split(/[\\/]+/).map(escapeRegExp).join('[\\\\/]+');
-  return drive === null ? body : `${mountedDrive(drive[1])}?${body}`;
+  if (below.length >= 3) return drive === null ? body : `${mountedDrive(drive[1])}?${body}`;
+  // Too short to find alone (C:\x leaves \x), so only after its drive and as a whole name. A drive root swaps nothing.
+  if (drive === null || !/[^\\/-]/.test(below)) return null;
+  return `(?<![\\p{L}\\p{N}_])${mountedDrive(drive[1])}${body}`;
 }
 
 /** One pattern for every alias of the home in every spelling, or null when none is long enough to swap safely. */
@@ -281,7 +283,7 @@ function buildHomePattern(home: string, probes: readonly string[]): RegExp | nul
   }
   if (patterns.size === 0) return null;
   // Whole names only: "<home> now" and "<home>." swap; "<home>ty", or "web-app" for a home of /app, do not. On Windows
-  // only the end is checked, because the path below the drive may follow anything.
+  // the start is spellingPattern's call, because the path below the drive may follow anything.
   const before = process.platform === 'win32' ? '' : '(?<![\\p{L}\\p{N}_])';
   const alternatives = [...patterns.values()].join('|');
   return new RegExp(`${before}(?:${alternatives})(?![\\p{L}\\p{N}_])`, process.platform === 'win32' ? 'giu' : 'gu');
