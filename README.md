@@ -82,7 +82,7 @@ hippo init
 hippo init --scan ~
 ```
 
-`--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from the last 30 days of commit history. One command, instant memory across all your projects.
+`--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from the last 365 days of commit history. One command, instant memory across all your projects.
 
 After setup, `hippo sleep` runs at session end (via auto-installed agent hooks) and does five things:
 

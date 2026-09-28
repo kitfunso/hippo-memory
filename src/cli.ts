@@ -647,6 +647,14 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
     (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
     '.');
   console.log(`Global store: ${globalRoot}`);
+  if (!flags['no-hooks']) {
+    // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
+    const agents = detectAgentHooks(repos);
+    if (agents.length === 0) {
+      console.log('   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.');
+    }
+    installUserLevelHooks(agents, true);
+  }
   if (!flags['no-schedule']) {
     setupDailySchedule(globalRoot);
   }
@@ -687,7 +695,7 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
 
   // Auto-detect and install hooks (unless --no-hooks)
   if (!flags['no-hooks']) {
-    autoInstallHooks(alreadyExists);
+    autoInstallHooks();
   }
 
   // Auto-setup daily schedule (unless --no-schedule)
@@ -716,13 +724,19 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
   }
 }
 
-/**
- * Detect agent config files in cwd and auto-install hippo hooks.
- * Skips files that already have a <!-- hippo:start --> block.
- */
-function autoInstallHooks(quiet: boolean): void {
+/** Plain init: patch the detected agents' instruction files in cwd, then install their user-level hooks. */
+function autoInstallHooks(): void {
   const cwd = process.cwd();
+  const agents = detectAgentHooks([cwd]);
+  const agentsMd = path.join(cwd, HOOKS.codex.file);
+  // Read before patching: a re-run of init finds its own block and skips the Codex hint.
+  const codexHint = !(fs.existsSync(agentsMd) && fs.readFileSync(agentsMd, 'utf8').includes(HOOK_MARKERS.start));
+  patchInstructionFiles(cwd, agents);
+  installUserLevelHooks(agents, codexHint);
+}
 
+/** HOOKS keys of the agents with a marker file in any of dirs, in detector order. */
+function detectAgentHooks(dirs: readonly string[]): string[] {
   // Map: filename to check -> hook key(s) to install
   const detectors: Array<{ files: string[]; hook: string }> = [
     { files: ['CLAUDE.md', '.claude/settings.json'], hook: 'claude-code' },
@@ -733,46 +747,34 @@ function autoInstallHooks(quiet: boolean): void {
     { files: ['.pi', '.pi/agent'], hook: 'pi' },
   ];
 
-  // Track which hook files we've already touched to avoid double-patching AGENTS.md
-  const installed = new Set<string>();
+  return detectors
+    .filter(({ files }) => dirs.some((dir) => files.some((f) => fs.existsSync(path.join(dir, f)))))
+    .map(({ hook }) => hook);
+}
 
-  for (const { files, hook } of detectors) {
+function patchInstructionFiles(dir: string, agents: readonly string[]): void {
+  for (const hook of agents) {
     const hookDef = HOOKS[hook];
     if (!hookDef) continue;
 
-    // Check if any marker file exists
-    const detected = files.some((f) => fs.existsSync(path.join(cwd, f)));
-    if (!detected) continue;
+    const targetPath = path.resolve(dir, hookDef.file);
+    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a new AGENTS.md or CLAUDE.md.
+    if (!fs.existsSync(targetPath)) continue;
+    const existing = fs.readFileSync(targetPath, 'utf8');
+    // One block per file: several agents share AGENTS.md, and a re-run of init finds its own block.
+    if (existing.includes(HOOK_MARKERS.start)) continue;
+    const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
+    const sep = existing.endsWith('\n') ? '\n' : '\n\n';
+    fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
+    console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
+  }
+}
 
-    const targetPath = path.resolve(cwd, hookDef.file);
-
-    // Skip if we already installed a hook into this file
-    if (installed.has(targetPath)) continue;
-
-    // An instruction block already present is not rewritten, but the JSON
-    // hooks and plugins below still run: they are idempotent, and skipping
-    // them meant a store set up by an older hippo never got hooks added in
-    // later releases (PreCompact, PostToolUseFailure) on a re-run of init.
-    const blockPresent = fs.existsSync(targetPath)
-      && fs.readFileSync(targetPath, 'utf8').includes(HOOK_MARKERS.start);
-
-    // Only patch the agent-instructions file if it already exists.
-    // Never create a new CLAUDE.md / AGENTS.md / etc. just because a sibling
-    // marker file (.claude/settings.json, .codex, etc.) was detected — that
-    // pollutes dirs the user didn't intend to configure.
-    if (!blockPresent && fs.existsSync(targetPath)) {
-      const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
-      const existing = fs.readFileSync(targetPath, 'utf8');
-      const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-      fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
-      installed.add(targetPath);
-      console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
-    }
-
-    // The Codex session-capture wrapper swaps the codex launcher binary, so
-    // init never installs it silently — it points at the explicit opt-in
-    // command instead (issue #133).
-    if (hook === 'codex' && !blockPresent && !isCodexWrapperInstalled()) {
+/** Claude Code settings hooks and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
+function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
+  for (const hook of agents) {
+    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in (issue #133).
+    if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
       console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }
 
