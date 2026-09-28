@@ -19,6 +19,7 @@ Any-evidence R@k from `evaluate_retrieval.py`, unchanged, on all 500 questions. 
 - Five sessions drawn at random from each haystack would hit 18.9% of the time, averaged over the 500.
 - Without the 30 abstention questions (n = 470), R@5 is 86.4, 87.9, 97.0 and 97.4 for the four scored runs.
 - Every run returned 0 sessions from outside the question's haystack.
+- The [mechanism audit](2026-09-23-mechanism-audit-result.md) found that `evaluate_retrieval.py` can credit a session id by substring. That cannot happen here: each memory carries one tag, its session id, and no answer id sits inside another id in its haystack. Exact id matches, counted from the raw file's per-question ranks, give the same R@k for every run.
 - Lifting the budget returns every candidate: a median of 47 sessions and 123,491 tokens per question. The lifted runs measure the ranking, not an amount of text an agent could take in.
 
 ### Paired differences in R@5
