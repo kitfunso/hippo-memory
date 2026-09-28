@@ -10,7 +10,7 @@ What is measured: in hippo's mechanism audit, outcome marks, supersession and re
 
 Retrieval, corpus first: on LongMemEval-S (500 questions, each scored against its own ~48-session haystack), using the benchmark scripts rather than `hippo recall`, best of five settings, R@5 is 98.0% with the free local MiniLM embedder and 99.8% with voyage-3-large (opt-in, paid). On the older LongMemEval oracle split with pooled retrieval, BM25 only and no embeddings (v0.11), R@5 was 74.0%.
 
-Install: `npm install -g hippo-memory`, then `hippo init` in a project. It creates the project's store and adds hippo's instructions to the agent files it finds there (CLAUDE.md, AGENTS.md, Cursor's rules), plus Claude Code's session hooks. `hippo init --scan ~` registers every git repo under your home directory at once, each with a store seeded from its git history. `npx -y hippo-memory mcp` runs the MCP server without a global install.
+Install: `npm install -g hippo-memory`, then `hippo init` in a project. It creates the project's store and adds hippo's instructions to the agent files it finds there (CLAUDE.md, and AGENTS.md, which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. `hippo init --scan ~` registers every git repo under your home directory at once, each with a store seeded from its git history. `npx -y hippo-memory mcp` runs the MCP server without a global install.
 
 ## Docs
 
@@ -24,7 +24,7 @@ Install: `npm install -g hippo-memory`, then `hippo init` in a project. It creat
 ## Agents
 
 - [Claude Code](https://hippo-memory.com/claude-code/): memory between sessions through a CLAUDE.md block and session hooks
-- [Cursor](https://hippo-memory.com/cursor/): memory between sessions through the MCP server and Cursor's rules
+- [Cursor](https://hippo-memory.com/cursor/): memory between sessions through the MCP server and the project's AGENTS.md
 - [Codex CLI](https://hippo-memory.com/codex/): memory across sessions through AGENTS.md, with optional session capture
 - [MCP server](https://hippo-memory.com/mcp/): `hippo mcp`, 13 tools over stdio for Claude Code, Cursor, Windsurf, Cline and Claude Desktop
 - [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension): session hooks for Pi

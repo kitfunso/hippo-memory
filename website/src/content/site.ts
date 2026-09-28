@@ -178,7 +178,7 @@ export const getStarted = {
   autoInstall: {
     heading: 'Detected and patched automatically',
     frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi'],
-    note: 'It patches the instruction file each agent already has (CLAUDE.md, AGENTS.md, .cursorrules) and adds session hooks where the agent supports them. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
+    note: 'It patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
   },
 } as const;
 

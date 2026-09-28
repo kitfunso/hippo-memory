@@ -31,8 +31,9 @@ const description =
     <Section title="Set it up">
       <Cmd lines={[site.installCmd, 'hippo init']} />
       <p>
-        <code>hippo init</code> adds its instructions to <code>.cursorrules</code> if the project has one. Then give
-        Cursor's agent the memory tools by adding hippo to <code>.cursor/mcp.json</code>:
+        <code>hippo init</code> adds its instructions to the project's <code>AGENTS.md</code> if it has one, and Cursor
+        reads that file from the project root. Then give Cursor's agent the memory tools by adding hippo to
+        <code>.cursor/mcp.json</code>:
       </p>
       <Cmd lines={mcpJson} prompt={false} />
       <p>
