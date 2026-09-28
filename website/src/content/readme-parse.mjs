@@ -11,14 +11,15 @@ export const LINK = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 /** Markdown to plain text for JSON-LD: code keeps its text, a link keeps its label, emphasis marks go.
  * @param {string} md */
 export function mdText(md) {
+  // Code spans wait behind U+E000 (private use, so never README text, and not a control character).
   /** @type {string[]} */
   const code = [];
   const text = md
-    .replace(/`([^`]+)`/g, (_, c) => `\u0000${code.push(c) - 1}\u0000`)
+    .replace(/`([^`]+)`/g, (_, c) => `\u{E000}${code.push(c) - 1}\u{E000}`)
     .replace(LINK, '$1')
     .replace(/(\*\*|__)(?=\S)([^\n]*?\S)\1/g, '$2')
     .replace(/(?<![\\\w*])([*_])(?=\S)([^*_\n]*?\S)\1(?![\w*])/g, '$2');
-  return unescapeMd(text).replace(/\u0000(\d+)\u0000/g, (_, i) => code[Number(i)]);
+  return unescapeMd(text).replace(/\u{E000}(\d+)\u{E000}/gu, (_, i) => code[Number(i)]);
 }
 
 /** @param {string} text @param {string} heading */

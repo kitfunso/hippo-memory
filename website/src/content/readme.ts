@@ -21,18 +21,18 @@ export function absoluteUrl(url: string): string {
 // `anchors` sends README anchors to site pages (e.g. '#mcp-server' -> '/mcp/'); other links open in a new tab.
 export function mdInline(md: string, anchors: Record<string, string> = {}): string {
   const code: string[] = [];
-  const text = md.replace(/`([^`]+)`/g, (_, c: string) => `\u0000${code.push(c) - 1}\u0000`);
+  const text = md.replace(/`([^`]+)`/g, (_, c: string) => `\u{E000}${code.push(c) - 1}\u{E000}`);
   return escHtml(unescapeMd(text))
     .replace(LINK, (_, label: string, url: string) => {
       const local = anchors[url];
       if (local) return `<a class="link" href="${local}">${label}</a>`;
       return `<a class="link" href="${absoluteUrl(url)}" target="_blank" rel="noopener noreferrer">${label}<span class="sr-only"> (opens in new tab)</span></a>`;
     })
-    .replace(/\u0000(\d+)\u0000/g, (_, i: string) => `<code>${escHtml(code[Number(i)])}</code>`);
+    .replace(/\u{E000}(\d+)\u{E000}/gu, (_, i: string) => `<code>${escHtml(code[Number(i)])}</code>`);
 }
 
 // README anchors that have a page of their own on the site.
-const siteAnchors: Record<string, string> = { '#mcp-server': '/mcp/' };
+const siteAnchors = { '#mcp-server': '/mcp/' } satisfies Record<string, string>;
 
 /** A README answer as HTML paragraphs, one per blank-line-separated block. */
 export const mdParagraphs = (md: string): string[] => md.split(/\n{2,}/).map((p) => mdInline(p, siteAnchors));
