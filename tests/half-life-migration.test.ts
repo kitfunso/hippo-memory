@@ -249,6 +249,20 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     expect(halfLifeOf(root, ordinary.id)).toBeGreaterThanOrEqual(730);
   });
 
+  it('are told apart from a supersede copy that kept the source but was written on the 7-day base', () => {
+    const copy = legacy('we release on Tuesdays now, not Mondays', { source: 'decision' });
+    const pinned = legacy('use Postgres for all new services', { source: 'decision' });
+    const root = store();
+    writeEntry(root, copy);
+    writeEntry(root, pinned);
+    pinTo90(root, pinned.id);
+    unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ from: 7, to: 365, rescaled: 1, typed: 1, kept: 0 });
+    expect(halfLifeOf(root, copy.id)).toBe(365);
+    expect(halfLifeOf(root, pinned.id)).toBe(365);
+  });
+
   it('a new store never moves one, even one set to 90 days by hand', () => {
     const root = store();
     const decision = saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' }).memoryId!;

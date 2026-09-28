@@ -114,9 +114,10 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
       }
       const all = selectAllEntries(db);
       const retired = typedPending ? retiredObjectMemoryIds(db) : new Set<string>();
-      // Pinned memories of objects were never on the base, so only the typed plan may move them.
+      // Only the typed plan moves a memory an object writer pinned to 90 days. A supersede copy keeps the object's source but was written on the base.
+      const pinnedTo90 = (e: MemoryEntry) => TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null;
       const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => !retired.has(e.id)), to) : [];
-      const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !TYPED_SOURCES.has(e.source)) : all, from, to);
+      const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !pinnedTo90(e)) : all, from, to);
       const plan = [...basePlan, ...typedPlan];
       const halfLives = new Map(plan.map((e) => [e.id, e.half_life_days]));
       const result: HalfLifeMigrationResult = { from, to, rescaled: basePlan.length, typed: typedPlan.length, kept: all.length - plan.length, dryRun, halfLives };
