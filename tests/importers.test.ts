@@ -187,6 +187,32 @@ describe('importCursor - .cursorrules', () => {
   });
 });
 
+describe('importCursor - .cursor/rules folder', () => {
+  it('imports every .mdc and .md rule under the folder, without front matter', () => {
+    const rules = path.join(tmpDir, '.cursor', 'rules');
+    fs.mkdirSync(path.join(rules, 'frontend'), { recursive: true });
+    fs.writeFileSync(path.join(rules, 'style.mdc'), [
+      '---',
+      'description: TypeScript style rules',
+      'globs: src/**/*.ts',
+      'alwaysApply: false',
+      '---',
+      '- Prefer named exports over default exports',
+    ].join('\n'));
+    fs.writeFileSync(path.join(rules, 'workflow.mdc'), '- Run the full test suite before every push\n');
+    fs.writeFileSync(path.join(rules, 'frontend', 'components.md'), '- Keep React components under 200 lines\n');
+
+    const result = importCursor(rules, makeOpts());
+
+    expect(result.imported).toBe(3);
+    expect(loadAllEntries(tmpDir).map((e) => e.content).sort()).toEqual([
+      'Keep React components under 200 lines',
+      'Prefer named exports over default exports',
+      'Run the full test suite before every push',
+    ]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Generic file importer
 // ---------------------------------------------------------------------------

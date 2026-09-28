@@ -423,9 +423,17 @@ function parseCursorFile(content: string): string[] {
   });
 }
 
-export function importCursor(filePath: string, options: ImportOptions): ImportResult {
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const chunks = parseCursorFile(raw);
+const CURSOR_RULE_FILE = /\.mdc?$/i;
+
+/** Import `.cursorrules`, one rule file, or a `.cursor/rules` tree of `.mdc` and `.md` rules. */
+export function importCursor(sourcePath: string, options: ImportOptions): ImportResult {
+  const files = fs.statSync(sourcePath).isDirectory()
+    ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) => path.join(sourcePath, rel))
+    : [sourcePath];
+  const chunks = files.flatMap((file) => {
+    const raw = fs.readFileSync(file, 'utf8');
+    return parseCursorFile(CURSOR_RULE_FILE.test(file) ? parseFrontmatter(raw).body : raw);
+  });
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
@@ -659,8 +667,8 @@ function parseWikilinks(body: string): string[] {
   return out;
 }
 
-/** Recursively collect `*.md` files under `root`, returning paths relative to
- *  `root` with forward-slash separators (stable artifactRef keys across OSes).
+/** Recursively collect files whose name matches `match` (`*.md` by default) under `root`,
+ *  as paths relative to `root` with forward-slash separators (stable artifactRef keys across OSes).
  *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
  *  `.git`, `.obsidian`, `.trash`) AND the canonicalized Hippo store path during
  *  the walk, so re-importing a vault that CONTAINS the store never ingests its own
@@ -669,7 +677,7 @@ function parseWikilinks(body: string): string[] {
  *  every run). The root-IS-the-store case is handled one level up in
  *  importVault (a no-op early return), NOT here: returning [] for it would feed
  *  the deletion-sync an empty scan that mass-archives every live row (codex R8). */
-function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
+function collectMarkdownFiles(root: string, hippoRoot: string, match: RegExp = /\.md$/i): string[] {
   const out: string[] = [];
   // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is
   // skipped even when hippoRoot is an aliased path (junction / Windows case
@@ -687,7 +695,7 @@ function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
         if (ent.name.startsWith('.')) continue;
         if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
         walk(abs);
-      } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) {
+      } else if (ent.isFile() && match.test(ent.name)) {
         out.push(path.relative(root, abs).split(path.sep).join('/'));
       }
     }
