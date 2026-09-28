@@ -3,7 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { initStore, listSessionEvents, loadAllEntries } from '../src/store.js';
+import { initStore, listSessionEvents, loadAllEntries, writeEntry } from '../src/store.js';
+import { createMemory } from '../src/memory.js';
 import { renderTraceContent, parseSteps } from '../src/trace.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -133,6 +134,21 @@ describe('hippo trace record', () => {
       '--steps', '[{"action":"x","observation":"y"}]',
       '--outcome', 'not-real',
     ])).toThrow();
+  });
+});
+
+describe('hippo trace <id>', () => {
+  it('shows the half-life the memory decays on, not one recomputed from a 7-day base', () => {
+    initStore(hippoDir);
+    // 123 days is no base times a write-time multiplier, like a half-life that recalls stretched.
+    const entry = { ...createMemory('the release checklist lives in docs/release.md', { baseHalfLifeDays: 365 }), half_life_days: 123 };
+    writeEntry(hippoDir, entry);
+
+    // SAFETY: cmdTrace --json prints these numeric fields (src/cli.ts cmdTrace).
+    const json = JSON.parse(runHippo(['trace', entry.id, '--json'])) as { half_life_days: number; reward_factor: number; effective_half_life_days: number };
+    expect(json.half_life_days).toBe(123);
+    expect(json.effective_half_life_days).toBeCloseTo(123 * json.reward_factor, 9);
+    expect(runHippo(['trace', entry.id])).toContain('half-life:  123.0d (stored)');
   });
 });
 

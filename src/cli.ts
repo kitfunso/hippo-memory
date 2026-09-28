@@ -2768,7 +2768,7 @@ function cmdTrace(
 
   const now = evalNow();
   const strength = calculateStrength(entry, now);
-  const halfLife = deriveHalfLife(7, entry);
+  const halfLife = entry.half_life_days;
   const rewardFactor = calculateRewardFactor(entry);
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
@@ -2837,7 +2837,7 @@ function cmdTrace(
   console.log(`  now:        ${fmt(strength, 3)}`);
   console.log(`  in 30 days: ${fmt(projectedAt(30), 3)}`);
   console.log(`  in 90 days: ${fmt(projectedAt(90), 3)}`);
-  console.log(`  half-life:  ${fmt(halfLife, 1)}d (base) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`);
+  console.log(`  half-life:  ${fmt(halfLife, 1)}d (stored) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`);
   console.log();
   console.log(`Retrieval:`);
   console.log(`  count:      ${entry.retrieval_count}`);
