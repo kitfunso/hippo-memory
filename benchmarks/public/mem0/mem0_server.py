@@ -2,6 +2,7 @@
 
 POST /memories keeps each turn's session date (metadata.created_at, the prompt's Observation Date); POST /search sends the
 user id in `filters` and the count as `top_k`; startup builds the entity store and BM25 encoders, and fails without BM25.
+Losses Mem0 logs below WARNING are logged again at WARNING, so the gate sees them; what Mem0 does is unchanged.
 """
 import os
 
@@ -37,6 +38,50 @@ def _prompt_with_date(*args: Any, **kwargs: Any) -> str:
 
 
 mem0_main.generate_additive_extraction_prompt = _prompt_with_date
+
+
+_in_batch = threading.local()
+
+
+def _surface_quiet_losses(mem: Any, log: Any) -> None:
+    """Mem0 drops a failed entity embedding (main.py:739-749), a failed entity link (782-783) and a failed keyword
+    search (qdrant.py:424-426) with no log above DEBUG. Each is logged at WARNING here, then Mem0 carries on as it would."""
+    emb, store, ents = mem.embedding_model, mem.vector_store, mem.entity_store
+    embed, embed_batch, keyword_search, link = emb.embed, emb.embed_batch, store.keyword_search, ents.update
+
+    def watched_embed(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return embed(*args, **kwargs)
+        except Exception as e:
+            if getattr(_in_batch, "on", False):  # Mem0 embeds each text of a failed batch again, one at a time
+                log.info("an embedding inside a batch failed; Mem0 retries the batch's texts one at a time")
+            else:
+                log.warning(f"embedding failed, so Mem0 drops this text: {e!r}")
+            raise
+
+    def watched_embed_batch(*args: Any, **kwargs: Any) -> Any:
+        _in_batch.on = True
+        try:
+            return embed_batch(*args, **kwargs)
+        finally:
+            _in_batch.on = False
+
+    def watched_link(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return link(*args, **kwargs)
+        except Exception as e:
+            log.warning(f"entity link update failed, so Mem0 drops the link: {e!r}")
+            raise
+
+    def watched_keyword_search(*args: Any, **kwargs: Any) -> Any:
+        hits = keyword_search(*args, **kwargs)
+        query = kwargs.get("query", args[0] if args else "")
+        if hits is None and str(query).strip():
+            log.warning(f"keyword search failed, so Mem0 ranks without BM25: {query!r}")
+        return hits
+
+    emb.embed, emb.embed_batch, store.keyword_search, ents.update = (
+        watched_embed, watched_embed_batch, watched_keyword_search, watched_link)
 
 
 class DatedAdd(BaseModel):
@@ -102,6 +147,7 @@ def build_app(runner: Path) -> FastAPI:
             for store in (mem.vector_store, mem.entity_store):
                 if store._get_bm25_encoder() is None:
                     raise SystemExit("no BM25 encoder: Mem0 would silently drop keyword search (pip install fastembed)")
+            _surface_quiet_losses(mem, server.logger)
             yield
 
     app.router.lifespan_context = lifespan

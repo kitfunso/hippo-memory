@@ -26,7 +26,7 @@ KEEP_ENV = {
 }
 LIMIT_RE = re.compile(r"usage limit|rate limit|hit your limit|limit reached|resets", re.I)
 MAX_FAILURES, MAX_JSON_MISSES = 4, 3
-DEADLINE_S = 11 * 3600  # a call gives up inside the 12 h client timeouts, so no client resends a live add
+DEADLINE_S = 11 * 3600  # slot waits, runs and retries included, so a call fails inside the 12 h client timeouts
 
 
 def json_reply(text: str) -> dict | None:
@@ -69,15 +69,20 @@ class Claude:
             path.write_bytes(system.encode("utf-8"))  # bytes, so Windows never rewrites the newlines
         return path, sha
 
-    def _run(self, sys_file: Path, user: str, effort: str) -> tuple[dict, str]:
+    def _run(self, sys_file: Path, user: str, effort: str, deadline: float) -> tuple[dict, str] | None:
+        """One `claude -p` run, or None if no slot frees up before the deadline."""
         cmd = [self.exe, "-p", "--safe-mode", "--permission-mode", "manual", "--system-prompt-file", str(sys_file),
                "--tools", "", "--model", MODEL, "--effort", effort, "--no-session-persistence", "--output-format", "json"]
+        if not self.slots.acquire(timeout=max(0.0, deadline - time.monotonic())):
+            return None
         try:
-            with self.slots:
-                p = subprocess.run(cmd, input=user.encode("utf-8"), capture_output=True, env=self.env,
-                                   cwd=self.cwd, timeout=900)
+            limit = max(1.0, min(900.0, deadline - time.monotonic()))
+            p = subprocess.run(cmd, input=user.encode("utf-8"), capture_output=True, env=self.env, cwd=self.cwd,
+                               timeout=limit)
         except subprocess.TimeoutExpired:
-            return {"is_error": True, "result": "timeout after 900 s"}, ""
+            return {"is_error": True, "result": f"timeout after {limit:.0f} s"}, ""
+        finally:
+            self.slots.release()
         out, err = p.stdout.decode("utf-8", "replace"), p.stderr.decode("utf-8", "replace")
         try:
             res = json.loads(out)
@@ -94,19 +99,24 @@ class Claude:
     def ask(self, system: str, user: str, *, effort: str, tag: str, want_json: bool = False) -> dict:
         sys_file, sys_sha = self._system_file(system)
         base = {"tag": tag, "sys": sys_sha, "user": hashlib.sha256(user.encode()).hexdigest()[:16], "effort": effort}
-        failures = misses = attempt = 0
-        waited, start = 0, time.time()
+        failures = misses = attempt = waited = 0
+        deadline = time.monotonic() + DEADLINE_S
         while True:
+            if time.monotonic() >= deadline:
+                self._fail(base, f"no reply within {DEADLINE_S} s")
             attempt += 1
             t0 = time.time()
-            res, err = self._run(sys_file, user, effort)
+            got = self._run(sys_file, user, effort, deadline)
+            if got is None:
+                self._fail(base, f"no free slot within {DEADLINE_S} s")
+            res, err = got
             text = res.get("result") or ""
             base.update(attempt=attempt, wall_ms=int((time.time() - t0) * 1000))
             if res.get("is_error") or not text.strip():
                 detail = f"{res.get('api_error_status')} {text} {err}"[:400]
                 if res.get("api_error_status") == 429 or LIMIT_RE.search(detail):
                     delay = 60 if waited == 0 else 300
-                    if time.time() - start + delay > DEADLINE_S:
+                    if time.monotonic() + delay > deadline:
                         self._fail(base, f"usage limit not lifted after {waited} s: {detail}")
                     self._log({**base, "event": "limit-wait", "delay_s": delay, "detail": detail})
                     time.sleep(delay)
@@ -116,7 +126,7 @@ class Claude:
                 self._log({**base, "event": "error", "detail": detail})
                 if failures >= MAX_FAILURES:
                     self._fail(base, f"{failures} failed attempts: {detail}")
-                time.sleep(10 * failures)
+                time.sleep(min(10 * failures, max(0.0, deadline - time.monotonic())))
                 continue
             if want_json and json_reply(text) is None:
                 misses += 1
