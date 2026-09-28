@@ -1559,6 +1559,7 @@ The 1.45.0 mechanism audit (`docs/evals/2026-09-23-mechanism-audit-result.md`, E
 - **Outcome feedback and retrieval strengthening each help.**
 - **Physics hurts:** -22.2 pp hit@5 on LongMemEval.
 - **Sleep's merge and dedup fall below the 3 pp floor.**
+- **Update 2026-09-28, release confirmation on 1.52.3** (`docs/evals/2026-09-28-e1-release-confirmation-result.md`, fresh seeds 121-160): marked-wrong memories now sit in the top five 0.0% of the time against BM25's 71.9%, but BM25 plus the same outcome nudge (one score multiplier) also reads 0.0% and retrieves current facts 6.5 pp better than the full lifecycle. Against plain BM25, current-fact recall shows no measurable difference. The known-bad win belongs to outcome feedback, which plain BM25 gets from the same nudge.
 
 What follows for this roadmap:
 - **Pitch the moat as "memory that learns what is wrong and stops repeating it"**: outcome-driven suppression, learned lifecycle (Track LC). Not a fast forgetting curve.
