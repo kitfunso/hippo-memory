@@ -1,0 +1,2272 @@
+{
+  "schema": "z6-supersession-fixture/1",
+  "background": [
+    {
+      "text": "My neighbor finally fixed the squeaky gate that had been annoying everyone on the street for weeks."
+    },
+    {
+      "text": "The book club picked a mystery novel for the next meeting after a long debate over the shortlist."
+    },
+    {
+      "text": "My colleague's umbrella turned inside out in the wind and she has not stopped laughing about it since."
+    },
+    {
+      "text": "The community garden finally got new compost bins after months of paperwork and polite nagging."
+    },
+    {
+      "text": "A friend of mine started learning to knit and has already made three lopsided scarves."
+    },
+    {
+      "text": "The old couch finally went to the charity pickup after sitting on the curb for two days."
+    },
+    {
+      "text": "My cousin's choir performance ran long, but the final song made the whole wait worth it."
+    },
+    {
+      "text": "The farmers market had unusually good peaches this week, so I bought far more than I needed."
+    },
+    {
+      "text": "Our reading group argued for an hour about whether the ending of the novel was earned."
+    },
+    {
+      "text": "My uncle swears by a stretching routine he does every single day before breakfast."
+    },
+    {
+      "text": "The neighborhood cat has decided our porch is its favorite napping spot this season."
+    },
+    {
+      "text": "My aunt is teaching herself watercolor painting and keeps sending photos of her progress."
+    },
+    {
+      "text": "The bakery down the street sold out of its sourdough loaves before I even got there."
+    },
+    {
+      "text": "A childhood friend is training for a long swim and complains about the cold water constantly."
+    },
+    {
+      "text": "My brother-in-law finally admitted his chili recipe has a secret ingredient he refuses to share."
+    },
+    {
+      "text": "The community choir is short on singers again and keeps asking everyone to recruit their friends."
+    },
+    {
+      "text": "My grandmother's quilt collection has grown so large it barely fits in the closet anymore."
+    },
+    {
+      "text": "The local library extended its hours, which has made a big difference for my reading habit."
+    },
+    {
+      "text": "My colleague brought homemade jam to share and it disappeared within the hour."
+    },
+    {
+      "text": "The stray dog that hangs around the park finally let someone get close enough to pet it."
+    },
+    {
+      "text": "My niece insists on wearing mismatched socks every day and refuses to explain why."
+    },
+    {
+      "text": "The allotment plot two doors down has the most impressive rows of climbing beans I have seen."
+    },
+    {
+      "text": "My grandfather still writes letters by hand and refuses to believe anyone still reads them."
+    },
+    {
+      "text": "The new puppy next door barks at the vacuum cleaner like it personally offended him."
+    },
+    {
+      "text": "My best friend is redecorating her kitchen and cannot decide between two shades of blue."
+    },
+    {
+      "text": "The potluck ended up with four different versions of the same pasta salad recipe."
+    },
+    {
+      "text": "My mother keeps threatening to finally clear out the garage, and nobody believes her yet."
+    },
+    {
+      "text": "A stray balloon got stuck in the big oak tree and the kids have not stopped talking about it."
+    },
+    {
+      "text": "My roommate's sourdough starter has apparently developed its own personality and demands a name."
+    },
+    {
+      "text": "The knitting circle welcomed three new members this month and ran out of chairs."
+    },
+    {
+      "text": "A flaky test in the suite turned out to depend on the order other tests happened to run in."
+    },
+    {
+      "text": "The design doc review ran long because two reviewers disagreed about naming before anything else got discussed."
+    },
+    {
+      "text": "An old comment in the code turned out to be actively wrong and had misled three separate people."
+    },
+    {
+      "text": "The onboarding checklist for new hires still references a step that nobody has needed in ages."
+    },
+    {
+      "text": "A silent failure in the background job only surfaced once someone finally checked the logs by hand."
+    },
+    {
+      "text": "The team spent an entire meeting debating a naming convention and reached no real conclusion."
+    },
+    {
+      "text": "A dependency upgrade quietly changed default behavior and nobody noticed until a customer complained."
+    },
+    {
+      "text": "The bug turned out to be a copy-pasted condition that was never updated for the new case."
+    },
+    {
+      "text": "Someone finally deleted a huge block of commented-out code that had been dead for ages."
+    },
+    {
+      "text": "The retro turned into a long discussion about alert fatigue and how many pages were actually useful."
+    },
+    {
+      "text": "A race condition only showed up under heavy load and was nearly impossible to reproduce locally."
+    },
+    {
+      "text": "The changelog entry for the last release undersold how big the underlying refactor actually was."
+    },
+    {
+      "text": "A junior engineer caught an off-by-one error that had been quietly wrong for months."
+    },
+    {
+      "text": "The incident review found three separate small mistakes that only became a problem when combined."
+    },
+    {
+      "text": "Someone renamed a widely used function and broke a dozen call sites nobody knew still existed."
+    },
+    {
+      "text": "The test suite got noticeably faster once a handful of redundant setup steps were removed."
+    },
+    {
+      "text": "A typo in an error message sent half the team down the wrong debugging path for an hour."
+    },
+    {
+      "text": "The pull request sat unreviewed for days simply because nobody felt confident approving it."
+    },
+    {
+      "text": "A cache invalidation bug caused stale data to show up in exactly one rare screen."
+    },
+    {
+      "text": "The documentation for the internal library was so out of date that nobody trusted it anymore."
+    },
+    {
+      "text": "An engineer spent a whole day chasing a bug that turned out to be a bad network cable."
+    },
+    {
+      "text": "The code review comments got increasingly nitpicky until someone finally called it out in the thread."
+    },
+    {
+      "text": "A missing null guard caused a crash that only happened for a small slice of users."
+    },
+    {
+      "text": "The team finally wrote down the shared knowledge that only one person used to carry around."
+    },
+    {
+      "text": "An automated alert fired constantly for months before anyone bothered to see if it still mattered."
+    },
+    {
+      "text": "The refactor was supposed to be small but ended up touching nearly every file in the project."
+    },
+    {
+      "text": "A well-meaning comment in the code has aged badly and now actively contradicts what the function does."
+    },
+    {
+      "text": "The postmortem revealed that the warning sign had been visible in the logs for a long while."
+    },
+    {
+      "text": "Someone finally wrote a proper test for the function everyone was too scared to touch."
+    },
+    {
+      "text": "The team agreed to slow down on merging anything risky right before a long break, after one too many rough incidents."
+    }
+  ],
+  "interleave": [
+    {
+      "text": "My grandfather's garden tomatoes came in early this year and there are already too many to eat."
+    },
+    {
+      "text": "A load test revealed the bottleneck was never the database at all, just a slow serialization step."
+    },
+    {
+      "text": "The neighborhood book swap box keeps getting restocked by someone nobody has ever actually seen."
+    },
+    {
+      "text": "The team's style guide finally got a section on error messages after one too many confusing ones shipped."
+    },
+    {
+      "text": "My cousin's band finally finished recording their first set of songs after years of false starts."
+    },
+    {
+      "text": "A stale cache entry caused a support case that took far longer to diagnose than it should have."
+    },
+    {
+      "text": "The new engineer's first pull request fixed a bug that had quietly annoyed everyone for a long while."
+    },
+    {
+      "text": "My neighbor's kids set up a small lemonade stand and somehow sold out within the hour."
+    },
+    {
+      "text": "A misleading variable name cost the reviewer twenty minutes before they realized what it actually held."
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "z6-0204b855",
+      "split": "heldout",
+      "category": "move",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Denver",
+          "fact": "I live in Denver.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I live in Denver, and I want a 3-day itinerary for a friend visiting next month. Can you sketch one out?"
+            },
+            {
+              "role": "assistant",
+              "text": "Day 1: downtown and Larimer Square, Day 2: a hike up in the foothills, Day 3: the art museum and a brewery crawl in RiNo."
+            }
+          ]
+        },
+        {
+          "marker": "Austin",
+          "fact": "I live in Austin now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We finally finished the move, so I live in Austin now. Can you find me a good running route near downtown?"
+            },
+            {
+              "role": "assistant",
+              "text": "Try the Lady Bird Lake trail, it loops right through downtown and has water fountains every mile or so."
+            },
+            {
+              "role": "user",
+              "text": "Nice, is it well lit if I want to run before sunrise?"
+            },
+            {
+              "role": "assistant",
+              "text": "Most of the loop has streetlights, but the north side near the river gets darker, so bring a headlamp if you start before dawn."
+            }
+          ]
+        }
+      ],
+      "question": "Which city do I live in these days?",
+      "answer": "Austin"
+    },
+    {
+      "id": "z6-e5326a57",
+      "split": "heldout",
+      "category": "move",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Vantree",
+          "fact": "I work at Vantree.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you draft a short doc explaining how to request PTO? I work at Vantree and our team wants something simple to point new hires to."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a short draft: submit requests via the HR portal at least a week ahead, tag your manager for approval, and add an out-of-office note once it's confirmed."
+            }
+          ]
+        },
+        {
+          "marker": "Corbell",
+          "fact": "I work at Corbell now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I left Vantree and now work at Corbell instead. Can you draft a two-line email introducing myself to my new manager?"
+            },
+            {
+              "role": "assistant",
+              "text": "Hi [Manager], I'm excited to be joining the team at Corbell starting Monday. Looking forward to meeting everyone and getting up to speed."
+            }
+          ]
+        }
+      ],
+      "question": "Where do I work these days?",
+      "answer": "Corbell"
+    },
+    {
+      "id": "z6-3a3dbfbf",
+      "split": "tune",
+      "category": "move",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Elmridge",
+          "fact": "My gym is in Elmridge.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Since my gym is in Elmridge, I want a simple 4-week strength plan I can run there twice a week."
+            },
+            {
+              "role": "assistant",
+              "text": "Week 1-2: full-body compound lifts at moderate weight; Week 3-4: add a third working set and bump the load by 5-10%."
+            }
+          ]
+        },
+        {
+          "marker": "Bayview",
+          "fact": "My gym is in Bayview now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "The old branch shut down, so my gym is in Bayview now. Can you suggest a warm-up routine for a 6am session?"
+            },
+            {
+              "role": "assistant",
+              "text": "Five minutes on the bike, then leg swings, walking lunges, and a couple of empty-bar warm-up sets before you load the bar."
+            }
+          ]
+        }
+      ],
+      "question": "Where is my gym located these days?",
+      "answer": "Bayview"
+    },
+    {
+      "id": "z6-b5583883",
+      "split": "tune",
+      "category": "move",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Riverside",
+          "fact": "My office is in Riverside.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I need a polite note to send to a client about rescheduling our Tuesday meeting. My office is in Riverside and the client is flying in for it."
+            },
+            {
+              "role": "assistant",
+              "text": "Hi [Client], something's come up and I need to move our Tuesday meeting. Would Wednesday afternoon work instead?"
+            }
+          ]
+        },
+        {
+          "marker": "Dockside",
+          "fact": "My office is in Dockside now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We moved out of Riverside, so my office is in Dockside now. Can you write directions from the train station for a visitor?"
+            },
+            {
+              "role": "assistant",
+              "text": "From the station, head east on Harbor Street for two blocks, then turn left at the ferry terminal. The building is right across from it."
+            }
+          ]
+        }
+      ],
+      "question": "Where is my office these days?",
+      "answer": "Dockside"
+    },
+    {
+      "id": "z6-4237d1cb",
+      "split": "tune",
+      "category": "move",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Bristow",
+          "fact": "My parents live in Bristow.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My parents live in Bristow. I'd like to plan a surprise weekend visit, any tips on budget flights around the holidays?"
+            },
+            {
+              "role": "assistant",
+              "text": "Book on a Tuesday or Wednesday if you can, and check nearby regional airports, they're often cheaper than the main one around the holidays."
+            }
+          ]
+        },
+        {
+          "marker": "Fenwick",
+          "fact": "My parents live in Fenwick now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "They downsized and my parents live in Fenwick now, closer to my sister. Can you help me find a nice cafe there for when I visit?"
+            },
+            {
+              "role": "assistant",
+              "text": "Look for one near the town square, small towns like that usually have a cafe with a good bakery counter right on the main street."
+            }
+          ]
+        }
+      ],
+      "question": "Which town do my parents live in these days?",
+      "answer": "Fenwick"
+    },
+    {
+      "id": "z6-1eaff37f",
+      "split": "heldout",
+      "category": "move",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "driftlabs",
+          "fact": "Our repo is under the driftlabs org on GitHub.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our repo is under the driftlabs org on GitHub. Can you write a one-line git command to clone it fresh?"
+            },
+            {
+              "role": "assistant",
+              "text": "git clone https://github.com/driftlabs/widget.git"
+            }
+          ]
+        },
+        {
+          "marker": "northlane",
+          "fact": "Our repo is under the northlane org on GitHub now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "The org changed hands, so our repo is under the northlane org on GitHub now. Can you update the clone command in the onboarding doc?"
+            },
+            {
+              "role": "assistant",
+              "text": "Updated it to git clone https://github.com/northlane/widget.git in the onboarding doc."
+            }
+          ]
+        }
+      ],
+      "question": "Which org is our repo under these days?",
+      "answer": "northlane"
+    },
+    {
+      "id": "z6-efccd58e",
+      "split": "tune",
+      "category": "move",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Ohio",
+          "fact": "Our API runs in the Ohio region.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm seeing odd latency from our EU users, can you suggest a quick way to measure round-trip time? Our API runs in the Ohio region, for reference."
+            },
+            {
+              "role": "assistant",
+              "text": "Run a quick curl with the -w flag for time_total from an EU box against the endpoint, a few samples will show you the baseline round-trip."
+            }
+          ]
+        },
+        {
+          "marker": "Frankfurt",
+          "fact": "Our API runs in the Frankfurt region now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We moved off Ohio, so our API runs in the Frankfurt region now. Can you update the healthcheck URL in the status page config?"
+            },
+            {
+              "role": "assistant",
+              "text": "Swapped the healthcheck URL to the Frankfurt endpoint in the status page config."
+            }
+          ]
+        }
+      ],
+      "question": "Which region does our API run in these days?",
+      "answer": "Frankfurt"
+    },
+    {
+      "id": "z6-1e67119a",
+      "split": "heldout",
+      "category": "move",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "wiki",
+          "fact": "Our docs live in the /wiki folder.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our docs live in the /wiki folder, can you fix a broken image link on the setup page?"
+            },
+            {
+              "role": "assistant",
+              "text": "Fixed it, the image now points to /wiki/assets/setup-diagram.png."
+            }
+          ]
+        },
+        {
+          "marker": "handbook",
+          "fact": "Our docs live in the /handbook folder now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We reorganized things, so our docs live in the /handbook folder now. Can you update the README link that points to the setup page?"
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the README to point at /handbook/setup.md."
+            },
+            {
+              "role": "user",
+              "text": "Thanks, can you also check the contributing guide for the same stale link?"
+            },
+            {
+              "role": "assistant",
+              "text": "Fixed it there too, it now points to /handbook/setup.md."
+            }
+          ]
+        }
+      ],
+      "question": "Which folder do our docs live in these days?",
+      "answer": "handbook"
+    },
+    {
+      "id": "z6-b6888049",
+      "split": "heldout",
+      "category": "move",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Jenkins",
+          "fact": "Our CI runs on Jenkins.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our CI runs on Jenkins. The build badge in the README is pointing to the wrong job, can you fix the badge URL?"
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the badge to point at the correct Jenkins job path."
+            }
+          ]
+        },
+        {
+          "marker": "CircleCI",
+          "fact": "Our CI runs on CircleCI now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "The team switched us over last week, so our CI runs on CircleCI now. Can you swap the badge link in the README?"
+            },
+            {
+              "role": "assistant",
+              "text": "Swapped it to the CircleCI status badge in the README."
+            }
+          ]
+        }
+      ],
+      "question": "Which system does our CI run on these days?",
+      "answer": "CircleCI"
+    },
+    {
+      "id": "z6-c6633efe",
+      "split": "tune",
+      "category": "move",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Marlin",
+          "fact": "The database lives on the Marlin server.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "The database lives on the Marlin server right now. I need a one-line pg_dump command to back up the users table before I touch it."
+            },
+            {
+              "role": "assistant",
+              "text": "pg_dump -h marlin.internal -U admin -t users mydb > users_backup.sql"
+            }
+          ]
+        },
+        {
+          "marker": "Sable",
+          "fact": "The database lives on the Sable server now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Ops cut over last night, so the database lives on the Sable server now. Can you update the connection string in the deploy script?"
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the deploy script's connection string to point at the Sable server."
+            }
+          ]
+        }
+      ],
+      "question": "Which server does the database live on these days?",
+      "answer": "Sable"
+    },
+    {
+      "id": "z6-ecd34ab1",
+      "split": "heldout",
+      "category": "flip",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "dark",
+          "fact": "I use dark mode everywhere.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you check why the contrast looks off on this settings screen? I use dark mode everywhere so text needs to stay readable on black backgrounds."
+            },
+            {
+              "role": "assistant",
+              "text": "The button text was using a mid-gray that fails contrast on black. I bumped it to a lighter gray so it reads clearly against dark backgrounds."
+            }
+          ]
+        },
+        {
+          "marker": "light",
+          "fact": "I use light mode now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "One more thing, can you check this doc template? I switched to light mode last week and the pale gray headers are now almost invisible."
+            },
+            {
+              "role": "assistant",
+              "text": "Light backgrounds need darker header text to stay legible, so I changed the headers to a deep charcoal."
+            }
+          ]
+        }
+      ],
+      "question": "Which mode do I use these days?",
+      "answer": "light"
+    },
+    {
+      "id": "z6-a9a70f33",
+      "split": "heldout",
+      "category": "flip",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "tea",
+          "fact": "I drink tea in the mornings.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you draft a quick grocery list for the week? I drink tea in the mornings so add a box of my usual English breakfast bags."
+            },
+            {
+              "role": "assistant",
+              "text": "Added English breakfast tea bags along with milk and a few oat bars for the rest of the week."
+            }
+          ]
+        },
+        {
+          "marker": "coffee",
+          "fact": "I drink coffee in the mornings now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Same as before, can you put together this week's grocery list? I switched to coffee in the mornings now, so swap the tea bags for a bag of ground coffee."
+            },
+            {
+              "role": "assistant",
+              "text": "Swapped the tea bags for a bag of ground coffee and kept the oat bars on the list."
+            }
+          ]
+        }
+      ],
+      "question": "What do I drink in the mornings?",
+      "answer": "coffee"
+    },
+    {
+      "id": "z6-c984d366",
+      "split": "heldout",
+      "category": "flip",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "morning",
+          "fact": "My team meetings are in the morning.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me write an agenda template for this project? My team meetings are in the morning, so keep it short since everyone's still settling in."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a five-item agenda template: updates, blockers, decisions, next steps, and a two-minute buffer."
+            }
+          ]
+        },
+        {
+          "marker": "afternoon",
+          "fact": "My team meetings are in the afternoon now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you tweak that agenda template? We moved team meetings to the afternoon, so add a note to send updates before lunch instead."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated it so the agenda opens with a written status recap, since people have already worked half the day by then."
+            }
+          ]
+        }
+      ],
+      "question": "When are my team meetings scheduled?",
+      "answer": "afternoon"
+    },
+    {
+      "id": "z6-5f25f7c4",
+      "split": "tune",
+      "category": "flip",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "email",
+          "fact": "I get project updates by email.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you draft a short message asking the vendor for a status report? I get project updates by email, so ask them to reply directly with the report attached."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a short formal note requesting the current status report as an attachment."
+            }
+          ]
+        },
+        {
+          "marker": "chat",
+          "fact": "I get project updates by chat now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you draft a quick note to the vendor asking for a status update? I switched to getting project updates by chat now, so ask them to just ping the group channel."
+            },
+            {
+              "role": "assistant",
+              "text": "Sent a short note asking them to post the current status directly in the group channel."
+            }
+          ]
+        }
+      ],
+      "question": "How do I get project updates these days?",
+      "answer": "chat"
+    },
+    {
+      "id": "z6-52e26c0c",
+      "split": "tune",
+      "category": "flip",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "bike",
+          "fact": "I commute by bike.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you suggest a good way for me to review some flashcards on the way to work? I commute by bike so I only really have a few minutes stopped at lights."
+            },
+            {
+              "role": "assistant",
+              "text": "At red lights you get maybe 20 to 40 seconds, so short audio flashcards would work better than reading text while riding."
+            }
+          ]
+        },
+        {
+          "marker": "train",
+          "fact": "I commute by train now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Different question, can you recommend something to listen to on my way to work? I commute by train now, so I've got a solid 40 minutes free each way."
+            },
+            {
+              "role": "assistant",
+              "text": "A 40-minute stretch is perfect for a podcast episode or two chapters of an audiobook."
+            }
+          ]
+        }
+      ],
+      "question": "How do I commute these days?",
+      "answer": "train"
+    },
+    {
+      "id": "z6-e4c92ec3",
+      "split": "tune",
+      "category": "flip",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "npm",
+          "fact": "We use npm for installs.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you write the setup steps for new contributors in the README? We use npm for installs, so list the exact commands to get the project running."
+            },
+            {
+              "role": "assistant",
+              "text": "Added a Getting Started section: clone the repo, run npm install, then npm run dev to start the local server."
+            }
+          ]
+        },
+        {
+          "marker": "pnpm",
+          "fact": "We use pnpm for installs now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you update the README setup steps? We moved from npm to pnpm for installs last week, so swap the commands accordingly."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the Getting Started section to use pnpm install and pnpm dev instead."
+            }
+          ]
+        }
+      ],
+      "question": "Which package manager handles installs in the web repo?",
+      "answer": "pnpm"
+    },
+    {
+      "id": "z6-7973a8d5",
+      "split": "tune",
+      "category": "flip",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "feature",
+          "fact": "Branch names use a feature prefix.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I need to cut a new branch for the login fix, what should I call it? We name branches with a feature prefix, so something like feature-login-fix."
+            },
+            {
+              "role": "assistant",
+              "text": "feature-login-fix works well and matches the pattern on your other open branches."
+            }
+          ]
+        },
+        {
+          "marker": "ticket",
+          "fact": "Branch names use a ticket prefix now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "New branch for the payments bug, what's the naming pattern again? We switched branch names to a ticket prefix instead of feature, so it should look like ticket-4821-payments."
+            },
+            {
+              "role": "assistant",
+              "text": "ticket-4821-payments fits the new pattern, just make sure the ticket number matches what's in the tracker."
+            }
+          ]
+        }
+      ],
+      "question": "What prefix do branch names use?",
+      "answer": "ticket"
+    },
+    {
+      "id": "z6-4d6245e5",
+      "split": "tune",
+      "category": "flip",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "tabs",
+          "fact": "The codebase uses tabs for indentation.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you fix the linting errors in this new file? The codebase uses tabs for indentation, so check the linter config matches that."
+            },
+            {
+              "role": "assistant",
+              "text": "The linter was set to enforce spaces, so I updated the config to expect tabs and reran it clean."
+            }
+          ]
+        },
+        {
+          "marker": "spaces",
+          "fact": "The codebase uses spaces for indentation now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Same file, can you rerun the formatter? The team moved from tabs to spaces for indentation, so the old config is stale now."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the formatter config to two-space indentation and reformatted the file to match."
+            }
+          ]
+        }
+      ],
+      "question": "What does the codebase use for indentation?",
+      "answer": "spaces"
+    },
+    {
+      "id": "z6-77f459da",
+      "split": "heldout",
+      "category": "flip",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Jest",
+          "fact": "We run tests with Jest.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me write a test for this date parser? We run tests with Jest, so use the same describe/it structure as the other files."
+            },
+            {
+              "role": "assistant",
+              "text": "Added a Jest test with a describe block covering leap years, invalid strings, and timezone edge cases."
+            }
+          ]
+        },
+        {
+          "marker": "Vitest",
+          "fact": "We run tests with Vitest now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you add a test for this retry helper? We moved off Jest to Vitest last sprint, so use the Vitest import syntax this time."
+            },
+            {
+              "role": "assistant",
+              "text": "Added a Vitest test using vi.fn() for the mock, covering both the success and exhausted-retries paths."
+            }
+          ]
+        }
+      ],
+      "question": "What tool do we use to run tests?",
+      "answer": "Vitest"
+    },
+    {
+      "id": "z6-06730bed",
+      "split": "heldout",
+      "category": "flip",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "squash",
+          "fact": "We squash merge pull requests.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "This PR is ready, can you write the merge commit message? We squash merge pull requests, so summarize all three commits into one line."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a single summary line covering the parser fix, the added tests, and the changelog update."
+            }
+          ]
+        },
+        {
+          "marker": "rebase",
+          "fact": "We rebase merge pull requests now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "This PR is ready too, what should the merge look like? We switched from squash merges to rebase merges on pull requests now, so keep individual commits instead of collapsing them."
+            },
+            {
+              "role": "assistant",
+              "text": "Kept the four commits separate in the merge instead of squashing them into one."
+            }
+          ]
+        }
+      ],
+      "question": "How do we merge pull requests?",
+      "answer": "rebase"
+    },
+    {
+      "id": "z6-31dbcb4b",
+      "split": "tune",
+      "category": "correction",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Marcus",
+          "fact": "My colleague's name is Marcus.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you draft a quick intro email for the client call? My colleague's name is Marcus, and he's leading the demo."
+            },
+            {
+              "role": "assistant",
+              "text": "Sure, here's a short draft: 'Hi all, Marcus will lead today's demo and can take follow-up questions after.' Want a more formal tone?"
+            }
+          ]
+        },
+        {
+          "marker": "Felix",
+          "fact": "My colleague's name is Felix.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Quick correction on that intro email: my colleague's name is Felix, I mixed him up with someone else on the team."
+            },
+            {
+              "role": "assistant",
+              "text": "Got it, swapped the name: 'Hi all, Felix will lead today's demo and can take follow-up questions after.'"
+            }
+          ]
+        }
+      ],
+      "question": "What's my colleague's name again?",
+      "answer": "Felix"
+    },
+    {
+      "id": "z6-865c9e7e",
+      "split": "heldout",
+      "category": "correction",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "March 3",
+          "fact": "My son's birthday is March 3.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me set a reminder for a gift? My son's birthday is March 3, and I always forget to order something in time."
+            },
+            {
+              "role": "assistant",
+              "text": "I'll set a reminder two weeks ahead of March 3 so you have time to order and have it shipped."
+            }
+          ]
+        },
+        {
+          "marker": "April 9",
+          "fact": "My son's birthday is April 9.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Fix that reminder please: my son's birthday is April 9, not March 3, I had the month wrong."
+            },
+            {
+              "role": "assistant",
+              "text": "No problem, moved the reminder to two weeks before April 9."
+            }
+          ]
+        }
+      ],
+      "question": "When is my son's birthday?",
+      "answer": "April 9"
+    },
+    {
+      "id": "z6-34f96edd",
+      "split": "tune",
+      "category": "correction",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "BA287",
+          "fact": "My flight number is BA287.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My sister's picking me up from the airport, can you jot down a text with my flight details? My flight number is BA287, landing Friday evening."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a draft: 'Landing Friday evening on BA287, no rush if traffic's bad, I'll wait by the arrivals board.'"
+            }
+          ]
+        },
+        {
+          "marker": "BA492",
+          "fact": "My flight number is BA492.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Change of plan for that pickup message: my flight number is BA492 now, the airline moved me to a later departure."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the draft to reference BA492 instead."
+            }
+          ]
+        }
+      ],
+      "question": "What's my flight number this time?",
+      "answer": "BA492"
+    },
+    {
+      "id": "z6-8a614210",
+      "split": "tune",
+      "category": "correction",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "peanuts",
+          "fact": "I'm allergic to peanuts.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "The school sent home a trip form that needs allergy info. I'm allergic to peanuts, so can you help me word that section?"
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a line for the form: 'Please note a peanut allergy, no nut products at snack time.'"
+            }
+          ]
+        },
+        {
+          "marker": "shellfish",
+          "fact": "I'm allergic to shellfish.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Small correction to that school form: I'm allergic to shellfish, not peanuts, I don't know why I said that."
+            },
+            {
+              "role": "assistant",
+              "text": "Fixed it: 'Please note a shellfish allergy, no seafood at snack time.'"
+            }
+          ]
+        }
+      ],
+      "question": "What am I allergic to?",
+      "answer": "shellfish"
+    },
+    {
+      "id": "z6-9a67f155",
+      "split": "heldout",
+      "category": "correction",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "555-0148",
+          "fact": "My phone number is 555-0148.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "The plumber's coming by later and might run behind, so I want to text ahead. My phone number is 555-0148, use that if they need to call."
+            },
+            {
+              "role": "assistant",
+              "text": "Draft: 'Running a bit behind is fine, just call 555-0148 when you're on the way.'"
+            }
+          ]
+        },
+        {
+          "marker": "555-0193",
+          "fact": "My phone number is 555-0193.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Fix that text before you send it: my phone number is 555-0193, I gave you an old one by mistake."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated: 'Running a bit behind is fine, just call 555-0193 when you're on the way.'"
+            }
+          ]
+        }
+      ],
+      "question": "What's my phone number right now?",
+      "answer": "555-0193"
+    },
+    {
+      "id": "z6-312d14d1",
+      "split": "heldout",
+      "category": "correction",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "3000",
+          "fact": "The dev server runs on port 3000.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me write a curl command to hit my local API? The dev server runs on port 3000 right now."
+            },
+            {
+              "role": "assistant",
+              "text": "Sure: curl http://localhost:3000/api/status should do it. Add -v if you need the headers too."
+            }
+          ]
+        },
+        {
+          "marker": "5173",
+          "fact": "The dev server runs on port 5173.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Quick fix before you write that script: the port is 5173, not 3000, I switched the config last week."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated: curl http://localhost:5173/api/status."
+            }
+          ]
+        }
+      ],
+      "question": "What port does the dev server run on?",
+      "answer": "5173"
+    },
+    {
+      "id": "z6-61813313",
+      "split": "heldout",
+      "category": "correction",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "spec",
+          "fact": "The test command is npm run spec.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you update the README's CI badge instructions? Our test command is npm run spec, so the badge script should call that."
+            },
+            {
+              "role": "assistant",
+              "text": "Added a line under Testing: 'Run npm run spec before opening a PR.'"
+            }
+          ]
+        },
+        {
+          "marker": "check",
+          "fact": "The test command is npm run check.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Before you touch the README again, quick correction: the test command is npm run check now, we renamed the script last sprint."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the Testing section to reference npm run check instead."
+            }
+          ]
+        }
+      ],
+      "question": "What's the test command here now?",
+      "answer": "check"
+    },
+    {
+      "id": "z6-39883550",
+      "split": "tune",
+      "category": "correction",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "api.example.com",
+          "fact": "The API base URL is https://api.example.com/v1.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm writing a Postman collection for the team. The API base URL is https://api.example.com/v1, can you draft the folder structure around it?"
+            },
+            {
+              "role": "assistant",
+              "text": "Sure, I'd start with folders for Auth, Users, and Orders, each with example requests pointed at https://api.example.com/v1."
+            }
+          ]
+        },
+        {
+          "marker": "core-api.example.net",
+          "fact": "The API base URL is https://core-api.example.net/v1.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Hold on, one more fix before you send that collection: the base URL is https://core-api.example.net/v1 now, we moved off the old host."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated every request in the collection to point at https://core-api.example.net/v1."
+            }
+          ]
+        }
+      ],
+      "question": "What's the base URL for the API now?",
+      "answer": "core-api.example.net"
+    },
+    {
+      "id": "z6-4fbb4829",
+      "split": "tune",
+      "category": "correction",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "deploy-branch",
+          "fact": "The release branch is called deploy-branch.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I need a GitHub Actions step that deploys automatically. The release branch is called deploy-branch here, can you draft the workflow trigger?"
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a trigger: on push to branches: [deploy-branch], run the deploy job. That'll fire on every push to it."
+            }
+          ]
+        },
+        {
+          "marker": "prod-main",
+          "fact": "The release branch is called prod-main.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Correction on that workflow: the release branch is called prod-main, not deploy-branch, someone renamed it after the workflow doc went out."
+            },
+            {
+              "role": "assistant",
+              "text": "Fixed the trigger to branches: [prod-main]."
+            }
+          ]
+        }
+      ],
+      "question": "What's the release branch called at the moment?",
+      "answer": "prod-main"
+    },
+    {
+      "id": "z6-5c233222",
+      "split": "heldout",
+      "category": "correction",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "SERVICE_TOKEN",
+          "fact": "The environment variable for the API key is called SERVICE_TOKEN.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "New hires keep asking about the API key setup, so I'm filling out .env.example for them. The environment variable for the API key is called SERVICE_TOKEN right now."
+            },
+            {
+              "role": "assistant",
+              "text": "Added SERVICE_TOKEN= with a comment: 'Get this from the team vault, ask an admin for access.'"
+            }
+          ]
+        },
+        {
+          "marker": "AUTH_SECRET",
+          "fact": "The environment variable for the API key is called AUTH_SECRET.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Small fix to that .env.example: the environment variable for the API key is called AUTH_SECRET now, we renamed it during the auth rewrite."
+            },
+            {
+              "role": "assistant",
+              "text": "Updated the file to use AUTH_SECRET= instead."
+            }
+          ]
+        }
+      ],
+      "question": "What's the environment variable called these days?",
+      "answer": "AUTH_SECRET"
+    },
+    {
+      "id": "z6-0b049b2b",
+      "split": "heldout",
+      "category": "reversal",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "iPhone",
+          "fact": "My phone is an iPhone.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My phone is an iPhone, so keep it plain text: can you draft a quick note for the family group chat about Saturday's picnic? Some cousins are on old messaging apps."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a plain-text version: 'Picnic this Saturday at 1pm in the park, bring a snack to share.' Renders fine everywhere."
+            }
+          ]
+        },
+        {
+          "marker": "Android",
+          "fact": "My phone is an Android now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Switched my phone to an Android last week, and I want a tiny script to rename my camera roll photos by date taken, the export folder is structured differently than before."
+            },
+            {
+              "role": "assistant",
+              "text": "Loop over the files, read the EXIF date, and rename each to YYYY-MM-DD-HHMM.jpg. Android keeps the EXIF data intact by default, so this should just work."
+            }
+          ]
+        },
+        {
+          "marker": "iPhone",
+          "fact": "My phone is an iPhone again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Back to an iPhone now, my phone switched again after six months on Android, and I need you to proofread this note to my landlord about the lease renewal, autocorrect keeps mangling 'renewal'."
+            },
+            {
+              "role": "assistant",
+              "text": "Fixed version: 'Hi, I'd like to renew my lease for another year starting November. Let me know the next steps.'"
+            }
+          ]
+        }
+      ],
+      "question": "What phone do I have these days?",
+      "answer": "iPhone"
+    },
+    {
+      "id": "z6-033b556b",
+      "split": "heldout",
+      "category": "reversal",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "9am",
+          "fact": "Standup is at 9am.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Standup is at 9am, can you write a short calendar invite description for the team, just two lines about keeping updates brief?"
+            },
+            {
+              "role": "assistant",
+              "text": "Try: 'Daily standup, 9am. Keep updates to what you did, what's next, and any blockers.'"
+            }
+          ]
+        },
+        {
+          "marker": "11am",
+          "fact": "Standup is at 11am now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Standup moved to 11am this week, so I'm shifting my morning around, can you tidy this status update before I post it?"
+            },
+            {
+              "role": "assistant",
+              "text": "Tidied: 'Heads up, standup is now 11am this week. Post async updates if you can't join.'"
+            }
+          ]
+        },
+        {
+          "marker": "9am",
+          "fact": "Standup is at 9am again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Standup is back to 9am starting Monday, the 11am slot kept clashing with client calls, can you reword this reminder so it sounds final, not tentative?"
+            },
+            {
+              "role": "assistant",
+              "text": "Try: 'Standup returns to 9am from Monday, this is the permanent slot going forward.'"
+            }
+          ]
+        }
+      ],
+      "question": "What time is standup these days?",
+      "answer": "9am"
+    },
+    {
+      "id": "z6-cb159bbe",
+      "split": "tune",
+      "category": "reversal",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "GreenCart",
+          "fact": "My groceries come from GreenCart.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My groceries come from GreenCart, can you turn this recipe into a shopping list using their usual units, like bunches and packs?"
+            },
+            {
+              "role": "assistant",
+              "text": "List: 2 bunches spinach, 1 pack chicken thighs, 3 cloves garlic, 1 block feta. Matches GreenCart's usual pack sizes."
+            }
+          ]
+        },
+        {
+          "marker": "FreshHive",
+          "fact": "My groceries come from FreshHive now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Switched my groceries to FreshHive after a price hike at the old place, and yesterday's order never showed up, can you draft a short email about the missed delivery?"
+            },
+            {
+              "role": "assistant",
+              "text": "Draft: 'Hi, my order from yesterday didn't arrive and no one contacted me. Could you resend it or refund the charge?'"
+            }
+          ]
+        },
+        {
+          "marker": "GreenCart",
+          "fact": "My groceries come from GreenCart again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My groceries are back with GreenCart, dropped FreshHive after two missed deliveries, can you tidy this note for my weekly order so it lists my usual staples?"
+            },
+            {
+              "role": "assistant",
+              "text": "Tidied: 'Weekly staples: oat milk, eggs, sourdough, spinach, coffee beans.'"
+            }
+          ]
+        }
+      ],
+      "question": "Which service delivers my groceries these days?",
+      "answer": "GreenCart"
+    },
+    {
+      "id": "z6-677ce811",
+      "split": "tune",
+      "category": "reversal",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Spanish",
+          "fact": "I'm learning Spanish.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm learning Spanish this year, can you make ten quick flashcards for common travel phrases, nothing too advanced?"
+            },
+            {
+              "role": "assistant",
+              "text": "Here: hola (hello), gracias (thank you), por favor (please), cuanto cuesta (how much is it), donde esta el bano (where is the bathroom). Simple and travel-ready."
+            }
+          ]
+        },
+        {
+          "marker": "French",
+          "fact": "I'm learning French now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Switched to learning French this semester, can you write a short beginner dialogue for asking directions to a museum?"
+            },
+            {
+              "role": "assistant",
+              "text": "Try: 'Excusez-moi, ou est le musee? Tournez a droite, puis tout droit.' Simple enough for a beginner to memorize."
+            }
+          ]
+        },
+        {
+          "marker": "Spanish",
+          "fact": "I'm learning Spanish again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Back to learning Spanish, gave up French after the summer course ended, can you write five practice sentences using the past tense?"
+            },
+            {
+              "role": "assistant",
+              "text": "Try: 'Ayer comi tacos. Visite un museo. Hable con un amigo. Camine por el parque. Escribi una carta.' All simple past tense."
+            }
+          ]
+        }
+      ],
+      "question": "Which language am I learning these days?",
+      "answer": "Spanish"
+    },
+    {
+      "id": "z6-2ab99e85",
+      "split": "heldout",
+      "category": "reversal",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "Larkspur",
+          "fact": "I get my haircut at Larkspur.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I get my haircut at Larkspur, can you help me write a two-line online review after my appointment yesterday, keep it upbeat but not over the top?"
+            },
+            {
+              "role": "assistant",
+              "text": "Try: 'Great cut and friendly staff, my go-to spot for a quick trim.' Short, upbeat, not gushing."
+            }
+          ]
+        },
+        {
+          "marker": "Cedarwood",
+          "fact": "I get my haircut at Cedarwood now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Switched my haircut to Cedarwood after Larkspur's stylist left, can you draft a text asking if they have any openings this Saturday?"
+            },
+            {
+              "role": "assistant",
+              "text": "Text: 'Hi, do you have any openings this Saturday for a haircut? Happy to take any time that works.'"
+            }
+          ]
+        },
+        {
+          "marker": "Larkspur",
+          "fact": "I get my haircut at Larkspur again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Back to Larkspur for my haircut, Cedarwood kept rescheduling on me, can you write a short note asking to be added to their cancellation list?"
+            },
+            {
+              "role": "assistant",
+              "text": "Note: 'Hi, could you add me to your cancellation list? I can come in on short notice if a slot opens up.'"
+            }
+          ]
+        }
+      ],
+      "question": "Where do I get my haircut these days?",
+      "answer": "Larkspur"
+    },
+    {
+      "id": "z6-8264dba4",
+      "split": "tune",
+      "category": "reversal",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "REST",
+          "fact": "Our API uses REST.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our API uses REST, can you help fix a 500 error on the orders endpoint? The handler throws when the order id is missing from the path."
+            },
+            {
+              "role": "assistant",
+              "text": "Add a guard clause that returns a 400 if the id param is empty, before the lookup runs."
+            }
+          ]
+        },
+        {
+          "marker": "GraphQL",
+          "fact": "Our API uses GraphQL now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our API moved to GraphQL this sprint, can you write a quick script to fetch a user's orders? It needs to send a query with the fields we want, not a plain URL."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a script that posts a query string with 'orders { id, total, status }' to the endpoint and parses the JSON response."
+            }
+          ]
+        },
+        {
+          "marker": "REST",
+          "fact": "Our API is back to REST.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our API is back to REST, dropped GraphQL after the client libraries got too heavy, can you tidy this docs snippet so the examples show plain endpoint calls again?"
+            },
+            {
+              "role": "assistant",
+              "text": "Updated: 'GET /orders/{id} returns the order as JSON.' Matches the REST examples elsewhere in the docs."
+            }
+          ]
+        }
+      ],
+      "question": "What style does the API use?",
+      "answer": "REST"
+    },
+    {
+      "id": "z6-7316c4cb",
+      "split": "heldout",
+      "category": "reversal",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Webpack",
+          "fact": "Our bundler is Webpack.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our bundler is Webpack, can you help quiet this build warning about chunk size? The vendor chunk is creeping past the limit."
+            },
+            {
+              "role": "assistant",
+              "text": "Split the vendor chunk with splitChunks and pull the largest dependency into its own chunk."
+            }
+          ]
+        },
+        {
+          "marker": "Vite",
+          "fact": "Our bundler is Vite now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our bundler switched to Vite last week, can you write a script to print the build output size after each build? It needs to read from the dist folder Vite generates."
+            },
+            {
+              "role": "assistant",
+              "text": "Script that walks the dist folder, sums file sizes by extension, and prints a short table."
+            }
+          ]
+        },
+        {
+          "marker": "Webpack",
+          "fact": "Our bundler is Webpack again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our bundler is Webpack again, moved off Vite after a plugin we needed had no equivalent, can you tidy the comments in this build config so it reads as current?"
+            },
+            {
+              "role": "assistant",
+              "text": "Cleaned up the comments to describe the config as-is and removed the leftover references to the missing plugin."
+            }
+          ]
+        }
+      ],
+      "question": "Which bundler builds the frontend?",
+      "answer": "Webpack"
+    },
+    {
+      "id": "z6-e79680bc",
+      "split": "heldout",
+      "category": "reversal",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Netlify",
+          "fact": "We deploy to Netlify.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We deploy to Netlify, can you help fix a redirect that 404s on the pricing page? The redirects file looks like it's missing a trailing slash rule."
+            },
+            {
+              "role": "assistant",
+              "text": "Add '/pricing /pricing/ 301' to the redirects file, before any catch-all rules."
+            }
+          ]
+        },
+        {
+          "marker": "Vercel",
+          "fact": "We deploy to Vercel now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We moved our deploy to Vercel this month, can you write a short setup note for env vars? It should mention the project dashboard, not a redirects file."
+            },
+            {
+              "role": "assistant",
+              "text": "Note: 'Add API_BASE_URL and AUTH_KEY under Project Settings, Environment Variables, then redeploy.'"
+            }
+          ]
+        },
+        {
+          "marker": "Netlify",
+          "fact": "We deploy to Netlify again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We deploy to Netlify again, dropped Vercel after a pricing change, can you clean up this README section so the old dashboard steps come out?"
+            },
+            {
+              "role": "assistant",
+              "text": "Removed the Vercel dashboard steps and swapped in the Netlify redirects file instructions."
+            }
+          ]
+        }
+      ],
+      "question": "Where does the site deploy to these days?",
+      "answer": "Netlify"
+    },
+    {
+      "id": "z6-8b946ddc",
+      "split": "tune",
+      "category": "reversal",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Redux",
+          "fact": "Our state library is Redux.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our state library is Redux, can you help debug why the cart count doesn't update on the page? I suspect the reducer isn't returning a new object."
+            },
+            {
+              "role": "assistant",
+              "text": "Check the reducer, if it mutates the existing array instead of returning a new one, Redux won't see the change."
+            }
+          ]
+        },
+        {
+          "marker": "Zustand",
+          "fact": "Our state library is Zustand now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our state library switched to Zustand this sprint, can you sketch a store for a wishlist feature? Keep it to a plain create() call, no reducers."
+            },
+            {
+              "role": "assistant",
+              "text": "Here's a store with a create() call holding an items array, plus add and remove functions."
+            }
+          ]
+        },
+        {
+          "marker": "Redux",
+          "fact": "Our state library is Redux again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our state library is Redux again, moved off Zustand after debugging got painful without devtools, can you tidy this section of the contributing guide?"
+            },
+            {
+              "role": "assistant",
+              "text": "Rewrote the section to walk through defining an action, a reducer, and connecting a component with the Redux hooks."
+            }
+          ]
+        }
+      ],
+      "question": "What library handles state in the app?",
+      "answer": "Redux"
+    },
+    {
+      "id": "z6-6bde2c89",
+      "split": "tune",
+      "category": "reversal",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Jira",
+          "fact": "We track tickets in Jira.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We track tickets in Jira, can you help me write up a bug report formatted with a Steps to Reproduce section like usual?"
+            },
+            {
+              "role": "assistant",
+              "text": "Draft: 'Summary: Login fails on Safari. Steps to Reproduce: 1) Open Safari, 2) Enter valid credentials, 3) Click Sign In, nothing happens.'"
+            }
+          ]
+        },
+        {
+          "marker": "Linear",
+          "fact": "We track tickets in Linear now.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We moved our tickets to Linear this week, can you write a short status comment? Their style is more casual than what we used before."
+            },
+            {
+              "role": "assistant",
+              "text": "Comment: 'Fixed in the latest deploy, verified on staging, closing this out.'"
+            }
+          ]
+        },
+        {
+          "marker": "Jira",
+          "fact": "We track tickets in Jira again.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "We track tickets in Jira again, dropped Linear after the migration stalled, can you write a short onboarding note about our workflow for a new hire?"
+            },
+            {
+              "role": "assistant",
+              "text": "Note: 'We track all work in Jira. New tickets go in the current sprint board, please add a summary and priority before assigning.'"
+            }
+          ]
+        }
+      ],
+      "question": "Where do we track tickets these days?",
+      "answer": "Jira"
+    },
+    {
+      "id": "z6-ddffe9c3",
+      "split": "tune",
+      "category": "control-restate",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "chess",
+          "fact": "I play chess online.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me write a quick forum post asking for feedback on a hobby project I'm building? I play chess online quite a bit, so I want the tone to sound approachable to that kind of crowd."
+            },
+            {
+              "role": "assistant",
+              "text": "Sure, keep it casual and specific, mention what stage the project is at and exactly what kind of feedback you want."
+            }
+          ]
+        },
+        {
+          "marker": "chess",
+          "fact": "Chess is a game I play online.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm trying to write a short bio for a community forum profile and want it to sound like a real person, not overly formal. Chess is a game I play online fairly often, so maybe that's worth a mention alongside my job."
+            },
+            {
+              "role": "assistant",
+              "text": "That works well, a short personal detail like that makes a bio feel much more human without oversharing."
+            }
+          ]
+        }
+      ],
+      "question": "What game do I play online?",
+      "answer": "chess"
+    },
+    {
+      "id": "z6-4131e9d7",
+      "split": "heldout",
+      "category": "control-restate",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "guitar",
+          "fact": "I play the guitar.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Could you help me draft two sentences for a meetup sign-up sheet? I play the guitar and want that mentioned alongside my day job as a florist."
+            },
+            {
+              "role": "assistant",
+              "text": "How about: runs a small flower shop by day and plays guitar by night, always up for a jam."
+            }
+          ]
+        },
+        {
+          "marker": "guitar",
+          "fact": "Guitar is the instrument I play.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My friend's birthday is coming up and I am stuck on gift ideas within a modest budget. Guitar is the instrument I play myself, so something music-related might land well, any ideas?"
+            },
+            {
+              "role": "assistant",
+              "text": "A set of nice picks or a capo are both cheap and genuinely useful, or a subscription to a song-tab site if they like learning new pieces."
+            }
+          ]
+        }
+      ],
+      "question": "What instrument do I play?",
+      "answer": "guitar"
+    },
+    {
+      "id": "z6-6827c21e",
+      "split": "tune",
+      "category": "control-restate",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "shelter",
+          "fact": "I volunteer at the animal shelter.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me write a short thank-you note to a coworker who covered my shift? I volunteer at the animal shelter on weekends, and I want the note to feel warm but not too long."
+            },
+            {
+              "role": "assistant",
+              "text": "Try: thank you for covering me, it meant I didn't have to choose between work and the shelter dogs, I owe you one."
+            }
+          ]
+        },
+        {
+          "marker": "shelter",
+          "fact": "The animal shelter is where I volunteer.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm bringing a dish to a work potluck and want something that reheats well. The animal shelter is where I volunteer, and they are running a bake sale that same week, so maybe I should make extra."
+            },
+            {
+              "role": "assistant",
+              "text": "A baked pasta dish reheats well and travels easily, and it's simple to double the batch for the bake sale too."
+            }
+          ]
+        }
+      ],
+      "question": "Where do I volunteer?",
+      "answer": "shelter"
+    },
+    {
+      "id": "z6-ca918114",
+      "split": "heldout",
+      "category": "control-restate",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "PostgreSQL",
+          "fact": "We use PostgreSQL for the database.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you help me write a query that finds duplicate email rows? We use PostgreSQL for the database, so feel free to use its window functions."
+            },
+            {
+              "role": "assistant",
+              "text": "Sure, a ROW_NUMBER window partitioned by email will flag every duplicate past the first occurrence cleanly."
+            }
+          ]
+        },
+        {
+          "marker": "PostgreSQL",
+          "fact": "The database we use is PostgreSQL.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm setting up a nightly backup script for the project and want it scheduled sensibly. The database we use is PostgreSQL, and I'd like the dump compressed to save space."
+            },
+            {
+              "role": "assistant",
+              "text": "Pipe the dump through a compressor and you'll cut the file size drastically with almost no extra setup."
+            }
+          ]
+        }
+      ],
+      "question": "Which database do we use?",
+      "answer": "PostgreSQL"
+    },
+    {
+      "id": "z6-4c3cc894",
+      "split": "tune",
+      "category": "control-restate",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Sentry",
+          "fact": "We use Sentry for error tracking.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Our checkout page crashed for a user overnight and I want better crash handling around the payment call. We use Sentry for error tracking, so wrap it so it reports there instead of failing silently."
+            },
+            {
+              "role": "assistant",
+              "text": "Wrap the payment call in a try block and capture the exception before re-throwing, so it lands in the dashboard with full context."
+            }
+          ]
+        },
+        {
+          "marker": "Sentry",
+          "fact": "Error tracking is handled by Sentry here.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm writing a short onboarding doc for a new engineer joining next month. Error tracking is handled by Sentry here, so I should add a line about checking the dashboard each day."
+            },
+            {
+              "role": "assistant",
+              "text": "Good call, also mention how to mute a noisy alert so they don't panic over a known issue on day one."
+            }
+          ]
+        }
+      ],
+      "question": "What handles error tracking for us?",
+      "answer": "Sentry"
+    },
+    {
+      "id": "z6-fd5204a9",
+      "split": "tune",
+      "category": "control-lookalike",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "parrot",
+          "fact": "My sister has a parrot as a pet.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm planning a weekend visit to see family and want to bring a small gift for the house. My sister has a parrot as a pet, so maybe something bird-safe would be nice, any ideas?"
+            },
+            {
+              "role": "assistant",
+              "text": "A millet spray or a few new perches usually go down well, just skip anything with strong scents nearby."
+            }
+          ]
+        },
+        {
+          "marker": "tortoise",
+          "fact": "My cousin has a tortoise as a pet.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm writing a quick message to catch up with my cousin after a long while and want it to sound casual, not formal. My cousin has a tortoise as a pet and I always forget its name, maybe I will ask about it this time."
+            },
+            {
+              "role": "assistant",
+              "text": "Good opener, asking after a pet by name is a warm, low-effort way back into the conversation."
+            }
+          ]
+        }
+      ],
+      "question": "What pet does my sister have?",
+      "answer": "parrot"
+    },
+    {
+      "id": "z6-c179cb01",
+      "split": "heldout",
+      "category": "control-lookalike",
+      "domain": "personal",
+      "statements": [
+        {
+          "marker": "porridge",
+          "fact": "My roommate always orders porridge for breakfast.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Could you help me put together a grocery list for the week, trying to keep it budget-friendly? My roommate always orders porridge for breakfast, so let's make sure oats are on there."
+            },
+            {
+              "role": "assistant",
+              "text": "Added oats, plus a couple of toppings like dried fruit and honey to keep breakfast from getting boring."
+            }
+          ]
+        },
+        {
+          "marker": "waffles",
+          "fact": "My grandfather always orders waffles for breakfast.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm putting together a loose plan for visiting family this weekend and want one relaxed morning built in. My grandfather always orders waffles for breakfast when we visit, so I thought we'd start there before anything else."
+            },
+            {
+              "role": "assistant",
+              "text": "Good anchor for the morning, everything else can flex around a slow breakfast without much planning."
+            }
+          ]
+        }
+      ],
+      "question": "What does my roommate order for breakfast?",
+      "answer": "porridge"
+    },
+    {
+      "id": "z6-5e55d15e",
+      "split": "heldout",
+      "category": "control-lookalike",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "4400",
+          "fact": "The staging service listens on port 4400.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I keep getting connection refused when I try to hit the staging service locally, can you sanity check my curl command? The staging service listens on port 4400, and I think I might be pointing at the wrong one."
+            },
+            {
+              "role": "assistant",
+              "text": "Your command points at the default port, update it to 4400 and the connection refused should clear right up."
+            }
+          ]
+        },
+        {
+          "marker": "7700",
+          "fact": "The analytics service listens on port 7700.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Can you sketch a tiny script that pings a couple of internal services and logs whether they respond? The analytics service listens on port 7700, so that one should be in the list too."
+            },
+            {
+              "role": "assistant",
+              "text": "Sure, a short loop over a list of host and port pairs with a timeout will cover both services cleanly."
+            }
+          ]
+        }
+      ],
+      "question": "Which port does the staging service run on?",
+      "answer": "4400"
+    },
+    {
+      "id": "z6-a5780c09",
+      "split": "heldout",
+      "category": "control-lookalike",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "bullseye",
+          "fact": "The worker service runs on the bullseye image.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I'm getting a missing shared library error when the worker container starts, can you help me figure out what package to install? The worker service runs on the bullseye image, if that changes which package name I need."
+            },
+            {
+              "role": "assistant",
+              "text": "That base uses the older package name, so install it under its legacy label rather than the newer one."
+            }
+          ]
+        },
+        {
+          "marker": "bookworm",
+          "fact": "The scheduler service runs on the bookworm image.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "Could you help me add a healthcheck line to a Dockerfile for one of our services? The scheduler service runs on the bookworm image, and I want the syntax to match what that base supports."
+            },
+            {
+              "role": "assistant",
+              "text": "That base supports the standard healthcheck instruction directly, so a simple curl against a local endpoint will do."
+            }
+          ]
+        }
+      ],
+      "question": "Which image does the worker service run on?",
+      "answer": "bullseye"
+    },
+    {
+      "id": "z6-346c3b9f",
+      "split": "tune",
+      "category": "control-lookalike",
+      "domain": "coding",
+      "statements": [
+        {
+          "marker": "Prettier",
+          "fact": "The API repo formats code with Prettier.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "My pre-commit hook keeps failing on a file I did not even touch, any idea why? The API repo formats code with Prettier, and I think it might be reformatting lines I did not change."
+            },
+            {
+              "role": "assistant",
+              "text": "That's normal if the file had inconsistent formatting already, Prettier rewrites the whole file, not just your lines."
+            }
+          ]
+        },
+        {
+          "marker": "Ruff",
+          "fact": "The docs site repo formats code with Ruff.",
+          "turns": [
+            {
+              "role": "user",
+              "text": "I want to add a lint step to the workflow file for one of our repos, can you sketch the step? The docs site repo formats code with Ruff, so the step should call that."
+            },
+            {
+              "role": "assistant",
+              "text": "Sure, a single step installing it and running its check command against the repo will cover that."
+            }
+          ]
+        }
+      ],
+      "question": "What formats code in the API repo?",
+      "answer": "Prettier"
+    }
+  ]
+}
