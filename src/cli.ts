@@ -3534,8 +3534,8 @@ async function cmdSessionEndWorker(
     try {
       const tenantId = resolveTenantId({});
       const ownSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId)?.session_id === closeSessionId;
-      // A session that never compacted has no snapshot, so its own transcript supplies the same fields.
-      const derived = !ownSnapshot && transcriptPath
+      // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take the slot before the write.
+      const derived = transcriptPath
         ? transcriptWorkingState(transcriptPath, (message) => appendSessionEndCloseLog(closeLogFile, message))
         : null;
       if (!ownSnapshot && !derived) {
