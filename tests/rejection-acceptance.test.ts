@@ -391,7 +391,7 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
       writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
       // longText is the longer of the two, so mergeContents' length-sort
-      // deterministically picks it as the 2-entry merge base.
+      // deterministically puts it first in the 2-entry merge.
       const shortText = 'migrate the billing database before the next release window';
       const longText = 'migrate the billing database before the next release window with full backups enabled';
       const e1 = createMemory(shortText, { layer: Layer.Episodic });
@@ -399,7 +399,7 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
       const db = openHippoDb(home);
       try {
@@ -595,7 +595,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in 'tenant-a' — the cluster's own tenant, and (post
@@ -650,7 +650,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in an unrelated tenant ('default') — the write now

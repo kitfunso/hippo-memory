@@ -3094,7 +3094,7 @@ function cmdDedup(
   const threshold = parseFloat(String(flags['threshold'] ?? '0.7'));
 
   const entries = loadAllEntries(hippoRoot);
-  console.log(`Scanning ${entries.length} memories for duplicates (>=${(threshold * 100).toFixed(0)}% text overlap)${dryRun ? ' (dry run)' : ''}...\n`);
+  console.log(`Scanning ${entries.length} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
 
   const result = deduplicateStore(hippoRoot, { threshold, dryRun });
 
@@ -9704,7 +9704,7 @@ Commands:
   daily-runner             Sweep registered workspaces and run daily learn+sleep
   dedup                    Remove duplicate memories (keeps stronger copy)
     --dry-run              Preview without removing
-    --threshold <n>        Overlap threshold 0-1 (default: 0.7)
+    --threshold <n>        Overlap threshold 0-1 (default: 0.7); text must also match apart from spacing
   status                   Show memory health stats
   audit [--fix]            Check memory quality (--fix removes junk)
   github                   GitHub connector subcommands (backfill, dlq)

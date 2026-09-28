@@ -775,8 +775,9 @@ export async function consolidate(
   // -------------------------------------------------------------------------
   // 3. Merge pass  - episodic entries only
   // -------------------------------------------------------------------------
+  const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
   const mergeCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted'),
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted') && !alreadyMergedIds.has(e.id),
   );
   const used = new Set<string>();
 
@@ -836,17 +837,20 @@ export async function consolidate(
       // always 'default'.
       let semantic: MemoryEntry | null = null;
       if (!dryRun) {
-        semantic = createMemory(mergedContent, {
-          layer: Layer.Semantic,
-          tags: allTags,
-          emotional_valence: maxValence,
-          schema_fit: 0.7,
-          source: 'consolidation',
-          confidence: 'inferred',
-          tenantId: mergeTenant,
-          scope: mergeScope,
-          baseHalfLifeDays: config.defaultHalfLifeDays,
-        });
+        semantic = {
+          ...createMemory(mergedContent, {
+            layer: Layer.Semantic,
+            tags: allTags,
+            emotional_valence: maxValence,
+            schema_fit: 0.7,
+            source: 'consolidation',
+            confidence: 'inferred',
+            tenantId: mergeTenant,
+            scope: mergeScope,
+            baseHalfLifeDays: config.defaultHalfLifeDays,
+          }),
+          parents: cluster.map((e) => e.id),
+        };
       }
 
       // mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)
@@ -1037,20 +1041,15 @@ export async function consolidate(
 // ---------------------------------------------------------------------------
 
 function mergeContents(entries: MemoryEntry[]): string {
-  // Simple merge: take the longest entry as the base, prepend a summary note.
-  // Equal-length merge bases previously fell to cluster-assembly order;
-  // compareEntryIdentity is a deterministic tie key (content asc -> metadata -> id asc),
-  // a no-op when lengths differ (docs/plans/2026-07-16-dedupe-survivor-determinism.md T2).
+  // Every source's full text goes in: the merge demotes all of them, so text left out would fade with its source.
+  // Length desc, then compareEntryIdentity, keeps the row and its rejection digest byte-identical across ingest orders.
   const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
-  const base = sorted[0].content;
 
   if (entries.length === 2) {
-    return `[Consolidated from ${entries.length} related memories]\n\n${base}`;
+    return `[Consolidated from ${entries.length} related memories]\n\n${sorted.map((e) => e.content).join('\n\n')}`;
   }
 
-  // Bullets follow the base order (not raw cluster order) so the merged row
-  // and its rejection digest are byte-identical across ingest orders.
-  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
+  const bullets = sorted.map((e) => `- ${e.content}`).join('\n');
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
 }
 

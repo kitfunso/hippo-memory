@@ -1,6 +1,6 @@
 /**
- * Store-level deduplication. Scans for near-duplicate memories by content
- * Jaccard overlap, keeps the stronger copy (by strength + retrieval count),
+ * Store-level deduplication. Scans for memories with the same text apart
+ * from spacing, keeps the stronger copy (by strength + retrieval count),
  * removes the rest.
  *
  * Extracted from cli.ts in Episode A (v1.11.3) so `api.sleep` can dedupe
@@ -77,9 +77,9 @@ export function strengthBucket(strength: number | null | undefined): number {
 }
 
 /**
- * Scan the store for near-duplicate memories and remove the weaker copy.
- * Two memories are duplicates if their content has > threshold Jaccard
- * overlap AND they belong to the same tenant: the scan is partitioned by
+ * Scan the store for duplicates and remove the weaker copy: same text apart
+ * from spacing, since a near-duplicate can differ in a value (port, version,
+ * path, name), AND the same tenant: the scan is partitioned by
  * tenantId, so byte-identical content in two tenants is never a duplicate
  * pair (the tenant boundary is an isolation boundary; cross-tenant removal
  * was the v1.32.0 known-issue data-loss bug).
@@ -138,10 +138,12 @@ export function deduplicateStore(
       return compareEntryIdentity(a, b);
     });
 
+    const texts = tenantEntries.map((e) => e.content.replace(/\s+/g, ' ').trim());
     for (let i = 0; i < tenantEntries.length; i++) {
       if (removed.has(tenantEntries[i].id)) continue;
       for (let j = i + 1; j < tenantEntries.length; j++) {
         if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j])) continue;
+        if (texts[j] !== texts[i]) continue;
 
         const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);
         if (similarity <= threshold) continue;

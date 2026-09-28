@@ -74,26 +74,19 @@ function permutationsOf3(): number[][] {
   return out;
 }
 
-// Near-duplicate probe pair: 14 tokens per entry, 13 shared, one word swapped
-// ("this" -> "last"). Jaccard = 13/15 = 0.8667 (> 0.7 dedupe threshold),
-// computed against src/search.ts textOverlap's tokenizer (lowercase,
-// punctuation-stripped, length>1 tokens, set-based Jaccard).
+// Duplicate probe pair: the same sentence, B with a double space before "this".
+// Dedup removes only text that matches apart from spacing; a swapped word is a
+// changed value and both copies stay (tests/sleep-keeps-both-versions.test.ts).
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';
-const CONTENT_B =
-  'The quarterly finance report shows revenue grew steadily across all four regions last year';
+const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
-// Three mutually near-duplicate contents for the permutation test: a 20
-// shared-token base sentence, each variant swapping a DIFFERENT single word
-// for a word that appears nowhere else in the set. Any two variants share
-// 18 of 20 tokens each (intersection 18, union 22) -> Jaccard 18/22 = 0.8182
-// (> 0.7), so all three pairs are near-duplicates of each other.
-const VARIANT_A =
-  'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+// Three mutual duplicates for the permutation test: one base sentence (B), with an
+// extra space at a different place in A and C, so A and C tie on length and B is shorter.
 const VARIANT_B =
-  'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
-const VARIANT_C =
-  'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
+  'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+const VARIANT_A = VARIANT_B.replace(' this time', '  this time');
+const VARIANT_C = VARIANT_B.replace(' each week', '  each week');
 
 describe('dedupe survivor determinism', () => {
   it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', () => {
@@ -437,7 +430,7 @@ describe('dedupe survivor determinism', () => {
     const expectedOrder = [...variants].sort(
       (a, b) => b.content.length - a.content.length || (a.content < b.content ? -1 : a.content > b.content ? 1 : 0),
     );
-    const expectedBlock = expectedOrder.map((v) => `- ${v.content.slice(0, 120)}`).join('\n');
+    const expectedBlock = expectedOrder.map((v) => `- ${v.content}`).join('\n');
 
     for (const perm of permutationsOf3()) {
       const { home, restore } = tmpHome('hippo-dedupe-det-14-');

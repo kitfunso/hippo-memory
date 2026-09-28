@@ -57,7 +57,7 @@ describe('T3: consolidateDb lazy open', () => {
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
       const db = openHippoDb(home);
       try {

@@ -51,15 +51,11 @@ function setStrength(home: string, id: string, strength: number): void {
   }
 }
 
-// Same probe pair as tests/dedupe-survivor-determinism.test.ts: 14 tokens per
-// entry, 13 shared, one word swapped ("this" -> "last"). Jaccard = 13/15 =
-// 0.8667 (> 0.7 dedupe threshold), computed against src/search.ts
-// textOverlap's tokenizer (lowercase, punctuation-stripped, length>1 tokens,
-// set-based Jaccard).
+// Same probe pair as tests/dedupe-survivor-determinism.test.ts: one sentence,
+// B with a double space, so the two differ in bytes but match apart from spacing.
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';
-const CONTENT_B =
-  'The quarterly finance report shows revenue grew steadily across all four regions last year';
+const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
 // Byte-identical content used across two tenants for the zero-removal case.
 const SHARED_CONTENT =
@@ -99,7 +95,7 @@ describe('deduplicateStore tenant partition', () => {
 
       // tenant-b: CONTENT_B weak, CONTENT_A strong -> CONTENT_A survives.
       // Deliberately the mirror image of tenant-a's pair, so a leaked
-      // cross-tenant comparison (all four rows overlap pairwise > 0.7)
+      // cross-tenant comparison (all four rows are pairwise duplicates)
       // would produce a different removal count and different survivors
       // than the per-tenant-correct result asserted below.
       const bWeak = remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
