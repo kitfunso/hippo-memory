@@ -14,6 +14,8 @@ export interface HandoffEvidence {
   gitRef?: string | null;
   dirtyTree?: boolean | null;
   testStatus?: 'pass' | 'fail' | 'unknown' | null;
+  /** 'transcript' when hippo read the handoff off the session's transcript at session end; a later exit may replace it. */
+  derivedFrom?: 'transcript';
 }
 
 /** Narrows an unvalidated value (e.g. CLI input or event content) to a HandoffOutcome. */

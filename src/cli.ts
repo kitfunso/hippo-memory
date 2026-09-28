@@ -3545,7 +3545,7 @@ async function cmdSessionEndWorker(
         const handoff = writeSessionEndHandoff(hippoRoot, tenantId, closeSessionId, evidence, derived);
         appendSessionEndCloseLog(
           closeLogFile,
-          handoff ? `wrote handoff for session ${closeSessionId}` : 'skip: a newer handoff covers the session',
+          handoff ? `wrote handoff for session ${closeSessionId}` : `skip: kept the existing handoff for session ${closeSessionId}`,
         );
       }
     } catch (err) {

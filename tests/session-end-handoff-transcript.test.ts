@@ -98,4 +98,31 @@ describe('writeSessionEndHandoff from transcript state', () => {
 
     expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, state)?.taskId).toBe('from the snapshot');
   });
+
+  it("replaces the handoff read at a resumed session's earlier exit", () => {
+    const root = store();
+    writeSessionEndHandoff(root, 'default', 'sess-new', null, state);
+    const later = { ...state, next_step: 'write the retry queue test' };
+
+    expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, later)?.nextAction).toBe(later.next_step);
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.evidence?.derivedFrom).toBe('transcript');
+  });
+
+  it('keeps a handoff written with hippo handoff create over a later transcript read', () => {
+    const root = store();
+    writeSessionEndHandoff(root, 'default', 'sess-new', null, state);
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-new', summary: 'written by hand', artifacts: [], evidence: { testStatus: 'pass' } });
+
+    expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, state)).toBeNull();
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.summary).toBe('written by hand');
+  });
+
+  it('keeps an unmarked handoff written before transcript reads were marked', () => {
+    const root = store();
+    const unmarked = { gitRef: 'abc123', dirtyTree: false, testStatus: 'unknown' as const };
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-new', taskId: state.task, summary: state.summary, nextAction: state.next_step, artifacts: [], evidence: unmarked });
+
+    expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, { ...state, next_step: 'newer' })).toBeNull();
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.nextAction).toBe(state.next_step);
+  });
 });
