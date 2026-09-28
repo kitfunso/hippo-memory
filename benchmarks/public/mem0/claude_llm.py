@@ -25,7 +25,8 @@ KEEP_ENV = {
     "PROGRAMW6432", "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERNAME", "USERPROFILE", "WINDIR",
 }
 LIMIT_RE = re.compile(r"usage limit|rate limit|hit your limit|limit reached|resets", re.I)
-MAX_FAILURES, MAX_JSON_MISSES, MAX_WAIT_S = 4, 3, 12 * 3600
+MAX_FAILURES, MAX_JSON_MISSES = 4, 3
+DEADLINE_S = 11 * 3600  # a call gives up inside the 12 h client timeouts, so no client resends a live add
 
 
 def json_reply(text: str) -> dict | None:
@@ -94,7 +95,7 @@ class Claude:
         sys_file, sys_sha = self._system_file(system)
         base = {"tag": tag, "sys": sys_sha, "user": hashlib.sha256(user.encode()).hexdigest()[:16], "effort": effort}
         failures = misses = attempt = 0
-        waited = 0
+        waited, start = 0, time.time()
         while True:
             attempt += 1
             t0 = time.time()
@@ -105,7 +106,7 @@ class Claude:
                 detail = f"{res.get('api_error_status')} {text} {err}"[:400]
                 if res.get("api_error_status") == 429 or LIMIT_RE.search(detail):
                     delay = 60 if waited == 0 else 300
-                    if waited + delay > MAX_WAIT_S:
+                    if time.time() - start + delay > DEADLINE_S:
                         self._fail(base, f"usage limit not lifted after {waited} s: {detail}")
                     self._log({**base, "event": "limit-wait", "delay_s": delay, "detail": detail})
                     time.sleep(delay)

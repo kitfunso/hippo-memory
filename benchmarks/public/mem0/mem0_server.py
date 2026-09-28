@@ -1,13 +1,14 @@
-"""Mem0's own OSS server from the runner (docker/mem0/main.py at 4b61c5d), with two routes fixed for the Mem0 it pins.
+"""Mem0's own OSS server from the runner (docker/mem0/main.py at 4b61c5d), fixed for the Mem0 it pins (mem0ai 5e941e2).
 
-POST /memories keeps each turn's session date, which that server drops, through metadata.created_at and the extraction
-prompt's Observation Date. POST /search sends the user id in `filters` and the count as `top_k`, as mem0ai 5e941e2 needs.
+POST /memories keeps each turn's session date (metadata.created_at, the prompt's Observation Date); POST /search sends the
+user id in `filters` and the count as `top_k`; startup builds the entity store and BM25 encoders, and fails without BM25.
 """
 import os
 
 os.environ.setdefault("MEM0_TELEMETRY", "False")  # read when mem0 is imported
 
 import argparse
+import contextlib
 import functools
 import importlib.util
 import sys
@@ -91,6 +92,19 @@ def build_app(runner: Path) -> FastAPI:
             server.logger.exception("search() failed")
             raise HTTPException(500, str(e)) from e
 
+    base = app.router.lifespan_context
+
+    @contextlib.asynccontextmanager
+    async def lifespan(a: FastAPI) -> Any:
+        async with base(a):
+            mem = server._get_memory()
+            # Mem0 builds both lazily, so the first ten adds at once raced to create the entity collection (one got 409).
+            for store in (mem.vector_store, mem.entity_store):
+                if store._get_bm25_encoder() is None:
+                    raise SystemExit("no BM25 encoder: Mem0 would silently drop keyword search (pip install fastembed)")
+            yield
+
+    app.router.lifespan_context = lifespan
     return app
 
 
