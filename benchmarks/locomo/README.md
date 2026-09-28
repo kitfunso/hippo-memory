@@ -92,7 +92,7 @@ Flags:
 - `--judge-timeout` — seconds per judge call (default: 60)
 - `HIPPO_BIN` — override the Hippo command used for every hippo
   invocation (init/remember/recall, not just judged runs), for example
-  `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`
+  `HIPPO_BIN='node C:/Users/<user>/hippo-v032/bin/hippo.js'`
 
 ### Windows / HIPPO_BIN
 
@@ -117,7 +117,7 @@ arguments:
 ```bash
 python audit_matched_stores.py \
   --hippo-cmd 'v032=hippo-v032' \
-  --hippo-cmd 'current=node C:/Users/skf_s/hippo/bin/hippo.js' \
+  --hippo-cmd 'current=node C:/Users/<user>/hippo/bin/hippo.js' \
   --max-conversations 1 --sample-qa 2
 ```
 

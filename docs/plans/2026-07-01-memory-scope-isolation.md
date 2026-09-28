@@ -4,14 +4,14 @@
 
 ## Problem
 
-The every-turn UserPromptSubmit hook (`hippo context --pinned-only --include-recent 5 --format additional-context`, src/hooks.ts:118) injects memories from other projects into the active session. Reproduced 2026-07-01 from `C:\Users\skf_s\shiny` (own `.hippo` store): 19/19 injected entries were `[global]`-store rows about other projects. Observed 2026-06-30: a production API key stored as a memory in the live context of unrelated sessions; a wrong-project infra recommendation traced to the same bleed.
+The every-turn UserPromptSubmit hook (`hippo context --pinned-only --include-recent 5 --format additional-context`, src/hooks.ts:118) injects memories from other projects into the active session. Reproduced 2026-07-01 from `C:\Users\<user>\shiny` (own `.hippo` store): 19/19 injected entries were `[global]`-store rows about other projects. Observed 2026-06-30: a production API key stored as a memory in the live context of unrelated sessions; a wrong-project infra recommendation traced to the same bleed.
 
 ## Root cause
 
 1. **`getContext` (src/api.ts:2118) bypasses the scope-isolation machinery `api.recall` enforces** (`passesScopeFilterForRecall` api.ts:182-198, `RECALL_DEFAULT_DENY_SCOPES` store.ts:227 via `loadRecallSearchEntries`). Its loads (`loadAllEntries` api.ts:2143-2144; pinned mode api.ts:2176+) apply no scope predicate.
 2. **No project-origin partition anywhere.** Global rows (`~/.hippo`) merge into every session (searchBoth shared.ts:88-143, searchBothHybrid shared.ts:170-227); origin is recorded only lossily (`source: shared:<project>:<ts>`, from a path basename, shared.ts:278-305) and never consulted. `autoShare` (shared.ts:373-411) only down-weights `api-key`-tagged rows (PROJECT_SPECIFIC_TAGS -0.15), never vetoes.
 3. **No secret detection on memory content** (only provider-error redaction and sleep metadata redaction).
-4. Path identity is a weak rank-boost only (`pathOverlapScore` path-context.ts:29-37 divides by the memory's tag count; bare `path:skf_s` scores 1.0 everywhere under home) - but path tuning is DEFERRED (see Non-goals) because it lives in generic search code.
+4. Path identity is a weak rank-boost only (`pathOverlapScore` path-context.ts:29-37 divides by the memory's tag count; bare `path:<user>` scores 1.0 everywhere under home) - but path tuning is DEFERRED (see Non-goals) because it lives in generic search code.
 
 ## Design pillars
 

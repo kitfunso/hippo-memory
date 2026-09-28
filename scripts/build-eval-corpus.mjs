@@ -114,10 +114,10 @@ const caseSpecs = [
     selector: { allOf: ['bloomberg parquet'], maxLen: 500 },
   },
   {
-    id: 'quantamental-cta-split',
-    query: 'Quantamental and CTA are independent pipelines',
+    id: 'project-e-cta-split',
+    query: 'project-e and CTA are independent pipelines',
     description: 'architecture rule',
-    selector: { allOf: ['quantamental', 'cta'], anyOf: ['independent'], maxLen: 1500 },
+    selector: { allOf: ['cta', 'independent', 'pipeline'], maxLen: 1500 },
   },
   {
     id: 'postgres-vacuum',

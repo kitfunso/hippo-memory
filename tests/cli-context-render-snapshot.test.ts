@@ -96,7 +96,7 @@ describe('printContextMarkdown snapshots', () => {
   const memVerifiedSemantic = makeMemory({
     id: 'mem_test_001',
     content: 'always use real DB for tests',
-    tags: ['path:skf_s', 'path:hippo'],
+    tags: ['path:alice', 'path:hippo'],
     confidence: 'verified',
     layer: 'semantic',
   });

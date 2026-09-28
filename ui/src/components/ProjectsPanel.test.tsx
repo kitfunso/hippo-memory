@@ -27,8 +27,8 @@ describe("ProjectsPanel", () => {
   it("renders top-N projects in order", () => {
     const projects = [
       project("path:hippo", 173, 18, 0),
-      project("path:quantamental", 247, -9, 16),
-      project("path:phzse", 155, -9, -16),
+      project("path:project-e", 247, -9, 16),
+      project("path:project-d", 155, -9, -16),
     ];
     const { getAllByRole } = render(
       <ProjectsPanel projects={projects} onSelectProject={() => {}} />,
@@ -37,8 +37,8 @@ describe("ProjectsPanel", () => {
     expect(buttons).toHaveLength(3);
     // Order matches input.
     expect(buttons[0].textContent).toContain("hippo");
-    expect(buttons[1].textContent).toContain("quantamental");
-    expect(buttons[2].textContent).toContain("phzse");
+    expect(buttons[1].textContent).toContain("project-e");
+    expect(buttons[2].textContent).toContain("project-d");
   });
 
   it("renders subtitle '(ordered by first-seen)'", () => {
@@ -52,14 +52,14 @@ describe("ProjectsPanel", () => {
   it("each button has an aria-label of the form 'Filter to project X, N memories' (design HIGH-1) with grammatical pluralization (review MED)", () => {
     const projects = [
       project("path:hippo", 173, 18, 0),
-      project("path:quantamental", 247, -9, 16),
+      project("path:project-e", 247, -9, 16),
       project("path:singleton", 1, 0, 0),
     ];
     const { getByLabelText } = render(
       <ProjectsPanel projects={projects} onSelectProject={() => {}} />,
     );
     expect(getByLabelText("Filter to project hippo, 173 memories")).toBeDefined();
-    expect(getByLabelText("Filter to project quantamental, 247 memories")).toBeDefined();
+    expect(getByLabelText("Filter to project project-e, 247 memories")).toBeDefined();
     // Singular form for count=1 (was '1 memories' in v1 — ungrammatical SR).
     expect(getByLabelText("Filter to project singleton, 1 memory")).toBeDefined();
   });

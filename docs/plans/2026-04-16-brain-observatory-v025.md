@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, Vite 6, TypeScript, Canvas 2D API, d3-force (layout), existing hippo physics/embeddings APIs
 
-**Design doc:** `~/.gstack/projects/kitfunso-hippo-memory/skf_s-master-design-20260416-225438.md`
+**Design doc:** `~/.gstack/projects/kitfunso-hippo-memory/<user>-master-design-20260416-225438.md`
 
 ---
 
@@ -93,7 +93,7 @@ describe('dashboard API', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd C:/Users/skf_s/hippo && npx vitest run tests/dashboard-api.test.ts`
+Run: `cd C:/Users/<user>/hippo && npx vitest run tests/dashboard-api.test.ts`
 Expected: FAIL — server not running, no API routes
 
 **Step 3: Implement the JSON API router in dashboard.ts**
@@ -235,7 +235,7 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): void {
 
 **Step 4: Run tests to verify they pass**
 
-Run: `cd C:/Users/skf_s/hippo && npx vitest run tests/dashboard-api.test.ts`
+Run: `cd C:/Users/<user>/hippo && npx vitest run tests/dashboard-api.test.ts`
 
 Note: Tests need a running server. Either start one in `beforeAll` using a temp hippo root, or refactor tests to use `handleApiRequest` directly. The pragmatic approach is to test the route handler directly by mocking req/res.
 
@@ -263,7 +263,7 @@ git commit -m "feat(dashboard): add JSON API endpoints for Brain Observatory UI"
 **Step 1: Initialize ui/ directory**
 
 ```bash
-cd C:/Users/skf_s/hippo
+cd C:/Users/<user>/hippo
 mkdir -p ui/src/api ui/src/views ui/src/components
 ```
 
@@ -548,8 +548,8 @@ export function App() {
 **Step 9: Install dependencies and verify build**
 
 ```bash
-cd C:/Users/skf_s/hippo/ui && npm install
-cd C:/Users/skf_s/hippo/ui && npm run build
+cd C:/Users/<user>/hippo/ui && npm install
+cd C:/Users/<user>/hippo/ui && npm run build
 ```
 
 Expected: `dist-ui/` directory created at hippo root with `index.html` and JS bundle.
@@ -557,8 +557,8 @@ Expected: `dist-ui/` directory created at hippo root with `index.html` and JS bu
 **Step 10: Verify integration**
 
 ```bash
-cd C:/Users/skf_s/hippo && npm run build
-cd C:/Users/skf_s/hippo && node bin/hippo.js dashboard --port 13334
+cd C:/Users/<user>/hippo && npm run build
+cd C:/Users/<user>/hippo && node bin/hippo.js dashboard --port 13334
 # In another terminal: curl http://localhost:13334/
 # Should serve the React app
 # curl http://localhost:13334/api/stats should return JSON
@@ -633,7 +633,7 @@ describe('projectTo2D', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd C:/Users/skf_s/hippo/ui && npx vitest run src/engine/projection.test.ts`
+Run: `cd C:/Users/<user>/hippo/ui && npx vitest run src/engine/projection.test.ts`
 Expected: FAIL — module not found
 
 **Step 3: Implement PCA projection**
@@ -734,7 +734,7 @@ export function projectTo2D(
 
 **Step 4: Run tests to verify they pass**
 
-Run: `cd C:/Users/skf_s/hippo/ui && npx vitest run src/engine/projection.test.ts`
+Run: `cd C:/Users/<user>/hippo/ui && npx vitest run src/engine/projection.test.ts`
 Expected: PASS
 
 **Step 5: Commit**
@@ -902,7 +902,7 @@ describe('ParticleEngine', () => {
 
 **Step 3: Run test to verify it fails**
 
-Run: `cd C:/Users/skf_s/hippo/ui && npx vitest run src/engine/particles.test.ts`
+Run: `cd C:/Users/<user>/hippo/ui && npx vitest run src/engine/particles.test.ts`
 Expected: FAIL — module not found
 
 **Step 4: Implement ParticleEngine**
@@ -1034,7 +1034,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 **Step 5: Run tests to verify they pass**
 
-Run: `cd C:/Users/skf_s/hippo/ui && npx vitest run src/engine/particles.test.ts`
+Run: `cd C:/Users/<user>/hippo/ui && npx vitest run src/engine/particles.test.ts`
 Expected: PASS
 
 **Step 6: Commit**
@@ -1098,7 +1098,7 @@ describe('createForceLayout', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd C:/Users/skf_s/hippo/ui && npx vitest run src/engine/layout.test.ts`
+Run: `cd C:/Users/<user>/hippo/ui && npx vitest run src/engine/layout.test.ts`
 Expected: FAIL
 
 **Step 3: Implement force layout**
@@ -1166,7 +1166,7 @@ export function createForceLayout(
 
 **Step 4: Run tests**
 
-Run: `cd C:/Users/skf_s/hippo/ui && npx vitest run src/engine/layout.test.ts`
+Run: `cd C:/Users/<user>/hippo/ui && npx vitest run src/engine/layout.test.ts`
 Expected: PASS
 
 **Step 5: Commit**
@@ -1759,7 +1759,7 @@ export function App() {
 **Step 5: Verify the full build**
 
 ```bash
-cd C:/Users/skf_s/hippo/ui && npm run build
+cd C:/Users/<user>/hippo/ui && npm run build
 ```
 
 Expected: `dist-ui/` created at hippo root with bundled assets.
@@ -1768,10 +1768,10 @@ Expected: `dist-ui/` created at hippo root with bundled assets.
 
 ```bash
 # Terminal 1: build everything
-cd C:/Users/skf_s/hippo && npm run build
+cd C:/Users/<user>/hippo && npm run build
 
 # Terminal 2: start dashboard
-cd C:/Users/skf_s/hippo && node bin/hippo.js dashboard --port 3333
+cd C:/Users/<user>/hippo && node bin/hippo.js dashboard --port 3333
 
 # Open browser to http://localhost:3333
 # Should see the Living Map with particles
@@ -1839,7 +1839,7 @@ dist-ui/
 **Step 4: Verify full pipeline**
 
 ```bash
-cd C:/Users/skf_s/hippo
+cd C:/Users/<user>/hippo
 npm run build:all
 ls dist-ui/
 # Should contain index.html + assets/
@@ -1961,7 +1961,7 @@ This gives the map a subtle breathing effect that reinforces the "alive" feeling
 **Step 3: Verify everything works end-to-end**
 
 ```bash
-cd C:/Users/skf_s/hippo
+cd C:/Users/<user>/hippo
 npm run build:all
 npm run test
 node bin/hippo.js dashboard
@@ -1987,7 +1987,7 @@ git commit -m "feat(ui): empty states, decay animation, final polish for v0.25"
 **Step 1: Bump version**
 
 ```bash
-cd C:/Users/skf_s/hippo
+cd C:/Users/<user>/hippo
 npm version minor --no-git-tag-version
 ```
 

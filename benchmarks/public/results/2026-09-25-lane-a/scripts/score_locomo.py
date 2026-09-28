@@ -1,16 +1,17 @@
 import json, glob, os, random, sys, types, io, contextlib
 
+HOME = os.path.expanduser('~')
 sys.modules['bert_score'] = types.SimpleNamespace(score=None)
-sys.path.insert(0, r'C:\Users\skf_s\hippo-bench\locomo\task_eval')
+sys.path.insert(0, HOME + r'\hippo-bench\locomo\task_eval')
 import evaluation as ev
 
-LANE_A = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-a'
+LANE_A = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-a'
 LOCOMO = os.path.join(LANE_A, 'locomo')
 # --rerun: deviation 3, bm25 answers regenerated with the identical procedure and judged blind with hippo@365.
 RERUN = '--rerun' in sys.argv
 JUDGED = os.path.join(LOCOMO, 'bm25-rerun') if RERUN else LOCOMO
 
-data = json.load(io.open(r'C:\Users\skf_s\hippo-bench\locomo\data\locomo10.json', encoding='utf-8'))
+data = json.load(io.open(HOME + r'\hippo-bench\locomo\data\locomo10.json', encoding='utf-8'))
 
 # answers: (arm, qid) -> text. arms: hippo365 (new), bm25 (reused amendment1), hippo7 (amendment1, secondary compare)
 ans = {}

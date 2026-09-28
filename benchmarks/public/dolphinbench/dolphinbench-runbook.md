@@ -6,11 +6,11 @@ Plan and deviations D1 to D7: `dolphinbench-feasibility.md`. This file covers ru
 
 | Piece | Where |
 |---|---|
-| hippo v1.52.3, built (tag v1.52.3, commit fcd432e) | `/home/skf_s/dolphin/hippo-v1.52.3` |
-| Claude Code 2.1.259, pinned local install | `/home/skf_s/dolphin/claude-code/bin/claude` |
-| Stores: Morgan 3,400, Alex 5,011, Riley 5,128 memories | `/home/skf_s/dolphin/stores`, ingest runs in `/home/skf_s/dolphin/runs/ingest-<persona>` |
-| DolphinBench clone, its WSL venv, judge work files | `/mnt/c/Users/skf_s/hippo-bench` (`dolphinbench/`, `.venv-dolphin-wsl/`, `runs/`) |
-| Adapter and stage driver | `$DOLPHIN/dolphin_hippo.py`, where `DOLPHIN=/mnt/c/Users/skf_s/hippo-wt-dolphin/benchmarks/public/dolphinbench` |
+| hippo v1.52.3, built (tag v1.52.3, commit fcd432e) | `~/dolphin/hippo-v1.52.3` |
+| Claude Code 2.1.259, pinned local install | `~/dolphin/claude-code/bin/claude` |
+| Stores: Morgan 3,400, Alex 5,011, Riley 5,128 memories | `~/dolphin/stores`, ingest runs in `~/dolphin/runs/ingest-<persona>` |
+| DolphinBench clone, its WSL venv, judge work files | `/mnt/c/Users/<user>/hippo-bench` (`dolphinbench/`, `.venv-dolphin-wsl/`, `runs/`) |
+| Adapter and stage driver | `$DOLPHIN/dolphin_hippo.py`, where `DOLPHIN=/mnt/c/Users/<user>/hippo-wt-dolphin/benchmarks/public/dolphinbench` |
 | Memory hook and `search_memories` MCP tool | `$DOLPHIN/dolphin_memory.py` |
 | Fake Claude for dry runs (no model call) | `$DOLPHIN/dolphin_fake_claude.py` |
 | Judge proxy (stub or codex) | `$DOLPHIN/dolphin_smoke.py` |
@@ -24,7 +24,7 @@ Plan and deviations D1 to D7: `dolphinbench-feasibility.md`. This file covers ru
 2. Make a clean codex profile for the judge: a folder holding only a copy of `auth.json` (feasibility doc, Regenerate):
 
    ```bash
-   mkdir -p /mnt/c/Users/skf_s/.dolphin-codex && cp /mnt/c/Users/skf_s/.codex/auth.json /mnt/c/Users/skf_s/.dolphin-codex/
+   mkdir -p /mnt/c/Users/<user>/.dolphin-codex && cp /mnt/c/Users/<user>/.codex/auth.json /mnt/c/Users/<user>/.dolphin-codex/
    ```
 
    Risk from the doc: a copied `auth.json` can fail when either copy refreshes (`refresh_token_reused`). If judging fails that way, copy it again and rerun.
@@ -32,10 +32,10 @@ Plan and deviations D1 to D7: `dolphinbench-feasibility.md`. This file covers ru
 ## Each session
 
 ```bash
-cd /mnt/c/Users/skf_s/hippo-bench
-DOLPHIN=/mnt/c/Users/skf_s/hippo-wt-dolphin/benchmarks/public/dolphinbench
+cd /mnt/c/Users/<user>/hippo-bench
+DOLPHIN=/mnt/c/Users/<user>/hippo-wt-dolphin/benchmarks/public/dolphinbench
 read -rs DOLPHIN_CLAUDE_OAUTH_TOKEN && export DOLPHIN_CLAUDE_OAUTH_TOKEN   # paste the token, then Enter; nothing echoes
-export DOLPHIN_CODEX_HOME=/mnt/c/Users/skf_s/.dolphin-codex
+export DOLPHIN_CODEX_HOME=/mnt/c/Users/<user>/.dolphin-codex
 ```
 
 `read -rs` keeps the token out of the command line and shell history. Each arm process removes the variable from its own environment at start and hands the token to Claude as `CLAUDE_CODE_OAUTH_TOKEN` only in the Claude subprocess environment. The judge process never receives it. Keep it exported until `check` and `compare` have run: they scan every file for it, and a real run checked without it fails as `not scanned`.
@@ -54,7 +54,7 @@ The dry run used a fake agent, so three things are only proven with the real CLI
 .venv-dolphin-wsl/bin/python $DOLPHIN/dolphin_hippo.py run --label smoke --persona morgan --tests 1 --judge codex --agent claude
 ```
 
-Pass: exit 0 and `GATE: PASS`, which includes `memory_context ok` (the hook's full context is in Claude's session file) and `model ok` (every main-thread message from `claude-sonnet-5`, at `medium` effort per the session file); `attempts` shows `usable` only; and `/home/skf_s/dolphin/runs/smoke-hippo-morgan/hooks/morgan/001-0.json` exists. Read `helper_models`: models Claude Code calls on its own, with their tokens, recorded apart and never failing the gate. A tool outside the list shows as `Claude used tools outside the allowed MCP surface` in the attempt's `error` in `tests/morgan/001.json`; the test still counts.
+Pass: exit 0 and `GATE: PASS`, which includes `memory_context ok` (the hook's full context is in Claude's session file) and `model ok` (every main-thread message from `claude-sonnet-5`, at `medium` effort per the session file); `attempts` shows `usable` only; and `~/dolphin/runs/smoke-hippo-morgan/hooks/morgan/001-0.json` exists. Read `helper_models`: models Claude Code calls on its own, with their tokens, recorded apart and never failing the gate. A tool outside the list shows as `Claude used tools outside the allowed MCP surface` in the attempt's `error` in `tests/morgan/001.json`; the test still counts.
 
 ## Pilot: 20 Morgan tests per arm
 
@@ -62,7 +62,7 @@ Pass: exit 0 and `GATE: PASS`, which includes `memory_context ok` (the hook's fu
 .venv-dolphin-wsl/bin/python $DOLPHIN/dolphin_hippo.py run --label pilot --persona morgan --tests 20 --judge codex --agent claude
 ```
 
-The official Claude + Mem0 rows took 32 s per test on these 20 tests, so expect roughly 15 to 30 minutes with both arms in parallel. Follow progress with `tail -f /home/skf_s/dolphin/logs/pilot-hippo-morgan.log` (one line per test: attempts, outcome, seconds, tools called; an arm that stops early ends its log with a `STOPPED`, `PAUSED` or `DEFERRED` line).
+The official Claude + Mem0 rows took 32 s per test on these 20 tests, so expect roughly 15 to 30 minutes with both arms in parallel. Follow progress with `tail -f ~/dolphin/logs/pilot-hippo-morgan.log` (one line per test: attempts, outcome, seconds, tools called; an arm that stops early ends its log with a `STOPPED`, `PAUSED` or `DEFERRED` line).
 
 ## Full run: 200 tests per persona per arm
 
@@ -79,7 +79,7 @@ At 200 tests the gate is integrity only: `complete`, `token`, `memory_context`, 
 
 ## Where results land
 
-- Per arm: `/home/skf_s/dolphin/runs/pilot-hippo-morgan` and `pilot-bm25-morgan` (from Windows: `\\wsl$\Ubuntu\home\skf_s\dolphin\runs\`).
+- Per arm: `~/dolphin/runs/pilot-hippo-morgan` and `pilot-bm25-morgan` (from Windows: `\\wsl$\Ubuntu\home\<user>\dolphin\runs\`).
   - `tests/morgan/NNN.json`: transcript, per-attempt summary (outcome, cost, usage, main-thread models, `model_usage` per model, the effort and injected context read from Claude's session file, session id, tools, memory hits, own and wall time, any limit wait, and `closed` with its reason).
   - `grades/morgan/NNN.json`: one entry per check; a test passes when it has checks, every check passes and there is no `dataset_touch` or `closed` entry.
   - `deferred/morgan/NNN.json`: why a test was left for a rerun, with its attempts, which the rerun carries on, so the attempt cap spans passes and resumes.
@@ -87,8 +87,8 @@ At 200 tests the gate is integrity only: `complete`, `token`, `memory_context`, 
   - `paused.json`: why a full-run arm paused; the run stays paused.
   - `apps/morgan/NNN/`: the app state and the app call log.
   - `costs/tests.json`: summed API-equivalent cost reported by Claude Code (subscription, no charge).
-- Logs: `/home/skf_s/dolphin/logs/pilot-*.log` (arms, judge, servers).
-- Judge work files (codex replies and logs): `C:/Users/skf_s/hippo-bench/runs/judge-pilot/`, named `codex-<arm>-<persona>-<test>-<8 hex>.txt` and `.log`, so arms, personas and retries never share a file.
+- Logs: `~/dolphin/logs/pilot-*.log` (arms, judge, servers).
+- Judge work files (codex replies and logs): `C:/Users/<user>/hippo-bench/runs/judge-pilot/`, named `codex-<arm>-<persona>-<test>-<8 hex>.txt` and `.log`, so arms, personas and retries never share a file.
 
 ## Checking
 
@@ -129,17 +129,17 @@ Rerun the same command. Finished tests are kept and not repeated; grading resume
 
 ```bash
 unset DOLPHIN_CLAUDE_OAUTH_TOKEN                  # or close the shell
-rm -rf /mnt/c/Users/skf_s/.dolphin-codex          # the auth.json copy
+rm -rf /mnt/c/Users/<user>/.dolphin-codex          # the auth.json copy
 pkill -f "[d]olphin_hippo.py"; pkill -f "[h]ippo-mem0-server"   # only if a run was interrupted
 rm -rf /tmp/dolphin-work                          # per-test Claude homes (emptied after each test)
 ```
 
-To remove everything, including the stores, the pinned hippo and Claude Code: `rm -rf /home/skf_s/dolphin` and `rm -rf /mnt/c/Users/skf_s/hippo-bench/runs/judge-*`.
+To remove everything, including the stores, the pinned hippo and Claude Code: `rm -rf ~/dolphin` and `rm -rf /mnt/c/Users/<user>/hippo-bench/runs/judge-*`.
 
 ## Differences from the feasibility doc
 
-- hippo is a shallow clone of GitHub tag v1.52.3, not a clone of `C:/Users/skf_s/hippo` at a named commit (the build brief said so; that checkout holds other people's uncommitted work).
-- D8: the agent runs as the normal WSL user, not a dedicated one: `sudo` needs a password and bubblewrap is not installed. Mitigations: a fresh HOME, config dir and working directory per test under `/tmp`; the token lives only in the Claude subprocess environment; the codex profile stays out of the arm processes; transcripts are redacted; `check` scans for the token and for dataset paths in tool calls and tool results. The agent can still read files through Bash; this is detected, not prevented. The review's probes found two misses: the other arm's live hook file read by a relative path, now caught through `hooks/<persona>/`, and `grep -rh` over /home, which prints no path and stays a miss. The structural fix is the driver's `run_as_user` (`claude_driver.py:521-531`) with a user that cannot read /home/skf_s or /mnt/c, set up with one sudo; until then read every pilot `local_calls` entry. Known false alarms: `ps` during a run shows the other arm's `--out` hook path, and the agent reading its own `mcp.json` or settings file shows `/dolphin/runs/`.
+- hippo is a shallow clone of GitHub tag v1.52.3, not a clone of `C:/Users/<user>/hippo` at a named commit (the build brief said so; that checkout holds other people's uncommitted work).
+- D8: the agent runs as the normal WSL user, not a dedicated one: `sudo` needs a password and bubblewrap is not installed. Mitigations: a fresh HOME, config dir and working directory per test under `/tmp`; the token lives only in the Claude subprocess environment; the codex profile stays out of the arm processes; transcripts are redacted; `check` scans for the token and for dataset paths in tool calls and tool results. The agent can still read files through Bash; this is detected, not prevented. The review's probes found two misses: the other arm's live hook file read by a relative path, now caught through `hooks/<persona>/`, and `grep -rh` over /home, which prints no path and stays a miss. The structural fix is the driver's `run_as_user` (`claude_driver.py:521-531`) with a user that cannot read `/home/<user>` or `/mnt/c`, set up with one sudo; until then read every pilot `local_calls` entry. Known false alarms: `ps` during a run shows the other arm's `--out` hook path, and the agent reading its own `mcp.json` or settings file shows `/dolphin/runs/`.
 - Claude runs with session persistence on (`persist_session=True`, where the driver's default adds `--no-session-persistence`, `claude_driver.py:503`), so its own session file proves the hook's context reached the model and gives the effort. The file is read after each attempt and removed with the per-test home.
 - Every child process starts from an allowlist, where the driver copies the full environment (`claude_driver.py:46`); see Environment.
 - Effort is pinned with `CLAUDE_CODE_EFFORT_LEVEL=medium`; the official run relied on the default, recorded as medium.

@@ -1,13 +1,14 @@
 """Blind judge prompts for deviation 3: hippo@365 answers shuffled with the regenerated bm25 answers."""
 import glob, io, json, os, random, sys
 
-BENCH = r'C:\Users\skf_s\hippo-bench\memory-benchmarks'
+HOME = os.path.expanduser('~')
+BENCH = HOME + r'\hippo-bench\memory-benchmarks'
 sys.path.insert(0, BENCH)
 from benchmarks.locomo.prompts import get_judge_prompt, preprocess_answer, JUDGE_SYSTEM_PROMPT
 
-LOCOMO = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-a\locomo'
+LOCOMO = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-a\locomo'
 RERUN = os.path.join(LOCOMO, 'bm25-rerun')
-PREDICTED = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_locomo-hippo365'
+PREDICTED = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_locomo-hippo365'
 
 gold_meta = json.load(io.open(os.path.join(LOCOMO, 'gold_meta.json'), encoding='utf-8'))
 question_text = {qid: json.load(io.open(os.path.join(PREDICTED, qid + '.json'), encoding='utf-8'))['question']

@@ -76,8 +76,8 @@ describe("computeSharedTagPairs basics", () => {
 
   it("excludePrefix drops single-pair entirely when only path tags remain", () => {
     const fixture = [
-      mem({ id: "a", tags: ["path:hippo", "path:quantamental"] }),
-      mem({ id: "b", tags: ["path:hippo", "path:quantamental"] }),
+      mem({ id: "a", tags: ["path:hippo", "path:project-e"] }),
+      mem({ id: "b", tags: ["path:hippo", "path:project-e"] }),
     ];
     const pairs = computeSharedTagPairs(fixture, { excludePrefix: "path:" });
     expect(pairs).toEqual([]);

@@ -21,7 +21,7 @@ const fsMock = {
 
 __setSchedulerFsDeps(fsMock);
 
-// scheduler tests use hardcoded Windows-style paths (`C:/Users/skf_s/.hippo`)
+// scheduler tests use hardcoded Windows-style paths (`C:/Users/alice/.hippo`)
 // and assert workspaceRegistryPath produces matching output. The production
 // code uses path.join which yields different separators on Linux, so the
 // assertions diverge by platform. Skip on non-Windows in CI.
@@ -34,10 +34,10 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
   });
 
   it('registerWorkspace stores unique project roots in the global registry', () => {
-    const registryFile = workspaceRegistryPath('C:/Users/skf_s/.hippo');
+    const registryFile = workspaceRegistryPath('C:/Users/alice/.hippo');
     let registryText = JSON.stringify({
       version: 1,
-      workspaces: ['C:/Users/skf_s/repo-a'],
+      workspaces: ['C:/Users/alice/repo-a'],
     });
 
     fsMock.existsSync.mockImplementation((target: string) => target === registryFile);
@@ -46,15 +46,15 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
       registryText = text;
     });
 
-    registerWorkspace('C:/Users/skf_s/.hippo', 'C:/Users/skf_s/repo-b');
-    registerWorkspace('C:/Users/skf_s/.hippo', 'C:/Users/skf_s/repo-a');
+    registerWorkspace('C:/Users/alice/.hippo', 'C:/Users/alice/repo-b');
+    registerWorkspace('C:/Users/alice/.hippo', 'C:/Users/alice/repo-a');
 
     expect(fsMock.writeFileSync).toHaveBeenLastCalledWith(
-      workspaceRegistryPath('C:/Users/skf_s/.hippo'),
+      workspaceRegistryPath('C:/Users/alice/.hippo'),
       JSON.stringify(
         {
           version: 1,
-          workspaces: ['C:/Users/skf_s/repo-a', 'C:/Users/skf_s/repo-b'],
+          workspaces: ['C:/Users/alice/repo-a', 'C:/Users/alice/repo-b'],
         },
         null,
         2,
@@ -65,11 +65,11 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
 
   it('buildDailyRunnerCommand targets a single machine-level task entrypoint', () => {
     expect(DAILY_TASK_NAME).toBe('hippo-daily-runner');
-    expect(buildDailyRunnerCommand('C:/Users/skf_s/hippo', 'win32')).toBe(
-      'cd /d "C:/Users/skf_s/hippo" && hippo daily-runner',
+    expect(buildDailyRunnerCommand('C:/Users/alice/hippo', 'win32')).toBe(
+      'cd /d "C:/Users/alice/hippo" && hippo daily-runner',
     );
-    expect(buildDailyRunnerCommand('/home/skf_s/.hippo', 'linux')).toBe(
-      'cd "/home/skf_s/.hippo" && hippo daily-runner',
+    expect(buildDailyRunnerCommand('/home/alice/.hippo', 'linux')).toBe(
+      'cd "/home/alice/.hippo" && hippo daily-runner',
     );
   });
 
@@ -78,19 +78,19 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
 
     fsMock.existsSync.mockImplementation((target: string) => {
       const normalized = String(target).replace(/\\/g, '/');
-      return normalized === 'C:/Users/skf_s/repo-a/.hippo' || normalized === 'C:/Users/skf_s/repo-c/.hippo';
+      return normalized === 'C:/Users/alice/repo-a/.hippo' || normalized === 'C:/Users/alice/repo-c/.hippo';
     });
 
     runDailyMaintenance(
-      ['C:/Users/skf_s/repo-a', 'C:/Users/skf_s/repo-b', 'C:/Users/skf_s/repo-c'],
+      ['C:/Users/alice/repo-a', 'C:/Users/alice/repo-b', 'C:/Users/alice/repo-c'],
       runCommand,
     );
 
     expect(runCommand.mock.calls).toEqual([
-      ['C:/Users/skf_s/repo-a', ['learn', '--git', '--days', '1']],
-      ['C:/Users/skf_s/repo-a', ['sleep']],
-      ['C:/Users/skf_s/repo-c', ['learn', '--git', '--days', '1']],
-      ['C:/Users/skf_s/repo-c', ['sleep']],
+      ['C:/Users/alice/repo-a', ['learn', '--git', '--days', '1']],
+      ['C:/Users/alice/repo-a', ['sleep']],
+      ['C:/Users/alice/repo-c', ['learn', '--git', '--days', '1']],
+      ['C:/Users/alice/repo-c', ['sleep']],
     ]);
   });
 });

@@ -116,6 +116,6 @@ The remaining queue items either need a design decision from you or have diminis
 - ✅ No autonomous `learn-apply` (skill prompt edits + CLAUDE.md edits require human approval)
 - ✅ No `--no-verify` on commits
 - ✅ No force pushes to `master`
-- ✅ Git identity: `Kit <skfsk27@gmail.com>` (single-f, kitfunso GitHub account)
+- ✅ Git identity: `Kit <owner-email>` (kitfunso GitHub account)
 - ✅ All commits Co-Authored-By footer
 - ✅ Conflicts on rebase resolved manually (CHANGELOG + version files); no auto-merge of unclear cases

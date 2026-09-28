@@ -53,7 +53,7 @@ describe("buildPalette", () => {
     mem({ id: "1", tags: ["error", "path:hippo"] }),
     mem({ id: "2", tags: ["error", "path:hippo"] }),
     mem({ id: "3", tags: ["error", "openclaw"] }),
-    mem({ id: "4", tags: ["rule", "path:quantamental"] }),
+    mem({ id: "4", tags: ["rule", "path:project-e"] }),
     mem({ id: "5", tags: ["openclaw"] }),
   ];
 
@@ -81,7 +81,7 @@ describe("buildPalette", () => {
       expect(tag.startsWith("path:")).toBe(true);
     }
     expect(result.has("path:hippo")).toBe(true);
-    expect(result.has("path:quantamental")).toBe(true);
+    expect(result.has("path:project-e")).toBe(true);
   });
 
   it("deterministic: same input → same output across calls", () => {
@@ -137,7 +137,7 @@ describe("pickColorTag", () => {
   });
 
   it("tag mode: returns null when only path:* tags", () => {
-    const m = mem({ id: "1", tags: ["path:hippo", "path:quantamental"] });
+    const m = mem({ id: "1", tags: ["path:hippo", "path:project-e"] });
     expect(pickColorTag(m, "tag")).toBeNull();
   });
 
@@ -232,13 +232,13 @@ describe("pickShortestPathTag", () => {
 
   it("excludeSet filters out matched tags before picking", () => {
     expect(
-      pickShortestPathTag(["path:skf_s", "path:hippo"], new Set(["path:skf_s"])),
+      pickShortestPathTag(["path:alice", "path:hippo"], new Set(["path:alice"])),
     ).toBe("path:hippo");
   });
 
   it("excludeSet excluding all path tags returns null", () => {
     expect(
-      pickShortestPathTag(["path:skf_s"], new Set(["path:skf_s"])),
+      pickShortestPathTag(["path:alice"], new Set(["path:alice"])),
     ).toBeNull();
   });
 

@@ -133,7 +133,7 @@ function buildSeedSet(hippoRoot: string): void {
 
   // Frontend/deploy
   seedMemory(hippoRoot, 'build_before_deploy',
-    `Always run npm run build before deploying frontend. Deploy command: npx wrangler pages deploy out --project-name=quantamental. Missing build step deploys stale code.`,
+    `Always run npm run build before deploying frontend. Deploy command: npx wrangler pages deploy out --project-name=project-e. Missing build step deploys stale code.`,
     { tags: ['frontend', 'deploy', 'build'] });
 
   seedMemory(hippoRoot, 'constants_must_sync',

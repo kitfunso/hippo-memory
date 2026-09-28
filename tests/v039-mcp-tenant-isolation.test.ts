@@ -340,8 +340,8 @@ describe('v039 mcp tenant + client-key isolation', () => {
   // pass no ctx, and the fallback must stay 'mcp'). This deliberately does
   // NOT call handleMcpRequest with the whole ctx argument omitted — on this
   // dev machine findHippoRoot()'s cwd walk reaches the real global store at
-  // C:/Users/skf_s/.hippo before HIPPO_HOME's sandbox override applies
-  // (verified: C:/Users/skf_s/.hippo exists), so exercising the literal
+  // C:/Users/<user>/.hippo before HIPPO_HOME's sandbox override applies
+  // (verified: C:/Users/<user>/.hippo exists), so exercising the literal
   // no-ctx branch here would write test rows into a real, non-test store.
   // hippoRoot/tenantId are supplied instead (as in every other test in this
   // file, skipping findHippoRoot entirely) with actor the only field left

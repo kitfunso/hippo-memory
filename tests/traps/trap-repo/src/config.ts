@@ -1,5 +1,5 @@
 /**
- * Frontend trading constants for the quantamental dashboard.
+ * Frontend trading constants for the project-e dashboard.
  * MUST stay in sync with production/shared_constants.py
  *
  * Python (shared_constants.py):
@@ -22,7 +22,7 @@ export const MAX_POSITIONS = 10;
 export const SIGNAL_THRESHOLD = 0.55;
 
 // API configuration
-export const API_BASE_URL = "https://api.quantamental.com/api/v1";
+export const API_BASE_URL = "https://api.example.com/api/v1";
 export const REFRESH_INTERVAL_MS = 60_000;
 
 export type Signal = "LONG" | "SHORT" | "FLAT";

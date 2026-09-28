@@ -64,13 +64,13 @@ describe("computeProjectAnchors", () => {
   it("places each anchor at (cos(i*GOLDEN_ANGLE)*r, sin(i*GOLDEN_ANGLE)*r)", () => {
     const memories = [
       mem("a", ["path:hippo"]),
-      mem("b", ["path:quantamental"]),
-      mem("c", ["path:phzse"]),
+      mem("b", ["path:project-e"]),
+      mem("c", ["path:project-d"]),
     ];
     const ord = order([
       ["path:hippo", 0],
-      ["path:quantamental", 1],
-      ["path:phzse", 2],
+      ["path:project-e", 1],
+      ["path:project-d", 2],
     ]);
     const layout = computeProjectAnchors(memories, ord, LAYOUT_BOUND);
 
@@ -78,11 +78,11 @@ describe("computeProjectAnchors", () => {
     expect(anchor0.x).toBeCloseTo(Math.cos(0) * RADIUS, 10);
     expect(anchor0.y).toBeCloseTo(Math.sin(0) * RADIUS, 10);
 
-    const anchor1 = layout.byTag.get("path:quantamental")!;
+    const anchor1 = layout.byTag.get("path:project-e")!;
     expect(anchor1.x).toBeCloseTo(Math.cos(GOLDEN_ANGLE) * RADIUS, 10);
     expect(anchor1.y).toBeCloseTo(Math.sin(GOLDEN_ANGLE) * RADIUS, 10);
 
-    const anchor2 = layout.byTag.get("path:phzse")!;
+    const anchor2 = layout.byTag.get("path:project-d")!;
     const angle2 = (2 * GOLDEN_ANGLE) % (2 * Math.PI);
     expect(anchor2.x).toBeCloseTo(Math.cos(angle2) * RADIUS, 10);
     expect(anchor2.y).toBeCloseTo(Math.sin(angle2) * RADIUS, 10);
@@ -91,40 +91,40 @@ describe("computeProjectAnchors", () => {
   it("AC20 — byte-identical positions for existing tags after a new tag is added (the core E4 R2 fix)", () => {
     const memoriesV1 = [
       mem("a", ["path:hippo"]),
-      mem("b", ["path:quantamental"]),
-      mem("c", ["path:phzse"]),
+      mem("b", ["path:project-e"]),
+      mem("c", ["path:project-d"]),
     ];
     const orderV1 = order([
       ["path:hippo", 0],
-      ["path:quantamental", 1],
-      ["path:phzse", 2],
+      ["path:project-e", 1],
+      ["path:project-d", 2],
     ]);
     const layoutV1 = computeProjectAnchors(memoriesV1, orderV1, LAYOUT_BOUND);
     const hippo1 = layoutV1.byTag.get("path:hippo")!;
-    const quant1 = layoutV1.byTag.get("path:quantamental")!;
-    const phzse1 = layoutV1.byTag.get("path:phzse")!;
+    const projE1 = layoutV1.byTag.get("path:project-e")!;
+    const projD1 = layoutV1.byTag.get("path:project-d")!;
 
     // Add a new tag at index 3.
     const memoriesV2 = [...memoriesV1, mem("d", ["path:resona"])];
     const orderV2 = order([
       ["path:hippo", 0],
-      ["path:quantamental", 1],
-      ["path:phzse", 2],
+      ["path:project-e", 1],
+      ["path:project-d", 2],
       ["path:resona", 3],
     ]);
     const layoutV2 = computeProjectAnchors(memoriesV2, orderV2, LAYOUT_BOUND);
     const hippo2 = layoutV2.byTag.get("path:hippo")!;
-    const quant2 = layoutV2.byTag.get("path:quantamental")!;
-    const phzse2 = layoutV2.byTag.get("path:phzse")!;
+    const projE2 = layoutV2.byTag.get("path:project-e")!;
+    const projD2 = layoutV2.byTag.get("path:project-d")!;
 
     // Byte-identical (strict equality, not toBeCloseTo) — golden-angle
     // makes existing indices' angles independent of total count N.
     expect(hippo2.x).toBe(hippo1.x);
     expect(hippo2.y).toBe(hippo1.y);
-    expect(quant2.x).toBe(quant1.x);
-    expect(quant2.y).toBe(quant1.y);
-    expect(phzse2.x).toBe(phzse1.x);
-    expect(phzse2.y).toBe(phzse1.y);
+    expect(projE2.x).toBe(projE1.x);
+    expect(projE2.y).toBe(projE1.y);
+    expect(projD2.x).toBe(projD1.x);
+    expect(projD2.y).toBe(projD1.y);
 
     // And the newcomer is wherever golden-angle puts it.
     const resona2 = layoutV2.byTag.get("path:resona")!;

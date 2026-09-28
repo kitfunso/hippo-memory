@@ -2012,7 +2012,7 @@ budget; E5 was spun out of E4 at task #106 and addressed each.
   adding new tags leaves existing anchor positions byte-identical (the
   AC20 stability guarantee, the structural fix for the E4 R2 issue v1
   reintroduced with a slotCount-mod formula).
-- `EXCLUDED_PATH_TAGS = new Set(["path:skf_s"])` filters the filesystem
+- `EXCLUDED_PATH_TAGS = new Set(["path:<user>"])` filters the filesystem
   root tag (60% of memories, would dominate layout).
 - Per-memory anchor pick uses the shared `pickShortestPathTag` helper
   (path-mode dedup with `pickColorTag`).
@@ -2166,7 +2166,7 @@ folded in-stage.
 - `projectAnchorOrder.test.ts` 16 new (load/save, append-only,
   reference-equality skip, JSON shape, inner-tuple corruption,
   QuotaExceededError silent-skip).
-- `projectAnchors.test.ts` 10 new (path:skf_s filter, golden-angle
+- `projectAnchors.test.ts` 10 new (`path:<user>` filter, golden-angle
   formula, AC20 byte-identical stability, multi-tag shortest-wins,
   orderedTags anchored-only filter, strength override).
 - `ProjectsPanel.test.tsx` 9 new (empty state, top-N truncation, +N

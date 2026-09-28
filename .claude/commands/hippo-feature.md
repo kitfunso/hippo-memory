@@ -54,7 +54,7 @@ Per global CLAUDE.md outside-voice rule: if the feature touches schema, retrieva
 ### 5. TIER 2 SMOKE — Stratified LoCoMo subsample
 
 ```powershell
-$env:HIPPO_BIN='node C:/Users/skf_s/hippo/bin/hippo.js'
+$env:HIPPO_BIN='node C:/Users/<user>/hippo/bin/hippo.js'
 python benchmarks/locomo/run.py `
   --data benchmarks/locomo/data/locomo10.json `
   --output-dir benchmarks/locomo/results `
@@ -82,7 +82,7 @@ Full LoCoMo only on explicit user request (release gate). Even with a green Tier
 - **Fixture before code.** No implementation commit without the fixture committed first (or in the same commit).
 - **One feature at a time.** Don't bundle ACC + vmPFC into one branch even if RESEARCH.md groups them.
 - **Real DB for tests** (project memory rule). No mocks where the real SQLite store is feasible.
-- **Power models — DO NOT TOUCH** (project memory rule, applies cross-repo to skf_s).
+- **Power models — DO NOT TOUCH** (project memory rule, applies across the owner's repos).
 - **Salience gate** — the v1 60% lexical-overlap gate destroyed LoCoMo from 0.28 to 0.02. Any salience work must be default-off and prove a positive delta on Tier 2 before being enabled.
 
 ## Pre-flight checks (run before step 1)

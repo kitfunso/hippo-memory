@@ -14,7 +14,7 @@ exports[`printContextMarkdown snapshots > empty items 1`] = `
 exports[`printContextMarkdown snapshots > framing=assert 1`] = `
 "## Project Memory (3 entries, 44 tokens)
 
-- **[verified] always use real DB for tests** [path:skf_s, path:hippo] (100%)
+- **[verified] always use real DB for tests** [path:alice, path:hippo] (100%)
 - **[stale] ⚠️ session 2025-08-12 debugging notes** [debug] (100%)
 - **[inferred] ⚠️ [global] inferred fact from telemetry** [inferred] (100%)"
 `;
@@ -22,7 +22,7 @@ exports[`printContextMarkdown snapshots > framing=assert 1`] = `
 exports[`printContextMarkdown snapshots > framing=suggest 1`] = `
 "## Project Memory (3 entries, 44 tokens)
 
-- **[verified] Consider checking: always use real DB for tests** [path:skf_s, path:hippo] (100%)
+- **[verified] Consider checking: always use real DB for tests** [path:alice, path:hippo] (100%)
 - **[stale] ⚠️ Consider checking: session 2025-08-12 debugging notes** [debug] (100%)
 - **[inferred] ⚠️ Consider checking: [global] inferred fact from telemetry** [inferred] (100%)"
 `;
@@ -44,7 +44,7 @@ exports[`printContextMarkdown snapshots > items with no tags 1`] = `
 exports[`printContextMarkdown snapshots > markdown default (framing=observe) 1`] = `
 "## Project Memory (3 entries, 44 tokens)
 
-- **[verified] always use real DB for tests** [path:skf_s, path:hippo] (100%)
+- **[verified] always use real DB for tests** [path:alice, path:hippo] (100%)
 - **[stale] ⚠️ Previously observed (2025-08-12): session 2025-08-12 debugging notes** [debug] (100%)
 - **[inferred] ⚠️ Previously observed (2026-05-22): [global] inferred fact from telemetry** [inferred] (100%)"
 `;
@@ -58,7 +58,7 @@ exports[`printContextMarkdown snapshots > single item with many tags 1`] = `
 exports[`printContextMarkdown snapshots > verified-only items (no stale/inferred tags) 1`] = `
 "## Project Memory (1 entries, 12 tokens)
 
-- **[verified] always use real DB for tests** [path:skf_s, path:hippo] (100%)"
+- **[verified] always use real DB for tests** [path:alice, path:hippo] (100%)"
 `;
 
 exports[`renderSleepResult snapshots > audit warnings only (no errors) 1`] = `

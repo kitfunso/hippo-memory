@@ -152,7 +152,7 @@ Every call behind a verdict, a gate or a diagnostic is printed verbatim, with it
 #!/usr/bin/env bash
 # The prereg's run command (04e1e6d), plus one exit-code line per run.
 unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY
-export W=C:/Users/skf_s/hippo-wt-r3run3 R=C:/Users/skf_s/hippo-mech-runs/r3
+export W=C:/Users/<user>/hippo-wt-r3run3 R=C:/Users/<user>/hippo-mech-runs/r3
 mkdir -p "$R" && { git -C "$W" rev-parse HEAD; git -C "$W" status --porcelain; node --version; } > "$R/build.txt"
 {
   for s in $(seq 121 140); do for a in full bm25-static bm25-outcome all-off outcome-off strengthen-off decay-off recency-off; do echo "main $a 365 $s"; done; done
@@ -169,8 +169,8 @@ The analysis script, run once after `ALL-DONE`, output to `raw`:
 # The prereg's analysis block (04e1e6d, prereg lines 219-240), run from an archive of the locked commit.
 # Ends with the post-lock check: gates from d91bd51 must print exactly what gates from 04e1e6d printed.
 S=<scratch directory>
-DOC=C:/Users/skf_s/hippo-wt-r3doc W=C:/Users/skf_s/hippo-wt-r3run3 R=C:/Users/skf_s/hippo-mech-runs/r3
-OLD=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2 LOCK=2026-09-28T12:30:36+01:00
+DOC=C:/Users/<user>/hippo-wt-r3doc W=C:/Users/<user>/hippo-wt-r3run3 R=C:/Users/<user>/hippo-mech-runs/r3
+OLD=C:/Users/<user>/hippo-mech-runs/r2/e1-am1/r2 LOCK=2026-09-28T12:30:36+01:00
 rm -rf "$S/lock04" && mkdir -p "$S/lock04" && git -C "$DOC" archive 04e1e6d scripts/e1-lifecycle scripts/lifecycle-stress | tar -x -C "$S/lock04"
 K="node $S/lock04/scripts/e1-lifecycle/confirm-check.mjs"
 C="node $W/scripts/e1-lifecycle/compare.mjs"

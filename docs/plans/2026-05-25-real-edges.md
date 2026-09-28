@@ -11,7 +11,7 @@ Engineering (plan-eng-critic R1, 7 must-fix):
 - **S1 rewritten** — `listMemoryConflicts(_, 'all')` would return 0 rows (strict-eq SQL). v2 adds `'*'` sentinel in `store.ts` that skips the WHERE-on-status clause. 4 SQL branches (tenanted × with-status, tenanted × no-status, unscoped × with-status, unscoped × no-status). 6 existing callers (cli/mcp/dashboard/tests) all pass `'open'` or default — unaffected.
 - **S1+S5 expanded** — `open_conflicts` stat at dashboard.ts:148 now explicitly filters `c.status === 'open'` after the all-fetch. Test asserts `stats.open_conflicts === 0` on live fixture even when `conflicts.length === 1676`.
 - **S4 + AC8 reconciled** — sharedTagEdges teardown disposes BOTH geometry AND material. Pre-existing tendril/conflictLine material-leak deferred to a separate ticket (referenced in Out of scope).
-- **S3 tag cap redesigned** — replaced `>50` hard cap with a tiered approach: tags with 50-300 users contribute their top-K=15 most-strongly-connected pairs; tags >300 fully skipped. Captures `openclaw` (162), `claude-code-memory` (68) which v1 silently lost. `error` (986), `git-learned` (669), `path:skf_s` (828), `path:quantamental` (247) still skipped. Note `path:*` tags excluded entirely by `excludePrefix:"path:"` regardless of tier (consistent with v1; project-namespace tags are too broad as a similarity signal).
+- **S3 tag cap redesigned** — replaced `>50` hard cap with a tiered approach: tags with 50-300 users contribute their top-K=15 most-strongly-connected pairs; tags >300 fully skipped. Captures `openclaw` (162), `claude-code-memory` (68) which v1 silently lost. `error` (986), `git-learned` (669), `path:<user>` (828), `path:project-e` (247) still skipped. Note `path:*` tags excluded entirely by `excludePrefix:"path:"` regardless of tier (consistent with v1; project-namespace tags are too broad as a similarity signal).
 - **New AC for perf budget** — `computeSharedTagPairs` (extracted helper) must complete in <50ms on a 500-memory fixture, measured via performance.now().
 - **AC1 disambiguated** — `/api/conflicts` returns 1676 rows; scene renders ~1117 lines after `!a || !b` filter at scene.ts:407.
 - **S6 rewritten** — extract `computeSharedTagPairs` to a pure helper in `ui/src/engine/sharedTagPairs.ts`. Test directly without WebGL stubs. The "no scene tests" framing was wrong; engine tests already exist (E1 added them). Scene class itself remains untested (out of scope for this episode).
@@ -225,10 +225,10 @@ export interface PairsOpts {
  * 3. For each tag with softCap <= userCount < hardCap: emit only the
  *    perTagTopK strongest pairs (by current intersection count). This
  *    preserves signal from medium-cardinality tags like openclaw (162),
- *    claude-code-memory (68), path:luminus-dashboard (75) without the
+ *    claude-code-memory (68), path:project-c-dashboard (75) without the
  *    O(N^2) cost of fully enumerating their pairs.
  * 4. Tags with userCount >= hardCap are skipped entirely (error 986,
- *    path:skf_s 828, git-learned 669, path:quantamental 247).
+ *    path:<user> 828, git-learned 669, path:project-e 247).
  * 5. Filter resulting counts by minShared.
  */
 export function computeSharedTagPairs(

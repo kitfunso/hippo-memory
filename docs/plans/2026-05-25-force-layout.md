@@ -87,9 +87,9 @@ Edge source: ui/src/engine/localNeighborhood.buildAdjacency (E3).
   REUSE exactly (hoisted to useCanvasEngine useMemo per memoization fix).
 
 Path tag distribution (from real fixture):
-  Unique path:* values: ~12 (path:skf_s, path:quantamental, path:hippo, path:phzse,
-    path:mure, path:luminus, path:luminus-dashboard, path:resona, path:production,
-    path:clawd, path:2chain, and a few rarer ones).
+  Unique path:* values: ~12 (path:<user>, path:project-e, path:hippo, path:project-d,
+    path:mure, path:project-c, path:project-c-dashboard, path:resona, path:production,
+    path:project-b, path:2chain, and a few rarer ones).
   90% of memories carry at least one path:* tag.
 
 Performance constraints:

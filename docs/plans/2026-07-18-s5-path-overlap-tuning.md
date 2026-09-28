@@ -16,13 +16,13 @@ return matches / memoryPathTags.length;
 Two defects, one refactor debt:
 
 1. **Genericity is rewarded, specificity punished.** A memory carrying a single
-   generic path tag (e.g. `path:skf_s`, auto-attached when remembering from the
+   generic path tag (e.g. `path:<user>`, auto-attached when remembering from the
    home directory) scores `1/1 = 1.0` from ANY cwd under home and receives the
    full 1.3x boost everywhere. A memory with 4 specific tags queried from a
    sibling project scores `2/4 = 0.5` (1.15x). The boost exists to reward
    *locality*; under this normalization a location-free memory outboosts a
    location-specific one from every foreign directory. Named in the v39 plan
-   ("bare `path:skf_s` scores 1.0 everywhere under home").
+   ("bare `path:<user>` scores 1.0 everywhere under home").
 2. **Duplicated boost logic.** Both call sites re-implement
    filter-tags -> score -> `1.0 + score * 0.3`:
    `hybridSearch` (src/search.ts:597-600) and sync `search`
@@ -50,7 +50,7 @@ Two defects, one refactor debt:
       Expected: FAILS (or exposes the inversion) under status-quo scoring —
       the red run is the measurement.
    c. `run.py` HIPPO_BIN Windows fallback (bundled from the loop backlog:
-      `C:/Users/skf_s/hippo/.devrl-backlog.md` Candidates, filed from episode
+      `C:/Users/<user>/hippo/.devrl-backlog.md` Candidates, filed from episode
       01KXPDKZ friction as B-sized "bundle into a future hardening pass" —
       this run.py-touching episode is that pass; same file):
       when the default `hippo` binary is unspawnable (WinError 2 cmd-shim
@@ -152,7 +152,7 @@ Controlled by content authoring; the fixture asserts top-1 membership, never
 scores.
 
 Platform note: the temp home's auto tags differ by OS (Windows
-`[path:skf_s, path:hippo-micro-x]`; Linux `/tmp` -> `[path:hippo-micro-x]`
+`[path:<user>, path:hippo-micro-x]`; Linux `/tmp` -> `[path:hippo-micro-x]`
 since `tmp` is noise-filtered) — the subset relationship above holds on both,
 so the fixture is platform-robust. Subdir names must avoid the
 `extractPathTags` noise list and be >= 2 chars (`lib` ok; `src` ok; `dist`/
@@ -260,7 +260,7 @@ project's recall sees the global copy):
   rotated nightly basaltro; export manifests archived". Measured under C0:
   GENERIC 0.2737282201552896 > LOCAL 0.2468671207643772 (both x1.300 path
   boost — the subset defect live; GENERIC tags = exactly
-  [path:skf_s, path:hippo-s5-pre6]) -> query1 RED, composite ratio 1.1088
+  `[path:<user>, path:hippo-s5-pre6]`) -> query1 RED, composite ratio 1.1088
   inside the (1.0, 1.13) band; query2 FOREIGN 0.6383 vs GENERIC 0.0395
   green, non-vacuous. Predicted C2: 1.1088 x 1.15/1.3 = 0.981 (Windows,
   LOCAL wins) / x 1.1/1.3 = 0.938 (Linux) — green both, deterministic corpus

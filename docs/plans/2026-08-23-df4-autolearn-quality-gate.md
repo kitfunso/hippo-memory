@@ -24,7 +24,7 @@ means changing the fetch. Measured across 4 repos and 1053 commits:
 
 | Repo | commits | subject passes | subject+body passes | rescued by body |
 |---|---|---|---|---|
-| quantamental | 762 | 733 | 733 | **0** |
+| project-e | 762 | 733 | 733 | **0** |
 | mure | 123 | 123 | 123 | **0** |
 | hippo | 120 | 102 | 102 | **0** |
 | shiny | 48 | 48 | 48 | **0** |

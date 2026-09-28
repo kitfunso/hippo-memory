@@ -126,13 +126,13 @@ function hippoConfig(overrides: Partial<HippoMemoryPluginConfig> = {}): HippoPlu
   return {
     agents: {
       defaults: {
-        workspace: 'C:/Users/skf_s/.openclaw/workspace',
+        workspace: 'C:/Users/alice/.openclaw/workspace',
       },
       list: [
         {
           id: 'main',
           default: true,
-          workspace: 'C:/Users/skf_s/clawd',
+          workspace: 'C:/Users/alice/project-b',
         },
       ],
     },
@@ -169,12 +169,12 @@ describe('openclaw hippo plugin', () => {
 
     register(harness.api);
 
-    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\clawd' });
+    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\project-b' });
     await tool.execute('tool-1', { query: 'cache refresh' });
 
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
     expect(execFileSyncMock.mock.calls[0]?.[0]).toBe('hippo');
-    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
   });
 
   it('uses workspaceDir for prompt hook auto-context', async () => {
@@ -184,14 +184,14 @@ describe('openclaw hippo plugin', () => {
     register(harness.api);
 
     const hook = harness.getHook('before_prompt_build');
-    const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\clawd' });
+    const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\project-b' });
 
     // 2 calls: session_start event + context injection
     expect(execFileSyncMock).toHaveBeenCalledTimes(2);
     expect(execFileSyncMock.mock.calls[0]?.[1]).toContain('session');
-    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
     expect(execFileSyncMock.mock.calls[1]?.[1]).toContain('context');
-    expect(execFileSyncMock.mock.calls[1]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[1]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
     expect(result).toMatchObject({
       appendSystemContext: expect.stringContaining('Project Memory (Hippo)'),
     });
@@ -207,7 +207,7 @@ describe('openclaw hippo plugin', () => {
 
     register(harness.api);
 
-    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\clawd' });
+    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\project-b' });
     await tool.execute('tool-2', { query: 'shared memory' });
 
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
@@ -245,7 +245,7 @@ describe('openclaw hippo plugin', () => {
     expect(args).toContain('--error');
     // tool name sanitized to tag: browser_open -> browser-open
     expect(args).toContain('browser-open');
-    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/alice/project-b' });
   });
 
   it('autoSleep detaches consolidation only after sessions with at least 10 new memories', async () => {
@@ -260,7 +260,7 @@ describe('openclaw hippo plugin', () => {
     register(harness.api);
 
     const lightSessionTool = harness.getTool('hippo_remember', {
-      workspaceDir: 'C:\\repo\\clawd',
+      workspaceDir: 'C:\\repo\\project-b',
       agentId: 'main',
       sessionId: 'session-light',
     });
@@ -283,7 +283,7 @@ describe('openclaw hippo plugin', () => {
     expect(spawnMock).not.toHaveBeenCalled();
 
     const heavySessionTool = harness.getTool('hippo_remember', {
-      workspaceDir: 'C:\\repo\\clawd',
+      workspaceDir: 'C:\\repo\\project-b',
       agentId: 'main',
       sessionId: 'session-heavy',
     });
@@ -303,7 +303,7 @@ describe('openclaw hippo plugin', () => {
       'hippo',
       ['sleep'],
       expect.objectContaining({
-        cwd: 'C:/Users/skf_s/clawd',
+        cwd: 'C:/Users/alice/project-b',
         detached: true,
         stdio: 'ignore',
         windowsHide: true,

@@ -11,7 +11,7 @@
     "budget": 2000,
     "benchmark_version": "1.7.7",
     "hippo_cli_version": "1.12.10",
-    "command": "node benchmarks/sequential-learning/run.mjs --adapter hippo --n-seeds 20 --restrict-late-to 4 --output /c/Users/skf_s/hippo/tmp-card4-20seed"
+    "command": "node benchmarks/sequential-learning/run.mjs --adapter hippo --n-seeds 20 --restrict-late-to 4 --output /c/Users/<user>/hippo/tmp-card4-20seed"
   },
   "per_seed": [
     {"seed": 145980072,  "base_index": 1000, "phases_late": 0.25, "non_zero": true},
@@ -62,7 +62,7 @@
     "elapsed_seconds": 464.8,
     "elapsed_human": "7m44s"
   },
-  "raw_artifact": "C:/Users/skf_s/hippo/tmp-card4-20seed/latest.json (also benchmark-1779641018677.json)",
-  "stdout_log": "C:/Users/skf_s/hippo/tmp-card4-20seed/stdout.log",
+  "raw_artifact": "C:/Users/<user>/hippo/tmp-card4-20seed/latest.json (also benchmark-1779641018677.json)",
+  "stdout_log": "C:/Users/<user>/hippo/tmp-card4-20seed/stdout.log",
   "notes": "All 20 seeds returned phases.late=0.25 exactly. lateStd=0 reflects structural determinism of the workload under restrict_late_to=4 (matches v1.8 baseline + 3-seed dry-run pattern). early/mid vary by seed (early 0.71-0.79, mid 0.08-0.15) because the slot-assignment changes which categories land where. Late slice covers the same final 4 trap encounters across seeds, all of which produce trap hits for hippo-base condition. Hook failures 0/0 as expected (no --use-goal-stack flag; C2 baseline). Result consistent with 2026-05-24 3-seed dry-run report and v1.8 baseline."
 }

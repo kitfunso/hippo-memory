@@ -141,7 +141,7 @@ describe('A3 envelope migration v14', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd C:/Users/skf_s/hippo && npx vitest run tests/a3-envelope-migration.test.ts
+cd C:/Users/<user>/hippo && npx vitest run tests/a3-envelope-migration.test.ts
 ```
 
 Expected: FAIL — `getCurrentSchemaVersion()` returns 13, not 14.

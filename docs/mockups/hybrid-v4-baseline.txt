@@ -5,7 +5,7 @@ Source mockup: mockups/hybrid-v4.html
 Viewport: 1440x900
 Browser: Playwright Chromium (default channel)
 Command:
-  cd C:/Users/skf_s/hippo && npx playwright screenshot \
+  cd C:/Users/<user>/hippo && npx playwright screenshot \
     --browser=chromium --viewport-size=1440,900 \
     mockups/hybrid-v4.html mockups/hybrid-v4-baseline.png
 

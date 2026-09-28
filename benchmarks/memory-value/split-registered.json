@@ -544,5 +544,5 @@
     "fullHeldoutCount": 200
   },
   "generatedAt": "2026-08-09T11:26:31.974Z",
-  "source": "C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json"
+  "source": "C:/Users/<user>/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json"
 }

@@ -1,13 +1,14 @@
 import json, io, os, sys
 
-BENCH = r'C:\Users\skf_s\hippo-bench\memory-benchmarks'
+HOME = os.path.expanduser('~')
+BENCH = HOME + r'\hippo-bench\memory-benchmarks'
 sys.path.insert(0, BENCH)
 from benchmarks.longmemeval.prompts import get_answer_generation_prompt
 
-LANE_A = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-a'
+LANE_A = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-a'
 PRED = {
-    'hippo365': r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_lme-hippo365',
-    'bm25': r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_lme-bm25',
+    'hippo365': HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_lme-hippo365',
+    'bm25': HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_lme-bm25',
 }
 
 qids = sorted(io.open(os.path.join(LANE_A, 'lme', 'qids_hippo365.txt'), encoding='utf-8').read().split())

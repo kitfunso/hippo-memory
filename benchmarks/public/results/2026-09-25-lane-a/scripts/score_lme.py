@@ -1,6 +1,7 @@
 import json, glob, os, random, io
 
-LANE_A = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-a'
+HOME = os.path.expanduser('~')
+LANE_A = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-a'
 LME = os.path.join(LANE_A, 'lme')
 
 gold_meta = json.load(io.open(os.path.join(LME, 'gold_meta.json'), encoding='utf-8'))

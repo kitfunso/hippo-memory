@@ -1,7 +1,7 @@
 # Hardening pass: AT1 follow-ups (episode 01M02X45JWXGB0HTS9VQPFMZB0)
 
 Status: Revised r2 (plan-eng-critic r1 fail 68; both must-fixes + both lows applied)
-Base: origin/master 35815a0 (v1.31.0). Branch: fix/hardening-at1-followups. Worktree: C:/Users/skf_s/hippo-wt-hard.
+Base: origin/master 35815a0 (v1.31.0). Branch: fix/hardening-at1-followups. Worktree: ~/hippo-wt-hard.
 Source: .devrl-backlog.md Candidates (filed from AT1 episode 01M025CW434ZAPVSFC61BGFGCT) + AT1 ship-check flaky-test classification.
 
 One correctness core (T1) + four riders (T2-T5). One PR, one commit per task.

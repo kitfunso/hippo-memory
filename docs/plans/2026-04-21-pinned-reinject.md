@@ -128,7 +128,7 @@ describe('hippo context --pinned-only', () => {
 **Step 2: Run and verify fail**
 
 ```bash
-cd "C:/Users/skf_s/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
+cd "C:/Users/<user>/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
 ```
 
 Expected: FAIL. `--pinned-only` is unrecognised; test output will contain extra content (not just pinned) OR unknown-flag error.
@@ -174,7 +174,7 @@ The emit path (framing application, output) is shared with the existing code —
 **Step 4: Run test, verify pass**
 
 ```bash
-cd "C:/Users/skf_s/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
+cd "C:/Users/<user>/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
 ```
 
 Expected: PASS on both.
@@ -223,7 +223,7 @@ it('--format additional-context with no pinned entries emits empty-output JSON (
 **Step 2: Run and verify fail**
 
 ```bash
-cd "C:/Users/skf_s/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
+cd "C:/Users/<user>/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
 ```
 
 Expected: FAIL — `--format` not recognised or output isn't valid JSON.
@@ -260,7 +260,7 @@ process.stdout.write(textBlock);
 **Step 4: Verify tests pass**
 
 ```bash
-cd "C:/Users/skf_s/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
+cd "C:/Users/<user>/hippo" && npm run build && npx vitest run tests/pinned-inject.test.ts
 ```
 
 Expected: all 4 tests pass.

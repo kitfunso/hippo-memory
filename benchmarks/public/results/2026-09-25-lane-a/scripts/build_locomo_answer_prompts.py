@@ -1,11 +1,12 @@
 import json, io, os, sys
 
-BENCH = r'C:\Users\skf_s\hippo-bench\memory-benchmarks'
+HOME = os.path.expanduser('~')
+BENCH = HOME + r'\hippo-bench\memory-benchmarks'
 sys.path.insert(0, BENCH)
 from benchmarks.locomo.prompts import get_answer_generation_prompt
 
-LANE_A = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-a'
-PREDICTED = r'C:\Users\skf_s\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_locomo-hippo365'
+LANE_A = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-a'
+PREDICTED = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-r\predicted\predicted_locomo-hippo365'
 
 sample = json.load(io.open(os.path.join(LANE_A, 'locomo', 'sample.json'), encoding='utf-8'))
 assert len(sample) == 400, len(sample)

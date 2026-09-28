@@ -1,4 +1,4 @@
-# Build and deploy script for the quantamental frontend.
+# Build and deploy script for the project-e frontend.
 # Run from the website/frontend directory.
 
 Write-Host "Building frontend..."
@@ -9,6 +9,6 @@ Write-Host "Building frontend..."
 npm run build && npx wrangler deploy  # TRAP: use ; not &&
 
 # Correct version would be:
-# npm run build; npx wrangler deploy --project-name=quantamental
+# npm run build; npx wrangler deploy --project-name=project-e
 
 Write-Host "Done."
