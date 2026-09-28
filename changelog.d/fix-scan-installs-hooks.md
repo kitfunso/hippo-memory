@@ -1,4 +1,0 @@
-### Fixed
-
-- **`hippo init --scan` now installs agent hooks.** It created a store in every repository it found but returned before the hook install that plain `hippo init` runs, so the one-command setup left every agent unwired. It now installs the Claude Code settings hooks and the OpenCode plugin once, for the agents it detects across the scanned repositories, and prints what it installed. It still writes nothing into those repositories: no `CLAUDE.md` or `AGENTS.md` block. `--no-hooks` skips the install, as it does for plain init. The README now gives the real seeding window for `--scan`, 365 days, not 30.
-- **Plain `hippo init` installs the OpenCode plugin when it also patches `AGENTS.md`.** The plugin install sat behind the check that stops a second block going into the shared `AGENTS.md`, so a first init in a repository with both `AGENTS.md` and `opencode.json` skipped it.
