@@ -14,8 +14,8 @@
  *   GOLDEN_ANGLE = π · (3 − √5) ≈ 137.508°. Vogel sunflower spiral
  *   packing — dense and collision-free for any N up to ~50.
  *
- * Excludes EXCLUDED_PATH_TAGS (currently just path:skf_s, the filesystem
- * root — 60% of memories. Including it would dominate the layout.)
+ * Excludes the home folder's path tags: every memory captured there carries
+ * them, so anchoring them would pull most memories to one point.
  *
  * Per-memory tag pick uses the shared pickShortestPathTag helper (matches
  * pickColorTag's path-mode rule from E1 tag palette).
@@ -24,10 +24,6 @@
 import type { Memory } from "../types.js";
 import type { ProjectAnchorOrder } from "../state/projectAnchorOrder.js";
 import { pickShortestPathTag } from "./tagPalette.js";
-
-/** Filter: which path:* tags are "real projects". Excludes the root
- *  filesystem dir which is not a project. */
-const EXCLUDED_PATH_TAGS: ReadonlySet<string> = new Set(["path:skf_s"]);
 
 /**
  * Vogel sunflower spiral angle. `(i * GOLDEN_ANGLE) % (2π)` is the same
@@ -74,7 +70,7 @@ const DEFAULT_ANCHOR_STRENGTH = 0.08;
  * around the origin. Each tag at persistent index `i` is placed at angle
  * `(i × GOLDEN_ANGLE) mod 2π` — stable per i regardless of total tag count.
  *
- * Filters out EXCLUDED_PATH_TAGS.
+ * Filters out homePathTags.
  *
  * Each memory gets the anchor of its shortest qualifying path tag
  * (alpha tiebreak), via pickShortestPathTag (shared with pickColorTag's
@@ -84,6 +80,7 @@ export function computeProjectAnchors(
   memories: readonly Memory[],
   order: ProjectAnchorOrder,
   bound: number,
+  homePathTags: ReadonlySet<string> = new Set(),
   anchorStrength: number = DEFAULT_ANCHOR_STRENGTH,
 ): AnchorLayout {
   const radius = bound * 0.6;
@@ -92,7 +89,7 @@ export function computeProjectAnchors(
   // Build byTag anchor positions via golden-angle packing.
   const byTag = new Map<string, AnchorTarget>();
   for (const [tag, index] of order.indexByTag) {
-    if (EXCLUDED_PATH_TAGS.has(tag)) continue;
+    if (homePathTags.has(tag)) continue;
     const angle = (index * GOLDEN_ANGLE) % TWO_PI;
     byTag.set(tag, {
       x: Math.cos(angle) * radius,
@@ -106,7 +103,7 @@ export function computeProjectAnchors(
   const byMemoryId = new Map<string, AnchorTarget>();
   const anchoredTags = new Set<string>();
   for (const mem of memories) {
-    const tag = pickShortestPathTag(mem.tags, EXCLUDED_PATH_TAGS);
+    const tag = pickShortestPathTag(mem.tags, homePathTags);
     if (tag === null) continue;
     const anchor = byTag.get(tag);
     if (anchor) {

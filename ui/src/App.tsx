@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Memory, Stats, Conflict, EmbeddingIndex } from "./types.js";
-import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings, errorMessage } from "./api/client.js";
+import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings, fetchConfig, errorMessage } from "./api/client.js";
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
 import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence, type ColorMode, type LocalViewState } from "./state/filterState.js";
 import { ViewSwitch, type View } from "./components/ViewSwitch.js";
@@ -27,6 +27,7 @@ export function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [embeddings, setEmbeddings] = useState<EmbeddingIndex>({});
+  const [homePathTags, setHomePathTags] = useState<ReadonlySet<string>>(new Set());
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState("");
 
@@ -145,12 +146,13 @@ export function App() {
   }, [filterState.frozen, setFrozen, view]);
 
   useEffect(() => {
-    Promise.all([fetchMemories(), fetchStats(), fetchConflicts(), fetchEmbeddings()])
-      .then(([m, s, c, e]) => {
+    Promise.all([fetchMemories(), fetchStats(), fetchConflicts(), fetchEmbeddings(), fetchConfig()])
+      .then(([m, s, c, e, cfg]) => {
         setMemories(m);
         setStats(s);
         setConflicts(c);
         setEmbeddings(e);
+        setHomePathTags(new Set(cfg.homePathTags));
         setState("ready");
       })
       .catch((err) => {
@@ -255,6 +257,7 @@ export function App() {
       <LivingMap
         memories={memories}
         embeddings={embeddings}
+        homePathTags={homePathTags}
         stats={stats}
         conflicts={conflicts}
         filterState={filterState}

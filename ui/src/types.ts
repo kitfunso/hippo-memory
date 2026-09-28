@@ -51,6 +51,7 @@ export interface DashboardConfig {
   defaultHalfLifeDays: number;
   defaultBudget: number;
   embeddingsEnabled: boolean | string;
+  homePathTags: string[];
 }
 
 export type EmbeddingIndex = Record<string, number[]>;

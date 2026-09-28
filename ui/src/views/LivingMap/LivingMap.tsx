@@ -26,6 +26,8 @@ import { buildAdjacency, computeLocalNeighborhood } from "../../engine/localNeig
 interface LivingMapProps {
   memories: Memory[];
   embeddings: EmbeddingIndex;
+  /** Path tags every memory captured in the home folder carries; they name no project. */
+  homePathTags: ReadonlySet<string>;
   stats: Stats | null;
   conflicts: Conflict[];
   filterState: FilterState;
@@ -209,7 +211,7 @@ function DetailPanel({ memory, onClose, open, localView, setLocalView }: {
 }
 
 export function LivingMap({
-  memories, embeddings, stats, conflicts, filterState, frozenOrigin,
+  memories, embeddings, homePathTags, stats, conflicts, filterState, frozenOrigin,
   setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly, setAgedOutOnly,
   setColorMode, setLocalView, resetFilters, viewSwitch,
 }: LivingMapProps) {
@@ -325,7 +327,7 @@ export function LivingMap({
     forceSettling,
     projectAnchorLayout,
   } = useCanvasEngine({
-    memories, embeddings, conflicts, width: size.width, height: size.height,
+    memories, embeddings, conflicts, homePathTags, width: size.width, height: size.height,
     onHover, onClick: onClickMemory,
     searchQuery: filterState.query,
     frozen: filterState.frozen,

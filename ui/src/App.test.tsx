@@ -62,11 +62,14 @@ function makeCard(overrides: Partial<Card> = {}): Card {
   };
 }
 
+const CONFIG = { defaultHalfLifeDays: 7, defaultBudget: 1500, embeddingsEnabled: false, homePathTags: [] };
+
 function queueEmptyMemories(router: ReturnType<typeof createRouter>) {
   router.queue("/api/memories", { status: 200, body: [] });
   router.queue("/api/stats", { status: 200, body: makeStats() });
   router.queue("/api/conflicts", { status: 200, body: [] });
   router.queue("/api/embeddings", { status: 200, body: {} });
+  router.queue("/api/config", { status: 200, body: CONFIG });
 }
 
 describe("App", () => {
@@ -97,6 +100,7 @@ describe("App", () => {
     router.queue("/api/stats", { status: 200, body: makeStats() });
     router.queue("/api/conflicts", { status: 200, body: [] });
     router.queue("/api/embeddings", { status: 200, body: {} });
+    router.queue("/api/config", { status: 200, body: CONFIG });
     vi.stubGlobal("fetch", router.fetchStub);
     render(<App />);
 

@@ -4,7 +4,7 @@
  * Highlights:
  *   - AC20 byte-identical stability: existing anchors unchanged when a
  *     new tag is added (the core E4 R2 fix).
- *   - path:skf_s filtered out.
+ *   - The home folder's path tags filtered out.
  *   - Golden-angle formula: angle = i × GOLDEN_ANGLE per index.
  *   - orderedTags includes only actually-anchored tags (HIGH-4 fix).
  *   - Memories pick shortest path tag (alpha tiebreak) via shared helper.
@@ -50,15 +50,19 @@ function order(entries: Array<[string, number]>): ProjectAnchorOrder {
 }
 
 describe("computeProjectAnchors", () => {
-  it("filters path:skf_s (filesystem root, not a project)", () => {
-    const memories = [mem("a", ["path:skf_s"]), mem("b", ["path:hippo"])];
-    const ord = order([["path:skf_s", 0], ["path:hippo", 1]]);
-    const layout = computeProjectAnchors(memories, ord, LAYOUT_BOUND);
-    expect(layout.byTag.has("path:skf_s")).toBe(false);
-    expect(layout.byTag.has("path:hippo")).toBe(true);
-    // Memory `a` had ONLY path:skf_s → no anchor.
+  it("leaves the home folder's path tags out of anchoring", () => {
+    const home = new Set(["path:alice"]);
+    const memories = [mem("a", ["path:alice"]), mem("b", ["path:alice", "path:hippo"])];
+    const ord = order([["path:alice", 0], ["path:hippo", 1]]);
+    const layout = computeProjectAnchors(memories, ord, LAYOUT_BOUND, home);
+    expect(layout.byTag.has("path:alice")).toBe(false);
+    // Memory `a` carries only the home tag, so it gets no anchor.
     expect(layout.byMemoryId.has("a")).toBe(false);
-    expect(layout.byMemoryId.has("b")).toBe(true);
+    // Same length as path:hippo and first alphabetically, so only the exclusion stops it winning.
+    expect(layout.byMemoryId.get("b")).toBe(layout.byTag.get("path:hippo"));
+    expect(layout.orderedTags).toEqual(["path:hippo"]);
+    // Without a home set the same tag is an ordinary project.
+    expect(computeProjectAnchors(memories, ord, LAYOUT_BOUND).byTag.has("path:alice")).toBe(true);
   });
 
   it("places each anchor at (cos(i*GOLDEN_ANGLE)*r, sin(i*GOLDEN_ANGLE)*r)", () => {
@@ -185,7 +189,7 @@ describe("computeProjectAnchors", () => {
   it("respects anchorStrength override", () => {
     const memories = [mem("a", ["path:hippo"])];
     const ord = order([["path:hippo", 0]]);
-    const layout = computeProjectAnchors(memories, ord, LAYOUT_BOUND, 0.04);
+    const layout = computeProjectAnchors(memories, ord, LAYOUT_BOUND, new Set(), 0.04);
     expect(layout.byTag.get("path:hippo")!.strength).toBe(0.04);
   });
 

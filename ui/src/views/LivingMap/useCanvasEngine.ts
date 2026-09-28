@@ -17,6 +17,8 @@ interface UseSceneOptions {
   memories: Memory[];
   embeddings: EmbeddingIndex;
   conflicts: Conflict[];
+  /** Home-folder path tags, left out of project anchoring. */
+  homePathTags: ReadonlySet<string>;
   width: number;
   height: number;
   onHover: (memory: Memory | null, x: number, y: number) => void;
@@ -57,6 +59,7 @@ export function useCanvasEngine({
   memories,
   embeddings,
   conflicts,
+  homePathTags,
   width,
   height,
   onHover,
@@ -123,7 +126,7 @@ export function useCanvasEngine({
     if (!scene || memories.length === 0) return;
 
     const positions = projectTo3D(embeddings);
-    scene.populate(memories, positions, conflicts, adjacency);
+    scene.populate(memories, positions, conflicts, adjacency, homePathTags);
     // v0.28 (E2 real-edges) — populate is synchronous, so reading edge
     // counts immediately after returns the freshly-built state. Triggers
     // a React re-render of BottomBar with the new affordance copy.
@@ -133,7 +136,7 @@ export function useCanvasEngine({
     // the SAME synchronous block so the Sidebar Projects panel sees
     // it as soon as the canvas does.
     setProjectAnchorLayout(scene.getProjectAnchorLayout());
-  }, [memories, embeddings, conflicts, adjacency]);
+  }, [memories, embeddings, conflicts, adjacency, homePathTags]);
 
   // v0.28+ E4 — subscribe once to scene-level settling events. Scene forwards
   // from current forceLayout (rebuilt per populate). Replay-on-subscribe

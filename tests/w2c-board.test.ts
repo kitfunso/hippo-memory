@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { execFileSync } from 'node:child_process';
@@ -184,6 +184,23 @@ describe('dashboard entry', () => {
   it('E6: an HTTP/1.0 request with no Host header is routed as today', async () => {
     const raw = await rawHttp10Get(port, '/api/stats');
     expect(raw).toMatch(/^HTTP\/1\.[01] 200 /);
+  });
+
+  it("E7: /api/config lists the home folder's path tags, read per request", async () => {
+    const prevHomeEnv = process.env.HOME;
+    const prevProfile = process.env.USERPROFILE;
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    try {
+      const res = await dashboardRequest(port, '/api/config', `127.0.0.1:${port}`);
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body).homePathTags).toContain(`path:${basename(home).toLowerCase()}`);
+    } finally {
+      if (prevHomeEnv === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHomeEnv;
+      if (prevProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = prevProfile;
+    }
   });
 });
 

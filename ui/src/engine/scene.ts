@@ -269,6 +269,7 @@ export class BrainScene {
     positions: Record<string, [number, number, number]>,
     conflicts: Conflict[],
     adjacency: AdjacencyMap,
+    homePathTags: ReadonlySet<string>,
   ): void {
     for (const node of this.nodes) {
       this.scene.remove(node.mesh);
@@ -430,7 +431,7 @@ export class BrainScene {
       // touch localStorage when there's actually something new to write.
       saveProjectAnchorOrder(reconciledOrder);
     }
-    const projectAnchors = computeProjectAnchors(memories, reconciledOrder, LAYOUT_BOUND);
+    const projectAnchors = computeProjectAnchors(memories, reconciledOrder, LAYOUT_BOUND, homePathTags);
     this.projectAnchorLayout = projectAnchors;
 
     this.forceLayout = buildForceLayout(memories, adjacency, seedPositions, {

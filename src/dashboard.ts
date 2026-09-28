@@ -6,8 +6,10 @@
  */
 
 import * as http from 'http';
+import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { extractPathTags } from './path-context.js';
 import { loadAllEntries, listCards, listMemoryConflicts, readEntry, writeEntry } from './store.js';
 import { calculateStrength, confidenceFacets, type MemoryEntry } from './memory.js';
 import { loadConfig } from './config.js';
@@ -65,6 +67,7 @@ interface DashboardData {
     defaultHalfLifeDays: number;
     defaultBudget: number;
     embeddingsEnabled: boolean | string;
+    homePathTags: string[];
   };
 }
 
@@ -167,6 +170,8 @@ function buildDashboardData(hippoRoot: string): DashboardData {
       defaultHalfLifeDays: config.defaultHalfLifeDays,
       defaultBudget: config.defaultBudget,
       embeddingsEnabled: config.embeddings.enabled,
+      // Every memory captured in the home folder carries these, so they name no project.
+      homePathTags: extractPathTags(os.homedir()),
     },
   };
 }
