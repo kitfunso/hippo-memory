@@ -47,7 +47,7 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // sk-... (OpenAI/Anthropic style) and sk_<vendor>_... shapes. Both require
   // a key-ish noun somewhere in the content (co-occurrence guard) so prose
   // like "the sk- prefix identifies API keys" without an actual long token
-  // does not flag, but a stored key ("2chain prod API key sk_keith_...")
+  // does not flag, but a stored key ("prod API key sk_live_...")
   // does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },

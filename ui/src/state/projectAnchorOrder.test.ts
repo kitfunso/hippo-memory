@@ -129,9 +129,9 @@ describe("projectAnchorOrder", () => {
         indexByTag: new Map([["path:hippo", 0]]),
         nextIndex: 1,
       };
-      const result = reconcileProjectOrder(["path:hippo", "path:resona"], start);
+      const result = reconcileProjectOrder(["path:hippo", "path:project-h"], start);
       expect(result.indexByTag.get("path:hippo")).toBe(0);
-      expect(result.indexByTag.get("path:resona")).toBe(1);
+      expect(result.indexByTag.get("path:project-h")).toBe(1);
       expect(result.nextIndex).toBe(2);
     });
 

@@ -105,12 +105,12 @@ describe("computeProjectAnchors", () => {
     const projD1 = layoutV1.byTag.get("path:project-d")!;
 
     // Add a new tag at index 3.
-    const memoriesV2 = [...memoriesV1, mem("d", ["path:resona"])];
+    const memoriesV2 = [...memoriesV1, mem("d", ["path:project-h"])];
     const orderV2 = order([
       ["path:hippo", 0],
       ["path:project-e", 1],
       ["path:project-d", 2],
-      ["path:resona", 3],
+      ["path:project-h", 3],
     ]);
     const layoutV2 = computeProjectAnchors(memoriesV2, orderV2, LAYOUT_BOUND);
     const hippo2 = layoutV2.byTag.get("path:hippo")!;
@@ -127,8 +127,8 @@ describe("computeProjectAnchors", () => {
     expect(projD2.y).toBe(projD1.y);
 
     // And the newcomer is wherever golden-angle puts it.
-    const resona2 = layoutV2.byTag.get("path:resona")!;
-    expect(resona2).toBeDefined();
+    const projH2 = layoutV2.byTag.get("path:project-h")!;
+    expect(projH2).toBeDefined();
   });
 
   it("memories with no qualifying path tag are not in byMemoryId", () => {

@@ -88,8 +88,8 @@ Edge source: ui/src/engine/localNeighborhood.buildAdjacency (E3).
 
 Path tag distribution (from real fixture):
   Unique path:* values: ~12 (path:<user>, path:project-e, path:hippo, path:project-d,
-    path:mure, path:project-c, path:project-c-dashboard, path:resona, path:production,
-    path:project-b, path:2chain, and a few rarer ones).
+    path:project-g, path:project-c, path:project-c-dashboard, path:project-h, path:production,
+    path:project-b, path:project-i, and a few rarer ones).
   90% of memories carry at least one path:* tag.
 
 Performance constraints:

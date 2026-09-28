@@ -25,9 +25,9 @@ means changing the fetch. Measured across 4 repos and 1053 commits:
 | Repo | commits | subject passes | subject+body passes | rescued by body |
 |---|---|---|---|---|
 | project-e | 762 | 733 | 733 | **0** |
-| mure | 123 | 123 | 123 | **0** |
+| project-g | 123 | 123 | 123 | **0** |
 | hippo | 120 | 102 | 102 | **0** |
-| shiny | 48 | 48 | 48 | **0** |
+| project-m | 48 | 48 | 48 | **0** |
 
 Every subject the gate rejects is still rejected with its body appended.
 Merging buys nothing here and costs a fetch-format change. **Skip it.**

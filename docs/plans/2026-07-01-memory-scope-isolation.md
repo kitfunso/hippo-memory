@@ -4,7 +4,7 @@
 
 ## Problem
 
-The every-turn UserPromptSubmit hook (`hippo context --pinned-only --include-recent 5 --format additional-context`, src/hooks.ts:118) injects memories from other projects into the active session. Reproduced 2026-07-01 from `C:\Users\<user>\shiny` (own `.hippo` store): 19/19 injected entries were `[global]`-store rows about other projects. Observed 2026-06-30: a production API key stored as a memory in the live context of unrelated sessions; a wrong-project infra recommendation traced to the same bleed.
+The every-turn UserPromptSubmit hook (`hippo context --pinned-only --include-recent 5 --format additional-context`, src/hooks.ts:118) injects memories from other projects into the active session. Reproduced 2026-07-01 from `C:\Users\<user>\project-m` (own `.hippo` store): 19/19 injected entries were `[global]`-store rows about other projects. Observed 2026-06-30: a production API key stored as a memory in the live context of unrelated sessions; a wrong-project infra recommendation traced to the same bleed.
 
 ## Root cause
 

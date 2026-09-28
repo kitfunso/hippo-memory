@@ -67,9 +67,9 @@ Tag distribution (from C:/Users/<user>/.hippo/hippo.db):
     path:hippo             173
     path:project-d         155
     path:project-c-dashboard 75
-    path:mure               55
-  Mid tier (10-50): project-c 33, project-b 22, resona 18, production 12, synth 11
-  Tail tier (<10): aegis 8, 2chain 5, part-l-hrt-challenge- 4, project-a 3
+    path:project-g          55
+  Mid tier (10-50): project-c 33, project-b 22, project-h 18, production 12, project-j 11
+  Tail tier (<10): project-k 8, project-i 5, project-l 4, project-a 3
   After filtering <user>: 17 anchor candidates packed by golden-angle on a circle
 
 Existing UI state:
@@ -698,9 +698,9 @@ Test: stability across tag-set growth (golden-angle invariant).
   Setup: 3 memories with tags [path:hippo], [path:project-e], [path:project-d].
   Reconcile order → indices {hippo:0, project-e:1, project-d:2}, nextIndex=3.
   Run computeProjectAnchors → record anchors{hippo:A, project-e:B, project-d:C}.
-  Add memory with new tag [path:resona].
-  Reconcile → indices {hippo:0, project-e:1, project-d:2, resona:3}, nextIndex=4.
-  Run computeProjectAnchors → anchors{hippo:A', project-e:B', project-d:C', resona:D}.
+  Add memory with new tag [path:project-h].
+  Reconcile → indices {hippo:0, project-e:1, project-d:2, project-h:3}, nextIndex=4.
+  Run computeProjectAnchors → anchors{hippo:A', project-e:B', project-d:C', project-h:D}.
   Assert A === A', B === B', C === C' (byte-identical via strict equality
   on .x and .y for each).
   Why this passes now: golden-angle formula uses ONLY i, not slotCount.
