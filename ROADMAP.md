@@ -1971,6 +1971,11 @@ The market's most reported memory failure (r/AI_Agents, September 2026): a user 
 - **Build:** on write, find memories about the same subject and attribute (same person or setting, different value) and supersede the older one, logged and reversible. A cheap classifier call is the opt-in arm when rules miss.
 - **Show it:** `hippo explain` on the current fact names the retired one, its date, its source and the rule that retired it. This is the demo, and the pitch: hippo knows what changed.
 
+#### Z7. Sub-agent work is remembered [test first; added 2026-09-28]
+A sub-agent is compaction by another name: it reads forty files, hits the dead ends and hands the parent a few hundred tokens (Cyrus, Decagon, "Multi-agent systems: from coordination to negotiation", 2026-09-27). Its gotchas and errors never reach hippo. Capture skips every sidechain turn on purpose (`src/capture.ts:649`), and Claude Code keeps sub-agent transcripts in separate `subagents/agent-*.jsonl` files that nothing in hippo reads. This box wrote 1,490 of them in the last 30 days. As agents delegate more, this share of the work grows.
+- **Test first:** replay a sample from the SI0-style archive. Count the errors, corrections and file-level facts found inside sub-agents that are missing from the parent's capture and the parent's reply. If few survive the SI4 write contract, drop Z7.
+- **Build:** session-end capture also reads the session's `subagents/` files through the same write contract, tagged with the parent session. Where the host has a sub-agent start hook, Z1's gated recall goes into the sub-agent too, so a delegated search does not repeat a known mistake.
+
 #### Z4. Repeated mistakes become guards [after Z2 and Z3]
 A lesson that was shown and still violated, or corrected twice, is promoted from recalled memory to an enforced check: a `PreToolUse` guard that blocks the matching action with the lesson as the reason. Guards are opt-in per store at first, listed by `hippo doctor`, and each can be dropped with one command. Promotion needs the evidence SI2 requires; a guard that blocks nothing in 30 days demotes back to a memory.
 
