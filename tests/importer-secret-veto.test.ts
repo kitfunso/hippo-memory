@@ -24,7 +24,9 @@ let hippoRoot: string;
 let homeDir: string;
 
 function writeMemoryFile(name: string, frontmatter: string, body: string): void {
-  const memDir = path.join(homeDir, '.claude', 'projects', 'C--Users-test', 'memory');
+  // The importer reads only the folder Claude Code names after the store's project.
+  const project = fs.realpathSync.native(path.dirname(hippoRoot)).replace(/[^a-zA-Z0-9]/g, '-');
+  const memDir = path.join(homeDir, '.claude', 'projects', project, 'memory');
   fs.mkdirSync(memDir, { recursive: true });
   fs.writeFileSync(path.join(memDir, name), `---\n${frontmatter}\n---\n${body}\n`, 'utf8');
 }

@@ -95,7 +95,8 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   })],
   ['Claude Code memory import', (root) => {
     const home = tmp();
-    const memDir = path.join(home, '.claude', 'projects', 'demo', 'memory');
+    const project = fs.realpathSync.native(path.dirname(root)).replace(/[^a-zA-Z0-9]/g, '-');
+    const memDir = path.join(home, '.claude', 'projects', project, 'memory');
     fs.mkdirSync(memDir, { recursive: true });
     fs.writeFileSync(path.join(memDir, 'lesson.md'), '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n');
     return added(root, () => learnFromMemoryMd(root, home));

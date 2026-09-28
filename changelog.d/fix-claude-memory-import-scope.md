@@ -1,0 +1,3 @@
+### Fixed
+
+- **`hippo init` and `hippo sleep` import only the project's own Claude Code memory.** They copied the auto memory of every project on the machine, every folder under `~/.claude/projects`, into the current project's store, where each note counted as this project's memory and came back in its recall. They now read only the folder Claude Code keeps for this project, named after its git repository (subfolders and worktrees share it) or, outside a repository, after the project folder. Notes an earlier version copied from other projects stay in the store. They carry the `claude-code-memory` tag, and `hippo forget <id>` removes one.

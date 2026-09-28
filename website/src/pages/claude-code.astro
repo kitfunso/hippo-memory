@@ -21,7 +21,7 @@ const hooks = [
   { event: 'SessionStart (compact)', does: 'Prints that snapshot and the recent session trail back into context after compaction.' },
   { event: 'PostCompact', does: 'Tells you what was saved, and prints nothing when nothing was.' },
   { event: 'PostToolUseFailure', does: '`hippo capture-error` stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once.' },
-  { event: 'SessionEnd', does: 'Runs `hippo sleep`, which consolidates the store and imports new entries from Claude Code MEMORY.md files, then `hippo capture` on the session transcript.' },
+  { event: 'SessionEnd', does: "Runs `hippo sleep`, which consolidates the store and imports new entries from the project's Claude Code auto memory, then `hippo capture` on the session transcript." },
 ];
 
 const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;

@@ -38,7 +38,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { execFileSync, execSync, spawn } from 'child_process';
+import { execFileSync, execSync, spawn, spawnSync } from 'child_process';
 import {
   installJsonHooks,
   uninstallJsonHooks,
@@ -161,7 +161,7 @@ import {
   isGitRepo,
 } from './autolearn.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
-import { resolveProjectIdentity } from './project-identity.js';
+import { realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -2938,24 +2938,23 @@ async function cmdRefine(
   }
 }
 
-/**
- * Scan for Claude Code MEMORY.md files and import new entries into hippo.
- * Looks in ~/.claude/projects/<project>/memory/ for .md files with YAML frontmatter.
- */
-export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedir()): number {
-  const home = homeDir;
-  const memoryDirs: string[] = [];
+/** Claude Code's auto memory folder names for a project: its repository's main checkout, shared by subfolders and worktrees, or the folder itself, non-alphanumerics made '-'. */
+function claudeMemoryFolderNames(projectRoot: string): Set<string> {
+  const roots = [projectRoot, realpathOrResolve(projectRoot)];
+  const git = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: projectRoot, encoding: 'utf8', timeout: 10000 });
+  if (git.status === 0) roots.push(path.dirname(git.stdout.trim()));
+  const name = (root: string) => path.resolve(root).replace(/[^a-zA-Z0-9]/g, '-');
+  return new Set(roots.map((root) => (process.platform === 'win32' ? name(root).toLowerCase() : name(root))));
+}
 
-  // Claude Code project memories
-  const claudeProjectsDir = path.join(home, '.claude', 'projects');
-  if (fs.existsSync(claudeProjectsDir)) {
-    try {
-      for (const project of fs.readdirSync(claudeProjectsDir)) {
-        const memDir = path.join(claudeProjectsDir, project, 'memory');
-        if (fs.existsSync(memDir)) memoryDirs.push(memDir);
-      }
-    } catch { /* permission denied */ }
-  }
+/** Import new entries from the Claude Code auto memory of the store's project, the frontmatter .md files in ~/.claude/projects/<project>/memory/. */
+export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedir()): number {
+  // Only this project's folder, because every entry written here counts as this project's memory.
+  // SHORTCUT: an autoMemoryDirectory or CLAUDE_CODE_PROJECT_DIR_NAME setting imports nothing; read Claude's settings if users ask.
+  const claudeProjectsDir = path.join(homeDir, '.claude', 'projects');
+  const memoryDirs = [...claudeMemoryFolderNames(path.dirname(hippoRoot))]
+    .map((folder) => path.join(claudeProjectsDir, folder, 'memory'))
+    .filter((memDir) => fs.existsSync(memDir));
 
   if (memoryDirs.length === 0) return 0;
 

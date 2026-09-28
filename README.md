@@ -87,7 +87,7 @@ hippo init --scan ~
 After setup, `hippo sleep` runs at session end (via auto-installed agent hooks) and does five things:
 
 1. **Learns** from today's git commits
-2. **Imports** new entries from Claude Code MEMORY.md files
+2. **Imports** new entries from the project's Claude Code auto memory
 3. **Consolidates** memories (decay, merge, prune)
 4. **Deduplicates** near-identical memories, keeping the stronger copy
 5. **Shares** high-value lessons to a global store so they surface in every project
