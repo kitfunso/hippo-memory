@@ -1,7 +1,7 @@
-// Every stored version of a fact survives until one is retired: sleep never drops a value's text, and no path skips a new value as a copy of an old one.
+// Every stored version of a fact survives until one is retired: sleep never drops a value's text, and the paths below never skip a new value as a copy of an old one.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
@@ -357,7 +357,8 @@ describe('a new value is never skipped as a copy of an old one', () => {
     const root = newRoot();
     write(root, OLD);
     const home = tmp();
-    const memDir = join(home, '.claude', 'projects', 'demo', 'memory');
+    const project = realpathSync.native(dirname(root)).replace(/[^a-zA-Z0-9]/g, '-'); // the import reads only this project's folder
+    const memDir = join(home, '.claude', 'projects', project, 'memory');
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
 
