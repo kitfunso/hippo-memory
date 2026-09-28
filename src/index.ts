@@ -2,7 +2,13 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, confidenceFacets, type ConfidenceFacets, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
+import { createMemory as createStoreMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from './memory.js';
+export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, confidenceFacets, type ConfidenceFacets, applyOutcome, generateId, computeSchemaFit } from './memory.js';
+
+/** Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts. */
+export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+  return createStoreMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS });
+}
 export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';
