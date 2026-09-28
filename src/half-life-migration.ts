@@ -113,11 +113,13 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
         return noop(from);
       }
       const all = selectAllEntries(db);
-      const retired = typedPending ? retiredObjectMemoryIds(db) : new Set<string>();
-      // Only the typed plan moves a memory an object writer pinned to 90 days. A supersede copy keeps the object's source but was written on the base.
-      const pinnedTo90 = (e: MemoryEntry) => TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null;
-      const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => !retired.has(e.id)), to) : [];
-      const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !pinnedTo90(e)) : all, from, to);
+      const objects = typedPending ? objectMemoryIds(db) : { all: new Set<string>(), retired: new Set<string>() };
+      const copies = new Set(all.flatMap((e) => (e.superseded_by ? [e.superseded_by] : [])));
+      // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the source). Shape decides the rest.
+      const objectWritten = (e: MemoryEntry) =>
+        objects.all.has(e.id) || (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
+      const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => objectWritten(e) && !objects.retired.has(e.id)), to) : [];
+      const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !objectWritten(e)) : all, from, to);
       const plan = [...basePlan, ...typedPlan];
       const halfLives = new Map(plan.map((e) => [e.id, e.half_life_days]));
       const result: HalfLifeMigrationResult = { from, to, rescaled: basePlan.length, typed: typedPlan.length, kept: all.length - plan.length, dryRun, halfLives };
@@ -140,15 +142,19 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
   }
 }
 
-/** Memories behind a superseded or closed object. Retiring an object leaves its memory untouched, so only its table knows. */
-function retiredObjectMemoryIds(db: DatabaseSyncLike): Set<string> {
-  const ids = new Set<string>();
+/** Memories behind every object, and those behind a superseded or closed one. Retiring an object leaves its memory untouched, so only its table knows. */
+function objectMemoryIds(db: DatabaseSyncLike) {
+  const all = new Set<string>();
+  const retired = new Set<string>();
   for (const table of OBJECT_TABLES) {
-    // SAFETY: SELECT of one TEXT column, filtered to non-null.
-    const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL AND status IN ('superseded', 'closed')`).all() as { memory_id: string }[];
-    for (const r of rows) ids.add(r.memory_id);
+    // SAFETY: SELECT of two TEXT columns, filtered to a non-null memory_id.
+    const rows = db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string; status: string }[];
+    for (const r of rows) {
+      all.add(r.memory_id);
+      if (r.status === 'superseded' || r.status === 'closed') retired.add(r.memory_id);
+    }
   }
-  return ids;
+  return { all, retired };
 }
 
 /** Writes `plan`, then one audit event per tenant with each id's old half-life, so the move can be undone. */

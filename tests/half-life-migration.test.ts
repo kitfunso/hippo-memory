@@ -18,6 +18,7 @@ import { consolidate } from '../src/consolidate.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { saveIncident, resolveIncident } from '../src/incidents.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
+import { supersede, adminActor } from '../src/api.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -261,6 +262,42 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ from: 7, to: 365, rescaled: 1, typed: 1, kept: 0 });
     expect(halfLifeOf(root, copy.id)).toBe(365);
     expect(halfLifeOf(root, pinned.id)).toBe(365);
+  });
+
+  it('leave a supersede copy on the base, even one whose recalls give it the pinned shape', () => {
+    const root = store();
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
+    migrateDefaultHalfLife(root, 30);
+    const decision = saveDecision(root, 'default', { decisionText: 'we release on Mondays' }).memoryId!;
+    const copy = supersede({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, decision, 'we release on Tuesdays now').newId;
+    writeEntry(root, { ...readEntry(root, copy, 'default')!, retrieval_count: 40, half_life_days: 30 + 2 * 40 });
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+
+    migrateDefaultHalfLife(root, 30);
+    expect(halfLifeOf(root, copy)).toBe(30 + 2 * 40);
+  });
+
+  it("keep an object's memory hippo shortened, even when its recalls read as base-written", () => {
+    const root = store();
+    const decision = saveDecision(root, 'default', { decisionText: 'use Postgres for all new services' }).memoryId!;
+    // A conflict loser: resolveConflict halved 90 + 2 * 38 and left no tag.
+    writeEntry(root, { ...readEntry(root, decision, 'default')!, retrieval_count: 38, half_life_days: (90 + 2 * 38) / 2 });
+    unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ from: 7, rescaled: 0, typed: 0 });
+    expect(halfLifeOf(root, decision)).toBe(83);
+  });
+
+  it('move a row that reads as both base-written and pinned once, by the typed plan', () => {
+    const root = store();
+    migrateDefaultHalfLife(root, 100);
+    const both = createMemory('use gRPC for internal APIs', { source: 'decision', baseHalfLifeDays: 100 });
+    writeEntry(root, { ...both, retrieval_count: 5, half_life_days: 90 + 2 * 5 });
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ from: 100, rescaled: 0, typed: 1, kept: 0 });
+    expect(halfLifeOf(root, both.id)).toBe(365 + 10);
+    expect(migrateAudits(root)).toEqual([expect.objectContaining({ from: 90, to: 365 })]);
   });
 
   it('a new store never moves one, even one set to 90 days by hand', () => {
