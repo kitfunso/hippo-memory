@@ -119,7 +119,7 @@ if (mode === 'r4-seeds') {
     ['M3', 'decay-off', 'staleIntrusionRate', '>= 0.20', (x) => x >= 0.2],
   ]) {
     const vals = seeds.map((s) => epochs(`${dir}:${arm}`, s).at(-1)[metric]);
-    const nums = vals.filter((x) => typeof x === 'number');
+    const nums = vals.filter((x) => Number.isFinite(x));
     const range = `range ${Math.min(...nums).toFixed(3)} to ${Math.max(...nums).toFixed(3)}, ${vals.length - nums.length} missing`;
     report(lanes, `${arm} ${metric} ${bar} (${range})`, nums.filter(pass).length);
   }
