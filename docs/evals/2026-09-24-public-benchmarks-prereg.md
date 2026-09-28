@@ -167,3 +167,31 @@ The runner itself runs unchanged, `--backend oss --predict-only --top-k 200`, ov
 **Published whatever the result:** `docs/evals/2026-09-28-mem0-head-to-head-result.md`, with the answers, the verdicts, the judge key, the score output, a summary of every call log, the code, the versions and the commands. If `hippo@365` trails `mem0-oss`, that is published the same way.
 
 **Scope:** as registered, LoCoMo ingests once and asks once, so this tests retrieval for answering, not the lifecycle. Mem0 runs here with another extraction model and embedder than in its own published runs, and every arm with another answering and judging model, so no number here is comparable with Mem0's published numbers.
+
+## Amendment 5 (2026-09-28, before any answer is made): Mem0's keyword search on, the gate in code, scores bound to the answers
+
+**Why.** A codex review of the Amendment 4 code (`d63449d`, with the search fix `3b6b882`), run during the first full ingestion, found Mem0 searching with half its method. Mem0's hybrid search adds a BM25 keyword score to the vector score, and its BM25 encoder needs `fastembed`, which sits in `mem0ai`'s optional extras. The runner's image installs `mem0ai` with no extras (`docker/mem0/requirements.txt` at `4b61c5d`), and so did this run, so Mem0 logged a warning on each insert and searched by vector alone. The review also found that the gate was not enforced before answering, that it missed replies Mem0 reads as holding no memories, and four weaker points in the scoring script. Each change below either gives Mem0 its full method or tightens a check; none touches hippo's arms.
+
+**The `mem0-oss` arm** (commit `0fce9bf`):
+1. **BM25 on:** `fastembed` 0.8.1 in Mem0's environment, with the BM25 model `Qdrant/bm25` at revision `22b8d2af71a76161e18dd432d2cee0eefa66e412`. This runs Mem0 with the full search its code has, which its image would not; it is expected to help Mem0. `mem0_server.py` refuses to start without the encoder.
+2. **Entity store built at startup:** Mem0 creates its entity collection on the first add. Ten first adds at once raced to create it, and one lost its entity links to an HTTP 409. The server now builds the store and both BM25 encoders once, before any add.
+3. **One deadline per call:** the proxy capped a usage-limit wait at 12 h of sleep, which left room for a client to time out and resend a live add. A call now gives up 11 h after it starts, inside the 12 h client timeouts.
+4. **Fresh start:** the first full ingestion was stopped after 1,276 of the 5,882 extraction calls. Its files are kept and not used. Ingestion restarted on a fresh Qdrant volume and history database.
+
+**The integrity gate, now code** (`gate.py`, run in Mem0's environment once ingestion ends). It replaces Amendment 4's gate and is stricter:
+- the proxy's log: no `fail` event, and exactly one successful extraction call per turn, 5,882 in all;
+- every successful reply parses, with Mem0's own `remove_code_blocks` and `extract_json`, to a `memory` list whose items all carry text; Mem0 reads any other reply as nothing to remember and logs no error;
+- the server's log: no line holding WARNING, ERROR, CRITICAL, Warning, Exception or Traceback, where Amendment 4 named three messages;
+- every conversation's checkpoint: all its turns processed, none failed;
+- 1,540 question files, each searched under its own conversation's user id;
+- every stored memory carries a BM25 vector, and the stored users are exactly the ten ingested.
+
+The gate writes `gate.json` with SHA-256 hashes of both logs and every predicted file. `h2h.py answer` and `h2h.py score` stop unless it passed and the hashes still match. A failed gate is never overridden: the cause is found, fixed and listed in the result, and the gate runs again.
+
+**Scores bound to the answers** (`h2h.py`):
+1. The judge and score stages require exactly the 3,600 (arm, cutoff, question) keys of the design, not only their count, and any stage stops on a key seen twice.
+2. The blind judge key holds each answer's SHA-256, each verdict holds the hash of the answer it judged, and scoring requires one matching verdict per key.
+3. A judge reply is read as the runner reads it (`llm_client.py:285-293`), including a `final` wrapper that holds a JSON string. A reply with no CORRECT or WRONG label is asked again, at most 3 times, and the stage stops if none comes, where the runner would count it WRONG. No verdict is made up.
+4. A failed call of any kind is named and retried by a rerun while every other result is saved, and a record cut off by a kill mid-write is dropped when the file is next read.
+
+**Unchanged:** Amendment 4's arms, models, prompts, sample, cutoffs, primary comparison, reading rule and publication rule.
