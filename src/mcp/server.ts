@@ -1112,9 +1112,9 @@ async function executeTool(
       // Auto-detect query from git
       let query = '';
       try {
-        const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
-        const diff = execSync('git diff --cached --stat 2>/dev/null', { encoding: 'utf-8' }).trim();
-        const log = execSync('git log -1 --pretty=format:"%s" 2>/dev/null', { encoding: 'utf-8' }).trim();
+        const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
+        const diff = execSync('git diff --cached --stat 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
+        const log = execSync('git log -1 --pretty=format:"%s" 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
         query = [branch, log, diff].filter(Boolean).join(' ');
       } catch { /* not a git repo */ }
 

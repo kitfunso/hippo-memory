@@ -13,7 +13,7 @@ export class GitReadError extends Error {}
 
 function runGit(args: string[], repoRoot: string): string {
   try {
-    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER });
+    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
   } catch (err) {
     throw new GitReadError(`git ${args.join(' ')} failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -22,7 +22,7 @@ function runGit(args: string[], repoRoot: string): string {
 // git grep exits 1 for "no match" -- a normal empty result, not a failure.
 function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
   try {
-    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER });
+    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
   } catch (err) {
     // SAFETY: execFileSync attaches `status` to the thrown Error on a non-zero child exit.
     const status = (err as { status?: number }).status;

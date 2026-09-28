@@ -142,7 +142,7 @@ export function deduplicateLesson(
 export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve) => {
     // Use shell: true so the command string is handled by the shell as-is
-    const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'] });
+    const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true });
 
     const stderrChunks: Buffer[] = [];
 
@@ -175,6 +175,7 @@ export function isGitRepo(cwd: string): boolean {
       cwd,
       timeout: 10000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     return raw.trim() === 'true';
   } catch {
@@ -190,7 +191,7 @@ export function fetchGitLog(cwd: string, days: number): string {
   try {
     const raw = execFileSync('git', [
       'log', `--since=${days} days ago`, '--pretty=format:%s',
-    ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] });
+    ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     return raw;
   } catch {
     return '';

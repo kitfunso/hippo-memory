@@ -349,7 +349,7 @@ function requireInit(hippoRoot: string): void {
 
 /** FE2: run detectChurnStale against every store this repo's memories can live in. */
 function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
-  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true }).trim();
   const projectName = resolveProjectIdentity(process.cwd()).name;
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
@@ -884,7 +884,7 @@ function setupDailySchedule(globalRoot: string): void {
   if (isWindows) {
     // Check if task already exists
     try {
-      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8' });
+      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true });
       if (existing.includes(taskName)) {
         return; // already scheduled
       }
@@ -895,7 +895,7 @@ function setupDailySchedule(globalRoot: string): void {
     try {
       execSync(
         `schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd.replace(/"/g, '""')}" /sc daily /st 06:15 /f`,
-        { stdio: 'pipe' }
+        { stdio: 'pipe', windowsHide: true }
       );
       console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
     } catch {
@@ -907,14 +907,14 @@ function setupDailySchedule(globalRoot: string): void {
     // Unix: check crontab for existing entry
     const marker = `# hippo:${taskName}`;
     try {
-      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8' });
+      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true });
       if (existing.includes(marker)) {
         return; // already scheduled
       }
 
       const cronLine = `15 6 * * * ${cmd} ${marker}`;
       const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'] });
+      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
     } catch {
       const cronLine = `15 6 * * * ${cmd}`;
@@ -2940,7 +2940,7 @@ async function cmdRefine(
 /** Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself outside a repository. */
 function claudeMemoryFolderNames(projectRoot: string): Set<string> {
   const roots = [projectRoot, realpathOrResolve(projectRoot)];
-  const git = spawnSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--absolute-git-dir', '--git-common-dir'], { cwd: projectRoot, encoding: 'utf8', timeout: 10000 });
+  const git = spawnSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--absolute-git-dir', '--git-common-dir'], { cwd: projectRoot, encoding: 'utf8', timeout: 10000, windowsHide: true });
   if (git.status === 0) {
     const [top, gitDir, common] = git.stdout.trim().split(/\r?\n/);
     roots.push(claudeCheckoutRoot(top, gitDir, common));
@@ -3471,7 +3471,7 @@ function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testSt
   let gitRef: string | null = null;
   try {
     gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
+      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     }).trim() || null;
   } catch {
     gitRef = null;
@@ -3479,7 +3479,7 @@ function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testSt
   let dirtyTree: boolean | null = null;
   try {
     const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
+      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     });
     dirtyTree = status.trim().length > 0;
   } catch {
@@ -6655,7 +6655,7 @@ function cmdGraph(
             : process.platform === 'darwin'
               ? ['open', [out]]
               : ['xdg-open', [out]];
-        const child = spawn(cmd, cmdArgs as string[], { detached: true, stdio: 'ignore' });
+        const child = spawn(cmd, cmdArgs as string[], { detached: true, stdio: 'ignore', windowsHide: true });
         // A missing launcher (e.g. xdg-open absent) emits 'error' asynchronously;
         // an unhandled 'error' event would throw, so swallow it — the file is
         // already written and its path printed above.
@@ -7257,6 +7257,7 @@ function autoDetectContext(): string {
     const diff = execSync('git diff --name-only HEAD 2>&1', {
       encoding: 'utf8',
       timeout: 3000,
+      windowsHide: true,
     }).trim();
 
     if (diff) {
@@ -7273,6 +7274,7 @@ function autoDetectContext(): string {
     const branch = execSync('git branch --show-current 2>&1', {
       encoding: 'utf8',
       timeout: 3000,
+      windowsHide: true,
     }).trim();
 
     if (branch && branch !== 'main' && branch !== 'master') {
