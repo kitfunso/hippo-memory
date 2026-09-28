@@ -116,7 +116,7 @@ hippo init
 #    Auto-installed claude-code hook in CLAUDE.md
 ```
 
-If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/OpenClaw/OpenCode/Pi. `.cursorrules` for Cursor. Your agent starts using Hippo on its next session. For Codex session capture, Hippo wraps the codex launcher only when you explicitly opt in with `hippo hook install codex` (init prints the command when it detects Codex; undo anytime with `hippo hook uninstall codex`).
+If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/Cursor/OpenClaw/OpenCode/Pi. Your agent starts using Hippo on its next session. For Codex session capture, Hippo wraps the codex launcher only when you explicitly opt in with `hippo hook install codex` (init prints the command when it detects Codex; undo anytime with `hippo hook uninstall codex`).
 
 It also registers the current project in Hippo's workspace registry and installs one machine-level daily runner (6:15am). That runner sweeps every registered workspace, runs `hippo learn --git --days 1`, then `hippo sleep`. You get strict daily consolidation without creating one OS task per project.
 
@@ -701,7 +701,7 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 |-----------|------------|---------|
 | Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + `SessionStart`/`SessionEnd` hooks in `settings.json` |
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md`; session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
-| Cursor | `.cursorrules` or `.cursor/rules` | `.cursorrules` |
+| Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
@@ -715,7 +715,7 @@ If you prefer explicit control:
 ```bash
 hippo hook install claude-code   # patches CLAUDE.md + adds SessionStart/SessionEnd + UserPromptSubmit hooks
 hippo hook install codex         # optional repair/manual run: patches AGENTS.md + wraps the detected Codex launcher
-hippo hook install cursor        # patches .cursorrules
+hippo hook install cursor        # patches AGENTS.md
 hippo hook install openclaw      # patches AGENTS.md
 hippo hook install opencode      # patches AGENTS.md + installs the opencode TS plugin
 ```
@@ -963,7 +963,7 @@ Run `npm install -g hippo-memory`, then `hippo init` in the project, or `hippo i
 
 ### How do I give Cursor memory between sessions?
 
-`hippo init` adds its instructions to `.cursorrules` if the project has one, and the [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. `hippo import --cursor .cursorrules` turns your existing rules into memories.
+`hippo init` adds its instructions to `AGENTS.md` if the project has one, and Cursor reads that file from the project root. The [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. Older hippo versions wrote the block to `.cursorrules`; `hippo hook uninstall cursor` removes it from there and from `AGENTS.md`, and `hippo hook install cursor` puts it back in `AGENTS.md`. `hippo import --cursor .cursorrules` turns your existing rules into memories.
 
 ### How do I give Codex memory across sessions?
 

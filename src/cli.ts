@@ -727,7 +727,7 @@ function autoInstallHooks(quiet: boolean): void {
   const detectors: Array<{ files: string[]; hook: string }> = [
     { files: ['CLAUDE.md', '.claude/settings.json'], hook: 'claude-code' },
     { files: ['AGENTS.md', '.codex'], hook: 'codex' },
-    { files: ['.cursorrules', '.cursor/rules'], hook: 'cursor' },
+    // No Cursor row: Cursor reads the root AGENTS.md, which the rows either side patch.
     { files: ['.openclaw', 'AGENTS.md'], hook: 'openclaw' },
     { files: ['.opencode', 'opencode.json'], hook: 'opencode' },
     { files: ['.pi', '.pi/agent'], hook: 'pi' },
@@ -7837,16 +7837,31 @@ hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
 `.trim(),
   },
   'cursor': {
-    file: '.cursorrules',
+    file: 'AGENTS.md',
     description: 'Cursor',
     content: `
-# Project Memory (Hippo)
-# Before each task, load context:
-#   hippo context --auto --budget 1500
-# After errors:
-#   hippo remember "<error description>" --error
-# After completing:
-#   hippo outcome --good
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+On task completion:
+\`\`\`bash
+hippo outcome --good
+\`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
 `.trim(),
   },
   'openclaw': {
@@ -8068,12 +8083,7 @@ function cmdHook(
     if (fs.existsSync(filepath)) {
       const existing = fs.readFileSync(filepath, 'utf8');
       if (existing.includes(HOOK_MARKERS.start)) {
-        const re = new RegExp(
-          `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
-          'g'
-        );
-        const cleaned = existing.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
-        fs.writeFileSync(filepath, cleaned + '\n', 'utf8');
+        fs.writeFileSync(filepath, withoutHookBlock(existing) + '\n', 'utf8');
         console.log(`Removed Hippo hook from ${hook.file}`);
       } else {
         console.log(`No Hippo hook found in ${hook.file}.`);
@@ -8098,6 +8108,16 @@ function cmdHook(
       if (uninstallCodexWrapper()) {
         console.log('Removed Codex wrapper integration');
       }
+    } else if (target === 'cursor') {
+      // Older hippo wrote Cursor's block to .cursorrules, creating the file when it was missing.
+      const legacy = path.resolve(process.cwd(), '.cursorrules');
+      const old = fs.existsSync(legacy) ? fs.readFileSync(legacy, 'utf8') : '';
+      if (old.includes(HOOK_MARKERS.start)) {
+        const left = withoutHookBlock(old);
+        if (left) fs.writeFileSync(legacy, left + '\n', 'utf8');
+        else fs.unlinkSync(legacy);
+        console.log(left ? 'Removed the old Hippo hook from .cursorrules' : 'Deleted .cursorrules, which held only the old Hippo hook');
+      }
     }
 
     return;
@@ -8105,6 +8125,14 @@ function cmdHook(
 
   console.error('Usage: hippo hook <install|uninstall|list> [target]');
   process.exit(1);
+}
+
+function withoutHookBlock(text: string): string {
+  const re = new RegExp(
+    `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
+    'g'
+  );
+  return text.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function escapeRegex(s: string): string {

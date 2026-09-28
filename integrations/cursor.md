@@ -1,10 +1,10 @@
 # Hippo + Cursor Integration
 
-Add this to your `.cursorrules` file in the project root.
+Add this to `AGENTS.md` in the project root. Cursor reads that file as an alternative to `.cursor/rules`, and its rules docs no longer mention `.cursorrules`.
 
 ---
 
-## .cursorrules snippet
+## AGENTS.md snippet
 
 ```
 ## Memory System (Hippo)
@@ -57,9 +57,11 @@ Then start remembering.
 ## Setup
 
 1. Install Hippo globally: `npm install -g hippo-memory`
-2. In your project root: `hippo init` (auto-detects `.cursorrules` and patches it)
-3. Or manually add the `.cursorrules` snippet above
+2. In your project root: `hippo init` (patches `AGENTS.md` if the project has one; it never creates the file)
+3. Or add the snippet above to `AGENTS.md` yourself, or run `hippo hook install cursor` once the file exists
 4. Optionally add `.hippo/` to `.gitignore` if you don't want to track memory in git (or commit it to share memory with your team)
+
+Older hippo versions wrote their block to `.cursorrules`. `hippo hook uninstall cursor` removes it from there and from `AGENTS.md`; run `hippo hook install cursor` afterwards to put it back in `AGENTS.md`.
 
 ## Token budget guidance
 
