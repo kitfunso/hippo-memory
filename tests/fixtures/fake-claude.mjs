@@ -17,6 +17,14 @@ if (argv.includes('--version')) {
   process.exit(0);
 }
 const prompt = fs.readFileSync(0, 'utf8');
+// FAKE_CLAUDE_LIMIT_ONCE=<marker file>: the first call leaves a stray edit and hits the plan limit.
+const limitMarker = process.env.FAKE_CLAUDE_LIMIT_ONCE;
+if (limitMarker && !fs.existsSync(limitMarker)) {
+  fs.writeFileSync(limitMarker, '');
+  fs.writeFileSync('stray.txt', 'half-done edit\n');
+  console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1790000000' }));
+  process.exit(1);
+}
 const sessionId = randomUUID();
 const settingsPath = argv[argv.indexOf('--settings') + 1];
 const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
@@ -46,7 +54,7 @@ const lines = [
 fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n'));
 const extra = Math.ceil(injected.length / 4);
 console.log(JSON.stringify({
-  type: 'result', subtype: 'success', is_error: false, session_id: sessionId, num_turns: 3, total_cost_usd: 0.01,
+  type: 'result', subtype: 'success', is_error: false, session_id: sessionId, strayFile: fs.existsSync('stray.txt'), num_turns: 3, total_cost_usd: 0.01,
   usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 },
   modelUsage: { 'fake-model': { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 10000, cacheCreationInputTokens: 2000 + extra, costUSD: 0.01 } },
 }));

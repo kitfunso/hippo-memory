@@ -34,7 +34,9 @@
  * Isolation: every run uses `--setting-sources project` (your own
  * ~/.claude/settings.json hooks, hippo's included, do not load),
  * `--strict-mcp-config` (none of your MCP servers), its own HIPPO_HOME, and a
- * `hippo` on PATH that runs this checkout's bin/hippo.js. hippo's optional
+ * `hippo` on PATH that runs this checkout's bin/hippo.js. hippo itself (init
+ * and every hook) runs with HOME set to the output dir, so it never reads or
+ * writes your ~/.claude, and init runs with `--no-schedule`. hippo's optional
  * LLM extraction is switched off so the arm has no spend outside Claude
  * Code's usage. Runs use `--permission-mode bypassPermissions` by default
  * inside the throwaway clones (Claude Code refuses it as root; pass
@@ -85,6 +87,22 @@ async function loadHippo() {
   return hippoLib;
 }
 
+const LIMIT_RE = /usage limit|hit your (usage )?limit|limit reached|rate_limit_error|overloaded_error/i;
+
+/** A plan usage limit or an overload: not a task failure, so the session is rerun. */
+export function isUsageLimit(result, output) {
+  // The run's own --max-budget-usd or turn cap is a real outcome, never retried.
+  if (String(result?.subtype ?? '').startsWith('error_max')) return false;
+  return (result === null || Boolean(result.is_error)) && LIMIT_RE.test(output);
+}
+
+/** Prepend a dir to PATH under the key the env already uses (Windows spells it Path). */
+export function prependPath(env, dir) {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  env[key] = `${dir}${path.delimiter}${env[key] ?? ''}`;
+  return env;
+}
+
 // Environment a child Claude Code session must not inherit: a parent
 // session id makes the child report and log under the parent's id.
 const STRIP_ENV = ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_REMOTE_SESSION_ID', 'HIPPO_SESSION_ID', 'HIPPO_HOME', 'HIPPO_TENANT'];
@@ -117,10 +135,12 @@ export function validateTasks(spec) {
 }
 
 /** A `hippo` on PATH that runs this checkout, for hook commands. */
-function writeHippoShim(binDir) {
+function writeHippoShim(binDir, fakeHome) {
+  // A fake HOME keeps hippo off the operator's ~/.claude (MEMORY.md import, capture scans, hook installs).
   fs.mkdirSync(binDir, { recursive: true });
-  fs.writeFileSync(path.join(binDir, 'hippo'), `#!/bin/sh\nexec "${process.execPath}" "${HIPPO_JS}" "$@"\n`, { mode: 0o755 });
-  fs.writeFileSync(path.join(binDir, 'hippo.cmd'), `@"${process.execPath}" "${HIPPO_JS}" %*\r\n`);
+  fs.mkdirSync(fakeHome, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'hippo'), `#!/bin/sh\nexport HOME="${fakeHome}" USERPROFILE="${fakeHome}"\nexec "${process.execPath}" "${HIPPO_JS}" "$@"\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(binDir, 'hippo.cmd'), `@set "HOME=${fakeHome}"\r\n@set "USERPROFILE=${fakeHome}"\r\n@"${process.execPath}" "${HIPPO_JS}" %*\r\n`);
 }
 
 /** The settings hippo's installer writes for Claude Code, generated under a throwaway HOME. */
@@ -325,11 +345,14 @@ export function planRuns(spec, arms, seeds) {
 /** Run the whole plan. Returns the records written. */
 export async function runAll(opts) {
   await loadHippo();
-  const { spec, arms, seeds, outDir, model, claudeBin = 'claude', maxBudgetUsd = null, projectsDir, settleMs = 5000, warmup = true, permissionMode = 'bypassPermissions', donorRuns = null, log = console.log } = opts;
+  const { spec, arms, seeds, outDir, model, claudeBin = 'claude', maxBudgetUsd = null, projectsDir, settleMs = 5000, warmup = true, permissionMode = 'bypassPermissions', donorRuns = null, log = console.log, limitWaitMs = 15 * 60_000, limitMaxWaits = 96 } = opts;
   fs.mkdirSync(outDir, { recursive: true });
   const runsFile = path.join(outDir, 'runs.jsonl');
   const binDir = path.join(outDir, 'bin');
-  writeHippoShim(binDir);
+  const hookHome = path.join(outDir, 'hook-home');
+  // outDir as HOME: hippo's store walk stops at HOME, so it must be an ancestor of every workspace.
+  const fakeHome = outDir;
+  writeHippoShim(binDir, fakeHome);
   const cacheDir = path.join(outDir, 'repo-cache');
   const records = [];
   const hippoStores = new Map(); // `${sequenceId}|${seed}` -> finished hippo store
@@ -378,18 +401,19 @@ export async function runAll(opts) {
     for (const k of STRIP_ENV) delete env[k];
     env.HIPPO_HOME = hippoHome;
     env.EVAL_SEED = String(seed);
-    env.PATH = `${binDir}${path.delimiter}${env.PATH ?? ''}`;
+    prependPath(env, binDir);
 
     const hippoRoot = path.join(workDir, '.hippo');
     let settings = {};
     if (arm === 'hippo' || arm === 'stale-memory') {
-      settings = hippoHookSettings(path.join(outDir, 'hook-home'));
+      settings = hippoHookSettings(hookHome);
       if (arm === 'stale-memory') {
         const donor = findDonor(spec, s, seed, hippoStores, donorRuns);
         if (!donor) throw new Error(`stale-memory for ${s.id} seed ${seed} needs a donor: pass --donor-runs or run the hippo arm with at least two clusters`);
         fs.cpSync(donor, hippoRoot, { recursive: true });
       } else {
-        sh(`"${process.execPath}" "${HIPPO_JS}" init`, workDir, env);
+        // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
+        sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, workDir, { ...env, HOME: fakeHome, USERPROFILE: fakeHome });
       }
       const cfgPath = path.join(hippoRoot, 'config.json');
       const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
@@ -434,12 +458,23 @@ export async function runAll(opts) {
         '--settings', JSON.stringify(settingsFile), '--strict-mcp-config', '--permission-mode', permissionMode];
       if (model) args.push('--model', model);
       if (maxBudgetUsd) args.push('--max-budget-usd', String(maxBudgetUsd));
-      const cc = sh(`${claudeBin} ${args.join(' ')}`, workDir, env, 60 * 60_000, t.prompt);
+      // A plan usage limit is not a task failure: wait, reset the checkout and rerun the session.
+      // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
+      let cc;
       let result = null;
-      try {
-        result = JSON.parse(cc.stdout.trim().split('\n').filter(Boolean).pop() ?? '');
-      } catch {
-        result = null;
+      for (let attempt = 1; ; attempt++) {
+        cc = sh(`${claudeBin} ${args.join(' ')}`, workDir, env, 60 * 60_000, t.prompt);
+        try {
+          result = JSON.parse(cc.stdout.trim().split('\n').filter(Boolean).pop() ?? '');
+        } catch {
+          result = null;
+        }
+        if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`) || attempt > limitMaxWaits) break;
+        fs.writeFileSync(path.join(rawDir, `${t.id}.limit${attempt}.txt`), `${cc.stdout}\n${cc.stderr}`.slice(-20000));
+        log(`${s.id} ${t.id} ${arm} seed${seed}: plan limit hit, waiting ${Math.round(limitWaitMs / 60_000)} min (attempt ${attempt})`);
+        if (limitWaitMs > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, limitWaitMs);
+        checkoutBase(cached, workDir, s.id, t);
+        if (t.setup) sh(t.setup, workDir, env);
       }
       fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
       if ((arm === 'hippo' || arm === 'stale-memory') && settleMs > 0) {

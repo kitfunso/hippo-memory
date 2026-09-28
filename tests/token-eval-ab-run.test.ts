@@ -6,11 +6,11 @@
  * up; this checks orchestration and records, not any result.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, delimiter } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { runAll, planRuns, validateTasks, usageFromResult, findDonor, checkDonors } from '../scripts/token-eval/ab-run.mjs';
+import { runAll, planRuns, validateTasks, usageFromResult, findDonor, checkDonors, isUsageLimit, prependPath } from '../scripts/token-eval/ab-run.mjs';
 import { parseRuns, analyze } from '../scripts/token-eval/ab-analyze.mjs';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
@@ -255,6 +255,90 @@ describe('A/B runner (TE5)', () => {
       if (prevProjects === undefined) delete process.env.FAKE_CLAUDE_PROJECTS;
       else process.env.FAKE_CLAUDE_PROJECTS = prevProjects;
     }
+  }, 60_000);
+
+  it('prepends to PATH under the key the env already uses, never a second one', () => {
+    const win = prependPath({ Path: 'C:\\Windows' }, 'bin');
+    expect(Object.keys(win)).toEqual(['Path']);
+    expect(win.Path).toBe(`bin${delimiter}C:\\Windows`);
+    expect(prependPath({ PATH: '/usr/bin' }, 'bin')).toEqual({ PATH: `bin${delimiter}/usr/bin` });
+    expect(prependPath({}, 'bin')).toEqual({ PATH: `bin${delimiter}` });
+  });
+
+  it('treats a usage limit or overload as a rerun, never a budget cap or a normal result', () => {
+    expect(isUsageLimit({ is_error: true, subtype: 'success', result: 'Claude AI usage limit reached|1790000000' }, 'Claude AI usage limit reached|1790000000')).toBe(true);
+    expect(isUsageLimit(null, 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}')).toBe(true);
+    expect(isUsageLimit(null, "You've hit your limit")).toBe(true);
+    expect(isUsageLimit({ is_error: false, result: 'the rate limit reached its cap' }, 'the rate limit reached its cap')).toBe(false);
+    expect(isUsageLimit({ is_error: true, subtype: 'error_max_budget_usd' }, 'budget limit reached')).toBe(false);
+    expect(isUsageLimit({ is_error: true, subtype: 'error_during_execution' }, 'TypeError: x is undefined')).toBe(false);
+  });
+
+  it('a usage limit waits, resets the checkout and reruns the same session instead of recording a failure', async () => {
+    const { repo, base, fix } = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'ab-run-limit-'));
+    const projects = mkdtempSync(join(tmpdir(), 'ab-run-limit-projects-'));
+    dirs.push(out, projects);
+    const task = (id: string, prompt: string) => ({ id, baseRef: base, fixRef: fix, prompt, testFiles: ['test.js'], test: 'node test.js' });
+    const limitSpec = validateTasks({ sequences: [{ id: 'seqL', cluster: 'repoL', repo, tasks: [task('l1', 'FIX add in lib.js'), task('l2', 'look around only')] }] });
+    const prev = { projects: process.env.FAKE_CLAUDE_PROJECTS, limit: process.env.FAKE_CLAUDE_LIMIT_ONCE };
+    process.env.FAKE_CLAUDE_PROJECTS = projects;
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    try {
+      await runAll({
+        spec: limitSpec, arms: ['no-memory'], seeds: 1, outDir: out, model: null,
+        claudeBin: `"${process.execPath}" "${FAKE}"`, projectsDir: projects, settleMs: 0, warmup: false, log: () => {}, limitWaitMs: 0,
+      });
+    } finally {
+      for (const [k, v] of [['FAKE_CLAUDE_PROJECTS', prev.projects], ['FAKE_CLAUDE_LIMIT_ONCE', prev.limit]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    const records = readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(records).toHaveLength(2);
+    expect(records[0]).toMatchObject({ taskId: 'l1', resolved: true, invalid: null, agentError: null });
+    const raw = join(out, 'raw', 'seqL', 'no-memory', 'seed1');
+    expect(existsSync(join(raw, 'l1.limit1.txt'))).toBe(true);
+    // The rerun started from a clean checkout: the limited attempt's stray file was gone.
+    expect(JSON.parse(readFileSync(join(raw, 'l1.json'), 'utf8')).strayFile).toBe(false);
+  }, 60_000);
+
+  it('hippo init and hooks never touch the operator home (settings, MEMORY.md import)', async () => {
+    const { repo, base, fix } = makeRepo();
+    const out = mkdtempSync(join(tmpdir(), 'ab-run-iso-'));
+    const projects = mkdtempSync(join(tmpdir(), 'ab-run-iso-projects-'));
+    const realHome = mkdtempSync(join(tmpdir(), 'ab-run-iso-home-'));
+    dirs.push(out, projects, realHome);
+    const sentinel = 'SENTINEL-ab-run-leak the answer is to flip the operator in add';
+    const memDir = join(realHome, '.claude', 'projects', 'some-project', 'memory');
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(join(memDir, 'answer.md'), `---\nname: answer\ntype: project\n---\n${sentinel}\n`);
+    const task = (id: string, prompt: string) => ({ id, baseRef: base, fixRef: fix, prompt, testFiles: ['test.js'], test: 'node test.js' });
+    const isoSpec = validateTasks({ sequences: [{ id: 'seqI', cluster: 'repoI', repo, tasks: [task('i1', 'FIX add in lib.js'), task('i2', 'look around only')] }] });
+    const prev = { projects: process.env.FAKE_CLAUDE_PROJECTS, home: process.env.HOME, profile: process.env.USERPROFILE };
+    process.env.FAKE_CLAUDE_PROJECTS = projects;
+    process.env.HOME = realHome;
+    process.env.USERPROFILE = realHome;
+    try {
+      await runAll({
+        spec: isoSpec, arms: ['hippo'], seeds: 1, outDir: out, model: null,
+        claudeBin: `"${process.execPath}" "${FAKE}"`, projectsDir: projects, settleMs: 0, warmup: false, log: () => {},
+      });
+    } finally {
+      for (const [k, v] of [['FAKE_CLAUDE_PROJECTS', prev.projects], ['HOME', prev.home], ['USERPROFILE', prev.profile]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    expect(existsSync(join(realHome, '.claude', 'settings.json'))).toBe(false);
+    const storeText = (dir: string): string => readdirSync(dir).map((f) => {
+      const p = join(dir, f);
+      return statSync(p).isDirectory() ? storeText(p) : readFileSync(p, 'latin1');
+    }).join('\n');
+    const store = join(out, 'work', 'seqI', 'hippo', 'seed1', '.hippo');
+    expect(existsSync(store)).toBe(true);
+    expect(storeText(store)).not.toContain('SENTINEL-ab-run-leak');
   }, 60_000);
 
   it('checkDonors throws for a single-cluster file without donor-runs', () => {
