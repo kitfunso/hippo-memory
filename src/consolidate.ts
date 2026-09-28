@@ -126,11 +126,11 @@ function isJsonString(value: JsonValue): value is string {
   return typeof value === 'string';
 }
 
-/** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL). */
-const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
+/** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
+export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
 
 /**
- * Ids of memories that back a first-class object (a decision, prediction,
+ * Ids of memories that back a first-class object (a decision, incident, prediction,
  * process, policy, skill, project brief or customer note). Sleep never
  * retires these: deleting or moving one to dormant storage fires the
  * object's ON DELETE SET NULL and a restore cannot repair the link. Their

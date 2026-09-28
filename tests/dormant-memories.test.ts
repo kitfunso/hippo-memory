@@ -21,9 +21,16 @@ import {
   getExistingEntryMirrorPaths,
   loadStats,
 } from '../src/store.js';
-import { saveDecision, resolveActiveDecisionIdByMemory } from '../src/decisions.js';
+import { saveDecision } from '../src/decisions.js';
+import { saveIncident } from '../src/incidents.js';
+import { saveProcess } from '../src/processes.js';
+import { savePolicy } from '../src/policies.js';
+import { saveSkill } from '../src/skills.js';
+import { saveProjectBrief } from '../src/project-briefs.js';
+import { saveCustomerNote } from '../src/customer-notes.js';
+import { savePrediction } from '../src/predictions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate, MEMORY_BACKED_TABLES } from '../src/consolidate.js';
 import { insertDormantRow } from '../src/dormant.js';
 import { loadConfig } from '../src/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
@@ -472,12 +479,34 @@ describe('listing, restoring and forgetting dormant memories', () => {
   });
 });
 
+/** Rows of `table` that still point at `memoryId`. */
+function linkedRows(home: string, table: string, memoryId: string): number {
+  const db = openHippoDb(home);
+  try {
+    // SAFETY: row's shape matches the single aliased COUNT column in the SELECT.
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE memory_id = ?`).get(memoryId) as { n: number };
+    return row.n;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+const objectSavers: [string, string, (home: string) => { memoryId: string | null }][] = [
+  ['decision', 'decisions', (home) => saveDecision(home, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', 'incidents', (home) => saveIncident(home, 'default', { incidentText: 'the billing cron charged twice on the 1st' })],
+  ['process', 'processes', (home) => saveProcess(home, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
+  ['policy', 'policies', (home) => savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
+  ['skill', 'skills', (home) => saveSkill(home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
+  ['project brief', 'project_briefs', (home) => saveProjectBrief(home, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
+  ['customer note', 'customer_notes', (home) => saveCustomerNote(home, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
+  ['prediction', 'predictions', (home) => savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
+];
+
 describe('memories that back a first-class object', () => {
-  it('sleep keeps a faded decision memory active, so the decision keeps its link', async () => {
+  it.each(objectSavers)('sleep keeps a faded %s memory active, so the object keeps its link', async (_kind, table, save) => {
     const { home, restore } = tmpHome('hippo-dormant-linked-', '{}');
     try {
-      const decision = saveDecision(home, 'default', { decisionText: 'we release on Tuesdays after the staging soak' });
-      const memoryId = decision.memoryId!;
+      const memoryId = save(home).memoryId!;
       // Fade it far below the threshold, as years without recall would.
       const faded = aged(loadAllEntries(home).find((e) => e.id === memoryId)!, 3000);
       writeEntry(home, faded);
@@ -487,8 +516,24 @@ describe('memories that back a first-class object', () => {
       expect(result.dormant).toBe(0);
       expect(result.removed).toBe(0);
       expect(loadAllEntries(home).map((e) => e.id)).toContain(memoryId);
-      expect(resolveActiveDecisionIdByMemory(home, 'default', memoryId)).toBe(decision.id);
+      expect(linkedRows(home, table, memoryId)).toBe(1);
     } finally {
+      restore();
+    }
+  });
+
+  it('covers every object table whose memory link a delete would null', () => {
+    const { home, restore } = tmpHome('hippo-dormant-schema-', '{}');
+    const db = openHippoDb(home);
+    try {
+      // SAFETY: each row is the single aliased TEXT column in the SELECT.
+      const rows = db.prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+        WHERE m.type = 'table' AND f."table" = 'memories' AND f."from" = 'memory_id' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
+      // Graph rows drop their memory pointer by design (src/db.ts, the entities and relations schema).
+      const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
+      expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
+    } finally {
+      closeHippoDb(db);
       restore();
     }
   });
