@@ -20,7 +20,7 @@ def counts(c: Counter) -> str:
 
 
 def summary(path: Path) -> list[str]:
-    recs = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    recs = [json.loads(line) for line in path.read_bytes().split(b"\n") if line.strip()]  # LF alone: see h2h.read_jsonl
     ok = [r for r in recs if r["event"] == "ok"]
     usage = [r.get("usage") or {} for r in ok]
     tokens = {k: sum(u.get(k) or 0 for u in usage) for k in TOKENS}

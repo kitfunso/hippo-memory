@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import random
+import re
 import sys
 import types
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,12 +23,13 @@ LOCOMO = Path.home() / "hippo-bench" / "locomo"
 LANE_R = Path.home() / "hippo" / "benchmarks" / "public" / "results" / "2026-09-25-lane-r" / "predicted"
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
 ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0"), (200, 50, 10), ("CORRECT", "WRONG")
+FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")  # a whole-reply code fence, as claude_llm.json_reply reads it
 CAT = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 
 sys.path[:0] = [str(HERE), str(HERE.parent), str(RUNNER)]
 from benchmarks.locomo.prompts import (JUDGE_SYSTEM_PROMPT, get_answer_generation_prompt,  # noqa: E402
                                        get_judge_prompt, preprocess_answer)
-from claude_llm import Claude, json_reply  # noqa: E402
+from claude_llm import Claude  # noqa: E402
 from evidence_recall import boot  # noqa: E402
 from gate import fingerprint  # noqa: E402
 
@@ -52,7 +54,8 @@ def read_jsonl(path: Path) -> list[dict]:
             with path.open("r+b") as f:
                 f.truncate(cut)
             raw = raw[:cut]
-    return [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+    # split on LF alone: an answer may hold U+2028 or U+0085, which str.splitlines() also splits on
+    return [json.loads(line) for line in raw.split(b"\n") if line.strip()]
 
 
 def records(path: Path, by) -> dict:
@@ -138,12 +141,18 @@ def judge_key(out: Path, answers: dict) -> dict:
 
 
 def verdict(text: str) -> dict | None:
-    """A judge reply read as the runner reads it (llm_client.py:285-293), or None if it holds no CORRECT or WRONG label."""
-    v = json_reply(text)
-    if v is not None and len(v) == 1 and "final" in v:
-        inner = v["final"]
-        v = json_reply(inner) if isinstance(inner, str) else inner if isinstance(inner, dict) else v
-    label = str((v or {}).get("label", "")).upper()
+    """A judge reply read as the runner reads it (llm_client.py:285-293), once a code fence around the whole reply is
+    removed, since `claude -p` has no JSON mode. None if it holds no CORRECT or WRONG label."""
+    t = text.strip()
+    fenced = FENCE.fullmatch(t)
+    try:
+        v = json.loads(fenced[1] if fenced else t)
+        if isinstance(v, dict) and len(v) == 1 and "final" in v:
+            inner = v["final"]
+            v = json.loads(inner) if isinstance(inner, str) else inner if isinstance(inner, dict) else v
+    except ValueError:  # the runner's parse fails here too and it asks again
+        return None
+    label = str(v.get("label", "")).upper() if isinstance(v, dict) else ""
     return {"label": label, "reasoning": v.get("reasoning", "")} if label in LABELS else None
 
 
