@@ -26,7 +26,7 @@ In the root of the project the user works in:
 hippo init
 ```
 
-`hippo init` creates `.hippo/`, learns lessons from the repository's git history, and detects Claude Code, Codex, Cursor, OpenClaw and OpenCode. For each one it finds, it adds hippo to that tool's instruction file and hooks. For many repositories at once: `hippo init --scan ~`.
+`hippo init` creates `.hippo/`, learns lessons from the repository's git history, and detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. For each one it finds, it adds hippo to that tool's instruction file if the file exists, and it installs Claude Code's hooks and the OpenCode plugin. Codex session capture is opt-in: run `hippo hook install codex`. For many repositories at once: `hippo init --scan ~`.
 
 For Claude Code, the plugin is an alternative to the hooks `hippo init` installs (use one, not both):
 
