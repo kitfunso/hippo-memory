@@ -159,3 +159,16 @@ describe('writers on a configured default half-life', () => {
     expect(DEFAULT_HALF_LIFE_DAYS).not.toBe(CONFIGURED);
   });
 });
+
+describe('an invalid configured default half-life', () => {
+  it.each([0, -30, 'forever'])('%s warns, and writers fall back to the built-in default', async (value) => {
+    const root = store();
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }));
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const old = seed(root, 'the deploy window is Tuesday afternoon');
+    const ctx: api.Context = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
+    const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
+    expect(entry.half_life_days).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
+    expect(warn.mock.calls.some((args) => String(args[0]).includes('"defaultHalfLifeDays"'))).toBe(true);
+  });
+});

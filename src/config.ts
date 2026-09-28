@@ -314,8 +314,17 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       );
       churnStalenessEnabled = false;
     }
+    // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
+    let defaultHalfLifeDays = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
+    if (!Number.isFinite(defaultHalfLifeDays) || defaultHalfLifeDays <= 0) {
+      console.error(
+        `Warning: config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
+        `(got ${JSON.stringify(defaultHalfLifeDays)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
+      );
+      defaultHalfLifeDays = DEFAULT_CONFIG.defaultHalfLifeDays;
+    }
     return {
-      defaultHalfLifeDays: raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays,
+      defaultHalfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
       defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
       decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
