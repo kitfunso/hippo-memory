@@ -19,6 +19,10 @@
  *   npm run build
  *   node benchmarks/public/hippo-mem0-server.mjs --arm hippo --port 8888 --data-dir /tmp/hippo-bench
  *   # then, in memory-benchmarks: MEM0_HOST=http://localhost:8888 python -m benchmarks.locomo.run --backend oss ...
+ *
+ * Optional: --dist DIR serves another hippo build (default: this checkout's dist),
+ * --host ADDR binds one address (default: all), --read-only answers only
+ * POST /search and GET /health and refuses every other route with 403.
  */
 import * as http from 'node:http';
 import * as fs from 'node:fs';
@@ -27,20 +31,23 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-// pathToFileURL: Windows' ESM loader rejects a bare "C:/..." specifier.
-const distImport = (name) => import(pathToFileURL(path.join(REPO, 'dist', name)).href);
-const { createMemory } = await distImport('memory.js');
-const { initStore, loadAllEntries, batchWriteAndDelete } = await distImport('store.js');
-const { hybridSearch } = await distImport('search.js');
-const { isEmbeddingAvailable, embedMemory } = await distImport('embeddings.js');
-
 const args = process.argv.slice(2);
 const arg = (name, dflt) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : dflt;
 };
+const DIST = path.resolve(arg('dist', path.join(REPO, 'dist')));
+// pathToFileURL: Windows' ESM loader rejects a bare "C:/..." specifier.
+const distImport = (name) => import(pathToFileURL(path.join(DIST, name)).href);
+const { createMemory } = await distImport('memory.js');
+const { initStore, loadAllEntries, batchWriteAndDelete } = await distImport('store.js');
+const { hybridSearch } = await distImport('search.js');
+const { isEmbeddingAvailable, embedMemory } = await distImport('embeddings.js');
+
 const ARM = arg('arm', 'hippo');
 const PORT = Number(arg('port', '8888'));
+const HOST = arg('host', undefined);
+const READ_ONLY = args.includes('--read-only');
 const DATA_DIR = path.resolve(arg('data-dir', path.join(REPO, 'benchmarks', 'public', 'stores')));
 // eval-only: overrides the shipped half-life default for sensitivity checks (Amendment 2).
 const HALF_LIFE_DAYS = arg('half-life-days', undefined);
@@ -140,10 +147,16 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
     try {
       let out;
+      // Search is a POST but reads only, so read-only mode allows it and GET alone.
+      if (READ_ONLY && req.method !== 'GET' && !(req.method === 'POST' && url.pathname === '/search')) {
+        res.writeHead(403, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'read-only server: only POST /search and GET /health are served' }));
+        return;
+      }
       if (req.method === 'POST' && url.pathname === '/memories') out = await addChunk(await readBody(req));
       else if (req.method === 'POST' && url.pathname === '/search') out = await search(await readBody(req));
       else if (req.method === 'DELETE' && url.pathname === '/memories') out = deleteUser(url.searchParams.get('user_id') ?? '');
-      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null };
+      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null, readOnly: READ_ONLY };
       else { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(out));
@@ -153,5 +166,5 @@ const server = http.createServer((req, res) => {
     }
   });
 });
-fs.mkdirSync(DATA_DIR, { recursive: true });
-server.listen(PORT, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} halfLifeDays=${HALF_LIFE_DAYS ?? 'default'} port=${PORT} data=${DATA_DIR}`));
+if (!READ_ONLY) fs.mkdirSync(DATA_DIR, { recursive: true });
+server.listen({ port: PORT, host: HOST }, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} halfLifeDays=${HALF_LIFE_DAYS ?? 'default'} readOnly=${READ_ONLY} host=${HOST ?? 'all'} port=${PORT} data=${DATA_DIR} dist=${DIST}`));
