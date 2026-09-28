@@ -1,11 +1,8 @@
-"""Mem0's own OSS server from the runner (docker/mem0/main.py at 4b61c5d), given each session's date.
+"""Mem0's own OSS server from the runner (docker/mem0/main.py at 4b61c5d), with two routes fixed for the Mem0 it pins.
 
-The runner sends every turn's session date as `timestamp`, which that server drops. This wrapper keeps the rest
-of it and passes the date through two inputs Mem0 already has: metadata.created_at and the extraction prompt's
-Observation Date.
+POST /memories keeps each turn's session date, which that server drops, through metadata.created_at and the extraction
+prompt's Observation Date. POST /search sends the user id in `filters` and the count as `top_k`, as mem0ai 5e941e2 needs.
 """
-from __future__ import annotations
-
 import os
 
 os.environ.setdefault("MEM0_TELEMETRY", "False")  # read when mem0 is imported
@@ -59,7 +56,7 @@ def build_app(runner: Path) -> FastAPI:
     spec.loader.exec_module(server)
     app: FastAPI = server.app
     app.router.routes = [r for r in app.router.routes
-                         if not (getattr(r, "path", "") == "/memories" and "POST" in getattr(r, "methods", ()))]
+                         if not (getattr(r, "path", "") in ("/memories", "/search") and "POST" in getattr(r, "methods", ()))]
 
     @app.post("/memories")
     def add_memories(req: DatedAdd) -> Any:
@@ -82,6 +79,17 @@ def build_app(runner: Path) -> FastAPI:
             raise HTTPException(500, str(e)) from e
         finally:
             _obs.date = None
+
+    # The original passes user_id and limit as keywords: this Mem0 rejects the first and silently drops the second.
+    @app.post("/search")
+    def search_memories(req: server.SearchRequest) -> Any:
+        ids = {k: v for k, v in (("user_id", req.user_id), ("agent_id", req.agent_id), ("run_id", req.run_id)) if v}
+        try:
+            return server._get_memory().search(req.query, top_k=req.limit, filters={**(req.filters or {}), **ids},
+                                               rerank=req.rerank)
+        except Exception as e:
+            server.logger.exception("search() failed")
+            raise HTTPException(500, str(e)) from e
 
     return app
 
