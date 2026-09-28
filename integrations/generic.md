@@ -216,8 +216,7 @@ Agents that want to understand what they're working with:
 - Default half-life: 365 days (`defaultHalfLifeDays` in `.hippo/config.json`)
 - Each retrieval: +2 days to half-life
 - Error tag (`--error`): 2x base half-life
-- Positive outcome: +5 days to half-life
-- Negative outcome: -3 days to half-life
+- Outcomes (`hippo outcome --good` / `--bad`): scale the effective half-life between 0.5x and 1.5x by the balance of good and bad marks, and each net bad mark halves strength, at most three times
 - Pin: no decay
 - Decision (`hippo decide`) and the other objects: the default half-life
 - Recall boost: 1.2x for decisions, up to 1.3x for path-matching memories
