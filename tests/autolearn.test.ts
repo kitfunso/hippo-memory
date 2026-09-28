@@ -413,7 +413,6 @@ describe('HOOKS config', () => {
 
   it('openclaw hook content includes key commands', () => {
     expect(cliSource).toContain('hippo context --auto --budget 1500');
-    expect(cliSource).toContain('hippo outcome --good');
     expect(cliSource).toContain('hippo learn --git');
   });
 });

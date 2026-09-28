@@ -51,21 +51,26 @@ native plugin.
 
 This appends a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block to `AGENTS.md`:
 
-```markdown
+````markdown
 ## Project Memory (Hippo)
 
 At the start of every session, run:
+```bash
 hippo context --auto --budget 1500
-
-On errors or unexpected behaviour:
-hippo remember "<description of what went wrong>" --error
-
-On task completion:
-hippo outcome --good
-
-After significant coding sessions:
-hippo learn --git
 ```
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+```bash
+hippo remember "<description of what went wrong>" --error
+```
+
+When ending a session, capture a brief summary:
+```bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+```
+````
 
 To remove: `hippo hook uninstall openclaw`
 

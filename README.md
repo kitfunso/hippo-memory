@@ -722,11 +722,13 @@ hippo hook install opencode      # patches AGENTS.md + installs the opencode TS 
 
 This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the agent to:
 1. Run `hippo context --auto --budget 1500` at session start
-2. Run `hippo remember "<lesson>" --error` on errors
-3. Run `hippo outcome --good` on completion
+2. Run `hippo remember "<what went wrong and why>" --error` the moment it finds out why something failed, never as a closing step
+3. Capture a short summary with `hippo capture --stdin` when the session ends, but only where no hook captures the session: Cursor, OpenClaw, OpenCode, Pi, and Codex without its wrapper
+
+The block asks for nothing a hook already does, because each extra tool call re-reads the whole context. Re-running `hippo init` swaps a block an older hippo wrote for the current one, as long as nobody edited it. It leaves an edited block alone and says so, and never touches text outside the markers.
 
 For Claude Code, it also adds:
-- a `SessionEnd` hook so `hippo sleep` runs automatically when the session exits
+- a `SessionEnd` hook that runs `hippo sleep` and then `hippo capture` on the session's transcript when the session exits
 - a `SessionStart` hook that prints the previous session's consolidation output
 - a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus the last 5 writes, so fresh same-session lessons appear on the next prompt before you pin them. The block is rendered without live strength percentages, so it stays byte-identical while its memories do not change, and it is sent only when it changed since the session's last prompt: an unchanged block is skipped, resent every 10 skips (`pinnedInject.refreshTurns`, `0` never resends) and resent after compaction. `{"pinnedInject":{"skipUnchanged":false}}` sends it every turn as before. Opt out entirely with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
 - a `PreCompact` hook that runs `hippo pre-compact` before the transcript gets summarized. It saves a working-state snapshot (task/summary/next step) so mid-session compaction can't drop it; the `SessionEnd` hook still owns extracting durable memories.
@@ -738,18 +740,27 @@ To remove: `hippo hook uninstall claude-code`
 
 ### What the hook adds (Claude Code example)
 
-```markdown
+````markdown
 ## Project Memory (Hippo)
 
-Before starting work, load relevant context:
+Pinned rules and recent writes auto-inject at every prompt via the installed
+UserPromptSubmit hook; never re-run that part manually. At the START of a
+task (not per prompt), additionally load task-specific context: git-aware
+recall over the full store that per-prompt injection does not cover. Also
+run it if the hook is not installed:
+```bash
 hippo context --auto --budget 1500
-
-When you hit an error or discover a gotcha:
-hippo remember "<what went wrong and why>" --error
-
-After completing work successfully:
-hippo outcome --good
 ```
+
+When you find out why something failed, record it right then, while you
+work, never as a closing step:
+```bash
+hippo remember "<what went wrong and why>" --error
+```
+
+The installed hooks store failed tool calls and capture the session when it
+ends, so there is nothing to run before you finish.
+````
 
 ### MCP Server
 

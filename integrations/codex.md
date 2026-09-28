@@ -6,7 +6,7 @@ Codex does not currently give Hippo a true `SessionEnd` hook in the same way Cla
 
 Hippo's Codex integration does two things:
 
-1. Patches `AGENTS.md` in the current project if it exists, so the agent still runs `hippo context`, `hippo remember`, and `hippo outcome` during normal work.
+1. Patches `AGENTS.md` in the current project if it exists, so the agent runs `hippo context` at the start of a task and `hippo remember` when something goes wrong. Without the wrapper, the block also asks for a `hippo capture` summary at session end.
 2. Only if you opt in, wraps the detected `codex` launcher in place and writes metadata in `~/.hippo/integrations/codex.json`.
 
 The wrapper starts the real Codex binary, waits for the session to exit, then spawns a detached Hippo worker that runs:
