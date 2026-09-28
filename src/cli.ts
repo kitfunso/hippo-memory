@@ -9445,7 +9445,7 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
 
 export function usageText(): string {
   return `
-Hippo - memory for AI agents that learns what is wrong and stops repeating it
+Hippo - memory for AI agents that learns what is wrong and ranks it down
 
 Usage: hippo <command> [options]
 

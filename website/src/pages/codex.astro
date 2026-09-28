@@ -45,12 +45,21 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
     </PageIntro>
 
     <Section title="Set it up">
-      <Cmd lines={[site.installCmd, 'hippo init', '# optional: capture Codex sessions too', 'hippo hook install codex']} />
       <p>
-        Capturing Codex sessions is opt-in. <code>hippo hook install codex</code> wraps the Codex launcher,
-        <code>hippo hook uninstall codex</code> removes the wrapper, and <code>hippo init</code> prints the command when it
-        detects Codex. <code>hippo doctor</code> checks the install.
+        Run it inside one project. <code>hippo init</code> creates the project's <code>.hippo/</code> store, seeded from the
+        last 30 days of commits, and adds the block below to the project's <code>AGENTS.md</code> if it has one. On your
+        machine it installs a daily 6:15am run that learns from each registered project's commits, plus Claude Code hooks
+        or the OpenCode plugin if the project also uses those. The <a class="link" href="/quickstart/">quickstart</a> lists
+        every change and the flags that skip each one.
       </p>
+      <Cmd lines={[site.installCmd, site.initCmd]} />
+      <p>
+        Capturing Codex sessions is opt-in, and it changes your machine: <code>hippo hook install codex</code> wraps the
+        Codex launcher so each session is captured when it ends, and <code>hippo hook uninstall codex</code> removes the
+        wrapper. <code>hippo init</code> prints the command when it detects Codex. <code>hippo doctor</code> checks the
+        install.
+      </p>
+      <Cmd lines={['hippo hook install codex']} />
     </Section>
 
     <Section title="What hippo adds to AGENTS.md" alt>

@@ -10,20 +10,17 @@ import CopyCommand from './CopyCommand.astro';
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{getStarted.kicker}</p>
         <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
         <p class="mt-5 max-w-md text-lg leading-relaxed text-zinc-400">{getStarted.body}</p>
-
-        <div class="mt-8 rounded-2xl glass p-5" data-reveal>
-          <p class="text-sm font-medium text-zinc-200">{getStarted.autoInstall.heading}</p>
-          <ul class="mt-3 flex flex-wrap gap-2">
-            {getStarted.autoInstall.frameworks.map((f) => (
-              <li class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-xs text-zinc-300">{f}</li>
-            ))}
-          </ul>
-          <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.autoInstall.note}</p>
-        </div>
       </div>
 
       <div data-reveal>
-        <ol class="space-y-4">
+        <!-- What init changes sits above the commands, so it is read before anything is copied. -->
+        <div class="rounded-2xl glass p-5">
+          <ul class="list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-300">
+            {getStarted.changes.map((c) => <li>{c}</li>)}
+          </ul>
+          <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.skip}</p>
+        </div>
+        <ol class="mt-6 space-y-4">
           {getStarted.steps.map((cmd, i) => (
             <li class="flex items-start gap-4">
               <span class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-xs text-acc-cyan">{i + 1}</span>
@@ -31,10 +28,6 @@ import CopyCommand from './CopyCommand.astro';
             </li>
           ))}
         </ol>
-        <p class="mt-4 pl-11 text-sm leading-relaxed text-zinc-400">
-          Then <code class="font-mono text-zinc-300">hippo sleep</code> tidies the store when a Claude Code
-          session ends, and a daily run at 6:15am learns from the day's commits in every registered project.
-        </p>
       </div>
     </div>
   </div>

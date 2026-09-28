@@ -44,13 +44,16 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
     </PageIntro>
 
     <Section title="Set it up in two commands">
-      <Cmd lines={[site.installCmd, 'hippo init', '# optional: register every git repo under ~ at once', site.initCmd]} />
       <p>
-        If the project has a <code>CLAUDE.md</code>, <code>hippo init</code> adds a short block telling Claude to run
-        <code>hippo context --auto</code> when a session starts, and adds the hooks below to Claude Code's settings. It
-        also installs one daily run at 6:15am that learns from the day's commits in every registered project.
-        <code>hippo init --no-hooks --no-schedule</code> skips both, and <code>hippo doctor</code> checks the install.
+        Run it inside one project. <code>hippo init</code> creates the project's <code>.hippo/</code> store, seeded from
+        the last 30 days of commits and the project's Claude Code auto memory. If the project has a <code>CLAUDE.md</code>,
+        init adds a short block telling Claude to run <code>hippo context --auto</code> when a session starts. If it has a
+        <code>CLAUDE.md</code> or <code>.claude/settings.json</code>, init adds the 7 hooks below to your user settings,
+        <code>~/.claude/settings.json</code>. It also installs one daily run at 6:15am that learns from the day's commits in
+        every registered project. <code>hippo init --no-hooks --no-schedule --no-learn</code> leaves those parts out, and
+        <code>hippo doctor</code> checks the install.
       </p>
+      <Cmd lines={[site.installCmd, site.initCmd]} />
     </Section>
 
     <Section title="What the hooks do" alt>

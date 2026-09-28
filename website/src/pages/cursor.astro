@@ -29,12 +29,15 @@ const description =
     </PageIntro>
 
     <Section title="Set it up">
-      <Cmd lines={[site.installCmd, 'hippo init']} />
       <p>
-        <code>hippo init</code> adds its instructions to the project's <code>AGENTS.md</code> if it has one, and Cursor
-        reads that file from the project root. Then give Cursor's agent the memory tools by adding hippo to
-        <code>.cursor/mcp.json</code>:
+        Run it inside one project. <code>hippo init</code> creates the project's <code>.hippo/</code> store, seeded from the
+        last 30 days of commits, and adds its instructions to the project's <code>AGENTS.md</code> if it has one; Cursor
+        reads that file from the project root. On your machine it installs a daily 6:15am run that learns from each
+        registered project's commits, plus Claude Code hooks or the OpenCode plugin if the project also uses those. The
+        <a class="link" href="/quickstart/">quickstart</a> lists every change and the flags that skip each one.
       </p>
+      <Cmd lines={[site.installCmd, site.initCmd]} />
+      <p>Then give Cursor's agent the memory tools by adding hippo to <code>.cursor/mcp.json</code>:</p>
       <Cmd lines={mcpJson} prompt={false} />
       <p>
         No global install? <code>"command": "npx", "args": ["-y", "hippo-memory", "mcp"]</code> works too. The agent gets

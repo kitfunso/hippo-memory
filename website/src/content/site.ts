@@ -68,7 +68,7 @@ export const nav = [
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-/** An illustrated two-day Claude Code session with hippo's hooks; the hippo lines are shortened from what hippo prints.
+/** An illustrated two-day Claude Code session with hippo's hooks; the hippo lines paraphrase what hippo does (capture-error prints nothing).
  *  Kinds: note = day label, cmd = prompt, out = agent output, err = failed tool call, caught = hippo storing it,
  *  ok = hippo, mem = a memory in context. */
 export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' | 'ok' | 'mem'; text: string }> = [
@@ -81,7 +81,6 @@ export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' |
   { kind: 'cmd', text: 'add a webhook for failed payments' },
   { kind: 'ok', text: 'hippo · 2 memories in context' },
   { kind: 'mem', text: 'billing uses pnpm; never run npm install here' },
-  { kind: 'out', text: 'Bash(pnpm add stripe)  ✓' },
   { kind: 'cmd', text: '/compact' },
   { kind: 'ok', text: 'Hippo saved your task snapshot before compacting.' },
 ];
@@ -121,8 +120,8 @@ export const mechanics = [
   },
   {
     title: 'Sleep consolidates',
-    metric: '3+ → 1',
-    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy, but in hippo\'s own audit it cost 3.6 points of LongMemEval recall.',
+    metric: '2+ → 1',
+    body: 'On `hippo sleep`, two or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy, but in hippo\'s own audit it cost 3.6 points of LongMemEval recall.',
   },
 ] as const;
 
@@ -189,7 +188,7 @@ export const getStarted = {
     'If the project uses Claude Code: 7 hook entries in ~/.claude/settings.json, for session start and end, each prompt, compaction and failed tool calls.',
     'If the project uses OpenCode: a plugin at ~/.config/opencode/plugins/hippo.ts.',
     "A daily run at 6:15am, through crontab on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs hippo sleep there.",
-    'On the first run, notes from Claude Code memory files under ~/.claude/projects/ are imported.',
+    "On the first run, it imports the project's Claude Code auto memory, from its folder under ~/.claude/projects/.",
   ],
   skip: 'To leave a part out: --no-hooks skips the block and the hooks, --no-schedule the daily run, --no-learn both imports.',
 } as const;
