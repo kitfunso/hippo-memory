@@ -8,12 +8,15 @@ Grep this file for a metric or a feature name to find the doc that owns it.
 
 ## The numbers we quote publicly
 
-These five are the claims that appear in the README, on hippo-memory.com, or in release
+These are the claims that appear in the README, on hippo-memory.com, or in release
 notes. Each links to the document that holds the method, the intervals and the limits.
 
 | Claim | Number | Source |
 |---|---|---|
-| LongMemEval-S retrieval, per-question haystack, R@5 | 98.0% free local MiniLM (best of five settings; the June build gave 98.6), 99.8% voyage-3-large (June, not re-run) | [2026-09-23-longmemeval-reproduction.md](2026-09-23-longmemeval-reproduction.md), [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
+| LongMemEval-S, `hippo recall` on a default install, per-question haystack, R@5 | 85.6% inside the 4,000-token default budget, 87.6% with MiniLM; 96.8% and 97.4% with the budget lifted, which returns every candidate | [2026-09-28-recall-cli-longmemeval-result.md](2026-09-28-recall-cli-longmemeval-result.md) |
+| LongMemEval-S, the benchmark scripts (not `hippo recall`), per-question haystack, R@5 | 98.0% free local MiniLM (best of five settings; the June build gave 98.6), 99.8% voyage-3-large (June, not re-run) | [2026-09-23-longmemeval-reproduction.md](2026-09-23-longmemeval-reproduction.md), [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
+| Decay against decay switched off, synthetic E1 test of 20 sessions, currentR5 | -0.7 pp [-1.4, 0.1], no measurable effect | [2026-09-23-mechanism-audit-round2-result.md](2026-09-23-mechanism-audit-round2-result.md) |
+| Sleep, slept against never-slept store, LongMemEval hit@5, text-credit scorer | -3.6 pp [-5.8, -1.4] | [2026-09-23-mechanism-audit-round2-result.md](2026-09-23-mechanism-audit-round2-result.md) |
 | LongMemEval-S, one unified store of 19,195 sessions, R@5 | 47.2% MiniLM, 56.4% voyage-3-large (June) | [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
 | LongMemEval-S, BM25 only, no embeddings, R@5 | 74.0% | [../../benchmarks/README.md](../../benchmarks/README.md) |
 | Jev reranker, R@1 on a private 300-query developer store | 0.2600 base, 0.4133 cross-encoder, 0.6167 Jev | [2026-09-19-jev-reranker.md](2026-09-19-jev-reranker.md) |

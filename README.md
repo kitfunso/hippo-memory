@@ -12,13 +12,15 @@
   <img src="https://raw.githubusercontent.com/kitfunso/hippo-memory/master/assets/hippo-init.svg" alt="hippo init adding memory to one project" width="720">
 </p>
 
-A memory layer for AI agents. Mark a memory wrong and it drops out of the top results. A newer fact replaces the old one. Memories you use get stronger. Provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
+Hippo keeps your coding agents' memories in a SQLite store on your machine, with markdown mirrors you can read and commit. Search is BM25 out of the box, with no model and no network call; embeddings are an optional install. `hippo init` wires it into the agents you already use (Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi), and any MCP client can connect. Mark a memory wrong and it ranks lower; a newer fact replaces the old one. Zero runtime deps.
+
+Install it, then run `hippo init` inside one project. Init creates the project's `.hippo/` store and adds a block to the `CLAUDE.md` or `AGENTS.md` already there. On your machine it adds hooks for the agents it finds, such as Claude Code's in `~/.claude/settings.json`, and a daily 6:15am run. [What hippo init changes](#what-hippo-init-changes) lists all of it and the flags that skip each part.
 
 ```bash
 npm install -g hippo-memory && hippo init
 ```
 
-Run `hippo init` inside a project. It creates the project's `.hippo/` store and wires hippo into the agents it finds there: a short block in `CLAUDE.md` or `AGENTS.md`, plus Claude Code's session hooks. To set up the git repos under a folder in one go, see `--scan` in the [Quick start](#quick-start).
+`hippo init --scan ~` sets up every git repo under a folder in one go. The [Quick start](#quick-start) says what it changes before you run it.
 
 Having an AI agent install it? Point it at [llms-install.md](llms-install.md): it installs, wires hippo into the agents it finds, and verifies with `hippo doctor`.
 
@@ -35,7 +37,7 @@ Dependencies:  Zero runtime deps. Node.js 22.16+. Optional embeddings: bring-you
 
 ## Why this exists
 
-Most "AI memory" systems save everything and search later. That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before. The system saw the failure four times. It had no way to know it should remember.
+Most "AI memory" systems save everything and search later. That's storage with search on top. A note that turned out wrong ranks the same as one that held up, and an old fact sits beside the one that replaced it.
 
 Hippo learns from outcomes. When a recalled memory turns out wrong, mark it bad and it drops out of the top results. Memories you keep using get stronger. Those two are the parts we measured helping ([mechanism audit, round 2](https://github.com/kitfunso/hippo-memory/pull/232)). When a fact changes, the new version supersedes the old one; we have not measured whether that helps. The design borrows from the hippocampus (decay, three layers, sleep consolidation), but that is inspiration. We have not measured decay or sleep making recall better.
 
@@ -72,17 +74,20 @@ claim we retracted.
 
 ## Quick start
 
+Start in one project. [What hippo init changes](#what-hippo-init-changes) lists everything the second command writes.
+
 ```bash
 npm install -g hippo-memory
 
 # In a project: create its store and wire in the agents it uses
 hippo init
-
-# Optional: a store for each git repo under a folder
-hippo init --scan ~
 ```
 
-`--scan` looks for git repos up to three folders below the folder you give it, skipping dot-folders and `node_modules`. Each one gets a `.hippo/` store seeded with lessons from the last 365 days of commit history. It also installs the Claude Code hooks and the OpenCode plugin for the agents it finds, and sets up the daily run. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`; run `hippo init` in a project to add one.
+**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits, and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 7 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
+
+```bash
+hippo init --scan ~
+```
 
 After setup, `hippo sleep` runs at session end (via auto-installed agent hooks) and does five things:
 
@@ -103,24 +108,32 @@ hippo recall "data pipeline issues" --budget 2000
 Full release history: **[CHANGELOG.md](./CHANGELOG.md)** · [GitHub Releases](https://github.com/kitfunso/hippo-memory/releases)
 
 
-### Zero-config agent integration
+### What hippo init changes
 
-`hippo init` auto-detects your agent framework and wires itself in:
+Run `hippo init` inside one project. This is everything it writes, in the project and on your machine:
+
+- **The project's store.** A `.hippo/` folder: SQLite plus markdown mirrors. On the first run in a git repo it learns lessons from the last 30 days of commits.
+- **Instruction files.** A block between `<!-- hippo:start -->` and `<!-- hippo:end -->` in the project's `CLAUDE.md` or `AGENTS.md`, only if that file already exists. Codex, Cursor, OpenClaw, OpenCode and Pi read `AGENTS.md`.
+- **Claude Code,** when the project has `CLAUDE.md` or `.claude/settings.json`: 7 hook entries in `~/.claude/settings.json`, one each on SessionEnd, UserPromptSubmit, PreCompact, PostCompact and PostToolUseFailure and two on SessionStart. [Framework Integrations](#framework-integrations) says what each one runs.
+- **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
+- **Codex:** no change. Init prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` undoes it.
+- **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
+- **Claude Code memory files.** On the first run, notes in `~/.claude/projects/*/memory/*.md` that have YAML front matter are imported into this project's store. A file that looks like it holds a secret is skipped.
 
 ```bash
 cd my-project
 hippo init
 
-# Initialized Hippo at /my-project
+# Initialized Hippo at /my-project/.hippo
 #    Directories: buffer/ episodic/ semantic/ conflicts/
+#    Files: hippo.db stats.json
 #    Auto-installed claude-code hook in CLAUDE.md
+#    Auto-installed hippo session-end SessionEnd hook in claude-code settings
+#    (one line per hook entry)
+#    Scheduled machine-level daily runner (6:15am) via crontab
 ```
 
-If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/Cursor/OpenClaw/OpenCode/Pi. Your agent starts using Hippo on its next session. For Codex session capture, Hippo wraps the codex launcher only when you explicitly opt in with `hippo hook install codex` (init prints the command when it detects Codex; undo anytime with `hippo hook uninstall codex`).
-
-It also registers the current project in Hippo's workspace registry and installs one machine-level daily runner (6:15am). That runner sweeps every registered workspace, runs `hippo learn --git --days 1`, then `hippo sleep`. You get strict daily consolidation without creating one OS task per project.
-
-To skip: `hippo init --no-hooks --no-schedule`
+To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and memory-file import.
 
 ---
 
@@ -465,12 +478,12 @@ Sleep keeps the store tidy. It has not been shown to improve recall. In round 2 
 `{"memoryValue":{"enabled":true}}` in `.hippo/config.json`, sleep consults a learned
 linear memory-value scorer before deleting a decayed memory: a memory that scores in the
 top 30% of its tenant by learned value is kept ("rescued") even though its strength fell
-below the decay threshold. The scorer can only rescue, never delete — with the flag on,
+below the decay threshold. The scorer can only rescue, never delete: with the flag on,
 sleep deletes a strict subset of what it would delete with the flag off. Every rescue is
 recorded in the audit log (`hippo audit list --op mv_rescue`). The weights were learned
 on the LongMemEval retention benchmark (held-out retention 0.4897 vs 0.4203 for the best
 hand-set baseline); caveat: their usage-feature signs reflect that benchmark's simulated
-usage, NOT real usage value — treat the flag as an experiment, not a recommendation.
+usage, NOT real usage value, so treat the flag as an experiment, not a recommendation.
 Tenants with fewer than 10 non-pinned memories never rescue (rank statistics are noise at
 tiny scale).
 
@@ -588,7 +601,7 @@ hippo watch "npm run build"
 
 | Command | What it does |
 |---------|-------------|
-| `hippo init` | Create `.hippo/` + auto-install agent hooks |
+| `hippo init` | Create `.hippo/`, install agent hooks and the daily run ([what it changes](#what-hippo-init-changes)) |
 | `hippo init --global` | Create global store at `~/.hippo/` |
 | `hippo init --no-hooks` | Create `.hippo/` without auto-installing hooks |
 | `hippo remember "<text>"` | Store a memory |
@@ -661,7 +674,7 @@ hippo watch "npm run build"
 | `hippo decide "<decision>" --context "<why>"` | Include reasoning |
 | `hippo decide "<decision>" --supersedes <id>` | Supersede a previous decision |
 | `hippo hook list` | Show available framework hooks |
-| `hippo hook install <target>` | Install hook (claude-code also adds session hooks: sleep at session end, pinned memories, a snapshot before compaction) |
+| `hippo hook install <target>` | Install hook (claude-code also adds its 7 settings.json hook entries: session start and end, each prompt, compaction, failed tool calls) |
 | `hippo hook uninstall <target>` | Remove hook |
 | `hippo handoff create --summary "..."` | Create a session handoff |
 | `hippo handoff latest` | Show the most recent handoff |
@@ -699,21 +712,21 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
-| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + `SessionStart`/`SessionEnd` hooks in `settings.json` |
+| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md`; session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
 | Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
 
-No extra commands needed. Just `hippo init` and your agent knows about Hippo.
+Init patches an instruction file only if it already exists. It also sets up a daily run and imports Claude Code memory files; [What hippo init changes](#what-hippo-init-changes) lists everything.
 
 ### Manual install
 
 If you prefer explicit control:
 
 ```bash
-hippo hook install claude-code   # patches CLAUDE.md + adds SessionStart/SessionEnd + UserPromptSubmit hooks
+hippo hook install claude-code   # patches CLAUDE.md + adds the 7 settings.json hook entries listed below
 hippo hook install codex         # optional repair/manual run: patches AGENTS.md + wraps the detected Codex launcher
 hippo hook install cursor        # patches AGENTS.md
 hippo hook install openclaw      # patches AGENTS.md
@@ -727,7 +740,7 @@ This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the
 
 The block asks for nothing a hook already does, because each extra tool call re-reads the whole context. Re-running `hippo init` swaps a block an older hippo wrote for the current one, as long as nobody edited it. It leaves an edited block alone and says so, and never touches text outside the markers.
 
-For Claude Code, it also adds:
+For Claude Code, it also adds 7 hook entries to `~/.claude/settings.json`:
 - a `SessionEnd` hook that runs `hippo sleep` and then `hippo capture` on the session's transcript when the session exits
 - a `SessionStart` hook that prints the previous session's consolidation output
 - a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus the last 5 writes, so fresh same-session lessons appear on the next prompt before you pin them. The block is rendered without live strength percentages, so it stays byte-identical while its memories do not change, and it is sent only when it changed since the session's last prompt: an unchanged block is skipped, resent every 10 skips (`pinnedInject.refreshTurns`, `0` never resends) and resent after compaction. `{"pinnedInject":{"skipUnchanged":false}}` sends it every turn as before. Opt out entirely with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
@@ -819,58 +832,75 @@ Hippo's design borrows seven properties of the human hippocampus. This section i
 
 **Why two stores?** The brain uses a fast hippocampal buffer + a slow neocortical store (Complementary Learning Systems theory, McClelland et al. 1995). If the neocortex learned fast, new information would overwrite old knowledge. The buffer absorbs new episodes; the neocortex extracts patterns over time.
 
-**Why decay at all?** In the brain, new neurons born in the dentate gyrus disrupt old memory traces (Frankland et al. 2013), which may reduce interference from outdated information. That is why hippo has decay. In hippo's own tests, age-based decay made no measurable difference to recall: at the 365-day default it tied with decay switched off. The forgetting that measured helpful is by evidence: a bad outcome mark, or a newer fact superseding an old one.
+**Why decay at all?** In the brain, new neurons born in the dentate gyrus disrupt old memory traces (Frankland et al. 2013), which may reduce interference from outdated information. That is why hippo has decay. In hippo's own tests, age-based decay made no measurable difference to recall: at the 365-day default it tied with decay switched off. The forgetting that measured helpful is by evidence: a bad outcome mark. Supersession, a newer fact replacing an old one, has not been measured.
 
 **Why do errors stick?** The amygdala modulates hippocampal consolidation based on emotional significance. Fear and error signals boost encoding. Your first production incident is burned into memory. Your 200th uneventful deploy isn't.
 
-**Why does retrieval strengthen?** Recalled memories undergo "reconsolidation" (Nader et al. 2000). The act of retrieval destabilizes the trace, then re-encodes it stronger. This is the testing effect. Hippo implements it mechanically via the half-life extension on recall.
+**Why does retrieval strengthen?** Recalled memories undergo "reconsolidation" (Nader et al. 2000). The act of retrieval destabilizes the trace, then re-encodes it stronger. This is the testing effect. Hippo borrows the idea: each recall adds 2 days to a memory's half-life.
 
-**Why does sleep consolidate?** During sleep, the hippocampus replays compressed versions of recent episodes and "teaches" the neocortex by repeatedly activating the same patterns. Hippo's `sleep` command runs this as a deliberate consolidation pass.
+**Why does sleep consolidate?** During sleep, the hippocampus replays compressed versions of recent episodes and "teaches" the neocortex by repeatedly activating the same patterns. Hippo's `sleep` command borrows the idea for a consolidation pass. It has not been shown to improve recall ([Sleep consolidation](#sleep-consolidation) has the numbers).
 
 The 7 mechanisms in full: [PLAN.md#core-principles](PLAN.md#core-principles)
 
 For how these mechanisms connect to LLM training, continual learning, and open research problems: **[RESEARCH.md](RESEARCH.md)**
 
-**Why does reward modulate decay?** In spiking neural networks, reward-modulated STDP strengthens synapses that contribute to positive outcomes and weakens those that don't. Hippo's reward-proportional decay (v0.11.0) implements this: memories with consistent positive outcomes decay slower, negatives decay faster, with no fixed deltas. Inspired by [MH-FLOCKE](https://github.com/MarcHesse/mhflocke)'s R-STDP architecture for quadruped locomotion, where the same mechanism produces stable learning with 11.6x lower variance than PPO.
+**Why does reward modulate decay?** In spiking neural networks, reward-modulated STDP strengthens synapses that contribute to positive outcomes and weakens those that don't. Hippo's reward-proportional decay (v0.11.0) borrows this idea: memories with consistent positive outcomes decay slower, negatives decay faster, with no fixed deltas. Inspired by [MH-FLOCKE](https://github.com/MarcHesse/mhflocke)'s R-STDP architecture for quadruped locomotion, where the same mechanism produces stable learning with 11.6x lower variance than PPO.
 
-**Prior art in agent memory simulation.** The idea that human-like memory produces human-like behavior as an emergent property was explored in IEEE research from 2010-2011 ([5952114](https://ieeexplore.ieee.org/document/5952114), [5548405](https://ieeexplore.ieee.org/document/5548405), [5953964](https://ieeexplore.ieee.org/document/5953964)). Walking between rooms and forgetting why you went there doesn't need direct simulation; it emerges naturally from a memory system with capacity limits and decay. Hippo's design follows the same principle: implement the mechanisms, and the behavior follows.
+**Prior art in agent memory simulation.** The idea that human-like memory produces human-like behavior as an emergent property was explored in IEEE research from 2010-2011 ([5952114](https://ieeexplore.ieee.org/document/5952114), [5548405](https://ieeexplore.ieee.org/document/5548405), [5953964](https://ieeexplore.ieee.org/document/5953964)). Walking between rooms and forgetting why you went there doesn't need direct simulation; it emerges naturally from a memory system with capacity limits and decay. Hippo takes the mechanisms as design ideas. Whether better agent behavior follows from them has not been shown.
 
-**Related work:** [HippoRAG](https://arxiv.org/abs/2405.14831) (Gutierrez et al., 2024) applies hippocampal indexing to RAG via knowledge graphs. [MemPalace](https://github.com/milla-jovovich/mempalace) (Sigman & Jovovich, 2026) organizes memory spatially (wings/halls/rooms) with AAAK compression, achieving 100% on [LongMemEval](https://arxiv.org/abs/2410.10813). [MH-FLOCKE](https://github.com/MarcHesse/mhflocke) (Hesse, 2026) uses spiking neurons with R-STDP for embodied cognition. Each system tackles a different facet: HippoRAG optimizes retrieval quality, MemPalace optimizes retrieval organization, MH-FLOCKE optimizes embodied learning, and Hippo optimizes memory lifecycle.
+**Related work:** [HippoRAG](https://arxiv.org/abs/2405.14831) (Gutierrez et al., 2024) applies hippocampal indexing to RAG via knowledge graphs. [MemPalace](https://github.com/milla-jovovich/mempalace) (Sigman & Jovovich, 2026) organizes memory spatially (wings/halls/rooms) with AAAK compression, achieving 100% on [LongMemEval](https://arxiv.org/abs/2410.10813). [MH-FLOCKE](https://github.com/MarcHesse/mhflocke) (Hesse, 2026) uses spiking neurons with R-STDP for embodied cognition. Each system tackles a different facet: HippoRAG optimizes retrieval quality, MemPalace optimizes retrieval organization, MH-FLOCKE optimizes embodied learning, and Hippo works on the memory lifecycle.
 
 ---
 
 ## Comparison
 
-The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay, strengthen-on-use, outcome-weighted half-lives — is one stance among several. The table below is a feature snapshot, not a verdict: graph-first systems ([gbrain](https://hermesatlas.com/projects/garrytan/gbrain), [Zep](https://www.getzep.com/), [Cognee](https://www.cognee.ai/)), agent-managed systems ([Letta](https://github.com/letta-ai/letta-code)), and version-control / skill-distillation takes ([Memoria](https://github.com/matrixorigin/Memoria), [EverMind](https://evermind.ai/)) all solve adjacent problems with different mechanics.
+Two tables. The first is plain facts: where the data lives, what each tool needs and runs on, and what it has published. Several rows favour the other tools: a managed multi-user service, a native Python library, a full knowledge graph. The second lists design bets, choices a tool made rather than results it measured; what hippo has measured is under [Benchmarks](#benchmarks). Graph-first systems ([gbrain](https://hermesatlas.com/projects/garrytan/gbrain), [Zep](https://www.getzep.com/), [Cognee](https://www.cognee.ai/)), agent-managed systems ([Letta](https://github.com/letta-ai/letta-code)), and version-control or skill-distillation takes ([Memoria](https://github.com/matrixorigin/Memoria), [EverMind](https://evermind.ai/)) solve adjacent problems with different mechanics.
+
+### What each tool is
+
+The rows from where the data lives to the graph were checked against each tool's own pages on 2026-09-28.
 
 | Feature | Hippo | [MemPalace](https://github.com/milla-jovovich/mempalace) | [Mem0](https://github.com/mem0ai/mem0) | [Basic Memory](https://github.com/basicmachines-co/basic-memory) | [gbrain](https://hermesatlas.com/projects/garrytan/gbrain) | [Zep](https://www.getzep.com/) | [Letta](https://github.com/letta-ai/letta-code) | [Cognee](https://www.cognee.ai/) | [Memoria](https://github.com/matrixorigin/Memoria) | [EverMind](https://evermind.ai/) |
+|---------|-------|-----------|------|-------------|--------|-----|-------|--------|---------|----------|
+| Where your data lives | Your machine or your server (SQLite) | Your machine (ChromaDB by default) | Where you run it, or Mem0's cloud | Your machine (Markdown files); cloud optional | Your machine (PGLite) or your Postgres | Zep's cloud (your own cloud on Enterprise) | Your machine; cloud backup with /login | Your machine by default; Cognee Cloud optional | Memoria Cloud, or self-hosted (Docker or embedded) | Your machine by default; EverOS Cloud optional |
+| Managed multi-user service | No (self-hosted, with tenants and API keys; the commercial edition adds hosted SaaS) | ? | Yes (hosted platform) | Yes (Teams) | ? (self-hosted server with OAuth) | Yes (Zep Cloud) | ? (cloud backup with /login) | Yes (Cognee Cloud) | ? (Memoria Cloud) | Yes (EverOS Cloud) |
+| Needs an account or model key | No | No (core path) | Yes (model key; account for the platform) | No (account for the cloud) | No (keyless mode) | Yes (Zep account; Graphiti needs a model key) | Yes (your own model keys) | No (local) | ? (account for Memoria Cloud) | Yes (an LLM key, OpenRouter) |
+| License | MIT | MIT | Apache-2.0 | AGPL-3.0 | MIT | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | Apache-2.0 | Apache-2.0 | Apache-2.0 (EverOS) + cloud |
+| Runtime | Node.js 22.16+, no runtime deps | Python 3.9+ (ChromaDB by default) | Python or Node.js (server: Postgres + pgvector) | Python (SQLite by default) | Bun (PGLite or Postgres + pgvector) | Managed service (Graphiti: Python + a graph database) | Node.js (npm) | Python (graph and vector stores, or Postgres) | A CLI binary + a MatrixOne database | Python (SQLite + LanceDB) |
+| SDKs and APIs | CLI, HTTP API, Python SDK over HTTP | Python library, CLI | Python and Node.js libraries, a self-hosted server | CLI, cloud app | CLI, HTTP API | Python, TypeScript and Go SDKs | TypeScript SDK, CLI | Python and TypeScript SDKs, REST API, CLI | Python client, REST API, CLI | Python library, HTTP API, CLI |
+| Native Python library | No (the Python SDK calls hippo serve over HTTP) | Yes (mempalace) | Yes (mem0ai) | Yes (basic-memory) | No (installs with Bun) | Yes (Graphiti: graphiti-core) | ? (Letta Code ships on npm) | Yes (cognee) | ? (memoria-client) | Yes (everos) |
+| Graph or entity relations | Partial (entities from decisions and policies; recall --hops, off by default) | Yes (temporal entity graph) | Partial (entity linking; graph memory on Pro) | Yes (wikilinks and observations) | Yes (typed knowledge graph) | Yes (temporal knowledge graph) | No | Yes (knowledge graph) | No (typed claims) | ? (graph view in progress) |
+| Hybrid search (BM25 + embeddings) | Yes (BM25 by default; embeddings are an optional install) | Embeddings + spatial | Yes (semantic + BM25 + entity) | No | Yes (vec + rerank + graph) | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
+| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (stdio + HTTP/OAuth) | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (first-party Claude/LangGraph) | Yes | ? |
+| Multi-agent shared memory | Yes | No | No | No | Yes (brain repo, team mounts) | Yes | Yes (shared memory blocks) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
+| Auto-hook install | Yes (Claude Code hooks, OpenCode plugin) | No | No | No | No | No | No | No | No | No |
+| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | Partial (data sources) | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
+| Git-friendly | Yes | No | No | Yes | Yes | No | Yes (memory tracked in git) | No | Yes (Git is the model) | ? |
+| Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| LongMemEval (published) | 85.6% R@5 from hippo recall, 96.8% with the budget lifted (4,000-token default budget; the benchmark scripts' best of five settings: 98.0% local / 99.8% voyage any-evidence, 88.5% local all-evidence; s_cleaned, per-haystack)\* | 96.6% raw / 100% reranked R@5 | 94.4 (hosted platform)\*\* | N/A | 95.53% all-evidence R@5 reranked, 93.19% without (s_cleaned\*) | 90.2% accuracy\*\* (LoCoMo 94.7%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
+
+\* Hippo's figures are on `longmemeval_s_cleaned` with a per-question haystack. On a default install, `hippo recall` puts an answer session in its top 5 for 85.6% of the 500 questions inside its default 4,000-token budget. With the budget lifted it scores 96.8%, but then it returns every candidate, so that figure measures the ranking ([result](docs/evals/2026-09-28-recall-cli-longmemeval-result.md)). The 98.0% and 99.8% are the benchmark scripts' retrieval, each the best of five settings, not `hippo recall`. Any-evidence R@5 counts a hit when any answer session is in the top 5, over all 500 questions: 98.0% with the free local MiniLM embedder (an optional install) and 99.8% with voyage-3-large (measured 2026-06-09, not re-run). All-evidence R@5 counts a hit only when every answer session is in the top 5, over the 470 questions that have an answer: 86.8 to 88.5% with MiniLM. gbrain first published 97.6%, an any-evidence score over all 500; its [report](https://github.com/garrytan/gbrain-evals/blob/main/docs/benchmarks/2026-05-07-longmemeval-s.md) now leads with all-evidence, 95.53% (449 of 470) with the paid Voyage rerank-2.5 reranker and 93.19% without it. On all-evidence recall gbrain is ahead. The June 2026 build scored 98.6 any-evidence; [`docs/evals/2026-09-23-longmemeval-reproduction.md`](docs/evals/2026-09-23-longmemeval-reproduction.md) has both runs. An older hippo number, 86.8% R@5 on `longmemeval_oracle` under pooled (non-per-haystack) retrieval, is not comparable to per-haystack figures.
+
+\*\* Different metric: these are end-to-end answer scores, not retrieval R@5. Mem0's 94.4 comes from its hosted platform, which its README says includes optimizations the open-source SDK lacks. Zep's 90.2% and 94.7% are accuracy figures from its homepage. Memoria's 88.78% and EverMind's 83% are overall accuracy with a reader LLM. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above. The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28.
+
+### Design bets
+
+These are choices, not results. A Yes means the tool made that choice, not that the choice was shown to help. What hippo has measured about its own bets is under [Benchmarks](#benchmarks); decay, for one, tied with decay switched off. Spatial organization and lossless compression are MemPalace's bets.
+
+| Design bet | Hippo | [MemPalace](https://github.com/milla-jovovich/mempalace) | [Mem0](https://github.com/mem0ai/mem0) | [Basic Memory](https://github.com/basicmachines-co/basic-memory) | [gbrain](https://hermesatlas.com/projects/garrytan/gbrain) | [Zep](https://www.getzep.com/) | [Letta](https://github.com/letta-ai/letta-code) | [Cognee](https://www.cognee.ai/) | [Memoria](https://github.com/matrixorigin/Memoria) | [EverMind](https://evermind.ai/) |
 |---------|-------|-----------|------|-------------|--------|-----|-------|--------|---------|----------|
 | Decay by default | Yes | No | No | No | No | No | No | No | No | No |
 | Retrieval strengthening | Yes | No | No | No | No | No | No | Partial (recall tuning) | No | Partial (Skill Memory distills patterns) |
 | Reward-proportional decay | Yes | No | No | No | No | No | No | No | No | No |
-| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Yes (semantic + BM25 + entity) | No | Yes (vec + rerank + graph) | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
-| Schema acceleration / knowledge graph | Yes (schema) | No | Partial (entity linking; graph memory on Pro) | No | Yes (typed KG, self-wiring) | Yes (temporal KG) | No | Yes (auto-ontologies) | No (typed claims) | Yes (hierarchical: user/group/agent) |
-| Conflict detection + resolution | Yes | No | Partial (hosted platform marks superseded facts) | No | Yes (eval-surfaced) | Yes (auto-invalidate stale facts) | No | No | Yes (auto-detect + quarantine) | Partial (temporal tracking) |
-| Multi-agent shared memory | Yes | No | No | No | Yes (brain repo, team mounts) | Yes | Yes (shared memory blocks) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
-| Transfer scoring | Yes | No | No | No | No | No | No | No | No | No |
 | Outcome tracking | Yes | No | No | No | No | No | No | No | No | Partial (Cases: agent trajectories) |
+| Conflict detection + resolution | Yes | No | Partial (hosted platform marks superseded facts) | No | Yes (eval-surfaced) | Yes (auto-invalidate stale facts) | No | No | Yes (auto-detect + quarantine) | Partial (temporal tracking) |
+| Transfer scoring | Yes | No | No | No | No | No | No | No | No | No |
 | Confidence tiers | Yes | No | No | No | No (typed facts) | No | No | No | No | No |
+| Schema acceleration | Yes | No | No | No | No | No | No | No | No | No |
 | Spatial organization | No | Yes (wings/halls/rooms) | No | No | No | No | No | No | No | No |
 | Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No | No | No |
-| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | Partial (data sources) | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
-| Auto-hook install | Yes | No | No | No | No | No | No | No | No | No |
-| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (stdio + HTTP/OAuth) | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (first-party Claude/LangGraph) | Yes | ? |
-| Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (npm deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
-| LongMemEval (best published) | 98.0% local / 99.8% voyage any-evidence R@5; 88.5% local all-evidence R@5 (s_cleaned, per-haystack)\* | 96.6% raw / 100% reranked R@5 | 94.4 (hosted platform)\*\* | N/A | 95.53% all-evidence R@5 reranked, 93.19% without (s_cleaned\*) | 90.2% accuracy\*\* (LoCoMo 94.7%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
-| Git-friendly | Yes | No | No | Yes | Yes | No | Yes (memory tracked in git) | No | Yes (Git is the model) | ? |
-| Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| License | MIT | (open) | Apache-2.0 | (open) | MIT | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
 
-\* Hippo's figures are on `longmemeval_s_cleaned` with a per-question haystack, each the best of five retrieval settings in the benchmark scripts, not `hippo recall`. Any-evidence R@5 counts a hit when any answer session is in the top 5, over all 500 questions: 98.0% with the free local MiniLM embedder (an optional install) and 99.8% with voyage-3-large (measured 2026-06-09, not re-run). All-evidence R@5 counts a hit only when every answer session is in the top 5, over the 470 questions that have an answer: 86.8 to 88.5% with MiniLM. gbrain first published 97.6%, an any-evidence score over all 500; its [report](https://github.com/garrytan/gbrain-evals/blob/main/docs/benchmarks/2026-05-07-longmemeval-s.md) now leads with all-evidence, 95.53% (449 of 470) with the paid Voyage rerank-2.5 reranker and 93.19% without it. On all-evidence recall gbrain is ahead. The June 2026 build scored 98.6 any-evidence; [`docs/evals/2026-09-23-longmemeval-reproduction.md`](docs/evals/2026-09-23-longmemeval-reproduction.md) has both runs. An older hippo number, 86.8% R@5 on `longmemeval_oracle` under pooled (non-per-haystack) retrieval, is not comparable to per-haystack figures.
-
-\*\* Different metric: these are end-to-end answer scores, not retrieval R@5. Mem0's 94.4 comes from its hosted platform, which its README says includes optimizations the open-source SDK lacks. Zep's 90.2% and 94.7% are accuracy figures from its homepage. Memoria's 88.78% and EverMind's 83% are overall accuracy with a reader LLM. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above. The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28.
-
-Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and rank it down." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
+Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and rank it down." These are complementary takes, not a single-axis ranking: memory lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
 
 ---
 
@@ -882,16 +912,24 @@ Three benchmarks testing three different things. Full details in [`benchmarks/`]
 
 [LongMemEval](https://arxiv.org/abs/2410.10813) (ICLR 2025) is the industry-standard benchmark: 500 questions across 5 memory abilities, embedded in 115k+ token chat histories.
 
-**Standard per-haystack result (`_s` split; MiniLM re-measured 2026-09-23, voyage measured 2026-06-09).** Each question is scored against its own ~48-session haystack, the same way gbrain and other published systems report. The v1.23.0 pluggable embedding provider lets you choose the embedder:
+**`hippo recall` (measured 2026-09-28 on hippo-memory 1.52.5).** On a default install, `hippo recall` puts an answer session in its top 5 for 85.6% of the 500 `_s` questions (95% CI 82.4 to 88.6), and 87.6% with the optional MiniLM embedder (84.6 to 90.4). Most of the gap to the scripts below is the default 4,000-token budget. Each memory in this test is a whole session, about 2,600 tokens at the median, so recall returns a median of 2 sessions. With the budget lifted, the same rankings score 96.8% (95.2 to 98.2) and 97.4% (96.0 to 98.6). A lifted call returns every candidate, a median of 47 sessions and 123,491 tokens per question, so those two figures measure the ranking, not an amount of text an agent could take in. Result: [`docs/evals/2026-09-28-recall-cli-longmemeval-result.md`](docs/evals/2026-09-28-recall-cli-longmemeval-result.md).
 
-| Embedder | Dense-only R@5 | Best hybrid R@5 | R@1 |
+**The benchmark scripts (`_s` split; MiniLM re-measured 2026-09-23, voyage measured 2026-06-09).** Each question is scored against its own ~48-session haystack, the same way gbrain and other published systems report. The v1.23.0 pluggable embedding provider lets you choose the embedder:
+
+| Embedder | Dense-only R@5 | Best of five settings, R@5 | R@1 |
 |----------|----------------|-----------------|-----|
 | MiniLM-L6 (local, optional install) | 96.8 | 98.0 | 88.4 |
 | voyage-3-large (opt-in, paid) | 99.8 | 99.8 | 94.6 |
 
 These are any-evidence scores: a hit when any answer session is in the top 5, over all 500 questions. Counting a hit only when every answer session is in the top 5, over the 470 questions that have an answer, the MiniLM runs score 86.8 to 88.5. gbrain first published 97.6 any-evidence and now reports 95.53 all-evidence with a paid reranker, 93.19 without, so on all-evidence recall gbrain is ahead. These numbers come from the scripts in `benchmarks/longmemeval/`, which index every turn and fuse BM25 with dense ranks; they are not `hippo recall`, and a default install has no embedder. Re-measure: [`docs/evals/2026-09-23-longmemeval-reproduction.md`](docs/evals/2026-09-23-longmemeval-reproduction.md). Any-evidence recall is near its ceiling on this task; all-evidence recall is not. Method and the global-pool comparison: [`docs/evals/2026-06-09-longmemeval-per-haystack-dual.md`](docs/evals/2026-06-09-longmemeval-per-haystack-dual.md).
 
-The differentiator is what happens as one store grows. Point retrieval at a single unified memory of tens of thousands of sessions, with no pre-scoped haystack, and recall stops being free (MiniLM 47, voyage 56 on the 19,195-session `_s` store, June 2026). That is where we expect the memory lifecycle to matter, and it is what hippo measures next (see ROADMAP Part III). It is not shown yet: in our tests so far, decay made no measurable difference and sleep cost recall. Outcome marks and retrieval strengthening are what measured helpful; supersession is not measured yet.
+The differentiator is what happens as one store grows. Point retrieval at a single unified memory of tens of thousands of sessions, with no pre-scoped haystack, and recall stops being free (MiniLM 47, voyage 56 on the 19,195-session `_s` store, June 2026). That is where we expect the memory lifecycle to matter, and it is what hippo measures next (see ROADMAP Part III). It is not shown yet. Decay and sleep are design choices, and the tests so far do not favour them:
+
+- **Decay tied with decay switched off.** On hippo's synthetic lifecycle test, full@365 minus decay-off is -0.7 points [-1.4, 0.1] on currentR5, no measurable effect. That test runs 20 sessions, so a 365-day half-life barely decays inside it ([mechanism audit, round 2](docs/evals/2026-09-23-mechanism-audit-round2-result.md); [decay default](docs/evals/2026-09-24-decay-default-result.md)).
+- **Sleep lowered LongMemEval recall.** The slept store loses 3.6 points of hit@5 [-5.8, -1.4] to the never-slept one under the audit's declared scorer, and no scorer there shows sleep helping recall ([mechanism audit, round 2](docs/evals/2026-09-23-mechanism-audit-round2-result.md)).
+- **Outcome marks helped on the synthetic test.** Plain BM25 plus the fast outcome nudge drops trap persistence from 71.9% to 0.0% (round 2). Round 1 found outcome feedback and retrieval strengthening each help there, in the test's best case: every outcome mark is right, and every scheduled recall repeats the probe's query ([round 1](docs/evals/2026-09-23-mechanism-audit-result.md)). Supersession is not measured yet.
+
+None of this shows hippo making agents better at their work; nothing published has shown that.
 
 **Hippo v0.28.0 oracle-split results (hybrid BM25 + cosine, full 500 questions, pooled retrieval):**
 
@@ -916,7 +954,7 @@ For context: MemPalace scores 96.6% (raw) using ChromaDB embeddings + spatial in
 
 Hippo's strongest categories (single-session-assistant 100% R@5, knowledge-update 89.7%) are where keyword overlap between question and stored content is highest. The weakest (preference 20%) involves indirect references that need deeper semantic understanding.
 
-> Note: v0.28 R@10 is 1.6pp below v0.11's BM25-only result. The earlier v0.27 benchmark showed an apparent 35pp regression — that was a methodology bug (budget-limited retrieval vs unlimited), fixed in v0.28 with the `minResults` option. See [`evals/README.md`](evals/README.md) for the full investigation and per-type breakdown.
+> Note: v0.28 R@10 is 1.6pp below v0.11's BM25-only result. The earlier v0.27 benchmark showed an apparent 35pp regression; that was a methodology bug (budget-limited retrieval vs unlimited), fixed in v0.28 with the `minResults` option. See [`evals/README.md`](evals/README.md) for the full investigation and per-type breakdown.
 
 ```bash
 cd benchmarks/longmemeval
@@ -948,10 +986,10 @@ No other public benchmark tests whether memory systems produce learning curves. 
 
 50 tasks, 10 trap categories, each appearing 2-3 times across the sequence.
 
-> **v0.11.0 informal results — RETRACTED v1.7.9.** The 78% → 14% magnitude does NOT reproduce on the formal sequential-learning benchmark. Three pre-registered workload variants (v1.7.5 full-late, v1.7.6 budget sweep, v1.7.7 `--restrict-late-to 4`) all returned C2 hippo-base late mean = 0.0% across every seed (the workload's late phase saturates structurally). The mechanism (dlPFC goal-stack: `pushGoal`/`completeGoal` hooks, `--use-goal-stack`) is shipped and exercisable. **The magnitude is RETRACTED. The mechanism is shipped; no magnitude is currently claimed.** v1.8.0 (queued) explores adversarial trap categories as mechanism characterisation under the magnitude-smuggling guard in `docs/RETRACTION.md`. Pre-registration trail: `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-prereg.md`, `docs/evals/2026-05-09-v1.7.6-calibration-result.md`, `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`. CHANGELOG: see v1.7.9 entry.
+> **v0.11.0 informal results: RETRACTED v1.7.9.** The 78% → 14% magnitude does NOT reproduce on the formal sequential-learning benchmark. Three pre-registered workload variants (v1.7.5 full-late, v1.7.6 budget sweep, v1.7.7 `--restrict-late-to 4`) all returned C2 hippo-base late mean = 0.0% across every seed (the workload's late phase saturates structurally). The mechanism (dlPFC goal-stack: `pushGoal`/`completeGoal` hooks, `--use-goal-stack`) is shipped and exercisable. **The magnitude is RETRACTED. The mechanism is shipped; no magnitude is currently claimed.** v1.8.0 (queued) explores adversarial trap categories as mechanism characterisation under the magnitude-smuggling guard in `docs/RETRACTION.md`. Pre-registration trail: `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-prereg.md`, `docs/evals/2026-05-09-v1.7.6-calibration-result.md`, `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`. CHANGELOG: see v1.7.9 entry.
 
 <details>
-<summary>Original v0.11.0 informal numbers (RETRACTED — preserved as audit trail in git, not reproduced here)</summary>
+<summary>Original v0.11.0 informal numbers (RETRACTED, preserved as audit trail in git, not reproduced here)</summary>
 
 v0.11.0 reported a single-run informal headline citing late-phase trap-rate decline on the sequential-learning benchmark. The specific numbers are archived at git tag `v0.11.0` and the corresponding `CHANGELOG.md` historical entry. Retained in version control, not reproduced here, since reproduction risks accidental re-citation. See `git show v0.11.0 -- README.md` for the original wording.
 
@@ -970,7 +1008,7 @@ node run.mjs --adapter all
 
 ### How do I give Claude Code memory between sessions?
 
-Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both. `hippo init --scan ~` gives each git repo up to three folders below your home directory its own store, and installs the same hooks when one of those repos uses Claude Code, but writes no block into any repo's `CLAUDE.md`; run `hippo init` in the projects where you want one.
+Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds 7 hook entries to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, store failed tool calls as lessons, and run `hippo sleep` when the session ends, and it sets up a daily 6:15am run. [What hippo init changes](#what-hippo-init-changes) lists everything. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both. To set up every git repo up to three folders below your home directory at once, know what the scan changes first: each repo gets its own store, seeded from a year of its git history, and the same hooks go in when one of those repos uses Claude Code, but no block goes into any repo's `CLAUDE.md`. The command is `hippo init --scan ~`; run `hippo init` in the projects where you want the block.
 
 ### How do I give Cursor memory between sessions?
 
@@ -998,7 +1036,7 @@ No. RAG searches a fixed corpus. Hippo's store changes as your agent works: a me
 
 ### Does it need embeddings?
 
-No. Recall runs on BM25 out of the box, with no model and no network call, and a default install has no embedder. Embeddings are an optional install for hybrid search. On LongMemEval-S, where each question gets its own haystack, the benchmark scripts (not `hippo recall`) fuse BM25 with the free local MiniLM embedder and reach 98.0% recall@5, counting a hit when any answer session is in the top five. On LongMemEval's oracle split with one pooled store, BM25 alone scored 74.0% recall@5 in v0.11. The two runs use different setups, so they are not a before and after.
+No. Recall runs on BM25 out of the box, with no model and no network call, and a default install has no embedder. Embeddings are an optional install for hybrid search. On LongMemEval-S, where each question gets its own haystack, `hippo recall` on a default install puts an answer session in its top five for 85.6% of questions inside its 4,000-token budget, and 87.6% with the free local MiniLM embedder; the budget, not the embedder, is most of the gap to the benchmark scripts. Those scripts, which are not `hippo recall`, fuse BM25 with MiniLM and reach 98.0% recall@5 at their best of five settings, counting a hit when any answer session is in the top five. On LongMemEval's oracle split with one pooled store, BM25 alone scored 74.0% recall@5 in v0.11. These runs use different setups, so they are not a before and after.
 
 ### Do I still need CLAUDE.md?
 
@@ -1022,7 +1060,7 @@ Judge it by what is tested. 3,500+ tests run against a real database, with no mo
 
 ### Has hippo been shown to make agents better at their work?
 
-Not yet. The published numbers measure retrieval: whether the right memory comes back, and whether a memory marked wrong stays out of the results. A paired test that runs real agent sessions with and without hippo is under way. Every measurement, including failed runs and one retracted claim, is indexed in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
+No. The published numbers measure retrieval: whether the right memory comes back, and whether a memory marked wrong stays out of the results. Decay and sleep are design choices, not measured wins. In the [mechanism audit](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-09-23-mechanism-audit-round2-result.md), decay had no measurable effect against decay switched off (-0.7 points [-1.4, 0.1] on a 20-session synthetic test, too short for a 365-day half-life to act), and sleep lowered LongMemEval hit@5 by 3.6 points [-5.8, -1.4] under the audit's declared scorer; no scorer there showed sleep helping recall. Every measurement, including failed runs and one retracted claim, is indexed in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
 
 ---
 
@@ -1031,7 +1069,7 @@ Not yet. The published numbers measure retrieval: whether the right memory comes
 Issues and PRs welcome. Before contributing, run `hippo status` in the repo root to see the project's own memory.
 
 The interesting problems:
-- **LongMemEval retrieval (standard task: done).** Per-question-haystack R@5 is 98.0% with the free local embedder (re-measured 2026-09-23; the June build gave 98.6) and 99.8% with voyage-3-large (measured 2026-06-09), counting a hit when any answer session is in the top 5. That measure is near its ceiling. The all-evidence one, every answer session in the top 5 over the 470 questions with an answer, is not; there the MiniLM runs score 86.8 to 88.5% against gbrain's 95.53%. The lifecycle stress eval (ROADMAP Part III) is the next measurement.
+- **LongMemEval retrieval.** `hippo recall` on a default install scores 85.6% R@5 inside its 4,000-token budget and 96.8% with the budget lifted ([result](docs/evals/2026-09-28-recall-cli-longmemeval-result.md)); a budget that fits five median sessions is the obvious next run. The benchmark scripts' best of five settings reach 98.0% with the free local embedder (re-measured 2026-09-23; the June build gave 98.6) and 99.8% with voyage-3-large (measured 2026-06-09), counting a hit when any answer session is in the top 5. That measure is near its ceiling. The all-evidence one, every answer session in the top 5 over the 470 questions with an answer, is not; there the MiniLM runs score 86.8 to 88.5% against gbrain's 95.53%. The lifecycle stress eval (ROADMAP Part III) is the next measurement.
 - Better consolidation heuristics (LLM-powered merge vs current text overlap)
 - Web UI / dashboard for visualizing decay curves and memory health
 - Optimal decay parameter tuning from real usage data

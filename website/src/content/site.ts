@@ -15,12 +15,14 @@ export const site = {
   pkg: 'hippo-memory',
   version: pkg.version, // npm-published hippo-memory version, imported at build time from the repo-root package.json
   positioning: 'memory for AI agents that learns what is wrong', // page title and hero eyebrow
-  // Hero headline (2026-09-24 Terminal Native direction), split for accent emphasis.
-  tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
+  // Hero headline, split for accent emphasis: what works on day one leads.
+  tagline: { lead: 'Local memory for', accent: 'the agents you already use.' },
   description:
-    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, drops what turned out to be wrong, and replaces facts that changed.",
+    "Hippo keeps your coding agents' memories in SQLite on your machine. Search needs no model or network call, and hippo init wires it into Claude Code, Codex and Cursor; any MCP client can connect too. Mark a memory wrong and it ranks lower; a newer fact replaces the old one.",
   installCmd: 'npm install -g hippo-memory',
-  initCmd: 'hippo init --scan ~',
+  initCmd: 'hippo init',
+  // Every page that offers the scan states what it changes before the command.
+  scanCmd: 'hippo init --scan ~',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
   tests: '3,500+',
   links: {
@@ -32,6 +34,7 @@ export const site = {
     longmemeval: `${REPO}/tree/master/benchmarks/longmemeval`,
     license: `${REPO}/blob/master/LICENSE`,
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
+    recallEval: `${REPO}/blob/master/docs/evals/2026-09-28-recall-cli-longmemeval-result.md`,
     atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
     // Pilot requests open a GitHub issue until a booking link exists.
     pilot: `${REPO}/issues/new?title=Pilot%20request&body=Company%2C%20team%20size%2C%20agents%20in%20use%3A`,
@@ -42,7 +45,12 @@ export const site = {
 // Hero proof lines, above the fold (audit: lead with capability proof, not adjectives).
 // The reranker line carries its null result inline; the win never travels without it.
 export const proofs = [
-  { stat: '98.0% R@5', text: 'on LongMemEval-S with a free local embedder (best of five settings).' },
+  {
+    stat: '85.6% R@5',
+    text: 'from hippo recall on LongMemEval-S, inside its default 4,000-token budget; 96.8% with the budget lifted.',
+    href: site.links.recallEval,
+    hrefLabel: 'the hippo recall eval',
+  },
   {
     stat: 'R@1 0.41 to 0.62',
     text: 'with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.',
@@ -81,7 +89,7 @@ export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' |
 /** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */
 export const commands = [
   { cmd: 'hippo capture-error', body: 'Real failures become lessons. Interrupts, declined permissions and empty searches are skipped.' },
-  { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and it stops coming back.' },
+  { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and hippo ranks it down.' },
   { cmd: 'hippo doctor', body: 'One command checks the install and names the fix for anything missing.' },
 ] as const;
 
@@ -89,8 +97,8 @@ export const problem = {
   kicker: 'The problem',
   heading: 'Most AI memory saves everything and searches later.',
   body: [
-    "That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before.",
-    'The system saw the failure four times. It had no way to know it should remember.',
+    "That's storage with search on top. A note that turned out wrong ranks the same as one that held up, and an old fact sits beside the one that replaced it.",
+    'Hippo records which memories were marked wrong or replaced. A wrong one ranks lower, and a replaced one leaves the results.',
   ],
   // README "Why this exists"
 } as const;
@@ -99,7 +107,7 @@ export const mechanics = [
   {
     title: 'Decay by default',
     metric: '365d half-life',
-    body: 'Every memory fades on a one-year half-life unless it is used. We did not tune 365 days: it tied with 730 days and with decay off.',
+    body: 'The default half-life is 365 days, and a memory fades unless it is used. We did not tune 365 days: it tied with 730 days and with decay off.',
   },
   {
     title: 'Retrieval strengthens',
@@ -107,23 +115,23 @@ export const mechanics = [
     body: 'Use it or lose it. Each recall extends the half-life. Memories you reach for survive.',
   },
   {
-    title: 'Errors stick',
+    title: 'Errors last longer',
     metric: '2x half-life',
-    body: 'Tag a failure once. It decays slower and resurfaces every time you walk back into that code.',
+    body: 'Tag a failure as an error and it gets twice the half-life, so a later recall that matches it can still find it.',
   },
   {
     title: 'Sleep consolidates',
     metric: '3+ → 1',
-    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.',
+    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy, but in hippo\'s own audit it cost 3.6 points of LongMemEval recall.',
   },
 ] as const;
 
 export const receipts = [
   {
-    stat: '98.0%',
-    label: 'R@5 on LongMemEval-S',
-    note: 'Any answer session in the top 5, per haystack, free local MiniLM (an optional install), best of five settings. Requiring every answer session: 86.8 to 88.5%. 99.8% with voyage-3-large (June 2026). BM25 only, older oracle split: 74.0%.',
-    href: site.links.longmemeval,
+    stat: '85.6%',
+    label: 'R@5 from hippo recall, LongMemEval-S',
+    note: "An answer session in the top 5 for 85.6% of the 500 questions, on a default install inside recall's 4,000-token budget. 87.6% with the optional MiniLM embedder; 96.8% with the budget lifted. The benchmark scripts' best of five settings reach 98.0%. BM25 only, older oracle split: 74.0%.",
+    href: site.links.recallEval,
   },
   {
     stat: '−6.0',
@@ -153,33 +161,37 @@ export const mcpJson = ['{', '  "mcpServers": {', '    "hippo-memory": {', '    
 export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'markdown'] as const;
 
 export const compare = {
-  heading: 'Learn what is wrong. Stop repeating it.',
-  body: 'How hippo compares to the strongest tools in the category, on the features that define a memory lifecycle.',
+  heading: 'How hippo compares.',
+  body: 'Where the data lives, what it runs on and what each tool has published, including the rows where another tool is stronger. Hippo\'s design bets, such as decay, are in a second table on GitHub.',
   sourceHref: `${REPO}#comparison`,
-  sourceLabel: 'Full 10-tool matrix on GitHub',
+  sourceLabel: 'Both tables, all 10 tools, on GitHub',
   scrollCue: 'scroll for more tools',
   qualifierNote:
-    'Verdicts are shortened for scanning; the qualifier behind each Yes/No/Partial is in the full matrix.',
+    'Verdicts are shortened for scanning; the qualifier behind each Yes, No or Partial is in the full tables.',
 } as const;
 
 /** README.md's Comparison table, parsed at build by readme.ts, plus the site's own closing line. */
 export const comparison = {
   ...readmeComparison,
   closing:
-    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and stop repeating it."',
+    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and rank it down."',
 } as const;
 
-/** Get started = quickstart + the zero-config auto-install differentiator (README L97/L621). */
+/** Get started in one project, with everything hippo init changes (src/cli.ts cmdInit) listed above the command. */
 export const getStarted = {
   kicker: 'Get started',
-  heading: 'Zero config. It wires itself in.',
-  body: 'Install it, run init in your repo, and hippo detects your agent framework and patches the right config file. Next session, your agent just uses it.',
-  steps: [site.installCmd, 'hippo init'],
-  autoInstall: {
-    heading: 'Detected and patched automatically',
-    frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi'],
-    note: 'In a repo, init patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --scan ~ gives every git repo under your home folder a store and installs the Claude Code hooks and the OpenCode plugin, but patches no instruction files. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
-  },
+  heading: 'Start in one project.',
+  body: 'Install it, then run init inside one repo. This is everything init changes on your machine.',
+  steps: [site.installCmd, site.initCmd],
+  changes: [
+    'A .hippo/ store in the project. On the first run it learns from the last 30 days of git history.',
+    'A hippo block in the CLAUDE.md or AGENTS.md the project already has. It never creates either file.',
+    'If the project uses Claude Code: 7 hook entries in ~/.claude/settings.json, for session start and end, each prompt, compaction and failed tool calls.',
+    'If the project uses OpenCode: a plugin at ~/.config/opencode/plugins/hippo.ts.',
+    "A daily run at 6:15am, through crontab on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs hippo sleep there.",
+    'On the first run, notes from Claude Code memory files under ~/.claude/projects/ are imported.',
+  ],
+  skip: 'To leave a part out: --no-hooks skips the block and the hooks, --no-schedule the daily run, --no-learn both imports.',
 } as const;
 
 /** Local-first / privacy. Every receipt sourced verbatim to README (L46/L57/L58). */

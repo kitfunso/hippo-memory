@@ -26,7 +26,17 @@ In the root of the project the user works in:
 hippo init
 ```
 
-`hippo init` creates `.hippo/`, learns lessons from the repository's git history, and detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. For each one it finds, it adds hippo to that tool's instruction file if the file exists, and it installs Claude Code's hooks and the OpenCode plugin. Codex session capture is opt-in: run `hippo hook install codex`. For many repositories at once: `hippo init --scan ~`.
+Tell the user what `hippo init` changes before you run it:
+
+- `.hippo/` in the project, seeded on the first run with lessons from the last 30 days of git history.
+- A hippo block in each instruction file that already exists, such as `CLAUDE.md` or `AGENTS.md`. It never creates one.
+- When the project uses Claude Code, 7 hook entries in `~/.claude/settings.json`. When it uses OpenCode, a plugin at `~/.config/opencode/plugins/hippo.ts`.
+- A daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs `hippo sleep` there.
+- On the first run, an import of the Claude Code memory files under `~/.claude/projects/`.
+
+`--no-hooks` leaves out the instruction-file blocks and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and memory-file import. Codex session capture is opt-in: run `hippo hook install codex`.
+
+Run `hippo init --scan <folder>` only if the user asks to set up many repositories at once, and say first what it changes: every git repo in the folder and up to three levels below gets its own `.hippo/` store, seeded from a year of its git history, and the same user-level hooks and daily run go in. It patches no instruction file.
 
 For Claude Code, the plugin is an alternative to the hooks `hippo init` installs (use one, not both):
 

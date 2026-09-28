@@ -33,11 +33,10 @@ function section(text, heading) {
 /** @param {string} line */
 const cellsOf = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 
-/** @param {string} text README.md with \n line endings */
-export function parseComparison(text) {
-  const body = section(text, '## Comparison');
-  const [header, , ...rowLines] = body.split('\n').filter((l) => l.startsWith('|'));
-  if (!header || !rowLines.length) throw new Error('README.md Comparison section has no table');
+/** @param {string[]} lines one markdown table: header, separator, rows */
+function parseTable(lines) {
+  const [header, , ...rowLines] = lines;
+  if (!rowLines.length || lines.some((l) => !l.startsWith('|'))) throw new Error('README.md Comparison has a malformed table');
   const systems = cellsOf(header).slice(1).map((cell, i) => {
     const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(cell);
     return { name: link ? link[1] : cell, href: link ? link[2] : REPO, self: i === 0 };
@@ -49,10 +48,23 @@ export function parseComparison(text) {
     }
     return { feature, cells };
   });
+  return { systems, rows };
+}
+
+/** @param {string} text README.md with \n line endings */
+export function parseComparison(text) {
+  const body = section(text, '## Comparison');
+  // Two tables, plain facts and then design bets, so a bet never reads as a measured fact.
+  const tables = body.split(/\n\s*\n/).map((p) => p.trim().split('\n')).filter((lines) => lines[0].startsWith('|'));
+  if (tables.length !== 2) throw new Error(`README.md Comparison section has ${tables.length} tables, expected 2 (facts, design bets)`);
+  const [facts, bets] = tables.map(parseTable);
+  if (bets.systems.map((s) => s.name).join() !== facts.systems.map((s) => s.name).join()) {
+    throw new Error('README.md Comparison tables name different systems');
+  }
   // Footnotes open with an escaped asterisk and stay markdown, for mdInline.
   const footnotes = body.split('\n').filter((l) => l.startsWith('\\*'));
   if (!footnotes.length) throw new Error('README.md Comparison section has no footnotes');
-  return { systems, rows, footnotes };
+  return { systems: facts.systems, rows: facts.rows, bets: bets.rows, footnotes };
 }
 
 /** @param {string} text README.md with \n line endings */

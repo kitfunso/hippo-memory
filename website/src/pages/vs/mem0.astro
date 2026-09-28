@@ -18,8 +18,8 @@ const strip = [
     who: 'hippo',
     metric: 'retrieval recall@5',
     corpus: 'LongMemEval-S, per-question haystack',
-    limit: 'benchmark scripts with a free local embedder, not hippo recall',
-    num: '98.0%',
+    limit: 'hippo recall on a default install, inside its 4,000-token budget',
+    num: '85.6%',
   },
   {
     who: 'mem0',
@@ -37,8 +37,8 @@ const qa = [
     a: "Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project, needs no account or API key, and `hippo init` wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. mem0 is Apache-2.0 and runs as a library, a self-hosted server or a hosted platform; its open-source library calls a language model to extract memories, OpenAI by default.",
   },
   {
-    q: "Is mem0's 94.4 on LongMemEval better than hippo's 98.0%?",
-    a: "Neither beats the other, because they measure different things. Hippo's 98.0% is retrieval recall@5 on LongMemEval-S with a per-question haystack: whether an answer session is in the top five results. It comes from the benchmark scripts with a free local embedder, not `hippo recall`. mem0's 94.4 is an end-to-end answer score: whether a model answered correctly from what came back. mem0's README says it comes from its hosted platform at a top-200 retrieval budget, with optimizations the open-source SDK lacks.",
+    q: "Is mem0's 94.4 on LongMemEval better than hippo's 85.6%?",
+    a: "Neither beats the other, because they measure different things. Hippo's 85.6% is retrieval recall@5 on LongMemEval-S with a per-question haystack: whether `hippo recall`, on a default install and inside its 4,000-token budget, returns an answer session in its top five. With the budget lifted it scores 96.8%, and the benchmark scripts' best of five settings reach 98.0%. mem0's 94.4 is an end-to-end answer score: whether a model answered correctly from what came back. mem0's README says it comes from its hosted platform at a top-200 retrieval budget, with optimizations the open-source SDK lacks.",
   },
 ];
 ---
@@ -81,7 +81,8 @@ const qa = [
         </div>
         <p class="mt-4 max-w-3xl text-sm leading-relaxed text-zinc-400">
           Recall@5 asks whether an answer session is in the top five results. An answer score asks whether a model answered
-          correctly from what came back. They are not comparable, so this is not a head-to-head. Hippo's method is on the
+          correctly from what came back. They are not comparable, so this is not a head-to-head. Hippo's method, and the
+          98.0% its benchmark scripts reach at their best of five settings, are on the
           <a class="link" href="/benchmarks/">benchmarks page</a>; mem0's figure is from its
           <a class="link" href="https://github.com/mem0ai/mem0" target="_blank" rel="noopener noreferrer">README<span class="sr-only"> (opens in new tab)</span></a>,
           checked 2026-09-28.
@@ -91,8 +92,8 @@ const qa = [
 
     <Section title="Feature by feature" alt>
       <p>
-        Every row of the README comparison table, hippo against mem0. The Mem0 column was last checked against mem0's own
-        pages on 2026-09-28.
+        Every row of the README's two comparison tables, hippo against mem0: what each tool is, then design bets. The
+        Mem0 column was last checked against mem0's own pages on 2026-09-28.
       </p>
       <VsTable system="Mem0" />
     </Section>
