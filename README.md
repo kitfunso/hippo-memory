@@ -961,13 +961,13 @@ node run.mjs --adapter all
 
 Run `npm install -g hippo-memory`, then `hippo init` in the project, or `hippo init --scan ~` for every repo on the machine. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
 
-### Does hippo work with Cursor?
+### How do I give Cursor memory between sessions?
 
-Yes. `hippo init` adds its instructions to `.cursorrules` if the project has one, and the [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. `hippo import --cursor .cursorrules` turns your existing rules into memories.
+`hippo init` adds its instructions to `.cursorrules` if the project has one, and the [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. `hippo import --cursor .cursorrules` turns your existing rules into memories.
 
-### Does hippo work with Codex?
+### How do I give Codex memory across sessions?
 
-Yes. `hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. Capturing Codex sessions is opt-in: `hippo hook install codex` wraps the Codex launcher, and `hippo hook uninstall codex` removes the wrapper.
+`hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. Capturing Codex sessions is opt-in: `hippo hook install codex` wraps the Codex launcher, and `hippo hook uninstall codex` removes the wrapper.
 
 ### Which agents does hippo work with?
 
