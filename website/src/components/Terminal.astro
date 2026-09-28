@@ -3,7 +3,7 @@ import { terminal } from '../content/site';
 
 type Kind = (typeof terminal)[number]['kind'];
 // Mint is hippo recalling or saving, amber is the failure it caught (the brand's "marked wrong").
-const tone: Record<Kind, string> = {
+const tone = {
   note: 'text-zinc-500',
   cmd: 'text-term-fg',
   out: 'text-zinc-300',
@@ -11,8 +11,8 @@ const tone: Record<Kind, string> = {
   caught: 'pl-4 text-acc-amber',
   ok: 'pl-4 text-term-ok',
   mem: 'pl-8 text-zinc-300',
-};
-const glyph: Partial<Record<Kind, string>> = { cmd: '>', out: '●', err: '⎿', mem: '·' };
+} satisfies Record<Kind, string>;
+const glyph = { note: '', cmd: '>', out: '●', err: '⎿', caught: '', ok: '', mem: '·' } satisfies Record<Kind, string>;
 ---
 
 <div class="overflow-hidden rounded-xl border border-zinc-800 bg-term-bg" data-terminal>
