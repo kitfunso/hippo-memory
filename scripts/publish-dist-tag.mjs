@@ -27,7 +27,9 @@ export function distTagFor(version, latest) {
   if (v.prerelease) return 'next';
   if (latest === null || latest === undefined) return 'latest';
   const l = parseVersion(latest);
-  return compareCore(v, l) > 0 ? 'latest' : `maint-${v.major}.${v.minor}`;
+  const byCore = compareCore(v, l);
+  // Semver ranks a release above its own prereleases, so 2.0.0 replaces a 2.0.0-rc.1 left on latest.
+  return byCore > 0 || (byCore === 0 && l.prerelease !== null) ? 'latest' : `maint-${v.major}.${v.minor}`;
 }
 
 /** Current `latest` dist-tag, or null when the package has never published

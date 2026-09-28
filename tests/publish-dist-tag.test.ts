@@ -29,6 +29,14 @@ describe('distTagFor', () => {
     expect(distTagFor('1.10.0', '1.9.9')).toBe('latest');
   });
 
+  it('publishes a release over its own prerelease left on latest', () => {
+    expect(distTagFor('2.0.0', '2.0.0-rc.1')).toBe('latest');
+  });
+
+  it('keeps an older line on its maint tag when latest is a newer prerelease', () => {
+    expect(distTagFor('1.9.0', '2.0.0-rc.1')).toBe('maint-1.9');
+  });
+
   it('throws on a version that is not x.y.z[-pre]', () => {
     expect(() => distTagFor('not-a-version', '1.0.0')).toThrow();
   });
