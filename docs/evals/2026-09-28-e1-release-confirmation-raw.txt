@@ -1,0 +1,390 @@
+== Provenance
+
+$ cat C:/Users/skf_s/hippo-mech-runs/r3/build.txt
+fcd432e73c9752fce4180269dfb5ff08ea71f389
+v24.13.0
+[exit 0]
+
+$ git -C C:/Users/skf_s/hippo-wt-r3run3 rev-parse HEAD
+fcd432e73c9752fce4180269dfb5ff08ea71f389
+[exit 0]
+
+$ git -C C:/Users/skf_s/hippo-wt-r3run3 status --porcelain
+[exit 0]
+launch.out: 320 runs exit=0, 320 runs total, 1 ALL-DONE
+confirm-check.mjs under test: 04e1e6d, 948e4d0ce0b4bc3fedad68a59221e4c6911fddfe (blob)
+
+== params, then gates, before any compare
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs params C:/Users/skf_s/hippo-mech-runs/r3/main full,bm25-static,bm25-outcome,all-off,outcome-off,strengthen-off,decay-off,recency-off 121-140 all 2026-09-28T12:30:36+01:00
+C:/Users/skf_s/hippo-mech-runs/r3/main: full,bm25-static,bm25-outcome,all-off,outcome-off,strengthen-off,decay-off,recency-off on seeds 121-140: half-life 365, window all, ran after 2026-09-28T12:30:36+01:00: PASS
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs params C:/Users/skf_s/hippo-mech-runs/r3/r4 full,bm25-static,bm25-newest,bm25-outcome 141-160 v1 2026-09-28T12:30:36+01:00
+C:/Users/skf_s/hippo-mech-runs/r3/r4: full,bm25-static,bm25-newest,bm25-outcome on seeds 141-160: half-life 365, window v1, ran after 2026-09-28T12:30:36+01:00: PASS
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs params C:/Users/skf_s/hippo-mech-runs/r3/drift full,bm25-static,bm25-outcome,recency-off 101-120 all 2026-09-28T12:30:36+01:00
+C:/Users/skf_s/hippo-mech-runs/r3/drift: full,bm25-static,bm25-outcome,recency-off on seeds 101-120: half-life 365, window all, ran after 2026-09-28T12:30:36+01:00: PASS
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs gates C:/Users/skf_s/hippo-mech-runs/r3/main 121-140
+C2 C4 C5: bm25-static trapPersistenceRate >= 0.20 (range 0.556 to 0.822, 0 missing) on 20/20 seeds (needs 18): PASS
+M1: outcome-off trapPersistenceRate >= 0.20 (range 0.667 to 0.867, 0 missing) on 20/20 seeds (needs 18): PASS
+M2: strengthen-off hotR5 <= 0.90 (range 0.549 to 0.765, 0 missing) on 20/20 seeds (needs 18): PASS
+M3: decay-off staleIntrusionRate >= 0.20 (range 0.825 to 0.942, 0 missing) on 20/20 seeds (needs 18): PASS
+M4: recency-off final epoch differs from full on 20/20 seeds (needs 18): PASS
+[exit 0]
+
+== Lanes
+-- C1, C2
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.769 | -1.4 | [-2.9, 0.1] | [-3.4, 0.5] | 20
+mrr | 0.369 | 0.401 | -3.2 | [-4.5, -1.9] | [-4.9, -1.5] | 20
+staleIntrusionRate | 0.885 | 0.906 | -2.1 | [-4.1, -0.2] | [-4.7, 0.3] | 20
+trapPersistenceRate | 0.000 | 0.719 | -71.9 | [-75.6, -68.0] | [-76.6, -66.7] | 20
+contraIntrusionRate | 0.077 | 0.000 | 7.7 | [5.0, 10.7] | [4.3, 11.8] | 20
+hotR5 | 0.774 | 0.770 | 0.4 | [-2.1, 2.8] | [-2.9, 3.6] | 20
+cleanStaleR5 | 0.103 | 0.086 | 1.7 | [-0.3, 3.7] | [-0.8, 4.3] | 20
+nonStaleR5 | 0.677 | 0.758 | -8.1 | [-10.1, -6.1] | [-10.7, -5.6] | 20
+cleanTrapR5 | 0.770 | 0.237 | 53.3 | [48.3, 58.3] | [46.7, 59.7] | 20
+nonTrapR5 | 0.753 | 0.777 | -2.5 | [-4.1, -0.7] | [-4.6, -0.2] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- C3, C4
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-outcome --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-outcome  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.820 | -6.5 | [-7.8, -5.1] | [-8.2, -4.7] | 20
+mrr | 0.369 | 0.477 | -10.8 | [-12.0, -9.6] | [-12.5, -9.3] | 20
+staleIntrusionRate | 0.885 | 0.939 | -5.4 | [-7.3, -3.5] | [-8.0, -3.0] | 20
+trapPersistenceRate | 0.000 | 0.000 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+contraIntrusionRate | 0.077 | 0.000 | 7.7 | [5.0, 10.7] | [4.3, 11.8] | 20
+hotR5 | 0.774 | 0.828 | -5.4 | [-8.0, -2.9] | [-8.7, -2.2] | 20
+cleanStaleR5 | 0.103 | 0.058 | 4.5 | [2.7, 6.5] | [2.1, 7.1] | 20
+nonStaleR5 | 0.677 | 0.838 | -16.1 | [-17.8, -14.4] | [-18.3, -13.9] | 20
+cleanTrapR5 | 0.770 | 0.834 | -6.4 | [-10.2, -2.7] | [-11.6, -1.4] | 20
+nonTrapR5 | 0.753 | 0.817 | -6.5 | [-8.0, -4.9] | [-8.4, -4.5] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- C5
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-outcome --b C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-outcome  B=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.820 | 0.769 | 5.0 | [4.3, 5.8] | [4.0, 6.1] | 20
+mrr | 0.477 | 0.401 | 7.6 | [6.8, 8.5] | [6.5, 8.8] | 20
+staleIntrusionRate | 0.939 | 0.906 | 3.3 | [2.3, 4.4] | [2.0, 4.7] | 20
+trapPersistenceRate | 0.000 | 0.719 | -71.9 | [-75.6, -68.0] | [-76.6, -66.7] | 20
+contraIntrusionRate | 0.000 | 0.000 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+hotR5 | 0.828 | 0.770 | 5.8 | [4.4, 7.4] | [3.9, 7.9] | 20
+cleanStaleR5 | 0.058 | 0.086 | -2.8 | [-3.9, -1.8] | [-4.3, -1.5] | 20
+nonStaleR5 | 0.838 | 0.758 | 8.0 | [6.8, 9.2] | [6.5, 9.5] | 20
+cleanTrapR5 | 0.834 | 0.237 | 59.8 | [55.1, 64.2] | [53.6, 65.6] | 20
+nonTrapR5 | 0.817 | 0.777 | 4.0 | [3.3, 4.8] | [3.0, 5.1] | 20
+break-even superseded share s* (A wins below it) = 73.8% [65.9, 82.0] | [63.2, 84.7]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- C6
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:all-off --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:all-off  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.701 | 5.4 | [4.2, 6.6] | [3.9, 7.0] | 20
+mrr | 0.369 | 0.322 | 4.7 | [4.1, 5.3] | [3.9, 5.5] | 20
+staleIntrusionRate | 0.885 | 0.832 | 5.3 | [4.0, 6.6] | [3.7, 7.1] | 20
+trapPersistenceRate | 0.000 | 0.778 | -77.8 | [-81.4, -74.2] | [-82.4, -73.1] | 20
+contraIntrusionRate | 0.077 | 0.057 | 2.0 | [0.3, 3.8] | [-0.0, 4.3] | 20
+hotR5 | 0.774 | 0.707 | 6.7 | [5.2, 8.3] | [4.7, 8.9] | 20
+cleanStaleR5 | 0.103 | 0.155 | -5.2 | [-6.5, -3.9] | [-7.0, -3.5] | 20
+nonStaleR5 | 0.677 | 0.585 | 9.1 | [7.5, 10.9] | [7.0, 11.4] | 20
+cleanTrapR5 | 0.770 | 0.154 | 61.6 | [57.2, 66.0] | [55.8, 67.3] | 20
+nonTrapR5 | 0.753 | 0.712 | 4.1 | [2.9, 5.2] | [2.5, 5.6] | 20
+break-even superseded share s* (A wins below it) = 63.7% [56.1, 71.3] | [53.8, 73.4]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- M1
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:outcome-off --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:outcome-off  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.693 | 6.3 | [5.4, 7.2] | [5.1, 7.4] | 20
+mrr | 0.369 | 0.320 | 4.8 | [4.3, 5.4] | [4.2, 5.6] | 20
+staleIntrusionRate | 0.885 | 0.833 | 5.2 | [4.1, 6.4] | [3.8, 6.8] | 20
+trapPersistenceRate | 0.000 | 0.770 | -77.0 | [-80.7, -73.3] | [-81.7, -72.2] | 20
+contraIntrusionRate | 0.077 | 0.075 | 0.2 | [-0.8, 1.2] | [-1.2, 1.7] | 20
+hotR5 | 0.774 | 0.713 | 6.1 | [4.7, 7.6] | [4.2, 8.1] | 20
+cleanStaleR5 | 0.103 | 0.151 | -4.8 | [-6.1, -3.7] | [-6.5, -3.4] | 20
+nonStaleR5 | 0.677 | 0.573 | 10.4 | [9.0, 11.8] | [8.6, 12.2] | 20
+cleanTrapR5 | 0.770 | 0.151 | 61.9 | [57.6, 66.2] | [56.2, 67.4] | 20
+nonTrapR5 | 0.753 | 0.705 | 4.7 | [3.9, 5.6] | [3.6, 5.9] | 20
+break-even superseded share s* (A wins below it) = 68.2% [61.3, 74.5] | [58.8, 76.4]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- M2
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:strengthen-off --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:strengthen-off  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.687 | 6.8 | [5.7, 7.9] | [5.3, 8.2] | 20
+mrr | 0.369 | 0.326 | 4.3 | [3.8, 4.8] | [3.7, 4.9] | 20
+staleIntrusionRate | 0.885 | 0.829 | 5.6 | [4.1, 7.1] | [3.7, 7.6] | 20
+trapPersistenceRate | 0.000 | 0.000 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+contraIntrusionRate | 0.077 | 0.148 | -7.2 | [-10.5, -4.3] | [-11.7, -3.5] | 20
+hotR5 | 0.774 | 0.694 | 8.0 | [5.9, 10.1] | [5.2, 10.8] | 20
+cleanStaleR5 | 0.103 | 0.151 | -4.8 | [-6.5, -3.3] | [-7.0, -2.8] | 20
+nonStaleR5 | 0.677 | 0.561 | 11.5 | [9.9, 13.1] | [9.4, 13.6] | 20
+cleanTrapR5 | 0.770 | 0.700 | 7.0 | [4.2, 9.8] | [3.3, 10.6] | 20
+nonTrapR5 | 0.753 | 0.685 | 6.7 | [5.5, 8.0] | [5.2, 8.4] | 20
+break-even superseded share s* (A wins below it) = 70.5% [63.9, 77.7] | [62.1, 80.3]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- M3
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:decay-off --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:decay-off  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.760 | -0.5 | [-1.2, 0.3] | [-1.4, 0.5] | 20
+mrr | 0.369 | 0.369 | -0.0 | [-0.3, 0.3] | [-0.4, 0.4] | 20
+staleIntrusionRate | 0.885 | 0.883 | 0.2 | [-0.8, 1.2] | [-1.0, 1.5] | 20
+trapPersistenceRate | 0.000 | 0.202 | -20.2 | [-23.7, -16.9] | [-24.8, -15.9] | 20
+contraIntrusionRate | 0.077 | 0.060 | 1.7 | [0.2, 3.3] | [-0.0, 4.0] | 20
+hotR5 | 0.774 | 0.767 | 0.7 | [-0.0, 1.5] | [-0.3, 1.8] | 20
+cleanStaleR5 | 0.103 | 0.107 | -0.4 | [-1.4, 0.6] | [-1.8, 0.9] | 20
+nonStaleR5 | 0.677 | 0.682 | -0.6 | [-1.6, 0.4] | [-1.9, 0.8] | 20
+cleanTrapR5 | 0.770 | 0.634 | 13.6 | [10.0, 17.1] | [8.9, 18.2] | 20
+nonTrapR5 | 0.753 | 0.757 | -0.5 | [-1.2, 0.2] | [-1.5, 0.5] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 100.0] | [0.0, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 100.0] | [0.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- M4
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:full --b C:/Users/skf_s/hippo-mech-runs/r3/main:recency-off --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:recency-off  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.806 | -5.1 | [-6.5, -3.7] | [-6.9, -3.3] | 20
+mrr | 0.369 | 0.437 | -6.9 | [-8.1, -5.7] | [-8.4, -5.4] | 20
+staleIntrusionRate | 0.885 | 0.943 | -5.8 | [-7.4, -4.3] | [-8.0, -3.9] | 20
+trapPersistenceRate | 0.000 | 0.000 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+contraIntrusionRate | 0.077 | 0.000 | 7.7 | [5.0, 10.7] | [4.3, 11.8] | 20
+hotR5 | 0.774 | 0.804 | -3.0 | [-5.5, -0.4] | [-6.2, 0.4] | 20
+cleanStaleR5 | 0.103 | 0.052 | 5.1 | [3.6, 6.7] | [3.2, 7.2] | 20
+nonStaleR5 | 0.677 | 0.818 | -14.1 | [-15.8, -12.5] | [-16.3, -11.9] | 20
+cleanTrapR5 | 0.770 | 0.822 | -5.2 | [-8.8, -1.6] | [-10.0, -0.6] | 20
+nonTrapR5 | 0.753 | 0.803 | -5.1 | [-6.5, -3.6] | [-7.0, -3.0] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- R4a
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/r4:full --b C:/Users/skf_s/hippo-mech-runs/r3/r4:bm25-static --seeds 141-160
+A=C:/Users/skf_s/hippo-mech-runs/r3/r4:full  B=C:/Users/skf_s/hippo-mech-runs/r3/r4:bm25-static  seeds=141..160 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.892 | 0.775 | 11.8 | [10.4, 13.2] | [9.9, 13.7] | 20
+mrr | 0.608 | 0.401 | 20.7 | [19.5, 21.9] | [19.1, 22.3] | 20
+staleIntrusionRate | 0.936 | 0.901 | 3.5 | [1.8, 5.3] | [1.3, 5.8] | 20
+trapPersistenceRate | 0.000 | 0.723 | -72.3 | [-76.7, -68.0] | [-77.8, -66.7] | 20
+contraIntrusionRate | 0.195 | 0.000 | 19.5 | [15.2, 24.0] | [13.8, 25.5] | 20
+hotR5 | 0.910 | 0.778 | 13.2 | [10.6, 15.9] | [9.7, 16.7] | 20
+cleanStaleR5 | 0.063 | 0.095 | -3.2 | [-4.9, -1.5] | [-5.5, -0.9] | 20
+nonStaleR5 | 0.850 | 0.764 | 8.5 | [6.5, 10.6] | [5.9, 11.3] | 20
+cleanTrapR5 | 0.887 | 0.219 | 66.8 | [62.3, 71.1] | [60.9, 72.6] | 20
+nonTrapR5 | 0.893 | 0.785 | 10.8 | [9.3, 12.4] | [8.8, 12.8] | 20
+break-even superseded share s* (A wins below it) = 72.7% [61.1, 86.0] | [57.8, 91.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- R4b
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/r4:full --b C:/Users/skf_s/hippo-mech-runs/r3/r4:bm25-newest --seeds 141-160
+A=C:/Users/skf_s/hippo-mech-runs/r3/r4:full  B=C:/Users/skf_s/hippo-mech-runs/r3/r4:bm25-newest  seeds=141..160 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.892 | 0.798 | 9.4 | [8.2, 10.6] | [7.8, 11.1] | 20
+mrr | 0.608 | 0.479 | 13.0 | [12.0, 14.0] | [11.7, 14.3] | 20
+staleIntrusionRate | 0.936 | 0.895 | 4.1 | [2.5, 5.8] | [2.0, 6.4] | 20
+trapPersistenceRate | 0.000 | 0.784 | -78.4 | [-82.1, -74.6] | [-83.2, -73.3] | 20
+contraIntrusionRate | 0.195 | 0.000 | 19.5 | [15.2, 24.0] | [13.8, 25.5] | 20
+hotR5 | 0.910 | 0.808 | 10.2 | [8.1, 12.5] | [7.4, 13.2] | 20
+cleanStaleR5 | 0.063 | 0.100 | -3.8 | [-5.4, -2.1] | [-6.0, -1.6] | 20
+nonStaleR5 | 0.850 | 0.759 | 9.1 | [7.3, 11.0] | [6.7, 11.6] | 20
+cleanTrapR5 | 0.887 | 0.177 | 71.0 | [66.7, 75.0] | [65.2, 76.2] | 20
+nonTrapR5 | 0.893 | 0.809 | 8.4 | [7.2, 9.7] | [6.8, 10.1] | 20
+break-even superseded share s* (A wins below it) = 70.8% [60.9, 81.6] | [58.0, 85.1]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- R4c
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/r4:full --b C:/Users/skf_s/hippo-mech-runs/r3/r4:bm25-outcome --seeds 141-160
+A=C:/Users/skf_s/hippo-mech-runs/r3/r4:full  B=C:/Users/skf_s/hippo-mech-runs/r3/r4:bm25-outcome  seeds=141..160 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.892 | 0.823 | 6.9 | [5.7, 8.2] | [5.3, 8.6] | 20
+mrr | 0.608 | 0.482 | 12.6 | [11.5, 13.8] | [11.1, 14.2] | 20
+staleIntrusionRate | 0.936 | 0.939 | -0.2 | [-1.6, 1.0] | [-2.1, 1.4] | 20
+trapPersistenceRate | 0.000 | 0.000 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+contraIntrusionRate | 0.195 | 0.000 | 19.5 | [15.2, 24.0] | [13.8, 25.5] | 20
+hotR5 | 0.910 | 0.829 | 8.1 | [5.9, 10.2] | [5.3, 10.9] | 20
+cleanStaleR5 | 0.063 | 0.060 | 0.3 | [-1.0, 1.7] | [-1.4, 2.1] | 20
+nonStaleR5 | 0.850 | 0.842 | 0.8 | [-0.9, 2.4] | [-1.4, 2.9] | 20
+cleanTrapR5 | 0.887 | 0.827 | 6.0 | [2.9, 9.1] | [1.8, 10.2] | 20
+nonTrapR5 | 0.893 | 0.822 | 7.1 | [5.8, 8.4] | [5.4, 8.7] | 20
+break-even superseded share s* (A wins below it) = 100.0% [0.0, 100.0] | [0.0, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+
+== No verdict: D1, split, drift
+-- D1
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/main:all-off --b C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static --seeds 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:all-off  B=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.701 | 0.769 | -6.8 | [-8.4, -5.2] | [-8.9, -4.7] | 20
+mrr | 0.322 | 0.401 | -7.8 | [-9.1, -6.6] | [-9.5, -6.2] | 20
+staleIntrusionRate | 0.832 | 0.906 | -7.4 | [-9.5, -5.4] | [-10.1, -4.8] | 20
+trapPersistenceRate | 0.778 | 0.719 | 5.9 | [2.3, 9.7] | [1.2, 10.8] | 20
+contraIntrusionRate | 0.057 | 0.000 | 5.7 | [3.3, 8.3] | [2.7, 9.3] | 20
+hotR5 | 0.707 | 0.770 | -6.3 | [-9.0, -3.6] | [-10.0, -2.8] | 20
+cleanStaleR5 | 0.155 | 0.086 | 6.9 | [4.8, 9.0] | [4.2, 9.7] | 20
+nonStaleR5 | 0.585 | 0.758 | -17.3 | [-19.5, -15.1] | [-20.2, -14.4] | 20
+cleanTrapR5 | 0.154 | 0.237 | -8.2 | [-11.8, -4.9] | [-13.0, -4.0] | 20
+nonTrapR5 | 0.712 | 0.777 | -6.5 | [-8.3, -4.7] | [-8.8, -4.3] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+-- C1 secondary
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs split C:/Users/skf_s/hippo-mech-runs/r3/main:full C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-static  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+updatedR5 | 0.873 | 0.787 | 8.6 | [6.5, 10.9] | [5.8, 11.6] | 20
+nonStaleR5 | 0.677 | 0.758 | -8.1 | [-10.1, -6.1] | [-10.7, -5.6] | 20
+[exit 0]
+-- C3 secondary
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs split C:/Users/skf_s/hippo-mech-runs/r3/main:full C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-outcome 121-140
+A=C:/Users/skf_s/hippo-mech-runs/r3/main:full  B=C:/Users/skf_s/hippo-mech-runs/r3/main:bm25-outcome  seeds=121..140 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+updatedR5 | 0.873 | 0.793 | 8.0 | [6.0, 10.2] | [5.2, 10.8] | 20
+nonStaleR5 | 0.677 | 0.838 | -16.1 | [-17.8, -14.4] | [-18.3, -13.9] | 20
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs diff C:/Users/skf_s/hippo-mech-runs/r3/drift:full C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:full 101-120
+seed 101: 18 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, nonStaleR5, probes
+seed 102: 16 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, nonStaleR5, probes
+seed 103: 17 of 20 epochs differ; final epoch fields that differ: mrr, trapPersistenceRate, probes
+seed 104: 17 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, contraIntrusionRate, hotR5, nonStaleR5, probes
+seed 105: 16 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 106: 17 of 20 epochs differ; final epoch fields that differ: mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+seed 107: 16 of 20 epochs differ; final epoch fields that differ: mrr, trapPersistenceRate, probes
+seed 108: 19 of 20 epochs differ; final epoch fields that differ: mrr, trapPersistenceRate, probes
+seed 109: 17 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, nonStaleR5, probes
+seed 110: 17 of 20 epochs differ; final epoch fields that differ: mrr, trapPersistenceRate, probes
+seed 111: 18 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, cleanStaleR5, nonStaleR5, probes
+seed 112: 18 of 20 epochs differ; final epoch fields that differ: mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+seed 113: 18 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, probes
+seed 114: 18 of 20 epochs differ; final epoch fields that differ: mrr, trapPersistenceRate, probes
+seed 115: 16 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, staleIntrusionRate, trapPersistenceRate, hotR5, cleanStaleR5, nonStaleR5, probes
+seed 116: 14 of 20 epochs differ; final epoch fields that differ: mrr, trapPersistenceRate, probes
+seed 117: 15 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, nonStaleR5, probes
+seed 118: 14 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, nonStaleR5, probes
+seed 119: 14 of 20 epochs differ; final epoch fields that differ: mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+seed 120: 15 of 20 epochs differ; final epoch fields that differ: mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+C:/Users/skf_s/hippo-mech-runs/r3/drift:full vs C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:full: identical on 0/20 seeds
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs diff C:/Users/skf_s/hippo-mech-runs/r3/drift:bm25-static C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-static 101-120
+seed 101: identical in every epoch
+seed 102: identical in every epoch
+seed 103: identical in every epoch
+seed 104: identical in every epoch
+seed 105: identical in every epoch
+seed 106: identical in every epoch
+seed 107: identical in every epoch
+seed 108: identical in every epoch
+seed 109: identical in every epoch
+seed 110: identical in every epoch
+seed 111: identical in every epoch
+seed 112: identical in every epoch
+seed 113: identical in every epoch
+seed 114: identical in every epoch
+seed 115: identical in every epoch
+seed 116: identical in every epoch
+seed 117: identical in every epoch
+seed 118: identical in every epoch
+seed 119: identical in every epoch
+seed 120: identical in every epoch
+C:/Users/skf_s/hippo-mech-runs/r3/drift:bm25-static vs C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-static: identical on 20/20 seeds
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs diff C:/Users/skf_s/hippo-mech-runs/r3/drift:bm25-outcome C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-outcome 101-120
+seed 101: identical in every epoch
+seed 102: identical in every epoch
+seed 103: identical in every epoch
+seed 104: identical in every epoch
+seed 105: identical in every epoch
+seed 106: identical in every epoch
+seed 107: identical in every epoch
+seed 108: identical in every epoch
+seed 109: identical in every epoch
+seed 110: identical in every epoch
+seed 111: identical in every epoch
+seed 112: identical in every epoch
+seed 113: identical in every epoch
+seed 114: identical in every epoch
+seed 115: identical in every epoch
+seed 116: identical in every epoch
+seed 117: identical in every epoch
+seed 118: identical in every epoch
+seed 119: identical in every epoch
+seed 120: identical in every epoch
+C:/Users/skf_s/hippo-mech-runs/r3/drift:bm25-outcome vs C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-outcome: identical on 20/20 seeds
+[exit 0]
+
+$ node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/64af170a-564a-4890-82b8-cd4b49a4fc7c/scratchpad/lock04/scripts/e1-lifecycle/confirm-check.mjs diff C:/Users/skf_s/hippo-mech-runs/r3/drift:recency-off C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:recency-off 101-120
+seed 101: 18 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 102: 16 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, probes
+seed 103: 17 of 20 epochs differ; final epoch fields that differ: staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+seed 104: 16 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 105: 14 of 20 epochs differ; final epoch fields that differ: 
+seed 106: 17 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 107: 16 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, probes
+seed 108: 17 of 20 epochs differ; final epoch fields that differ: 
+seed 109: 16 of 20 epochs differ; final epoch fields that differ: staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+seed 110: 16 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 111: 18 of 20 epochs differ; final epoch fields that differ: mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, probes
+seed 112: 18 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 113: 18 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, nonStaleR5, probes
+seed 114: 16 of 20 epochs differ; final epoch fields that differ: 
+seed 115: 16 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, trapPersistenceRate, probes
+seed 116: 14 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 117: 14 of 20 epochs differ; final epoch fields that differ: 
+seed 118: 14 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+seed 119: 14 of 20 epochs differ; final epoch fields that differ: currentR5, mrr, staleIntrusionRate, trapPersistenceRate, cleanStaleR5, nonStaleR5, probes
+seed 120: 15 of 20 epochs differ; final epoch fields that differ: trapPersistenceRate, probes
+C:/Users/skf_s/hippo-mech-runs/r3/drift:recency-off vs C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:recency-off: identical on 0/20 seeds
+[exit 0]
+-- drift
+
+$ node C:/Users/skf_s/hippo-wt-r3run3/scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r3/drift:full --b C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:full --seeds 101-120
+A=C:/Users/skf_s/hippo-mech-runs/r3/drift:full  B=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:full  seeds=101..120 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.755 | 0.753 | 0.2 | [-0.0, 0.4] | [-0.1, 0.5] | 20
+mrr | 0.370 | 0.369 | 0.1 | [0.1, 0.2] | [0.1, 0.2] | 20
+staleIntrusionRate | 0.885 | 0.882 | 0.3 | [0.0, 0.6] | [0.0, 0.7] | 20
+trapPersistenceRate | 0.000 | 0.198 | -19.8 | [-23.4, -16.1] | [-24.6, -15.0] | 20
+contraIntrusionRate | 0.077 | 0.075 | 0.2 | [0.0, 0.8] | [0.0, 1.0] | 20
+hotR5 | 0.766 | 0.765 | 0.1 | [0.0, 0.4] | [0.0, 0.6] | 20
+cleanStaleR5 | 0.105 | 0.107 | -0.2 | [-0.6, 0.0] | [-0.7, 0.1] | 20
+nonStaleR5 | 0.682 | 0.679 | 0.3 | [0.0, 0.5] | [-0.1, 0.6] | 20
+cleanTrapR5 | 0.752 | 0.609 | 14.3 | [11.3, 17.4] | [10.3, 18.4] | 20
+nonTrapR5 | 0.755 | 0.755 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+break-even superseded share s* (A wins below it) = 50.0% [0.0, 100.0] | [0.0, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+[exit 0]
+
+== Post-lock edit (d91bd51 changed confirm-check.mjs:122 from typeof to Number.isFinite)
+gates output identical under 04e1e6d and d91bd51
