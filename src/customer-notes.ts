@@ -25,7 +25,7 @@ import { writeEntry, assertTenantId } from './store.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
-import { loadConfig } from './config.js';
+import { objectHalfLifeDays } from './half-life-migration.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -202,7 +202,7 @@ export function saveCustomerNote(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'customer_note',
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
 

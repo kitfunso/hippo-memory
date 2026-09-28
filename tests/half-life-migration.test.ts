@@ -10,7 +10,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, writeEntry, readEntry, loadAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store.js';
+import { initStore, writeEntry, readEntry, loadAllEntries, replaceDetectedConflicts, listMemoryConflicts, resolveConflict, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store.js';
 import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration, LEGACY_TYPED_HALF_LIFE } from '../src/half-life-migration.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -306,5 +306,68 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     pinTo90(root, decision);
     expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ rescaled: 0, typed: 0 });
     expect(halfLifeOf(root, decision)).toBe(90);
+  });
+
+  it('keep the memory that lost a conflict, even when an odd recall count halves it onto the pinned shape, and move the winner', () => {
+    const root = store();
+    const loser = saveDecision(root, 'default', { decisionText: 'use Postgres for all new services' }).memoryId!;
+    const winner = saveDecision(root, 'default', { decisionText: 'use MySQL for all new services' }).memoryId!;
+    pinTo90(root, loser, 47);
+    pinTo90(root, winner);
+    replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
+    resolveConflict(root, listMemoryConflicts(root)[0]!.id, winner);
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    expect(halfLifeOf(root, loser)).toBe(92);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ typed: 1 });
+    expect(halfLifeOf(root, loser)).toBe(92);
+    expect(halfLifeOf(root, winner)).toBe(365);
+  });
+
+  it('keep both memories of a conflict resolved before the audit log named a winner', () => {
+    const root = store();
+    const a = saveDecision(root, 'default', { decisionText: 'use Postgres for all new services' }).memoryId!;
+    const b = saveDecision(root, 'default', { decisionText: 'use MySQL for all new services' }).memoryId!;
+    pinTo90(root, a, 1);
+    pinTo90(root, b);
+    const db = openHippoDb(root);
+    try {
+      db.prepare(`INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at) VALUES (?, ?, 'contradiction', 0.9, 'resolved', datetime('now'), datetime('now'))`).run(a, b);
+    } finally {
+      closeHippoDb(db);
+    }
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ typed: 0 });
+    expect(halfLifeOf(root, a)).toBe(92);
+    expect(halfLifeOf(root, b)).toBe(90);
+  });
+
+  it('written between the upgrade and the first sleep, stay on 90 days until it moves them, through a config change', () => {
+    const root = store();
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
+    migrateDefaultHalfLife(root, 30);
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    const plain = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: 30 });
+    writeEntry(root, plain);
+    const decision = saveDecision(root, 'default', { decisionText: 'use Postgres for all new services' }).memoryId!;
+    const recalled = saveDecision(root, 'default', { decisionText: 'use gRPC for internal APIs' }).memoryId!;
+    expect(halfLifeOf(root, decision)).toBe(90);
+    pinTo90(root, recalled, 40);
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 60 }));
+
+    expect(migrateDefaultHalfLife(root, 60)).toMatchObject({ from: 30, rescaled: 1, typed: 2 });
+    expect(halfLifeOf(root, decision)).toBe(60);
+    expect(halfLifeOf(root, recalled)).toBe(60 + 80);
+    expect(halfLifeOf(root, plain.id)).toBe(60);
+    expect(halfLifeOf(root, saveDecision(root, 'default', { decisionText: 'freeze deploys on Fridays' }).memoryId!)).toBe(60);
+  });
+
+  it('written to a store with no memories yet, take the configured default at once', () => {
+    const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hl-')), '.hippo');
+    dirs.push(path.dirname(root));
+    fs.mkdirSync(root);
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
+    expect(halfLifeOf(root, saveDecision(root, 'default', { decisionText: 'use Postgres for all new services' }).memoryId!)).toBe(30);
   });
 });

@@ -27,7 +27,7 @@ import { writeEntry, assertTenantId, RECALL_DEFAULT_DENY_SCOPES } from './store.
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
-import { loadConfig } from './config.js';
+import { objectHalfLifeDays } from './half-life-migration.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -228,7 +228,7 @@ export function saveProjectBrief(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'project_brief',
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
 

@@ -24,6 +24,7 @@ import { deriveHalfLife, type MemoryEntry } from './memory.js';
 import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 
 /** The base every store used before the base was recorded. */
 export const LEGACY_HALF_LIFE_BASE = 7;
@@ -93,6 +94,17 @@ function readBase(db: DatabaseSyncLike): number {
   return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
 }
 
+/** The base an object writer gives its memory: the flat 90 days until this store's typed migration has run, which then moves them, and the default after. */
+export function objectHalfLifeDays(hippoRoot: string): number {
+  // SHORTCUT: read outside the write's transaction, so a write racing the typed migration keeps 90; read inside writeEntry if that ever matters.
+  const db = openStore(hippoRoot);
+  try {
+    return getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '' ? LEGACY_TYPED_HALF_LIFE : loadConfig(hippoRoot).defaultHalfLifeDays;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /**
  * Move the store's memories from the base they are on, and those of objects from
  * the old flat 90 days, to `to`, once. Under `dryRun` nothing is written, the recorded
@@ -114,11 +126,12 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
       }
       const all = selectAllEntries(db);
       const objects = typedPending ? objectMemoryIds(db) : { all: new Set<string>(), retired: new Set<string>() };
+      const losers = typedPending ? conflictLosers(db) : new Set<string>();
       const copies = new Set(all.flatMap((e) => (e.superseded_by ? [e.superseded_by] : [])));
       // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the source). Shape decides the rest.
       const objectWritten = (e: MemoryEntry) =>
         objects.all.has(e.id) || (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
-      const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => objectWritten(e) && !objects.retired.has(e.id)), to) : [];
+      const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => objectWritten(e) && !objects.retired.has(e.id) && !losers.has(e.id)), to) : [];
       const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !objectWritten(e)) : all, from, to);
       const plan = [...basePlan, ...typedPlan];
       const halfLives = new Map(plan.map((e) => [e.id, e.half_life_days]));
@@ -155,6 +168,18 @@ function objectMemoryIds(db: DatabaseSyncLike) {
     }
   }
   return { all, retired };
+}
+
+/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (before v1.31.0, or found stale) names no winner, so both sides count. */
+function conflictLosers(db: DatabaseSyncLike): Set<string> {
+  // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta in store.ts).
+  const audited = db.prepare(`SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId FROM audit_log WHERE op = 'conflict_resolve'`).all() as { conflictId: number; loserId: string }[];
+  const losers = new Set(audited.map((a) => a.loserId));
+  const named = new Set(audited.map((a) => a.conflictId));
+  // SAFETY: SELECT of three columns of resolved conflicts.
+  const resolved = db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as { id: number; memory_a_id: string; memory_b_id: string }[];
+  for (const c of resolved) if (!named.has(c.id)) losers.add(c.memory_a_id).add(c.memory_b_id);
+  return losers;
 }
 
 /** Writes `plan`, then one audit event per tenant with each id's old half-life, so the move can be undone. */

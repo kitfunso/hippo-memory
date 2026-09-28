@@ -29,7 +29,7 @@ import { writeEntry, assertTenantId } from './store.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
-import { loadConfig } from './config.js';
+import { objectHalfLifeDays } from './half-life-migration.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -128,7 +128,7 @@ const DECISION_COLS = `
  *
  * The memory mirror preserves the legacy `hippo decide` shape: tags
  * ['decision', ...extraTags], source 'decision', confidence 'verified',
- * the store's default half-life, content = "<text>\n\nContext: <context>"
+ * the half-life objectHalfLifeDays picks, content = "<text>\n\nContext: <context>"
  * when context is given (so existing recall output is unchanged).
  */
 export function saveDecision(
@@ -150,7 +150,7 @@ export function saveDecision(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'decision',
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
 
