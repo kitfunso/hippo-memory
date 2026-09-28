@@ -26,6 +26,7 @@ import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
+import { duplicateKey, storedTextKeys } from './same-text.js';
 
 /**
  * Returns the path to the global Hippo store.
@@ -150,7 +151,7 @@ export function searchBoth(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = r.entry.content.slice(0, 200).toLowerCase();
+    const key = duplicateKey(r.entry.content);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -300,7 +301,7 @@ export async function searchBothHybrid(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = r.entry.content.slice(0, 200).toLowerCase();
+    const key = duplicateKey(r.entry.content);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -543,9 +544,7 @@ export function autoShare(
   const globalEntries = loadAllEntries(globalRoot);
 
   // Build set of global content hashes to avoid duplicates
-  const globalContentSet = new Set(
-    globalEntries.map((e) => e.content.toLowerCase().trim().slice(0, 200))
-  );
+  const globalContentSet = storedTextKeys(globalEntries);
 
   const candidates = localEntries.filter((entry) => {
     // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
@@ -558,9 +557,8 @@ export function autoShare(
     const score = transferScore(entry);
     if (score < minScore) return false;
 
-    // Skip if already shared (approximate content match)
-    const contentKey = entry.content.toLowerCase().trim().slice(0, 200);
-    if (globalContentSet.has(contentKey)) return false;
+    // Skip if already shared (same text apart from spacing)
+    if (globalContentSet.has(duplicateKey(entry.content))) return false;
 
     // v39 S4 producer veto: secret rows never auto-share, regardless of
     // transfer score. (shareMemory would throw; filtering here keeps the

@@ -161,11 +161,11 @@ import {
   captureError,
   extractLessons,
   partitionLessons,
-  deduplicateLesson,
   runWatched,
   fetchGitLog,
   isGitRepo,
 } from './autolearn.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
 import { realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
@@ -1831,6 +1831,9 @@ async function cmdRecall(
   if (limit < results.length) {
     results = results.slice(0, limit);
   }
+  const beforeHeldCopies = results.length; // runs on the final list: a merged row cut earlier must not hide its sources
+  results = dropHeldCopies(results, (r) => r.entry);
+  droppedPreRankCountCmd += beforeHeldCopies - results.length;
   const droppedByBudgetCountCmd = Math.max(
     0,
     totalCandidatesCountCmd + graphAddedCountCmd - droppedPreRankCountCmd - results.length,
@@ -2462,6 +2465,7 @@ async function cmdExplain(
   if (limit < results.length) {
     results = results.slice(0, limit);
   }
+  results = dropHeldCopies(results, (r) => r.entry);
 
   const candidates = explainLocalEntries.length + explainGlobalEntries.length;
 
@@ -3007,7 +3011,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
 
   if (memoryDirs.length === 0) return 0;
 
-  const existing = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const keys = storedTextKeys(loadAllEntries(hippoRoot, resolveTenantId({})));
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   let imported = 0;
   let skippedSecret = 0;
@@ -3043,12 +3047,8 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           continue;
         }
 
-        // Dedup: check if substantially similar content already exists
-        const isDup = existing.some(e => {
-          const overlap = textOverlap(content.slice(0, 200), e.content.slice(0, 200));
-          return overlap > 0.6;
-        });
-        if (isDup) continue;
+        // Dedup: skip only when the same text is already stored
+        if (keys.has(duplicateKey(content))) continue;
 
         const entry = createMemory(content, {
           layer: Layer.Episodic,
@@ -3068,7 +3068,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           }
           throw err;
         }
-        existing.push(entry); // prevent self-dedup within batch
+        keys.add(duplicateKey(content)); // prevent self-dedup within batch
         imported++;
       }
     } catch { /* skip broken dirs */ }
@@ -7577,7 +7577,7 @@ function learnFromRepo(
   // parsed lesson with the gate on the write alone.
   //
   // Round 2 then found the cure was worse. STORAGE is what makes invalidation
-  // idempotent here: a stored lesson is recognised by deduplicateLesson on
+  // idempotent here: a stored lesson is recognised by its same-text key on
   // the next scan and short-circuits before invalidating again. A lesson that
   // invalidates but is never stored has no such record, so every rescan
   // re-invalidates, and invalidateMatching halves half_life_days each time.
@@ -7606,10 +7606,10 @@ function learnFromRepo(
   let rejected = 0;
   const gitLearnTags = ['error', 'git-learned'];
   const existingForSchema = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const keys = storedTextKeys(existingForSchema);
 
   for (const lesson of lessons) {
-    // The array overload ignores the tenant arg; existingForSchema is already scoped.
-    if (deduplicateLesson(existingForSchema, lesson, 0.7, resolveTenantId({}))) {
+    if (keys.has(duplicateKey(lesson))) {
       skipped++;
       continue;
     }
@@ -7650,6 +7650,7 @@ function learnFromRepo(
       throw err;
     }
     updateStats(hippoRoot, { remembered: 1 });
+    keys.add(duplicateKey(lesson));
 
     if (isEmbeddingConfigured(hippoRoot)) {
       embedMemory(hippoRoot, entry).catch(() => {});

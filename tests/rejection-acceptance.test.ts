@@ -399,7 +399,7 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
       const db = openHippoDb(home);
       try {
@@ -595,7 +595,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in 'tenant-a' — the cluster's own tenant, and (post
@@ -650,7 +650,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}\n\n${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in an unrelated tenant ('default') — the write now

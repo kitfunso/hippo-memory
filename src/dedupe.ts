@@ -26,6 +26,7 @@ import { loadAllEntries, deleteEntry } from './store.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
+import { duplicateKey } from './same-text.js';
 
 export interface DedupPair {
   kept: string;
@@ -138,7 +139,7 @@ export function deduplicateStore(
       return compareEntryIdentity(a, b);
     });
 
-    const texts = tenantEntries.map((e) => e.content.replace(/\s+/g, ' ').trim());
+    const texts = tenantEntries.map((e) => duplicateKey(e.content));
     for (let i = 0; i < tenantEntries.length; i++) {
       if (removed.has(tenantEntries[i].id)) continue;
       for (let j = i + 1; j < tenantEntries.length; j++) {

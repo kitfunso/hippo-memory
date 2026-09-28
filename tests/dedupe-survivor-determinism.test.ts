@@ -288,8 +288,8 @@ describe('dedupe survivor determinism', () => {
           (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories]'),
         );
         expect(semantics.length).toBe(1);
-        // Content shape: '[Consolidated from 2 related memories]\n\n<base>'.
-        bases.push(semantics[0].content.split('\n\n')[1]);
+        // Content shape: '[Consolidated from 2 related memories]\n\n- <base>\n- <other>'.
+        bases.push(semantics[0].content.split('\n\n')[1].split('\n')[0]);
       } finally {
         restore();
       }
@@ -297,7 +297,7 @@ describe('dedupe survivor determinism', () => {
 
     expect(bases[0]).toBe(bases[1]);
     // content asc tie key: the lexicographically smaller content is the base.
-    expect(bases[0]).toBe(contentAlpha);
+    expect(bases[0]).toBe(`- ${contentAlpha}`);
   });
 
   it('8. strengthBucket maps non-finite strength to bucket 0 and the assembled comparator chain never returns NaN', () => {
@@ -417,15 +417,18 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: length desc -> content asc)', async () => {
-    // Guards: a future VARIANT_* edit that breaks the length tie/non-tie shape fails here loudly.
-    expect(VARIANT_A.length).toBe(VARIANT_C.length);
-    expect(VARIANT_B.length).toBeLessThan(VARIANT_A.length);
+    // Distinct texts, one word swapped each: the merge writes each distinct text once, so the spacing-only VARIANT_* would make one bullet.
+    const textA = 'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textB = 'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textC = 'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
+    expect(textA.length).toBe(textC.length);
+    expect(textB.length).toBeLessThan(textA.length);
 
     const now = new Date();
     const variants = [
-      { content: VARIANT_A, tags: ['t-a'] },
-      { content: VARIANT_B, tags: ['t-b'] },
-      { content: VARIANT_C, tags: ['t-c'] },
+      { content: textA, tags: ['t-a'] },
+      { content: textB, tags: ['t-b'] },
+      { content: textC, tags: ['t-c'] },
     ];
     const expectedOrder = [...variants].sort(
       (a, b) => b.content.length - a.content.length || (a.content < b.content ? -1 : a.content > b.content ? 1 : 0),

@@ -22,8 +22,9 @@ import {
   traceExistsForSession,
   listSessionEvents,
 } from './store.js';
-import { textOverlap, markRetrieved } from './search.js';
+import { textOverlap, markRetrieved, tokenize } from './search.js';
 import { compareEntryIdentity } from './compare.js';
+import { duplicateKey } from './same-text.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { rejectionDigest, findRejectedValue } from './rejection.js';
 import { countExpiredDormant, purgeExpiredDormant, type DormantMove } from './dormant.js';
@@ -44,6 +45,8 @@ import { isQuarantineScope } from './quarantine.js';
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
+const MERGE_MAX_SOURCES = 5;            // with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context budget
+const MERGE_MAX_CHARS = 2000;           // total source text; sources past either cap stay unmerged and keep their half-life
 // Half-life scale for merged source episodics. Demotion must go through
 // half_life_days: calculateStrength() recomputes live strength from
 // last_retrieved/half_life and never reads the stored strength field, so a
@@ -777,7 +780,8 @@ export async function consolidate(
   // -------------------------------------------------------------------------
   const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
   const mergeCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted') && !alreadyMergedIds.has(e.id),
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted') && !alreadyMergedIds.has(e.id)
+      && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
   );
   const used = new Set<string>();
 
@@ -809,16 +813,24 @@ export async function consolidate(
     const mergeTenant = tenantCandidates[0].tenantId;
     const mergeScope = derivationScope(tenantCandidates[0].scope);
     for (let i = 0; i < tenantCandidates.length; i++) {
-      if (used.has(tenantCandidates[i].id)) continue;
+      if (used.has(tenantCandidates[i].id) || tenantCandidates[i].content.length > MERGE_MAX_CHARS) continue;
 
-      const cluster: MemoryEntry[] = [tenantCandidates[i]];
+      const related: MemoryEntry[] = [tenantCandidates[i]];
 
       for (let j = i + 1; j < tenantCandidates.length; j++) {
         if (used.has(tenantCandidates[j].id)) continue;
         const overlap = textOverlap(tenantCandidates[i].content, tenantCandidates[j].content);
         if (overlap >= MERGE_OVERLAP_THRESHOLD) {
-          cluster.push(tenantCandidates[j]);
+          related.push(tenantCandidates[j]);
         }
+      }
+
+      const cluster: MemoryEntry[] = [];
+      let clusterChars = 0;
+      for (const e of related) {
+        if (cluster.length === MERGE_MAX_SOURCES || clusterChars + e.content.length > MERGE_MAX_CHARS) continue;
+        cluster.push(e);
+        clusterChars += e.content.length;
       }
 
       if (cluster.length < MERGE_MIN_CLUSTER) continue;
@@ -863,13 +875,16 @@ export async function consolidate(
       // the tombstone is lifted.
       const consolidateDb = getConsolidateDb();
       if (consolidateDb && semantic) {
-        const mergeDigest = rejectionDigest(semantic.content);
-        const tombstone = findRejectedValue(consolidateDb, semantic.tenantId, mergeDigest);
+        const newDigest = rejectionDigest(semantic.content);
+        const oldDigest = rejectionDigest(legacyMergeContents(related)); // tombstones from older releases hold this format's digest
+        const newHit = findRejectedValue(consolidateDb, semantic.tenantId, newDigest);
+        const tombstone = newHit ?? findRejectedValue(consolidateDb, semantic.tenantId, oldDigest);
+        const mergeDigest = newHit ? newDigest : oldDigest;
         if (tombstone) {
           // Still mark used — these members are not re-tried against a
           // DIFFERENT cluster within this same pass; next sleep re-clusters
           // them fresh.
-          for (const e of cluster) used.add(e.id);
+          for (const e of related) used.add(e.id);
           mergesSkippedRejected++;
           try {
             appendAuditEvent(consolidateDb, {
@@ -879,7 +894,7 @@ export async function consolidate(
               metadata: {
                 digest: mergeDigest,
                 reason: tombstone.reason,
-                sourceIds: cluster.map((e) => e.id),
+                sourceIds: related.map((e) => e.id),
               },
             });
           } catch {
@@ -1041,15 +1056,22 @@ export async function consolidate(
 // ---------------------------------------------------------------------------
 
 function mergeContents(entries: MemoryEntry[]): string {
-  // Every source's full text goes in: the merge demotes all of them, so text left out would fade with its source.
+  // Each distinct text goes in once and in full (the merge demotes every source), one bullet with its lines indented, so heldTextKeys can read it back.
   // Length desc, then compareEntryIdentity, keeps the row and its rejection digest byte-identical across ingest orders.
   const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
-
-  if (entries.length === 2) {
-    return `[Consolidated from ${entries.length} related memories]\n\n${sorted.map((e) => e.content).join('\n\n')}`;
+  const texts = new Map<string, string>();
+  for (const e of sorted) {
+    if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content.trim().replace(/\n/g, '\n  '));
   }
+  const header = entries.length === 2 ? '[Consolidated from 2 related memories]' : `[Consolidated pattern from ${entries.length} related memories]`;
+  return `${header}\n\n${[...texts.values()].map((t) => `- ${t}`).join('\n')}`;
+}
 
-  const bullets = sorted.map((e) => `- ${e.content}`).join('\n');
+function legacyMergeContents(entries: MemoryEntry[]): string {
+  // The old format dropped text, so it is only ever digested to match rejections recorded against it, never written.
+  const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
+  if (entries.length === 2) return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
+  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
 }
 

@@ -8,7 +8,7 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, Layer, MemoryEntry } from './memory.js';
 import { initStore, loadAllEntries, writeEntry } from './store.js';
-import { textOverlap } from './search.js';
+import { duplicateKey, storedTextKeys } from './same-text.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -90,10 +90,10 @@ export function importEntries(
     initGlobal();
   }
 
-  const existing = loadAllEntries(
+  const keys = storedTextKeys(loadAllEntries(
     targetRoot,
     options.global ? undefined : options.tenantId,
-  );
+  ));
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
 
@@ -125,16 +125,8 @@ export function importEntries(
 
       total++;
 
-      // Dedup check: textOverlap > 0.7 with any existing memory = skip
-      let isDuplicate = false;
-      for (const existing_entry of existing) {
-        if (textOverlap(chunk, existing_entry.content) > 0.7) {
-          isDuplicate = true;
-          break;
-        }
-      }
-
-      if (isDuplicate) {
+      // Dedup check: skip only when the same text is already stored
+      if (keys.has(duplicateKey(chunk))) {
         skipped++;
         continue;
       }
@@ -184,7 +176,7 @@ export function importEntries(
           throw err;
         }
         // Add to existing so subsequent chunks dedup against freshly imported ones
-        existing.push(entry);
+        keys.add(duplicateKey(chunk));
       }
 
       entries.push(entry);

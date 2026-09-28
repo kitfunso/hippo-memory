@@ -23,7 +23,8 @@ import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, 
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
-import { fetchGitLog, extractLessons, partitionLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
+import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
@@ -644,6 +645,7 @@ async function executeTool(
         // never actually saw. Real MCP tracing is the reserved 'mcp'
         // pipeline value (schema v40) — a follow-up, not v1 scope.
         suppressRecallTrace: true,
+        keepHeldCopies: true,
         ...recallExtra,
       });
 
@@ -669,6 +671,7 @@ async function executeTool(
       let results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
+      results = dropHeldCopies(results, (r) => r.entry);
       // v1.12.13 / C5 — droppedByBudget for MCP is an UPPER BOUND. The
       // difference (entries.length - results.length) lumps three things
       // together: rows hybridSearch/physicsSearch internally dropped because
@@ -803,9 +806,10 @@ async function executeTool(
       // memories with zero mention of the dropped pool. Top-placement + plain-
       // English rewrite fixes the read-rate without any system-prompt addendum.
       const physicsIds = new Set(results.map((r) => r.entry.id));
-      const tailOrSummary = apiResult.results.filter(
-        (r) => (r.isFreshTail || r.isSummary) && !physicsIds.has(r.id),
-      );
+      const shownKeys = storedTextKeys(results.map((r) => r.entry));
+      const tailOrSummary = dropHeldCopies(apiResult.results.filter(
+        (r) => (r.isFreshTail || r.isSummary) && !physicsIds.has(r.id) && !shownKeys.has(duplicateKey(r.content)),
+      ), (r) => r);
       const freshTailAddedMcp = tailOrSummary.filter((r) => r.isFreshTail && !r.isSummary).length;
       const summarySubsAddedMcp = tailOrSummary.filter((r) => r.isSummary).length;
       // v0.33 / J1: suppressedByInterference bumped on MCP's R2 fire.
@@ -1152,9 +1156,9 @@ async function executeTool(
         return classifyOriginProject(e.origin_project, mcpProjectName) !== 'cross-project';
       });
       const usePhysicsCtx = config.physics?.enabled !== false;
-      const results = usePhysicsCtx
+      const results = dropHeldCopies(usePhysicsCtx
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
-        : await hybridSearch(query, entries, { budget, hippoRoot });
+        : await hybridSearch(query, entries, { budget, hippoRoot }), (r) => r.entry);
       const retrievedIds = results.map((r) => r.entry.id);
       strengthenRetrieved(hippoRoot, retrievedIds);
       lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
@@ -1229,8 +1233,9 @@ async function executeTool(
       let added = 0;
       let skipped = 0;
       let rejected = 0;
+      const keys = storedTextKeys(loadAllEntries(hippoRoot, tenantId));
       for (const lesson of lessons) {
-        if (deduplicateLesson(hippoRoot, lesson, 0.7, tenantId)) { skipped++; continue; }
+        if (keys.has(duplicateKey(lesson))) { skipped++; continue; }
         const entry = createMemory(lesson, {
           layer: Layer.Episodic,
           tags: ['git-learned'],
@@ -1247,6 +1252,7 @@ async function executeTool(
           if (err instanceof RejectedValueError) { rejected++; continue; }
           throw err;
         }
+        keys.add(duplicateKey(lesson));
         added++;
       }
       const rejectedSuffix = rejected > 0 ? `, ${rejected} rejected values skipped` : '';

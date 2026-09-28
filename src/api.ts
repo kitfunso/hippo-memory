@@ -99,6 +99,7 @@ import {
 import { applyGoalStackBoost } from './goals.js';
 import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
@@ -512,6 +513,7 @@ export interface RecallOpts {
    * callers leave this unset and get the trace.
    */
   suppressRecallTrace?: boolean;
+  keepHeldCopies?: boolean; // MCP sets this: it shows rows from its own scorer, so it drops copies from its own final list
 }
 
 export interface ContinuityBlock {
@@ -1000,6 +1002,13 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
       }));
     }
   }
+  if (!opts.keepHeldCopies) {
+    const shownIds = new Set(dropHeldCopies([...baseScored.map((r) => r.entry), ...substituted.map((s) => s.entry)], (e) => e).map((e) => e.id));
+    droppedPreRankCount += baseScored.filter((r) => !shownIds.has(r.entry.id)).length;
+    baseScored = baseScored.filter((r) => shownIds.has(r.entry.id));
+    baseSlice = baseScored.map((r) => r.entry);
+    substituted = substituted.filter((s) => shownIds.has(s.entry.id));
+  }
   // v1.12.13 / C5 — WYSIATI summary_substitutions_added counter.
   summarySubstitutionsCount = substituted.length;
 
@@ -1078,8 +1087,10 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
       ...baseRanked.map((r) => r.id),
       ...summaryRanked.map((r) => r.id),
     ]);
+    const shownKeys = storedTextKeys(opts.keepHeldCopies ? [] : [...baseSlice, ...substituted.map((s) => s.entry)]);
     for (const m of recentScoped) {
-      if (seenIds.has(m.id)) continue;
+      if (seenIds.has(m.id) || shownKeys.has(duplicateKey(m.content))) continue;
+      shownKeys.add(duplicateKey(m.content));
       const item: RecallResultItem = {
         id: m.id,
         content: m.content,
@@ -2986,8 +2997,9 @@ export async function getContext(
 
   if (limit < selectedItems.length) {
     selectedItems = selectedItems.slice(0, limit);
-    totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
+  selectedItems = dropHeldCopies(selectedItems, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
 
   // v39: annotate every returned entry with its origin and how it relates to
   // the active project, so renderers can demarcate cross-project inclusions.

@@ -11,7 +11,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { createMemory, Layer, MemoryEntry } from './memory.js';
+import { createMemory, Layer } from './memory.js';
+import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isContentWorthStoring } from './audit.js';
 import {
   isInitialized,
@@ -445,7 +446,7 @@ export function extractFromText(text: string): ExtractedItem[] {
   const seen = new Set<string>();
 
   const addIfNew = (item: ExtractedItem): void => {
-    const norm = item.content.toLowerCase().replace(/\s+/g, ' ').trim();
+    const norm = duplicateKey(item.content);
     if (seen.has(norm)) return;
     if (!isContentWorthStoring(item.content)) return;
     seen.add(norm);
@@ -476,27 +477,6 @@ export function extractFromText(text: string): ExtractedItem[] {
   }
 
   return items;
-}
-
-// ---------------------------------------------------------------------------
-// Normalisation for deduplication (mirrors import.ts)
-// ---------------------------------------------------------------------------
-
-function normalise(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function isDuplicate(content: string, existing: MemoryEntry[]): boolean {
-  const norm = normalise(content);
-  if (!norm) return true;
-  for (const e of existing) {
-    if (normalise(e.content) === norm) return true;
-  }
-  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -904,10 +884,10 @@ function cmdCaptureCore(
   // Load existing for dedup. L9: when options.tenantId is set on a non-global
   // capture, scope the dedup read so tenant A's captures don't get suppressed
   // by tenant B's existing content. Undefined preserves host-wide behaviour.
-  const existing = loadAllEntries(
+  const keys = storedTextKeys(loadAllEntries(
     targetRoot,
     useGlobal ? undefined : options.tenantId,
-  );
+  ));
 
   let captured = 0;
   let skipped = 0;
@@ -924,7 +904,7 @@ function cmdCaptureCore(
   const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
   try {
     for (const item of extracted) {
-      if (isDuplicate(item.content, existing)) {
+      if (keys.has(duplicateKey(item.content))) {
         skipped++;
         if (options.dryRun) {
           console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
@@ -978,7 +958,7 @@ function cmdCaptureCore(
           throw err;
         }
         updateStats(targetRoot, { remembered: 1 });
-        existing.push(entry); // within-batch dedup
+        keys.add(duplicateKey(item.content)); // within-batch dedup
 
         if (isEmbeddingConfigured(targetRoot)) {
           embedMemory(targetRoot, entry).catch(() => {});
