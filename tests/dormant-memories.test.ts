@@ -522,13 +522,32 @@ describe('memories that back a first-class object', () => {
     }
   });
 
+  it('sleep stops, retiring nothing, when it cannot read an object table', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-unreadable-', '{}');
+    try {
+      const faded = aged(createMemory('the old staging hostname was build-02', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 3000);
+      writeEntry(home, faded);
+      const db = openHippoDb(home);
+      try {
+        db.exec('ALTER TABLE incidents RENAME COLUMN memory_id TO memory_ref');
+      } finally {
+        closeHippoDb(db);
+      }
+
+      await expect(consolidate(home)).rejects.toThrow(/no such column/);
+      expect(loadAllEntries(home).map((e) => e.id)).toContain(faded.id);
+    } finally {
+      restore();
+    }
+  });
+
   it('covers every object table whose memory link a delete would null', () => {
     const { home, restore } = tmpHome('hippo-dormant-schema-', '{}');
     const db = openHippoDb(home);
     try {
       // SAFETY: each row is the single aliased TEXT column in the SELECT.
       const rows = db.prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
-        WHERE m.type = 'table' AND f."table" = 'memories' AND f."from" = 'memory_id' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
+        WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
       // Graph rows drop their memory pointer by design (src/db.ts, the entities and relations schema).
       const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());

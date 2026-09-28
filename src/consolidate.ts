@@ -146,8 +146,9 @@ function memoriesBackingObjects(hippoRoot: string): Set<string> {
         // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
         const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
         for (const r of rows) ids.add(r.memory_id);
-      } catch {
-        // Table not present in this schema version.
+      } catch (err) {
+        // A missing table is an older schema; any other error could hide a backing memory, so sleep stops.
+        if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
       }
     }
   } finally {
