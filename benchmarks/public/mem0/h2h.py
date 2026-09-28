@@ -58,6 +58,21 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in raw.split(b"\n") if line.strip()]
 
 
+def replies(log: Path) -> dict:
+    """A call log's replies by (tag, prompt hash), read only: every saved answer and verdict must come from one."""
+    raw = log.read_bytes() if log.exists() else b""
+    out = {}
+    for line in raw[:raw.rfind(b"\n") + 1].split(b"\n"):  # a record still being written is no reply yet
+        if line.strip() and (r := json.loads(line))["event"] == "ok":
+            out.setdefault((r["tag"], r["user"]), []).append(r["text"])
+    return out
+
+
+def answer_of(text: str) -> str:
+    """The runner's answer parse: the text after the last ANSWER:, else the whole reply."""
+    return text.rsplit("ANSWER:", 1)[-1].strip() if "ANSWER:" in text else text
+
+
 def records(path: Path, by) -> dict:
     """The file's records by key; a key seen twice means two runs wrote at once, so it stops."""
     out = {}
@@ -111,20 +126,27 @@ def answer_prompts(run: Path) -> dict:
     return prompts
 
 
-def answers_on_file(out: Path, prompts: dict) -> dict:
-    """The answers made so far, each checked to come from the prompt its retrieval file gives now, or stop."""
+def answers_on_file(run: Path, out: Path, prompts: dict) -> dict:
+    """The answers made so far, each checked to come from the prompt its retrieval file gives now and to be the answer
+    in a logged reply to that prompt, or stop."""
     answers = records(out / "answers.jsonl", lambda r: (r["arm"], r["cutoff"], r["qid"]))
-    stale = [k for k, r in answers.items() if k not in prompts or r.get("prompt") != sha(prompts[k][1])]
+    said = replies(run / "calls-answer.jsonl")
+
+    def logged(k: tuple, r: dict) -> bool:
+        return r.get("answer") in map(answer_of, said.get((f"answer {k[0]} {k[1]} {k[2]}", r["prompt"][:16]), []))
+
+    stale = [k for k, r in answers.items()
+             if k not in prompts or r.get("prompt") != sha(prompts[k][1]) or not logged(k, r)]
     if stale:
-        sys.exit(f"answers.jsonl holds {len(stale)} answers outside the design or made from other inputs, "
-                 f"e.g. {stale[0]}; move it aside and answer again")
+        sys.exit(f"answers.jsonl holds {len(stale)} answers outside the design, made from other inputs or not in the "
+                 f"call log, e.g. {stale[0]}; move it aside and answer again")
     return answers
 
 
 def all_answers(run: Path, out: Path) -> dict:
     """Exactly the answers the design calls for, or stop: a count alone can hide a missing answer behind a stray one."""
     prompts = answer_prompts(run)
-    answers = answers_on_file(out, prompts)
+    answers = answers_on_file(run, out, prompts)
     if set(answers) != set(prompts):
         sys.exit(f"answers: {len(set(prompts) - set(answers))} of {len(prompts)} missing")
     return answers
@@ -167,14 +189,21 @@ def judge_prompts(key: dict, answers: dict, data: list) -> dict:
     return prompts
 
 
-def verdicts_on_file(out: Path, prompts: dict) -> dict:
-    """The verdicts so far, each on the judge prompt as it is now and labelled CORRECT or WRONG, or stop."""
+def verdicts_on_file(run: Path, out: Path, prompts: dict) -> dict:
+    """The verdicts so far, each on the judge prompt as it is now, labelled CORRECT or WRONG, and read from a logged
+    reply to that prompt, or stop."""
     verdicts = records(out / "verdicts.jsonl", lambda r: r["id"])
+    said = replies(run / "calls-judge.jsonl")
+
+    def logged(j: str, v: dict) -> bool:
+        return {"label": v.get("label"), "reasoning": v.get("reasoning")} in map(
+            verdict, said.get((f"judge {j}", v["prompt"][:16]), []))
+
     bad = [j for j, v in verdicts.items()
-           if j not in prompts or v.get("prompt") != sha(prompts[j]) or v.get("label") not in LABELS]
+           if j not in prompts or v.get("prompt") != sha(prompts[j]) or v.get("label") not in LABELS or not logged(j, v)]
     if bad:
-        sys.exit(f"verdicts.jsonl holds {len(bad)} verdicts on other prompts or without a CORRECT or WRONG label, "
-                 f"e.g. {bad[0]}; judge again from an empty file")
+        sys.exit(f"verdicts.jsonl holds {len(bad)} verdicts on other prompts, without a CORRECT or WRONG label or not "
+                 f"read from the call log, e.g. {bad[0]}; judge again from an empty file")
     return verdicts
 
 
@@ -200,7 +229,7 @@ def run_all(jobs: list[tuple], fn, out: Path, slots: int) -> None:
 def answer(a: argparse.Namespace) -> None:
     check_gate(a.run)
     prompts = answer_prompts(a.run)
-    done = answers_on_file(a.out, prompts)
+    done = answers_on_file(a.run, a.out, prompts)
     jobs = [(arm, c, qid, n, prompt) for (arm, c, qid), (n, prompt) in prompts.items() if (arm, c, qid) not in done]
     random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits all three alike
     claude = Claude(a.run / "claude", a.run / "calls-answer.jsonl", a.slots)
@@ -208,10 +237,8 @@ def answer(a: argparse.Namespace) -> None:
     def one(job: tuple) -> dict:
         arm, c, qid, n, prompt = job
         r = claude.ask("", prompt, effort="medium", tag=f"answer {arm} {c} {qid}")
-        text = r["text"]
-        ans = text.rsplit("ANSWER:", 1)[-1].strip() if "ANSWER:" in text else text
         return {"arm": arm, "cutoff": c, "qid": qid, "memories": n, "prompt": sha(prompt), "tokens_in": tokens_in(r),
-                "answer": ans}
+                "answer": answer_of(r["text"])}
 
     print(f"{len(jobs)} answers to make, {len(done)} already made", flush=True)
     run_all(jobs, one, a.out / "answers.jsonl", a.slots)
@@ -225,10 +252,12 @@ def judge(a: argparse.Namespace) -> None:
         random.Random(7).shuffle(items)
         key = {f"j{i:05d}": {"arm": arm, "cutoff": c, "qid": qid, "sha": sha(answers[(arm, c, qid)]["answer"])}
                for i, (arm, c, qid) in enumerate(items)}
-        key_path.write_text(json.dumps(key, indent=0), encoding="utf-8")
+        tmp = key_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(key, indent=0), encoding="utf-8")
+        tmp.replace(key_path)  # whole or absent: a kill mid-write never leaves half a key
     key = judge_key(a.out, answers)
     prompts = judge_prompts(key, answers, data)
-    done = verdicts_on_file(a.out, prompts)
+    done = verdicts_on_file(a.run, a.out, prompts)
     jobs = [(jid, prompts[jid]) for jid in key if jid not in done]
     claude = Claude(a.run / "claude", a.run / "calls-judge.jsonl", a.slots)
 
@@ -272,7 +301,7 @@ def score(a: argparse.Namespace) -> None:
     check_gate(a.run)
     data, sample, answers = load(LOCOMO / "data" / "locomo10.json"), load(SAMPLE), all_answers(a.run, a.out)
     key = judge_key(a.out, answers)
-    verdicts = verdicts_on_file(a.out, judge_prompts(key, answers, data))
+    verdicts = verdicts_on_file(a.run, a.out, judge_prompts(key, answers, data))
     if set(verdicts) != set(key):
         sys.exit(f"{len(verdicts)} verdicts for {len(key)} keyed answers; never scored partial")
     metric = {"F1": f1_scores(answers, data),

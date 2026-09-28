@@ -29,6 +29,7 @@ SERVED = re.compile(r'"(\w+) (/[^ ?"]*)\S* HTTP/[\d.]+" (\d{3})')  # uvicorn's l
 # embedding (Ollama), a batch search (qdrant.py:394-396) and a batch insert of memories (main.py:686-692).
 REDONE = re.compile(r"\w+ 11434 /\S*|POST 6333 /collections/[^/]+/points/query/batch|PUT 6333 /collections/locomo_mem0/points")
 RECOVERED = "Batch search failed, falling back to sequential"  # qdrant.py:395, the batch search in REDONE
+QDRANT_BODY = "Raw response content:"  # qdrant_client puts an error's body on two more lines (exceptions.py:37-38)
 
 
 def fingerprint(ingest: Path) -> dict:
@@ -81,16 +82,33 @@ def post(url: str, body: dict) -> dict:
     return json.load(urllib.request.urlopen(req))["result"]
 
 
-def points(qdrant: str) -> list[dict]:
+def scroll(qdrant: str, collection: str, **body) -> list[dict]:
     out, offset = [], None
     while True:
-        res = post(f"{qdrant}/collections/{COLLECTION}/points/scroll", {
-            "limit": 1000, "with_payload": ["user_id", "data", "text_lemmatized", "hash", "attributed_to", "created_at"],
-            "with_vector": ["bm25"], "offset": offset})
+        res = post(f"{qdrant}/collections/{collection}/points/scroll", {"limit": 1000, "offset": offset, **body})
         out += res["points"]
         offset = res.get("next_page_offset")
         if offset is None:
             return out
+
+
+def points(qdrant: str) -> list[dict]:
+    return scroll(qdrant, COLLECTION, with_vector=["bm25"],
+                  with_payload=["user_id", "data", "text_lemmatized", "hash", "attributed_to", "created_at"])
+
+
+def alarms_in(lines: list[str]) -> list[str]:
+    """Lines holding an alarm word, less Mem0's recovery WARNING and the two body lines Qdrant's error text adds to it."""
+    out, skip = [], 0
+    for i, line in enumerate(lines):
+        if skip:
+            skip -= 1
+        elif RECOVERED in line:
+            body = [x.rstrip("\r") for x in lines[i + 1:i + 3]]
+            skip = 2 if len(body) == 2 and body[0] == QDRANT_BODY and body[1].startswith(("b'", 'b"')) else 0
+        elif ALARM.search(line):
+            out.append(line)
+    return out
 
 
 def logs(ingest: Path, turns: int, asked: int) -> tuple[list[tuple[bool, str]], list[list]]:
@@ -103,7 +121,7 @@ def logs(ingest: Path, turns: int, asked: int) -> tuple[list[tuple[bool, str]], 
     calls = [p for p in parsed if isinstance(p, list)]
     server = text_of(ingest / "server.log").split("\n")
     runner = re.split(r"[\r\n]+", text_of(ingest / "runner.log"))  # progress bars redraw with \r
-    alarms = [line for line in server + runner if ALARM.search(line) and RECOVERED not in line]
+    alarms = alarms_in(server) + alarms_in(runner)
     failed = [(f"{m[1]} {m[2]} {m[3]}", m[4]) for line in server if (m := UPSTREAM.search(line)) and m[4][0] != "2"]
     redone = Counter(req for req, _ in failed if REDONE.fullmatch(req))
     served = Counter(m.groups() for line in server if (m := SERVED.search(line)))
@@ -160,20 +178,35 @@ def questions(ingest: Path, data: list, users: dict, stored: dict) -> tuple[bool
             f"questions with none {n.count(0)}")
 
 
-def bm25_missing(pts: list[dict]) -> int:
-    """Memories stored without the BM25 terms their text encodes to; fastembed gives some texts, such as punctuation, none."""
-    bare = [p["payload"] for p in pts if not ((p.get("vector") or {}).get("bm25") or {}).get("indices")]
-    if not bare:
-        return 0
+def bm25_wrong(pts: list[dict]) -> int:
+    """Memories whose stored BM25 terms are not the ones their text encodes to, encoded as qdrant.py:182-186 does at
+    insert; fastembed gives some texts, such as punctuation, none."""
     from fastembed import SparseTextEmbedding
     encoder = SparseTextEmbedding(model_name="Qdrant/bm25")  # as qdrant.py:88 builds it, from the same model cache
-    return sum(len(e.indices) > 0 for e in encoder.embed([p.get("text_lemmatized") or p.get("data") or "" for p in bare]))
+    texts = [p["payload"].get("text_lemmatized") or p["payload"].get("data") or "" for p in pts]
+    wrong = 0
+    for p, e in zip(pts, encoder.embed(texts)):
+        got = (p.get("vector") or {}).get("bm25") or {}
+        have = dict(zip(got.get("indices") or [], got.get("values") or []))
+        want = dict(zip(e.indices.tolist(), e.values.tolist()))
+        wrong += have.keys() != want.keys() or any(abs(have[i] - v) > 1e-5 * max(1.0, abs(v)) for i, v in want.items())
+    return wrong
+
+
+def unlinked(qdrant: str, pts: list[dict]) -> int:
+    """Memories with entities that no entity links. Mem0 updates a matched entity from its search result, so two names
+    in one add that match the same entity keep only the second's new links (main.py:769-781), with no log."""
+    linked = {i for e in scroll(qdrant, f"{COLLECTION}_entities", with_payload=["linked_memory_ids"])
+              for i in e["payload"].get("linked_memory_ids") or []}
+    bare = [p for p in pts if p["id"] not in linked]
+    from mem0.utils.entity_extraction import extract_entities_batch  # as main.py:719 extracts them
+    return sum(bool(e) for e in extract_entities_batch([p["payload"].get("data") or "" for p in bare]))
 
 
 def store(qdrant: str, pts: list[dict], calls: list[list], users: dict, dates: dict) -> list[tuple[bool, str]]:
     """Qdrant against the replies: nothing stored that no reply gave, and nothing a reply gave lost without a log line."""
     pay = [p["payload"] for p in pts]
-    no_bm25 = bm25_missing(pts)
+    bad_bm25 = bm25_wrong(pts)
     per_user = Counter(p.get("user_id") for p in pay)
     bad_hash = sum(p.get("hash") != md5(p.get("data") or "") for p in pay)
     stored = Counter(p.get("hash") for p in pay)
@@ -198,9 +231,9 @@ def store(qdrant: str, pts: list[dict], calls: list[list], users: dict, dates: d
         "exact": True, "filter": {"must": [{"key": "user_id", "match": {"value": u}}]}})["count"]
         for u in sorted(set(users.values()) - {None})}
     return [
-        (no_bm25 == 0 and set(per_user) == set(users.values()) and not (bad_hash or unexplained or lost),
-         f"stored memories: {len(pay)}, without the BM25 terms their text encodes to {no_bm25}, hash not of its text "
-         f"{bad_hash}; stored more often than extracted {sum(unexplained.values())}, extracted but never stored "
+        (bad_bm25 == 0 and set(per_user) == set(users.values()) and not (bad_hash or unexplained or lost),
+         f"stored memories: {len(pay)}, with BM25 terms other than those their text encodes to {bad_bm25}, hash not "
+         f"of its text {bad_hash}; stored more often than extracted {sum(unexplained.values())}, extracted but never stored "
          f"{len(lost)}; per user {dict(sorted(per_user.items()))}"),
         (not (owners.count(set()) or undated or miscredited),
          f"per user: replies whose memories no one user holds {owners.count(set())}, memories not dated at a session "
@@ -210,7 +243,8 @@ def store(qdrant: str, pts: list[dict], calls: list[list], users: dict, dates: d
         (True, f"info: Mem0 skipped {sum(skipped.values())} extracted copies of {len(skipped)} texts as duplicates of "
                f"a stored copy; {sum(turns_of[h] > 1 for h in skipped)} of those texts came from more than one turn, "
                f"so a later turn's date may be lost; {sum(bool(said_by[h] - kept_by[h]) for h in skipped)} lost an "
-               f"attributed_to that no stored copy has"),
+               f"attributed_to that no stored copy has; memories with entities that no entity links "
+               f"{unlinked(qdrant, pts)}"),
     ]
 
 
@@ -245,9 +279,11 @@ def main() -> None:
     ok = all(passed for passed, _ in res)
     lines = [f"{'ok  ' if passed else 'FAIL'} {text}" for passed, text in res] + [f"GATE: {'PASS' if ok else 'FAIL'}"]
     print("\n".join(lines))
-    (ingest / "gate.json").write_text(json.dumps({
+    tmp = ingest / "gate.json.tmp"
+    tmp.write_text(json.dumps({
         "pass": ok, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "fingerprint": fingerprint(ingest), "lines": lines}, indent=1), encoding="utf-8")
+    tmp.replace(ingest / "gate.json")  # whole or absent: a kill mid-write never leaves half a gate
 
 
 if __name__ == "__main__":
