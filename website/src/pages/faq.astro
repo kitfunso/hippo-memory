@@ -1,0 +1,43 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import PageIntro from '../components/PageIntro.astro';
+import { faq, site } from '../content/site';
+import { faqPageLd, mdParagraphs } from '../content/readme';
+
+const title = 'hippo-memory FAQ: agent memory questions answered';
+const description = `${faq.length} answers about hippo: memory for Claude Code, Cursor and Codex, the MCP server, where your data lives, what it costs and what is not yet shown.`;
+// Stable per-question anchors, so an answer engine or a chat message can link one answer.
+const anchor = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+---
+
+<Base title={title} description={description} crumb="FAQ" schema={[faqPageLd(faq)]}>
+  <Nav />
+  <main id="main">
+    <PageIntro eyebrow="FAQ">
+      <Fragment slot="title">Questions about hippo, <span class="text-gradient">answered.</span></Fragment>
+      <p>
+        These are the answers in the
+        <a class="link" href={`${site.links.repo}#faq`} target="_blank" rel="noopener noreferrer">README's FAQ<span class="sr-only"> (opens in new tab)</span></a>,
+        word for word, so this page, GitHub and npm give the same answer.
+      </p>
+    </PageIntro>
+
+    <section class="relative border-t border-white/5" aria-label="Questions and answers">
+      <div class="mx-auto max-w-3xl px-5 py-16 sm:py-20">
+        {faq.map((item) => (
+          <article id={anchor(item.q)} class="scroll-mt-24 border-b border-white/5 py-8 first:pt-0 last:border-b-0">
+            <h2 class="text-xl leading-snug text-zinc-100 sm:text-2xl">
+              <a href={`#${anchor(item.q)}`} class="transition hover:text-acc-cyan">{item.q}</a>
+            </h2>
+            <div class="copy mt-4 space-y-3 leading-relaxed text-zinc-400">
+              {mdParagraphs(item.a).map((html) => <p set:html={html} />)}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Base>

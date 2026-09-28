@@ -1,5 +1,6 @@
 ---
 import { compare, comparison } from '../content/site';
+import { mdInline } from '../content/readme';
 
 // Color-code cells for scannability. All tones pass AA contrast on the dark table.
 function cellTone(v: string): string {
@@ -10,10 +11,9 @@ function cellTone(v: string): string {
   return 'text-zinc-300';
 }
 
-// Home shows a trimmed view: 6 differentiator rows x (Feature + hippo + 3 strongest
-// competitors). The FULL 10-tool data stays in `comparison` (README-verbatim,
-// build-gate-checked); the GitHub link below carries readers to it. Cells render
-// the short `display` verdict where one exists, else the verbatim cell.
+// Home shows 6 rows x 4 systems of the README table; the GitHub link carries readers to all 10.
+// A cell shows its short verdict, the README cell minus its parenthetical, keeping footnote marks.
+const shortVerdict = (cell: string) => cell.replace(/\s*\(([^)]*)\)/g, (_, inner: string) => inner.match(/\*+/)?.[0] ?? '');
 const homeSystems = ['Hippo', 'Mem0', 'gbrain', 'Zep'];
 const homeFeatures = [
   'Decay by default',
@@ -23,12 +23,17 @@ const homeFeatures = [
   'Zero runtime deps',
   'LongMemEval (best published)',
 ];
-const systems = homeSystems.map((n) => comparison.systems.find((s) => s.name === n)!);
-const sysIdx = homeSystems.map((n) => comparison.systems.findIndex((s) => s.name === n));
+// A README rename must fail the build here, not drop a column or row from the page.
+const sysIdx = homeSystems.map((n) => {
+  const i = comparison.systems.findIndex((s) => s.name === n);
+  if (i < 0) throw new Error(`README comparison has no "${n}" column`);
+  return i;
+});
+const systems = sysIdx.map((i) => comparison.systems[i]);
 const rows = homeFeatures.map((f) => {
-  const row = comparison.rows.find((r) => r.feature === f)!;
-  const all: readonly string[] = 'display' in row ? row.display : row.cells;
-  return { feature: row.feature, cells: sysIdx.map((i) => all[i]) };
+  const row = comparison.rows.find((r) => r.feature === f);
+  if (!row) throw new Error(`README comparison has no "${f}" row`);
+  return { feature: row.feature, cells: sysIdx.map((i) => shortVerdict(row.cells[i])) };
 });
 ---
 
@@ -107,7 +112,7 @@ const rows = homeFeatures.map((f) => {
     </p>
 
     <div class="mt-4 space-y-2" data-reveal>
-      {comparison.footnotes.map((f) => <p class="max-w-lg text-sm leading-relaxed text-zinc-400">{f}</p>)}
+      {comparison.footnotes.map((f) => <p class="copy max-w-lg text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
       <p class="max-w-lg text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
     </div>
 

@@ -1,22 +1,10 @@
 #!/usr/bin/env node
-/**
- * README <-> page drift guard.
- *
- * The landing page's comparison matrix (src/content/site.ts `comparison`) is a VERBATIM
- * copy of the README's #comparison table. This guard fails the build if a distinctive
- * comparison cell or a system name in site.ts is no longer present in README.md, so the
- * page cannot silently drift from the source of truth.
- *
- * Best-effort, not a parser: it text-extracts the cell/system string literals from
- * site.ts (no .ts import) and substring-checks them against the README's Comparison
- * section, after normalizing markdown backslash-escapes (e.g. `oracle\*` -> `oracle*`)
- * and collapsing whitespace. Trivial cells (Yes/No/?/N/A) are skipped - only distinctive
- * cells (with parens, %, or length > 6) are asserted. Receipt claim numbers are a WARN,
- * not a failure (README wording can legitimately change).
- */
+// README <-> site drift guard. The site reads the comparison table and the FAQ out of README.md at build,
+// so here they only have to parse; the checks after that cover copy that is still hand-written.
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { mdText, parseComparison, parseFaq } from '../src/content/readme-parse.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -24,30 +12,22 @@ const normalize = (s) => s.replace(/\\/g, '').replace(/\s+/g, ' ').trim();
 
 const readme = await readFile(join(root, '..', 'README.md'), 'utf8');
 const site = await readFile(join(root, 'src', 'content', 'site.ts'), 'utf8');
-
-// Scope to the README's Comparison section so common words don't match elsewhere.
-const cmpStart = readme.indexOf('## Comparison');
-const cmpEnd = cmpStart >= 0 ? readme.indexOf('\n## ', cmpStart + 3) : -1;
-const cmpNorm = normalize(cmpStart >= 0 ? readme.slice(cmpStart, cmpEnd > 0 ? cmpEnd : undefined) : readme);
 const readmeNorm = normalize(readme);
-
-// Extract comparison cell strings from every `cells: [ ... ]` array in site.ts.
-// Best-effort: [^\]]* assumes no cell literal contains a ']' (true today); a future cell
-// with ']' would truncate that row's extraction. The README remains the canonical source.
-const cells = [];
-for (const arr of site.match(/cells:\s*\[([^\]]*)\]/g) || []) {
-  for (const lit of arr.match(/'([^']*)'/g) || []) cells.push(lit.slice(1, -1));
-}
-// Extract system names from the `systems: [ ... ]` block.
-const sysBlock = (site.match(/systems:\s*\[([\s\S]*?)\],/) || [])[1] || '';
-const systems = (sysBlock.match(/name:\s*'([^']*)'/g) || []).map((m) => m.replace(/name:\s*'([^']*)'/, '$1'));
-
-// Only assert distinctive cells (skip trivial Yes/No/?/N/A that match anywhere).
-const distinctive = [...new Set(cells.filter((c) => c.length > 6 || c.includes('(') || c.includes('%')))];
-
 const missing = [];
-for (const c of distinctive) if (!cmpNorm.includes(normalize(c))) missing.push(`cell: "${c}"`);
-for (const s of systems) if (!cmpNorm.includes(normalize(s))) missing.push(`system: "${s}"`);
+
+let parsed = '';
+try {
+  const readmeLf = readme.replace(/\r\n/g, '\n');
+  const { systems, rows } = parseComparison(readmeLf);
+  const faq = parseFaq(readmeLf);
+  parsed = `${systems.length} systems x ${rows.length} comparison rows, ${faq.length} FAQ answers`;
+  // FAQPage JSON-LD carries these answers as plain text, so no markdown may survive mdText.
+  for (const { q, a } of faq) {
+    if (/`|\]\(|\*\*|__/.test(mdText(a))) missing.push(`faq: markdown left in the JSON-LD answer to "${q}"`);
+  }
+} catch (err) {
+  missing.push(`parse: ${err.message} (the site build reads this section)`);
+}
 
 // The test figure lives once in site.ts; the README and llms.txt must carry the same one.
 const testsFloor = (site.match(/^\s*tests:\s*'([^']+)'/m) || [])[1];
@@ -94,10 +74,10 @@ if (!/proofs\.map\(/.test(hero) || !/p\.text/.test(hero)) {
 }
 
 if (missing.length) {
-  console.error('[readme-sync] DRIFT: website entries missing from README.md (comparison cells vs #comparison, locomo rows vs ### LoCoMo):');
+  console.error('[readme-sync] DRIFT: website copy no longer matches README.md:');
   for (const m of missing) console.error('  - ' + m);
-  console.error('Fix: the README is the source of truth - update README.md and site.ts together.');
+  console.error('Fix: the README is the source of truth - update README.md and the site together.');
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: ${distinctive.length} distinctive cells + ${systems.length} systems match README #comparison; ${locoRows.length} LoCoMo rows match README ### LoCoMo.`);
+console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${locoRows.length} LoCoMo rows and the hero proofs match README.md.`);

@@ -1,0 +1,42 @@
+---
+// Hippo against one system, every row of the README comparison table, so a vs page cannot drift from it.
+import { comparison } from '../content/site';
+import { mdInline } from '../content/readme';
+
+interface Props {
+  system: string;
+}
+const { system } = Astro.props;
+const col = comparison.systems.findIndex((s) => s.name === system);
+if (col < 0) throw new Error(`README comparison has no "${system}" column`);
+const them = comparison.systems[col];
+const rows = comparison.rows.map((r) => ({ feature: r.feature, hippo: r.cells[0], them: r.cells[col] }));
+// Show a footnote only when a cell on this page carries its mark (* or **).
+const marks = new Set(rows.flatMap((r) => [r.hippo, r.them]).flatMap((c) => c.match(/\*+/g) ?? []));
+const footnotes = comparison.footnotes.filter((f) => marks.has((f.match(/^(?:\\\*)+/)?.[0] ?? '').replace(/\\/g, '')));
+---
+
+<div class="overflow-x-auto rounded-2xl border border-white/8">
+  <table class="w-full min-w-[520px] text-left text-sm">
+    <caption class="sr-only">hippo and {them.name}, row by row from the README comparison table</caption>
+    <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+      <tr>
+        <th scope="col" class="px-5 py-3 font-medium">Feature</th>
+        <th scope="col" class="px-5 py-3 font-medium text-zinc-200">hippo</th>
+        <th scope="col" class="px-5 py-3 font-medium">{them.name}</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-white/5">
+      {rows.map((r) => (
+        <tr class="align-top text-zinc-300">
+          <th scope="row" class="px-5 py-3 text-left font-normal text-zinc-400">{r.feature}</th>
+          <td class="px-5 py-3 font-medium text-zinc-100">{r.hippo}</td>
+          <td class="px-5 py-3">{r.them}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+<div class="mt-4 space-y-2">
+  {footnotes.map((f) => <p class="copy text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
+</div>

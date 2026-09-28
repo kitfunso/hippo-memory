@@ -1,24 +1,39 @@
 ---
 import { faq } from '../content/site';
+import { mdParagraphs } from '../content/readme';
+
+interface Props {
+  items?: ReadonlyArray<{ q: string; a: string }>;
+  heading?: string;
+  moreHref?: string;
+}
+const { items = faq, heading = 'Questions, answered.', moreHref } = Astro.props;
 ---
 
 <section id="faq" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
   <div class="mx-auto max-w-3xl px-5 py-24">
     <div>
       <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">FAQ</p>
-      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">Questions, answered.</h2>
+      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{heading}</h2>
     </div>
 
     <div class="mt-10 space-y-3" data-reveal>
-      {faq.map((item) => (
+      {items.map((item) => (
         <details class="group rounded-2xl glass px-6 [&>summary]:list-none">
           <summary class="flex cursor-pointer items-center justify-between gap-4 py-5 text-left text-base font-medium text-zinc-100">
             <span>{item.q}</span>
             <span class="shrink-0 text-xl leading-none text-acc-cyan transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
           </summary>
-          <p class="max-w-lg pb-5 text-sm leading-relaxed text-zinc-400">{item.a}</p>
+          <div class="copy max-w-2xl space-y-3 pb-5 text-sm leading-relaxed text-zinc-400">
+            {mdParagraphs(item.a).map((html) => <p set:html={html} />)}
+          </div>
         </details>
       ))}
     </div>
+    {moreHref && (
+      <p class="mt-8 text-sm">
+        <a class="link" href={moreHref}>All {faq.length} questions →</a>
+      </p>
+    )}
   </div>
 </section>

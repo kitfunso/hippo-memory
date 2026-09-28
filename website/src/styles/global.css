@@ -126,6 +126,23 @@ header.glass {
   text-decoration-color: var(--color-acc-cyan);
 }
 
+/* ---- inline code in long-form copy (README markdown and the content pages); long config strings wrap on phones ---- */
+.copy code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--color-zinc-200);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  overflow-wrap: anywhere;
+}
+.copy pre code {
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+}
+
 /* ---- current-page nav markers (aria-current set in Nav.astro) ---- */
 nav a[aria-current='page'] {
   color: var(--color-acc-cyan);

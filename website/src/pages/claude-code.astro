@@ -1,0 +1,130 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import PageIntro from '../components/PageIntro.astro';
+import Section from '../components/Section.astro';
+import Cmd from '../components/Cmd.astro';
+import Faq from '../components/Faq.astro';
+import { faqPick, site } from '../content/site';
+import { mdInline } from '../content/readme';
+
+const title = 'Claude Code memory between sessions | hippo-memory';
+const description =
+  'Persistent memory for Claude Code. hippo init adds hooks that keep pinned memories in context, save state before compaction and store failed tool calls.';
+
+// README "Framework Integrations": what `hippo init` adds to Claude Code's settings.
+const hooks = [
+  { event: 'SessionStart', does: "Prints what the previous session's `hippo sleep` consolidated." },
+  { event: 'UserPromptSubmit', does: 'Keeps your pinned memories and the last 5 writes in context. An unchanged block is skipped, and sent again after 10 skips or a compaction.' },
+  { event: 'PreCompact', does: 'Saves a snapshot of the task, a summary and the next step before the transcript is summarized.' },
+  { event: 'SessionStart (compact)', does: 'Prints that snapshot and the recent session trail back into context after compaction.' },
+  { event: 'PostCompact', does: 'Tells you what was saved, and prints nothing when nothing was.' },
+  { event: 'PostToolUseFailure', does: '`hippo capture-error` stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once.' },
+  { event: 'SessionEnd', does: 'Runs `hippo sleep`, which consolidates the store and imports new entries from Claude Code MEMORY.md files.' },
+];
+
+const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
+---
+
+<Base title={title} description={description} crumb="Claude Code" published="2026-09-28">
+  <Nav />
+  <main id="main">
+    <PageIntro eyebrow="Claude Code">
+      <Fragment slot="title">Claude Code memory <span class="text-gradient">between sessions</span></Fragment>
+      <p>
+        Claude Code loads two things into every session: the <code>CLAUDE.md</code> files you write and the auto memory
+        notes it writes itself. Hippo adds a store of lessons that carries over between sessions: what failed, what
+        fixed it, and which facts changed.
+      </p>
+      <p>
+        It recalls the lessons that match the task, keeps pinned ones in context, ranks the ones you mark wrong lower,
+        and leaves out the ones you replace. The store is SQLite in your project, with markdown mirrors you can read and commit.
+      </p>
+    </PageIntro>
+
+    <Section title="Set it up in two commands">
+      <Cmd lines={[site.installCmd, 'hippo init', '# optional: register every git repo under ~ at once', site.initCmd]} />
+      <p>
+        If the project has a <code>CLAUDE.md</code>, <code>hippo init</code> adds a short block telling Claude to run
+        <code>hippo context --auto</code> when a session starts, and adds the hooks below to Claude Code's settings. It
+        also installs one daily run at 6:15am that learns from the day's commits in every registered project.
+        <code>hippo init --no-hooks --no-schedule</code> skips both, and <code>hippo doctor</code> checks the install.
+      </p>
+    </Section>
+
+    <Section title="What the hooks do" alt>
+      <div class="overflow-x-auto rounded-2xl border border-white/8">
+        <table class="w-full min-w-[520px] text-left text-sm">
+          <caption class="sr-only">Claude Code hooks that hippo init installs</caption>
+          <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-medium">Hook</th>
+              <th scope="col" class="px-5 py-3 font-medium">What it does</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            {hooks.map((h) => (
+              <tr class="align-top">
+                <th scope="row" class="whitespace-nowrap px-5 py-3 text-left font-mono text-xs font-normal text-acc-cyan">{h.event}</th>
+                <td class="copy px-5 py-3 text-zinc-300" set:html={mdInline(h.does)} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The <a class="link" href={plugin} target="_blank" rel="noopener noreferrer">Claude Code plugin<span class="sr-only"> (opens in new tab)</span></a>
+        is the alternative to these hooks; use one, not both. <code>hippo hook uninstall claude-code</code> removes the hooks.
+      </p>
+    </Section>
+
+    <Section title="A mistakes file that maintains itself">
+      <p>
+        Some developers ask Claude Code to keep a <code>MISTAKES.md</code> file of what went wrong. Hippo keeps that record
+        for you. The <code>PostToolUseFailure</code> hook turns failed tool calls into error memories, and error memories
+        get twice the half-life of ordinary ones. You can add, correct and replace lessons yourself:
+      </p>
+      <Cmd
+        lines={[
+          'hippo remember "billing uses pnpm; never run npm install here" --error',
+          '# a recalled lesson was wrong:',
+          'hippo outcome --bad',
+          '# a fact changed:',
+          'hippo supersede mem_a1b2c3 "billing moved to bun"',
+          '# what the failure hook saw:',
+          'hippo failures',
+        ]}
+      />
+      <p>
+        Recall pulls the lessons that match the task, ranked by relevance, strength and recency, and a lesson marked wrong
+        drops out of the top results.
+      </p>
+    </Section>
+
+    <Section title="Memories you can read and commit" alt>
+      <p>
+        The store is SQLite: <code>.hippo/hippo.db</code> in each project, plus <code>~/.hippo/</code> for lessons shared
+        across projects. After each change hippo writes markdown mirrors beside it, so you can read, grep and commit what
+        your agent has learned. The same store serves Codex, Cursor and any MCP client, so a lesson Claude Code learned is
+        there when you switch tools.
+      </p>
+    </Section>
+
+    <Section title="MCP, and where CLAUDE.md fits">
+      <p>
+        <code>claude mcp add hippo-memory -- hippo mcp</code> gives Claude Code hippo's memory tools over MCP; the
+        <a class="link" href="/mcp/">MCP server page</a> lists them. Keep <code>CLAUDE.md</code> for short standing rules:
+        <a class="link" href="/vs/claude-memory/">CLAUDE.md vs memory</a> covers what goes where, and
+        <code>hippo import --claude CLAUDE.md</code> turns notes that piled up there into memories.
+      </p>
+    </Section>
+
+    <Faq
+      items={faqPick(['How do I give Claude Code memory between sessions?', 'Do I still need CLAUDE.md?', 'What happens when a memory turns out to be wrong?'])}
+      heading="Claude Code questions"
+      moreHref="/faq/"
+    />
+  </main>
+  <Footer />
+</Base>

@@ -1,0 +1,19 @@
+---
+// Header for the content pages: eyebrow, the h1 (named slot "title") and a lead paragraph or two.
+interface Props {
+  eyebrow: string;
+}
+const { eyebrow } = Astro.props;
+---
+
+<section class="relative scroll-mt-20">
+  <div class="mx-auto max-w-6xl px-5 pb-12 pt-28 sm:pt-32">
+    <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{eyebrow}</p>
+    <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+      <slot name="title" />
+    </h1>
+    <div class="copy mt-6 max-w-2xl space-y-4 text-lg leading-relaxed text-zinc-400">
+      <slot />
+    </div>
+  </div>
+</section>

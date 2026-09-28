@@ -53,19 +53,9 @@ const heroChips = [
   { num: '0', label: 'outbound HTTP' },
 ];
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'TechArticle',
-  headline: 'hippo on LongMemEval: per-haystack retrieval R@5 98.0 (local) / 99.8 (voyage-3-large)',
-  description,
-  about: 'LongMemEval retrieval benchmark for the hippo-memory AI agent memory system',
-  author: { '@type': 'Organization', name: 'kitfunso', url: site.links.repo },
-  url: new URL('/benchmarks/', Astro.site!).href,
-  isPartOf: { '@type': 'WebSite', name: site.name, url: Astro.site!.href },
-};
 ---
 
-<Base title={title} description={description}>
+<Base title={title} description={description} crumb="Benchmarks" published="2026-06-09" modified="2026-09-25">
   <Nav />
   <main id="main">
     <!-- Header -->
@@ -269,5 +259,4 @@ const jsonLd = {
     </section>
   </main>
   <Footer />
-  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 </Base>

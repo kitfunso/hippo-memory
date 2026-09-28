@@ -1,31 +1,51 @@
-# hippo
+# hippo-memory
 
-> A memory layer for AI agents that learns what is wrong and stops repeating it: a memory marked bad drops out of recall, a newer fact supersedes the old one, and retrieval strengthens what gets used. Memories also decay on a half-life (365 days, not tuned) and a sleep cycle consolidates repeats; neither has been shown to improve recall. Open source (MIT), zero runtime dependencies, runs locally.
+> hippo is an open-source (MIT), local-first memory layer for AI agents. Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and any MCP client share one SQLite store on your machine. A memory marked wrong drops out of the top results, a newer fact supersedes the old one, memories you use get stronger, and every memory records where it came from.
 
-hippo (npm package `hippo-memory`) is an open-source memory system for AI agents and LLM applications. Unlike "save everything and search later" stores, hippo models the full memory lifecycle: decay by default, retrieval strengthening, outcome-weighted half-lives, error tagging, conflict detection, supersession, and sleep consolidation. It is local-first (SQLite source of truth with git-friendly markdown mirrors, no outbound HTTP unless you opt in to a network reranker or an API embedder), framework-agnostic, and ships an MCP server plus auto-installed hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode.
+hippo is the npm package `hippo-memory`; the CLI is `hippo` and `hippo mcp` is its MCP server. It needs Node.js 22.16+ and has zero runtime dependencies. Recall uses BM25 out of the box; hybrid search with a local or an API embedder is optional, and nothing is auto-installed. 3,500+ tests run against a real database, with no module mocks and no mocked store.
 
-## Key facts
-- License: MIT. Runtime: Node.js 22.16+. Zero runtime dependencies (embeddings are optional).
-- Storage: local SQLite source of truth plus markdown mirrors. No cloud, no account, no telemetry.
-- Retrieval: BM25 out of the box; optional hybrid BM25 + embeddings via a pluggable provider (local MiniLM default, or opt-in OpenAI / Voyage / Cohere).
-- Mechanics: decay by default, retrieval strengthening, reward-proportional half-lives, error and emotional tagging, sleep consolidation, conflict detection, bi-temporal supersession.
-- Integrations: MCP server (Cursor, Windsurf, Cline, Claude Desktop) and hooks for Claude Code, Codex, Cursor, OpenClaw, OpenCode.
+Where data lives: `.hippo/hippo.db` in each project, plus a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text goes to an outside provider only through features that use one: an API embedder, the Jev or LLM reranker, `hippo refine`, and the fact extraction `hippo sleep` runs through Anthropic's API when `ANTHROPIC_API_KEY` is set (`{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that off).
+
+What is measured: in hippo's mechanism audit, outcome marks, supersession and retrieval strengthening measured helping; decay and sleep have not been shown to make recall better. The published numbers measure retrieval, not whether agents do better work with hippo.
+
+Retrieval, corpus first: on LongMemEval-S (500 questions, each scored against its own ~48-session haystack), using the benchmark scripts rather than `hippo recall`, best of five settings, R@5 is 98.0% with the free local MiniLM embedder and 99.8% with voyage-3-large (opt-in, paid). On the older LongMemEval oracle split with pooled retrieval, BM25 only and no embeddings (v0.11), R@5 was 74.0%.
+
+Install: `npm install -g hippo-memory`, then `hippo init` in a project. It creates the project's store and adds hippo's instructions to the agent files it finds there (CLAUDE.md, AGENTS.md, Cursor's rules), plus Claude Code's session hooks. `hippo init --scan ~` registers every git repo under your home directory at once, each with a store seeded from its git history. `npx -y hippo-memory mcp` runs the MCP server without a global install.
+
+## Docs
+
+- [README](https://github.com/kitfunso/hippo-memory#readme): install, agent setup, CLI reference, how memory works, comparison, benchmarks and FAQ
+- [README as one text file](https://hippo-memory.com/llms-full.txt): the full README in markdown, with absolute links
+- [Agent install guide](https://github.com/kitfunso/hippo-memory/blob/master/llms-install.md): for an AI agent installing hippo: install, wire it in, verify with `hippo doctor --json`
+- [Quickstart](https://hippo-memory.com/quickstart/): install, `hippo init` and the memory loop
+- [How it works](https://hippo-memory.com/how-it-works/): decay, strengthening, outcome marks, supersession, conflicts and sleep, with what each one measured
+- [FAQ](https://hippo-memory.com/faq/): the README FAQ, 14 questions
+
+## Agents
+
+- [Claude Code](https://hippo-memory.com/claude-code/): memory between sessions through a CLAUDE.md block and session hooks
+- [Cursor](https://hippo-memory.com/cursor/): memory between sessions through the MCP server and Cursor's rules
+- [Codex CLI](https://hippo-memory.com/codex/): memory across sessions through AGENTS.md, with optional session capture
+- [MCP server](https://hippo-memory.com/mcp/): `hippo mcp`, 13 tools over stdio for Claude Code, Cursor, Windsurf, Cline and Claude Desktop
+- [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension): session hooks for Pi
+
+## Compare
+
+- [hippo vs mem0](https://hippo-memory.com/vs/mem0/): a local, open-source mem0 alternative, feature by feature
+- [hippo vs Zep](https://hippo-memory.com/vs/zep/): Zep is a managed service and its self-hosted Community Edition is deprecated
+- [hippo vs Letta](https://hippo-memory.com/vs/letta/): Letta Code is a coding agent with its own memory; hippo is memory for the agents you already use
+- [CLAUDE.md vs memory](https://hippo-memory.com/vs/claude-memory/): what CLAUDE.md, Claude Code's auto memory and hippo each hold
+- [Comparison table](https://github.com/kitfunso/hippo-memory#comparison): hippo against nine other memory tools, row by row
 
 ## Benchmarks
-- LongMemEval-S, standard per-question haystack, recall@5: 98.0% with the free local MiniLM embedder (an optional install; best of five settings in the benchmark scripts), 99.8% with voyage-3-large (opt-in, measured June 2026), level with the published frontier (gbrain reports 97.6%). Zero-dependency BM25-only path: 74%.
-- 3,500+ tests against a real database. No module mocks and no mocked store; only paid network calls are stubbed.
 
-## Links
-- Repository: https://github.com/kitfunso/hippo-memory
-- npm: https://www.npmjs.com/package/hippo-memory
-- Docs (README): https://github.com/kitfunso/hippo-memory#readme
-- Benchmarks: https://github.com/kitfunso/hippo-memory/tree/master/benchmarks
-- Changelog: https://github.com/kitfunso/hippo-memory/blob/master/CHANGELOG.md
+- [Benchmarks](https://hippo-memory.com/benchmarks/): LongMemEval retrieval, LoCoMo evidence recall and the Jev reranker, each with its setting and its limits
+- [LongMemEval reproduction](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-09-23-longmemeval-reproduction.md): how to re-measure the MiniLM figure
+- [Eval index](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md): every published measurement, including failed runs and one retracted claim
 
-## Install
-```
-npm install -g hippo-memory
-hippo init --scan ~
-```
+## Optional
 
-Agents installing hippo: follow https://github.com/kitfunso/hippo-memory/blob/master/llms-install.md (install, wire in, verify with `hippo doctor --json`). Zero-install MCP: `npx -y hippo-memory mcp`.
+- [Teams](https://hippo-memory.com/teams/): Enterprise hippo, in development: shared memory run inside your network
+- [npm package](https://www.npmjs.com/package/hippo-memory): versions and install
+- [Changelog](https://github.com/kitfunso/hippo-memory/blob/master/CHANGELOG.md): release history
+- [License](https://github.com/kitfunso/hippo-memory/blob/master/LICENSE): MIT

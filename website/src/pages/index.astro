@@ -11,12 +11,23 @@ import Compare from '../components/Compare.astro';
 import Faq from '../components/Faq.astro';
 import InstallCta from '../components/InstallCta.astro';
 import Footer from '../components/Footer.astro';
+import { faqPick } from '../content/site';
 
 // Homepage-only meta + OG description, carrying the terms people actually search:
 // "open-source", "local-first" and "MCP server". The shared site.description (JSON-LD
 // and every other page) and the visible hero copy are left unchanged on purpose.
 const metaDescription =
-  'Open-source, local-first memory for AI agents, with an MCP server. It learns what is wrong and stops repeating it: outcome marks, supersession, strength through use, provenance on every row.';
+  'Open-source, local-first memory for AI agents, with an MCP server. A memory marked wrong drops out of the top results, and newer facts supersede old ones.';
+
+// The home FAQ is a sample; /faq/ holds every question and the FAQPage markup.
+const homeFaq = faqPick([
+  'Is this just RAG?',
+  'Which agents does hippo work with?',
+  'Where does hippo keep my data?',
+  'How is hippo different from mem0?',
+  'What happens when a memory turns out to be wrong?',
+  'Has hippo been shown to make agents better at their work?',
+]);
 ---
 
 <Base description={metaDescription}>
@@ -29,52 +40,8 @@ const metaDescription =
     <LocalFirst />
     <Receipts />
     <Compare />
-    <Faq />
+    <Faq items={homeFaq} moreHref="/faq/" />
     <InstallCta />
   </main>
   <Footer />
-
-  <div id="copy-live" class="sr-only" aria-live="polite"></div>
-
-  <script is:inline>
-    (function () {
-      // copy-to-clipboard
-      var live = document.getElementById('copy-live');
-      document.querySelectorAll('[data-copy]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var text = btn.getAttribute('data-copy');
-          if (!text || !navigator.clipboard) return;
-          navigator.clipboard.writeText(text).then(function () {
-            var label = btn.querySelector('[data-copy-label]');
-            if (live) live.textContent = 'Copied to clipboard';
-            if (label) {
-              var prev = label.textContent;
-              label.textContent = 'Copied';
-              setTimeout(function () { label.textContent = prev; }, 1600);
-            }
-          }).catch(function () {});
-        });
-      });
-
-      // scroll-reveal: reveal [data-reveal] blocks as they enter view (.js gate hides
-      // them first; no-JS / no-IO shows everything). Reveals are applied to INNER
-      // blocks only (never section roots or h2 wrappers), and the fail-open below
-      // force-shows anything still hidden so print/screenshot/preview never blanks.
-      var reveals = document.querySelectorAll('[data-reveal]');
-      if (!reveals.length) return;
-      setTimeout(function () {
-        reveals.forEach(function (el) { el.classList.add('is-visible'); });
-      }, 1500);
-      if (!('IntersectionObserver' in window)) {
-        reveals.forEach(function (el) { el.classList.add('is-visible'); });
-        return;
-      }
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
-        });
-      }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
-      reveals.forEach(function (el) { io.observe(el); });
-    })();
-  </script>
 </Base>

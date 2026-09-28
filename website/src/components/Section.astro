@@ -1,0 +1,18 @@
+---
+// One titled block of long-form copy; `alt` shades every other section, as on the home page.
+interface Props {
+  title: string;
+  id?: string;
+  alt?: boolean;
+}
+const { title, id, alt = false } = Astro.props;
+---
+
+<section id={id} class:list={['relative scroll-mt-20 border-t border-white/5', alt && 'bg-white/[0.02]']}>
+  <div class="mx-auto max-w-6xl px-5 py-16 sm:py-20">
+    <h2 class="max-w-3xl text-2xl leading-tight sm:text-3xl">{title}</h2>
+    <div class="copy mt-6 max-w-3xl space-y-4 leading-relaxed text-zinc-400">
+      <slot />
+    </div>
+  </div>
+</section>

@@ -4,23 +4,25 @@ import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { site } from '../content/site';
 
-const title = 'hippo quickstart: persistent memory for Claude Code, Cursor, and MCP';
+const title = 'hippo quickstart: memory for Claude Code, Cursor and MCP';
 const description =
-  'Install hippo and give your AI agents persistent, local memory in two commands. Auto-hooks for Claude Code, Codex, Cursor, OpenClaw, OpenCode, plus an MCP server for any MCP client.';
+  'Install hippo in two commands: persistent local memory for Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, plus an MCP server for other clients.';
 
+// What hippo init patches per agent: README "Framework Integrations".
 const integrations = [
-  { name: 'Claude Code', note: 'Auto-installs a recall hook on session start and a sleep hook on exit.' },
-  { name: 'Cursor', note: 'Hook on task start plus the MCP server for in-editor recall.' },
-  { name: 'Codex', note: 'Auto-installed hook via hippo init.' },
-  { name: 'OpenClaw', note: 'Skill that injects recall on start and runs sleep on session end.' },
-  { name: 'OpenCode', note: 'Hook installed by hippo init.' },
-  { name: 'Any MCP client', note: 'MCP server for Cursor, Windsurf, Cline, and Claude Desktop.' },
+  { name: 'Claude Code', href: '/claude-code/', note: 'A block in CLAUDE.md plus hooks: pinned memories each turn, sleep on exit, a snapshot before compaction, failed tool calls stored as errors.' },
+  { name: 'Cursor', href: '/cursor/', note: "hippo's instructions in Cursor's rules, and the MCP server gives the agent the memory tools." },
+  { name: 'Codex', href: '/codex/', note: 'A block in AGENTS.md. hippo hook install codex wraps the Codex launcher to capture sessions.' },
+  { name: 'OpenClaw', note: 'A native plugin that injects context and, with autoSleep on, runs sleep when the session ends.' },
+  { name: 'OpenCode', note: 'A block in AGENTS.md plus a TypeScript plugin that runs when a session starts and goes idle.' },
+  { name: 'Pi', note: 'A block in AGENTS.md; copy the Pi extension from the repo for session hooks.' },
+  { name: 'Any MCP client', href: '/mcp/', note: 'hippo mcp serves 13 tools over stdio to Windsurf, Cline, Claude Desktop and others.' },
 ];
 
 // Hero "at a glance" card: mirrors the page's real steps (and the HowTo JSON-LD below).
 const heroSteps = [
   { n: '01', label: 'Install', cmd: site.installCmd, prompt: true },
-  { n: '02', label: 'Initialize', cmd: site.initCmd, prompt: true },
+  { n: '02', label: 'Initialize', cmd: 'hippo init', prompt: true },
   { n: '03', label: 'Use the loop', cmd: 'remember · recall · outcome · sleep', prompt: false },
 ];
 
@@ -31,21 +33,19 @@ const loop = [
   { cmd: 'hippo sleep', note: 'Consolidate repeats into patterns, decay the unused, flag conflicts.' },
 ];
 
-const jsonLd = {
-  '@context': 'https://schema.org',
+const howTo = {
   '@type': 'HowTo',
   name: 'Add persistent memory to an AI agent with hippo',
   description,
-  url: new URL('/quickstart/', Astro.site!).href,
   step: [
-    { '@type': 'HowToStep', name: 'Install', text: 'npm install -g hippo-memory' },
-    { '@type': 'HowToStep', name: 'Initialize', text: 'hippo init --scan ~ wires hooks into your agents and scans existing repos.' },
-    { '@type': 'HowToStep', name: 'Use', text: 'remember, recall, outcome, and sleep form the memory loop.' },
+    { '@type': 'HowToStep', name: 'Install', text: site.installCmd },
+    { '@type': 'HowToStep', name: 'Initialize', text: "Run hippo init in a project. It creates the project's .hippo store and adds hippo's instructions to the agent files it finds there, such as CLAUDE.md and AGENTS.md." },
+    { '@type': 'HowToStep', name: 'Use the loop', text: 'hippo remember, hippo recall, hippo outcome and hippo sleep form the memory loop.' },
   ],
 };
 ---
 
-<Base title={title} description={description}>
+<Base title={title} description={description} crumb="Quickstart" schema={[howTo]}>
   <Nav />
   <main id="main">
     <section class="relative scroll-mt-20">
@@ -56,7 +56,7 @@ const jsonLd = {
             Add memory in <span class="text-gradient">two commands</span>.
           </h1>
           <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
-            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, point it at your home directory, and it wires itself into the agents you already use.
+            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run <code>hippo init</code> in a project, and it wires itself into the agents that project uses.
           </p>
         </div>
         <!-- Setup-at-a-glance card fills the hero's right side on wide viewports. -->
@@ -79,9 +79,13 @@ const jsonLd = {
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-3xl leading-tight sm:text-4xl">Install</h2>
         <pre class="mt-6 overflow-x-auto rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg"><code><span class="text-term-prompt">$</span> {site.installCmd}
-<span class="text-term-prompt">$</span> {site.initCmd}</code></pre>
+<span class="text-term-prompt">$</span> hippo init</code></pre>
         <p class="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">init --scan ~</code> detects your agents, installs their hooks, and gives you memory across every git repo under your home directory. Everything lives in a local SQLite store with markdown mirrors. No cloud, no account, no telemetry.
+          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> creates a <code>.hippo/</code> store in the project and adds hippo's instructions to the agent files it finds there, such as <code>CLAUDE.md</code>, <code>AGENTS.md</code> and Cursor's rules, plus Claude Code's session hooks. To register every git repo under a folder at once, run <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">{site.initCmd}</code>, which gives each repo a store seeded from its git history.
+        </p>
+        <p class="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          Memories are stored in SQLite with markdown mirrors, and recall makes no network call by default. No account.
+          <a class="link" href="/faq/#where-does-hippo-keep-my-data">Where hippo keeps your data</a> lists the opt-in features that send text to a provider.
         </p>
       </div>
     </section>
@@ -92,7 +96,9 @@ const jsonLd = {
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {integrations.map((i) => (
             <div class="glass rounded-2xl p-5">
-              <span class="text-sm font-medium text-zinc-200">{i.name}</span>
+              {i.href
+                ? <a href={i.href} class="link text-sm font-medium">{i.name}</a>
+                : <span class="text-sm font-medium text-zinc-200">{i.name}</span>}
               <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{i.note}</span>
             </div>
           ))}
@@ -122,5 +128,4 @@ const jsonLd = {
     </section>
   </main>
   <Footer />
-  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 </Base>

@@ -1,0 +1,12 @@
+---
+// Terminal block. Shell lines get a prompt and `#` lines read as comments; prompt={false} shows a config file as-is.
+interface Props {
+  lines: string[];
+  prompt?: boolean;
+}
+const { lines, prompt = true } = Astro.props;
+---
+
+<pre class="whitespace-pre-wrap rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg [overflow-wrap:anywhere]"><code>{lines.map((line, i) => (
+  <Fragment>{i > 0 && '\n'}{!prompt ? line : line.startsWith('#') ? <span class="text-zinc-400">{line}</span> : <Fragment><span class="select-none text-term-prompt">$ </span>{line}</Fragment>}</Fragment>
+))}</code></pre>

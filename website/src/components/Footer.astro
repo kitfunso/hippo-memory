@@ -1,48 +1,74 @@
 ---
 import { site } from '../content/site';
 
-const siteLinks = [
-  { label: 'Teams', href: '/teams/' },
-  { label: 'Benchmarks', href: '/benchmarks/' },
-  { label: 'Quickstart', href: '/quickstart/' },
-  { label: 'hippo vs mem0', href: '/vs/mem0/' },
-];
-
-const footerLinks = [
-  { label: 'GitHub', href: site.links.repo },
-  { label: 'npm', href: site.links.npm },
-  { label: 'Docs', href: site.links.docs },
-  { label: 'Changelog', href: site.links.changelog },
-  { label: 'License (MIT)', href: site.links.license },
+const groups = [
+  {
+    label: 'Agents',
+    links: [
+      { label: 'Claude Code', href: '/claude-code/' },
+      { label: 'Cursor', href: '/cursor/' },
+      { label: 'Codex', href: '/codex/' },
+      { label: 'MCP server', href: '/mcp/' },
+    ],
+  },
+  {
+    label: 'Compare',
+    links: [
+      { label: 'hippo vs mem0', href: '/vs/mem0/' },
+      { label: 'hippo vs Zep', href: '/vs/zep/' },
+      { label: 'hippo vs Letta', href: '/vs/letta/' },
+      { label: 'CLAUDE.md vs memory', href: '/vs/claude-memory/' },
+    ],
+  },
+  {
+    label: 'Site',
+    links: [
+      { label: 'Quickstart', href: '/quickstart/' },
+      { label: 'How it works', href: '/how-it-works/' },
+      { label: 'Benchmarks', href: '/benchmarks/' },
+      { label: 'Teams', href: '/teams/' },
+      { label: 'FAQ', href: '/faq/' },
+    ],
+  },
+  {
+    label: 'Resources',
+    external: true,
+    links: [
+      { label: 'GitHub', href: site.links.repo },
+      { label: 'npm', href: site.links.npm },
+      { label: 'Docs', href: site.links.docs },
+      { label: 'Changelog', href: site.links.changelog },
+      { label: 'License (MIT)', href: site.links.license },
+    ],
+  },
 ];
 ---
 
 <footer class="border-t border-white/8">
   <div class="mx-auto max-w-6xl px-5 py-12">
     <div class="rule-gradient mb-10"></div>
-    <div class="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
-      <div class="max-w-sm">
+    <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+      <div class="max-w-xs">
         <p class="font-mono text-base font-semibold text-acc-violet">~/hippo</p>
         <p class="mt-3 text-sm leading-relaxed text-zinc-400">
-          A memory layer for AI agents that learns what is wrong and stops repeating it. Good
-          memory is knowing what to forget: what was wrong, replaced, or never used.
+          A memory layer for AI agents that learns what is wrong. Good memory is knowing what to
+          forget: what was wrong, replaced, or never used.
         </p>
       </div>
-      <div class="flex flex-wrap gap-x-12 gap-y-6">
-        <nav aria-label="Site pages" class="flex flex-col gap-y-2 text-sm">
-          {siteLinks.map((l) => (
-            <a href={l.href} class="text-zinc-400 transition hover:text-zinc-100">
-              {l.label}
-            </a>
-          ))}
-        </nav>
-        <nav aria-label="Resources" class="flex flex-col gap-y-2 text-sm">
-          {footerLinks.map((l) => (
-            <a href={l.href} target="_blank" rel="noopener noreferrer" class="text-zinc-400 transition hover:text-zinc-100">
-              {l.label}
-            </a>
-          ))}
-        </nav>
+      <div class="grid grid-cols-2 gap-x-10 gap-y-8 md:grid-cols-4">
+        {groups.map((g) => (
+          <nav aria-labelledby={`footer-${g.label.toLowerCase()}`} class="flex flex-col gap-y-2 text-sm">
+            <p id={`footer-${g.label.toLowerCase()}`} class="font-mono text-xs uppercase tracking-wider text-zinc-400">{g.label}</p>
+            {g.links.map((l) => (
+              <a
+                href={l.href}
+                target={g.external ? '_blank' : undefined}
+                rel={g.external ? 'noopener noreferrer' : undefined}
+                class="text-zinc-400 transition hover:text-zinc-100"
+              >{l.label}</a>
+            ))}
+          </nav>
+        ))}
       </div>
     </div>
     <p class="mt-10 font-mono text-xs text-zinc-400">

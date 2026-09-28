@@ -1,55 +1,101 @@
 ---
 import '../styles/global.css';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { Font } from 'astro:assets';
-import { site, faq } from '../content/site';
+import { site } from '../content/site';
 import BackgroundFx from '../components/BackgroundFx.astro';
 
 interface Props {
   title?: string;
   description?: string;
+  /** This page's own JSON-LD nodes (TechArticle, HowTo, FAQPage), merged into the site-wide @graph. */
+  schema?: object[];
+  /** Breadcrumb name for a sub-page, read as Home > crumb. */
+  crumb?: string;
+  /** Set on article pages: adds a TechArticle node with these dates (YYYY-MM-DD). */
+  published?: string;
+  modified?: string;
 }
 
 const {
-  title = `${site.name}: ${site.positioning}`,
+  title = `${site.pkg}: ${site.positioning}`,
   description = site.description,
+  schema = [],
+  crumb,
+  published,
+  modified = published,
 } = Astro.props;
+const article = published
+  ? [{ '@type': 'TechArticle', headline: title, description, datePublished: published, dateModified: modified }]
+  : [];
 
 // All URLs derive from astro.config `site` -> a later domain swap is one edit.
 const base = Astro.site ?? new URL('https://hippo-memory.com');
+const home = base.href;
 const canonical = new URL(Astro.url.pathname, base).href;
-const ogImage = new URL('/og.png', base).href;
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: site.pkg,
-  applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'Node.js 22.16+',
-  description: site.description,
-  url: site.links.repo,
-  softwareVersion: site.version,
-  license: 'https://opensource.org/licenses/MIT',
-  author: { '@type': 'Organization', name: 'kitfunso', url: site.links.repo },
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-  sameAs: [site.links.repo, site.links.npm],
-  downloadUrl: site.links.npm,
-  keywords:
-    'AI agent memory, LLM memory, agent memory layer, MCP memory server, memory lifecycle, decay, retrieval strengthening, consolidation, open source, local-first',
-};
+// scripts/make-images.mjs draws one card per built page; a page built before its card exists borrows home's.
+const slug = Astro.url.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '-') || 'home';
+const ogPath = existsSync(join(process.cwd(), 'public', 'og', `${slug}.png`)) ? `/og/${slug}.png` : '/og/home.png';
+const ogImage = new URL(ogPath, base).href;
 
-// The FAQPage schema describes the homepage FAQ, so only emit it on the homepage.
-// Sub-pages carry their own page-appropriate structured data.
-const isHome = Astro.url.pathname === '/';
-
-const faqJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: faq.map((f) => ({
-    '@type': 'Question',
-    name: f.q,
-    acceptedAnswer: { '@type': 'Answer', text: f.a },
+const id = { org: `${home}#org`, website: `${home}#website`, software: `${home}#software` };
+const graph = [
+  {
+    '@type': 'Organization',
+    '@id': id.org,
+    name: 'kitfunso',
+    url: 'https://github.com/kitfunso',
+    logo: new URL('/apple-touch-icon.png', base).href,
+    sameAs: ['https://github.com/kitfunso'],
+  },
+  {
+    '@type': 'WebSite',
+    '@id': id.website,
+    url: home,
+    name: site.pkg,
+    alternateName: [site.name],
+    description: site.description,
+    publisher: { '@id': id.org },
+    sameAs: [site.links.repo, site.links.npm],
+  },
+  {
+    '@type': 'SoftwareApplication',
+    '@id': id.software,
+    name: site.pkg,
+    alternateName: site.name,
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Node.js 22.16+',
+    description: site.description,
+    url: home,
+    softwareVersion: site.version,
+    license: 'https://opensource.org/licenses/MIT',
+    author: { '@id': id.org },
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    sameAs: [site.links.repo, site.links.npm],
+    downloadUrl: site.links.npm,
+    keywords:
+      'AI agent memory, persistent memory for Claude Code, Cursor memory, Codex memory, MCP memory server, long-term memory for LLM agents, local-first, open source',
+  },
+  ...(crumb
+    ? [{
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: home },
+          { '@type': 'ListItem', position: 2, name: crumb, item: canonical },
+        ],
+      }]
+    : []),
+  ...[...article, ...schema].map((node) => ({
+    url: canonical,
+    isPartOf: { '@id': id.website },
+    about: { '@id': id.software },
+    author: { '@id': id.org },
+    publisher: { '@id': id.org },
+    ...node,
   })),
-};
+];
 
 // Cloudflare Web Analytics: cookie-less, no perf hit. The token below is a PUBLIC site
 // identifier - it ships in the page HTML by design and grants no account access, so it
@@ -88,16 +134,17 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:site_name" content={site.name} />
+    <meta property="og:image:alt" content={title} />
+    <meta property="og:site_name" content={site.pkg} />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={title} />
 
-    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
-    {isHome && <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />}
+    <script type="application/ld+json" set:html={JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })} />
   </head>
   <body class="min-h-screen antialiased">
     <a
@@ -108,6 +155,49 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     </a>
     <BackgroundFx />
     <slot />
+    <div id="copy-live" class="sr-only" aria-live="polite"></div>
+    <!-- Lives in the layout because the components that carry data-copy and data-reveal appear on many pages. -->
+    <script is:inline>
+      (function () {
+        // copy-to-clipboard
+        var live = document.getElementById('copy-live');
+        document.querySelectorAll('[data-copy]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var text = btn.getAttribute('data-copy');
+            if (!text || !navigator.clipboard) return;
+            navigator.clipboard.writeText(text).then(function () {
+              var label = btn.querySelector('[data-copy-label]');
+              if (live) live.textContent = 'Copied to clipboard';
+              if (label) {
+                var prev = label.textContent;
+                label.textContent = 'Copied';
+                setTimeout(function () { label.textContent = prev; }, 1600);
+              }
+            }).catch(function () {});
+          });
+        });
+
+        // scroll-reveal: reveal [data-reveal] blocks as they enter view (.js gate hides
+        // them first; no-JS / no-IO shows everything). Reveals are applied to INNER
+        // blocks only (never section roots or h2 wrappers), and the fail-open below
+        // force-shows anything still hidden so print/screenshot/preview never blanks.
+        var reveals = document.querySelectorAll('[data-reveal]');
+        if (!reveals.length) return;
+        setTimeout(function () {
+          reveals.forEach(function (el) { el.classList.add('is-visible'); });
+        }, 1500);
+        if (!('IntersectionObserver' in window)) {
+          reveals.forEach(function (el) { el.classList.add('is-visible'); });
+          return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
+          });
+        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+        reveals.forEach(function (el) { io.observe(el); });
+      })();
+    </script>
     {beaconToken && (
       <script
         defer

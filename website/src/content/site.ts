@@ -6,8 +6,9 @@
  */
 
 import pkg from '../../../package.json';
+import { REPO, readmeComparison, readmeFaq } from './readme';
 
-export const REPO = 'https://github.com/kitfunso/hippo-memory';
+export { REPO };
 
 export const site = {
   name: 'hippo',
@@ -52,7 +53,7 @@ export const proofs = [
 
 // Quickstart is the nav's install button, so it is not repeated here.
 export const nav = [
-  { label: 'How it works', href: '/#how' },
+  { label: 'How it works', href: '/how-it-works/' },
   { label: 'Teams', href: '/teams/' },
   { label: 'Benchmarks', href: '/benchmarks/' },
   { label: 'Compare', href: '/#compare' },
@@ -121,7 +122,7 @@ export const receipts = [
   {
     stat: '98.0%',
     label: 'R@5 on LongMemEval-S',
-    note: 'Standard per-haystack, free local MiniLM (an optional install), best of five settings. 99.8% with voyage-3-large (June 2026); gbrain reports 97.6. Zero-dep BM25-only path: 74%.',
+    note: 'Standard per-haystack, free local MiniLM (an optional install), best of five settings. 99.8% with voyage-3-large (June 2026); gbrain reports 97.6. BM25 only, on the older oracle-split test: 74.0%.',
     href: site.links.longmemeval,
   },
   {
@@ -146,6 +147,9 @@ export const receipts = [
 ] as const;
 
 export const worksWith = ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi', 'any MCP client'] as const;
+
+/** The README's MCP config block ("MCP Server"), shown on /cursor/ and /mcp/. */
+export const mcpJson = ['{', '  "mcpServers": {', '    "hippo-memory": {', '      "command": "hippo",', '      "args": ["mcp"]', '    }', '  }', '}'];
 export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'markdown'] as const;
 
 export const compare = {
@@ -158,51 +162,9 @@ export const compare = {
     'Verdicts are shortened for scanning; the qualifier behind each Yes/No/Partial is in the full matrix.',
 } as const;
 
-/** Full comparison matrix. cells[] are reproduced VERBATIM from README.md (#comparison),
- *  including the asterisked "not directly comparable" benchmark caveats + footnotes,
- *  and are asserted against the README by scripts/check-readme-sync.mjs - NEVER edit a
- *  cells literal without editing the README. display[] (optional) is a render-only short
- *  verdict per cell that the checker ignores; the home matrix renders display ?? cells.
- *  cells[]/display[] align to systems[] order (Hippo first). */
+/** README.md's Comparison table, parsed at build by readme.ts, plus the site's own closing line. */
 export const comparison = {
-  systems: [
-    { name: 'Hippo', href: REPO, self: true },
-    { name: 'MemPalace', href: 'https://github.com/milla-jovovich/mempalace', self: false },
-    { name: 'Mem0', href: 'https://github.com/mem0ai/mem0', self: false },
-    { name: 'Basic Memory', href: 'https://github.com/basicmachines-co/basic-memory', self: false },
-    { name: 'gbrain', href: 'https://hermesatlas.com/projects/garrytan/gbrain', self: false },
-    { name: 'Zep', href: 'https://www.getzep.com/', self: false },
-    { name: 'Letta', href: 'https://github.com/letta-ai/letta', self: false },
-    { name: 'Cognee', href: 'https://www.cognee.ai/', self: false },
-    { name: 'Memoria', href: 'https://github.com/matrixorigin/Memoria', self: false },
-    { name: 'EverMind', href: 'https://evermind.ai/', self: false },
-  ],
-  rows: [
-    { feature: 'Decay by default', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Retrieval strengthening', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial (recall tuning)', 'No', 'Partial (Skill Memory distills patterns)'], display: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial', 'No', 'Partial'] },
-    { feature: 'Reward-proportional decay', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Hybrid search (BM25 + embeddings)', cells: ['Yes', 'Embeddings + spatial', 'Yes (semantic + BM25 + entity)', 'No', 'Yes (vec + rerank + graph)', 'Yes (graph + vec)', '?', 'Yes (GraphRAG)', 'Yes (vector + full-text)', 'Yes (mRAG, multi-modal)'] },
-    { feature: 'Schema acceleration / knowledge graph', cells: ['Yes (schema)', 'No', 'No', 'No', 'Yes (typed KG, self-wiring)', 'Yes (temporal KG)', 'No', 'Yes (auto-ontologies)', 'No (typed claims)', 'Yes (hierarchical: user/group/agent)'] },
-    { feature: 'Conflict detection + resolution', cells: ['Yes', 'No', 'No', 'No', 'Yes (eval-surfaced)', 'Yes (auto-invalidate stale facts)', 'No', 'No', 'Yes (auto-detect + quarantine)', 'Partial (temporal tracking)'] },
-    { feature: 'Multi-agent shared memory', cells: ['Yes', 'No', 'No', 'No', 'Yes (brain repo, team mounts)', 'Yes', 'Yes (shared memory blocks)', 'Yes', 'Yes (branch/merge across sessions)', 'Yes (multi-agent coordination)'] },
-    { feature: 'Transfer scoring', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Outcome tracking', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial (Cases: agent trajectories)'] },
-    { feature: 'Confidence tiers', cells: ['Yes', 'No', 'No', 'No', 'No (typed facts)', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Spatial organization', cells: ['No', 'Yes (wings/halls/rooms)', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Lossless compression', cells: ['No', 'Yes (AAAK, 30x)', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Cross-tool import (ChatGPT/Claude/Cursor)', cells: ['Yes', 'No', 'No', 'No', 'Partial (data sources)', '?', 'No', 'Partial (28 data sources)', 'No (Git ops)', 'Partial (mRAG: PDFs/images/URLs)'], display: ['Yes', 'No', 'No', 'No', 'Partial', '?', 'No', 'Partial', 'No', 'Partial'] },
-    { feature: 'Auto-hook install', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'MCP server', cells: ['Yes', 'Yes', 'Yes (hosted, needs an account)', 'Yes', 'Yes (stdio + HTTP/OAuth)', 'Yes (hosted, needs an account)', 'Yes (hosted, needs an API key)', 'Yes (first-party Claude/LangGraph)', 'Yes', '?'] },
-    { feature: 'Zero runtime deps', cells: ['Yes', 'No (ChromaDB)', 'No', 'No', 'No (PGLite or PG+pgvector)', 'No (managed service)', 'No (Python deps)', 'No (Python deps)', 'Yes (single Rust binary)', 'No (managed + OSS)'], display: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'Yes', 'No'] },
-    { feature: 'LongMemEval (best published)', cells: ['98.0% local / 99.8% voyage R@5 (s_cleaned, per-haystack)*', '96.6% raw / 100% reranked R@5', '94.4 (hosted platform)**', 'N/A', '97.6-97.9% R@5 (s_cleaned*)', '90.2% accuracy** (LoCoMo 94.7%)', 'N/A', 'N/A', '88.78% overall accuracy w/ reader**', '83.00% overall** (LoCoMo 93.05%, HaluMem 93.04%)'], display: ['98.0% R@5*', '96.6% R@5', '94.4**', 'N/A', '97.6% R@5*', '90.2%**', 'N/A', 'N/A', '88.78%**', '83.00%**'] },
-    { feature: 'Git-friendly', cells: ['Yes', 'No', 'No', 'Yes', 'Yes', 'No', 'No', 'No', 'Yes (Git is the model)', '?'] },
-    { feature: 'Framework agnostic', cells: ['Yes', 'Yes', 'Partial', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'] },
-    { feature: 'License', cells: ['MIT', '(open)', 'Apache-2.0', '(open)', 'MIT', 'Proprietary cloud (Graphiti: Apache-2.0)', 'Apache-2.0', 'MIT (core)', 'Apache-2.0', 'Apache-2.0 (OSS) + cloud'] },
-  ],
-  footnotes: [
-    "* Hippo's 98.0% (free local MiniLM, an optional install) and 99.8% (voyage-3-large, measured 2026-06-09) are on longmemeval_s_cleaned, per-question haystack, the split and metric of gbrain's published 97.6%. Each is the best of five settings in the benchmark scripts, not hippo recall; at 500 questions 98.0 and 97.6 are a tie. The June 2026 build scored 98.6. An older 86.8% on longmemeval_oracle used pooled (non-per-haystack) retrieval and is not comparable.",
-    "** Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.",
-  ],
+  ...readmeComparison,
   closing:
     'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and stop repeating it."',
 } as const;
@@ -215,8 +177,8 @@ export const getStarted = {
   steps: [site.installCmd, site.initCmd],
   autoInstall: {
     heading: 'Detected and patched automatically',
-    frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode'],
-    note: 'The only memory layer that installs its own hooks. No manual wiring.',
+    frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi'],
+    note: 'It patches the instruction file each agent already has (CLAUDE.md, AGENTS.md, .cursorrules) and adds session hooks where the agent supports them. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
   },
 } as const;
 
@@ -225,7 +187,7 @@ export const localFirst = {
   kicker: 'Local-first',
   points: [
     { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker, the LLM reranker and the API embedders do.' },
-    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store you can read, grep, and git-track. No cloud, no account, no telemetry.' },
+    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set, and one config line turns that off.' },
     { stat: '1 call', label: 'to forget', body: 'Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.' },
     { stat: 'tenant-safe', label: 'by default', body: 'Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.' },
   ],
@@ -235,12 +197,15 @@ export const localFirst = {
   },
 } as const;
 
-/** FAQ - objection handling. Answers sourced to README receipts. */
-export const faq = [
-  { q: 'Is this just RAG?', a: 'No. RAG retrieves from a static corpus; hippo is a memory lifecycle. Memories decay on a half-life, retrieval strengthens them, errors stick, and sleep consolidates repeats into patterns. Mark a memory wrong and it stops coming back; a newer fact replaces the old one.' },
-  { q: 'Does it need embeddings?', a: 'No. Recall runs on BM25 out of the box (74% R@5 on LongMemEval, BM25 only). Embeddings are an optional dependency for hybrid scoring; nothing is required at runtime.' },
-  { q: 'Where does my data go?', a: 'Nowhere, unless you opt in. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry. Opt-in features change that. hippo recall --reranker jev sends your query and your candidate memory text to TypeSafe, and the LLM reranker and the API embedders send text to the provider you configure. Each is off unless you turn it on.' },
-  { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
-  { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the full memory lifecycle. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo learns what turned out wrong and stops repeating it, with outcome marks, supersession, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
-  { q: 'Is it production-ready?', a: `It is MIT-licensed at v${pkg.version}, with ${site.tests} tests against a real database and no mocked store. Multi-tenant isolation is proven by a negative test.` },
-] as const;
+/** The README's FAQ word for word, so the site, GitHub and npm answer alike. Answers are markdown:
+ *  render them with mdInline, or mdText for JSON-LD. */
+export const faq = readmeFaq;
+
+/** Picks FAQ entries by question and fails the build when one is missing, so a renamed README question cannot vanish quietly. */
+export function faqPick(questions: readonly string[]) {
+  return questions.map((q) => {
+    const item = faq.find((f) => f.q === q);
+    if (!item) throw new Error(`FAQ question not found: "${q}"`);
+    return item;
+  });
+}

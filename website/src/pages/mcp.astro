@@ -1,0 +1,155 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import PageIntro from '../components/PageIntro.astro';
+import Section from '../components/Section.astro';
+import Cmd from '../components/Cmd.astro';
+import Faq from '../components/Faq.astro';
+import { faqPick, mcpJson } from '../content/site';
+
+const title = 'MCP memory server for Claude Code, Cursor, Windsurf | hippo';
+const description =
+  'hippo mcp is a local MCP memory server: 13 tools to recall, store and correct memories, for Claude Code, Cursor, Windsurf, Cline and Claude Desktop.';
+
+// README "MCP Server" names the 13 tools; each line paraphrases its description in src/mcp/server.ts.
+const tools = [
+  { name: 'hippo_recall', does: 'Memories that match a query, ranked by relevance, strength and recency within a token budget.' },
+  { name: 'hippo_assemble', does: "A session's context in time order within a token budget; over budget, the weakest older items go first." },
+  { name: 'hippo_drill', does: 'Opens a topic summary that recall returned and lists the memories under it.' },
+  { name: 'hippo_remember', does: 'Stores a memory. Errors get twice the half-life, and pinned memories never decay.' },
+  { name: 'hippo_outcome', does: 'Reports whether the recalled memories helped: good ones get stronger, bad ones weaker.' },
+  { name: 'hippo_context', does: 'Works out the current task from git and returns the matching memories plus the saved task snapshot.' },
+  { name: 'hippo_status', does: 'Counts, strengths, memories at risk of fading, and when the store was last consolidated.' },
+  { name: 'hippo_learn', does: 'Scans recent git commits for fixes, reverts, bugs, refactors and performance changes, and stores the lessons.' },
+  { name: 'hippo_conflicts', does: 'Lists open conflicts: memories that contradict each other.' },
+  { name: 'hippo_resolve', does: 'Settles a conflict by keeping one memory and weakening or deleting the other.' },
+  { name: 'hippo_share', does: 'Shares a memory to the global store for use in other projects, with a transfer score.' },
+  { name: 'hippo_peers', does: 'Lists the projects that have added memories to the global store.' },
+  { name: 'hippo_predict_baserate', does: 'Base-rate stats for past predictions in a class, such as effort estimates, to check a new one against.' },
+];
+
+const ext = (href: string, label: string) => ({ href, label });
+// Vendor pages fetched 2026-09-28.
+const others = [
+  {
+    name: 'The reference memory server',
+    body: 'In its README\'s words, "a basic implementation of persistent memory using a local knowledge graph", kept in a memory.jsonl file. No account. Facts are added and deleted by explicit tool calls; the README describes no decay or contradiction detection.',
+    link: ext('https://github.com/modelcontextprotocol/servers/tree/main/src/memory', 'README'),
+  },
+  {
+    name: 'Basic Memory',
+    body: 'Knowledge kept as Markdown files on your disk that you and the agent both read and edit, with an optional paid cloud. AGPL-3.0.',
+    link: ext('https://github.com/basicmachines-co/basic-memory', 'README'),
+  },
+  {
+    name: 'Mem0',
+    body: 'A hosted MCP server that needs a Mem0 Platform account and API key. Memories stored this way "live in your Mem0 account, not on your computer."',
+    link: ext('https://docs.mem0.ai/platform/mem0-mcp', 'mem0 MCP docs'),
+  },
+  {
+    name: 'Zep',
+    body: "A hosted Memory MCP Server. It needs sign-in through an identity provider and a Zep project, and uses per-account MCP seats.",
+    link: ext('https://help.getzep.com/memory-mcp-server', 'Zep docs'),
+  },
+  {
+    name: 'Letta',
+    body: 'A hosted MCP endpoint, used with a Letta API key, that lets an MCP agent create and message stateful Letta agents.',
+    link: ext('https://docs.letta.com/platform/hosted-mcp', 'Letta docs'),
+  },
+];
+---
+
+<Base title={title} description={description} crumb="MCP server" published="2026-09-28">
+  <Nav />
+  <main id="main">
+    <PageIntro eyebrow="MCP server">
+      <Fragment slot="title">MCP memory server for <span class="text-gradient">Claude Code, Cursor and Windsurf</span></Fragment>
+      <p>
+        <code>hippo mcp</code> runs a memory server over stdio. Any MCP client can use it, including Claude Code, Cursor,
+        Windsurf, Cline and Claude Desktop. Memories are stored in SQLite on your machine, with no account and no API key.
+      </p>
+      <p>
+        The agent gets 13 tools to recall and store memories, mark what it recalled as helpful or wrong, and see where
+        memories contradict each other.
+      </p>
+    </PageIntro>
+
+    <Section title="Add it to your client">
+      <p>In Claude Code, one command:</p>
+      <Cmd lines={['claude mcp add hippo-memory -- hippo mcp']} />
+      <p>
+        Other clients take a config block. Cursor reads it from <code>.cursor/mcp.json</code> and Claude Desktop from
+        <code>claude_desktop_config.json</code>; Windsurf and Cline take the same <code>mcpServers</code> block in their
+        own MCP settings.
+      </p>
+      <Cmd lines={mcpJson} prompt={false} />
+      <p>
+        No global install? <code>"command": "npx", "args": ["-y", "hippo-memory", "mcp"]</code> works too. With no store
+        anywhere, the first tool call creates the global store in <code>~/.hippo</code>, and <code>hippo init</code> in a
+        project adds a project store. <code>hippo doctor</code> checks the install.
+      </p>
+    </Section>
+
+    <Section title="The 13 tools" alt>
+      <div class="overflow-x-auto rounded-2xl border border-white/8">
+        <table class="w-full min-w-[520px] text-left text-sm">
+          <caption class="sr-only">Tools the hippo MCP server exposes</caption>
+          <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+            <tr>
+              <th scope="col" class="px-5 py-3 font-medium">Tool</th>
+              <th scope="col" class="px-5 py-3 font-medium">What it does</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            {tools.map((t) => (
+              <tr class="align-top">
+                <th scope="row" class="whitespace-nowrap px-5 py-3 text-left font-mono text-xs font-normal text-acc-cyan">{t.name}</th>
+                <td class="px-5 py-3 text-zinc-300">{t.does}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+
+    <Section title="Choosing an MCP memory server in 2026">
+      <p>
+        The main question is where the memories live and who runs the server. Here is what the other options say about
+        themselves, checked 2026-09-28.
+      </p>
+      <dl class="space-y-4">
+        {others.map((o) => (
+          <div>
+            <dt class="font-medium text-zinc-100">{o.name}</dt>
+            <dd class="mt-1">
+              {o.body}
+              (<a class="link" href={o.link.href} target="_blank" rel="noopener noreferrer">{o.link.label}<span class="sr-only"> (opens in new tab)</span></a>)
+            </dd>
+          </div>
+        ))}
+        <div>
+          <dt class="font-medium text-zinc-100">hippo</dt>
+          <dd class="mt-1">
+            Runs on your machine over stdio, stores memories in SQLite with markdown mirrors you can commit, and needs no
+            account. You can mark a recalled memory wrong, replace an old fact with <code>hippo supersede</code>, and list
+            conflicts between memories. Compared feature by feature:
+            <a class="link" href="/vs/mem0/">vs mem0</a>, <a class="link" href="/vs/zep/">vs Zep</a>,
+            <a class="link" href="/vs/letta/">vs Letta</a>.
+          </dd>
+        </div>
+      </dl>
+      <p>
+        The reference server, Basic Memory and hippo store memories on your machine. The MCP servers from Mem0, Zep and
+        Letta are hosted services.
+      </p>
+    </Section>
+
+    <Faq
+      items={faqPick(['Can I use hippo as an MCP memory server?', 'Where does hippo keep my data?', 'Does it need embeddings?'])}
+      heading="MCP questions"
+      moreHref="/faq/"
+    />
+  </main>
+  <Footer />
+</Base>

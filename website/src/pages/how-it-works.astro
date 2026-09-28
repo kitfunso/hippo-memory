@@ -1,0 +1,88 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import PageIntro from '../components/PageIntro.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Section from '../components/Section.astro';
+import Faq from '../components/Faq.astro';
+import { faqPick, REPO } from '../content/site';
+import { mdInline } from '../content/readme';
+
+const title = 'Memory decay for AI agents: how hippo works | hippo-memory';
+const description =
+  'How hippo decides what an agent forgets: a half-life, strength from use, outcome marks, supersession and conflicts, and which of them measured helping.';
+
+const audit = 'https://github.com/kitfunso/hippo-memory/pull/232';
+// Each body is README "Key Features" in short, numbers included; markdown, rendered with mdInline.
+const mechanisms = [
+  {
+    name: 'Decay: a 365-day half-life',
+    body: `Every memory has a half-life, 365 days by default, and its strength halves each time one passes without use. Until 1.46.0 the default was 7 days. On a pre-registered test, the current version of a fact was in the top five 29% of the time at 7 days and 75% at 365 days, and 730 days and decay switched off both tied with 365 ([result](${REPO}/blob/master/docs/evals/2026-09-24-decay-default-result.md)). So 365 was not tuned, and on that test decay made no measurable difference to recall. Set \`defaultHalfLifeDays\` in \`.hippo/config.json\` to choose your own, or pin a memory so it never decays.`,
+  },
+  {
+    name: 'Recall strengthens',
+    body: 'Each recall adds 2 days to a memory\'s half-life. Recall ranks memories by relevance, strength and recency, and the strongest matches fill the token budget first.',
+  },
+  {
+    name: 'Errors stick',
+    body: 'A memory stored with `--error`, or captured from a failed tool call, gets twice the half-life.',
+  },
+  {
+    name: 'Outcome marks',
+    body: `\`hippo outcome --good\` or \`--bad\` marks the memories from the last recall. After 5 good marks and no bad ones, a memory's effective half-life is about 42% longer; after 3 bad marks and no good ones, it decays nearly twice as fast. On the synthetic E1 test, where every mark is correct, plain BM25 plus the outcome mark cut how often a marked-bad memory stayed in the top five from 71.9% to 0.0% ([mechanism audit, round 2](${audit})). Real marks are noisier, because \`--bad\` marks the whole recall batch.`,
+  },
+  {
+    name: 'Supersession and invalidation',
+    body: '`hippo supersede <id> "<new fact>"` stores the new version and links the old one to it; the old one leaves recall but stays on record. `hippo decide "<decision>" --supersedes <id>` replaces an earlier architectural decision, halving its half-life and marking it stale. `hippo learn --git` weakens memories about a tool that a migration commit replaced, and `hippo reject <id> --reason "<why>"` stops a value from coming back at all.',
+  },
+  {
+    name: 'Conflicts',
+    body: 'When two memories overlap in content and contradict each other, hippo records an open conflict; shared tags alone do not count. `hippo sleep` refreshes the list, `hippo conflicts` shows it, and each conflict is mirrored under `.hippo/conflicts/`. Resolving one keeps one memory and weakens or deletes the other.',
+  },
+  {
+    name: 'Sleep and dormant memories',
+    body: `\`hippo sleep\` merges three or more related episodes into one pattern, and the originals decay. It keeps the store tidy but has not been shown to improve recall: in round 2 of the mechanism audit, a slept LongMemEval store scored 3.6 points lower at hit@5 than the same store never slept. A memory that fades below the threshold goes dormant instead of being deleted. \`hippo dormant restore <id>\` brings it back, and a dormant memory nobody restores is deleted after 180 days by default.`,
+  },
+  {
+    name: 'Confidence',
+    body: 'Each memory is `verified`, `observed`, `inferred` or `stale`, and `hippo context` shows the level beside each memory. A memory unretrieved for 30 days or more is marked stale at the next sleep, and a recall wakes it back to observed.',
+  },
+];
+---
+
+<Base title={title} description={description} crumb="How it works" published="2026-09-28">
+  <Nav />
+  <main id="main">
+    <PageIntro eyebrow="How it works">
+      <Fragment slot="title">How hippo decides what your agent <span class="text-gradient">forgets</span></Fragment>
+      <p>
+        Every memory has a strength. It fades on a half-life, grows each time the memory is recalled, and drops when you
+        mark the memory wrong. A newer fact can supersede an older one, and memories that contradict each other are
+        flagged.
+      </p>
+      <p>
+        The design borrows from the hippocampus, but that is inspiration, not evidence. In our mechanism audit, outcome
+        marks and supersession measured helping; decay and sleep have not been shown to make recall better.
+      </p>
+    </PageIntro>
+
+    <HowItWorks />
+
+    <Section title="Each mechanism, with what was measured" alt>
+      {mechanisms.map((m) => (
+        <div>
+          <h3 class="text-lg font-medium text-zinc-100">{m.name}</h3>
+          <p class="mt-2" set:html={mdInline(m.body)} />
+        </div>
+      ))}
+    </Section>
+
+    <Faq
+      items={faqPick(['What happens when a memory turns out to be wrong?', 'Is this just RAG?', 'Does it need embeddings?'])}
+      heading="Questions about how it works"
+      moreHref="/faq/"
+    />
+  </main>
+  <Footer />
+</Base>

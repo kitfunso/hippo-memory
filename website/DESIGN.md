@@ -45,7 +45,7 @@ tokens:
 
 **2026-09-24 redesign:** Terminal Native direction. The hero shows the product (a Claude Code session with hippo's real output), receipts include published losses, and `/teams` carries the company pitch. Rules below still apply where they do not name the old violet/cyan palette.
 
-**2026-09-28:** the hero follows the Terminal Native mockup: positioning line, h1, lead, install command and agent names on the left, the session on the right, three commands below. The brand mark on the site is the `~/hippo` wordmark in Geist Mono. The three.js Spiral is gone; `scripts/make-logo.mjs` only draws the favicon.
+**2026-09-28:** the hero follows the Terminal Native mockup: positioning line, h1, lead, install command and agent names on the left, the session on the right, three commands below. The brand mark on the site is the `~/hippo` wordmark in Geist Mono. The icon is a mint `~/` on ink, drawn as strokes: `scripts/make-images.mjs` writes the favicon, the apple-touch icon and one 1200x630 Open Graph card per page in `public/og/`, captioned with the page title. The Spiral logo and the violet `og.png` are gone.
 
 Codified from the shipped site plus the 2026-06-10 design audit
 (C:/Users/skf_s/design-audits/hippo-memory-2026-06-10/REPORT.md). The audit's
