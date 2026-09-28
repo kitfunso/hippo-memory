@@ -1953,6 +1953,12 @@ Credit or blame the memories Z1 injected, from signals in the session: a failed 
 #### Z3. Capture corrections [with Z2]
 A user message that corrects the agent ("no, don't...", "stop...", "use X not Y") is the strongest signal we have. Detect it in the hook, distil it through SI4's write contract, and store it as a lesson tied to what it corrected. A repeat of the same correction strengthens the existing lesson instead of adding a new one.
 
+#### Z6. Automatic supersession of changed facts [with Z3; test first; added 2026-09-28]
+The market's most reported memory failure (r/AI_Agents, September 2026): a user moves from Delhi to Mumbai, or switches from dark mode to light, and the memory returns both facts and leaves the model to choose. Hippo has the machinery (`supersede`, `invalidate`, `conflicts`, `resolve`, `explain`, `--as-of`) but every step is a command. Its automatic conflict check runs only at sleep and needs a negation signal plus half the words shared (`src/consolidate.ts:57-63`), so "lives in Delhi" against "moved to Mumbai" is probably never flagged. Not yet tested.
+- **Test first:** a small update set (moves, preference flips, corrections, reversals) written in over normal prompts with no hippo commands, then asked across sessions. Pass means the current fact wins and the old one is retired with a reason, not merely ranked lower. Run it on hippo as shipped before building.
+- **Build:** on write, find memories about the same subject and attribute (same person or setting, different value) and supersede the older one, logged and reversible. A cheap classifier call is the opt-in arm when rules miss.
+- **Show it:** `hippo explain` on the current fact names the retired one, its date, its source and the rule that retired it. This is the demo, and the pitch: hippo knows what changed.
+
 #### Z4. Repeated mistakes become guards [after Z2 and Z3]
 A lesson that was shown and still violated, or corrected twice, is promoted from recalled memory to an enforced check: a `PreToolUse` guard that blocks the matching action with the lesson as the reason. Guards are opt-in per store at first, listed by `hippo doctor`, and each can be dropped with one command. Promotion needs the evidence SI2 requires; a guard that blocks nothing in 30 days demotes back to a memory.
 
