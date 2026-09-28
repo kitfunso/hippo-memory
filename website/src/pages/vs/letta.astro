@@ -10,16 +10,16 @@ import { faqPageLd } from '../../content/readme';
 
 const title = 'hippo vs Letta: a Letta alternative for coding agents';
 const description =
-  'hippo vs Letta, checked 2026-09-28. Letta Code is a coding agent that edits its own memory blocks. hippo adds memory to Claude Code, Codex and Cursor.';
+  'hippo vs Letta, checked 2026-09-28. Letta Code is a stateful agent harness that edits its own memory blocks. hippo adds memory to Claude Code, Codex and Cursor.';
 
 const qa = [
   {
     q: 'Is Letta the same as MemGPT?',
-    a: 'Letta grew out of MemGPT; its GitHub README calls it "Letta (f.k.a. MemGPT)". Active development has moved to Letta Code, a coding agent, and the original Letta server now sits on an archive branch (checked 2026-09-28).',
+    a: 'Letta grew out of MemGPT; its GitHub README calls it "Letta (f.k.a. MemGPT)". Active development has moved to Letta Code, a stateful agent harness, and the original Letta server now sits on an archive branch (checked 2026-09-28).',
   },
   {
     q: 'Is hippo a Letta alternative?',
-    a: 'It depends on what you want from Letta. Letta Code is a coding agent with its memory built in. Hippo is memory for the agents you already use: Claude Code, Codex, Cursor and any MCP client share one store, on your machine with no account, and you can mark a lesson wrong or supersede an old fact. If you want an agent that manages its own memory blocks, that is Letta Code.',
+    a: 'It depends on what you want from Letta. Letta Code is a stateful agent harness with its memory built in. Hippo is memory for the agents you already use: Claude Code, Codex, Cursor and any MCP client share one store, on your machine with no account, and you can mark a lesson wrong or supersede an old fact. If you want an agent that manages its own memory blocks, that is Letta Code.',
   },
 ];
 ---
@@ -30,7 +30,7 @@ const qa = [
     <PageIntro eyebrow="Comparison">
       <Fragment slot="title">hippo vs Letta: a <span class="text-gradient">Letta alternative</span> for coding agents</Fragment>
       <p>
-        Letta, formerly MemGPT, now builds Letta Code, a coding agent whose memory lives in blocks the agent edits itself.
+        Letta, formerly MemGPT, now builds Letta Code, a stateful agent harness whose memory lives in blocks the agent edits itself.
         Hippo is memory for the agents you already run, such as Claude Code, Codex and Cursor, in one store they share.
       </p>
       <p>
@@ -60,12 +60,13 @@ const qa = [
           Without signing in, "your agents are stored only on local disk"; <code>/login</code> backs them up to Letta's
           cloud
           (<a class="link" href="https://docs.letta.com/letta-agent/quickstart" target="_blank" rel="noopener noreferrer">quickstart<span class="sr-only"> (opens in new tab)</span></a>).
-          All context, memory blocks included, is tracked in git.
+          All context, memory blocks included, is tracked in git
+          (<a class="link" href="https://github.com/letta-ai/letta-code" target="_blank" rel="noopener noreferrer">Letta Code<span class="sr-only"> (opens in new tab)</span></a>).
         </li>
         <li>
-          Memory blocks the agent reads and updates with built-in tools. Writing a block replaces its whole content, and
-          when two processes write the same block at once, the last write wins
-          (<a class="link" href="https://docs.letta.com/guides/core-concepts/memory/memory-blocks" target="_blank" rel="noopener noreferrer">memory blocks docs<span class="sr-only"> (opens in new tab)</span></a>).
+          In Letta's legacy V1 SDK, memory blocks are what the agent reads and updates with built-in tools. Writing a
+          block replaces its whole content, and when two processes write the same block at once, the last write wins
+          (<a class="link" href="https://docs.letta.com/v1-sdk/memory/memory-blocks" target="_blank" rel="noopener noreferrer">V1 SDK memory blocks docs<span class="sr-only"> (opens in new tab)</span></a>).
         </li>
         <li>
           A hosted MCP server, used with a Letta API key, that lets an MCP agent create and message your Letta agents

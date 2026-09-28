@@ -23,7 +23,7 @@ const qa = [
   },
   {
     q: "Is Zep's 90.2% on LongMemEval comparable to hippo's 98.0%?",
-    a: "No. Zep's homepage reports 90.2% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, using the benchmark scripts and a free local embedder rather than `hippo recall`, the evidence was in the top five results 98.0% of the time. Different metrics, so neither number beats the other.",
+    a: "No. Zep's homepage reports 90.2% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, using the benchmark scripts and a free local embedder rather than `hippo recall`, an answer session was in the top five results 98.0% of the time. Different metrics, so neither number beats the other.",
   },
 ];
 ---
@@ -53,8 +53,8 @@ const qa = [
     <Section title="What Zep ships today (checked 2026-09-28)">
       <ul class="list-disc space-y-2 pl-5">
         <li>
-          Zep Cloud, which in Zep's words "unifies business data, documents, and conversations so agents have the context
-          they need to complete tasks correctly"
+          Zep Cloud, which in Zep's words "unifies business data, documents, and conversations into shared, governed
+          context so agents can complete tasks correctly"
           (<a class="link" href="https://www.getzep.com/" target="_blank" rel="noopener noreferrer">getzep.com<span class="sr-only"> (opens in new tab)</span></a>).
           Enterprise customers can run it in their own cloud.
         </li>

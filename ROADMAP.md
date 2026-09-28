@@ -973,6 +973,8 @@ gbrain v0.28.8 reports 97.6 per-haystack with `text-embedding-3-large`. The zero
 
 > **CORRECTION 2026-09-23.** `chunk_per_turn_haystack_retrieve.mjs` was never committed; `chunk_per_turn_hybrid_retrieve.mjs --per-haystack` now replays it. The 98.6 reproduces only on the June build (`@xenova/transformers` 2.17.2, int8 weights). Today's build (`@huggingface/transformers` 4.2.0) gives 98.0, and MiniLM has been an optional install, not the default, since 1.28.0. Both figures are the best of five settings, and at 500 questions either one ties gbrain's 97.6. The voyage 99.8 was not re-run. See `docs/evals/2026-09-23-longmemeval-reproduction.md`.
 
+> **CORRECTION 2026-09-28.** gbrain's 97.6 is an any-evidence score over all 500 questions, and gbrain has since replaced it. On the strict all-evidence measure over the 470 questions that have an answer, gbrain reports 95.53 with the Voyage rerank-2.5 reranker and 93.19 without; today's MiniLM runs score 86.8 to 88.5. hippo does not tie gbrain on strict recall, so the parity framing below no longer holds.
+
 ### Memory-system eval methodology and metric [next, research]
 
 The category lacks a good way to measure what a memory system is *for*. LongMemEval and LoCoMo measure retrieval recall on a fixed corpus, and per-haystack recall is saturated by any competent embedder (this update), so it does not discriminate memory systems on the thing that actually matters: deciding what to keep, forget, consolidate, supersede, and strengthen over time. Define that methodology and a composite metric, and release it as an open benchmark so the field (and hippo) is measured on the lifecycle, not just retrieval. This is the umbrella; the lifecycle stress eval below is its first concrete instance.
@@ -1008,7 +1010,7 @@ Lossless-claw-style hierarchical summarization on the SQLite backbone: raw recei
 
 "Retrieval is solved; remembering the right things over time is not." hippo is the memory-lifecycle layer that runs on any embedder (zero-dep local default OR frontier via the v1.23.0 provider, Part II A-track / B episode).
 
-- **Parity-then-pivot** (avoids reading as goalpost-moving to grant reviewers, given the Part I / Part II benchmark WPs): lead with the per-haystack parity number (98.0 with the free local embedder, level with gbrain's 97.6) as proof of competitiveness, then pivot to the lifecycle stress eval as the differentiator. Not "benchmarks do not matter."
+- **Parity-then-pivot** (avoids reading as goalpost-moving to grant reviewers, given the Part I / Part II benchmark WPs): lead with the per-haystack parity number (98.0 with the free local embedder, level with gbrain's 97.6) as proof of competitiveness, then pivot to the lifecycle stress eval as the differentiator. Not "benchmarks do not matter." Superseded 2026-09-28: the correction above removes the parity claim.
 - LongMemEval becomes a reproducible parity footnote with the harness in-repo, not the headline. The lifecycle stress eval becomes the headline once it exists.
 - README updated 2026-06-09 with the dual-number parity table + lifecycle pivot.
 

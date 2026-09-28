@@ -60,9 +60,9 @@ export const nav = [
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-/** A two-day Claude Code session with hippo's hooks. The hippo lines are what hippo really prints;
- *  the project and commands are an illustration. Kinds: note = day label, cmd = prompt, out = agent
- *  output, err = failed tool call, caught = hippo storing it, ok = hippo, mem = a memory in context. */
+/** An illustrated two-day Claude Code session with hippo's hooks; the hippo lines are shortened from what hippo prints.
+ *  Kinds: note = day label, cmd = prompt, out = agent output, err = failed tool call, caught = hippo storing it,
+ *  ok = hippo, mem = a memory in context. */
 export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' | 'ok' | 'mem'; text: string }> = [
   { kind: 'note', text: 'Monday · billing-service' },
   { kind: 'cmd', text: 'add the refunds endpoint' },
@@ -75,7 +75,7 @@ export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' |
   { kind: 'mem', text: 'billing uses pnpm; never run npm install here' },
   { kind: 'out', text: 'Bash(pnpm add stripe)  ✓' },
   { kind: 'cmd', text: '/compact' },
-  { kind: 'ok', text: 'Hippo saved your task snapshot and 2 new memories before compacting.' },
+  { kind: 'ok', text: 'Hippo saved your task snapshot before compacting.' },
 ];
 
 /** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */
@@ -122,7 +122,7 @@ export const receipts = [
   {
     stat: '98.0%',
     label: 'R@5 on LongMemEval-S',
-    note: 'Standard per-haystack, free local MiniLM (an optional install), best of five settings. 99.8% with voyage-3-large (June 2026); gbrain reports 97.6. BM25 only, on the older oracle-split test: 74.0%.',
+    note: 'Any answer session in the top 5, per haystack, free local MiniLM (an optional install), best of five settings. Requiring every answer session: 86.8 to 88.5%. 99.8% with voyage-3-large (June 2026). BM25 only, older oracle split: 74.0%.',
     href: site.links.longmemeval,
   },
   {
@@ -173,12 +173,12 @@ export const comparison = {
 export const getStarted = {
   kicker: 'Get started',
   heading: 'Zero config. It wires itself in.',
-  body: 'Install it, point it at your repos, and hippo auto-detects your agent framework and patches the right config file. Next session, your agent just uses it.',
-  steps: [site.installCmd, site.initCmd],
+  body: 'Install it, run init in your repo, and hippo detects your agent framework and patches the right config file. Next session, your agent just uses it.',
+  steps: [site.installCmd, 'hippo init'],
   autoInstall: {
     heading: 'Detected and patched automatically',
     frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi'],
-    note: 'It patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
+    note: 'In a repo, init patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --scan ~ gives every git repo under your home folder a store and installs the Claude Code hooks and the OpenCode plugin, but patches no instruction files. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
   },
 } as const;
 

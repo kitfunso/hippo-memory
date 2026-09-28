@@ -44,11 +44,11 @@ const description =
     </Section>
 
     <Section title="Bring your rules with you" alt>
-      <Cmd lines={['# preview first, then import', 'hippo import --cursor .cursorrules --dry-run', 'hippo import --cursor .cursorrules']} />
+      <Cmd lines={['# preview first, then import', 'hippo import --cursor .cursor/rules --dry-run', 'hippo import --cursor .cursor/rules']} />
       <p>
-        <code>hippo import --cursor</code> takes a <code>.cursorrules</code> file, or one rule file from
-        <code>.cursor/rules/</code>, and turns what is in it into memories, so lessons written for Cursor reach your other
-        agents too.
+        <code>hippo import --cursor</code> reads the whole <code>.cursor/rules</code> tree, every <code>.mdc</code> and
+        <code>.md</code> file in it, and turns what is in them into memories, so lessons written for Cursor reach your
+        other agents too. It reads an older single <code>.cursorrules</code> file as well.
       </p>
     </Section>
 
@@ -61,9 +61,11 @@ const description =
         Cursor's rules are instructions you write: project rules in <code>.cursor/rules</code>, user rules, team rules and
         <code>AGENTS.md</code>
         (<a class="link" href="https://cursor.com/docs/context/rules" target="_blank" rel="noopener noreferrer">Cursor docs<span class="sr-only"> (opens in new tab)</span></a>,
-        checked 2026-09-28). Keep those for standing instructions. Cursor also has Memories, introduced as a beta in
-        Cursor 1.0 to remember facts from conversations per project
+        checked 2026-09-28). Keep those for standing instructions. Cursor also had Memories, a beta in Cursor 1.0 that
+        remembered facts from conversations per project
         (<a class="link" href="https://cursor.com/changelog/1-0" target="_blank" rel="noopener noreferrer">changelog<span class="sr-only"> (opens in new tab)</span></a>).
+        Cursor staff say the feature was removed starting in version 2.1.x
+        (<a class="link" href="https://forum.cursor.com/t/are-my-memories-gone/144057" target="_blank" rel="noopener noreferrer">forum<span class="sr-only"> (opens in new tab)</span></a>).
         Hippo holds what the agent learns as it works, in a store your other agents share, and lets you mark a lesson
         wrong with <code>hippo outcome --bad</code> or replace a fact that changed with <code>hippo supersede</code>.
       </p>

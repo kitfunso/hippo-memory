@@ -38,7 +38,7 @@ const qa = [
   },
   {
     q: "Is mem0's 94.4 on LongMemEval better than hippo's 98.0%?",
-    a: "Neither beats the other, because they measure different things. Hippo's 98.0% is retrieval recall@5 on LongMemEval-S with a per-question haystack: whether the evidence is in the top five results. It comes from the benchmark scripts with a free local embedder, not `hippo recall`. mem0's 94.4 is an end-to-end answer score: whether a model answered correctly from what came back. mem0's README says it comes from its hosted platform at a top-200 retrieval budget, with optimizations the open-source SDK lacks.",
+    a: "Neither beats the other, because they measure different things. Hippo's 98.0% is retrieval recall@5 on LongMemEval-S with a per-question haystack: whether an answer session is in the top five results. It comes from the benchmark scripts with a free local embedder, not `hippo recall`. mem0's 94.4 is an end-to-end answer score: whether a model answered correctly from what came back. mem0's README says it comes from its hosted platform at a top-200 retrieval budget, with optimizations the open-source SDK lacks.",
   },
 ];
 ---
@@ -80,7 +80,7 @@ const qa = [
           ))}
         </div>
         <p class="mt-4 max-w-3xl text-sm leading-relaxed text-zinc-400">
-          Recall@5 asks whether the evidence is in the top five results. An answer score asks whether a model answered
+          Recall@5 asks whether an answer session is in the top five results. An answer score asks whether a model answered
           correctly from what came back. They are not comparable, so this is not a head-to-head. Hippo's method is on the
           <a class="link" href="/benchmarks/">benchmarks page</a>; mem0's figure is from its
           <a class="link" href="https://github.com/mem0ai/mem0" target="_blank" rel="noopener noreferrer">README<span class="sr-only"> (opens in new tab)</span></a>,

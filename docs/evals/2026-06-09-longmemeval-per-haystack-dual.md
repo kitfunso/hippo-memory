@@ -2,6 +2,8 @@
 
 > **CORRECTION 2026-09-23.** The MiniLM 98.6 reproduces only on the build it was measured with (`@xenova/transformers` 2.17.2, int8 weights). Today's build gives 98.0, which ties gbrain's 97.6 at 500 questions, and 98.6 was the best of five settings. MiniLM has been an optional install, not the default, since 1.28.0. The per-haystack and voyage scripts behind this doc were never committed. See [2026-09-23-longmemeval-reproduction.md](2026-09-23-longmemeval-reproduction.md).
 
+> **CORRECTION 2026-09-28.** gbrain's 97.6 is an any-evidence score that gbrain has since replaced. On the strict all-evidence measure (470 questions with an answer) gbrain reports 95.53% with a reranker and 93.19% without, against 86.8 to 88.5% for today's MiniLM runs, so there is no tie on strict recall. Details in the reproduction doc's banner.
+
 ## Summary
 
 Two findings:

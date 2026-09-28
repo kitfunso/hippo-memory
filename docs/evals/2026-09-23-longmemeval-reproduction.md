@@ -2,6 +2,8 @@
 
 A check of the public claim "98.6% R@5 with the zero-dependency default", from [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md).
 
+> **CORRECTION 2026-09-28.** The tie with gbrain's 97.6 below compares two any-evidence scores. gbrain has since replaced that figure with the strict all-evidence measure over the 470 questions that have an answer: 95.53% with the Voyage rerank-2.5 reranker and 93.19% without ([gbrain's report](https://github.com/garrytan/gbrain-evals/blob/main/docs/benchmarks/2026-05-07-longmemeval-s.md)). On that measure today's MiniLM runs score 86.8 to 88.5% (the 86.0 to 87.4 below counts all 500 questions), so gbrain is ahead on strict recall. `score_haystack.py` prints both question counts.
+
 ## Summary
 
 - **98.6 reproduces exactly, but only on the build it was measured with.** Replaying June's embedding backend (`@xenova/transformers` 2.17.2, int8 MiniLM weights) gives June's R@5 in all five retrieval settings.

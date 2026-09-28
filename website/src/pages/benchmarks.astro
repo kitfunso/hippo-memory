@@ -112,7 +112,10 @@ const heroChips = [
           </table>
         </div>
         <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          For reference, gbrain reports 97.6% R@5 on this split with a paid frontier embedder. hippo reaches 98.0% with a free local embedder, the best of five settings in its benchmark scripts; at 500 questions that is a tie. The June 2026 build scored 98.6%, and the <a class="link" href={reproUrl} target="_blank" rel="noopener noreferrer">re-measure<span class="sr-only"> (opens in new tab)</span></a> shows both runs. On the standard task, retrieval recall is effectively saturated, so the embedder is a swappable part, not the differentiator.
+          These scores count a hit when any answer session is in the top 5, over all 500 questions. hippo reaches 98.0% that way with a free local embedder, the best of five settings in its benchmark scripts. The June 2026 build scored 98.6%, and the <a class="link" href={reproUrl} target="_blank" rel="noopener noreferrer">re-measure<span class="sr-only"> (opens in new tab)</span></a> shows both runs.
+        </p>
+        <p class="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          The stricter measure counts a hit only when every answer session is in the top 5, over the 470 questions that have an answer. The same runs score 86.8 to 88.5% there. gbrain first published 97.6%, an any-session score, and its <a class="link" href="https://github.com/garrytan/gbrain-evals/blob/main/docs/benchmarks/2026-05-07-longmemeval-s.md" target="_blank" rel="noopener noreferrer">report<span class="sr-only"> (opens in new tab)</span></a> now leads with the strict one: 95.53% (449 of 470) with the paid Voyage rerank-2.5 reranker, 93.19% without it. On strict recall gbrain is ahead. Any-session recall is near its ceiling on this task; strict recall is not.
         </p>
       </div>
     </section>
@@ -230,7 +233,7 @@ const heroChips = [
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">LoCoMo: conversational evidence&nbsp;recall</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
-          <a class="link" href="https://arxiv.org/abs/2402.17753" target="_blank" rel="noopener noreferrer">LoCoMo<span class="sr-only"> (opens in new tab)</span></a> is 10 long multi-session conversations, 5,882 turns and 1,986 questions. hippo scores it deterministically: did the gold evidence turn land in the top 5 recalled memories? No LLM judge. Measured once on v1.25.0 (2026-07-05) with the zero-dependency default embedder, MiniLM-L6:
+          <a class="link" href="https://arxiv.org/abs/2402.17753" target="_blank" rel="noopener noreferrer">LoCoMo<span class="sr-only"> (opens in new tab)</span></a> is 10 long multi-session conversations, 5,882 turns and 1,986 questions. hippo scores it deterministically: did the gold evidence turn land in the top 5 recalled memories? No LLM judge. Measured once on v1.25.0 (2026-07-05) with MiniLM-L6, the default embedder then and an optional install since 1.28.0:
         </p>
         <div class="mt-8 overflow-hidden rounded-2xl border border-white/8">
           <table class="w-full text-left text-sm">
