@@ -1,6 +1,6 @@
 # 🦛 Hippo: memory for AI agents that learns what is wrong
 
-**Hippo learns what is wrong and stops repeating it.** Good memory is knowing what to forget: what turned out wrong, what got replaced, what nobody used.
+**Hippo learns what is wrong and ranks it down.** Good memory is knowing what to forget: what turned out wrong, what got replaced, what nobody used.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![npm downloads](https://img.shields.io/npm/dm/hippo-memory)](https://npmjs.com/package/hippo-memory)
@@ -9,16 +9,16 @@
 [![website](https://img.shields.io/badge/website-hippo--memory.com-7c3aed)](https://hippo-memory.com)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/kitfunso/hippo-memory/master/assets/hippo-init.svg" alt="hippo init --scan ~ initializing memory across all repos" width="720">
+  <img src="https://raw.githubusercontent.com/kitfunso/hippo-memory/master/assets/hippo-init.svg" alt="hippo init adding memory to one project" width="720">
 </p>
 
-A memory layer for AI agents. Mark a memory wrong and it stops coming back. A newer fact replaces the old one. Memories you use get stronger. Provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
+A memory layer for AI agents. Mark a memory wrong and it drops out of the top results. A newer fact replaces the old one. Memories you use get stronger. Provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
 
 ```bash
-npm install -g hippo-memory && hippo init --scan ~
+npm install -g hippo-memory && hippo init
 ```
 
-One command. Every git repo on your machine gets memory.
+Run `hippo init` inside a project. It creates the project's `.hippo/` store and wires hippo into the agents it finds there: a short block in `CLAUDE.md` or `AGENTS.md`, plus Claude Code's session hooks. To set up the git repos under a folder in one go, see `--scan` in the [Quick start](#quick-start).
 
 Having an AI agent install it? Point it at [llms-install.md](llms-install.md): it installs, wires hippo into the agents it finds, and verifies with `hippo doctor`.
 
@@ -51,19 +51,19 @@ pre-registrations kept next to their results, including the runs that failed and
 claim we retracted.
 
 - **Sequential Learning Benchmark.** [benchmarks/sequential-learning/](benchmarks/sequential-learning/). 50 tasks, 10 buried traps. Measures whether agents learn from past mistakes, not just retrieve text. v0.11.0 informal magnitude RETRACTED v1.7.9; mechanism remains shipped. See [CHANGELOG.md](./CHANGELOG.md) v1.7.9 entry.
-- **R@5 = 74.0%** on [LongMemEval](benchmarks/longmemeval/). 500-question industry retrieval benchmark, BM25 only, no embeddings.
-- **R@1 0.41 to 0.62 with `hippo recall "<query>" --reranker jev`** on a private 300-query developer store ([full eval](docs/evals/2026-09-19-jev-reranker.md)). The opt-in [TypeSafe Jev](https://typesafe.ai) reranker, off by default, about 0.0004 USD a recall. 2000-draw paired bootstrap; the margin held in 20 of 20 seeds and a permutation null reached it in 0 of 200 runs. Ranking only: three graded tests did **not** show a better answer rate than the free local cross-encoder, and that negative result is in the same doc. What it buys today is a shorter context, 2 memories ranked by Jev answering as well as 5 ranked by the cross-encoder.
-- **10 of 10 incident scenarios beat transcript replay** on a staged Slack corpus ([benchmarks/e1.3/](benchmarks/e1.3/)). Recall surfaces the cause faster than scrolling the last N messages.
-- **0 outbound HTTP** on the 1000-event ingestion smoke. Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker above, the LLM reranker and the API embedders do.
+- **LongMemEval oracle split, all 500 questions in one pooled store, BM25 only, no embeddings, v0.11: R@5 = 74.0%** ([benchmarks/README.md](benchmarks/README.md), harness in [benchmarks/longmemeval/](benchmarks/longmemeval/)). A different setup from the per-haystack results under [Benchmarks](#benchmarks), so the two are not a before and after.
+- **On a private 300-query developer store, R@1 0.41 to 0.62 with `hippo recall "<query>" --reranker jev`**, the free local cross-encoder against Jev ([full eval](docs/evals/2026-09-19-jev-reranker.md)). The opt-in [TypeSafe Jev](https://typesafe.ai) reranker, off by default, about 0.0004 USD a recall. 2000-draw paired bootstrap; the margin held in 20 of 20 seeds and a permutation null reached it in 0 of 200 runs. Ranking only: three graded tests on one 150-question LongMemEval set did **not** show a better answer rate than the free local cross-encoder, and that negative result is in the same doc. What it buys today is a shorter context: on that set, 2 memories ranked by Jev answered as well as 5 ranked by the cross-encoder.
+- **Staged Slack corpus, 10 incident scenarios: recall beat transcript replay in 10 of 10** ([benchmarks/e1.3/](benchmarks/e1.3/)). The answers sit mid-channel by design. In every scenario hippo's top 10 results held all the answer messages, and the channel's last 10 messages held none.
+- **Slack connector, 1000-event ingestion smoke: 0 outbound HTTP** ([benchmarks/e1.3/](benchmarks/e1.3/)). Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero. Recall makes no network call by default. One default does: `hippo sleep` sends memory text to Anthropic for fact extraction when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that off. Opt-in features such as the Jev reranker above, the LLM reranker and the API embedders also call out.
 - **3,500+ tests on a real database.** No module mocks and no mocked store; only paid network calls are stubbed. Project rule. The one mocks-vs-prod divergence that bit us early is now the constraint that kept the next ten releases honest.
-- **dlPFC goal-conditioned cluster discrimination, 3/3 queries pass** — full goal stack with policy weighting and lifespan-windowed outcome propagation. Per-goal lift on a 3-cluster fixture where BM25 alone cannot discriminate; deterministic test in [`benchmarks/micro/results/b3-depth.json`](benchmarks/micro/results/b3-depth.json).
+- **3-cluster fixture where BM25 alone cannot discriminate: dlPFC goal-conditioned cluster discrimination passes 3 of 3 queries.** Full goal stack with policy weighting and lifespan-windowed outcome propagation, one query per goal; deterministic test in [`benchmarks/micro/results/b3-depth.json`](benchmarks/micro/results/b3-depth.json).
 
 ---
 
 ## What it does for your agent
 
-- **Stops repeating mistakes.** Tag a failure with `--tag error` once, the lesson surfaces every time the agent walks back into that part of the code. Errors decay slower than ordinary observations.
-- **Survives tool switches.** Use Claude Code on Monday, Cursor on Tuesday, Codex on Wednesday. Same `.hippo/` store. Same memories. Pick up exactly where you left off.
+- **Keeps errors longer.** Tag a failure with `--tag error` and it gets twice the half-life of an ordinary memory, so the lesson is still in the store the next time a recall matches it. In Claude Code, a hook stores failed tool calls as error memories for you.
+- **Survives tool switches.** Use Claude Code on Monday, Cursor on Tuesday, Codex on Wednesday. They all read the same `.hippo/` store, so the memories come with you.
 - **Ingests systems of record.** Slack and GitHub today (`POST /v1/connectors/slack/events`, `POST /v1/connectors/github/events`). Jira and Notion next. Webhooks land as `kind='raw'` memories with full provenance and GDPR-correct deletion.
 - **Knows where every memory came from.** Every row carries `kind`, `scope`, `owner`, and `artifact_ref`. Right-to-be-forgotten is a single API call, not an audit nightmare.
 - **Plays nice with multi-tenant.** API keys, scrypt-hashed. Audit log on every mutation. Tenant A literally cannot see tenant B's memories. Proven by negative test.
@@ -75,14 +75,14 @@ claim we retracted.
 ```bash
 npm install -g hippo-memory
 
-# Single project
+# In a project: create its store and wire in the agents it uses
 hippo init
 
-# All your projects at once (recommended)
+# Optional: a store for each git repo under a folder
 hippo init --scan ~
 ```
 
-`--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from the last 365 days of commit history. One command, instant memory across all your projects. It installs the Claude Code hooks and the OpenCode plugin when it finds those agents, but patches no instruction file; run `hippo init` inside a repo to add the block to its `CLAUDE.md` or `AGENTS.md`.
+`--scan` looks for git repos up to three folders below the folder you give it, skipping dot-folders and `node_modules`. Each one gets a `.hippo/` store seeded with lessons from the last 365 days of commit history. It also installs the Claude Code hooks and the OpenCode plugin for the agents it finds, and sets up the daily run. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`; run `hippo init` in a project to add one.
 
 After setup, `hippo sleep` runs at session end (via auto-installed agent hooks) and does five things:
 
@@ -870,7 +870,7 @@ The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay
 
 \*\* Different metric: these are end-to-end answer scores, not retrieval R@5. Mem0's 94.4 comes from its hosted platform, which its README says includes optimizations the open-source SDK lacks. Zep's 90.2% and 94.7% are accuracy figures from its homepage. Memoria's 88.78% and EverMind's 83% are overall accuracy with a reader LLM. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above. The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28.
 
-Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and stop repeating it." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
+Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and rank it down." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
 
 ---
 
@@ -970,7 +970,7 @@ node run.mjs --adapter all
 
 ### How do I give Claude Code memory between sessions?
 
-Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. `hippo init --scan ~` gives every git repo under your home folder a store and installs the same hooks, but adds no block to any `CLAUDE.md`. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
+Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both. `hippo init --scan ~` gives each git repo up to three folders below your home directory its own store, and installs the same hooks when one of those repos uses Claude Code, but writes no block into any repo's `CLAUDE.md`; run `hippo init` in the projects where you want one.
 
 ### How do I give Cursor memory between sessions?
 
