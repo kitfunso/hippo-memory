@@ -2,7 +2,7 @@
   "id": "hippo-memory",
   "name": "Hippo Memory",
   "description": "Memory for AI agents that learns what is wrong and stops repeating it. Injects context at session start and captures errors.",
-  "version": "1.52.4",
+  "version": "1.52.5",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

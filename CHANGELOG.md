@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.52.5 - 2026-09-28
+
+### Fixed
+
+- **`--help` and `-h` print usage and run nothing.** Most commands ignored the flag and ran for real: `hippo init --help` created `.hippo/`, installed hooks for detected agents and registered the daily runner, `hippo support-bundle --help` wrote a file, and in a project with a store `hippo dashboard --help` started the dashboard server. Now `hippo <command> --help` prints that command's usage and exits 0 before it opens a store or writes anything. `supersede`, `dag`, `slack`, `session-end`, `predict` and `serve` gain the usage text they lacked. A bare `-h` after a command means help too; `hippo codex-run -- -h` still hands `-h` to Codex. The usage header now reads "memory for AI agents that learns what is wrong and stops repeating it".
+
+### Documentation
+
+- **The README comparison table now matches what Mem0, Zep and Letta ship today.** Zep's self-hosted Community Edition is discontinued, Letta's live code moved to letta-code, and Mem0 added hybrid retrieval and superseded-fact marking on its hosted platform. The cells and benchmark figures now say so, checked against each vendor's own pages on 2026-09-28.
+
 ## 1.52.4 - 2026-09-28
 
 ### Documentation

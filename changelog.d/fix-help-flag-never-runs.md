@@ -1,3 +1,0 @@
-### Fixed
-
-- **`--help` and `-h` print usage and run nothing.** Most commands ignored the flag and ran for real: `hippo init --help` created `.hippo/`, installed hooks for detected agents and registered the daily runner, `hippo support-bundle --help` wrote a file, and in a project with a store `hippo dashboard --help` started the dashboard server. Now `hippo <command> --help` prints that command's usage and exits 0 before it opens a store or writes anything. `supersede`, `dag`, `slack`, `session-end`, `predict` and `serve` gain the usage text they lacked. A bare `-h` after a command means help too; `hippo codex-run -- -h` still hands `-h` to Codex. The usage header now reads "memory for AI agents that learns what is wrong and stops repeating it".
