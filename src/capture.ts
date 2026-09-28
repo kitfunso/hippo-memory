@@ -1337,7 +1337,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
       ? existing
       : null;
 
-  // Carried-over fields are not re-scrubbed or re-capped: they passed the same gate, or came from `hippo snapshot save`.
+  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.
   const task = derived.task || (fallback?.task ?? '');
   const summary = derived.summary || (fallback?.summary ?? '');
   const nextStep = derived.next_step || (fallback?.next_step ?? '');

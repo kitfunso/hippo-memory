@@ -59,7 +59,7 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // rollout worked well" were verified false positives that would silently
   // hide real code-lesson memories from ambient context (post-merge
   // adversarial review, 2026-07-02).
-  { name: 'secret-assignment', re: /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/=]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  { name: 'secret-assignment', re: /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
 ];
 
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
@@ -69,7 +69,7 @@ const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
-  /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
+  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
 ];
 
 /**

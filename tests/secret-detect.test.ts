@@ -114,6 +114,20 @@ describe('redactSecrets / redactSecretsStrict', () => {
     expect(redactSecrets(prose)).toBe(prose);
     expect(redactSecretsStrict(prose)).toBe(prose);
   });
+
+  it('redactSecretsStrict removes a JWT at the start, after a space, after Bearer, after = and inside JSON quotes', () => {
+    for (const text of [`${JWT} was issued`, `the token is ${JWT}`, `Authorization: Bearer ${JWT}`, `jwt=${JWT}`, `{"id_token":"${JWT}"}`]) {
+      expect(redactSecretsStrict(text), text).not.toContain('eyJ');
+    }
+  });
+
+  it('redactSecretsStrict finishes crafted 128 KiB runs of eyJ- and token= within 250 ms', () => {
+    for (const crafted of ['eyJ-'.repeat(32768), 'token='.repeat(21846)]) {
+      const started = performance.now();
+      redactSecretsStrict(crafted);
+      expect(performance.now() - started, crafted.slice(0, 6)).toBeLessThan(250);
+    }
+  });
 });
 
 describe('producer + sync vetoes (real stores)', () => {

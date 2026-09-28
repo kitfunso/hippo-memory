@@ -26,6 +26,7 @@ import { isRecallBoostAblated } from './ablation.js';
 import { rarestPromptTerms, RAREST_TERM_COUNT } from './prompt-recall.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
+import { redactSecretsStrict } from './secret-detect.js';
 import { deriveOriginProject, originFromSource, findHippoStoreDir, realpathOrResolve, type ResolveProjectIdentityOpts } from './project-identity.js';
 import {
   checkRejectionGuard,
@@ -2705,9 +2706,9 @@ export function saveActiveTaskSnapshot(
       INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at)
       VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
     `).run(
-      snapshot.task,
-      snapshot.summary,
-      snapshot.next_step,
+      redactSecretsStrict(snapshot.task),
+      redactSecretsStrict(snapshot.summary),
+      redactSecretsStrict(snapshot.next_step),
       snapshot.source ?? 'cli',
       snapshot.session_id ?? null,
       snapshot.scope ?? null,
