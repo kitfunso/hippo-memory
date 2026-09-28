@@ -15,7 +15,8 @@ import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/mem
 import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration, LEGACY_TYPED_HALF_LIFE } from '../src/half-life-migration.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { consolidate } from '../src/consolidate.js';
-import { saveDecision } from '../src/decisions.js';
+import { saveDecision, closeDecision } from '../src/decisions.js';
+import { saveIncident, resolveIncident } from '../src/incidents.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 
 const dirs: string[] = [];
@@ -212,6 +213,23 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ typed: 0, kept: 2 });
     expect(halfLifeOf(root, superseded)).toBe(45);
     expect(halfLifeOf(root, handSet)).toBe(200);
+  });
+
+  it('keep the memory of a superseded or closed object, but move a resolved incident', () => {
+    const root = store();
+    const old = saveDecision(root, 'default', { decisionText: 'use REST for all public APIs' });
+    saveDecision(root, 'default', { decisionText: 'use gRPC for internal APIs', supersedesDecisionId: old.id });
+    const closed = saveDecision(root, 'default', { decisionText: 'freeze deploys on Fridays' });
+    closeDecision(root, 'default', closed.id);
+    const incident = saveIncident(root, 'default', { incidentText: 'the billing cron charged twice on the 1st' });
+    resolveIncident(root, 'default', incident.id, 'made the charge idempotent');
+    for (const id of [old.memoryId!, closed.memoryId!, incident.memoryId!]) pinTo90(root, id);
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ typed: 1 });
+    expect(halfLifeOf(root, old.memoryId!)).toBe(90);
+    expect(halfLifeOf(root, closed.memoryId!)).toBe(90);
+    expect(halfLifeOf(root, incident.memoryId!)).toBe(365);
   });
 
   it('sleep moves them to a configured default along with ordinary memories', async () => {

@@ -18,7 +18,7 @@
  *
  * `hippo sleep` runs it before its decay pass, from the base the store is on
  * (7 days when never recorded) to the configured `defaultHalfLifeDays`. Once per store it also
- * moves memories of decisions, incidents and other objects off the flat 90 days they used to get.
+ * moves memories of live decisions, incidents and other objects off the flat 90 days they used to get.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
 import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store.js';
@@ -31,6 +31,7 @@ export const LEGACY_HALF_LIFE_BASE = 7;
 /** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 const TYPED_SOURCES: ReadonlySet<string> = new Set(['decision', 'incident', 'process', 'policy', 'skill', 'project_brief', 'customer_note']);
+const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
 
 export { HALF_LIFE_BASE_META_KEY };
 
@@ -112,8 +113,9 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
         return noop(from);
       }
       const all = selectAllEntries(db);
+      const retired = typedPending ? retiredObjectMemoryIds(db) : new Set<string>();
       // Pinned memories of objects were never on the base, so only the typed plan may move them.
-      const typedPlan = typedPending ? planTypedHalfLifeMigration(all, to) : [];
+      const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => !retired.has(e.id)), to) : [];
       const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !TYPED_SOURCES.has(e.source)) : all, from, to);
       const plan = [...basePlan, ...typedPlan];
       const halfLives = new Map(plan.map((e) => [e.id, e.half_life_days]));
@@ -135,6 +137,17 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Memories behind a superseded or closed object. Retiring an object leaves its memory untouched, so only its table knows. */
+function retiredObjectMemoryIds(db: DatabaseSyncLike): Set<string> {
+  const ids = new Set<string>();
+  for (const table of OBJECT_TABLES) {
+    // SAFETY: SELECT of one TEXT column, filtered to non-null.
+    const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL AND status IN ('superseded', 'closed')`).all() as { memory_id: string }[];
+    for (const r of rows) ids.add(r.memory_id);
+  }
+  return ids;
 }
 
 /** Writes `plan`, then one audit event per tenant with each id's old half-life, so the move can be undone. */
