@@ -63,10 +63,16 @@ When you're stuck, repeating yourself, or hitting unexpected errors, search proj
 hippo recall "<describe what's going wrong>" --budget 2000 --why
 \```
 
-When you learn something important:
+When something goes wrong:
 
 \```bash
-hippo remember "<lesson>" --error
+hippo remember "<description of what went wrong>" --error
+\```
+
+When you learn something that should outlive this session:
+
+\```bash
+hippo remember "<what you learned and why>"
 \```
 
 When you make an architectural decision:
