@@ -1765,7 +1765,7 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
 ### New items
 
 #### EV1. Enterprise edition packaging [planned, 1w; private repository created 2026-09-27]
-- **Where the code lives:** the features that stay out of the MIT core go in a separate private repository and package under a commercial licence from KITFUNSO LTD. That means SSO (OIDC and SAML sign-in), SCIM, the CD6 admin view, the CD11 and CD12 pilot report and telemetry join, SIEM export of the audit log, the EV2 licence check, hosted SaaS (A10), and support with an SLA. EI2's scope grants are not on this list: they shipped under MIT in 1.49.0.
+- **Where the code lives:** the features that stay out of the MIT core go in a separate private repository and package under a commercial licence from KITFUNSO LTD. That means SSO (OIDC and SAML sign-in), SCIM, teams, project mapping and layered roles (EV6 to EV8), the CD6 admin view, the CD11 and CD12 pilot report and telemetry join, SIEM export of the audit log, the EV2 licence check, hosted SaaS (A10), and support with an SLA. EI2's scope grants are not on this list: they shipped under MIT in 1.49.0.
 - **The line:** documented in the README ("Open source and commercial"). The line is drawn by buyer: everything an individual developer or a self-hosted team needs stays MIT, including the CLI, MCP server, hooks, connectors, tenants, API keys, roles, scope grants, the audit log and the dashboard.
 - **CI:** builds and tests both packages against each release of the core.
 
@@ -1793,6 +1793,18 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
 - An install, upgrade and rollback guide for the server tier.
 - A one-page data-flow diagram: what is stored, where, what leaves the network (nothing by default), and which model sees what.
 - A security overview that answers a standard questionnaire: CAIQ Lite or SIG Lite.
+
+#### EV6. Teams and departments [planned, added 2026-09-29, after SSO and SCIM] [commercial repo]
+- Users and groups arrive from SSO or SCIM (Okta, Entra) as first-class objects. Today EI2's grants attach to one API key, so a 40-person department is 40 grants and a new joiner inherits none.
+- A scope grant attaches to a group; a member gets it through the group and loses it on leaving.
+
+#### EV7. Project-to-team mapping [planned, added 2026-09-29, needs EV6 and Z9 item 7] [commercial repo]
+- An admin maps a repository or project to a team, and memories written there land in that team's scope with no per-write choice.
+- Needs every memory tagged with its project in the core first, Claude Code imports included (Z9 item 7, MIT).
+
+#### EV8. Layered roles [planned, added 2026-09-29, with EV6] [commercial repo]
+- Org, team, project and scope, with roles past admin and member: editor, viewer, team admin. The A5 plan named this hierarchy (`docs/plans/2026-04-29-a5-stub-auth.md`); it was never built.
+- The admin and member pair stays in the MIT core.
 
 ### Exit criteria for v1
 - A design partner installs it in their network from the admin guide, with no help beyond the support channel.
@@ -2008,7 +2020,7 @@ Claude Code spends its effort when a memory is written: the model decides what i
 4. **Say what not to save, and stop saving what git already has.** Claude Code tells the model to skip anything derivable from the code, git history or CLAUDE.md, and anything that matters only to this conversation. Put that list in the hook block and the `hippo_remember` description. `learn --git` inside sleep (`autoLearnOnSleep`, on by default) stores bare commit subjects, which `git log` already answers; keep a commit only when its body states a cause. **Test:** share of `git-learned` rows among the audit's low-quality flags, before and after.
 5. **Verify at recall.** One line in the injected block: memories are point-in-time; if one names a file, function or flag, check it exists before acting on it. The labels ("Previously observed") say a memory is old but not what to do. Text only, no schema. **Test:** the `misleading-memory` arm under Z0 is the scoreboard; this line should cut silent-follow.
 6. **Read edited mirrors back.** Mirrors are written but edits are never read back (`src/store.ts:2475-2485`), so a user who fixes a file changes nothing. At sleep, a mirror whose hash differs from what hippo wrote is a user edit and supersedes its row, logged and reversible. Users trust files they can open.
-7. **Keep Claude Code's shape on import.** `learnFromMemoryMd` keeps the body only, cut at 1,500 characters (`src/cli.ts:3003`), and stores it as anonymous `observed` text. Map `type` to a tag, `description` to item 3's hook, and the Why and How lines to item 1's fields. These are the best-shaped memories hippo receives.
+7. **Keep Claude Code's shape on import.** `learnFromMemoryMd` keeps the body only, cut at 1,500 characters (`src/cli.ts:3003`), and stores it as anonymous `observed` text. Map `type` to a tag, `description` to item 3's hook, and the Why and How lines to item 1's fields. The project folder (`~/.claude/projects/<project>/`) is dropped too, so a fifty memory recalls in hippo as readily as a hippo one: turn it into the same `path:` tag capture gives, and re-tag rows already imported. EV7's project mapping needs this. These are the best-shaped memories hippo receives.
 
 **Order.** 5 and 4 first (text and a default, no schema). 2 with Z3 and Z6. 3 as a Z1 arm. 1 and 7 together once the migration is signed off. 6 last.
 
