@@ -382,3 +382,27 @@ describe('hippo sleep finishes what the hook could not', () => {
     expect(compactionRows(s.hippoRoot).map((r) => r.status)).toEqual(['done', 'done']);
   }, 60_000);
 });
+
+describe('the daily runner finishes the global store', () => {
+  it('imports what a hook in a folder with no store of its own spooled into the global store', () => {
+    initStore(s.globalRoot);
+    const db = openHippoDb(s.globalRoot);
+    try {
+      db.exec('BEGIN IMMEDIATE');
+      const hook = runHippo(['post-compact'], s.proj, s.env, postCompactPayload('s1', s.proj, summaryWith(ITEMS)));
+      expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
+    } finally {
+      db.exec('ROLLBACK');
+      closeHippoDb(db);
+    }
+    expect(fs.existsSync(s.hippoRoot)).toBe(false);
+    expect(compactionMemories(s.globalRoot)).toEqual([]);
+
+    const daily = runHippo(['daily-runner'], s.dir, s.env);
+    expect(daily.status).toBe(0);
+    expect(daily.stdout).toContain('Finished saving 1 compaction left over in the global store.');
+    expect(fs.readdirSync(path.join(s.globalRoot, 'compactions-spool'))).toEqual([]);
+    expect(compactionMemories(s.globalRoot)).toHaveLength(2);
+    expect(compactionRows(s.globalRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
+  }, 60_000);
+});

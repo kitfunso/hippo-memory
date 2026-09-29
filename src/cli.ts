@@ -8312,6 +8312,11 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
 
 function cmdDailyRunner(): void {
   const globalRoot = getGlobalRoot();
+  // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
+  if (isInitialized(globalRoot)) {
+    const finished = replayCompactionsAt(globalRoot, (message) => console.error(`compaction replay: ${message}`));
+    if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
+  }
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   if (workspaces.length === 0) {
