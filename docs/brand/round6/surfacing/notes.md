@@ -1,0 +1,3 @@
+Surfacing: a putty-clay hippo head sunk in dark mirror water; only ears, eyes and nostrils break the surface, each ringed by ripples that bend a mint horizon glow, with the rest of the head a dark-green ghost below.
+Weak: the six bumps still read as eggs until the eye beads and the submerged mass tie them together, and the top-down icon carries only a faint face at 60 px. The mint-ceramic variant was tried (renders/s37-mint.png) and dropped as candy; alt.png is the low-angle shot instead.
+Render: `python render_sd.py "surfacing/hero=surfacing/scene.html?size=2048&mat=putty&yaw=32&pitch=10&dist=4.8&ghost=0.3&fade=0.06"` from round6; icon/mark/alt query strings are in the render log (top=1 for icon and mark, alpha=1&disc=1&discr=1.4 for the mark, pitch=4 for alt).

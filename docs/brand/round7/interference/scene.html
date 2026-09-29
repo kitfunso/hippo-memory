@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo round 7 interference</title>
+<style>html,body{margin:0;background:#0b0f0c}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { build } from './sculpt.js';
+
+const q = Object.fromEntries(new URLSearchParams(location.search));
+const num = (k, d) => (q[k] !== undefined ? +q[k] : d);
+const SIZE = num('size', 1024);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: !!num('alpha', 0) });
+renderer.setPixelRatio(1);
+renderer.setSize(SIZE, SIZE);
+document.body.appendChild(renderer.domElement);
+try {
+  const t0 = performance.now();
+  const render = build(renderer, SIZE, q, num);
+  console.log('built in', Math.round(performance.now() - t0), 'ms');
+  for (let i = 0; i < 3; i++) { render(); await new Promise(requestAnimationFrame); }
+} catch (e) {
+  console.error('scene failed:', e.stack || e);
+}
+window.__done = true;
+</script>
+</body></html>

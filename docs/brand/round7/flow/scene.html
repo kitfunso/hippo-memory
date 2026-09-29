@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo round 7 flow</title>
+<style>html,body{margin:0;background:#0b0f0c}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+<body>
+<script type="module">
+import * as THREE from 'three';
+
+const q = Object.fromEntries(new URLSearchParams(location.search));
+const SIZE = +(q.size || 1024), MODE = q.mode || 'hero', ALPHA = !!+(q.alpha || 0);
+const P = {
+  hero: { n: 3600, seedR: [0.2, 1.7], w: 1.2, env: [0.62, 0.36], floor: 0.03, mint: 3, noise: 0.2, zoom: 1.0, cx: 0, cy: 0, flowX: 0, a: [0.05, 0.5], hw: 1.9 },
+  icon: { n: 45, seedR: [0.3, 1.3], w: 5, env: [0.7, 0.75], floor: 0.12, mint: 1, noise: 0.08, zoom: 0.8, cx: 0, cy: 0, flowX: 0, a: [0.2, 0.5], hw: 7 },
+  alt:  { n: 2400, env: [0, 99], floor: 1, seedR: [0, 0], w: 1.8, mint: 2, noise: 0.5, zoom: 1.0, cx: 0.34, cy: 0.06, flowX: 0.9, a: [0.06, 0.6], hw: 1.9 },
+  mark: { n: 45, seedR: [0.3, 0.95], w: 5, env: [0.6, 0.6], floor: 0.2, mint: 1, noise: 0.08, zoom: 1.05, cx: 0, cy: 0, flowX: 0, a: [0.3, 0.6], hw: 7, clip: 0.98, ms: 0.95 },
+}[MODE];
+
+let s = +(q.seed || 7);
+const rnd = () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const G = Array.from({ length: 512 }, () => { const a = rnd() * 6.2832; return [Math.cos(a), Math.sin(a)]; });
+const PERM = Array.from({ length: 256 }, (_, i) => i).sort(() => rnd() - 0.5);
+const hash = (x, y) => G[(PERM[(PERM[x & 255] + y) & 255] + 0) & 511];
+function noise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const f = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const d = (ix, iy) => { const g = hash(xi + ix, yi + iy); return g[0] * (xf - ix) + g[1] * (yf - iy); };
+  const u = f(xf), v = f(yf);
+  return (d(0, 0) * (1 - u) + d(1, 0) * u) * (1 - v) + (d(0, 1) * (1 - u) + d(1, 1) * u) * v;
+}
+const psi = (x, y) => noise(x * 1.6, y * 1.6) + 0.2 * noise(x * 3.7 + 11, y * 3.7 - 5);
+
+// Vortex with a sink plus divergence-free curl noise that calms toward the eye.
+function vel(x, y) {
+  const dx = x - P.cx, dy = y - P.cy, r = Math.hypot(dx, dy) + 1e-6;
+  const cap = P.flowX ? Math.exp(-r * r / 0.28) : 1;
+  let vx = (-dy / r) * cap - 0.2 * (dx / r) * cap + P.flowX * (1 - cap);
+  let vy = (dx / r) * cap - 0.2 * (dy / r) * cap;
+  const e = 1e-3, k = P.noise * Math.min(1, Math.max(0, (r - 0.08) / 0.5));
+  vx += k * (psi(x, y + e) - psi(x, y - e)) / (2 * e);
+  vy -= k * (psi(x + e, y) - psi(x - e, y)) / (2 * e);
+  const m = Math.hypot(vx, vy) + 1e-9;
+  return [vx / m, vy / m, r];
+}
+function trace(x, y, maxSteps) {
+  const pts = [];
+  for (let i = 0; i < maxSteps; i++) {
+    const [vx, vy, r] = vel(x, y);
+    const z = -0.7 * Math.pow(Math.max(0, 1 - r), 2.2);
+    pts.push([x, y, z]);
+    if (r < 0.03 || (P.clip && r > P.clip) || Math.abs(x) > 2.2 || Math.abs(y) > 2.2) break;
+    const ds = 0.005 * (0.35 + 0.65 * Math.min(r, 1));
+    const [mx, my] = vel(x + vx * ds * 0.5, y + vy * ds * 0.5);
+    x += mx * ds; y += my * ds;
+  }
+  return pts;
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true, alpha: ALPHA });
+renderer.setPixelRatio(1); renderer.setSize(SIZE, SIZE);
+renderer.setClearColor(0x0b0f0c, ALPHA ? 0 : 1);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(28, 1, 0.1, 50);
+cam.position.set(0, -0.55 * P.zoom, 4.1 * P.zoom); cam.lookAt(0, 0, -0.2);
+const VIEWH = 2 * 4.1 * P.zoom * Math.tan(14 * Math.PI / 180), PIX = VIEWH / 1024;
+
+const INK = [0.043, 0.059, 0.047], BONE = [0.914, 0.937, 0.914], MINT = [0.486, 0.890, 0.545], AMBER = [0.949, 0.722, 0.294];
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+// One ribbon batch per layer; sub-pixel widths are clamped and paid back in alpha.
+function Batch() { return { pos: [], col: [], side: [], idx: [], n: 0 }; }
+function ribbon(B, pts, widthFn, colFn) {
+  if (pts.length < 3) return;
+  const base = B.n, L = pts.length, minW = VIEWH / SIZE;
+  for (let i = 0; i < L; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(L - 1, i + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1]; const m = Math.hypot(tx, ty) + 1e-9; tx /= m; ty /= m;
+    const t = i / (L - 1), tin = Math.min(1, i / 12); let w = widthFn(t) * tin; const c = colFn(t, pts[i]);
+    let al = c[3]; if (w < minW) { al *= w / minW; w = minW; }
+    for (const sd of [-1, 1]) {
+      B.pos.push(pts[i][0] - ty * w * 0.5 * sd, pts[i][1] + tx * w * 0.5 * sd, pts[i][2]);
+      B.col.push(c[0], c[1], c[2], al); B.side.push(sd);
+    }
+    if (i < L - 1) { const k = base + i * 2; B.idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  B.n += L * 2;
+}
+const mat = new THREE.ShaderMaterial({
+  transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+  vertexShader: `attribute vec4 col; attribute float side; varying vec4 vC; varying float vS;
+    void main(){ vC = col; vS = side; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
+  fragmentShader: `varying vec4 vC; varying float vS;
+    void main(){ float e = 1. - smoothstep(0.55, 1., abs(vS)); gl_FragColor = vec4(vC.rgb, vC.a * mix(0.55,1.,e)); }`,
+});
+function flush(B, order) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
+  g.setAttribute('col', new THREE.Float32BufferAttribute(B.col, 4));
+  g.setAttribute('side', new THREE.Float32BufferAttribute(B.side, 1));
+  g.setIndex(B.idx);
+  const m = new THREE.Mesh(g, mat); m.renderOrder = order; m.frustumCulled = false; scene.add(m);
+}
+
+function seed() {
+  if (P.flowX) return [-1.6 - rnd() * 0.6, (rnd() - 0.5) * 1.1 * (0.4 + rnd())];
+  const a = rnd() * 6.2832, r = P.seedR[0] + (P.seedR[1] - P.seedR[0]) * Math.sqrt(rnd());
+  return [P.cx + Math.cos(a) * r, P.cy + Math.sin(a) * r];
+}
+
+const env = p => { const r = Math.hypot(p[0] - P.cx, p[1] - P.cy), d = (r - P.env[0]) / P.env[1]; return P.floor + (1 - P.floor) * Math.exp(-d * d); };
+const ICON = MODE === 'icon' || MODE === 'mark';
+const grey = Batch(), glow = Batch(), core = Batch(), amb = Batch();
+const W = P.w * PIX;
+for (let i = 0; i < P.n; i++) {
+  const [x, y] = seed();
+  const pts = trace(x, y, Math.floor(180 + rnd() * (P.flowX ? 1400 : 900)));
+  const b = Math.pow(rnd(), 2.2), w0 = W * (0.4 + 1.6 * b), a0 = P.a[0] + (P.a[1] - P.a[0]) * b;
+  ribbon(grey, pts, t => w0 * Math.pow(1 - t, 1.3), (t, p) => [...mix(BONE, mix(BONE, INK, 0.62), Math.pow(t, 0.6)), a0 * Math.pow(1 - t, 0.9) * env(p)]);
+}
+// Recalled strands: full length, brighter toward the eye.
+for (let i = 0; i < P.mint; i++) {
+  const [x, y] = P.flowX ? [-1.9, -0.12 + i * 0.2] : (() => { const a = i / P.mint * 6.2832 + 0.9, r = P.ms || 1.1 + 0.45 * rnd(); return [P.cx + Math.cos(a) * r, P.cy + Math.sin(a) * r]; })();
+  const pts = trace(x, y, 4000), wm = W * P.hw;
+  if (!ICON) ribbon(glow, pts, t => wm * 7 * (0.6 + 0.4 * t), t => [...MINT, 0.05]);
+  ribbon(core, pts, t => wm * (0.8 + 0.5 * t), t => [...mix(MINT, BONE, 0.15 * t), 0.95]);
+}
+// Marked-wrong strand: bright, then a clean snap, a short recoiling fragment, nothing after.
+{
+  const [x, y] = P.flowX ? [-1.8, 0.32] : [P.cx + Math.cos(+(q.aa || 3.3)) * (P.ms || 1.25), P.cy + Math.sin(+(q.aa || 3.3)) * (P.ms || 1.25)];
+  const pts = trace(x, y, 4000), cut = Math.floor(pts.length * (P.flowX ? 0.5 : 0.42));
+  const wa = W * P.hw, gap = Math.floor(pts.length * (ICON ? 0.06 : 0.05));
+  const head = pts.slice(0, cut), frag = pts.slice(cut + gap, cut + gap * 2);
+  if (!ICON) ribbon(glow, head, t => wa * 7, t => [...AMBER, 0.05]);
+  ribbon(amb, head, t => wa, t => [...AMBER, 0.95]);
+  ribbon(amb, frag.slice(0, Math.ceil(frag.length * 0.6)), t => wa, t => [...AMBER, 0.9]);
+}
+
+flush(grey, 1); flush(glow, 2); flush(amb, 3); flush(core, 4);
+renderer.render(scene, cam);
+window.__done = true;
+</script>
+</body></html>

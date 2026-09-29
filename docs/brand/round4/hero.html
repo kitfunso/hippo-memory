@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo round 4 hero</title>
+<style>html,body{margin:0;background:#0b0f0c;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<body>
+<script type="module">
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const q = new URLSearchParams(location.search);
+const SIZE = +(q.get("size") || 1024);
+const R = 3; // half the 6-unit stroke, in grid units
+
+// Grid (y down, 64 wide) to scene (y up, centred).
+const P = (x, y, z = 0) => new THREE.Vector3(x - 32, 32 - y, z);
+
+class Arc extends THREE.Curve {
+  constructor(cx, cy, r, a0, a1) { super(); Object.assign(this, { cx, cy, r, a0, a1 }); }
+  getPoint(t, o = new THREE.Vector3()) { const a = this.a0 + (this.a1 - this.a0) * t; return o.copy(P(this.cx + this.r * Math.cos(a), this.cy + this.r * Math.sin(a))); }
+}
+const line = (x0, y0, x1, y1) => new THREE.LineCurve3(P(x0, y0), P(x1, y1));
+const path = (...curves) => { const c = new THREE.CurvePath(); curves.forEach(k => c.add(k)); return c; };
+
+const strokes = [
+  path(line(10, 10, 10, 54)),
+  path(line(10, 54, 10, 38), new Arc(25, 38, 15, Math.PI, 2 * Math.PI), line(40, 38, 40, 54)),
+  path(line(40, 54, 40, 46.5), new Arc(47.5, 46.5, 7.5, Math.PI, 2 * Math.PI), line(55, 46.5, 55, 54)),
+];
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(SIZE, SIZE); renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f0c);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.35;
+
+const mat = new THREE.MeshStandardMaterial({ color: 0x7ce38b, roughness: 0.62, metalness: 0 });
+const group = new THREE.Group();
+for (const c of strokes) {
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(c, 240, R, 32, false), mat);
+  tube.castShadow = tube.receiveShadow = true; group.add(tube);
+  for (const t of [0, 1]) { const s = new THREE.Mesh(new THREE.SphereGeometry(R, 32, 24), mat); s.position.copy(c.getPoint(t)); s.castShadow = true; group.add(s); }
+}
+group.position.z = R;
+scene.add(group);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x0f1511, roughness: 1, metalness: 0 }));
+ground.receiveShadow = true; scene.add(ground);
+
+scene.add(new THREE.HemisphereLight(0xdfe8e0, 0x0b0f0c, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(-30, 60, 70); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); key.shadow.radius = 8;
+Object.assign(key.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 300 });
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xa7f0b1, 0.5); fill.position.set(60, 10, 40); scene.add(fill);
+
+const camera = new THREE.PerspectiveCamera(20, 1, 1, 1000);
+camera.position.set(10, 16, 205); camera.lookAt(0, 0, 0);
+renderer.render(scene, camera);
+window.__done = true;
+</script>
+</body></html>

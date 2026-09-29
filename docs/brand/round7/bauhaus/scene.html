@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo round 7 bauhaus</title>
+<style>html,body{margin:0;background:#e9efe9}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const q = Object.fromEntries(new URLSearchParams(location.search));
+const SIZE = +(q.size || 1024), MODE = q.mode || 'hero', ALPHA = MODE === 'mark';
+const DARK = MODE === 'alt';
+const C = { ink: 0x0b0f0c, bone: 0xe9efe9, mint: 0x7ce38b, amber: 0xf2b84b, disc: 0xc4ccc5 };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: ALPHA });
+renderer.setPixelRatio(1); renderer.setSize(SIZE, SIZE);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.VSMShadowMap;
+renderer.setClearColor(DARK ? C.ink : C.bone, ALPHA ? 0 : 1);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+
+// Paper grain drawn in JS so paper and gouache share one tooth.
+const cv = document.createElement('canvas'); cv.width = cv.height = 1024;
+const cx = cv.getContext('2d'), img = cx.createImageData(1024, 1024);
+for (let i = 0; i < img.data.length; i += 4) { const v = 118 + Math.random() * 20 + Math.random() * 20; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+cx.putImageData(img, 0, 0);
+const grain = new THREE.CanvasTexture(cv); grain.wrapS = grain.wrapT = THREE.RepeatWrapping; grain.repeat.set(3, 3);
+const mat = (color, bump = 0.6) => new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0, bumpMap: grain, bumpScale: bump });
+
+const paper = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), ALPHA ? new THREE.ShadowMaterial({ opacity: 0.22 }) : mat(DARK ? 0x0b0f0c : C.bone, 1.2));
+paper.receiveShadow = true; scene.add(paper);
+
+function add(geo, m, x, y, z, rz = 0) {
+  const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.z = rz;
+  o.castShadow = o.receiveShadow = true; scene.add(o); return o;
+}
+const box = (w, h, d) => new RoundedBoxGeometry(w, h, d, 5, Math.min(w, h, d) * 0.18);
+function arch(R, Ri, d, a0 = 0, a1 = Math.PI) {
+  const s = new THREE.Shape();
+  s.absarc(0, 0, R, a0, a1, false); s.absarc(0, 0, Ri, a1, a0, true);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d, curveSegments: 96, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01, bevelSegments: 4 });
+  return g;
+}
+function disc(r, d) { const g = new THREE.CylinderGeometry(r, r, d, 128); g.rotateX(Math.PI / 2); g.translate(0, 0, d / 2); return g; }
+const ink = mat(0x141a15, 0.5), fg = DARK ? mat(C.bone, 0.8) : ink;
+const pop = c => { const m = mat(c, 0.2); m.emissive.set(c); m.emissiveIntensity = 0.28; return m; };
+const rodG = (len, r) => new THREE.CylinderGeometry(r, r, len, 24);
+if (MODE === 'alt') {
+  // Second take: the same primitives rearranged so a hippo head appears only on a second look.
+  add(disc(0.5, 0.02), mat(0x1c231e, 0.8), 0.12, 0.22, 0);
+  add(arch(0.36, 0.0001, 0.1), fg, -0.22, -0.26, 0.0);
+  add(new RoundedBoxGeometry(0.66, 0.3, 0.1, 8, 0.049), fg, 0.2, -0.11, 0.06);
+  add(new THREE.SphereGeometry(0.075, 64, 48), pop(C.mint), -0.32, 0.2, 0.2);
+  const rod = rodG(1.5, 0.009); rod.rotateZ(Math.PI / 2); add(rod, fg, 0.0, -0.42, 0.2, -0.03);
+  add(box(0.09, 0.09, 0.09), pop(C.amber), 0.5, -0.58, 0.045, 0.5);
+} else {
+  const icon = MODE !== 'hero';
+  add(disc(0.46, 0.02), mat(0xc9d2ca, 0.8), 0.2, 0.2, 0);
+  add(box(0.17, 1.2, 0.1), ink, -0.34, -0.04, 0.05);
+  add(arch(0.44, 0.27, 0.08, 0, Math.PI / 2), ink, -0.3, -0.12, 0.03);
+  const leg = rodG(0.56, icon ? 0.03 : 0.018); add(leg, ink, 0.055, -0.4, icon ? 0.06 : 0.16);
+  add(new THREE.SphereGeometry(icon ? 0.085 : 0.07, 64, 48), pop(C.mint), 0.5, 0.44, 0.22);
+  add(box(icon ? 0.12 : 0.1, icon ? 0.12 : 0.1, 0.08), pop(C.amber), 0.42, -0.6, 0.04, 0.45);
+}
+
+scene.add(new THREE.HemisphereLight(0xf4f8f4, 0x9aa39b, DARK ? 1.1 : 1.75));
+const sun = new THREE.DirectionalLight(0xfffdf6, DARK ? 3.4 : 1.5);
+sun.position.set(DARK ? -3.2 : -1.6, DARK ? 1.2 : 2.2, DARK ? 2.2 : 4.2);
+sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.1, far: 12 });
+sun.shadow.radius = +(q.soft || 14); sun.shadow.blurSamples = 25; sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+const cam = new THREE.PerspectiveCamera(MODE === 'hero' || DARK ? 18 : 16, 1, 0.1, 50);
+if (MODE === 'hero' || DARK) cam.position.set(0.45, -1.2, 6.0); else cam.position.set(0.25, -0.5, 6.4);
+cam.lookAt(DARK ? 0.02 : 0.06, DARK ? -0.06 : -0.08, 0);
+renderer.render(scene, cam);
+window.__done = true;
+</script>
+</body></html>

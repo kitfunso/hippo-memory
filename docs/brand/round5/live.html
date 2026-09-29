@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo mark, live</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#0b0f0c;overflow:hidden}canvas{display:block}
+#hint{position:fixed;left:0;right:0;bottom:14px;text-align:center;font:12px "Martian Mono",monospace;color:#6e7a71;letter-spacing:.04em}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<body>
+<div id="hint">drag to orbit</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createScene, paramsFrom } from './scene.js';
+
+const q = { form: 'echo', mat: 'boneglow', zoff: 3, glow: 2, key: 0.6, bev: 1.2, ...paramsFrom(location.search) };
+const side = () => Math.min(window.innerWidth, window.innerHeight);
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const { camera, composer, render } = await createScene(renderer, Math.round(side() * renderer.getPixelRatio()), q);
+const base = camera.position.length();
+const fit = () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.position.setLength(base * Math.max(1, 1 / camera.aspect)); // portrait phones back off so the mark fits
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+};
+window.addEventListener('resize', fit);
+fit();
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.7;
+controls.minDistance = 5; controls.maxDistance = 16;
+controls.minPolarAngle = 0.9; controls.maxPolarAngle = 1.75;
+renderer.setAnimationLoop(() => { controls.update(); render(); });
+</script>
+</body></html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>How Claude Code saves memories, and what hippo can take from it</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--ink:#1d1f23;--mute:#5d6470;--line:#e2e4e8;--bg:#fbfbfa;--acc:#2f6f5e;--warn:#9a5b13}
+@media(prefers-color-scheme:dark){:root{--ink:#e7e8ea;--mute:#9aa1ab;--line:#30343a;--bg:#16181b;--acc:#7cc4ae;--warn:#e0a861}}
+body{font:16px/1.55 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);max-width:980px;margin:40px auto;padding:0 24px}
+h1{font-size:26px;margin:0 0 6px}h2{font-size:19px;margin:34px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.sub{color:var(--mute);margin:0 0 24px}
+table{border-collapse:collapse;width:100%;font-size:14.5px}th,td{border-top:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{color:var(--mute);font-weight:600}td:first-child{font-weight:600;width:17%}
+code{font:13px ui-monospace,Consolas,monospace;background:color-mix(in srgb,var(--line) 55%,transparent);padding:1px 4px;border-radius:3px}
+ol.rec>li{margin:0 0 18px}ol.rec b{color:var(--acc)}.why,.how,.cost{display:block;color:var(--mute);font-size:14.5px;margin-top:3px}
+.cost{color:var(--warn)}
+.note{border-left:3px solid var(--acc);padding:6px 14px;color:var(--mute)}
+.src{font-size:13px;color:var(--mute)}
+</style></head><body>
+<h1>How Claude Code saves memories, and what hippo can take from it</h1>
+<p class="sub">2026-09-28. Hippo side read from the source at <code>origin/master 8a00c7b</code>; Claude Code side from the official memory docs and the memory instructions Claude Code gives the model.</p>
+
+<p class="note">The short version: Claude Code spends its effort at <b>write time</b>. The model decides what's worth keeping, writes it in a fixed shape with the reason attached, and updates the old entry instead of adding a new one. Hippo spends its effort <b>after the fact</b>. It captures a lot by regex and git, then decays, dedupes, merges and flags conflicts during sleep. Hippo's machinery is stronger. Claude Code's individual memories are better. Track Z (zero-touch) needs both.</p>
+
+<h2>Side by side</h2>
+<table>
+<tr><th></th><th>Claude Code auto memory</th><th>hippo</th></tr>
+<tr><td>Who decides to save</td><td>The model, in the moment. It saves when something would help a future conversation, and when the user says "remember that".</td><td>Mostly code: regex over the last 20 user turns and 10 replies at session end (<code>capture.ts:65-94</code>), git commit subjects matching fix/revert/refactor… (<code>autolearn.ts:46-58</code>), and failed tool calls. The agent can call <code>hippo remember</code> too.</td></tr>
+<tr><td>Shape of one memory</td><td>One file per fact with frontmatter: <code>name</code>, a one-line <code>description</code> used for recall, and a <code>type</code> (user, feedback, project, reference). Feedback and project entries add <b>Why:</b> and <b>How to apply:</b> lines. Relative dates become absolute.</td><td>One row of free text plus tags, layer, strength, confidence and scope (<code>db.ts:50-68</code>). There's no rationale field; the only "why" is <code>--context</code> on the separate decisions table (<code>cli.ts:5602</code>).</td></tr>
+<tr><td>What NOT to save</td><td>Explicit: nothing derivable from the code, git history or CLAUDE.md, and nothing that only matters to this conversation.</td><td>No such guidance. Negative filtering is a code-side quality gate (<code>audit.ts:73-126</code>). <code>learn --git</code> stores commit subjects, which is exactly what Claude Code is told to skip.</td></tr>
+<tr><td>New vs existing</td><td>Check for an existing file first. Update it rather than duplicating, and delete memories that turn out to be wrong.</td><td>Append, then dedupe by word overlap with a threshold that varies by path (0.6 or 0.7). Sleep merges clusters by <i>concatenation</i> (<code>consolidate.ts:852</code>). <code>supersede</code> exists but only runs when someone calls it.</td></tr>
+<tr><td>What loads each session</td><td>An index: the first 200 lines or 25 KB of <code>MEMORY.md</code>, one line per memory with a hook. The model reads the full topic file only when a line looks relevant.</td><td>Pinned rows plus the 5 most recent, in full, within a 1500-token budget (<code>hooks.ts:138</code>). The rest is reachable only if the agent runs <code>hippo context</code>. There's no index of what exists.</td></tr>
+<tr><td>Links</td><td><code>[[name]]</code> links written by the model; a dangling link marks something worth writing later.</td><td>An entity graph extracted from content. It's automatic, but it doesn't say why two memories are related.</td></tr>
+<tr><td>Staleness</td><td>No decay. The recall rule is "memory is point-in-time: if it names a file, function or flag, check it still exists before recommending it."</td><td>Half-life decay, confidence levels, "aged" and "Previously observed" labels, git invalidation (<code>memory.ts:446-472</code>, <code>invalidation.ts:148</code>). No instruction to verify before acting.</td></tr>
+<tr><td>Human editing</td><td>Plain markdown files are the source of truth. Edit them in any editor and the next session sees the change.</td><td>SQLite is the source of truth. Markdown mirrors are written but edits are never read back (<code>store.ts:2475-2485</code>).</td></tr>
+<tr><td>Scale and reach</td><td>One machine, one repo, and the index is capped at 200 lines. No search.</td><td>Search, decay, conflict detection, scopes and tenants, and it works across Claude Code, Codex, Cursor and OpenClaw. The store here holds about 2,400 memories.</td></tr>
+</table>
+
+<h2>What hippo can learn, ranked by value for Track Z</h2>
+<ol class="rec">
+<li><b>Store the reason with the rule.</b> Add <code>why</code> and <code>apply</code> fields, and have capture fill them from the turn where the correction happened.
+<span class="why">Why: a rule with its reason lets the agent handle the edge case instead of applying the rule blindly. Today a captured "never X" arrives without context in a session months later.</span>
+<span class="how">How: add two nullable columns and have <code>remember --why --apply</code> set them. Capture's "rule" and "decision" categories take the surrounding user sentence as <code>why</code>. Render as <code>rule — Why: …</code> in injection.</span>
+<span class="cost">Cost: a schema migration on live stores, so it needs a migration plan and sign-off.</span></li>
+<li><b>Decide update or create at write time.</b> Before inserting, find the closest existing memory. If it covers the same thing, supersede it with the merged text instead of adding a row.
+<span class="why">Why: sleep's concatenation merge produces "[Consolidated from 2 related memories]" blobs (visible in tonight's sleep log). Claude Code's rule, one fact per entry and update in place, keeps the store readable and the injection budget spent on distinct facts.</span>
+<span class="how">How: <code>remember</code> and capture call recall with a top-1 threshold. Above it, supersede with a replacement: LLM-written when a key is set, else new text wins. Keep the sleep merge as a backstop only.</span></li>
+<li><b>Inject an index, not just pinned and recent.</b> Add one line per high-strength memory (id plus a ~12-word hook) under the pinned block, with <code>hippo show &lt;id&gt;</code> to expand.
+<span class="why">Why: today the agent can't know what hippo knows unless it happens to search for it. Claude Code's 200-line index is why its memory feels present without prompt-relevant recall.</span>
+<span class="how">How: store a <code>description</code> per memory (the first sentence, or LLM-written at sleep) and render the top N by strength and scope into the existing budget.</span></li>
+<li><b>Write down what not to save, and stop saving what git already knows.</b> Put Claude Code's exclusion list into the hook text and the <code>hippo_remember</code> tool description. Default <code>autoLearnOnSleep</code> to keep only commits whose body explains a cause, not bare subjects.
+<span class="why">Why: commit subjects are derivable from <code>git log</code>. They crowd out lessons, and they're a big share of the "low-quality" rows the audit keeps flagging (35 tonight).</span></li>
+<li><b>Tell the agent to verify at recall.</b> Add one line to the injected block: "Memories are point-in-time; if one names a file, function or flag, check it exists before acting on it."
+<span class="why">Why: the labels ("Previously observed") say a memory is old, but not what to do about it. This is the cheapest change on the list: text only, no schema.</span></li>
+<li><b>Read edited mirrors back.</b> On sleep, if a mirror file's hash differs from what was written, treat the file as a user edit and supersede the row.
+<span class="why">Why: users trust files they can open and fix. Today fixing a mirror silently does nothing, which is worse than having no mirror at all.</span></li>
+<li><b>Keep the frontmatter when importing Claude Code memories.</b> <code>learnFromMemoryMd</code> takes the body only and cuts it at 1,500 characters (<code>cli.ts:3003</code>). Map <code>type</code> to tags, <code>description</code> to the hook, and the Why/How lines to the fields in point 1.
+<span class="why">Why: these are the best-shaped memories hippo ever receives, and the import currently flattens them into anonymous "observed" text.</span></li>
+</ol>
+
+<h2>What hippo should not copy</h2>
+<p>Claude Code has no decay, no search, no conflict detection and a hard 200-line index cap. It works because the model curates a small set by hand. Hippo's promise is memory without that curation. So take the write-time <i>shape</i> (reason, type, one fact, update in place), not the small-and-manual <i>model</i>.</p>
+
+<p class="src">Sources: code.claude.com/docs/en/memory and /context-window (fetched 2026-09-28); the Claude Code memory instructions in this session's system prompt; the hippo code map with file:line citations against the source at <code>8a00c7b</code>; <code>~/.hippo/logs/claude-code-sleep.log</code> for the merge and audit counts.</p>
+</body></html>
