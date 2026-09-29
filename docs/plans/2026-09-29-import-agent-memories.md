@@ -109,8 +109,8 @@ and test is kept, the session-end import for folders without a store included; t
    and the tool tag. "Untagged" is a live row with the key's source and no tag: a set-aside row the user restored,
    or a pinned row whose note went. "Dormant" is a readable `dormant_memories` snapshot with the key's source and no
    `superseded_by`. A row's hash is the one in its source. An item is **present** (read, with its hash), **refused**
-   (read, but short, a secret or rejected: design 4), **unread** (in `skipped`: over 256 KB, a NUL byte, a failed
-   read) or **gone**.
+   (read, but short, a secret or rejected: design 4), **unread** (in `skipped`: empty, over 256 KB, a NUL byte, a
+   failed read) or **gone**.
    - present, a live row has its hash: that row is kept (the newest such tagged row by `created`, then id; else an
      untagged one, whose tag goes back on with its id and recall history). Every other tagged row of the key is
      superseded by it. Untagged rows with another hash are left alone, so a `hippo dormant restore` survives.
@@ -201,7 +201,8 @@ and test is kept, the session-end import for folders without a store included; t
       init` creates the store in the same command that imports.
 
 12. **Reading another tool's store.** Files only, read and never written; no adapter opens another tool's database.
-    A file over 256 KB, a file holding a NUL byte, or a failed read is unread (design 6): its rows are left alone. An
+    An empty file (a tool rewriting a file truncates it first), a file over 256 KB, a file holding a NUL byte, or a
+    failed read is unread (design 6): its rows are left alone. An
     unreadable folder or a single-file store whose shape check fails marks the container unreadable: one warning
     line, nothing set aside, and the sync goes on. A failed git call only lists fewer containers, which changes
     nothing (design 6). The old bare catch (cli.ts:2976) goes.
@@ -236,8 +237,8 @@ the file's mtime as the item time unless a better one is named.
 - Home: `codexHomeDir(home, env)` (`CODEX_HOME`, else `<home>/.codex`).
 - User container: `<codex home>/memories/memory_summary.md`, the only memory file Codex puts in its prompt.
   Shape check: the first non-empty line is `v1` and a `## User Profile` heading exists.
-- Items: the paragraphs of `## User Profile`, and the top-level bullets of `## User preferences` and
-  `## General Tips`. Stored as `<heading>: <item>`. `## What's in Memory` is an index into `MEMORY.md` and is skipped.
+- Items: the paragraphs and top-level bullets (sub-lines stay with their bullet) under `## User Profile`,
+  `## User preferences` and `## General Tips`, all of which Codex puts in its prompt. Stored as `<heading>: <item>`. `## What's in Memory` is an index into `MEMORY.md` and is skipped.
 - Not read: `MEMORY.md` (a registry Codex greps on demand, grouped by working folder), `raw_memories.md`,
   `rollout_summaries/`, `memories_1.sqlite`, and the v2 pipeline (opt-in, layout not checked).
 
@@ -499,3 +500,25 @@ folder's own notes; it now does what session end does there (design 11).
    containers; only a session whose notes folder is that container writes them (design 2).
 2. Rejected: migrate global rows written before the origin joined the container id. No release has written
    `agent-memory:` rows; the old `claude-memory:` rows live in local stores and legacy adoption covers them.
+
+**Build review, Opus reviewer on the branch (11 points: 3 applied, 2 closed otherwise, 6 rejected):**
+1. Applied: the origin `''` handover gap, the same finding as codex's delta point 1.
+2. Applied: an empty file read as a note-free file set every row aside while a tool rewrote it; it is now unread
+   (designs 6, 12). OpenClaw's `MEMORY.md` was the exposed case.
+3. Applied: the test run now clears the OpenClaw and Qwen variables and `HIPPO_AGENT_MEMORY_TOOLS`.
+4. Closed by the tests written since: the 4x40 race, rebuild-index after a set-aside, the canary child process,
+   the busy skip, never auto-shared.
+5. Closed in the spec: the Codex adapter reads paragraphs and bullets under all three headings. Sub-bullets stay
+   inside their bullet, so the "nested bullets become rows" part was wrong; the Codex text above now says what runs.
+6. Rejected: check that `transcript_path` sits under `<config>/projects`. It is Claude's own word on where the
+   session lives, the one route that still works when Claude's folder is not where hippo looks, and a caller who can
+   forge hook input can read those files anyway.
+7. Rejected: ignore relative tool variables. The tool resolves them against its own working folder, and hooks run
+   in it; a wrong guess from a scheduled run lists a missing folder, which changes nothing (design 6).
+8. Rejected: skip symlinked notes. The tools read through links, so the import sees what the agent sees.
+9. Rejected: break `created` ties by recall count. The lookup and writes share one transaction and a present hash is
+   never written twice, so two tagged rows of one key and hash with the same `created` cannot form.
+10. Rejected: a read-only dry run. `BEGIN` takes the write lock at the first planned write and holds it for one
+    container's rollback; with no store there is nothing to be a duplicate of, so the count is what a first run does.
+11. Rejected: a deadline for the post-compact import. Replay's deadline is absolute, so the import's time comes out
+    of replay's budget and replay's leftovers wait for the next compaction; the import reads one folder.

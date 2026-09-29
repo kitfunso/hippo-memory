@@ -9,11 +9,13 @@ export type TextFile =
   | { readonly ok: true; readonly text: string; readonly mtimeMs: number }
   | { readonly ok: false; readonly reason: string };
 
-/** A file's text, or why it was skipped: too big, holds a NUL byte (not text), or unreadable. */
+/** A file's text, or why it was skipped: empty, too big, holds a NUL byte (not text), or unreadable. */
 export function readTextFile(file: string): TextFile {
   try {
     const stat = fs.statSync(file);
     if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
+    // A tool rewriting a file truncates it first; read as holding no notes, every row would be set aside.
+    if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
     if (stat.size > MAX_ITEM_BYTES) return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };
     const buf = fs.readFileSync(file);
     if (buf.includes(0)) return { ok: false, reason: `${file}: not text` };
