@@ -12,9 +12,8 @@
  * Tests:
  *   1. Output.watching set on no_class_match (regex matched, no classes scored >=1)
  *   2. Output.watching set on tiebreak (>=2 classes tied at best score)
- *   3. Backward-compat: computePlanningFallacyHint wrapper still returns null on watching paths
- *   4. api.recall populates RecallResult.planningFallacyWatching when output is watching
- *   5. Mutual exclusivity: hint and watching never co-exist
+ *   3. api.recall populates RecallResult.planningFallacyWatching when output is watching
+ *   4. Mutual exclusivity: hint and watching never co-exist
  *
  * Project rule: always use real DB for tests.
  */
@@ -27,7 +26,6 @@ import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 import {
   computePlanningFallacyOutput,
-  computePlanningFallacyHint,
   savePrediction,
   closePrediction,
 } from '../src/predictions.js';
@@ -105,20 +103,6 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     expect(out.watching).toBeDefined();
     expect(out.watching!.reason).toBe('tiebreak');
     expect(out.watching!.suggestion).toMatch(/tied|rename|refine/i);
-  });
-
-  it('backward-compat: computePlanningFallacyHint wrapper returns null on watching paths', () => {
-    // The pre-v1.13.4 contract was: returns PlanningFallacyHint | null.
-    // The watching variant only surfaces via computePlanningFallacyOutput.
-    // The wrapper MUST still return null on no_class_match (otherwise
-    // existing callers that haven't migrated yet would see undefined).
-    const hint = computePlanningFallacyHint(
-      root,
-      'default',
-      'this will take 2 days to finish',
-      { actor: 'test' },
-    );
-    expect(hint).toBeNull();
   });
 
   it('Output returns {} (neither variant) when AUTODEBIAS=off (env-gated short-circuit)', () => {

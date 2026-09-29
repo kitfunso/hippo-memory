@@ -1,7 +1,7 @@
 /**
  * J3.2 — api.recall integration with planningFallacyHint auto-injection.
  *
- * Asserts the orchestrator (computePlanningFallacyHint) wires correctly
+ * Asserts the orchestrator (computePlanningFallacyOutput) wires correctly
  * through api.recall: hint populated only when ALL conditions met (env
  * != off, forward-claim match, class resolves uniquely, nClosed > 0).
  * Audit attribution flows from ctx.actor.subject -> inner

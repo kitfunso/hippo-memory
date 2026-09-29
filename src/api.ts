@@ -618,7 +618,7 @@ export interface RecallResult {
    * the calling agent sees its track record at the moment of forecasting
    * (Lovallo-Kahneman 2003 inside-vs-outside view).
    *
-   * Populated by `api.recall` itself via `computePlanningFallacyHint`.
+   * Populated by `api.recall` itself via `computePlanningFallacyOutput`.
    * Pipeline-invariant: the value depends only on (queryText, tenantId,
    * predictions table state) — all three are identical regardless of
    * which downstream search pipeline produces the memory list, so MCP
@@ -1226,10 +1226,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // per-pipeline). opts.actor threads through to the inner
   // computePredictionBaserate call so MCP/HTTP-originated hints attribute
   // correctly instead of defaulting to 'cli'. Disabled by HIPPO_AUTODEBIAS=off.
-  // v1.13.4: switched from computePlanningFallacyHint to
-  // computePlanningFallacyOutput so the no-class-match / tiebreak
-  // watching variant can also reach the caller surface. The two
-  // outputs are mutually exclusive; we splat both as optional fields.
+  // The hint and the no-class-match / tiebreak watching variant are mutually exclusive; both go out as optional fields.
   const planningFallacyOutput = computePlanningFallacyOutput(
     ctx.hippoRoot,
     ctx.tenantId,

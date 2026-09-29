@@ -2605,7 +2605,9 @@ async function cmdEval(
     const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
     let baseline: EvalBaseline | undefined;
     if (fs.existsSync(baselinePath)) {
-      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {}
+      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {
+        console.error(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
+      }
     }
 
     const result = await runFeatureEval(version);

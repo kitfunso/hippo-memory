@@ -365,8 +365,3 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     return { ...DEFAULT_CONFIG };
   }
 }
-
-export function saveConfig(hippoRoot: string, config: HippoConfig): void {
-  const configPath = path.join(hippoRoot, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-}

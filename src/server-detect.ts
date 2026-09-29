@@ -64,7 +64,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
   try {
     info = JSON.parse(readFileSync(path, 'utf8'));
   } catch {
-    try { unlinkSync(path); } catch {}
+    removePidfile(hippoRoot);
     return null;
   }
 
@@ -75,7 +75,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
   try {
     process.kill(info.pid, 0);
   } catch {
-    try { unlinkSync(path); } catch {}
+    removePidfile(hippoRoot);
     return null;
   }
 
@@ -88,7 +88,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
   try {
     probeUrl = new URL(info.url);
   } catch {
-    try { unlinkSync(path); } catch {}
+    removePidfile(hippoRoot);
     return null;
   }
   if (
@@ -96,7 +96,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     !PIDFILE_LOOPBACK_HOSTS.has(probeUrl.hostname) ||
     probeUrl.port !== String(info.port)
   ) {
-    try { unlinkSync(path); } catch {}
+    removePidfile(hippoRoot);
     return null;
   }
 
@@ -111,7 +111,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
       signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
     });
     if (!res.ok || !res.body) {
-      try { unlinkSync(path); } catch {}
+      removePidfile(hippoRoot);
       return null;
     }
     // Read the body under a hard byte cap. The process answering on info.url
@@ -127,7 +127,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
       received += value.byteLength;
       if (received > HEALTH_BODY_MAX_BYTES) {
         await reader.cancel();
-        try { unlinkSync(path); } catch {}
+        removePidfile(hippoRoot);
         return null;
       }
       raw += decoder.decode(value, { stream: true });
@@ -135,7 +135,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     raw += decoder.decode();
     const body: { started_at?: unknown } = JSON.parse(raw);
     if (body.started_at !== info.started_at) {
-      try { unlinkSync(path); } catch {}
+      removePidfile(hippoRoot);
       return null;
     }
   } catch (err) {
@@ -145,7 +145,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     // SAFETY: err's shape is unknown (catch clause); reading an optional
     // .name property structurally is safe regardless of the object's actual type.
     if ((err as { name?: unknown })?.name !== 'TimeoutError') {
-      try { unlinkSync(path); } catch {}
+      removePidfile(hippoRoot);
     }
     return null;
   }
@@ -187,7 +187,7 @@ export function writePidfile(
  */
 export function removePidfile(hippoRoot: string): void {
   const path = join(hippoRoot, PIDFILE);
-  try { unlinkSync(path); } catch {}
+  try { unlinkSync(path); } catch { /* already gone or undeletable; the next detectServer probe re-checks */ }
 }
 
 /**

@@ -40,8 +40,6 @@ export interface SlackEventEnvelope {
   event: SlackMessageEvent | { type: string; [k: string]: JsonValue };
 }
 
-export type SlackInbound = SlackEventEnvelope | SlackUrlVerification;
-
 function isJsonString(value: JsonValue | undefined): value is string {
   return typeof value === 'string';
 }

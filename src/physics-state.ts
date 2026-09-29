@@ -178,13 +178,6 @@ export function initializeParticle(
 }
 
 /**
- * Delete physics state for a memory. (Also handled by CASCADE, but explicit for clarity.)
- */
-export function deletePhysicsState(db: DatabaseSyncLike, memoryId: string): void {
-  db.prepare('DELETE FROM memory_physics WHERE memory_id = ?').run(memoryId);
-}
-
-/**
  * Reset all physics states from original embeddings.
  * Drops existing physics data and re-initializes from the embedding index.
  */
