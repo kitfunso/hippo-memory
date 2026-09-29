@@ -88,4 +88,4 @@ hippo doctor --json
 - Never store secrets, API keys, tokens or personal data in a memory. hippo's secret detector blocks common formats; do not rely on it alone.
 - Remember lessons, decisions and known dead ends, not transcripts.
 - `hippo reject <memory-id>` marks a memory's value as wrong so it cannot come back; prefer it over deleting and re-deleting.
-- `hippo tokens` shows how much memory text hippo has sent to agents.
+- `hippo tokens` shows how much memory text hippo has sent to agents, and how much later model calls re-read.

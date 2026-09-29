@@ -3157,8 +3157,8 @@ export function recordTokens(
 
 /**
  * Token ledger totals for the tenant over the last `days` days (default 30):
- * tokens sent per surface, blocks skipped as unchanged and the tokens that
- * saved, and mean tokens per session.
+ * tokens sent, skipped as unchanged and re-read by later model calls, per
+ * surface, with session counts and mean tokens per session.
  */
 export function tokenSummary(ctx: Context, opts: { days?: number } = {}): TokenSummary {
   const db = openHippoDb(ctx.hippoRoot);

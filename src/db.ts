@@ -2456,12 +2456,12 @@ const MIGRATIONS: Migration[] = [
     version: 45,
     up: (db) => {
       // Token ledger (src/token-ledger.ts, ROADMAP TE0): one row per block of
-      // memory text hippo hands an agent (hook, CLI, MCP, HTTP). `event` is
-      // 'inject' (sent), 'skip' (unchanged since the session's last inject,
-      // not sent) or 'reset' (compaction dropped earlier injections, so the
-      // next one must be sent). block_hash lets the per-prompt hook skip an
-      // unchanged block. Rows older than the retention window are pruned on
-      // write. Additive only: no min_compatible_binary bump.
+      // memory text hippo hands an agent (hook, CLI, MCP, HTTP). `event` is 'inject'
+      // (sent), 'skip' (unchanged since the session's last inject, not sent), 'reset'
+      // (compaction dropped earlier injections, so the next one must be sent) or
+      // 'reread' (re-read by later model calls, booked at session end). block_hash
+      // lets the per-prompt hook skip an unchanged block. Rows older than the retention
+      // window are pruned on write. Additive only: no min_compatible_binary bump.
       db.exec(`
         CREATE TABLE IF NOT EXISTS token_ledger (
           id         INTEGER PRIMARY KEY AUTOINCREMENT,

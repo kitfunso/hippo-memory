@@ -158,8 +158,17 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
       const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
       try {
         // SAFETY: COUNT/SUM aggregate row.
-        const row = db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(tokens), 0) AS t FROM token_ledger WHERE ts >= ? AND event = 'inject'`).get(since) as { n: number; t: number } | undefined;
-        checks.push({ id: 'tokens', status: 'info', detail: `${Number(row?.n ?? 0)} memory blocks sent to agents in 7 days, about ${Number(row?.t ?? 0)} tokens (hippo tokens for detail)` });
+        const row = db.prepare(
+          `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
+                  COALESCE(SUM(CASE WHEN event = 'inject' THEN tokens END), 0) AS t,
+                  COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
+           FROM token_ledger WHERE ts >= ?`,
+        ).get(since) as { n: number; t: number; r: number } | undefined;
+        checks.push({
+          id: 'tokens',
+          status: 'info',
+          detail: `${Number(row?.n ?? 0)} memory blocks sent to agents in 7 days, about ${Number(row?.t ?? 0)} tokens sent and ${Number(row?.r ?? 0)} re-read by later model calls (hippo tokens for detail)`,
+        });
       } catch {
         checks.push({ id: 'tokens', status: 'info', detail: 'no token ledger yet (created on the next write)' });
       }
