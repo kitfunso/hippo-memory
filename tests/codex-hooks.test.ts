@@ -374,6 +374,8 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     expect(context).not.toContain('Foreign project handoff summary');
     expect(context).not.toContain('Resume the unrelated deployment');
     expect(runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
+    fs.writeFileSync(path.join(globalStore, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
+    expect(runCodexHook(m, command, { ...base, session_id: 'projectless-disabled', turn_id: 't1' })).toBe('');
     expect(fs.existsSync(path.join(m.repo, '.hippo'))).toBe(false);
   });
 

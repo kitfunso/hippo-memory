@@ -6,7 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { getHippoRoot, initStore, isInitialized, loadIndex, readEntry, writeEntry } from '../src/store.js';
+import { getHippoRoot, initStore, isInitialized, loadIndex, readEntry, saveSessionHandoff, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
@@ -123,18 +123,33 @@ describe('CLI end to end', () => {
     const entry = createMemory('projectless-orbit release staging flag', { pinned: true });
     entry.origin_project = '';
     writeEntry(globalStore, entry);
+    const foreignFolder = mkdirs('other-project');
+    saveSessionHandoff(globalStore, 'default', {
+      version: 1,
+      sessionId: 'other-project-session',
+      repoRoot: foreignFolder,
+      summary: 'Foreign global handoff summary',
+      nextAction: 'Resume unrelated global action',
+      artifacts: [],
+    });
     const opts = { cwd: work, env: { ...process.env, HIPPO_HOME: globalStore }, encoding: 'utf-8' as const };
 
     const recall = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--json'], opts));
     expect(recall.results.map((r: { id: string }) => r.id)).toContain(entry.id);
     expect(recall.suppressionSummary.totalCandidates).toBe(1);
-    expect(execFileSync('node', [hippoBin, 'context', '--auto'], opts)).toContain(entry.content);
+    const autoContext = execFileSync('node', [hippoBin, 'context', '--auto'], opts);
+    expect(autoContext).toContain(entry.content);
+    expect(autoContext).not.toContain('Foreign global handoff summary');
+    expect(autoContext).not.toContain('Resume unrelated global action');
 
     const before = readEntry(globalStore, entry.id)!.retrieval_count;
     const beforeDb = openHippoDb(globalStore);
     const priorTraces = beforeDb.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all().length;
     closeHippoDb(beforeDb);
-    expect(execFileSync('node', [hippoBin, 'context', 'projectless-orbit'], opts)).toContain(entry.content);
+    const queriedContext = execFileSync('node', [hippoBin, 'context', 'projectless-orbit'], opts);
+    expect(queriedContext).toContain(entry.content);
+    expect(queriedContext).not.toContain('Foreign global handoff summary');
+    expect(queriedContext).not.toContain('Resume unrelated global action');
     expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
     const db = openHippoDb(globalStore);
     try {

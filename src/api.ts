@@ -2624,9 +2624,7 @@ export async function getContext(
     return { entries: [], tokens: 0 };
   }
 
-  // Pinned-only path is allowed against an un-initialised local store (the
-  // UserPromptSubmit hook can run in directories without a .hippo). Non-pinned
-  // path requires an initialised local store; callers should check first.
+  // Global memories do not establish a project boundary for task state.
   const hasLocal = isInitialized(ctx.hippoRoot);
 
   const query = (opts.q ?? '').trim() || '*';
@@ -2634,6 +2632,7 @@ export async function getContext(
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
   const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
+  const hasLocalTaskState = hasLocal && !primaryIsGlobal;
 
   // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
   // S2: envelope-filter parity with api.recall for AMBIENT context - private
@@ -2681,7 +2680,7 @@ export async function getContext(
   // unbounded; see loadFreshActiveTaskSnapshot's own doc comment for the
   // exact null/empty-id matching rules.
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
-  const rawActiveSnapshot = hasLocal
+  const rawActiveSnapshot = hasLocalTaskState
     ? loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, {
         sessionId: opts.currentSessionId,
       })
@@ -2693,7 +2692,7 @@ export async function getContext(
       ? rawActiveSnapshot
       : null;
   // Key on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
-  const rawSessionHandoff = !hasLocal
+  const rawSessionHandoff = !hasLocalTaskState
     ? null
     : rawActiveSnapshot?.session_id
       ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, rawActiveSnapshot.session_id)
@@ -2708,7 +2707,7 @@ export async function getContext(
       ? rawSessionHandoff
       : null;
   // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
-  const recentSessionEvents = hasLocal && rawActiveSnapshot?.session_id
+  const recentSessionEvents = hasLocalTaskState && rawActiveSnapshot?.session_id
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
         session_id: rawActiveSnapshot.session_id,
         limit: 5,
