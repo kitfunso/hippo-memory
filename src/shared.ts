@@ -341,6 +341,11 @@ const TRANSFERABLE_TAGS = new Set([
   'sub-agent', 'review', 'best-practice',
 ]);
 
+/** Tags whose rows only a hand-run share or promote may copy to the global store. */
+export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
+  'git-learned',
+]);
+
 /**
  * Estimate how well a memory would transfer to other projects.
  * Returns 0..1 where >0.5 = good candidate for sharing.
@@ -490,7 +495,7 @@ export function listPeers(
 }
 
 /**
- * Auto-share: find local memories with high transfer scores that aren't already global.
+ * Auto-share: local memories with high transfer scores, not already global, no NEVER_AUTO_SHARE_TAGS tag.
  * Returns the list of shared entries.
  *
  * L9: `options.tenantId` is opt-in. When provided, the LOCAL-entries read is
@@ -521,7 +526,7 @@ export function autoShare(
     minScore?: number;
     dryRun?: boolean;
     tenantId?: string;
-    stats?: { secretSkipped: number; rejectedSkipped?: number };
+    stats?: { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
   } = {},
 ): MemoryEntry[] {
   const { minScore = 0.6, dryRun = false } = options;
@@ -541,6 +546,11 @@ export function autoShare(
   const candidates = localEntries.filter((entry) => {
     // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
     if (isQuarantineScope(entry.scope ?? null)) return false;
+    // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
+    if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t))) {
+      if (options.stats) options.stats.neverAutoShareSkipped = (options.stats.neverAutoShareSkipped ?? 0) + 1;
+      return false;
+    }
     const score = transferScore(entry);
     if (score < minScore) return false;
 
