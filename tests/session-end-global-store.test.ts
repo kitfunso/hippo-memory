@@ -90,6 +90,32 @@ describe('__session-end-worker with no store in the folder', () => {
     expect(saved.every((e) => e.origin_project === 'work')).toBe(true);
   });
 
+  it('saves its own copy of a lesson another project already holds in the global store', () => {
+    initStore(globalRoot);
+    const other = path.join(dir, 'other');
+    fs.mkdirSync(path.join(other, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(cwd, '.git'));
+    const home = cwd;
+    cwd = other;
+    expect(runSessionEnd('sess-other-project').status).toBe(0);
+    cwd = home;
+
+    expect(runSessionEnd('sess-this-project').status).toBe(0);
+
+    const origins = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE)).map((e) => e.origin_project);
+    expect(origins).toContain('other');
+    expect(origins).toContain('work');
+  });
+
+  it('starts the log afresh when it skips sleep, as sleep does', () => {
+    initStore(globalRoot);
+    fs.writeFileSync(path.join(dir, 'session-end.log'), 'stale line from an earlier run\n');
+
+    const { logFile } = runSessionEnd('sess-fresh-log');
+
+    expect(fs.readFileSync(logFile, 'utf8')).not.toContain('stale line');
+  });
+
   it('closes the session snapshot and writes the handoff in the global store', () => {
     initStore(globalRoot);
     saveActiveTaskSnapshot(globalRoot, 'default', {
@@ -110,13 +136,17 @@ describe('__session-end-worker with no store in the folder', () => {
     expect(loadLatestHandoff(globalRoot, 'default', 'sess-global-close')?.taskId).toBe('billing service lockfile task');
   });
 
-  it('with no store anywhere, exits 0, creates no store and logs the skip', () => {
+  it('with no store anywhere, exits 0, creates no store and logs the skip in a fresh log', () => {
+    fs.writeFileSync(path.join(dir, 'session-end.log'), 'stale line from an earlier run\n');
+
     const { logFile, status } = runSessionEnd('sess-no-store');
 
     expect(status).toBe(0);
     expect(fs.existsSync(path.join(cwd, '.hippo'))).toBe(false);
     expect(fs.existsSync(globalRoot)).toBe(false);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain('skip: no hippo store for this folder or globally');
+    const log = fs.readFileSync(logFile, 'utf8');
+    expect(log).toContain('skip: no hippo store for this folder or globally');
+    expect(log).not.toContain('stale line');
   });
 
   it('with a store of its own, still sleeps and captures into that store, not the global one', () => {
@@ -154,10 +184,12 @@ describe('__codex-session-end-worker with no store in the folder', () => {
     return { logFile, status: result.status };
   }
 
-  it('captures into the global store and skips sleep', () => {
+  it('captures into the global store and skips sleep, in a fresh log', () => {
     initStore(globalRoot);
+    fs.writeFileSync(path.join(dir, 'codex-session-end.log'), 'stale line from an earlier run\n');
 
     const { logFile, status } = runCodexWorker(writeCodexHome());
+    expect(fs.readFileSync(logFile, 'utf8')).not.toContain('stale line');
 
     expect(status).toBe(0);
     expect(contents(globalRoot).some((c) => c.includes(RULE))).toBe(true);

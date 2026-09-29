@@ -3547,7 +3547,7 @@ async function cmdSessionEndWorker(
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
   if (!isInitialized(store)) {
-    appendSessionEndCloseLog(closeLogFile, 'skip: no hippo store for this folder or globally');
+    appendSessionEndCloseLog(closeLogFile, 'skip: no hippo store for this folder or globally', { startFresh: true });
     flushRereadLog();
     return;
   }
@@ -3560,7 +3560,7 @@ async function cmdSessionEndWorker(
       // `[hippo] sleep failed: ...` line. Continue to capture regardless.
     }
   } else {
-    appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own');
+    appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
   }
   flushRereadLog();
   try {
@@ -3670,13 +3670,14 @@ async function bookSessionRereads(
  * the detached worker's `stdio: 'ignore'` — write straight to the file
  * instead, matching capture.ts's `appendPreCompactLog` convention.
  */
-function appendSessionEndCloseLog(logFile: string | null, message: string): void {
+function appendSessionEndCloseLog(logFile: string | null, message: string, opts: { startFresh?: boolean } = {}): void {
   if (!logFile) return;
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     // sanitizeLogMessage: `message` interpolates the payload-controlled
     // session_id — same log-forgery guard appendPreCompactLog applies.
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
+    const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
+    write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch {
     // Best-effort only — never let a log-write failure surface as an error.
   }
@@ -3803,7 +3804,7 @@ async function cmdCodexSessionEndWorker(
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
   if (!isInitialized(store)) {
-    appendSessionEndCloseLog(logFile ?? null, 'skip: no hippo store for this folder or globally');
+    appendSessionEndCloseLog(logFile ?? null, 'skip: no hippo store for this folder or globally', { startFresh: true });
     return;
   }
 
@@ -3815,7 +3816,7 @@ async function cmdCodexSessionEndWorker(
       // sleep errors are already written via cmdSleep
     }
   } else {
-    appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own');
+    appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
   }
 
   try {

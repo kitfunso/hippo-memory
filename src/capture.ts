@@ -32,6 +32,7 @@ import { redactSecretsStrict } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
+import { classifyOriginProject } from './project-identity.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -882,13 +883,13 @@ function cmdCaptureCore(
     return;
   }
 
-  // Load existing for dedup. L9: when options.tenantId is set on a non-global
-  // capture, scope the dedup read so tenant A's captures don't get suppressed
-  // by tenant B's existing content. Undefined preserves host-wide behaviour.
-  const keys = storedTextKeys(loadAllEntries(
-    targetRoot,
-    useGlobal ? undefined : options.tenantId,
-  ));
+  // Dedup only against rows this capture's reader sees: another tenant's rows (L9), or another
+  // project's, are hidden from it, so they must not stop its own copy.
+  const stored = loadAllEntries(targetRoot, useGlobal ? undefined : options.tenantId);
+  const origin = options.originProject;
+  const keys = storedTextKeys(origin === undefined
+    ? stored
+    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'));
 
   let captured = 0;
   let skipped = 0;
