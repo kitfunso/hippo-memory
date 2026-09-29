@@ -513,7 +513,9 @@ export interface RecallOpts {
    * callers leave this unset and get the trace.
    */
   suppressRecallTrace?: boolean;
-  keepHeldCopies?: boolean; // MCP sets this: it shows rows from its own scorer, so it drops copies from its own final list
+  /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
+   *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
+  keepHeldCopies?: boolean;
 }
 
 export interface ContinuityBlock {
