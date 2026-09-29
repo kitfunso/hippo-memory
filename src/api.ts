@@ -1168,7 +1168,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   let continuity: ContinuityBlock | undefined;
   let continuityTokens: number | undefined;
   if (opts.includeContinuity) {
-    const snapshot = isGlobalStoreRoot(ctx.hippoRoot) ? null : loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId);
+    const snapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId);
     // No active snapshot = no anchor = no handoff/events. Avoids resurrecting
     // a stale handoff from a deleted/completed session.
     const sessionId = snapshot?.session_id ?? undefined;

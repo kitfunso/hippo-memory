@@ -211,7 +211,9 @@ describe('CLI end to end', () => {
         { hippoRoot: globalStore, tenantId: 'default', actor: adminActor('test') },
         { query: 'projectless-orbit', includeContinuity: true },
       );
-      expect(direct.continuity).toEqual({ activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] });
+      expect(direct.continuity?.activeSnapshot?.task).toBe('Foreign global active task');
+      expect(direct.continuity?.sessionHandoff?.summary).toBe('Foreign global handoff summary');
+      expect(direct.continuity?.recentSessionEvents[0].content).toBe('Foreign global event trail');
       expect(direct.results.map((r) => r.id)).toContain(entry.id);
     } finally {
       if (priorHome === undefined) delete process.env.HIPPO_HOME;
