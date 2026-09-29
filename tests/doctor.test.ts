@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
+import { startCompaction } from '../src/compaction-record.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
 
 function sha256(file: string): string {
@@ -73,6 +74,36 @@ describe('hippo doctor', () => {
     db.exec('DROP TABLE failure_log');
     closeHippoDb(db);
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'warn' });
+  });
+
+  it('names compactions left unfinished for over 10 minutes and points at sleep, ignoring live and finished ones', () => {
+    const cwd = tmp('doctor-compactions-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    const hippoRoot = join(cwd, '.hippo');
+    initStore(hippoRoot);
+    const now = new Date('2026-09-29T12:00:00.000Z');
+    expect(runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
+
+    const ago = (minutes: number): Date => new Date(now.getTime() - minutes * 60_000);
+    const db = openHippoDb(hippoRoot);
+    const begin = (session: string, at: Date, transcript: string | null = '/t.jsonl'): string =>
+      startCompaction(db, 'default', { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: transcript }, at);
+    begin('started-stuck', ago(20));
+    begin('started-live', ago(2));
+    begin('started-transcript-gone', ago(40 * 24 * 60));
+    begin('started-no-transcript', ago(20), null);
+    const summarisedStuck = begin('summarised-stuck', ago(30));
+    const summarisedLive = begin('summarised-live', ago(30));
+    const finished = begin('finished', ago(30));
+    const setStatus = db.prepare(`UPDATE compactions SET status = ?, summarised_at = ? WHERE id = ?`);
+    setStatus.run('summarised', ago(20).toISOString(), summarisedStuck);
+    setStatus.run('summarised', ago(3).toISOString(), summarisedLive);
+    setStatus.run('done', ago(20).toISOString(), finished);
+    closeHippoDb(db);
+
+    const check = runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')!;
+    expect(check).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo sleep') });
+    expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet)');
   });
 
   it('flags old Node, missing Claude Code hooks, and accepts the plugin instead of hooks', () => {

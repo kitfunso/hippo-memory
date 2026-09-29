@@ -130,6 +130,8 @@ under 'Memories for hippo'. Write '- none' if nothing new remains."
 
 ## PR 2: Claude Code auto-memory sync
 
+PR 2 moved to branch `feat/import-agent-memories`, which imports every agent's memories (Claude Code, Codex, Gemini CLI) on init and sleep, likely with no new table; the design below is the earlier one.
+
 One function replaces `learnFromMemoryMd` (cli.ts:3000-3085), built on its #323 version (storedTextKeys +
 duplicateKey), moved to `src/claude-memory-sync.ts`, used by init (cli.ts:726), sleep (cli.ts:3285) and post-compact
 (after items). Test importers move with it: tests/claude-memory-import.test.ts, tests/importer-secret-veto.test.ts,

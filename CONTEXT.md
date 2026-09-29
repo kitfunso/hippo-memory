@@ -33,6 +33,20 @@ A `kind='raw'` memory: a connector message or imported note, append-only. Sleep 
 deletes one; only the raw archive removes it.
 _Avoid_: raw memory, transcript
 
+**Compaction memory**:
+A memory `hippo post-compact` saves from one item of the summariser's "Memories for hippo" list:
+tagged `compaction-memory`, source `compaction:<session id>`, kind distilled, confidence observed.
+A keep rule protects it, so sleep never deletes it or moves it to dormant. The session that
+compacted is not shown it again in its own prompts.
+_Avoid_: summary memory (the summary lives in the compaction record), snapshot (the task snapshot is a different thing)
+
+**Keep rule**:
+A tag and a source prefix that together keep a memory out of automatic deletion; today
+`compaction-memory` with `compaction:`. Both must match, because a merge copies a source's tags onto
+a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/memory.ts`
+apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
+_Avoid_: pin (a person sets that), retention policy, allowlist
+
 **Token ledger**:
 The record of every block of memory text hippo handed an agent: surface, session, estimated
 tokens, and whether it was sent or skipped as unchanged. Counts only, never the text.
@@ -134,6 +148,14 @@ _Avoid_: kanban, tracker
 **Hook payload**:
 The JSON a host writes to a hook command's stdin at spawn. Optional, and absent only counts as a manual run when the read finished on its own; a read that timed out proves nothing either way.
 _Avoid_: stdin text, hook input, hook data
+
+**Compaction record**:
+The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it
+`started`, `hippo post-compact` moves it to `summarised` and then `done`. It holds the session,
+whether a task snapshot was saved, the summary with secrets scrubbed, every item of the "Memories
+for hippo" list and how many became memories. It is not a memory: recall, context and sleep's memory
+passes never read it. `hippo sleep` finishes one left `started` or `summarised` for over 10 minutes.
+_Avoid_: compaction summary, compaction log, snapshot
 
 **User correction**:
 A human message that tells the agent something it just did, said, proposed or assumed is wrong

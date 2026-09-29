@@ -26,6 +26,7 @@ npm run smoke:openclaw-install
 - Comments say why, in one line. Ticket codes, versions, reviewer notes and dates go to docs or the git log; CI fails when a file's count of them rises above `.comment-history-baseline.json`. After rewriting old ones, `node scripts/check-comment-history.mjs --update` and commit the lower baseline.
 - An eval that reads host transcripts (`~/.claude/projects/*.jsonl`) copies its corpus outside the repo at registration and names the copy in the prereg: Claude Code deletes sessions after 30 days by default, so a live-path corpus cannot be re-run.
 - Use Hippo memory commands when useful, but do not store secrets.
+- The `compactions` table is one record per Claude Code compaction, not a memory row: recall, FTS, context and sleep's memory passes never read it. Memories saved from a compaction carry the `compaction-memory` tag and a `compaction:` source; the keep rule (`KEEP_PAIRS` in `src/memory.ts`) needs both, and `canAutoDelete` and `AUTO_DELETABLE_SQL` must change together.
 
 ## Never Do
 - Never store secrets, API keys, tokens, raw private emails, or sensitive personal data in Hippo memories.

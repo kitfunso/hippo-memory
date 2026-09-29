@@ -82,7 +82,7 @@ export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' |
   { kind: 'ok', text: 'hippo · 2 memories in context' },
   { kind: 'mem', text: 'Bash: lockfile is pnpm-lock.yaml; npm install would rewrite it' },
   { kind: 'cmd', text: '/compact' },
-  { kind: 'ok', text: 'Hippo saved your task snapshot before compacting.' },
+  { kind: 'ok', text: 'Hippo saved 3 memories from this compaction and restored your task snapshot.' },
 ];
 
 /** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */

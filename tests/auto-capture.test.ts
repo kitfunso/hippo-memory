@@ -295,7 +295,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     } }));
     const check = runDoctor({ cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!;
     expect(check.status).toBe('warn');
-    expect(check.detail).toMatch(/compaction snapshot and capture/);
+    expect(check.detail).toMatch(/compaction snapshot and memories request/);
     expect(check.detail).toMatch(/failed-tool capture/);
     installJsonHooks('claude-code');
     expect(runDoctor({ cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');

@@ -131,6 +131,41 @@ function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
+// The ages replay works to (compaction-record.ts): a live hook has finished by 10 minutes, and a transcript is gone after 30 days.
+const COMPACTION_STUCK_MS = 10 * 60_000;
+const COMPACTION_TRANSCRIPT_MS = 30 * 86_400_000;
+
+/** Compaction records the PostCompact hook left unfinished, which `hippo sleep` replays. */
+function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
+  const stuckBefore = new Date(now.getTime() - COMPACTION_STUCK_MS).toISOString();
+  const transcriptFloor = new Date(now.getTime() - COMPACTION_TRANSCRIPT_MS).toISOString();
+  try {
+    // SAFETY: COUNT aggregate row.
+    const row = db.prepare(
+      `SELECT COUNT(*) AS total,
+              COUNT(CASE WHEN status = 'summarised' AND summarised_at < ? THEN 1 END) AS summarised,
+              COUNT(CASE WHEN status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL THEN 1 END) AS started
+       FROM compactions`,
+    ).get(stuckBefore, stuckBefore, transcriptFloor) as { total: number; summarised: number; started: number } | undefined;
+    const total = Number(row?.total ?? 0);
+    const summarised = Number(row?.summarised ?? 0);
+    const started = Number(row?.started ?? 0);
+    const stuck = summarised + started;
+    if (stuck === 0) return { id: 'compactions', status: 'pass', detail: `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck` };
+    return {
+      id: 'compactions',
+      status: 'warn',
+      detail: `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`,
+      fix: 'hippo sleep   (replays them)',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return message.includes('no such table')
+      ? { id: 'compactions', status: 'info', detail: 'no compaction records yet (hippo creates them on the next write)' }
+      : { id: 'compactions', status: 'warn', detail: `cannot read the compaction records: ${message}` };
+  }
+}
+
 /** Run every check. Never throws for a broken install; broken parts become failed checks. */
 export function runDoctor(opts: DoctorOpts): DoctorReport {
   const cwd = opts.cwd ?? process.cwd();
@@ -198,6 +233,7 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
       }
       checks.push(failuresCheck(db, since, have));
       checks.push(sleepCheck(db, now));
+      checks.push(compactionsCheck(db, now));
     } catch (err) {
       checks.push({
         id: 'schema',
@@ -219,9 +255,9 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
     const hooks: Array<[string, string]> = [
       ['hippo context --pinned-only', 'per-prompt memory'],
       ['hippo session-end', 'session-end capture and sleep'],
-      ['hippo pre-compact', 'compaction snapshot and capture'],
+      ['hippo pre-compact', 'compaction snapshot and memories request'],
       ['hippo compact-resume', 'resume after compaction'],
-      ['hippo post-compact', 'the message after compaction'],
+      ['hippo post-compact', 'saving the memories a compaction lists'],
       ['hippo capture-error', 'failed-tool capture'],
     ];
     const missing = hooks.filter(([marker]) => !text.includes(marker)).map(([, what]) => what);

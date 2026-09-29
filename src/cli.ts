@@ -9765,10 +9765,12 @@ Commands:
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
-  pre-compact              PreCompact hook: save a working-state snapshot and ask the summary for memories
+  pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
+                           ask the summariser to end with a "Memories for hippo" list
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
   compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old
-  post-compact             PostCompact hook: keep the summary and save its memories
+  post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
+                           the next hippo sleep) and print one line saying how many
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)
   codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper
   hook <sub> [target]      Manage framework integrations

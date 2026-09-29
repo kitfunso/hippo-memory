@@ -11,15 +11,15 @@ import { mdInline } from '../content/readme';
 
 const title = 'Claude Code memory between sessions | hippo-memory';
 const description =
-  'Persistent memory for Claude Code. hippo init adds hooks that keep pinned memories plus the five most recent ones in context, save state before compaction and store failed tool calls.';
+  'Persistent memory for Claude Code. hippo init adds hooks that keep pinned memories plus the five most recent ones in context, save state and the memories a compaction summary lists, and store failed tool calls.';
 
 // README "Framework Integrations": what `hippo init` adds to Claude Code's settings.
 const hooks = [
   { event: 'SessionStart', does: "Prints what the previous session's `hippo sleep` consolidated." },
   { event: 'UserPromptSubmit', does: 'Keeps your pinned memories and the last 5 writes in context. An unchanged block is skipped, and sent again after 10 skips or a compaction.' },
-  { event: 'PreCompact', does: 'Saves a snapshot of the task, a summary and the next step before the transcript is summarized.' },
+  { event: 'PreCompact', does: 'Records the compaction, saves a snapshot of the task, a summary and the next step, and asks the summariser to end its summary with a "Memories for hippo" list, all before the transcript is summarized.' },
   { event: 'SessionStart (compact)', does: 'Prints that snapshot back into context after compaction, if it is under 15 minutes old.' },
-  { event: 'PostCompact', does: 'Tells you what was saved, and prints nothing when nothing was.' },
+  { event: 'PostCompact', does: 'Saves the items of that list as memories sleep never deletes, up to 10 a compaction, then prints one line saying how many. If the store is busy, `hippo sleep` finishes the save.' },
   { event: 'PostToolUseFailure', does: '`hippo capture-error` stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once.' },
   { event: 'SessionEnd', does: "Runs `hippo sleep`, which consolidates the store and imports new entries from the project's Claude Code auto memory, then `hippo capture`, which matches the last 20 user and 10 assistant messages of the transcript against word patterns for decisions, rules, errors and preferences." },
 ];

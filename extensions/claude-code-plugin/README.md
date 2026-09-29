@@ -52,9 +52,9 @@ The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5
 
 The `PostToolUseFailure` hook runs `hippo capture-error`, which reads the failure Claude Code sends on stdin and saves the tool name and error (first 200 characters) as an error memory (2x half-life), marked `observed` because nobody verified it. Routine failures are skipped: interrupts, permissions you declined, "permission denied" errors from the system, searches that found nothing, and `grep`/`find`/`diff`-style commands exiting 1. A failure already captured is not stored twice. Every failure, stored or skipped, is also logged for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days. `hippo hook install claude-code` installs the same hook, so both install routes behave alike.
 
-### Working state across compaction
+### Working state and memories across compaction
 
-The `PreCompact` hook runs `hippo pre-compact` to snapshot the working state before the transcript is summarised. After compaction, `hippo compact-resume` puts that snapshot back into context, and `hippo post-compact` (the `PostCompact` hook) tells you what was saved.
+The `PreCompact` hook runs `hippo pre-compact` to record the compaction, snapshot the working state and ask the summariser to end its summary with a "Memories for hippo" list. After compaction, `hippo compact-resume` puts that snapshot back into context, and `hippo post-compact` (the `PostCompact` hook) saves the list as memories that sleep never deletes and tells you how many. `hippo sleep` finishes any save a busy store delayed.
 
 ### Sleep at session end
 

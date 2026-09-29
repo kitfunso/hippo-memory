@@ -16,6 +16,8 @@
  *      - < 0.20.2: `Stop` hook firing `hippo sleep` on every assistant turn.
  *      - < 0.21.0: bare `hippo sleep` in SessionEnd, no `--log-file`.
  *      - 0.22.x: separate sleep + capture SessionEnd entries.
+ *    PreCompact and PostCompact entries go in too: the first records the compaction and
+ *    asks the summariser for a "Memories for hippo" list, the second saves that list.
  *    Codex's hooks.json gets only two groups (per-prompt memory and
  *    compact-resume); see installCodexHooks.
  *
@@ -114,7 +116,7 @@ export interface InstallResult {
   installedUserPromptSubmit: boolean;
   installedPreCompact: boolean;
   installedCompactResume: boolean;
-  /** PostCompact -> `hippo post-compact` (tells the user what compaction saved). */
+  /** PostCompact -> `hippo post-compact` (saves the summary's memories, tells the user how many). */
   installedPostCompact: boolean;
   /** PostToolUseFailure -> `hippo capture-error` (failed tool calls become error memories). */
   installedCaptureError: boolean;
@@ -875,8 +877,8 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedUserPromptSubmit = true;
   }
 
-  // PreCompact: fires on manual AND auto compaction (no matcher). Writes a
-  // working-state snapshot before the transcript summary drops detail.
+  // PreCompact: fires on manual AND auto compaction (no matcher). Records the compaction, asks the
+  // summariser for a "Memories for hippo" list and saves a working-state snapshot before the summary drops detail.
   // Exit-0 contract lives in the verb itself (src/capture.ts cmdPreCompact),
   // not here — this is install-time wiring only.
   let installedPreCompact = false;
@@ -916,9 +918,8 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedCompactResume = true;
   }
 
-  // PostCompact: tells the user what pre-compact saved. PreCompact itself
-  // must stay silent, because Claude Code hands PreCompact stdout to the
-  // summarising model as instructions; PostCompact stdout is only shown.
+  // PostCompact: saves the memories the summariser listed and prints one line, which Claude Code only shows.
+  // PreCompact stdout, by contrast, is handed to the summariser as instructions, so pre-compact prints just the request.
   let installedPostCompact = false;
   if (!hookArrayContains(hooks.PostCompact, HIPPO_POST_COMPACT_MARKER)) {
     if (!Array.isArray(hooks.PostCompact)) hooks.PostCompact = [];
