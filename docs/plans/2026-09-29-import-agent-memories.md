@@ -64,7 +64,8 @@ and test is kept, the session-end import for folders without a store included; t
      10-second limit, and PR 2 kept git and adoption off it for that reason.
    - Handover: when a project pass into a local store commits, the global store's tagged rows under the containers
      that pass read, and under the project's own origin (`deriveOriginProject` of the store's folder, what
-     post-compact stamps), are set aside (design 6). Rows of a note the pass could not read stay until it can.
+     post-compact stamps) or under origin `''` (a folder with no git and no marker has no origin until its store
+     exists), are set aside (design 6). Rows of a note the pass could not read stay until it can.
      Without this, rows the hook path wrote before the project had a store would stay kept and be served beside the
      local copy after the note is deleted.
 
@@ -338,7 +339,8 @@ their users); then Gemini and OpenClaw. If the diff passes about 2,500 lines, th
   - the handover: global `p-` rows from the store-less hook path are set aside when the project's own store syncs
     that container; a project Y row with the same text does not hide the note from project X in the global store;
     a worktree and its main checkout each keep a global row of their shared folder, and handover retires only its
-    own origin's; a note the local pass could not read keeps its global row;
+    own origin's; a note the local pass could not read keeps its global row; a folder with no git hands over the
+    rows it wrote with origin `''` before its store existed;
   - post-compact reads the transcript folder only and runs no git call;
   - a malformed dormant snapshot does not stop the sync; a superseded dormant snapshot is never restored;
   - `HIPPO_AGENT_MEMORY_TOOLS` overrides config; `[]` in a project store stops that project's user pass;
@@ -490,3 +492,10 @@ cutting two needs his yes. The build order puts them last and allows a second PR
    only its own origin's rows (designs 2, 3).
 Found while verifying: `hippo import --agents` in a folder without a store ran only the user pass and hid the
 folder's own notes; it now does what session end does there (design 11).
+
+**Build review, codex on the delta (2 findings, 1 applied, 1 rejected):**
+1. Applied: a folder with no git and no marker imports with origin `''` before `hippo init` and with its own name
+   after, so handover missed its earlier global rows. Handover now also retires origin `''` rows of the synced
+   containers; only a session whose notes folder is that container writes them (design 2).
+2. Rejected: migrate global rows written before the origin joined the container id. No release has written
+   `agent-memory:` rows; the old `claude-memory:` rows live in local stores and legacy adoption covers them.

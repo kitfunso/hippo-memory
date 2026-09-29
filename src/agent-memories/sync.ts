@@ -329,8 +329,9 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
   try {
     db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
     const tenantId = resolveTenantId({});
-    const origin = deriveOriginProject(projectRoot);
-    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, origin, opts.machine.platform, report);
+    // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
+    const origins = [...new Set([deriveOriginProject(projectRoot), ''])];
+    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, origins, opts.machine.platform, report);
   } catch (err) {
     report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);
   } finally {
@@ -339,20 +340,22 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
 }
 
 function handOverContainer(
-  db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, origin: string, platform: NodeJS.Platform, report: ImportReport,
+  db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, origins: readonly string[], platform: NodeJS.Platform, report: ImportReport,
 ): void {
-  const prefix = containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, platform, origin));
   // A note the local pass could not read has no local row yet, so its global copy stays until it does.
   const unread = new Set(work.container.skipped);
   const mirror: MemoryEntry[] = [];
   const purge: string[] = [];
   db.exec('BEGIN IMMEDIATE');
   try {
-    for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, prefix)) {
-      if (!row.tags.includes(work.tool.tag) || unread.has(splitSource(row.source, prefix).key)) continue;
-      const result = setAsideRow(db, work.tool.tag, row, 'handover');
-      if (result.kind === 'untagged') mirror.push(result.entry);
-      else purge.push(result.id);
+    for (const origin of origins) {
+      const prefix = containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, platform, origin));
+      for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, prefix)) {
+        if (!row.tags.includes(work.tool.tag) || unread.has(splitSource(row.source, prefix).key)) continue;
+        const result = setAsideRow(db, work.tool.tag, row, 'handover');
+        if (result.kind === 'untagged') mirror.push(result.entry);
+        else purge.push(result.id);
+      }
     }
     db.exec('COMMIT');
   } catch (err) {

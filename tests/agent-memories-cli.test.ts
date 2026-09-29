@@ -62,6 +62,8 @@ function userNotes(b: Box): string {
   return dir;
 }
 
+type MemoryEntryRow = ReturnType<typeof loadAllEntries>[number];
+
 const imported = (root: string): string[] =>
   isInitialized(root) ? loadAllEntries(root).filter((e) => e.source?.startsWith('agent-memory:')).map((e) => e.content).sort() : [];
 
@@ -258,6 +260,19 @@ describe('hooks in a folder without a store', () => {
     hippo(b, worktree, ['init', '--no-hooks', '--no-schedule']);
     expect(origins()).toEqual([main]);
     expect(imported(join(worktree, '.hippo'))).toEqual([PROJECT_NOTE]);
+  });
+
+  it('handover finds the global copies a folder with no git wrote as user-global before its store existed', () => {
+    const b = box();
+    const plain = tmp();
+    note(projectNotes(b, plain), 'schema.md', PROJECT_NOTE);
+    hippo(b, plain, ['import', '--agents']);
+    const globalRows = (): MemoryEntryRow[] => (isInitialized(b.global) ? loadAllEntries(b.global) : []).filter((e) => e.content === PROJECT_NOTE);
+    expect(globalRows().map((e) => e.origin_project)).toEqual(['']);
+
+    hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);
+    expect(imported(join(plain, '.hippo'))).toEqual([PROJECT_NOTE]);
+    expect(globalRows()).toEqual([]);
   });
 
   it('handover leaves the global copy of a note the new local store could not read', () => {
