@@ -24,7 +24,8 @@ import {
 } from './store.js';
 import { textOverlap, markRetrieved, tokenize } from './search.js';
 import { compareEntryIdentity } from './compare.js';
-import { duplicateKey } from './same-text.js';
+import { duplicateKey, mergedText } from './same-text.js';
+import { successorAfterRetirement } from './merged-row.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { rejectionDigest, findRejectedValue } from './rejection.js';
 import { countExpiredDormant, purgeExpiredDormant, type DormantMove } from './dormant.js';
@@ -775,6 +776,26 @@ export async function consolidate(
     }
   }
 
+  const byId = new Map(all.map((e) => [e.id, e]));
+  const rejectedIn = (tenantId: string) => (text: string): boolean => {
+    const db = getConsolidateDb();
+    return db !== null && findRejectedValue(db, tenantId, rejectionDigest(text)) !== null;
+  };
+  for (let i = survivors.length - 1; i >= 0; i--) {
+    const row = survivors[i];
+    const successor = retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenantId)) : undefined;
+    if (successor === undefined) continue;
+    result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
+    if (dryRun) continue;
+    pendingDeletes.push(row.id);
+    if (successor) {
+      pendingWrites.push(successor);
+      survivors[i] = successor;
+    } else {
+      survivors.splice(i, 1);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // 3. Merge pass  - episodic entries only
   // -------------------------------------------------------------------------
@@ -1063,10 +1084,10 @@ function mergeContents(entries: MemoryEntry[]): string {
   const sorted = [...entries].sort((a, b) => (Date.parse(b.created) - Date.parse(a.created)) || compareEntryIdentity(a, b));
   const texts = new Map<string, string>();
   for (const e of sorted) {
-    if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content.trim().replace(/\n/g, '\n  '));
+    if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content);
   }
   const header = entries.length === 2 ? '[Consolidated from 2 related memories, newest first]' : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
-  return `${header}\n\n${[...texts.values()].map((t) => `- ${t}`).join('\n')}`;
+  return mergedText(header, [...texts.values()]);
 }
 
 function legacyMergeContents(entries: MemoryEntry[]): string {

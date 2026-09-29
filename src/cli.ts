@@ -3091,12 +3091,14 @@ function cmdDedup(
   requireInit(hippoRoot);
 
   const dryRun = Boolean(flags['dry-run']);
-  const threshold = parseFloat(String(flags['threshold'] ?? '0.7'));
+  if (flags['threshold'] !== undefined) {
+    console.error('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
+  }
 
   const entries = loadAllEntries(hippoRoot);
   console.log(`Scanning ${entries.length} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
 
-  const result = deduplicateStore(hippoRoot, { threshold, dryRun });
+  const result = deduplicateStore(hippoRoot, { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
@@ -4349,6 +4351,9 @@ function cmdReject(
     console.log(`  Reason: ${reason}`);
     if (result.removedIds.length > 0) {
       console.log(`  Removed ${result.removedIds.length} matching row(s): ${result.removedIds.join(', ')}`);
+      if (result.successorIds.length > 0) {
+        console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
+      }
     } else {
       console.log('  No live rows matched (pre-emptive tombstone).');
     }
@@ -9705,7 +9710,7 @@ Commands:
   daily-runner             Sweep registered workspaces and run daily learn+sleep
   dedup                    Remove duplicate memories (keeps stronger copy)
     --dry-run              Preview without removing
-    --threshold <n>        Overlap threshold 0-1 (default: 0.7); text must also match apart from spacing
+    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing
   status                   Show memory health stats
   audit [--fix]            Check memory quality (--fix removes junk)
   github                   GitHub connector subcommands (backfill, dlq)

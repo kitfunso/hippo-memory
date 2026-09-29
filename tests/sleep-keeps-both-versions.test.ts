@@ -18,6 +18,7 @@ import { importEntries } from '../src/importers.js';
 import { autoShare, getGlobalRoot, initGlobal, searchBoth, searchBothHybrid } from '../src/shared.js';
 import { cmdCapture, extractFromText } from '../src/capture.js';
 import { computeSalience } from '../src/salience.js';
+import { heldTexts, mergedText } from '../src/same-text.js';
 
 const DAY = 86_400_000;
 const HIPPO_BIN = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -170,6 +171,20 @@ describe('sleep keeps both versions', () => {
     expect(deduplicateStore(root).removed).toBe(0);
     expect(loadAllEntries(root)).toHaveLength(6);
   });
+
+  it('dedup removes a copy of the same text whatever the threshold says', () => {
+    const root = newRoot();
+    const text = 'The staging service listens on port 4400.';
+    for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
+
+    expect(deduplicateStore(root, { threshold: 1 }).removed).toBe(1);
+    expect(loadAllEntries(root)).toHaveLength(1);
+
+    const cli = newRoot();
+    for (const t of [text, text.replace(' ', '  ')]) writeEntry(cli, createMemory(t));
+    hippo(cli, 'dedup', '--threshold', '1');
+    expect(loadAllEntries(cli)).toHaveLength(1);
+  });
 });
 
 describe('merge caps', () => {
@@ -305,6 +320,71 @@ describe('merged row', () => {
     expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
     expect(merged(root)).toHaveLength(0);
     halfLifeKept(root, sources);
+  });
+
+  it('reads back every text it holds, lines and all', () => {
+    const texts = ['Deploy steps:\n- build the image\n\nthen flip the traffic', 'The staging service listens on port 4400.'];
+    const content = mergedText('[Consolidated from 2 related memories, newest first]', texts);
+    expect(heldTexts({ content, source: 'consolidation' })).toEqual(texts);
+  });
+});
+
+describe('a retired version leaves the merged row', () => {
+  const OLD = 'The web app dev server runs on port 3000 locally.';
+  const NEW = 'The web app dev server now runs on port 5173 locally.';
+  const ctx = (root: string): api.Context => ({ hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') });
+  const recalled = (root: string): string => api.recall(ctx(root), { query: 'web app dev server port' }).results.map((r) => r.content).join('\n');
+  const current = (root: string): string => loadAllEntries(root).filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
+
+  async function mergedPair(): Promise<{ root: string; old: MemoryEntry; next: MemoryEntry; row: MemoryEntry }> {
+    vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
+    const root = newRoot();
+    const old = write(root, OLD, { created: new Date(Date.now() - DAY).toISOString() });
+    const next = write(root, NEW);
+    await consolidate(root, { now: new Date() });
+    const [row] = merged(root);
+    expect(row.parents.sort()).toEqual([old.id, next.id].sort());
+    return { root, old, next, row };
+  }
+
+  it('reject takes the value out of every merged row that holds it, in the same call', async () => {
+    const { root, old, next, row } = await mergedPair();
+    api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
+
+    const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
+
+    const [kept] = merged(root);
+    expect(out).toContain(`keep their other texts in: ${kept.id}`);
+    expect(loadAllEntries(root).map((e) => e.id)).not.toContain(row.id);
+    expect(kept.content).toBe(`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`);
+    expect(kept.parents).toEqual([next.id]);
+    expect(current(root)).not.toContain(OLD);
+    expect(recalled(root)).toContain(NEW);
+    expect(recalled(root)).not.toContain('port 3000');
+  });
+
+  it('a superseded version leaves the merged row at the next sleep', async () => {
+    const { root, old, next } = await mergedPair();
+    api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
+
+    await consolidate(root, { now: new Date(Date.now() + DAY) });
+
+    expect(current(root)).not.toContain(OLD);
+    expect(recalled(root)).not.toContain('port 3000');
+    expect(merged(root).map((e) => [e.content, e.parents])).toEqual([[`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]]]);
+  });
+
+  it('sleep takes a rejected text out of merged rows, including rows an older release wrote', async () => {
+    const { root, next, row } = await mergedPair();
+    const legacy = write(root, `[Consolidated from 2 related memories]\n\n${OLD}`, { layer: Layer.Semantic, source: 'consolidation' });
+    reject(root, [OLD]); // a rejection whose sweep missed the merged rows, as resolve --reject-loser leaves it
+
+    await consolidate(root, { now: new Date(Date.now() + DAY) });
+
+    const ids = loadAllEntries(root).map((e) => e.id);
+    expect(ids).not.toContain(row.id);
+    expect(ids).not.toContain(legacy.id);
+    expect(merged(root).map((e) => [e.content, e.parents])).toEqual([[`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]]]);
   });
 });
 

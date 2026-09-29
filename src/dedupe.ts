@@ -84,13 +84,12 @@ export function strengthBucket(strength: number | null | undefined): number {
  * tenantId, so byte-identical content in two tenants is never a duplicate
  * pair (the tenant boundary is an isolation boundary; cross-tenant removal
  * was the v1.32.0 known-issue data-loss bug).
- * Keeps the one with higher strength (or more retrievals if tied).
+ * Keeps the one with higher strength (or more retrievals if tied). `threshold` is accepted for old callers and ignored.
  */
 export function deduplicateStore(
   hippoRoot: string,
   options: { threshold?: number; dryRun?: boolean; actor?: string } = {}
 ): DedupResult {
-  const threshold = options.threshold ?? 0.7;
   const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history, as in consolidate.ts.
@@ -147,8 +146,6 @@ export function deduplicateStore(
         if (texts[j] !== texts[i]) continue;
 
         const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);
-        if (similarity <= threshold) continue;
-
         removed.add(tenantEntries[j].id);
         pairs.push({
           kept: tenantEntries[i].id,

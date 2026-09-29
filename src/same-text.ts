@@ -8,14 +8,23 @@ export function duplicateKey(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/** A sleep-merged row's text: a header, a blank line, then each text as a "- " bullet with its later lines indented. */
+export function mergedText(header: string, texts: readonly string[]): string {
+  return `${header}\n\n${texts.map((t) => `- ${t.trim().replace(/\n/g, '\n  ')}`).join('\n')}`;
+}
+
+/** Each source text a sleep-merged row holds; a two-row merge by an older release kept one text whole after its header. */
+export function heldTexts(entry: Text): string[] {
+  const cut = entry.content.indexOf('\n\n');
+  if (entry.source !== 'consolidation' || cut < 0) return [];
+  const body = entry.content.slice(cut + 2);
+  if (/^\[Consolidated from \d+ related memories\]$/.test(entry.content.slice(0, cut))) return [body];
+  return `\n${body}`.split('\n- ').slice(1).map((t) => t.replace(/\n {2}/g, '\n'));
+}
+
 /** Keys of every text a row holds word for word: its own, plus each source text inside a sleep-merged row. */
 export function heldTextKeys(entry: Text): string[] {
-  const own = duplicateKey(entry.content);
-  const cut = entry.content.indexOf('\n\n');
-  if (entry.source !== 'consolidation' || cut < 0) return [own];
-  // Merged rows hold one "- " bullet per text; rows merged by older releases may hold one text alone after the header.
-  const body = entry.content.slice(cut + 2);
-  return [own, duplicateKey(body), ...`\n${body}`.split('\n- ').slice(1).map(duplicateKey)];
+  return [duplicateKey(entry.content), ...heldTexts(entry).map(duplicateKey)];
 }
 
 export function storedTextKeys(entries: readonly Text[]): Set<string> {
