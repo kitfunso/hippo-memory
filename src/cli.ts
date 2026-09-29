@@ -4354,6 +4354,9 @@ function cmdReject(
       if (result.successorIds.length > 0) {
         console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
       }
+      if (result.dormantSuccessorIds.length > 0) {
+        console.log(`  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`);
+      }
     } else {
       console.log('  No live rows matched (pre-emptive tombstone).');
     }

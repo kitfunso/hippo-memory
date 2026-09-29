@@ -15,7 +15,7 @@
 import { closeHippoDb } from './db.js';
 import { appendAuditEvent } from './audit.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { purgeDormantByDigest } from './dormant.js';
+import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
 import {
   openStore,
   deleteEntryCore,
@@ -54,13 +54,14 @@ export interface RejectFlowResult {
    *  tombstone itself stores no content — this is the only place it's seen
    *  again after this call returns). */
   content: string;
-  /** Every live row removed this call: all tenant rows whose normalized digest
-   *  matched (not just the id passed, per the K1/R7 duplicate lesson), and each
-   *  sleep-merged row holding the value, whose other texts move to successorIds. */
+  /** Every row removed this call, live or dormant: all whose normalized digest matched (not just the id
+   *  passed, per the K1/R7 duplicate lesson), and each sleep-merged row holding the value, whose other
+   *  texts move to a new row: listed in successorIds when it was live, dormantSuccessorIds when dormant. */
   removedIds: string[];
   /** Subset of removedIds that were kind='raw' (archived, not deleted). */
   removedRawIds: string[];
   successorIds: string[];
+  dormantSuccessorIds: string[];
 }
 
 /**
@@ -114,6 +115,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     const removedIds: string[] = [];
     const removedRawIds: string[] = [];
     const successors: MemoryEntry[] = [];
+    const dormantSuccessorIds: string[] = [];
 
     db.exec('BEGIN');
     try {
@@ -161,12 +163,23 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
         successors.push(kept);
       }
 
-      // Dormant copies (src/dormant.ts) go too, in the same transaction: a
+      // Dormant copies (src/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
       // rejected value may not linger where `hippo dormant restore` could
       // bring it back. They have no markdown mirror, so the post-commit
       // mirror purge below is a no-op for them; they join removedIds for the
       // audit trail and the caller's report.
       removedIds.push(...purgeDormantByDigest(db, opts.tenantId, digest));
+      for (const dormant of listDormantSnapshots(db, opts.tenantId)) {
+        const successor = mergedSuccessor(dormant.entry, holdsValue, new Set(removedIds));
+        if (successor === undefined) continue;
+        removedIds.push(dormant.entry.id);
+        if (!successor) {
+          deleteDormantRow(db, opts.tenantId, dormant.entry.id);
+          continue;
+        }
+        replaceDormantEntry(db, opts.tenantId, dormant.entry.id, successor);
+        dormantSuccessorIds.push(successor.id);
+      }
 
       try {
         appendAuditEvent(db, {
@@ -213,7 +226,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     }
     for (const successor of successors) writeEntryMirrors(opts.hippoRoot, successor);
 
-    return { digest, content, removedIds, removedRawIds, successorIds: successors.map((s) => s.id) };
+    return { digest, content, removedIds, removedRawIds, successorIds: successors.map((s) => s.id), dormantSuccessorIds };
   } finally {
     closeHippoDb(db);
   }

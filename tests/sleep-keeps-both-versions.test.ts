@@ -19,6 +19,7 @@ import { autoShare, getGlobalRoot, initGlobal, searchBoth, searchBothHybrid } fr
 import { cmdCapture, extractFromText } from '../src/capture.js';
 import { computeSalience } from '../src/salience.js';
 import { heldTexts, mergedText } from '../src/same-text.js';
+import { insertDormantRow } from '../src/dormant.js';
 
 const DAY = 86_400_000;
 const HIPPO_BIN = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -361,6 +362,27 @@ describe('a retired version leaves the merged row', () => {
     expect(current(root)).not.toContain(OLD);
     expect(recalled(root)).toContain(NEW);
     expect(recalled(root)).not.toContain('port 3000');
+  });
+
+  it('reject takes the value out of a dormant merged row, so restoring it cannot bring the value back', async () => {
+    const { root, old, next, row } = await mergedPair();
+    const db = openHippoDb(root);
+    try {
+      insertDormantRow(db, { entry: row, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
+    } finally {
+      closeHippoDb(db);
+    }
+    api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
+
+    const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
+    const [dormant] = api.listDormant(ctx(root));
+    const restored = api.restoreDormant(ctx(root), dormant.id);
+
+    expect(current(root)).not.toContain(OLD);
+    expect(recalled(root)).not.toContain('port 3000');
+    expect(restored.content).toBe(`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`);
+    expect(restored.parents).toEqual([next.id]);
+    expect(out).toContain(`Dormant merged rows that held it keep their other texts in: ${dormant.id}`);
   });
 
   it('a superseded version leaves the merged row at the next sleep', async () => {

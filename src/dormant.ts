@@ -167,8 +167,28 @@ export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: 
     `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
        FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
   ).get(tenantId, id) as DormantRow | undefined;
-  const entry = row ? parseSnapshot(row) : null;
-  return row && entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;
+  return row ? toSnapshot(row) : null;
+}
+
+/** Every dormant memory of a tenant whose snapshot still reads back. */
+export function listDormantSnapshots(db: DatabaseSyncLike, tenantId: string): DormantSnapshot[] {
+  // SAFETY: rows' shape matches the seven columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+       FROM dormant_memories WHERE tenant_id = ?`,
+  ).all(tenantId) as DormantRow[];
+  return rows.flatMap((row) => toSnapshot(row) ?? []);
+}
+
+function toSnapshot(row: DormantRow): DormantSnapshot | null {
+  const entry = parseSnapshot(row);
+  return entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;
+}
+
+/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went dormant. */
+export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: string, entry: MemoryEntry): void {
+  db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`)
+    .run(entry.id, entry.content, JSON.stringify(entry), tenantId, id);
 }
 
 /** Whether a tenant has a dormant memory with this id (snapshot readable or not). */
