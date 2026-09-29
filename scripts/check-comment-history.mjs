@@ -15,7 +15,7 @@ const PATTERNS = [
   ['ticket', /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H1|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/],
   ['review', /\b[Cc]odex[- ](?:[Rr]eview|[Rr]ound|P\d|R\d|catch|finding|flagged|CRITICAL|diff-pass)|\([Cc]odex\b|\b[Cc]odex\)|\b[Cc]ritic\b|\bsenior-review\b|\b[Rr]ound[- ]?\d+\b|\bCRIT\b|\bP[0-3]s?\b/],
   ['plan', /docs\/plans\/|\bplan v\d|\bTask \d/],
-  ['date', /\b(?!\d{4}-02-(?:29|30|31)\b)20\d\d-\d\d-\d\d\b/],
+  ['date', /\b(?!\d{4}-02-3[01]\b|20(?:[02468][1235679]|[13579][01345789])-02-29\b)20\d\d-\d\d-\d\d\b/],
   ['pr', /\(#\d{2,4}\)|\bPR ?#?\d+|\bissue #\d+/],
 ];
 
@@ -115,7 +115,7 @@ function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) tsFiles(p, out);
-    else if (e.name.endsWith('.ts')) out.push(p.replace(/\\/g, '/'));
+    else if (/\.[cm]?ts$/.test(e.name)) out.push(p.replace(/\\/g, '/'));
   }
   return out.sort();
 }

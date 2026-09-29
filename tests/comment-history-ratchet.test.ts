@@ -97,13 +97,22 @@ describe('check-comment-history.mjs', () => {
     const code = [
       '// L2 summaries rank by BM25 and FTS5, not SHA1 or P95.',
       '// Schema v39 added the column; the Codex wrapper installs itself.',
-      '// Invalid dates such as 2026-02-31 roll forward.',
+      '// Invalid dates such as 2026-02-31 and 2026-02-29 roll forward.',
       '',
     ].join('\n');
     withFixture({ 'src/a.ts': code }, {}, ({ run }) => {
       const r = run();
       expect(r.status).toBe(0);
       expect(r.stdout).toContain('0 lines');
+    });
+  });
+
+  it('counts a real leap day and scans .mts and .cts files', () => {
+    const files = { 'src/a.ts': '// Released 2028-02-29\n', 'src/b.mts': '// v2.0.0 fix\n', 'src/c.cts': '// DF1 note\n' };
+    withFixture(files, {}, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      for (const f of ['src/a.ts', 'src/b.mts', 'src/c.cts']) expect(r.stderr).toContain(`${f}: 0 -> 1`);
     });
   });
 });
