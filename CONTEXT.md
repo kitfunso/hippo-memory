@@ -47,6 +47,12 @@ a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` 
 apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
 _Avoid_: pin (a person sets that), retention policy, allowlist
 
+**Imported agent memory**:
+A memory hippo copied from another coding agent's own memory: a Claude Code auto memory note, a Codex memory, and the
+like. It follows its source item: kept while the item exists, superseded when the item changes, set aside as dormant
+(restorable) when the item is deleted.
+_Avoid_: synced memory, external memory, auto memory (Claude Code's own feature)
+
 **Token ledger**:
 The record of every block of memory text hippo handed an agent: surface, session, estimated
 tokens, and whether it was sent or skipped as unchanged. Counts only, never the text.

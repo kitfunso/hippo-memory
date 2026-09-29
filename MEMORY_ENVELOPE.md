@@ -97,7 +97,7 @@ Two shapes of caller, both pinned by tests:
   domain-object writers, and `api.supersede`'s successor write propagate the
   refusal to the caller with the tombstone's reason.
 - **Multi-item surfaces contain the refusal per item and keep going.**
-  `capture`, post-compact items, importers, `learnFromMemoryMd`,
+  `capture`, post-compact items, importers, the agent memory import,
   `syncGlobalToLocal`/`promoteToGlobal`/`shareMemory`'s sync-down path,
   connector ingest, and the DAG summary builders (`buildDag`,
   `buildEntityProfiles`) catch `RejectedValueError` per item, skip it, count

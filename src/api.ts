@@ -3187,7 +3187,7 @@ export async function getContext(
  * (consolidate + dedup + audit + share + ambient) and return structured counts.
  *
  * Extracted from `cmdSleepCore` Phase 2-6 in Episode A. NOT covered by api.sleep:
- * the cli-only auto-learn phase (Phase 1: learnFromRepo + learnFromMemoryMd),
+ * the cli-only auto-learn phase (Phase 1: learnFromRepo + the agent memory import),
  * which is intrinsically host-bound (uses `process.cwd()` / `os.homedir()`).
  * Auto-learn stays in cli.ts cmdSleepCore as a pre-api block.
  *

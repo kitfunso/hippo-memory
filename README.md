@@ -83,7 +83,7 @@ npm install -g hippo-memory
 hippo init
 ```
 
-**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits, and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 7 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
+**Optional: many repos at once.** Read what it changes first. `hippo init --scan <folder>` looks for git repos in the folder and up to three levels below it, skipping dot-folders and `node_modules`. Each repo gets a `.hippo/` store, seeded with lessons from the last 365 days of its commits and with its [agent memories](#agent-memories), and is added to the daily run's list. For the agents it finds, it installs the same user-level hooks as `hippo init`: 7 Claude Code hook entries in `~/.claude/settings.json` and the OpenCode plugin. It also sets up the daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It adds no block to any repo's `CLAUDE.md` or `AGENTS.md`. `--no-hooks`, `--no-schedule` and `--no-learn` leave out the hooks, the daily run and the history import.
 
 ```bash
 hippo init --scan ~
@@ -92,7 +92,7 @@ hippo init --scan ~
 After setup, `hippo sleep` runs when a Claude Code or OpenCode session ends, and in the daily 6:15am job for every project. Codex runs it at session end only if you installed its wrapper. It does five things:
 
 1. **Learns** from today's git commits
-2. **Imports** new entries from the project's Claude Code auto memory
+2. **Imports** what your coding agents remember, about this project and about you ([Agent memories](#agent-memories))
 3. **Consolidates** memories (decay, merge, prune)
 4. **Deduplicates** identical memories, keeping the stronger copy
 5. **Shares** high-value lessons to a global store so they surface in every project
@@ -118,7 +118,7 @@ Run `hippo init` inside one project. This is everything it writes, in the projec
 - **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
 - **Codex,** when the project has `AGENTS.md` or `.codex` and Codex is installed (`$CODEX_HOME`, else `~/.codex`, exists): 2 hook entries in Codex's `hooks.json`, one on UserPromptSubmit that sends your pinned memories plus the five most recent ones with every prompt and one on SessionStart after a compaction. **Codex runs them only after you trust them once in `/hooks`.** Init also prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` removes hippo's hooks and the wrapper.
 - **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
-- **Claude Code auto memory.** On the first run, the notes with YAML front matter in this project's own folder under `~/.claude/projects/` are imported into its store. A file that looks like it holds a secret is skipped.
+- **Agent memories.** On every run, the notes your coding agents keep about this project go into its store, and the ones about you go into the global store. [Agent memories](#agent-memories) lists what is read.
 
 ```bash
 cd my-project
@@ -133,7 +133,28 @@ hippo init
 #    Scheduled machine-level daily runner (6:15am) via crontab
 ```
 
-To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and auto memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does.
+To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and agent memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does.
+
+### Agent memories
+
+Most coding agents now keep their own notes between sessions. Hippo reads them, whatever the tool, so what one agent learned reaches the others. It reads files only and never writes to another tool's folders.
+
+When: `hippo init` (every run), `init --scan`, `init --global`, `hippo setup`, every `hippo sleep` and the daily run. At session end a folder with its own store gets it through sleep; a folder without one sends its project's notes to the global store, marked with the project's name. After a Claude Code compaction, the session's own notes folder is read as well.
+
+What is read, per tool (each tool's own environment variables and settings decide where its home is):
+
+- **Claude Code:** the project's auto memory notes under `~/.claude/projects/<project>/memory/` (front matter required, `MEMORY.md` skipped), and the `autoMemoryDirectory` folder from your user settings.
+- **Codex:** the User Profile, preferences and tips in `~/.codex/memories/memory_summary.md`.
+- **Gemini CLI:** the "Gemini Added Memories" section of `~/.gemini/GEMINI.md`, and the project's auto memory folder when that feature is on.
+- **GitHub Copilot Chat in VS Code:** the memory tool's user memories and the repository memories of this project's workspace.
+- **OpenClaw:** the workspace's `MEMORY.md`.
+- **Qwen Code:** the project's auto memory folder and your user memories.
+
+Each imported memory follows its note. It stays while the note exists, is replaced when the note changes, and is set aside as dormant when the note is deleted (`hippo dormant` lists it and can restore it). A note shorter than 10 characters, one that looks like it holds a secret, and one whose text you rejected with `hippo reject` are skipped. Notes are cut at 1,500 characters.
+
+Not read: Windsurf (the file format is not documented, and Cascade reached end of life on 1 July 2026); Cursor, Copilot CLI and GitHub's Copilot Memory (the memories live on the vendor's servers); Kiro (the local store is not documented); Cline and Roo memory banks (files in the repository, which `hippo import --markdown` covers); Amp, Aider, Continue, OpenCode and pi (no memory feature found).
+
+`hippo import --agents --dry-run` shows each tool's home, the folders found and what would change, and writes nothing. To choose tools, set `"agentMemories": { "tools": ["claude-code", "codex"] }` in `.hippo/config.json` (`[]` turns the import off), or `HIPPO_AGENT_MEMORY_TOOLS=claude-code,codex` in the environment (`none` turns it off), which wins over config.
 
 ---
 
@@ -735,7 +756,7 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
 
-Init patches an instruction file only if it already exists. It also sets up a daily run and imports the project's Claude Code auto memory; [What hippo init changes](#what-hippo-init-changes) lists everything.
+Init patches an instruction file only if it already exists. It also sets up a daily run and imports your coding agents' own memories; [What hippo init changes](#what-hippo-init-changes) lists everything.
 
 ### Manual install
 
