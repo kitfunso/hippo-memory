@@ -40,6 +40,9 @@ jobs:
       # Hit counts per rule may fall but never rise; see scripts/check-lint-ratchet.mjs.
       - name: Lint ratchet
         run: node scripts/check-lint-ratchet.mjs
+      # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
+      - name: Comment history ratchet
+        run: node scripts/check-comment-history.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs
