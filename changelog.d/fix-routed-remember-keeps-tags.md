@@ -1,3 +1,0 @@
-### Fixed
-
-- **`hippo remember "<lesson>" --error` no longer loses its `error` tag when a hippo server is running.** With a server up, `remember` goes over HTTP, and that route built its tag list on its own: it sent only the `--tag` values, so a routed `--error` memory was stored without the `error` tag. That also cost it the doubled half-life and the negative valence the tag brings, and the `path:` and `scope:` tags a direct `remember` adds went missing too. Both paths now build the tag list from one function, so a routed memory carries the same tags as a direct one. Memories already stored without the tag stay as they are.
