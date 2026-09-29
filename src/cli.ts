@@ -955,6 +955,32 @@ function setupDailySchedule(globalRoot: string): void {
   }
 }
 
+// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
+interface RememberTags {
+  requested: string[];
+  all: string[];
+}
+
+// Shared by the direct write and the routed request so both store the same tags.
+function rememberTags(
+  flags: Record<string, string | boolean | string[]>,
+  cwd: string,
+): RememberTags {
+  const requested: string[] = Array.isArray(flags['tag']) ? [...(flags['tag'] as string[])] : [];
+  if (flags['error']) requested.push('error');
+  const all = [...requested];
+  for (const pt of extractPathTags(cwd)) {
+    if (!all.includes(pt)) all.push(pt);
+  }
+  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const activeScope = explicitScope || detectScope();
+  if (activeScope) {
+    const scopeTag = `scope:${activeScope}`;
+    if (!all.includes(scopeTag)) all.push(scopeTag);
+  }
+  return { requested, all };
+}
+
 async function cmdRemember(
   hippoRoot: string,
   text: string,
@@ -969,8 +995,7 @@ async function cmdRemember(
     requireInit(hippoRoot);
   }
 
-  const rawTags: string[] = Array.isArray(flags['tag']) ? flags['tag'] as string[] : [];
-  if (flags['error']) rawTags.push('error');
+  const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
 
   // Resolve explicit confidence flag (default: 'verified' for manual remember)
   let confidence: ConfidenceLevel = 'verified';
@@ -978,9 +1003,9 @@ async function cmdRemember(
   if (flags['inferred']) confidence = 'inferred';
   if (flags['verified']) confidence = 'verified';
 
-  // Compute schema fit against existing memories
+  // Schema fit needs the store, which the routed request has no access to, so it stays here.
   const existing = loadAllEntries(targetRoot, resolveTenantId({}));
-  const schemaFit = computeSchemaFit(text, rawTags, existing);
+  const schemaFit = computeSchemaFit(text, requestedTags, existing);
 
   // A3 envelope flags
   const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
@@ -1014,7 +1039,7 @@ async function cmdRemember(
 
   const entry = createMemory(text, {
     layer: Layer.Episodic,
-    tags: rawTags,
+    tags: allTags,
     pinned: Boolean(flags['pin']),
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
@@ -1026,20 +1051,6 @@ async function cmdRemember(
     tenantId,
     baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
   });
-
-  // Auto-tag with path context
-  const pathTags = extractPathTags(process.cwd());
-  for (const pt of pathTags) {
-    if (!entry.tags.includes(pt)) entry.tags.push(pt);
-  }
-
-  // Scope tagging: explicit --scope or auto-detected
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const activeScope = explicitScope || detectScope();
-  if (activeScope) {
-    const scopeTag = `scope:${activeScope}`;
-    if (!entry.tags.includes(scopeTag)) entry.tags.push(scopeTag);
-  }
 
   // Salience gate: decide if this memory is worth storing
   if (rememberConfig.salience.enabled && !Boolean(flags['pin']) && !Boolean(flags['force'])) {
@@ -10320,10 +10331,7 @@ async function main(
         const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
         const rememberKindAllowed = ['distilled', 'superseded'] as const;
         if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
-          const tagsRaw = flags['tag'];
-          const tags = Array.isArray(tagsRaw)
-            ? (tagsRaw as string[]).map(String)
-            : typeof tagsRaw === 'string' ? [tagsRaw] : undefined;
+          const tags = rememberTags(flags, process.cwd()).all;
           // B2 v1.12.6 — validate --owner on the thin-client path too.
           // Failure on this path exits early so the user gets the same
           // validation experience whether or not a server is up.
