@@ -185,7 +185,7 @@ describe('resolveLastSessionTranscript', () => {
   it('prefers an explicit transcript path when the file exists', () => {
     const file = path.join(tmp.dir, 'explicit.jsonl');
     fs.writeFileSync(file, '{}');
-    expect(resolveLastSessionTranscript(file, undefined)).toBe(file);
+    expect(resolveLastSessionTranscript(file, undefined, { mayScan: true })).toBe(file);
   });
 
   it('falls back to stdin JSON payload with transcript_path (Claude Code SessionEnd shape)', () => {
@@ -196,7 +196,7 @@ describe('resolveLastSessionTranscript', () => {
       transcript_path: file,
       cwd: tmp.dir,
     });
-    expect(resolveLastSessionTranscript(undefined, payload)).toBe(file);
+    expect(resolveLastSessionTranscript(undefined, payload, { mayScan: true })).toBe(file);
   });
 
   it('auto-discovers the newest transcript under ~/.claude/projects/', () => {
@@ -210,15 +210,15 @@ describe('resolveLastSessionTranscript', () => {
     const past = new Date(Date.now() - 60_000);
     fs.utimesSync(older, past, past);
 
-    expect(resolveLastSessionTranscript(undefined, undefined)).toBe(newer);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(newer);
   });
 
   it('returns null when no transcript can be located', () => {
-    expect(resolveLastSessionTranscript(undefined, undefined)).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
   });
 
   it('does not throw on non-JSON stdin text', () => {
-    expect(resolveLastSessionTranscript(undefined, 'some plain text')).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
 
   // Another project's newest transcript, which only a manual run may pick up.
@@ -232,22 +232,32 @@ describe('resolveLastSessionTranscript', () => {
 
   it('a named transcript that is missing returns null instead of scanning every project', () => {
     plantOtherProjectTranscript();
-    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined)).toBeNull();
+    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined, { mayScan: true })).toBeNull();
   });
 
   it('a payload without a readable transcript_path returns null instead of scanning', () => {
     plantOtherProjectTranscript();
     const gone = JSON.stringify({ session_id: 'abc', transcript_path: path.join(tmp.dir, 'gone.jsonl') });
-    expect(resolveLastSessionTranscript(undefined, gone)).toBeNull();
-    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }))).toBeNull();
-    expect(resolveLastSessionTranscript(undefined, 'some plain text')).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, gone, { mayScan: true })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), { mayScan: true })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
 
-  it('scans only on a proven manual run: no path, no stdin text, no timed-out read', () => {
+  it('scans only when the caller allows it: no path, no stdin text, mayScan true', () => {
     const planted = plantOtherProjectTranscript();
-    expect(resolveLastSessionTranscript(undefined, undefined)).toBe(planted);
-    expect(resolveLastSessionTranscript(undefined, '  \n')).toBe(planted);
-    expect(resolveLastSessionTranscript(undefined, undefined, true)).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, '  \n', { mayScan: true })).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: false })).toBeNull();
+  });
+
+  it('never scans when the caller says mayScan false, even with a newer transcript planted', () => {
+    const older = plantOtherProjectTranscript();
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(older, past, past);
+    const newer = path.join(path.dirname(older), 'newer.jsonl');
+    fs.writeFileSync(newer, '{}');
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: false })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, '  \n', { mayScan: false })).toBeNull();
   });
 });
 

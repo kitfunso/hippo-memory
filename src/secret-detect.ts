@@ -101,6 +101,14 @@ export function redactSecrets(text: string): string {
   return redactText(text, false);
 }
 
+/** A domain's first label must open on a letter, so asset names like logo@2x.png and pins like react@18.2.0 stay. */
+const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
+
+/** Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their patterns misfire on ids. */
+export function maskEmails(text: string): string {
+  return text.replace(EMAIL, '[email]');
+}
+
 /** Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and JWTs. */
 export function redactSecretsStrict(text: string): string {
   return redactText(text, true);

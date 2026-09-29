@@ -17,13 +17,14 @@ import {
   applyOutcome,
   calculateStrength,
 } from '../memory.js';
-import { search, hybridSearch, physicsSearch, estimateTokens } from '../search.js';
+import { hybridSearch, physicsSearch, estimateTokens, type SearchResult } from '../search.js';
 import { evalNow } from '../ablation.js';
 import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
-import { fetchGitLog, extractLessons, partitionLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
+import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
@@ -42,9 +43,8 @@ import {
   appendRecall,
   snapshotRing,
   RingBuffer,
-  type AnchoringHint,
 } from '../recall-history.js';
-import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
+import { detectAvailabilityBias } from '../availability.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
 // for the MCP pipeline. Separate from CLI/HTTP rings per plan v3
@@ -182,8 +182,9 @@ interface DrillDownExtraOpts {
 
 // ── Format helpers ──
 
-import type { ContinuityBlock } from '../api.js';
+import type { ContinuityBlock, RecallResult, RecallResultItem } from '../api.js';
 import { formatHandoffEvidenceLine } from '../handoff.js';
+import { assembleCost, assembleText, drillCost, drillText, printedTokens } from '../context-render.js';
 
 function formatContinuityBlock(block: ContinuityBlock): string {
   const lines: string[] = ['## Continuity'];
@@ -235,21 +236,58 @@ function formatContinuityBlock(block: ContinuityBlock): string {
   return lines.join('\n');
 }
 
-function formatMemories(results: ReturnType<typeof search>, hippoRoot: string): string {
-  if (results.length === 0) return 'No relevant memories found.';
+const NO_MEMORIES = 'No relevant memories found.';
 
-  const config = loadConfig(hippoRoot);
-  const lines: string[] = [`Found ${results.length} memories:\n`];
+function memoriesHeading(count: number): string {
+  return `Found ${count} memories:\n`;
+}
 
-  for (const r of results) {
-    const conf = confidenceLabel(r.entry).text;
-    const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
-    lines.push(`[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})`);
-    lines.push(r.entry.content);
-    lines.push('');
+function formatMemory(r: SearchResult): string {
+  const conf = confidenceLabel(r.entry).text;
+  const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
+  return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${r.entry.content}\n`;
+}
+
+function formatMemories(results: SearchResult[]): string {
+  if (results.length === 0) return NO_MEMORIES;
+  return [memoriesHeading(results.length), ...results.map(formatMemory)].join('\n');
+}
+
+/** What a memory costs the budget: the text formatMemories prints for it. */
+const memoryCost = (r: SearchResult): number => printedTokens(formatMemory(r));
+
+// The widest heading or the empty-list line, whichever costs more, so either prints inside the budget.
+function memoriesReserve(budget: number): number {
+  return Math.max(printedTokens(memoriesHeading(budget)), estimateTokens(NO_MEMORIES));
+}
+
+// Rows the ranked list already shows drop out of this section, so pricing every row bounds what it prints.
+function tailSection(rows: RecallResultItem[]): string {
+  if (rows.length === 0) return '';
+  const lines: string[] = ['', '## Fresh tail / substituted summaries'];
+  for (const r of rows) {
+    const tag = r.isSummary ? '[summary]' : '[tail]';
+    const head = r.content.length > 200 ? r.content.slice(0, 200) + '…' : r.content;
+    if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
+      lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
+    } else {
+      lines.push(`- ${tag} ${r.id}: ${head}`);
+    }
   }
+  return '\n' + lines.join('\n');
+}
 
-  return lines.join('\n');
+// J3.2: the hint depends on the query alone, so api.recall's copy is the one shown; JSON.stringify fences the phrase.
+function planningSection(r: RecallResult): string {
+  if (r.planningFallacyHint) {
+    const h = r.planningFallacyHint;
+    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
+  }
+  if (r.planningFallacyWatching) {
+    const w = r.planningFallacyWatching;
+    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
+  }
+  return '';
 }
 
 // ── Tool definitions ──
@@ -644,6 +682,7 @@ async function executeTool(
         // never actually saw. Real MCP tracing is the reserved 'mcp'
         // pipeline value (schema v40) — a follow-up, not v1 scope.
         suppressRecallTrace: true,
+        keepHeldCopies: true,
         ...recallExtra,
       });
 
@@ -665,10 +704,25 @@ async function executeTool(
         ? allEntries.filter((e) => e.scope === explicitScope)
         : allEntries.filter((e) => passesScopeFilterForRecall(e.scope ?? null, undefined));
       const droppedPreRankCountMcp = allEntries.length - entries.length;
+      // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
+      let left = budget - memoriesReserve(budget);
+      const pays = (piece: string): boolean => {
+        const tokens = estimateTokens(piece);
+        if (tokens > left) return false;
+        left -= tokens;
+        return true;
+      };
+      const planPiece = planningSection(apiResult);
+      const showPlan = planPiece !== '' && pays(planPiece);
+      const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
+      const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
+      const continuityPiece = includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
+      const showContinuity = continuityPiece !== '' && pays(continuityPiece);
       const usePhysics = config.physics?.enabled !== false;
+      const fit = { budget: Math.max(0, left), cost: memoryCost, hippoRoot };
       let results = usePhysics
-        ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
-        : await hybridSearch(query, entries, { budget, hippoRoot });
+        ? await physicsSearch(query, entries, { ...fit, physicsConfig: config.physics })
+        : await hybridSearch(query, entries, fit);
       // v1.12.13 / C5 — droppedByBudget for MCP is an UPPER BOUND. The
       // difference (entries.length - results.length) lumps three things
       // together: rows hybridSearch/physicsSearch internally dropped because
@@ -686,7 +740,7 @@ async function executeTool(
       // compute droppedByBudget = scoredCount - results.length, with the
       // remainder (entries.length - scoredCount) attributed to
       // droppedPreRank or a new "noQueryMatch" counter.
-      const droppedByBudgetCountMcp = Math.max(0, entries.length - results.length);
+      const droppedByBudgetFor = (shown: number): number => Math.max(0, entries.length - shown);
 
       // v1.7.4 -- dlPFC goal-stack boost on the MCP physics/hybrid result
       // list BEFORE formatMemories. MCP's user-visible primary ordering does
@@ -706,27 +760,66 @@ async function executeTool(
         }
       }
 
-      const retrievedIds = results.map((r) => r.entry.id);
+      // J1, J2 and C5: MCP ranks its own list (its top-1 can differ from api.recall's), so its hints and Cutoff block are its own.
+      const anchorRing = process.env.HIPPO_ANCHORING !== 'off' && sessionId
+        ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
+        : null;
+      const queryHash = hashQueryText(query);
+      const render = (cut: SearchResult[]) => {
+        const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
+        const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
+        const availability = process.env.HIPPO_AVAILABILITY !== 'off'
+          ? detectAvailabilityBias({
+              topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+              pool: entries.map((e) => ({ id: e.id, created: e.created })),
+            })
+          : null;
+        const shownIds = new Set(list.map((r) => r.entry.id));
+        const shownKeys = storedTextKeys(list.map((r) => r.entry));
+        const tail = showTail
+          ? dropHeldCopies(tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))), (r) => r)
+          : [];
+        const s = buildSuppressionSummary({
+          totalCandidates: totalCandidatesCountMcp,
+          droppedPreRank: droppedPreRankCountMcp + cut.length - list.length, // the bucket CLI and API recall put hidden copies in
+          droppedByBudget: droppedByBudgetFor(cut.length),
+          summarySubstitutionsAdded: tail.filter((r) => r.isSummary).length,
+          freshTailAdded: tail.filter((r) => r.isFreshTail && !r.isSummary).length,
+          suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
+        });
+        // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads it.
+        let text = anchoring ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n` : '';
+        if (availability) text += `## Availability bias\n${availability.summary}\n\n---\n\n`;
+        if (showPlan) text += planPiece;
+        const cutoffClauses: string[] = [];
+        if (s.droppedByBudget > 0) cutoffClauses.push(`${s.droppedByBudget} dropped to fit limit`);
+        if (s.droppedPreRank > 0) cutoffClauses.push(`${s.droppedPreRank} filtered pre-rank`);
+        if (s.summarySubstitutionsAdded > 0) cutoffClauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+        if (s.freshTailAdded > 0) cutoffClauses.push(`${s.freshTailAdded} fresh-tail added`);
+        if (s.suppressedByInterference > 0) cutoffClauses.push(`${s.suppressedByInterference} suppressed by interference`);
+        if (cutoffClauses.length > 0) {
+          text += `## Cutoff\nShowing ${list.length} of ${s.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n\n---\n\n`;
+        }
+        // v1.6.3: the fresh-tail and summary rows api.recall produced follow the ranked list, or the MCP fields go unanswered.
+        text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
+        return { anchoring, availability, text, list };
+      };
+      let rendered = render(results);
+      // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response fits.
+      while (results.length > 1 && estimateTokens(rendered.text) > budget) {
+        results = results.slice(0, -1);
+        rendered = render(results);
+      }
+      const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown } = rendered;
+
+      const retrievedIds = shown.map((r) => r.entry.id);
       strengthenRetrieved(hippoRoot, retrievedIds);
       lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
 
-      // v0.33 / J1 — MCP per-pipeline anchoring detector. UNLIKE J3.2's
-      // planningFallacyHint (which is pipeline-invariant because it
-      // depends only on queryText + predictions table state), the
-      // anchoring hint depends on (a) per-pipeline top-1 ranking (MCP's
-      // physics/hybrid winner can differ from api.recall's BM25 winner)
-      // and (b) per-pipeline ring buffer. So MCP computes its OWN hint
-      // against MCP's own top-1, mirroring the C5 per-pipeline rule.
-      let mcpAnchoringHint: AnchoringHint | null = null;
       if (process.env.HIPPO_ANCHORING !== 'off') {
-        if (sessionId) {
-          const ringKey = buildSessionKey(tenantId, sessionId);
-          const ring = getOrCreateRing(sessionRecallHistoryMcp, ringKey);
-          const queryHash = hashQueryText(query);
-          const topId = results[0]?.entry.id ?? null;
-          mcpAnchoringHint = detectAnchoring(snapshotRing(ring), queryHash, topId);
-          appendRecall(ring, queryHash, topId, mcpAnchoringHint?.memoryId);
-          // Pipeline-local audit emission (lockstep with CLI / api.recall).
+        if (anchorRing) {
+          // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
+          appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);
           if (mcpAnchoringHint?.reason === 'memory_dominance') {
             const dbForAudit = openHippoDb(hippoRoot);
             try {
@@ -781,161 +874,25 @@ async function executeTool(
         }
       }
 
-      // v0.32 / J3.2 — auto-injection of reference-class baserate hint
-      // when the query carries a forward-prediction phrase. Read from
-      // apiResult.planningFallacyHint (already computed inside api.recall
-      // with the caller identity threaded through ctx.actor.subject -
-      // auth-resolved actor under HTTP-MCP, 'mcp' for stdio). The hint is
-      // pipeline-INVARIANT — same (hippoRoot, tenantId, query) inputs
-      // produce the same hint regardless of which downstream search
-      // pipeline (api.recall band vs physics/hybrid) renders the memory
-      // list, so re-computing here would double the audit emission for
-      // identical telemetry. C5 per-pipeline rule does NOT apply here
-      // because the hint depends on queryText, not on the matched memory
-      // set. Prepend BEFORE the memory list so the agent sees it first.
-      // v0.33 / J1: Anchoring hint goes ABOVE planning-fallacy hint
-      // (anchoring is the stronger cognitive-pull warning).
-      // v1.13.3 / C5 follow-up — Build MCP-pipeline suppressionSummary BEFORE
-      // the response is assembled so the Cutoff block can render at TOP
-      // alongside the other Track J hints. The dogfood
-      // (docs/dogfood/2026-05-27-track-j-warnings.md) showed the v1.13.0-v1.13.2
-      // bottom-placement was dark: a fresh sub-agent summarised the visible
-      // memories with zero mention of the dropped pool. Top-placement + plain-
-      // English rewrite fixes the read-rate without any system-prompt addendum.
-      const physicsIds = new Set(results.map((r) => r.entry.id));
-      const tailOrSummary = apiResult.results.filter(
-        (r) => (r.isFreshTail || r.isSummary) && !physicsIds.has(r.id),
-      );
-      const freshTailAddedMcp = tailOrSummary.filter((r) => r.isFreshTail && !r.isSummary).length;
-      const summarySubsAddedMcp = tailOrSummary.filter((r) => r.isSummary).length;
-      // v0.33 / J1: suppressedByInterference bumped on MCP's R2 fire.
-      const mcpSuppressedByInterference = mcpAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
-      const mcpSuppressionSummary = buildSuppressionSummary({
-        totalCandidates: totalCandidatesCountMcp,
-        droppedPreRank: droppedPreRankCountMcp,
-        droppedByBudget: droppedByBudgetCountMcp,
-        summarySubstitutionsAdded: summarySubsAddedMcp,
-        freshTailAdded: freshTailAddedMcp,
-        suppressedByInterference: mcpSuppressedByInterference,
-      });
-
-      // v1.13.x / J2 — MCP per-pipeline availability/recency-bias detector.
-      // Like the anchoring hint above (and unlike J3.2's pipeline-invariant
-      // planningFallacyHint), this depends on MCP's OWN returned top-K and the
-      // scope-filtered candidate pool (entries) it was drawn from, so MCP
-      // computes its own hint here. Soft warning only. Gated by
-      // HIPPO_AVAILABILITY=off; audit emission is pipeline-local (actor =
-      // auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio).
-      let mcpAvailabilityHint: AvailabilityHint | null = null;
-      if (process.env.HIPPO_AVAILABILITY !== 'off') {
-        mcpAvailabilityHint = detectAvailabilityBias({
-          topK: results.map((r) => ({ id: r.entry.id, created: r.entry.created })),
-          pool: entries.map((e) => ({ id: e.id, created: e.created })),
-        });
-        if (mcpAvailabilityHint) {
-          const dbForAudit = openHippoDb(hippoRoot);
-          try {
-            appendAuditEvent(dbForAudit, {
-              tenantId,
-              actor: ctx?.actor ?? 'mcp',
-              op: 'recall_availability_detected',
-              metadata: {
-                recent_fraction: mcpAvailabilityHint.recentFraction,
-                older_passed_over: mcpAvailabilityHint.olderCandidatesPassedOver,
-                returned_count: mcpAvailabilityHint.returnedCount,
-              },
-            });
-          } finally {
-            closeHippoDb(dbForAudit);
-          }
-        }
-      }
-
-      let response = '';
-      if (mcpAnchoringHint) {
-        response =
-          `## Anchoring hint\n` +
-          `${mcpAnchoringHint.summary}\n` +
-          `[anchored_on: ${mcpAnchoringHint.memoryId}]\n` +
-          `\n---\n\n`;
-      }
-      // v1.13.x / J2 — availability/recency-bias hint, rendered below the
-      // anchoring hint and above the planning-fallacy hint. Soft warning only.
       if (mcpAvailabilityHint) {
-        response += `## Availability bias\n${mcpAvailabilityHint.summary}\n\n---\n\n`;
-      }
-      if (apiResult.planningFallacyHint) {
-        const h = apiResult.planningFallacyHint;
-        const safePhrase = JSON.stringify(h.detectedPhrase);
-        response +=
-          `## Planning fallacy hint\n` +
-          `Class: ${h.classTag}\n` +
-          `${h.baserateSummary}\n` +
-          `(detected: ${safePhrase})\n` +
-          `\n---\n\n`;
-      } else if (apiResult.planningFallacyWatching) {
-        // v1.13.4 / J3.2 follow-up — surface the watching variant when
-        // the regex matched but no baserate could be produced
-        // (no_class_match / tiebreak). Mutually exclusive with the hint
-        // block above. Suggestion text directs the user toward an action
-        // (typically: tag a prediction class) that would unblock the
-        // hint next time.
-        const w = apiResult.planningFallacyWatching;
-        const safePhrase = JSON.stringify(w.detectedPhrase);
-        response +=
-          `## Planning fallacy watch\n` +
-          `Reason: ${w.reason}\n` +
-          `${w.suggestion}\n` +
-          `(detected: ${safePhrase})\n` +
-          `\n---\n\n`;
-      }
-
-      // v1.13.3 / C5 follow-up — Cutoff block (was "WYSIATI:" line at bottom
-      // in v1.13.0-v1.13.2). Top placement so the agent reads the cutoff
-      // before scrolling the result list. "Cutoff" is plain English; the old
-      // "WYSIATI:" acronym was opaque to agents without Kahneman context per
-      // the 2026-05-27 dogfood Trial 1.
-      const sMcp = mcpSuppressionSummary;
-      const cutoffClauses: string[] = [];
-      if (sMcp.droppedByBudget > 0) cutoffClauses.push(`${sMcp.droppedByBudget} dropped to fit limit`);
-      if (sMcp.droppedPreRank > 0) cutoffClauses.push(`${sMcp.droppedPreRank} filtered pre-rank`);
-      if (sMcp.summarySubstitutionsAdded > 0) cutoffClauses.push(`${sMcp.summarySubstitutionsAdded} summary substitutions added`);
-      if (sMcp.freshTailAdded > 0) cutoffClauses.push(`${sMcp.freshTailAdded} fresh-tail added`);
-      if (sMcp.suppressedByInterference > 0) cutoffClauses.push(`${sMcp.suppressedByInterference} suppressed by interference`);
-      if (cutoffClauses.length > 0) {
-        response +=
-          `## Cutoff\n` +
-          `Showing ${results.length} of ${sMcp.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n` +
-          `\n---\n\n`;
-      }
-
-      response += formatMemories(results, hippoRoot);
-
-      // v1.6.3 codex P2 fix. The physics/hybrid scorer drives the primary
-      // ranked block above, so user-visible ordering is preserved. But
-      // when the v1.5.0+/v1.5.2 RecallOpts are passed, we MUST also surface
-      // the fresh-tail and substituted-summary items apiRecall produced —
-      // otherwise the advertised MCP fields are silently ignored. Append
-      // them as their own section, deduplicated against the physics ranking.
-      if (tailOrSummary.length > 0) {
-        const lines: string[] = ['', '## Fresh tail / substituted summaries'];
-        for (const r of tailOrSummary) {
-          const tag = r.isSummary ? '[summary]' : '[tail]';
-          const head = r.content.length > 200 ? r.content.slice(0, 200) + '…' : r.content;
-          if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
-            lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
-          } else {
-            lines.push(`- ${tag} ${r.id}: ${head}`);
-          }
+        const dbForAudit = openHippoDb(hippoRoot);
+        try {
+          appendAuditEvent(dbForAudit, {
+            tenantId,
+            actor: ctx?.actor ?? 'mcp',
+            op: 'recall_availability_detected',
+            metadata: {
+              recent_fraction: mcpAvailabilityHint.recentFraction,
+              older_passed_over: mcpAvailabilityHint.olderCandidatesPassedOver,
+              returned_count: mcpAvailabilityHint.returnedCount,
+            },
+          });
+        } finally {
+          closeHippoDb(dbForAudit);
         }
-        response += '\n' + lines.join('\n');
       }
 
-      if (includeContinuity && apiResult.continuity) {
-        response += '\n\n' + formatContinuityBlock(apiResult.continuity);
-      }
-
-      return response;
+      return rendered.text;
     }
 
     case 'hippo_assemble': {
@@ -959,14 +916,9 @@ async function executeTool(
       const r = apiAssemble(apiCtx, sessionId, {
         summarizeOlder,
         ...assembleExtra,
+        cost: assembleCost(sessionId),
       });
-      const lines: string[] = [];
-      lines.push(`Session ${r.sessionId} — ${r.items.length} items, ${r.tokens} tokens (raw=${r.totalRaw}, summarized=${r.summarized}, evicted=${r.evicted})`);
-      for (const it of r.items) {
-        const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-        lines.push(`  ${prefix} ${it.createdAt} ${it.id} - ${it.content}`);
-      }
-      return lines.join('\n');
+      return assembleText(r);
     }
 
     case 'hippo_drill': {
@@ -994,7 +946,7 @@ async function executeTool(
       if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
       if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
       if (depth !== undefined) drillExtra.depth = depth;
-      const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra });
+      const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, cost: drillCost });
       if ('failure' in r) {
         // v1.6.4: only not_drillable is caller-actionable. not_found
         // intentionally collapses cross-tenant + scope-blocked + missing
@@ -1005,15 +957,7 @@ async function executeTool(
         }
         return `No drillable summary at id=${summaryId}.`;
       }
-      const lines: string[] = [];
-      lines.push(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} -> ${r.summary.latestAt})` : ''}`);
-      lines.push(`  ${r.summary.content}`);
-      lines.push('');
-      lines.push(`Children (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
-      for (const c of r.children) {
-        lines.push(`  [L${c.dagLevel}] ${c.id} - ${c.content}`);
-      }
-      return lines.join('\n');
+      return drillText(r);
     }
 
     case 'hippo_predict_baserate': {
@@ -1151,13 +1095,6 @@ async function executeTool(
         if (isolationOff) return true;
         return classifyOriginProject(e.origin_project, mcpProjectName) !== 'cross-project';
       });
-      const usePhysicsCtx = config.physics?.enabled !== false;
-      const results = usePhysicsCtx
-        ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
-        : await hybridSearch(query, entries, { budget, hippoRoot });
-      const retrievedIds = results.map((r) => r.entry.id);
-      strengthenRetrieved(hippoRoot, retrievedIds);
-      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
 
       // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): bounded
       // read, no session id available on this surface (freshness bound
@@ -1183,8 +1120,21 @@ async function executeTool(
           ].join('\n')
         : '';
 
-      const memoryText = formatMemories(results, hippoRoot);
-      return snapshotText ? `${snapshotText}\n${memoryText}` : memoryText;
+      // The snapshot prints first, so it is paid first after the heading; context keeps no hit past the budget, even the top one.
+      let left = budget - memoriesReserve(budget);
+      if (left < 0) return ''; // not even the heading fits, so nothing prints, as at budget 0
+      const snapshotPiece = snapshotText ? `${snapshotText}\n` : '';
+      const showSnapshot = snapshotPiece !== '' && estimateTokens(snapshotPiece) <= left;
+      if (showSnapshot) left -= estimateTokens(snapshotPiece);
+      const usePhysicsCtx = config.physics?.enabled !== false;
+      const fit = { budget: left, minResults: 0, cost: memoryCost, hippoRoot };
+      const results = dropHeldCopies(usePhysicsCtx
+        ? await physicsSearch(query, entries, { ...fit, physicsConfig: config.physics })
+        : await hybridSearch(query, entries, fit), (r) => r.entry);
+      const retrievedIds = results.map((r) => r.entry.id);
+      strengthenRetrieved(hippoRoot, retrievedIds);
+      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
+      return (showSnapshot ? snapshotPiece : '') + formatMemories(results);
     }
 
     case 'hippo_status': {
@@ -1229,8 +1179,9 @@ async function executeTool(
       let added = 0;
       let skipped = 0;
       let rejected = 0;
+      const keys = storedTextKeys(loadAllEntries(hippoRoot, tenantId));
       for (const lesson of lessons) {
-        if (deduplicateLesson(hippoRoot, lesson, 0.7, tenantId)) { skipped++; continue; }
+        if (keys.has(duplicateKey(lesson))) { skipped++; continue; }
         const entry = createMemory(lesson, {
           layer: Layer.Episodic,
           tags: ['git-learned'],
@@ -1247,6 +1198,7 @@ async function executeTool(
           if (err instanceof RejectedValueError) { rejected++; continue; }
           throw err;
         }
+        keys.add(duplicateKey(lesson));
         added++;
       }
       const rejectedSuffix = rejected > 0 ? `, ${rejected} rejected values skipped` : '';

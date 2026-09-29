@@ -72,6 +72,143 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
+// The Claude Code block as it stands: Claude Code's own auto memory saves what it learns, so it has no plain remember line.
+const CLAUDE_CURRENT = `
+## Project Memory (Hippo)
+
+Pinned rules and recent writes auto-inject at every prompt via the installed
+UserPromptSubmit hook; never re-run that part manually. At the START of a
+task (not per prompt), additionally load task-specific context: git-aware
+recall over the full store that per-prompt injection does not cover. Also
+run it if the hook is not installed:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+
+When you find out why something failed, record it right then, while you
+work, never as a closing step:
+\`\`\`bash
+hippo remember "<what went wrong and why>" --error
+\`\`\`
+
+The installed hooks store failed tool calls and capture the session when it
+ends, so there is nothing to run before you finish.
+`.trim();
+
+// The AGENTS.md blocks written for these five agents before the plain remember line came back.
+const PREVIOUS_AGENTS_BLOCKS = {
+  codex: `
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When Hippo's Codex wrapper is installed, session-end capture runs automatically.
+If the wrapper is not installed, capture a brief summary manually:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim(),
+  cursor: `
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim(),
+  openclaw: `
+## Project Memory (Hippo)
+
+At the start of every session, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim(),
+  opencode: `
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+When you learn a non-obvious lesson or hit an error, record it right then,
+while you work, never as a closing step:
+\`\`\`bash
+hippo remember "<lesson>" --error
+\`\`\`
+
+When stuck or repeating yourself, check if this happened before:
+\`\`\`bash
+hippo recall "<what's going wrong>" --budget 2000
+\`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim(),
+  pi: `
+## Project Memory (Hippo)
+
+At the start of every session, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+
+For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extensions/hippo-memory/\`.
+`.trim(),
+};
+const REMEMBER_LINE = 'hippo remember "<what you learned and why>"\n';
+const NO_SECRETS = 'Leave out secrets and personal details:';
+
 let home: string;
 let proj: string;
 
@@ -107,20 +244,25 @@ describe('the instruction block', () => {
     expect(claude).toContain('hippo context --auto --budget 1500');
     expect(claude).toContain('hippo remember "<what went wrong and why>" --error');
     expect(claude).not.toContain('hippo remember "<lesson>"');
+    expect(claude).not.toContain(REMEMBER_LINE);
     expect(claude).not.toContain('hippo outcome');
     expect(claude).not.toContain('hippo capture');
     const codex = inner(read('AGENTS.md'));
     expect(codex).toContain('hippo context --auto --budget 1500');
     expect(codex).not.toContain('hippo outcome');
     expect(codex).toContain('hippo capture --stdin');
+    expect(codex).toContain(REMEMBER_LINE);
+    expect(codex).toContain(NO_SECRETS);
   });
 
-  it.each(['cursor', 'openclaw', 'opencode', 'pi'])('keeps context, errors and capture and drops the outcome mark for %s, which has no capture hook', (agent) => {
+  it.each(['cursor', 'openclaw', 'opencode', 'pi'])('keeps context, errors and capture, drops the outcome mark and asks for a plain remember for %s, which has no capture hook', (agent) => {
     write('AGENTS.md', '# Agents\n');
     hippo(proj, 'hook', 'install', agent);
     const text = inner(read('AGENTS.md'));
     expect(text).toContain('hippo context --auto --budget 1500');
-    expect(text).toContain('--error');
+    expect(text).toContain('hippo remember "<description of what went wrong>" --error');
+    expect(text).toContain(REMEMBER_LINE);
+    expect(text).toContain(NO_SECRETS);
     expect(text).not.toContain('hippo outcome');
     expect(text).toContain('hippo capture --stdin');
   });
@@ -171,6 +313,36 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(after).not.toMatch(/(^|[^\r])\n/);
     const out = init();
     expect(read('CLAUDE.md')).toBe(after);
+    expect(out).not.toMatch(/Refreshed|Left the edited/);
+  });
+
+  it.each(Object.entries(PREVIOUS_AGENTS_BLOCKS))('refreshes the previous %s block to the one that asks for a plain remember', (agent, previous) => {
+    const before = `# Agents\n\nKeep this line.\n\n${START}\n${previous}\n${END}\n\nAnd this one.\n`;
+    write('AGENTS.md', before);
+    expect(init()).toContain(`Refreshed the ${agent} hippo block in AGENTS.md`);
+
+    // `hook install codex` swaps the Codex launcher, so the expected Codex block comes from init in a fresh project.
+    const fresh = path.join(home, 'fresh');
+    fs.mkdirSync(fresh);
+    fs.writeFileSync(path.join(fresh, 'AGENTS.md'), '# Agents\n');
+    if (agent === 'codex') init(fresh);
+    else hippo(fresh, 'hook', 'install', agent);
+
+    const after = read('AGENTS.md');
+    expect(outside(after)).toEqual(outside(before));
+    expect(inner(after)).toBe(inner(read('AGENTS.md', fresh)));
+    expect(inner(after)).toContain(REMEMBER_LINE);
+    expect(inner(after)).not.toContain('<lesson>');
+    const out = init();
+    expect(read('AGENTS.md')).toBe(after);
+    expect(out).not.toMatch(/Refreshed|Left the edited/);
+  });
+
+  it('leaves the current Claude Code block as it is, since its own auto memory saves what it learns', () => {
+    const before = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\n${END}\n`;
+    write('CLAUDE.md', before);
+    const out = init();
+    expect(read('CLAUDE.md')).toBe(before);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });
 

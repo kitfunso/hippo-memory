@@ -266,6 +266,15 @@ export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceI
 }
 
 /** JSON-value string check without a runtime `typeof` (anti-slop rule). */
+interface ModelTagged {
+  model?: unknown;
+}
+
+/** Claude Code writes its own API errors and limit notices as assistant lines from this model; no model call made them. */
+export function isSyntheticMessage(message: ModelTagged): boolean {
+  return message.model === '<synthetic>';
+}
+
 function isJsonString(value: JsonValue | undefined): value is string {
   return value !== undefined && value !== null && value.constructor === String;
 }
@@ -381,7 +390,7 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
       // One call spans lines sharing a message id.
       const message = entry.message;
       if (entry.type !== 'assistant' || !isJsonObject(message)) continue;
-      if (!isJsonObject(message.usage) || message.model === '<synthetic>' || !isJsonString(message.id)) continue;
+      if (!isJsonObject(message.usage) || isSyntheticMessage(message) || !isJsonString(message.id)) continue;
       if (seen.has(message.id)) continue;
       seen.add(message.id);
       const at = isJsonString(entry.timestamp) ? Date.parse(entry.timestamp) : Number.NaN;

@@ -19,13 +19,14 @@ import {
   readEntry,
 } from './store.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
-import { search, hybridSearch, SearchResult } from './search.js';
+import { search, hybridSearch, fitBudget, SearchResult, type ResultCost } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
+import { duplicateKey, storedTextKeys } from './same-text.js';
 
 /**
  * Returns the path to the global Hippo store.
@@ -93,11 +94,8 @@ export function promoteToGlobal(
 
   writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
 
-  // Fire-and-forget: embedMemory's own availability gate (embeddings.ts:438)
-  // already no-ops when embeddings are unavailable/disabled, so a pre-guard
-  // here would be redundant (capture.ts:598 pre-guards instead; both
-  // contracts are correct, see docs/plans/2026-07-18-global-row-embeddings.md).
-  void embedMemory(globalRoot, globalEntry).catch(() => {});
+  // Fire-and-forget: embedMemory gates on availability and never rejects.
+  void embedMemory(globalRoot, globalEntry);
 
   return globalEntry;
 }
@@ -150,7 +148,7 @@ export function searchBoth(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = r.entry.content.slice(0, 200).toLowerCase();
+    const key = duplicateKey(r.entry.content);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -190,6 +188,8 @@ export interface HybridSearchOptions extends SearchOptions {
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
   asOf?: string;
+  /** Budget cost per result, spent the same way in each store and in the merged list. */
+  cost?: ResultCost;
   /** v0.30 / E4 — propagated to underlying hybridSearch calls.
    *  Per-call > env HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
@@ -231,7 +231,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
+  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
 
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
@@ -278,10 +278,10 @@ export async function searchBothHybrid(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
+    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   });
   const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
+    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   });
 
   // Tag global results. Local memories get a configurable priority bump.
@@ -300,7 +300,7 @@ export async function searchBothHybrid(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = r.entry.content.slice(0, 200).toLowerCase();
+    const key = duplicateKey(r.entry.content);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -310,18 +310,7 @@ export async function searchBothHybrid(
   // same rationale (deterministic inputs + stability; local-first on ties).
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget (guarantee at least minResults items)
-  const effectiveMinHybrid = minResults ?? 1;
-  const results: typeof deduped = [];
-  let usedTokens = 0;
-
-  for (let i = 0; i < deduped.length; i++) {
-    if (results.length >= effectiveMinHybrid && usedTokens + deduped[i].tokens > budget) continue;
-    usedTokens += deduped[i].tokens;
-    results.push(deduped[i]);
-  }
-
-  return results;
+  return fitBudget(deduped, budget, minResults ?? 1, cost);
 }
 
 // ---------------------------------------------------------------------------
@@ -344,11 +333,18 @@ const TRANSFERABLE_TAGS = new Set([
 /** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows inherit them. */
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
   'git-learned',
+  'session-digest',
 ]);
 
 export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
 }
+
+/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own list. */
+export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
+  'extracted',
+  'session-digest',
+]);
 
 /**
  * Estimate how well a memory would transfer to other projects.
@@ -436,10 +432,9 @@ export function shareMemory(
   // Single-row producer: embed here unless the caller opts out. autoShare
   // sets skipEmbed so it can batch its whole run through one embedAll() at
   // the end instead of N serialized full-index rewrites (embedMemory rewrites
-  // the whole index JSON per call). Same redundant-pre-guard reasoning as
-  // promoteToGlobal above.
+  // the whole index JSON per call).
   if (!options.skipEmbed) {
-    void embedMemory(globalRoot, globalEntry).catch(() => {});
+    void embedMemory(globalRoot, globalEntry);
   }
 
   return globalEntry;
@@ -543,9 +538,7 @@ export function autoShare(
   const globalEntries = loadAllEntries(globalRoot);
 
   // Build set of global content hashes to avoid duplicates
-  const globalContentSet = new Set(
-    globalEntries.map((e) => e.content.toLowerCase().trim().slice(0, 200))
-  );
+  const globalContentSet = storedTextKeys(globalEntries);
 
   const candidates = localEntries.filter((entry) => {
     // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
@@ -558,9 +551,8 @@ export function autoShare(
     const score = transferScore(entry);
     if (score < minScore) return false;
 
-    // Skip if already shared (approximate content match)
-    const contentKey = entry.content.toLowerCase().trim().slice(0, 200);
-    if (globalContentSet.has(contentKey)) return false;
+    // Skip if already shared (same text apart from spacing)
+    if (globalContentSet.has(duplicateKey(entry.content))) return false;
 
     // v39 S4 producer veto: secret rows never auto-share, regardless of
     // transfer score. (shareMemory would throw; filtering here keeps the

@@ -19,7 +19,8 @@
  *   - API provider `id` is `${kind}:${model}`; switching to/from an API embedder
  *     (or a dimension change) flips the identity and triggers the existing
  *     reindex-on-change path.
- *   - `resolveEmbeddingProvider` NEVER throws. `isAvailable()` is provider-aware
+ *   - `resolveEmbeddingProvider` throws on an invalid config (unknown provider,
+ *     bad apiBaseUrl); `embedMemory` turns that into a warning. `isAvailable()` is provider-aware
  *     (local -> dependency installed; api -> key present). `embed()` MAY throw on
  *     a hard transport/auth failure so a reindex can abort atomically; hot paths
  *     wrap it and fall back to BM25.

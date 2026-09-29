@@ -121,8 +121,8 @@ describe('refine --limit: the paid-API-runaway pin', () => {
 describe('dedup --threshold: the no-undo data-loss pin', () => {
   let home: string;
   let env: GuardEnv;
-  // Deliberately NOT near-duplicates: dedupe.ts only deletes a pair whose
-  // similarity exceeds the threshold, so a NaN threshold is the only way in.
+  // Deliberately different texts: dedup removes only copies of the same text,
+  // so a bad --threshold value must fail loud and delete nothing.
   const CONTENT_A = 'The quarterly budget review meeting moved to Thursday afternoon.';
   const CONTENT_B = 'Bananas are a good source of potassium and dietary fiber.';
 

@@ -1,12 +1,15 @@
 import type { MemoryEntry } from './memory.js';
-import { search, type SearchResult } from './search.js';
+import { fitBudget, search, type ResultCost, type SearchResult } from './search.js';
 
 export function multihopSearch(
   query: string,
   entries: MemoryEntry[],
-  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; includeSuperseded?: boolean; asOf?: string } = {},
+  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; cost?: ResultCost; includeSuperseded?: boolean; asOf?: string } = {},
 ): SearchResult[] {
-  const pass1 = search(query, entries, { ...options, budget: (options.budget ?? 4000) * 2 });
+  const budget = options.budget ?? 4000;
+  // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search() does.
+  const fit = (ordered: SearchResult[]): SearchResult[] => fitBudget(ordered, budget, options.minResults ?? 1, options.cost);
+  const pass1 = search(query, entries, { ...options, budget: budget * 2 });
   const topK = pass1.slice(0, 10);
 
   if (topK.length === 0) return [];
@@ -25,7 +28,7 @@ export function multihopSearch(
     .map((t) => t.split(':')[1])
     .filter((e) => !queryLower.includes(e.toLowerCase()));
 
-  if (newEntities.length === 0) return pass1;
+  if (newEntities.length === 0) return fit(pass1);
 
   const followUpQuery = newEntities.join(' ') + ' ' + query;
   const pass2 = search(followUpQuery, entries, options);
@@ -41,5 +44,5 @@ export function multihopSearch(
   // T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are
   // deterministically ordered (search() carries the content tail), stability
   // inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
-  return [...merged.values()].sort((a, b) => b.score - a.score);
+  return fit([...merged.values()].sort((a, b) => b.score - a.score));
 }

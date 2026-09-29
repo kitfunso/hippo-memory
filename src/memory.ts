@@ -71,7 +71,7 @@ export interface MemoryEntry {
   parents: string[];       // IDs of source memories this was consolidated from (may be empty)
   starred: boolean;        // user-bookmarked
   trace_outcome: TraceOutcome;      // final outcome for trace-layer entries; null otherwise
-  source_session_id: string | null; // set by auto-promote; null for everything else
+  source_session_id: string | null; // set by auto-promote and session digests; null for everything else
   valid_from: string;               // ISO 8601 timestamp when this belief became true
   superseded_by: string | null;     // ID of the memory that replaced this one; null = current
   extracted_from: string | null;

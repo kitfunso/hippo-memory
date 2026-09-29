@@ -192,64 +192,68 @@ export function isContentWorthStoring(content: string): boolean {
 // A5 audit log primitives (append-only mutation trail)
 // ---------------------------------------------------------------------------
 
-export type AuditOp =
-  | 'remember'
-  | 'recall'
-  | 'promote'
-  | 'supersede'
-  | 'forget'
-  | 'archive_raw'
-  | 'auth_revoke'
-  | 'auth_create' // v1.12.4: emitted by api.authCreate (closes the gap v1.12.3 CHANGELOG flagged)
-  | 'outcome'
-  | 'consolidate' // v1.11.5: emitted once per api.sleep invocation
-  | 'audit_prune' // v1.12.9: emitted by pruneAuditLog after each retention prune
-  | 'summary_marked_dirty' // v0.30 / E1 of DAG live-coupling — emitted by markSummaryDirty on 0->1 transition
-  | 'summary_marked_clean' // v0.30 / E3 — emitted by clearSummaryDirtyAfterBuild after buildDag child-link loop
-  | 'summary_rebuilt' // v0.30 / E3 — emitted by applyRebuildResult on successful sleep-cycle rebuild
-  | 'predict_create' // v0.31 / E2 prediction first-class object — emitted by savePrediction
-  | 'predict_close' // v0.31 / E2 — emitted by closePrediction
-  | 'predict_baserate' // v0.31 / J3 — emitted by computePredictionBaserate (read-side; meaningful agent signal worth auditing)
-  | 'recall_autodebias_hint' // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success (forward-claim detected, class resolved, hint returned)
-  | 'recall_autodebias_hint_no_class_match' // v0.32 / J3.2 — telemetry: forward-claim detected, no class scored >= 1 (drives J3.3 embedding-fallback decision)
-  | 'recall_autodebias_hint_tiebreak' // v0.32 / J3.2 — telemetry: forward-claim detected, >=2 classes tied at best overlap (silent to caller)
-  | 'recall_anchor_detected_query_repeat' // v0.33 / J1 — emitted by detector when R1 fires (same query phrasing returning same top-1 within recentRepeatWindow)
-  | 'recall_anchor_detected_memory_dominance' // v0.33 / J1 — emitted by detector when R2 fires (same memory wins top-1 across >=minDominance distinct queries)
-  | 'recall_anchor_skipped_no_session' // v0.33 / J1 — telemetry: caller skipped ring tracking because no sessionId; drives J1-v2 decision on persisting cross-session history
-  | 'recall_availability_detected' // v1.13.x / J2 - emitted when availability/recency-bias hint fires
-  | 'decision_create' // E2 decision first-class object — emitted by saveDecision
-  | 'decision_supersede' // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
-  | 'decision_close' // E2 — emitted by closeDecision (active -> closed, retire without successor)
-  | 'incident_open' // E2 incident first-class object — emitted by saveIncident
-  | 'incident_resolve' // E2 — emitted by resolveIncident (open -> resolved)
-  | 'incident_close' // E2 — emitted by closeIncident (open|resolved -> closed)
-  | 'process_create' // E2 process first-class object — emitted by saveProcess
-  | 'process_supersede' // E2 — emitted by saveProcess when supersedesProcessId resolves to an active process row
-  | 'process_close' // E2 — emitted by closeProcess (active -> closed, retire without successor)
-  | 'policy_create' // E2 policy first-class object — emitted by savePolicy
-  | 'policy_supersede' // E2 — emitted by savePolicy when supersedesPolicyId resolves to an active policy row
-  | 'policy_close' // E2 — emitted by closePolicy (active -> closed, retire without successor)
-  | 'skill_create' // E2 skill first-class object — emitted by saveSkill
-  | 'skill_supersede' // E2 — emitted by saveSkill when supersedesSkillId resolves to an active skill row
-  | 'skill_close' // E2 — emitted by closeSkill (active -> closed, retire without successor)
-  | 'project_brief_create' // E2 project_brief first-class object — emitted by saveProjectBrief (incl. refreshBrief)
-  | 'project_brief_supersede' // E2 — emitted by saveProjectBrief when supersedesBriefId resolves to an active brief row
-  | 'project_brief_close' // E2 — emitted by closeProjectBrief (active -> closed, retire without successor)
-  | 'customer_note_create' // E2 customer_note first-class object — emitted by saveCustomerNote
-  | 'customer_note_supersede' // E2 — emitted by saveCustomerNote when supersedesNoteId resolves to an active note row
-  | 'customer_note_close' // E2 — emitted by closeCustomerNote (active -> closed, retire without successor)
-  | 'mv_rescue' // LC2-E3 — emitted by consolidate() per rescued entry when config.memoryValue.enabled (docs/plans/2026-08-10-lc2-e3-mv-wiring.md)
-  | 'reject_value' // AT1 — lockstep with cli.ts VALID_AUDIT_OPS + server.ts VALID_AUDIT_OPS; emitted by the `hippo reject` verb (docs/plans/2026-08-15-at1-rejected-value-tombstone.md)
-  | 'reject_refusal' // AT1 — lockstep; emitted when the rejection guard refuses a write (writeEntry/api.supersede post-rollback, or inline during bootstrapLegacyStore/rebuildIndex skips)
-  | 'unreject_value' // AT1 — lockstep; emitted by the `hippo unreject` verb
-  | 'half_life_migrate' // Decay default change — lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by migrateDefaultHalfLife with the rescaled ids (src/half-life-migration.ts)
-  | 'dormant_restore' // Dormant memories — lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by api.restoreDormant (a "forgot it, then needed it" label)
-  | 'conflict_resolve' // AT1 — lockstep; emitted by resolveConflict on every resolution path (domain-namespaced, not bare 'resolve' — grill issue 5)
-  | 'auth_grant' // EI2: lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by api.authGrant
-  | 'auth_ungrant' // EI2: lockstep; emitted by api.authUngrant
-  | 'quarantine' // CD5: lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by recordQuarantine inside remember's write transaction
-  | 'quarantine_approve' // CD5: lockstep; emitted by api.quarantineApprove
-  | 'quarantine_reject'; // CD5: lockstep; emitted by api.quarantineReject
+// The one list of audit ops: the AuditOp type, `hippo audit list --op` and GET /v1/audit?op= all read it.
+export const AUDIT_OPS = [
+  'remember',
+  'recall',
+  'promote',
+  'supersede',
+  'forget',
+  'archive_raw',
+  'auth_revoke',
+  'auth_create', // emitted by api.authCreate
+  'outcome',
+  'consolidate', // emitted once per api.sleep invocation
+  'audit_prune', // emitted by pruneAuditLog after each retention prune
+  'summary_marked_dirty', // emitted by markSummaryDirty on the 0->1 transition
+  'summary_marked_clean', // emitted by clearSummaryDirtyAfterBuild after the buildDag child-link loop
+  'summary_rebuilt', // emitted by applyRebuildResult on a successful sleep-cycle rebuild
+  'predict_create', // emitted by savePrediction
+  'predict_close', // emitted by closePrediction
+  'predict_baserate', // emitted by computePredictionBaserate
+  'recall_autodebias_hint', // emitted by computePlanningFallacyOutput on success
+  'recall_autodebias_hint_no_class_match', // telemetry: forward-claim detected, no class scored
+  'recall_autodebias_hint_tiebreak', // telemetry: forward-claim detected, two or more classes tied
+  'recall_anchor_detected_query_repeat', // emitted by the anchoring detector when the same query returns the same top-1
+  'recall_anchor_detected_memory_dominance', // emitted by the anchoring detector when one memory wins top-1 across distinct queries
+  'recall_anchor_skipped_no_session', // telemetry: no sessionId, so ring tracking was skipped
+  'recall_availability_detected', // emitted when the availability/recency-bias hint fires
+  'decision_create', // emitted by saveDecision
+  'decision_supersede', // emitted by saveDecision when --supersedes resolves to an active decision
+  'decision_close', // emitted by closeDecision
+  'incident_open', // emitted by saveIncident
+  'incident_resolve', // emitted by resolveIncident
+  'incident_close', // emitted by closeIncident
+  'process_create', // emitted by saveProcess
+  'process_supersede', // emitted by saveProcess on a supersession
+  'process_close', // emitted by closeProcess
+  'policy_create', // emitted by savePolicy
+  'policy_supersede', // emitted by savePolicy on a supersession
+  'policy_close', // emitted by closePolicy
+  'skill_create', // emitted by saveSkill
+  'skill_supersede', // emitted by saveSkill on a supersession
+  'skill_close', // emitted by closeSkill
+  'project_brief_create', // emitted by saveProjectBrief
+  'project_brief_supersede', // emitted by saveProjectBrief on a supersession, including a refresh
+  'project_brief_close', // emitted by closeProjectBrief
+  'customer_note_create', // emitted by saveCustomerNote
+  'customer_note_supersede', // emitted by saveCustomerNote on a supersession
+  'customer_note_close', // emitted by closeCustomerNote
+  'mv_rescue', // emitted by consolidate() per rescued entry when config.memoryValue.enabled
+  'reject_value', // emitted by the `hippo reject` verb
+  'reject_refusal', // emitted when the rejection guard refuses a write
+  'unreject_value', // emitted by the `hippo unreject` verb
+  'conflict_resolve', // emitted by resolveConflict on every resolution path
+  'half_life_migrate', // emitted by migrateDefaultHalfLife with the rescaled ids
+  'dormant_restore', // emitted by api.restoreDormant
+  'auth_grant', // emitted by api.authGrant
+  'auth_ungrant', // emitted by api.authUngrant
+  'quarantine', // emitted by recordQuarantine inside remember's write transaction
+  'quarantine_approve', // emitted by api.quarantineApprove
+  'quarantine_reject', // emitted by api.quarantineReject
+] as const;
+
+export type AuditOp = (typeof AUDIT_OPS)[number];
 
 export interface AppendAuditOpts {
   tenantId: string;

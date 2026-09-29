@@ -6,7 +6,7 @@ Hippo puts memory into Codex requests through Codex's own [hooks](https://learn.
 
 Hippo's Codex integration does three things:
 
-1. Patches `AGENTS.md` in the current project if it exists, so the agent runs `hippo context` at the start of a task and `hippo remember` when something goes wrong. Without the wrapper, the block also asks for a `hippo capture` summary at session end.
+1. Patches `AGENTS.md` in the current project if it exists, so the agent runs `hippo context` at the start of a task and `hippo remember` when something goes wrong or when it learns something that should outlive the session, leaving out secrets and personal details. Without the wrapper, the block also asks for a `hippo capture` summary at session end.
 2. Adds two memory hooks to Codex's `hooks.json` (see below), so your pinned memories plus the five most recent ones reach every prompt without the model having to run a command.
 3. Only if you opt in, wraps the detected `codex` launcher in place and writes metadata in `~/.hippo/integrations/codex.json`.
 
@@ -87,7 +87,7 @@ This gives Hippo access to both user messages and assistant responses from the C
 
 ## Notes
 
-- This wrapper path is specific to Codex. Claude Code and OpenCode keep using native `SessionStart`/`SessionEnd` hooks.
+- This wrapper path is specific to Codex. Claude Code keeps using its `SessionStart`/`SessionEnd` hooks, and OpenCode keeps using its plugin.
 - The wrapper passes your arguments to Codex unchanged and adds nothing to the prompt, so memory reaches the request once, through the `UserPromptSubmit` hook.
 - OpenClaw keeps using the Hippo plugin path, not the Codex wrapper.
 - If no local `.hippo/` store exists in the working directory, Hippo cannot consolidate project memory there. Run `hippo init` inside the repo first.

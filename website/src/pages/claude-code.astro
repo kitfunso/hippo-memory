@@ -18,10 +18,10 @@ const hooks = [
   { event: 'SessionStart', does: "Prints what the previous session's `hippo sleep` consolidated." },
   { event: 'UserPromptSubmit', does: 'Keeps your pinned memories and the last 5 writes in context. An unchanged block is skipped, and sent again after 10 skips or a compaction.' },
   { event: 'PreCompact', does: 'Saves a snapshot of the task, a summary and the next step before the transcript is summarized.' },
-  { event: 'SessionStart (compact)', does: 'Prints that snapshot and the recent session trail back into context after compaction.' },
+  { event: 'SessionStart (compact)', does: 'Prints that snapshot back into context after compaction, if it is under 15 minutes old.' },
   { event: 'PostCompact', does: 'Tells you what was saved, and prints nothing when nothing was.' },
   { event: 'PostToolUseFailure', does: '`hippo capture-error` stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once.' },
-  { event: 'SessionEnd', does: "Runs `hippo sleep`, which consolidates the store and imports new entries from the project's Claude Code auto memory, then `hippo capture` on the session transcript." },
+  { event: 'SessionEnd', does: "Runs `hippo sleep`, which consolidates the store and imports new entries from the project's Claude Code auto memory, then `hippo capture`, which matches the last 20 user and 10 assistant messages of the transcript against word patterns for decisions, rules, errors and preferences." },
 ];
 
 const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
@@ -38,8 +38,9 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
         fixed it, and which facts changed.
       </p>
       <p>
-        It recalls the lessons that match the task, keeps pinned ones and the five newest in context, ranks the ones you mark wrong lower,
-        and leaves out the ones you replace. The store is SQLite in your project, with markdown mirrors you can read and commit.
+        The agent loads the lessons that match the task when a session starts. On every prompt the hook adds your pinned
+        lessons and the 5 newest; it does not read the prompt unless you turn on <code>pinnedInject.promptRecall</code>.
+        Hippo ranks the ones you mark wrong lower, and leaves out the ones you replace. The store is SQLite in your project, with markdown mirrors you can read and commit.
       </p>
     </PageIntro>
 
@@ -82,11 +83,11 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
       </p>
     </Section>
 
-    <Section title="A mistakes file that maintains itself">
+    <Section title="Failed tool calls are stored as error memories">
       <p>
-        Some developers ask Claude Code to keep a <code>MISTAKES.md</code> file of what went wrong. Hippo keeps that record
-        for you. The <code>PostToolUseFailure</code> hook turns failed tool calls into error memories, and error memories
-        get twice the half-life of ordinary ones. You can add, correct and replace lessons yourself:
+        Some developers ask Claude Code to keep a <code>MISTAKES.md</code> file of what went wrong. Hippo keeps a record
+        for you. The <code>PostToolUseFailure</code> hook stores each failed tool call as an error memory, word for word,
+        and error memories get twice the half-life of ordinary ones. You can add, correct and replace lessons yourself:
       </p>
       <Cmd
         lines={[

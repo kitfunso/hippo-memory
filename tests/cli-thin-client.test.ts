@@ -200,6 +200,32 @@ function getActorForId(workspace: string, memoryId: string): string | null {
   }
 }
 
+interface StoredRow {
+  tags: string[];
+  halfLifeDays: number;
+  valence: string;
+}
+
+function getRowForContent(workspace: string, contentNeedle: string): StoredRow | null {
+  const db = openHippoDb(join(workspace, '.hippo'));
+  try {
+    // SAFETY: literal SELECT of known columns against the memories schema.
+    const row = db.prepare(
+      `SELECT tags_json, half_life_days, emotional_valence FROM memories WHERE content LIKE ?`,
+    ).get(`%${contentNeedle}%`) as
+      | { tags_json: string; half_life_days: number; emotional_valence: string }
+      | undefined;
+    if (!row) return null;
+    return {
+      tags: JSON.parse(row.tags_json) as string[],
+      halfLifeDays: row.half_life_days,
+      valence: row.emotional_valence,
+    };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 describe('cli thin-client mode', () => {
   beforeAll(() => {
     if (!existsSync(CLI_PATH)) {
@@ -239,6 +265,44 @@ describe('cli thin-client mode', () => {
     } finally {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('remember --error stores the same tags and half-life whether it routes or takes the direct path', async () => {
+    // Separate stores: a second remember in one store would shift the direct row's schema fit.
+    const routedWorkspace = makeWorkspace();
+    const directWorkspace = makeWorkspace();
+    let server: SpawnedServer | null = null;
+    try {
+      const port = await pickFreePort();
+      server = await startServer(routedWorkspace, port);
+
+      const routedRun = runCli(routedWorkspace, 'remember', 'error-tag-parity-canary', '--error', '--tag', 't');
+      expect(routedRun.stdout, `stderr: ${routedRun.stderr}`).toMatch(/Remembered .*\(via http/);
+      expect(getActorForContent(routedWorkspace, 'error-tag-parity-canary')).toBe('localhost:cli');
+
+      await server.stop();
+      server = null;
+
+      const directRun = runCli(directWorkspace, 'remember', 'error-tag-parity-canary', '--error', '--tag', 't');
+      expect(directRun.stdout, `stderr: ${directRun.stderr}`).toMatch(/Remembered \[/);
+      expect(getActorForContent(directWorkspace, 'error-tag-parity-canary')).toBe('cli');
+
+      const routed = getRowForContent(routedWorkspace, 'error-tag-parity-canary');
+      const direct = getRowForContent(directWorkspace, 'error-tag-parity-canary');
+      expect(routed).not.toBeNull();
+      expect(direct).not.toBeNull();
+      for (const row of [routed!, direct!]) {
+        expect(row.tags).toContain('error');
+        expect(row.tags).toContain('t');
+        expect(row.tags.some((tag) => tag.startsWith('path:'))).toBe(true);
+        expect(row.valence).toBe('negative');
+      }
+      expect(routed!.halfLifeDays).toBe(direct!.halfLifeDays);
+    } finally {
+      if (server) await server.stop();
+      rmSync(routedWorkspace, { recursive: true, force: true });
+      rmSync(directWorkspace, { recursive: true, force: true });
     }
   }, 30_000);
 

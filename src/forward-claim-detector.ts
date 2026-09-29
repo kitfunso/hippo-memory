@@ -11,7 +11,7 @@
  * Kahneman 2003 inside-vs-outside view).
  *
  * Iteration signal: the `recall_autodebias_hint_no_class_match` audit op
- * (emitted by computePlanningFallacyHint when a phrase matches but no class
+ * (emitted by computePlanningFallacyOutput when a phrase matches but no class
  * resolves) is the telemetry channel for deciding whether to add an
  * embedding-based detector in J3.3.
  *

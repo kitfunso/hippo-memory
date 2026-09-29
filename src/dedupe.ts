@@ -1,6 +1,6 @@
 /**
- * Store-level deduplication. Scans for near-duplicate memories by content
- * Jaccard overlap, keeps the stronger copy (by strength + retrieval count),
+ * Store-level deduplication. Scans for memories with the same text apart
+ * from spacing, keeps the stronger copy (by strength + retrieval count),
  * removes the rest.
  *
  * Extracted from cli.ts in Episode A (v1.11.3) so `api.sleep` can dedupe
@@ -26,6 +26,7 @@ import { loadAllEntries, deleteEntry } from './store.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
+import { duplicateKey } from './same-text.js';
 
 export interface DedupPair {
   kept: string;
@@ -77,19 +78,18 @@ export function strengthBucket(strength: number | null | undefined): number {
 }
 
 /**
- * Scan the store for near-duplicate memories and remove the weaker copy.
- * Two memories are duplicates if their content has > threshold Jaccard
- * overlap AND they belong to the same tenant: the scan is partitioned by
+ * Scan the store for duplicates and remove the weaker copy: same text apart
+ * from spacing, since a near-duplicate can differ in a value (port, version,
+ * path, name), AND the same tenant: the scan is partitioned by
  * tenantId, so byte-identical content in two tenants is never a duplicate
  * pair (the tenant boundary is an isolation boundary; cross-tenant removal
  * was the v1.32.0 known-issue data-loss bug).
- * Keeps the one with higher strength (or more retrievals if tied).
+ * Keeps the one with higher strength (or more retrievals if tied). `threshold` is accepted for old callers and ignored.
  */
 export function deduplicateStore(
   hippoRoot: string,
   options: { threshold?: number; dryRun?: boolean; actor?: string } = {}
 ): DedupResult {
-  const threshold = options.threshold ?? 0.7;
   const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history, as in consolidate.ts.
@@ -138,14 +138,14 @@ export function deduplicateStore(
       return compareEntryIdentity(a, b);
     });
 
+    const texts = tenantEntries.map((e) => duplicateKey(e.content));
     for (let i = 0; i < tenantEntries.length; i++) {
       if (removed.has(tenantEntries[i].id)) continue;
       for (let j = i + 1; j < tenantEntries.length; j++) {
         if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j])) continue;
+        if (texts[j] !== texts[i]) continue;
 
         const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);
-        if (similarity <= threshold) continue;
-
         removed.add(tenantEntries[j].id);
         pairs.push({
           kept: tenantEntries[i].id,

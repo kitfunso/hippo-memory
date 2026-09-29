@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +31,11 @@ import { remember, recall, getContext, type Context } from '../src/api.js';
 // install happens to be globally linked.
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const hippoBin = join(repoRoot, 'bin', 'hippo.js');
+
+// Zero-result tests must not depend on an optional embedder being installed.
+function disableEmbeddings(storeDir: string) {
+  writeFileSync(join(storeDir, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+}
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-wiring-'));
@@ -217,6 +222,7 @@ describe('api.getContext — trace wiring', () => {
       // active task snapshot / handoff / recent session events — this is
       // the bare `return { entries: [], tokens: 0 }` early-return path
       // (api.ts, the check right after the origin/category annotation).
+      disableEmbeddings(home);
       remember(ctx, { content: 'context-empty-baseline unrelated content' });
 
       const before = loadIndex(home);
@@ -264,6 +270,7 @@ describe('api.getContext — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      disableEmbeddings(home);
       remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
 
       const result = await getContext(ctx, { q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000, currentSessionId: 'sess-caller-2' });
@@ -322,6 +329,7 @@ describe('CLI cmdRecall — trace wiring', () => {
     try {
       const env = { ...process.env, HIPPO_HOME: hippoRoot };
       execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
+      disableEmbeddings(join(hippoRoot, '.hippo'));
       execFileSync('node', [hippoBin, 'remember', 'zero-result-baseline eta fact'], { cwd: hippoRoot, env });
       // First recall: populates last_trace_id with a real trace id.
       execFileSync('node', [hippoBin, 'recall', 'zero-result-baseline'], { cwd: hippoRoot, env, encoding: 'utf-8' });
@@ -417,6 +425,7 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
       delete env.HIPPO_SESSION_ID;
       delete env.CLAUDE_CODE_SESSION_ID;
       execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
+      disableEmbeddings(join(hippoRoot, '.hippo'));
       // Tag shares no substring with the query, so any ranking gap is the goal boost, not a tag/query match.
       execFileSync('node', [hippoBin, 'remember', 'zzgoalboostquery bug fix details', '--tag', 'sprintx'], { cwd: hippoRoot, env });
       execFileSync('node', [hippoBin, 'remember', 'zzgoalboostquery UI polish', '--tag', 'ui'], { cwd: hippoRoot, env });

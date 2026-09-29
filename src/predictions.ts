@@ -438,7 +438,7 @@ export function computePredictionBaserate(
   classTag: string,
   actor: string = 'cli',
   /** v0.32 / J3.2 — when false, skip the predict_baserate audit emit. The
-   *  J3.2 orchestrator (computePlanningFallacyHint, below) calls this with
+   *  J3.2 orchestrator (computePlanningFallacyOutput, below) calls this with
    *  emitAudit=false and emits its own `recall_autodebias_hint` audit row
    *  instead, so the predict_baserate channel stays scoped to deliberate
    *  CLI / HTTP / MCP predict-baserate calls and does NOT pollute on every
@@ -640,10 +640,6 @@ export interface PlanningFallacyWatching {
  * `computePlanningFallacyOutput`. Carries EITHER `hint` (baserate
  * available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
  * no queryText, no regex match, or nClosed=0 silent path). Never both.
- *
- * Existing `computePlanningFallacyHint` (preserved as a backward-compat
- * wrapper) returns only the hint variant; new code should call
- * `computePlanningFallacyOutput` directly to surface the watching variant.
  */
 export interface PlanningFallacyOutput {
   hint?: PlanningFallacyHint;
@@ -746,8 +742,7 @@ function resolveClassFromTokens(
 }
 
 /**
- * J3.2 orchestrator (v1.13.4: richer return type — see computePlanningFallacyHint
- * below for the backward-compat wrapper that returns only the hint variant).
+ * J3.2 orchestrator.
  *
  * Composes the forward-claim detector + class resolver + baserate compute,
  * with telemetry-grade audit emission at every decision point (success,
@@ -886,22 +881,4 @@ export function computePlanningFallacyOutput(
       meanRatio: baserate.meanRatio,
     },
   };
-}
-
-/**
- * v1.13.4 backward-compat wrapper: thin shim around
- * computePlanningFallacyOutput that returns only the hint variant.
- * Existing callers (api.recall, cmdRecall, MCP handler) that don't yet
- * consume the watching variant continue to work unchanged.
- *
- * New callers that want to surface the silent no-class-match / tiebreak
- * paths to users should call computePlanningFallacyOutput directly.
- */
-export function computePlanningFallacyHint(
-  hippoRoot: string,
-  tenantId: string,
-  queryText: string,
-  opts: ComputePlanningFallacyHintOpts = {},
-): PlanningFallacyHint | null {
-  return computePlanningFallacyOutput(hippoRoot, tenantId, queryText, opts).hint ?? null;
 }

@@ -11,7 +11,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { createMemory, Layer, MemoryEntry } from './memory.js';
+import { createMemory, Layer } from './memory.js';
+import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isContentWorthStoring } from './audit.js';
 import {
   isInitialized,
@@ -24,13 +25,13 @@ import {
 } from './store.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { embedMemory } from './embeddings.js';
-import { isEmbeddingConfigured } from './embedding-provider.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
-import { redactSecretsStrict } from './secret-detect.js';
+import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
+import { classifyOriginProject } from './project-identity.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -71,7 +72,7 @@ const DECISION_PATTERNS = [
 ];
 
 const RULE_PATTERNS = [
-  /((?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s+)(.{1,500})/i,
+  /\b((?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s+)(.{1,500})/i,
   /((?:the rule is|rule:)\s*)(.{1,500})/i,
   /((?:important|critical|remember):\s*)(.{1,500})/i,
   /((?:make sure|ensure)\s+(?:to\s+)?)(.{1,500})/i,
@@ -103,7 +104,7 @@ const SPEC_HEADING_PATTERNS = [
 // Extraction engine
 // ---------------------------------------------------------------------------
 
-function splitSentences(text: string): string[] {
+export function splitSentences(text: string): string[] {
   // Split on sentence boundaries, keeping reasonable chunks
   return text
     .split(/(?<=[.!?])\s+|\n/)
@@ -321,6 +322,20 @@ function cleanExtract(raw: string): string {
   return content;
 }
 
+/** The 500-char write gate minus the 200-char bound counted from the keyword. */
+const RULE_LEAD_CAP = 300;
+
+/** A modal rule keeps its subject ("We must never ..."); null keeps the keyword-start form when the lead is long or the keyword sits inside a bracket. */
+function ruleLead(sentence: string, keywordStart: number, contentStart: number): string | null {
+  if (keywordStart < 0 || contentStart < 0 || contentStart > RULE_LEAD_CAP) return null;
+  let depth = 0;
+  for (const ch of sentence.slice(0, keywordStart)) {
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if ((ch === ')' || ch === ']' || ch === '}') && depth > 0) depth--;
+  }
+  return depth > 0 ? null : sentence.slice(0, contentStart);
+}
+
 function extractFromPatterns(
   sentence: string,
   patterns: RegExp[],
@@ -380,7 +395,11 @@ function extractFromPatterns(
         // capture, shipped in the previous commit. Codex P1, r6.
         const contentStart = match.indices?.[2]?.[0] ?? -1;
         const afterKeyword = contentStart >= 0 ? sentence.slice(contentStart) : (match[2] ?? match[0]);
-        bounded = boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
+        const keywordStart = match.indices?.[1]?.[0] ?? -1;
+        const lead = pat === RULE_PATTERNS[0] ? ruleLead(sentence, keywordStart, contentStart) : null;
+        bounded = lead !== null
+          ? boundToClause(lead + afterKeyword, lead.length, keywordStart + 200)
+          : boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
       }
       const content = cleanExtract(bounded);
       if (content.length >= 8 && content.length <= 500) {
@@ -445,7 +464,7 @@ export function extractFromText(text: string): ExtractedItem[] {
   const seen = new Set<string>();
 
   const addIfNew = (item: ExtractedItem): void => {
-    const norm = item.content.toLowerCase().replace(/\s+/g, ' ').trim();
+    const norm = duplicateKey(item.content);
     if (seen.has(norm)) return;
     if (!isContentWorthStoring(item.content)) return;
     seen.add(norm);
@@ -479,27 +498,6 @@ export function extractFromText(text: string): ExtractedItem[] {
 }
 
 // ---------------------------------------------------------------------------
-// Normalisation for deduplication (mirrors import.ts)
-// ---------------------------------------------------------------------------
-
-function normalise(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function isDuplicate(content: string, existing: MemoryEntry[]): boolean {
-  const norm = normalise(content);
-  if (!norm) return true;
-  for (const e of existing) {
-    if (normalise(e.content) === norm) return true;
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
 // Command
 // ---------------------------------------------------------------------------
 
@@ -513,6 +511,7 @@ export interface CaptureOptions {
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
   stdinText?: string;
   stdinTimedOut?: boolean;
+  sessionTurns?: readonly SessionTurn[];
   /**
    * Tee stdout/stderr to this log file while capture runs. Mirrors the
    * pattern used by `hippo sleep --log-file` so the SessionEnd hook output
@@ -530,6 +529,7 @@ export interface CaptureOptions {
    * behaviour. Ignored when `global: true` (global captures are host-wide).
    */
   tenantId?: string;
+  originProject?: string;
 }
 
 /**
@@ -543,16 +543,16 @@ export interface CaptureOptions {
  * anything `JSON.parse` can produce (the only divergence is boxed
  * primitives, which JSON.parse never yields).
  */
-function isStringValue<T>(value: T): value is T & string {
+export function isStringValue<T>(value: T): value is T & string {
   return String(value) === value;
 }
 
-function isObjectLike<T>(value: T): value is T & object {
+export function isObjectLike<T>(value: T): value is T & object {
   return value !== null && value instanceof Object;
 }
 
 /** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
-function errorMessage(cause: unknown): string {
+export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
@@ -607,10 +607,20 @@ function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): 
   return text && !isNonHumanUserLine(entry, text) ? text : '';
 }
 
-export function summariseTranscript(jsonl: string): string {
+export interface SessionTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface TranscriptRecord extends TranscriptLineFlags {
+  message?: unknown;
+  payload?: unknown;
+  cwd?: unknown;
+}
+
+export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRecord) => void): SessionTurn[] {
   const lines = jsonl.split('\n').filter((l) => l.trim());
-  const userMessages: string[] = [];
-  const assistantTexts: string[] = [];
+  const turns: SessionTurn[] = [];
 
   for (const line of lines) {
     let entry: unknown;
@@ -619,16 +629,17 @@ export function summariseTranscript(jsonl: string): string {
     } catch {
       continue;
     }
-    if (!isObjectLike(entry)) continue;
+    if (!isObjectLike(entry) || !('type' in entry)) continue;
+    visit?.(entry);
 
-    if (('type' in entry) && (entry.type === 'user' || entry.type === 'assistant')) {
+    if (entry.type === 'user' || entry.type === 'assistant') {
       const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
       if (!message) continue;
       const content = 'content' in message ? message.content : undefined;
 
       if (entry.type === 'user') {
         const text = humanUserText(entry, message);
-        if (text) userMessages.push(text);
+        if (text) turns.push({ role: 'user', text });
       } else if (Array.isArray(content)) {
         // Keep assistant text blocks; drop thinking + tool_use
         const chunks: string[] = [];
@@ -641,14 +652,14 @@ export function summariseTranscript(jsonl: string): string {
           }
         }
         if (chunks.length > 0) {
-          assistantTexts.push(chunks.join('\n'));
+          turns.push({ role: 'assistant', text: chunks.join('\n') });
         }
       }
       continue;
     }
 
     // Codex rollout transcript shape: response_item -> payload.message
-    if ('type' in entry && entry.type === 'response_item') {
+    if (entry.type === 'response_item') {
       const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
       if (!payload || !('type' in payload) || payload.type !== 'message') continue;
       const role = 'role' in payload ? payload.role : undefined;
@@ -669,11 +680,21 @@ export function summariseTranscript(jsonl: string): string {
       }
 
       if (chunks.length === 0) continue;
-      if (role === 'user') userMessages.push(chunks.join('\n'));
-      if (role === 'assistant') assistantTexts.push(chunks.join('\n'));
+      if (role === 'user') turns.push({ role: 'user', text: chunks.join('\n') });
+      if (role === 'assistant') turns.push({ role: 'assistant', text: chunks.join('\n') });
     }
   }
 
+  return turns;
+}
+
+export function summariseTranscript(jsonl: string): string {
+  return summariseSessionTurns(collectSessionTurns(jsonl));
+}
+
+function summariseSessionTurns(turns: readonly SessionTurn[]): string {
+  const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.text);
+  const assistantTexts = turns.filter((t) => t.role === 'assistant').map((t) => t.text);
   if (userMessages.length === 0 && assistantTexts.length === 0) return '';
 
   // Keep the tail: last ~20 user turns and last ~10 assistant replies.
@@ -698,14 +719,14 @@ export function summariseTranscript(jsonl: string): string {
  * Priority, where the first source present is the only one tried:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only on a proven manual run (no path, no stdin text, no timed-out read), because this scan spans every project on the box
+ *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
  *
  * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
   stdinText: string | undefined,
-  stdinTimedOut = false
+  opts: { mayScan: boolean }
 ): string | null {
   if (explicit) return fs.existsSync(explicit) ? explicit : null;
 
@@ -722,7 +743,7 @@ export function resolveLastSessionTranscript(
     return null;
   }
 
-  if (stdinTimedOut) return null;
+  if (!opts.mayScan) return null;
 
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!home) return null;
@@ -872,14 +893,16 @@ function cmdCaptureCore(
       break;
     }
     case 'last-session': {
-      const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, options.stdinTimedOut);
-      if (!resolved) {
-        console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
-        return;
+      let turns = options.sessionTurns;
+      if (!turns) {
+        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, { mayScan: !options.stdinTimedOut });
+        if (!resolved) {
+          console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
+          return;
+        }
+        turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
       }
-
-      const jsonl = fs.readFileSync(resolved, 'utf8');
-      text = summariseTranscript(jsonl);
+      text = summariseSessionTurns(turns);
       if (!text) {
         console.log('Transcript had no user/assistant messages to summarise.');
         return;
@@ -894,20 +917,20 @@ function cmdCaptureCore(
   }
 
   // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromText(redactSecretsStrict(text));
+  const extracted = extractFromText(maskEmails(redactSecretsStrict(text)));
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
     return;
   }
 
-  // Load existing for dedup. L9: when options.tenantId is set on a non-global
-  // capture, scope the dedup read so tenant A's captures don't get suppressed
-  // by tenant B's existing content. Undefined preserves host-wide behaviour.
-  const existing = loadAllEntries(
-    targetRoot,
-    useGlobal ? undefined : options.tenantId,
-  );
+  // Dedup only against rows this capture's reader sees: another tenant's rows (L9), or another
+  // project's, are hidden from it, so they must not stop its own copy.
+  const stored = loadAllEntries(targetRoot, useGlobal ? undefined : options.tenantId);
+  const origin = options.originProject;
+  const keys = storedTextKeys(origin === undefined
+    ? stored
+    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'));
 
   let captured = 0;
   let skipped = 0;
@@ -924,7 +947,7 @@ function cmdCaptureCore(
   const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
   try {
     for (const item of extracted) {
-      if (isDuplicate(item.content, existing)) {
+      if (keys.has(duplicateKey(item.content))) {
         skipped++;
         if (options.dryRun) {
           console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
@@ -942,7 +965,7 @@ function cmdCaptureCore(
       // global: true, the global store is host-wide and tenant is irrelevant
       // (createMemory's default 'default' applies). When global: false,
       // options.tenantId scopes the write to the same tenant as the dedup.
-      const entry = createMemory(item.content, {
+      const created = createMemory(item.content, {
         layer: Layer.Episodic,
         tags: item.tags,
         source: 'capture',
@@ -950,6 +973,7 @@ function cmdCaptureCore(
         tenantId: useGlobal ? undefined : options.tenantId,
         baseHalfLifeDays,
       });
+      const entry = options.originProject === undefined ? created : { ...created, origin_project: options.originProject };
 
       if (options.dryRun) {
         if (dryRunDb) {
@@ -978,11 +1002,8 @@ function cmdCaptureCore(
           throw err;
         }
         updateStats(targetRoot, { remembered: 1 });
-        existing.push(entry); // within-batch dedup
-
-        if (isEmbeddingConfigured(targetRoot)) {
-          embedMemory(targetRoot, entry).catch(() => {});
-        }
+        keys.add(duplicateKey(item.content)); // within-batch dedup
+        void embedMemory(targetRoot, entry);
       }
 
       captured++;
@@ -1235,9 +1256,9 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
 
   // X9: these fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
   // re-injection token budget and never split a surrogate pair (X2); `hippo snapshot save` stays uncapped.
-  const task = redactSecretsStrict(rawTask);
-  const summary = redactSecretsStrict(rawSummary);
-  const nextStep = redactSecretsStrict(rawNextStep);
+  const task = maskEmails(redactSecretsStrict(rawTask));
+  const summary = maskEmails(redactSecretsStrict(rawSummary));
+  const nextStep = maskEmails(redactSecretsStrict(rawNextStep));
   return {
     task: task.trim() ? truncateCodePointSafe(task, PRE_COMPACT_TASK_CAP) : '',
     summary: summary.trim() ? truncateKeepNewest(summary, PRE_COMPACT_SUMMARY_CAP) : '',
@@ -1320,7 +1341,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
       return;
     }
   } else {
-    transcriptPath = resolveLastSessionTranscript(undefined, stdinText);
+    transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
   }
 
   if (!transcriptPath) {

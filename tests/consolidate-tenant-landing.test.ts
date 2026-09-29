@@ -73,7 +73,7 @@ describe('T1 (a): merge pass partitions by tenant before clustering', () => {
       // Both directions: neither row is the 4-way "pattern from 4" bulleted
       // form a cross-tenant cluster would have produced.
       for (const row of semanticRows) {
-        expect(row.content).toContain('[Consolidated from 2 related memories]');
+        expect(row.content).toContain('[Consolidated from 2 related memories, newest first]');
         expect(row.content).not.toContain('pattern from 4');
       }
 

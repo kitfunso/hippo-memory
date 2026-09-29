@@ -265,7 +265,7 @@ describe('__session-end-worker counts re-reads', () => {
     }
   });
 
-  it('still logs the count when sleep exits early in a project with no store', () => {
+  it('still logs the count in a project with no store of its own, and no longer exits early', () => {
     rmSync(join(proj, '.hippo'), { recursive: true, force: true });
     const sent = minute(0);
     withDb(globalRoot, (db) => book(db, 'hook', 'inject', sent, 100));
@@ -273,9 +273,9 @@ describe('__session-end-worker counts re-reads', () => {
     writeFileSync(transcript, [1, 2].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n');
     const log = join(root, 'session-end.log');
     const result = hippo(['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION], proj, env);
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(0);
     const text = readFileSync(log, 'utf8');
-    expect(text).toContain('No hippo store at');
+    expect(text).not.toContain('No hippo store at');
     expect(text).toContain(`re-read 100 tokens over 2 model calls for session ${SESSION}`);
   });
 

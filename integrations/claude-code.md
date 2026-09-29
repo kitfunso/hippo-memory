@@ -10,7 +10,7 @@ Add this block to your `CLAUDE.md` (project root or `~/.claude/CLAUDE.md` for gl
 ## Memory (Hippo)
 
 Hippo manages project memory across sessions. It decays old memories, strengthens
-retrieved ones, and compresses episodes into patterns during sleep cycles.
+retrieved ones, and merges related episodes into one memory during sleep.
 
 ### At session start
 
@@ -71,8 +71,8 @@ If you prefer manual control:
 hippo sleep
 ```
 
-This decays unretrieved memories, merges related episodes into patterns, and
-removes entries below the strength threshold.
+This decays unretrieved memories, merges related episodes into one memory, and
+moves faded memories to a dormant store, deleted after 180 days unless restored.
 
 ### Check memory health
 
@@ -92,8 +92,8 @@ hippo init
 ```
 
 Hippo auto-detects Claude Code and:
-1. Patches `CLAUDE.md` with the hook block above
-2. Adds a `SessionEnd` hook to `~/.claude/settings.json` so `hippo sleep` runs on session exit
+1. Patches `CLAUDE.md` with hippo's own block, which is shorter than the snippet above
+2. Adds 7 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
 
 No copy-paste needed, no cron required.
 
@@ -102,6 +102,6 @@ To skip auto-detection: `hippo init --no-hooks`
 ## Notes
 
 - Hippo stores everything in `.hippo/` in your project root. It's markdown on disk. Commit it or gitignore it, your call.
-- `--budget 3000` is a good default for Claude Code sessions. Increase for larger context tasks.
+- `--budget 3000` is a good default for Claude Code sessions. Increase for larger context tasks. The budget counts the whole printed block, headings and tags included.
 - If the project has no `.hippo/` yet, run `hippo init` first.
 - For global memory across projects, run `hippo init --global`. The global store defaults to `~/.hippo/` but respects `$HIPPO_HOME` and `$XDG_DATA_HOME/hippo`.

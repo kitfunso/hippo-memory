@@ -1,7 +1,7 @@
 {
   "name": "hippo-memory",
-  "version": "1.52.8",
-  "description": "Memory for AI agents that learns what is wrong and ranks it down. MCP server and hooks for Claude Code, Codex and Cursor. SQLite, zero runtime deps.",
+  "version": "1.52.9",
+  "description": "Memory for AI agents that learns what is wrong and ranks it down. MCP server, hooks for Claude Code, OpenCode and Codex, AGENTS.md instructions for Codex, Cursor, OpenClaw and Pi. SQLite, zero runtime deps.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
   "main": "./dist/index.js",

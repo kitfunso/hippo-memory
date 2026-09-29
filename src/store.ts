@@ -3546,7 +3546,7 @@ export function loadLatestHandoff(
   hippoRoot: string,
   tenantId: string,
   sessionId?: string,
-  opts: { unfinishedOnly?: boolean; maxAgeMs?: number; scopeFilter?: 'default-deny' } = {},
+  opts: { unfinishedOnly?: boolean; maxAgeMs?: number; scopeFilter?: 'default-deny'; excludeSessionId?: string } = {},
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
   const db = openStore(hippoRoot);
@@ -3557,6 +3557,10 @@ export function loadLatestHandoff(
     if (sessionId) {
       conditions.push('session_id = ?');
       params.push(sessionId);
+    }
+    if (opts.excludeSessionId) {
+      conditions.push('session_id != ?');
+      params.push(opts.excludeSessionId);
     }
     if (opts.unfinishedOnly) {
       // codex P2: restrict to each session's newest revision first — stampHandoffOutcome

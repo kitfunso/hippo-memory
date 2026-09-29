@@ -7,20 +7,27 @@
  * SAME multi-step transaction + post-commit mirror-purge flow. Extracted
  * here (leaf module) so neither duplicates it.
  *
- * Module direction: this file imports from store.ts, rejection.ts,
- * raw-archive.ts and dormant.ts. Nothing imports FROM this file except
+ * Module direction: this file imports from store.ts, rejection.ts, raw-archive.ts,
+ * dormant.ts, same-text.ts and merged-row.ts. Nothing imports FROM this file except
  * cli.ts and api.ts, so it introduces no cycle.
  */
 
 import { closeHippoDb } from './db.js';
 import { appendAuditEvent } from './audit.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { purgeDormantByDigest } from './dormant.js';
+import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
 import {
   openStore,
   deleteEntryCore,
   purgeMirrorBestEffort,
+  selectAllEntries,
+  stampOriginProject,
+  writeEntryDbOnly,
+  writeEntryMirrors,
 } from './store.js';
+import type { MemoryEntry } from './memory.js';
+import { heldTexts } from './same-text.js';
+import { mergedSuccessor } from './merged-row.js';
 import {
   rejectionDigest,
   normalizeValueForRejection,
@@ -47,12 +54,14 @@ export interface RejectFlowResult {
    *  tombstone itself stores no content — this is the only place it's seen
    *  again after this call returns). */
   content: string;
-  /** Every live row removed this call (all tenant rows whose normalized
-   *  digest matched — not just the id passed, per the K1/R7 duplicate
-   *  lesson). */
+  /** Every row removed this call, live or dormant: all whose normalized digest matched (not just the id
+   *  passed, per the K1/R7 duplicate lesson), and each sleep-merged row holding the value, whose other
+   *  texts move to a new row: listed in successorIds when it was live, dormantSuccessorIds when dormant. */
   removedIds: string[];
   /** Subset of removedIds that were kind='raw' (archived, not deleted). */
   removedRawIds: string[];
+  successorIds: string[];
+  dormantSuccessorIds: string[];
 }
 
 /**
@@ -105,6 +114,8 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     const now = new Date().toISOString();
     const removedIds: string[] = [];
     const removedRawIds: string[] = [];
+    const successors: MemoryEntry[] = [];
+    const dormantSuccessorIds: string[] = [];
 
     db.exec('BEGIN');
     try {
@@ -121,12 +132,13 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       // O(N) scan over the tenant's rows (plan §4): human-triggered command
       // on ~1-5k-row stores — acceptable, documented. A digest column on
       // memories is the escape if stores grow 100x; not needed now.
-      // SAFETY: rows' shape matches the three columns named in the SELECT above.
-      const rows = db
-        .prepare(`SELECT id, kind, content FROM memories WHERE tenant_id = ?`)
-        .all(opts.tenantId) as Array<{ id: string; kind: string; content: string }>;
-      for (const row of rows) {
-        if (rejectionDigest(row.content) !== digest) continue;
+      const holdsValue = (text: string): boolean => rejectionDigest(text) === digest;
+      const merged: MemoryEntry[] = [];
+      for (const row of selectAllEntries(db, opts.tenantId)) {
+        if (!holdsValue(row.content)) {
+          if (heldTexts(row).some(holdsValue)) merged.push(row);
+          continue;
+        }
         if (row.kind === 'raw') {
           // Append-only trigger respected — archiveRawMemory is the only
           // legitimate removal path for kind='raw', and its inner SAVEPOINT
@@ -141,13 +153,33 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
         }
         removedIds.push(row.id);
       }
+      for (const row of merged) {
+        const successor = mergedSuccessor(row, holdsValue, new Set(removedIds));
+        deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
+        removedIds.push(row.id);
+        if (!successor) continue;
+        const kept = stampOriginProject(opts.hippoRoot, successor);
+        writeEntryDbOnly(db, kept, { actor: opts.actor });
+        successors.push(kept);
+      }
 
-      // Dormant copies (src/dormant.ts) go too, in the same transaction: a
+      // Dormant copies (src/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
       // rejected value may not linger where `hippo dormant restore` could
       // bring it back. They have no markdown mirror, so the post-commit
       // mirror purge below is a no-op for them; they join removedIds for the
       // audit trail and the caller's report.
       removedIds.push(...purgeDormantByDigest(db, opts.tenantId, digest));
+      for (const dormant of listDormantSnapshots(db, opts.tenantId)) {
+        const successor = mergedSuccessor(dormant.entry, holdsValue, new Set(removedIds));
+        if (successor === undefined) continue;
+        removedIds.push(dormant.entry.id);
+        if (!successor) {
+          deleteDormantRow(db, opts.tenantId, dormant.entry.id);
+          continue;
+        }
+        replaceDormantEntry(db, opts.tenantId, dormant.entry.id, successor);
+        dormantSuccessorIds.push(successor.id);
+      }
 
       try {
         appendAuditEvent(db, {
@@ -192,8 +224,9 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
         );
       }
     }
+    for (const successor of successors) writeEntryMirrors(opts.hippoRoot, successor);
 
-    return { digest, content, removedIds, removedRawIds };
+    return { digest, content, removedIds, removedRawIds, successorIds: successors.map((s) => s.id), dormantSuccessorIds };
   } finally {
     closeHippoDb(db);
   }

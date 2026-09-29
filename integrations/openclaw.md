@@ -66,6 +66,13 @@ never as a closing step:
 hippo remember "<description of what went wrong>" --error
 ```
 
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+```bash
+hippo remember "<what you learned and why>"
+```
+
 When ending a session, capture a brief summary:
 ```bash
 hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'

@@ -122,10 +122,11 @@ import {
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
+import { readSessionScan, recordSessionDigest } from './session-digest.js';
 import { type Card, isCardStatus } from './card.js';
 import { loadCardDetail, type CardDetail } from './card-detail.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
-import { search, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
+import { search, estimateTokens, fitBudget, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { writeRecallTraceAtRoot } from './recall-trace.js';
@@ -139,7 +140,7 @@ import {
   resolveEmbeddingModel,
   embeddingModelRequiresReindex,
 } from './embeddings.js';
-import { isEmbeddingConfigured, resolveEmbeddingProvider } from './embedding-provider.js';
+import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
@@ -161,13 +162,13 @@ import {
   captureError,
   extractLessons,
   partitionLessons,
-  deduplicateLesson,
   runWatched,
   fetchGitLog,
   isGitRepo,
 } from './autolearn.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
-import { realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
+import { deriveOriginProject, realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -206,6 +207,7 @@ import {
   auditMemories,
   appendAuditEvent,
   queryAuditEvents,
+  AUDIT_OPS,
   type AuditEvent,
   type AuditOp,
   type AuditResult,
@@ -215,7 +217,7 @@ import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
-import { computePlanningFallacyOutput } from './predictions.js';
+import { computePlanningFallacyOutput, type PlanningFallacyOutput } from './predictions.js';
 import * as decisionsModule from './decisions.js';
 import * as incidentsModule from './incidents.js';
 import * as processesModule from './processes.js';
@@ -234,9 +236,8 @@ import {
   appendRecall,
   snapshotRing,
   RingBuffer,
-  type AnchoringHint,
 } from './recall-history.js';
-import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
+import { detectAvailabilityBias } from './availability.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map.
 // Each CLI process maintains its OWN Map; no IPC / no cross-process sharing
@@ -275,6 +276,10 @@ import { getReranker } from './rerankers/index.js';
 import { JEV_DEFAULT_TOP_K } from './rerankers/jev.js';
 import { computeSalience } from './salience.js';
 import { renderAmbientSummary } from './ambient.js';
+import {
+  assembleCost, assembleHeading, contextCost, contextHeading, contextLine, crossProjectHeading, crossProjectLine, drillCost, handoffText,
+  printedTokens, sessionTrailText, settleTokens, snapshotText,
+} from './context-render.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
@@ -570,6 +575,64 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
 
 function fmt(n: number, digits = 2): string {
   return n.toFixed(digits);
+}
+
+// What `hippo recall` prints for one result; the budget prices this same text.
+function recallEntryText(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean): string {
+  const e = r.entry;
+  const label = confidenceLabel(e);
+  const confLabel = label.warn ? `[${label.text}] ⚠️` : `[${label.text}]`;
+  const bars = Math.round(e.strength * 10);
+  const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
+  const lines = [
+    `--- ${e.id} [${e.layer}] ${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
+    `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`,
+  ];
+  if (showWhy) {
+    const explanation = explainMatch(query, r);
+    lines.push(`    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`, `    reason: ${explanation.reason}`);
+    const env = explanation.envelope;
+    if (env) {
+      lines.push(`    kind: ${env.kind}`);
+      if (env.scope) lines.push(`    scope: ${env.scope}`);
+      if (env.owner) lines.push(`    owner: ${env.owner}`);
+      if (env.artifact_ref) lines.push(`    artifact_ref: ${env.artifact_ref}`);
+      if (env.session_id) lines.push(`    session_id: ${env.session_id}`);
+      lines.push(`    confidence: ${env.confidence}`);
+    }
+    // A7 recall-trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost x1.50 -> 0.189".
+    if (r.rerankTrace && r.rerankTrace.length > 0) {
+      const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
+      for (const step of r.rerankTrace) {
+        parts.push(`${step.stage}${step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : ''}`, fmt(step.scoreAfter, 3));
+      }
+      lines.push(`    ranking: ${parts.join(' -> ')}`);
+    }
+  }
+  lines.push('', e.content, '');
+  return lines.join('\n');
+}
+
+function recallHeading(entries: number, tokens: number, query: string): string {
+  return `Found ${entries} memories (${tokens} tokens) for: "${query}"\n`;
+}
+
+// JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
+function planningLine(p: PlanningFallacyOutput): string | null {
+  if (p.hint) return `Planning fallacy hint (class: ${p.hint.classTag}): ${p.hint.baserateSummary} [detected: ${JSON.stringify(p.hint.detectedPhrase)}]`;
+  if (p.watching) return `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} [detected: ${JSON.stringify(p.watching.detectedPhrase)}]`;
+  return null;
+}
+
+function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | null {
+  const clauses: string[] = [];
+  // The residual covers rank, budget and limit drops alike, and fires with no --limit at all.
+  if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
+  if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
+  if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+  if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
+  if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+  return clauses.length > 0 ? `Cutoff: showing ${shown} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.` : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -955,6 +1018,32 @@ function setupDailySchedule(globalRoot: string): void {
   }
 }
 
+// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
+interface RememberTags {
+  requested: string[];
+  all: string[];
+}
+
+// Shared by the direct write and the routed request so both store the same tags.
+function rememberTags(
+  flags: Record<string, string | boolean | string[]>,
+  cwd: string,
+): RememberTags {
+  const requested: string[] = Array.isArray(flags['tag']) ? [...(flags['tag'] as string[])] : [];
+  if (flags['error']) requested.push('error');
+  const all = [...requested];
+  for (const pt of extractPathTags(cwd)) {
+    if (!all.includes(pt)) all.push(pt);
+  }
+  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const activeScope = explicitScope || detectScope();
+  if (activeScope) {
+    const scopeTag = `scope:${activeScope}`;
+    if (!all.includes(scopeTag)) all.push(scopeTag);
+  }
+  return { requested, all };
+}
+
 async function cmdRemember(
   hippoRoot: string,
   text: string,
@@ -969,8 +1058,7 @@ async function cmdRemember(
     requireInit(hippoRoot);
   }
 
-  const rawTags: string[] = Array.isArray(flags['tag']) ? flags['tag'] as string[] : [];
-  if (flags['error']) rawTags.push('error');
+  const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
 
   // Resolve explicit confidence flag (default: 'verified' for manual remember)
   let confidence: ConfidenceLevel = 'verified';
@@ -978,9 +1066,9 @@ async function cmdRemember(
   if (flags['inferred']) confidence = 'inferred';
   if (flags['verified']) confidence = 'verified';
 
-  // Compute schema fit against existing memories
+  // Schema fit needs the store, which the routed request has no access to, so it stays here.
   const existing = loadAllEntries(targetRoot, resolveTenantId({}));
-  const schemaFit = computeSchemaFit(text, rawTags, existing);
+  const schemaFit = computeSchemaFit(text, requestedTags, existing);
 
   // A3 envelope flags
   const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
@@ -1014,7 +1102,7 @@ async function cmdRemember(
 
   const entry = createMemory(text, {
     layer: Layer.Episodic,
-    tags: rawTags,
+    tags: allTags,
     pinned: Boolean(flags['pin']),
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
@@ -1026,20 +1114,6 @@ async function cmdRemember(
     tenantId,
     baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
   });
-
-  // Auto-tag with path context
-  const pathTags = extractPathTags(process.cwd());
-  for (const pt of pathTags) {
-    if (!entry.tags.includes(pt)) entry.tags.push(pt);
-  }
-
-  // Scope tagging: explicit --scope or auto-detected
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const activeScope = explicitScope || detectScope();
-  if (activeScope) {
-    const scopeTag = `scope:${activeScope}`;
-    if (!entry.tags.includes(scopeTag)) entry.tags.push(scopeTag);
-  }
 
   // Salience gate: decide if this memory is worth storing
   if (rememberConfig.salience.enabled && !Boolean(flags['pin']) && !Boolean(flags['force'])) {
@@ -1069,12 +1143,7 @@ async function cmdRemember(
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
 
-  // Auto-embed if available (provider-aware: local dep installed, or API key present)
-  if (isEmbeddingConfigured(targetRoot)) {
-    embedMemory(targetRoot, entry).catch(() => {
-      // Silently ignore embedding errors
-    });
-  }
+  void embedMemory(targetRoot, entry);
 
   const config = loadConfig(targetRoot);
   const shouldExtract = flags['extract'] || config.extraction.enabled === true;
@@ -1335,6 +1404,13 @@ async function cmdRecall(
     graphStreamSeeds = s;
   }
 
+  // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
+  const localIndex = loadIndex(hippoRoot);
+  const globalOn = isInitialized(globalRoot);
+  const entryText = (r: SearchResult): string => recallEntryText(r, query, showWhy, globalOn && !localIndex.entries[r.entry.id]);
+  const printCost = (r: SearchResult): number => printedTokens(entryText(r));
+  const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
+
   let results;
   if (useGraphStream) {
     if (!isEmbeddingAvailable()) {
@@ -1350,7 +1426,7 @@ async function cmdRecall(
     // tail; on a pool with <= seedCount candidates EVERY candidate is a seed and the stream
     // is inert (it degrades to the 2-list fusion). Tune the anchor count with --graph-seeds.
     results = await hybridSearch(query, localEntries, {
-      budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
+      budget: entryBudget, cost: printCost, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
       includeSuperseded, asOf,
       scoring: 'rrf',
       graphStream: { weight: DEFAULT_GRAPH_STREAM_WEIGHT, tenantId, hops: graphStreamHops, seedCount: graphStreamSeeds },
@@ -1359,7 +1435,8 @@ async function cmdRecall(
     // Unlike searchBothHybrid below, multihop ranks one pooled list, so a shared memory's two copies both compete.
     const allEntries = api.oneCopyPerMemory(localEntries, globalEntries, evalNow()).flat();
     results = multihopSearch(query, allEntries, {
-      budget,
+      budget: entryBudget,
+      cost: printCost,
       hippoRoot,
       minResults,
       includeSuperseded,
@@ -1367,7 +1444,8 @@ async function cmdRecall(
     });
   } else if (usePhysics && !hasGlobal) {
     results = await physicsSearch(query, localEntries, {
-      budget,
+      budget: entryBudget,
+      cost: printCost,
       hippoRoot,
       physicsConfig: config.physics,
       minResults,
@@ -1381,7 +1459,7 @@ async function cmdRecall(
     // so the scope rule must be plumbed in — the filtered localEntries /
     // globalEntries above are NOT what this path ranks.
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
+      budget: entryBudget, cost: printCost, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
       includeSuperseded, asOf,
       recallScope: recallExplicitScope
         ? { requested: recallExplicitScope, additive: true }
@@ -1389,7 +1467,7 @@ async function cmdRecall(
     });
   } else {
     results = await hybridSearch(query, localEntries, {
-      budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
+      budget: entryBudget, cost: printCost, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
       includeSuperseded, asOf,
     });
   }
@@ -1447,7 +1525,8 @@ async function cmdRecall(
         tenantId,
         includeSuperseded,
         asOf,
-        budget,
+        budget: entryBudget,
+        cost: printCost,
         minResults: minResults ?? 1,
         recallScope: recallExplicitScope
           ? { requested: recallExplicitScope, additive: true }
@@ -1831,145 +1910,14 @@ async function cmdRecall(
   if (limit < results.length) {
     results = results.slice(0, limit);
   }
-  const droppedByBudgetCountCmd = Math.max(
-    0,
-    totalCandidatesCountCmd + graphAddedCountCmd - droppedPreRankCountCmd - results.length,
-  );
-
-  // v0.33 / J1 — CLI per-pipeline anchoring detector. Each pipeline (api.recall,
-  // cmdRecall, MCP) computes its own AnchoringHint via the shared detectAnchoring
-  // helper against its own top-1 + its own per-(tenant, session) ring buffer.
-  // HIPPO_ANCHORING=off short-circuits BEFORE both the ring lookup and the
-  // detect call so disabled tenants pay truly zero work. When sessionId is
-  // absent we emit recall_anchor_skipped_no_session for J1-v2 telemetry.
-  let cmdAnchoringHint: AnchoringHint | null = null;
-  if (process.env.HIPPO_ANCHORING !== 'off') {
-    if (sessionId) {
-      const ringKey = buildSessionKey(tenantId, sessionId);
-      const ring = getOrCreateRing(sessionRecallHistoryCli, ringKey);
-      const queryHash = hashQueryText(query);
-      const topId = results[0]?.entry.id ?? null;
-      cmdAnchoringHint = detectAnchoring(snapshotRing(ring), queryHash, topId);
-      // Append AFTER detect (snapshot was taken before). anchoredOn carries
-      // the memoryId of any hint that fired, feeding the cooldown logic for
-      // the NEXT cmdRecall on this session.
-      appendRecall(ring, queryHash, topId, cmdAnchoringHint?.memoryId);
-    } else {
-      // Telemetry: caller had no sessionId so ring tracking is skipped.
-      // Per the recall-audit convention at api.ts:854, use SHA-256/16
-      // for prompt hashing (NOT hashQueryText which is FNV-1a 32-bit
-      // for recall matching; brute-force trivial for low-entropy
-      // queries). Codex round-1 P1 / round-2 P2 catch.
-      emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
-        query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
-        query_length: query.length,
-      });
-    }
-  }
-
-  // v1.12.13 / C5 — Build suppressionSummary for cmdRecall pipeline. Surfaced
-  // in --why text output and in the --json JSON output. cmdRecall does not
-  // run the summarizeOverflow path (api.recall does) and does not currently
-  // expose fresh-tail in the CLI, so those two counters are 0 here.
-  // v0.33 / J1: suppressedByInterference is bumped by 1 when cmdAnchoringHint
-  // fires with reason='memory_dominance' (the only reason that counts as
-  // interference; query_repeat is a re-ask, not memory competition).
-  const cmdSuppressedByInterference = cmdAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
-  const cmdSuppressionSummary = api.buildSuppressionSummary({
-    // PUBLISHED total includes graph-surfaced rows. Folding graphAdded into
-    // the derivation but not into the reported total made the invariant hold
-    // internally and break externally by exactly that count: JSON consumers
-    // saw total != preRank + byBudget + returned, and the text line could
-    // read "showing 8 of 10" having actually considered 12. The number a
-    // caller sees must be the number the arithmetic used.
-    totalCandidates: totalCandidatesCountCmd + graphAddedCountCmd,
-    droppedPreRank: droppedPreRankCountCmd,
-    droppedByBudget: droppedByBudgetCountCmd,
-    summarySubstitutionsAdded: 0,
-    freshTailAdded: 0,
-    suppressedByInterference: cmdSuppressedByInterference,
-  });
-
-  // v0.33 / J1 — emit pipeline-local audit op when a hint fires (lockstep
-  // with api.recall's audit pattern; each pipeline emits for its own hits).
-  if (cmdAnchoringHint?.reason === 'memory_dominance') {
-    emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
-      memory_id: cmdAnchoringHint.memoryId,
-      query_count: cmdAnchoringHint.queryCount ?? null,
-    });
-  } else if (cmdAnchoringHint?.reason === 'query_repeat') {
-    emitCliAudit(hippoRoot, 'recall_anchor_detected_query_repeat', cmdAnchoringHint.memoryId, {
-      memory_id: cmdAnchoringHint.memoryId,
-    });
-  }
-
-  // v1.13.x / J2 — CLI per-pipeline availability/recency-bias detector. Each
-  // pipeline computes its own hint (this one against the CLI's returned top-K
-  // and the full local+global candidate pool). Soft warning only. Gated by
-  // HIPPO_AVAILABILITY=off, which short-circuits BEFORE the detect call so
-  // disabled tenants pay zero work. Audit emission is pipeline-local, lockstep
-  // with the anchoring emitCliAudit calls above. cmdAvailabilityHint is null on
-  // the zero-result branch (topK < minReturned), so the splat is a no-op there.
-  let cmdAvailabilityHint: AvailabilityHint | null = null;
-  if (process.env.HIPPO_AVAILABILITY !== 'off') {
-    cmdAvailabilityHint = detectAvailabilityBias({
-      topK: results.map((r) => ({ id: r.entry.id, created: r.entry.created })),
-      pool: [...localEntries, ...globalEntries].map((e) => ({ id: e.id, created: e.created })),
-    });
-    if (cmdAvailabilityHint) {
-      emitCliAudit(hippoRoot, 'recall_availability_detected', undefined, {
-        recent_fraction: cmdAvailabilityHint.recentFraction,
-        older_passed_over: cmdAvailabilityHint.olderCandidatesPassedOver,
-        returned_count: cmdAvailabilityHint.returnedCount,
-      });
-    }
-  }
-
-  // v0.32 / J3.2 — auto-injection of reference-class baserate when the
-  // CLI query carries a forward-prediction phrase AND a class matches.
-  // cmdRecall runs its own pipeline (doesn't go through api.recall for
-  // the memory list), so it computes the hint here. The hint VALUE is
-  // pipeline-invariant — same (hippoRoot, tenantId, query) inputs would
-  // produce the same hint in api.recall — but the audit emission is
-  // pipeline-local (one audit row per actual call, actor='cli' here).
-  // computePlanningFallacyOutput short-circuits BEFORE the regex gate
-  // when HIPPO_AUTODEBIAS=off so the no-match path is effectively free.
-  // v1.13.4: switched to the richer Output type so the watching variant
-  // (regex fired, no class matched OR tiebreak) can also surface.
-  const cmdPlanningFallacyOutput = computePlanningFallacyOutput(
-    hippoRoot,
-    tenantId,
-    query,
-    { actor: 'cli' },
-  );
-  const cmdPlanningFallacyHint = cmdPlanningFallacyOutput.hint ?? null;
-  const cmdPlanningFallacyWatching = cmdPlanningFallacyOutput.watching ?? null;
-
-  // A5 audit: emit one 'recall' event per query, capturing the (truncated)
-  // query text and the post-filter result count. Tenant resolved by emitCliAudit.
-  // Emit before the early-empty return so zero-result recalls are still logged.
-  // recall reads from BOTH local and global stores when both are initialized;
-  // log against every participating store so the audit trail in either db
-  // shows the read access (no false negatives across --global flows).
-  const recallMetadata: Record<string, unknown> = {
-    query: query.slice(0, 200),
-    results: results.length,
-  };
-  emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
-  if (isInitialized(globalRoot) && globalRoot !== hippoRoot) {
-    emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
-  }
 
   // Continuity assembly (--continuity). Lives BEFORE the zero-result branch
   // so a no-match query with active continuity state still returns a useful
-  // resume packet. Same three tenant-scoped store helpers as api.recall;
-  // continuityTokens uses the same Math.ceil(len/4) rule as the search-path
-  // estimateTokens() in src/search.ts.
+  // resume packet. Same three tenant-scoped store helpers as api.recall.
   const includeContinuity = Boolean(flags['continuity']);
   let activeSnapshot: TaskSnapshot | null = null;
   let sessionHandoff: SessionHandoff | null = null;
   let recentSessionEvents: SessionEvent[] = [];
-  let continuityTokens = 0;
   if (includeContinuity) {
     const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
     const sessionId = rawSnapshot?.session_id ?? undefined;
@@ -1991,37 +1939,150 @@ async function cmdRecall(
     sessionHandoff =
       rawHandoff && passesScopeFilterForRecall(rowScope(rawHandoff), effectiveScope) ? rawHandoff : null;
     recentSessionEvents = rawEvents.filter((e) => passesScopeFilterForRecall(rowScope(e), effectiveScope));
-    const tokenize = (s?: string | null): number =>
-      s ? estimateTokens(s) : 0;
-    continuityTokens =
-      tokenize(activeSnapshot?.task) +
-      tokenize(activeSnapshot?.summary) +
-      tokenize(activeSnapshot?.next_step) +
-      tokenize(sessionHandoff?.summary) +
-      tokenize(sessionHandoff?.nextAction) +
-      (sessionHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
-      (sessionHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenize(c), 0) +
-      tokenize(sessionHandoff?.evidence ? formatHandoffEvidenceLine(sessionHandoff.evidence) : null) +
-      tokenize(sessionHandoff?.outcome) +
-      tokenize(sessionHandoff?.targetRuntime) +
-      tokenize(sessionHandoff?.cardId) +
-      recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
-  const hasContinuity =
-    activeSnapshot !== null
-    || sessionHandoff !== null
-    || recentSessionEvents.length > 0;
 
-  // TE0 token ledger: the memory text this recall hands back (results plus
-  // any continuity block), recorded once per query.
-  withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-    tenantId,
-    sessionId: hostSessionId() ?? null,
-    surface: 'recall',
-    event: 'inject',
-    items: results.length,
-    tokens: results.reduce((acc, r) => acc + (r.tokens || 0), 0) + continuityTokens,
+  // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
+  const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
+  let left = sectionBudget;
+  const pays = (tokens: number): boolean => { if (tokens > left) return false; left -= tokens; return true; };
+  if (activeSnapshot && !pays(printedTokens(snapshotText(activeSnapshot)))) activeSnapshot = null;
+  if (sessionHandoff && !pays(printedTokens(handoffText(sessionHandoff)))) sessionHandoff = null;
+  if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) recentSessionEvents = [];
+  const continuityTokens = sectionBudget - left;
+  const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
+
+  // J3.2: the baserate hint depends on the query alone; its audit is pipeline-local (actor 'cli').
+  const cmdPlanningFallacyOutput = computePlanningFallacyOutput(hippoRoot, tenantId, query, { actor: 'cli' });
+  const planText = planningLine(cmdPlanningFallacyOutput);
+  const showPlan = planText !== null && pays(printedTokens(`${planText}\n`));
+  const cmdPlanningFallacyHint = showPlan ? cmdPlanningFallacyOutput.hint ?? null : null;
+  const cmdPlanningFallacyWatching = showPlan ? cmdPlanningFallacyOutput.watching ?? null : null;
+
+  // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
+  const floor = minResults ?? 1;
+  const fitted = fitBudget(results, left, floor, printCost);
+  // Copies go after every cut, so a merged row the budget drops never hides its sources.
+  const shown = (n: number): SearchResult[] => dropHeldCopies(fitted.slice(0, n), (r) => r.entry);
+  let kept = fitted.length;
+  results = shown(kept);
+
+  // J1, J2 and C5: each pipeline computes its hints over the list it returns, so they follow the list as it shrinks.
+  // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
+  const anchorRing = process.env.HIPPO_ANCHORING !== 'off' && sessionId
+    ? getOrCreateRing(sessionRecallHistoryCli, buildSessionKey(tenantId, sessionId))
+    : null;
+  const queryHash = hashQueryText(query);
+  const availabilityPool = process.env.HIPPO_AVAILABILITY !== 'off'
+    ? [...localEntries, ...globalEntries].map((e) => ({ id: e.id, created: e.created }))
+    : null;
+  const hintsFor = (list: SearchResult[], held: number) => {
+    const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
+    const availability = availabilityPool
+      ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool: availabilityPool })
+      : null;
+    const summary = api.buildSuppressionSummary({
+      // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
+      totalCandidates: totalCandidatesCountCmd + graphAddedCountCmd,
+      droppedPreRank: droppedPreRankCountCmd + held,
+      droppedByBudget: Math.max(0, totalCandidatesCountCmd + graphAddedCountCmd - droppedPreRankCountCmd - held - list.length),
+      summarySubstitutionsAdded: 0,
+      freshTailAdded: 0,
+      suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0, // a query_repeat is a re-ask, not competition
+    });
+    return { anchoring, availability, summary };
+  };
+  const printContinuity = (): void => {
+    if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
+    if (sessionHandoff) printHandoff(sessionHandoff);
+    if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
+  };
+  const renderRecall = (list: SearchResult[], h: ReturnType<typeof hintsFor>): string => settleTokens((t) => captureConsole(() => {
+    if (list.length === 0) {
+      // The hint still prints when nothing matched, so the agent sees its track record.
+      if (showPlan) { console.log(planText); console.log(); }
+      if (hasContinuity) {
+        printContinuity();
+        console.log(`(no memories matched "${query}")`);
+      } else {
+        console.log('No memories found for:', query);
+      }
+      return;
+    }
+    printContinuity();
+    // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
+    if (h.anchoring) { console.log(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`); console.log(); }
+    if (h.availability) {
+      console.log(`Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`);
+      console.log();
+    }
+    if (showPlan) { console.log(planText); console.log(); }
+    const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
+    if (cutoff) { console.log(cutoff); console.log(); }
+    console.log(recallHeading(list.length, t, query));
+    for (const r of list) console.log(entryText(r));
   }));
+
+  let hints = hintsFor(results, kept - results.length);
+  let recallText = renderRecall(results, hints);
+  // The hints, Cutoff line and header vary with the list, so the lowest-ranked entry goes until the whole block fits.
+  while (kept > floor && estimateTokens(recallText) > budget) {
+    kept--;
+    results = shown(kept);
+    hints = hintsFor(results, kept - results.length);
+    recallText = renderRecall(results, hints);
+  }
+  const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = hints;
+
+  if (anchorRing) {
+    // Appended after every detect: anchoredOn feeds the cooldown for the next recall on this session.
+    appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
+  } else if (process.env.HIPPO_ANCHORING !== 'off') {
+    // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
+    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
+      query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
+      query_length: query.length,
+    });
+  }
+  if (cmdAnchoringHint?.reason === 'memory_dominance') {
+    emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
+      memory_id: cmdAnchoringHint.memoryId,
+      query_count: cmdAnchoringHint.queryCount ?? null,
+    });
+  } else if (cmdAnchoringHint?.reason === 'query_repeat') {
+    emitCliAudit(hippoRoot, 'recall_anchor_detected_query_repeat', cmdAnchoringHint.memoryId, {
+      memory_id: cmdAnchoringHint.memoryId,
+    });
+  }
+  if (cmdAvailabilityHint) {
+    emitCliAudit(hippoRoot, 'recall_availability_detected', undefined, {
+      recent_fraction: cmdAvailabilityHint.recentFraction,
+      older_passed_over: cmdAvailabilityHint.olderCandidatesPassedOver,
+      returned_count: cmdAvailabilityHint.returnedCount,
+    });
+  }
+
+  // A5 audit: one 'recall' event per query, before the early-empty return, in every participating store.
+  const recallMetadata: Record<string, unknown> = {
+    query: query.slice(0, 200),
+    results: results.length,
+  };
+  emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
+  if (isInitialized(globalRoot) && globalRoot !== hippoRoot) {
+    emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
+  }
+
+  // TE0 token ledger: books the block this recall prints, on whichever exit it takes.
+  const emit = (text: string): void => {
+    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
+      tenantId,
+      sessionId: hostSessionId() ?? null,
+      surface: 'recall',
+      event: 'inject',
+      items: results.length,
+      tokens: estimateTokens(text),
+    }));
+    console.log(text);
+  };
 
   if (results.length === 0) {
     // LC1 F1 structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
@@ -2068,60 +2129,14 @@ async function cmdRecall(
         };
         out.continuityTokens = continuityTokens;
       }
-      console.log(JSON.stringify(out));
+      emit(JSON.stringify(out));
       return;
     }
-    // v0.33 / J1 — render anchoring hint above planning hint (anchoring
-    // is the stronger cognitive-pull warning so it gets first position).
-    if (cmdAnchoringHint) {
-      console.log(
-        `[anchored_on: ${cmdAnchoringHint.memoryId}] ${cmdAnchoringHint.summary}`,
-      );
-    }
-    // v1.13.x / J2 — render availability/recency-bias hint below anchoring and
-    // above the planning-fallacy hint. Soft warning; absent (env disabled or no
-    // bias detected) is silent. Null on this zero-result branch anyway since
-    // topK < minReturned, so this is effectively a no-op here; wired for parity.
-    if (cmdAvailabilityHint) {
-      console.log(
-        `Availability bias (${cmdAvailabilityHint.recentCount}/${cmdAvailabilityHint.returnedCount} recent): ${cmdAvailabilityHint.summary}`,
-      );
-    }
-    // v0.32 / J3.2 — render hint BEFORE the no-memories message so the
-    // calling agent sees its track record even when the query missed
-    // every memory. Same single-line shape + JSON.stringify-safe phrase
-    // as the populated-results path below.
-    if (cmdPlanningFallacyHint) {
-      const safePhrase = JSON.stringify(cmdPlanningFallacyHint.detectedPhrase);
-      console.log(
-        `Planning fallacy hint (class: ${cmdPlanningFallacyHint.classTag}): ${cmdPlanningFallacyHint.baserateSummary} [detected: ${safePhrase}]`,
-      );
-      console.log();
-    } else if (cmdPlanningFallacyWatching) {
-      // v1.13.4: render the watching variant when the regex matched but no
-      // baserate could be produced. Suggestion text directs the user to
-      // tag a prediction class so future queries can produce a baserate.
-      const safePhrase = JSON.stringify(cmdPlanningFallacyWatching.detectedPhrase);
-      console.log(
-        `Planning fallacy: watching this query (reason: ${cmdPlanningFallacyWatching.reason}). ${cmdPlanningFallacyWatching.suggestion} [detected: ${safePhrase}]`,
-      );
-      console.log();
-    }
-    if (hasContinuity) {
-      // Print continuity even when no memories matched. The resume packet
-      // is the whole point of `--continuity` and must not be dropped here.
-      if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
-      if (sessionHandoff) printHandoff(sessionHandoff);
-      if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-      console.log(`(no memories matched "${query}")`);
-      return;
-    }
-    console.log('No memories found for:', query);
+    emit(recallText);
     return;
   }
 
   const retrievedIds = results.map((r) => r.entry.id);
-  const localIndex = loadIndex(hippoRoot);
   const strengthenedHere = strengthenRetrieved(hippoRoot, retrievedIds);
   if (isInitialized(globalRoot)) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)));
 
@@ -2213,129 +2228,10 @@ async function cmdRecall(
       };
       jsonOut.continuityTokens = continuityTokens;
     }
-    console.log(JSON.stringify(jsonOut));
+    emit(JSON.stringify(jsonOut));
     return;
   }
-
-  const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
-  if (includeContinuity && hasContinuity) {
-    if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
-    if (sessionHandoff) printHandoff(sessionHandoff);
-    if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-  }
-  // v0.33 / J1 — render anchoring hint above planning-fallacy hint
-  // (anchoring is the stronger cognitive-pull warning so it gets first
-  // position). Hint absent (env disabled, no sessionId, or no R1/R2)
-  // is silent.
-  if (cmdAnchoringHint) {
-    console.log(
-      `[anchored_on: ${cmdAnchoringHint.memoryId}] ${cmdAnchoringHint.summary}`,
-    );
-    console.log();
-  }
-  // v1.13.x / J2 — render availability/recency-bias hint below anchoring and
-  // above the planning-fallacy hint. Soft warning; absent (env disabled or no
-  // bias detected) is silent.
-  if (cmdAvailabilityHint) {
-    console.log(
-      `Availability bias (${cmdAvailabilityHint.recentCount}/${cmdAvailabilityHint.returnedCount} recent): ${cmdAvailabilityHint.summary}`,
-    );
-    console.log();
-  }
-  // v0.32 / J3.2 — render planning-fallacy hint ABOVE the result list so
-  // the agent sees its track record before scrolling. Hint absent (env
-  // disabled or no forward-claim match) is silent. detectedPhrase is
-  // sanitised against control chars and ASCII quotes via JSON.stringify
-  // to head off rendering ambiguity when a regex match contains quotes
-  // or parens (plan-eng-critic round 2 LOW).
-  if (cmdPlanningFallacyHint) {
-    const safePhrase = JSON.stringify(cmdPlanningFallacyHint.detectedPhrase);
-    console.log(
-      `Planning fallacy hint (class: ${cmdPlanningFallacyHint.classTag}): ${cmdPlanningFallacyHint.baserateSummary} [detected: ${safePhrase}]`,
-    );
-    console.log();
-  } else if (cmdPlanningFallacyWatching) {
-    // v1.13.4: render the watching variant when the regex matched but no
-    // baserate could be produced (no_class_match / tiebreak). Suggestion
-    // text directs the user toward an action that would unblock the
-    // hint next time (typically: tag a prediction class).
-    const safePhrase = JSON.stringify(cmdPlanningFallacyWatching.detectedPhrase);
-    console.log(
-      `Planning fallacy: watching this query (reason: ${cmdPlanningFallacyWatching.reason}). ${cmdPlanningFallacyWatching.suggestion} [detected: ${safePhrase}]`,
-    );
-    console.log();
-  }
-  // v1.13.3 / C5 follow-up — Cutoff line ABOVE the result list (was a
-  // "WYSIATI:" line BELOW the result list in v1.12.13-v1.13.2). Dogfood
-  // proof at docs/dogfood/2026-05-27-track-j-warnings.md: a fresh sub-agent
-  // reading the v1.13.2 bottom-placed line ignored it entirely and
-  // summarised the visible memories as if the dropped pool didn't exist
-  // (the exact WYSIATI failure mode C5 is supposed to flag). Top placement
-  // + plain English ("Cutoff:" not "WYSIATI:") closes the read gap.
-  if (showWhy) {
-    const s = cmdSuppressionSummary;
-    const clauses: string[] = [];
-    // "dropped to fit limit" pointed at the wrong control: the residual covers
-    // search-ranking and token-budget drops too, and fires even when --limit
-    // was never passed. Measured: `recall --budget 20 --why` printed "39
-    // dropped to fit limit" with no --limit flag in the command at all.
-    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
-    if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
-    if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
-    if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
-    if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
-    if (clauses.length > 0) {
-      console.log(`Cutoff: showing ${results.length} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.`);
-      console.log();
-    }
-  }
-  console.log(`Found ${results.length} memories (${totalTokens} tokens) for: "${query}"\n`);
-
-  for (const r of results) {
-    const e = r.entry;
-    const label = confidenceLabel(e);
-    const confLabel = label.warn ? `[${label.text}] \u26A0\uFE0F` : `[${label.text}]`;
-    const strengthBar = '\u2588'.repeat(Math.round(e.strength * 10)) + '\u2591'.repeat(10 - Math.round(e.strength * 10));
-    const isGlobal = isInitialized(globalRoot) && !localIndex.entries[e.id];
-    const globalMark = isGlobal ? ' [global]' : '';
-    const supersededMark = e.superseded_by ? ' [superseded]' : '';
-    const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
-    const sourceMark = isGlobal ? ' [global]' : ' [local]';
-    console.log(`--- ${e.id} [${e.layer}] ${confLabel}${globalMark}${supersededMark}${graphMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
-    console.log(`    [${strengthBar}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`);
-    if (showWhy) {
-      const explanation = explainMatch(query, r);
-      console.log(`    source:${sourceMark} | layer: [${e.layer}] | confidence: [${label.text}]`);
-      console.log(`    reason: ${explanation.reason}`);
-      if (explanation.envelope) {
-        const env = explanation.envelope;
-        console.log(`    kind: ${env.kind}`);
-        if (env.scope) console.log(`    scope: ${env.scope}`);
-        if (env.owner) console.log(`    owner: ${env.owner}`);
-        if (env.artifact_ref) console.log(`    artifact_ref: ${env.artifact_ref}`);
-        if (env.session_id) console.log(`    session_id: ${env.session_id}`);
-        console.log(`    confidence: ${env.confidence}`);
-      }
-      // A7 recall-trace: render the ordered lifecycle re-ranking chain, e.g.
-      // "ranking: base 0.420 -> interference x0.3 -> 0.126 -> goal-boost x1.5 -> 0.189".
-      if (r.rerankTrace && r.rerankTrace.length > 0) {
-        const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
-        for (const step of r.rerankTrace) {
-          const mult = step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : '';
-          parts.push(`${step.stage}${mult}`);
-          parts.push(fmt(step.scoreAfter, 3));
-        }
-        console.log(`    ranking: ${parts.join(' -> ')}`);
-      }
-    }
-    console.log();
-    console.log(e.content);
-    console.log();
-  }
-
-  // v1.12.13 / C5 -> v1.13.3 follow-up: the WYSIATI bottom block was
-  // moved above the result list (see comment near the Cutoff render
-  // above). Function ends here.
+  emit(recallText);
 }
 
 async function cmdExplain(
@@ -2430,12 +2326,19 @@ async function cmdExplain(
       : config.search.localBump;
   // explainExplicitScope hoisted above the candidate loads (v1.25.0).
   const explainActiveScope = explainExplicitScope || detectScope();
+  // Priced as recall prints each result, so explain returns what recall's engines would.
+  const explainIndex = loadIndex(hippoRoot);
+  const explainGlobalOn = isInitialized(globalRoot);
+  const cost = (r: SearchResult): number =>
+    printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
+  const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   let results;
   let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
   if (usePhysics && !hasGlobal) {
     results = await physicsSearch(query, explainLocalEntries, {
-      budget,
+      budget: entryBudget,
+      cost,
       hippoRoot,
       physicsConfig: config.physics,
       explain: true,
@@ -2444,7 +2347,7 @@ async function cmdExplain(
     modeUsed = 'physics';
   } else if (hasGlobal) {
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
+      budget: entryBudget, cost, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
       includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf, tenantId,
       recallScope: explainExplicitScope
         ? { requested: explainExplicitScope, additive: true }
@@ -2453,7 +2356,7 @@ async function cmdExplain(
     modeUsed = 'searchBothHybrid';
   } else {
     results = await hybridSearch(query, explainLocalEntries, {
-      budget, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda, scope: explainActiveScope,
+      budget: entryBudget, cost, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda, scope: explainActiveScope,
       includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
     });
     modeUsed = 'hybrid';
@@ -2462,6 +2365,7 @@ async function cmdExplain(
   if (limit < results.length) {
     results = results.slice(0, limit);
   }
+  results = dropHeldCopies(results, (r) => r.entry);
 
   const candidates = explainLocalEntries.length + explainGlobalEntries.length;
 
@@ -2594,7 +2498,9 @@ async function cmdEval(
     const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
     let baseline: EvalBaseline | undefined;
     if (fs.existsSync(baselinePath)) {
-      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {}
+      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {
+        console.error(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
+      }
     }
 
     const result = await runFeatureEval(version);
@@ -3007,7 +2913,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
 
   if (memoryDirs.length === 0) return 0;
 
-  const existing = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const keys = storedTextKeys(loadAllEntries(hippoRoot, resolveTenantId({})));
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   let imported = 0;
   let skippedSecret = 0;
@@ -3043,12 +2949,8 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           continue;
         }
 
-        // Dedup: check if substantially similar content already exists
-        const isDup = existing.some(e => {
-          const overlap = textOverlap(content.slice(0, 200), e.content.slice(0, 200));
-          return overlap > 0.6;
-        });
-        if (isDup) continue;
+        // Dedup: skip only when the same text is already stored
+        if (keys.has(duplicateKey(content))) continue;
 
         const entry = createMemory(content, {
           layer: Layer.Episodic,
@@ -3068,7 +2970,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           }
           throw err;
         }
-        existing.push(entry); // prevent self-dedup within batch
+        keys.add(duplicateKey(content)); // prevent self-dedup within batch
         imported++;
       }
     } catch { /* skip broken dirs */ }
@@ -3091,12 +2993,14 @@ function cmdDedup(
   requireInit(hippoRoot);
 
   const dryRun = Boolean(flags['dry-run']);
-  const threshold = parseFloat(String(flags['threshold'] ?? '0.7'));
+  if (flags['threshold'] !== undefined) {
+    console.error('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
+  }
 
   const entries = loadAllEntries(hippoRoot);
-  console.log(`Scanning ${entries.length} memories for duplicates (>=${(threshold * 100).toFixed(0)}% text overlap)${dryRun ? ' (dry run)' : ''}...\n`);
+  console.log(`Scanning ${entries.length} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
 
-  const result = deduplicateStore(hippoRoot, { threshold, dryRun });
+  const result = deduplicateStore(hippoRoot, { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
@@ -3467,7 +3371,7 @@ async function cmdSessionEnd(
   // Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
   // extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
-  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  const { text: stdinText } = await readStdinBounded();
   try {
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
@@ -3479,7 +3383,8 @@ async function cmdSessionEnd(
     // No stdin, not JSON, or read failure: the snapshot close below will no-op.
   }
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
-  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, stdinTimedOut);
+  // Always a hook, so never scan: an empty stdin here is not a manual run.
+  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false });
 
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);
@@ -3539,34 +3444,56 @@ async function cmdSessionEndWorker(
   const closeSessionId = typeof flags['session-id'] === 'string' ? (flags['session-id'] as string) : null;
   const rereadLog = await bookSessionRereads(hippoRoot, transcriptPath, closeSessionId)
     .catch((err) => [`re-read count failed: ${err instanceof Error ? err.message : String(err)}`]);
-  // Sleep starts the log file afresh, so the lines go in after it; on exit too, as sleep exits in a project with no store.
+  // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
   const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) appendSessionEndCloseLog(closeLogFile, line); };
   process.once('exit', flushRereadLog);
-  try {
-    await cmdSleep(hippoRoot, flags);
-  } catch {
-    // sleep errors are already tee'd to the log file via cmdSleep's
-    // `[hippo] sleep failed: ...` line. Continue to capture regardless.
+  // Like the other hooks: project store, else global; a folder with neither must not get one made.
+  const store = hookStoreRoot(hippoRoot);
+  if (!isInitialized(store)) {
+    appendSessionEndCloseLog(closeLogFile, 'skip: no hippo store for this folder or globally', { startFresh: true });
+    flushRereadLog();
+    return;
+  }
+  // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
+  if (isInitialized(hippoRoot)) {
+    try {
+      await cmdSleep(hippoRoot, flags);
+    } catch {
+      // sleep errors are already tee'd to the log file via cmdSleep's
+      // `[hippo] sleep failed: ...` line. Continue to capture regardless.
+    }
+  } else {
+    appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
   }
   flushRereadLog();
+  const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
+  const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
   try {
     const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
     // With no stdin of its own, capture would read this as a manual run and scan every project.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
     } else {
-      cmdCapture(hippoRoot, {
+      cmdCapture(store, {
         source: 'last-session',
         transcriptPath,
         logFile,
         dryRun: false,
         global: false,
         tenantId: resolveTenantId({}),
+        // In the global store, rows would otherwise read as user-global and show up in every project.
+        originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+        sessionTurns: scan?.turns,
       });
     }
   } catch {
     // Same treatment — the failure line is already in the log.
   }
+  recordSessionDigest(hippoRoot, scan, {
+    key: closeSessionId || path.basename(transcriptPath ?? '', '.jsonl'),
+    tenantId: resolveTenantId({}),
+    log: digestLog,
+  });
 
   // DF1 T3: close the ending session's own active task snapshot AFTER
   // sleep+capture complete — neither producer (runPreCompact,
@@ -3581,7 +3508,7 @@ async function cmdSessionEndWorker(
   if (closeSessionId) {
     try {
       const tenantId = resolveTenantId({});
-      const ownSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId)?.session_id === closeSessionId;
+      const ownSnapshot = loadActiveTaskSnapshot(store, tenantId)?.session_id === closeSessionId;
       // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take the slot before the write.
       const derived = transcriptPath
         ? transcriptWorkingState(transcriptPath, (message) => appendSessionEndCloseLog(closeLogFile, message))
@@ -3590,7 +3517,7 @@ async function cmdSessionEndWorker(
         appendSessionEndCloseLog(closeLogFile, 'skip: no snapshot or transcript for session');
       } else {
         const evidence = collectHandoffEvidence(process.cwd(), 'unknown');
-        const handoff = writeSessionEndHandoff(hippoRoot, tenantId, closeSessionId, evidence, derived);
+        const handoff = writeSessionEndHandoff(store, tenantId, closeSessionId, evidence, derived);
         appendSessionEndCloseLog(
           closeLogFile,
           handoff ? `wrote handoff for session ${closeSessionId}` : `skip: kept the existing handoff for session ${closeSessionId}`,
@@ -3603,7 +3530,7 @@ async function cmdSessionEndWorker(
   }
   try {
     if (closeSessionId) {
-      const closed = closeTaskSnapshotsForSession(hippoRoot, resolveTenantId({}), closeSessionId);
+      const closed = closeTaskSnapshotsForSession(store, resolveTenantId({}), closeSessionId);
       appendSessionEndCloseLog(closeLogFile, `closed ${closed} active snapshot(s) for session ${closeSessionId}`);
     } else {
       appendSessionEndCloseLog(closeLogFile, 'skip: no session_id in SessionEnd payload, active snapshot left untouched');
@@ -3654,13 +3581,14 @@ async function bookSessionRereads(
  * the detached worker's `stdio: 'ignore'` — write straight to the file
  * instead, matching capture.ts's `appendPreCompactLog` convention.
  */
-function appendSessionEndCloseLog(logFile: string | null, message: string): void {
+function appendSessionEndCloseLog(logFile: string | null, message: string, opts: { startFresh?: boolean } = {}): void {
   if (!logFile) return;
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     // sanitizeLogMessage: `message` interpolates the payload-controlled
     // session_id — same log-forgery guard appendPreCompactLog applies.
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
+    const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
+    write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch {
     // Best-effort only — never let a log-write failure surface as an error.
   }
@@ -3784,11 +3712,22 @@ async function cmdCodexSessionEndWorker(
   flags: Record<string, string | boolean | string[]>,
 ): Promise<void> {
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
+  // Like the other hooks: project store, else global; a folder with neither must not get one made.
+  const store = hookStoreRoot(hippoRoot);
+  if (!isInitialized(store)) {
+    appendSessionEndCloseLog(logFile ?? null, 'skip: no hippo store for this folder or globally', { startFresh: true });
+    return;
+  }
 
-  try {
-    await cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
-  } catch {
-    // sleep errors are already written via cmdSleep
+  // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
+  if (isInitialized(hippoRoot)) {
+    try {
+      await cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
+    } catch {
+      // sleep errors are already written via cmdSleep
+    }
+  } else {
+    appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
   }
 
   try {
@@ -3812,6 +3751,8 @@ async function cmdCodexSessionEndWorker(
       return;
     }
 
+    const digestLog = (message: string): void => appendSessionEndCloseLog(logFile ?? null, message);
+    const scan = readSessionScan(transcriptPath, digestLog);
     const captureOpts: CaptureOptions = {
       source: 'last-session',
       transcriptPath,
@@ -3819,8 +3760,16 @@ async function cmdCodexSessionEndWorker(
       dryRun: false,
       global: false,
       tenantId: resolveTenantId({}),
+      originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+      sessionTurns: scan?.turns,
     };
-    cmdCapture(hippoRoot, captureOpts);
+    try {
+      cmdCapture(store, captureOpts);
+    } catch {
+      // capture path logs its own failures
+    }
+    // The Codex wrapper passes no session id, so the rollout file names the session.
+    recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId: resolveTenantId({}), log: digestLog });
   } catch {
     // capture path logs its own failures
   }
@@ -4162,40 +4111,11 @@ function cmdInspect(hippoRoot: string, id: string): void {
 }
 
 function printActiveTaskSnapshot(snapshot: TaskSnapshot): void {
-  console.log('## Active Task Snapshot\n');
-  console.log(`- Task: ${snapshot.task}`);
-  console.log(`- Status: ${snapshot.status}`);
-  console.log(`- Updated: ${snapshot.updated_at}`);
-  console.log(`- Source: ${snapshot.source}`);
-  if (snapshot.session_id) {
-    console.log(`- Session: ${snapshot.session_id}`);
-  }
-  console.log('');
-  console.log('### Summary');
-  console.log(snapshot.summary);
-  console.log('');
-  console.log('### Next step');
-  console.log(snapshot.next_step);
-  console.log('');
+  console.log(snapshotText(snapshot));
 }
 
 function printSessionEvents(events: SessionEvent[]): void {
-  if (events.length === 0) {
-    console.log('No session events found.');
-    return;
-  }
-
-  const latest = events[events.length - 1]!;
-  console.log('## Recent Session Trail\n');
-  console.log(`- Session: ${latest.session_id}`);
-  console.log(`- Task: ${latest.task ?? 'n/a'}`);
-  console.log(`- Updated: ${latest.created_at}`);
-  console.log('');
-
-  for (const event of events) {
-    console.log(`- [${event.created_at}] (${event.event_type}) ${event.content}`);
-  }
-  console.log('');
+  console.log(events.length === 0 ? 'No session events found.' : sessionTrailText(events));
 }
 
 function cmdConflicts(
@@ -4349,6 +4269,12 @@ function cmdReject(
     console.log(`  Reason: ${reason}`);
     if (result.removedIds.length > 0) {
       console.log(`  Removed ${result.removedIds.length} matching row(s): ${result.removedIds.join(', ')}`);
+      if (result.successorIds.length > 0) {
+        console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
+      }
+      if (result.dormantSuccessorIds.length > 0) {
+        console.log(`  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`);
+      }
     } else {
       console.log('  No live rows matched (pre-emptive tombstone).');
     }
@@ -4872,42 +4798,7 @@ function cmdSession(
 }
 
 function printHandoff(handoff: SessionHandoff): void {
-  console.log('## Session Handoff\n');
-  console.log(`- Session: ${handoff.sessionId}`);
-  console.log(`- Updated: ${handoff.updatedAt}`);
-  if (handoff.taskId) console.log(`- Task: ${handoff.taskId}`);
-  if (handoff.repoRoot) console.log(`- Repo: ${handoff.repoRoot}`);
-  if (handoff.outcome) console.log(`- Outcome: ${handoff.outcome}`);
-  if (handoff.targetRuntime) console.log(`- Target runtime: ${handoff.targetRuntime}`);
-  if (handoff.cardId) console.log(`- Card: ${handoff.cardId}`);
-  console.log('');
-  console.log('### Summary');
-  console.log(handoff.summary);
-  if (handoff.nextAction) {
-    console.log('');
-    console.log('### Next action');
-    console.log(handoff.nextAction);
-  }
-  if (handoff.artifacts && handoff.artifacts.length > 0) {
-    console.log('');
-    console.log('### Artifacts');
-    for (const artifact of handoff.artifacts) {
-      console.log(`- ${artifact}`);
-    }
-  }
-  if (handoff.constraints && handoff.constraints.length > 0) {
-    console.log('');
-    console.log('### Constraints');
-    for (const constraint of handoff.constraints) {
-      console.log(`- ${constraint}`);
-    }
-  }
-  if (handoff.evidence) {
-    console.log('');
-    console.log('### Evidence');
-    console.log(formatHandoffEvidenceLine(handoff.evidence));
-  }
-  console.log('');
+  console.log(handoffText(handoff));
 }
 
 function cmdHandoff(
@@ -7037,6 +6928,9 @@ async function cmdContext(
   const ledgerSessionId = subagent ? undefined : currentSessionId;
   if (subagent) payloadSessionId = undefined;
 
+  const format = String(flags['format'] ?? 'markdown');
+  const framing = String(flags['framing'] ?? 'observe');
+
   const opts: api.ContextOpts = {
     q: query,
     budget,
@@ -7047,6 +6941,8 @@ async function cmdContext(
     crossProject,
     currentSessionId,
     prompt: payloadPrompt,
+    // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
+    cost: contextCost(format === 'additional-context' ? 'additional-context' : 'markdown', framing),
   };
 
   const result = await api.getContext(ctx, opts);
@@ -7058,10 +6954,6 @@ async function cmdContext(
     result.sessionHandoff ||
     (result.recentEvents && result.recentEvents.length > 0);
   if (!hasContextData) return;
-
-  // Format + framing are CLI rendering concerns; api.getContext doesn't see them.
-  const format = String(flags['format'] ?? 'markdown');
-  const framing = String(flags['framing'] ?? 'observe');
 
   // Adapter: ContextResultEntry -> the print-helper input shape. v39:
   // cross-project inclusions (only present under --cross-project or with
@@ -7109,27 +7001,19 @@ async function cmdContext(
     const recallEntries = result.entries.filter((r) => r.promptRecall);
     const staticItems = staticEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
     const recallItems = recallEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
-    // Header total is static-only once a recall section exists; otherwise byte-identical to today.
-    const staticHeaderTokens = recallItems.length > 0
-      ? staticItems.reduce((sum, r) => sum + r.tokens, 0)
-      : result.tokens;
 
-    const staticBlock = captureConsole(() => {
+    const staticBlock = settleTokens((t) => captureConsole(() => {
       if (result.activeSnapshot) printActiveTaskSnapshot(result.activeSnapshot);
       if (result.sessionHandoff) printHandoff(result.sessionHandoff);
       if (result.recentEvents && result.recentEvents.length > 0) {
         printSessionEvents(result.recentEvents);
       }
-      if (staticItems.length > 0) {
-        // TE1: no live strength percentage, so an unchanged set of memories
-        // renders byte-identically turn after turn.
-        printContextMarkdown(staticItems, staticHeaderTokens, framing, { showStrength: false });
-      }
+      // TE1: no live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
+      if (staticItems.length > 0) printContextMarkdown(staticItems, t, framing, { showStrength: false });
       printCrossProjectSection(staticCrossEntries);
-    });
-    const recallTokens = recallItems.reduce((sum, r) => sum + r.tokens, 0);
+    }));
     const recallBlock = recallItems.length > 0
-      ? captureConsole(() => printContextMarkdown(recallItems, recallTokens, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }))
+      ? settleTokens((t) => captureConsole(() => printContextMarkdown(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' })))
       : '';
     if (!staticBlock.trim() && !recallBlock.trim()) return;
 
@@ -7192,8 +7076,8 @@ async function cmdContext(
       });
     }
   } else {
-    // markdown (default)
-    const text = captureConsole(() => {
+    // markdown (default); the header figure counts the whole block, sections included, as the ledger does.
+    const text = settleTokens((t) => captureConsole(() => {
       if (result.activeSnapshot) {
         printActiveTaskSnapshot(result.activeSnapshot);
       }
@@ -7203,15 +7087,12 @@ async function cmdContext(
       if (result.recentEvents && result.recentEvents.length > 0) {
         printSessionEvents(result.recentEvents);
       }
-      if (renderItems.length > 0) {
-        printContextMarkdown(renderItems, result.tokens, framing);
-      }
+      if (renderItems.length > 0) printContextMarkdown(renderItems, t, framing);
       printCrossProjectSection(crossEntries);
-
       if (result.ambientState) {
         console.log(`\n${renderAmbientSummary(result.ambientState)}`);
       }
-    });
+    }));
     if (text.length > 0) console.log(text);
     withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
       tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
@@ -7298,12 +7179,8 @@ function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippo
  */
 function printCrossProjectSection(items: api.ContextResultEntry[]): void {
   if (items.length === 0) return;
-  console.log(`\n## Other-project memory (explicitly requested, ${items.length} entries)\n`);
-  for (const item of items) {
-    const originLabel = item.origin === null || item.origin === '' ? 'unknown-origin' : item.origin;
-    const tagStr = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
-    console.log(`- **[${originLabel}]** ${item.entry.content}${tagStr}`);
-  }
+  console.log(crossProjectHeading(items.length));
+  for (const item of items) console.log(crossProjectLine(item));
 }
 
 /** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
@@ -7315,36 +7192,8 @@ export function printContextMarkdown(
 ): void {
   const now = evalNow();
   const showStrength = opts.showStrength !== false;
-  const heading = opts.heading ?? 'Project Memory';
-  console.log(`## ${heading} (${items.length} entries, ${totalTokens} tokens)\n`);
-  for (const item of items) {
-    const e = item.entry;
-    const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
-    const strengthPct = Math.round(calculateStrength(e) * 100);
-    const strengthStr = showStrength ? ` (${strengthPct}%)` : '';
-    const globalPrefix = item.isGlobal ? '[global] ' : '';
-    const effectiveConf = confidenceFacets(e, now).tier;
-    const label = confidenceLabel(e, now);
-    const confWarning = label.warn ? ' \u26A0\uFE0F' : '';
-    const confTag = `[${label.text}]${confWarning}`;
-
-    if (framing === 'observe') {
-      const dateStr = new Date(e.created).toISOString().slice(0, 10);
-      if (effectiveConf === 'verified') {
-        // Verified: no date prefix, just the rule
-        console.log(`- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`);
-      } else if (effectiveConf === 'stale') {
-        console.log(`- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr}${strengthStr}`);
-      } else {
-        console.log(`- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr}${strengthStr}`);
-      }
-    } else if (framing === 'suggest') {
-      console.log(`- **${confTag} Consider checking: ${globalPrefix}${e.content}**${tagStr}${strengthStr}`);
-    } else {
-      // framing === 'assert': no prefix (bare facts)
-      console.log(`- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`);
-    }
-  }
+  console.log(contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens));
+  for (const item of items) console.log(contextLine(item, framing, showStrength, now));
 }
 
 function autoDetectContext(): string {
@@ -7515,10 +7364,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   try {
     writeEntry(hippoRoot, entry);
     updateStats(hippoRoot, { remembered: 1 });
-
-    if (isEmbeddingConfigured(hippoRoot)) {
-      embedMemory(hippoRoot, entry).catch(() => {});
-    }
+    void embedMemory(hippoRoot, entry);
 
     const preview = stderr.trim().slice(0, 80);
     console.error(`\nHippo learned from failure: "${preview}"`);
@@ -7577,7 +7423,7 @@ function learnFromRepo(
   // parsed lesson with the gate on the write alone.
   //
   // Round 2 then found the cure was worse. STORAGE is what makes invalidation
-  // idempotent here: a stored lesson is recognised by deduplicateLesson on
+  // idempotent here: a stored lesson is recognised by its same-text key on
   // the next scan and short-circuits before invalidating again. A lesson that
   // invalidates but is never stored has no such record, so every rescan
   // re-invalidates, and invalidateMatching halves half_life_days each time.
@@ -7606,10 +7452,10 @@ function learnFromRepo(
   let rejected = 0;
   const gitLearnTags = ['error', 'git-learned'];
   const existingForSchema = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const keys = storedTextKeys(existingForSchema);
 
   for (const lesson of lessons) {
-    // The array overload ignores the tenant arg; existingForSchema is already scoped.
-    if (deduplicateLesson(existingForSchema, lesson, 0.7, resolveTenantId({}))) {
+    if (keys.has(duplicateKey(lesson))) {
       skipped++;
       continue;
     }
@@ -7650,10 +7496,8 @@ function learnFromRepo(
       throw err;
     }
     updateStats(hippoRoot, { remembered: 1 });
-
-    if (isEmbeddingConfigured(hippoRoot)) {
-      embedMemory(hippoRoot, entry).catch(() => {});
-    }
+    keys.add(duplicateKey(lesson));
+    void embedMemory(hippoRoot, entry);
 
     added++;
   }
@@ -7970,6 +7814,13 @@ never as a closing step:
 hippo remember "<description of what went wrong>" --error
 \`\`\`
 
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+
 When Hippo's Codex wrapper is installed, session-end capture runs automatically.
 If the wrapper is not installed, capture a brief summary manually:
 \`\`\`bash
@@ -7993,6 +7844,13 @@ On errors or unexpected behaviour, record it right then, while you work,
 never as a closing step:
 \`\`\`bash
 hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
 \`\`\`
 
 When ending a session, capture a brief summary:
@@ -8019,6 +7877,13 @@ never as a closing step:
 hippo remember "<description of what went wrong>" --error
 \`\`\`
 
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+
 When ending a session, capture a brief summary:
 \`\`\`bash
 hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
@@ -8037,10 +7902,17 @@ hippo context --auto --budget 1500
 \`\`\`
 Read the output before writing any code.
 
-When you learn a non-obvious lesson or hit an error, record it right then,
-while you work, never as a closing step:
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
 \`\`\`bash
-hippo remember "<lesson>" --error
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
 \`\`\`
 
 When stuck or repeating yourself, check if this happened before:
@@ -8072,6 +7944,13 @@ never as a closing step:
 hippo remember "<description of what went wrong>" --error
 \`\`\`
 
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+
 When ending a session, capture a brief summary:
 \`\`\`bash
 hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
@@ -8091,14 +7970,19 @@ const SHIPPED_HOOK_HASHES = new Map([
   ['15abcece9712279fb4721f7a8f0ba117457400278977beb5cf5b5d7ba49f7b1a', 'codex'],
   ['0c81a6b2c21473313001f624b80ea870e661aecbfda9bfe8503febc0d5f34533', 'codex'],
   ['88e45358aba4f17912f113221c991dc758275991335d1daa4aa1974a69c46769', 'codex'],
+  ['e61632fe177450a06541c148a9a4f9182530d8df667806927a99792825903298', 'codex'],
   ['a1415ecda9b2f8f317c233738e4a5ac16e6b2cc385a017c0c8ecfbfacbcab6a3', 'cursor'],
   ['a38c428bbdfc14ec50f6f7b9183785170a4eae1ce9cde60257cca6efc7206b3a', 'cursor'],
+  ['0ec9f556abfd55e94f9e6fb47ece0fc5acb841977d144b35a2371e03645d8636', 'cursor'],
   ['40524c3bd5a2eb04036567cc761451961d950995768bccd93a9900b0f75eafea', 'openclaw'],
   ['7b3518e8c0feaa7b8b454cde7743f7598ad14cd9979e1680d0954484e2464aae', 'openclaw'],
+  ['1137dcf04568caf011e41db77bc55324faee88bc29c3a5fcc98ab687cd952a16', 'openclaw'],
   ['4601c67c31f41cd5b1324cfccdb1afc66872b7fb0bc1e7c5789ecabb1f6bd942', 'opencode'],
   ['90d9e21d8d1ecbe99a0fc7b7f2d9f8af7b5315a6b4b0203df4f7a9bdc0699b98', 'opencode'],
+  ['ca4e00284f1397ed2f2fcc53210c27f63b90edf6b37fd66dad5ee58b94ea3eee', 'opencode'],
   ['8b8f5986d7f7ed15f06e68720d8913c3cab23d94366b411935ca2bbaa334553b', 'pi'],
   ['37767b355e18beac726b05b9e2b898dab8c6135fd7b98f3aa52edc734d5dd283', 'pi'],
+  ['6e85a5cccb3cfeaa9a080713754936db730f96376f94cc9a9888a746149c7268', 'pi'],
 ]);
 
 function cmdHook(
@@ -8652,17 +8536,20 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
     ...(Number.isFinite(freshTailCount) && freshTailCount! >= 0 ? { freshTailCount } : {}),
     summarizeOlder,
     ...(scope !== undefined ? { scope } : {}),
+    cost: assembleCost(sessionId),
   });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
   }
-  console.log(`Session ${r.sessionId} — ${r.items.length} items, ${r.tokens} tokens (raw=${r.totalRaw}, summarized=${r.summarized}, evicted=${r.evicted})`);
-  for (const it of r.items) {
-    const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-    const head = it.content.slice(0, 120);
-    console.log(`  ${prefix} ${it.createdAt} ${it.id} — ${head}${it.content.length > 120 ? '…' : ''}`);
-  }
+  console.log(settleTokens((t) => captureConsole(() => {
+    console.log(assembleHeading({ ...r, items: r.items.length, tokens: t }));
+    for (const it of r.items) {
+      const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
+      const head = it.content.slice(0, 120);
+      console.log(`  ${prefix} ${it.createdAt} ${it.id} \u2014 ${head}${it.content.length > 120 ? '…' : ''}`);
+    }
+  })));
 }
 
 function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string, string | boolean | string[]>): void {
@@ -8690,6 +8577,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
     ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
     ...(depth !== undefined ? { depth } : {}),
+    cost: drillCost,
   });
   if ('failure' in r) {
     // v1.6.4: only `not_drillable` is caller-actionable. `not_found`
@@ -8908,65 +8796,7 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
 // Audit log subcommands (A5 stub auth — `hippo audit list`)
 // ---------------------------------------------------------------------------
 
-const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
-  'remember',
-  'recall',
-  'promote',
-  'supersede',
-  'forget',
-  'archive_raw',
-  'auth_revoke',
-  'auth_create', // v1.12.4: emitted by api.authCreate
-  'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
-  'consolidate', // v1.11.5: emitted by api.sleep / hippo sleep
-  'audit_prune', // v1.12.9: emitted by pruneAuditLog
-  'summary_marked_dirty', // v0.30 / E1 — lockstep with AuditOp union + server.ts VALID_AUDIT_OPS (v1.11.5 CRIT A institutional rule)
-  'summary_marked_clean', // v0.30 / E3 — buildDag post-link clean op; lockstep
-  'summary_rebuilt',      // v0.30 / E3 — sleep-cycle rebuild op; lockstep
-  'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
-  'predict_close',        // v0.31 / E2 — emitted by closePrediction
-  'predict_baserate',     // v0.31 / J3 — emitted by computePredictionBaserate
-  'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
-  'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
-  'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
-  'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
-  'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
-  'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
-  'recall_availability_detected',             // v1.13.x / J2 - emitted when availability/recency-bias hint fires
-  'decision_create',       // E2 decision first-class object — emitted by saveDecision
-  'decision_supersede',    // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
-  'decision_close',        // E2 — emitted by closeDecision
-  'incident_open',         // E2 incident first-class object — emitted by saveIncident
-  'incident_resolve',      // E2 — emitted by resolveIncident (open -> resolved)
-  'incident_close',        // E2 — emitted by closeIncident (open|resolved -> closed)
-  'process_create',        // E2 process first-class object — emitted by saveProcess
-  'process_supersede',     // E2 — emitted by saveProcess on a supersession
-  'process_close',         // E2 — emitted by closeProcess
-  'policy_create',         // E2 policy first-class object — emitted by savePolicy
-  'policy_supersede',      // E2 — emitted by savePolicy on a supersession
-  'policy_close',          // E2 — emitted by closePolicy
-  'skill_create',          // E2 skill first-class object — emitted by saveSkill
-  'skill_supersede',       // E2 — emitted by saveSkill on a supersession
-  'skill_close',           // E2 — emitted by closeSkill
-  'project_brief_create',  // E2 project_brief first-class object — emitted by saveProjectBrief
-  'project_brief_supersede', // E2 — emitted by saveProjectBrief on a supersession (incl. refresh)
-  'project_brief_close',   // E2 — emitted by closeProjectBrief
-  'customer_note_create',  // E2 customer_note first-class object — emitted by saveCustomerNote
-  'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
-  'customer_note_close',   // E2 — emitted by closeCustomerNote
-  'mv_rescue',             // LC2-E3 — emitted by consolidate() per rescue; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
-  'reject_value',          // AT1 — emitted by `hippo reject`; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
-  'reject_refusal',        // AT1 — emitted when the rejection guard refuses a write; lockstep
-  'unreject_value',        // AT1 — emitted by `hippo unreject`; lockstep
-  'conflict_resolve',      // AT1 — emitted by resolveConflict on every resolution path; lockstep
-  'half_life_migrate',     // Decay default change — emitted by migrateDefaultHalfLife; lockstep with AuditOp union
-  'dormant_restore',       // Dormant memories — emitted by api.restoreDormant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
-  'auth_grant',            // EI2: emitted by api.authGrant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
-  'auth_ungrant',          // EI2: emitted by api.authUngrant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
-  'quarantine',            // CD5: emitted by recordQuarantine; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
-  'quarantine_approve',    // CD5: emitted by api.quarantineApprove; lockstep
-  'quarantine_reject',     // CD5: emitted by api.quarantineReject; lockstep
-]);
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
 function formatAuditRow(ev: AuditEvent): string {
   const target = ev.targetId ?? '-';
@@ -9579,7 +9409,7 @@ Commands:
     --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
     --pin                  Pin the new memory (default: pinned if the old one was)
   recall <query>           Search and retrieve memories (local + global)
-    --budget <n>           Token budget (default: 4000)
+    --budget <n>           Token budget for the whole printed block (default: 4000)
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
@@ -9660,7 +9490,7 @@ Commands:
                            handoff/events (use 'hippo session resume' for
                            the explicit handoff-without-snapshot path).
   explain <query>          Show full score breakdown for each retrieved memory
-    --budget <n>           Token budget (default: 4000)
+    --budget <n>           Token budget, counted as recall prints (default: 4000)
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
@@ -9691,20 +9521,23 @@ Commands:
     --json                 Output full summary as JSON
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state
-    --budget <n>           Token budget (default: 1500)
+    --budget <n>           Token budget for the whole printed block (default: 1500)
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on)
     --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
+                           Runs at Claude Code and OpenCode session end and in the daily job.
+                           With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
+                           fact extraction; {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn before consolidation
     --no-share             Skip auto-sharing to global store
   daily-runner             Sweep registered workspaces and run daily learn+sleep
   dedup                    Remove duplicate memories (keeps stronger copy)
     --dry-run              Preview without removing
-    --threshold <n>        Overlap threshold 0-1 (default: 0.7)
+    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing
   status                   Show memory health stats
   audit [--fix]            Check memory quality (--fix removes junk)
   github                   GitHub connector subcommands (backfill, dlq)
@@ -9728,10 +9561,10 @@ Commands:
     --stats                Count memories per DAG level instead
   drill <summary-id>       Walk down a DAG level-2 summary to its children
     --limit N              Cap children list (default 50)
-    --budget N             Cap total child token cost (≈ chars/4)
+    --budget N             Token budget for the printed children (≈ chars/4)
     --json                 Output as JSON
   assemble --session <id>  Build a session's chronological context window
-    --budget N             Token budget (default 4000)
+    --budget N             Token budget for the printed window (default 4000)
     --fresh-tail N         Recent rows always kept verbatim (default 10)
     --no-summarize-older   Disable older-row summary substitution
     --scope <s>            Restrict to exact scope (default: deny *:private:*)
@@ -9905,14 +9738,16 @@ Commands:
   capture                  Extract memories from conversation text
     --stdin                Read from piped input
     --file <path>          Read from a file
-    --last-session         Read from the most recent agent session transcript
+    --last-session         Read the transcript a hook names on stdin, else the newest
+                           Claude Code one from any project
     --transcript <path>    Explicit transcript path (implies --last-session)
     --log-file <path>      Tee output to a log file (paired with 'hippo last-sleep')
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
-  setup                    One-shot: detect installed AI tools and install all
-                           available SessionEnd+SessionStart+PreCompact hooks,
-                           plus Codex's memory hooks in its hooks.json
+  setup                    One-shot: detect installed AI tools and install their hooks:
+                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
+                           a plugin, codex 2 hooks in its hooks.json plus a launcher
+                           wrapper; other tools get a hint
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
@@ -9920,23 +9755,23 @@ Commands:
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
-                           capture this session, in a detached worker
+                           capture from the session's last 20 user and 10 assistant messages,
+                           in a detached worker
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
   pre-compact              PreCompact hook: save a working-state snapshot before compaction
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
-  compact-resume           SessionStart(compact) hook: re-print the snapshot + session trail
+  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old
   post-compact             PostCompact hook: tell the user what pre-compact saved
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)
   codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code/opencode install SessionEnd+SessionStart;
-                           claude-code also installs PreCompact +
-                           SessionStart(compact) for mid-session continuity;
-                           codex adds UserPromptSubmit + SessionStart(compact)
-                           to $CODEX_HOME/hooks.json (trust them once in
-                           /hooks) and wraps the detected launcher in place
+                           claude-code adds 7 hooks to ~/.claude/settings.json;
+                           opencode installs a plugin; codex adds 2 hooks to
+                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           wraps the detected launcher in place; all but claude-code
+                           also patch an existing AGENTS.md
     hook uninstall <target> Remove hook
   predict "<claim>"        Record a prediction to score against the actual outcome later
     --class <c>            Reference class (required)
@@ -10057,7 +9892,7 @@ Commands:
     wm clear               Clear working memory entries
       --scope <scope>      Filter by scope
       --session <id>       Filter by session
-    wm flush               Flush working memory (session end)
+    wm flush               Same as clear; nothing runs it at session end
       --scope <scope>      Filter by scope
       --session <id>       Filter by session
   dashboard                Open web dashboard for memory health
@@ -10306,10 +10141,7 @@ async function main(
         const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
         const rememberKindAllowed = ['distilled', 'superseded'] as const;
         if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
-          const tagsRaw = flags['tag'];
-          const tags = Array.isArray(tagsRaw)
-            ? (tagsRaw as string[]).map(String)
-            : typeof tagsRaw === 'string' ? [tagsRaw] : undefined;
+          const tags = rememberTags(flags, process.cwd()).all;
           // B2 v1.12.6 — validate --owner on the thin-client path too.
           // Failure on this path exits early so the user gets the same
           // validation experience whether or not a server is up.

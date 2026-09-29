@@ -97,8 +97,9 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep } from './search.js';
+import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
@@ -111,6 +112,7 @@ import {
   type PromptRecallGate,
 } from './prompt-recall.js';
 import { detectSecret } from './secret-detect.js';
+import { isSessionDigestRow } from './session-digest.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
@@ -512,6 +514,9 @@ export interface RecallOpts {
    * callers leave this unset and get the trace.
    */
   suppressRecallTrace?: boolean;
+  /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
+   *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
+  keepHeldCopies?: boolean;
 }
 
 export interface ContinuityBlock {
@@ -614,7 +619,7 @@ export interface RecallResult {
    * the calling agent sees its track record at the moment of forecasting
    * (Lovallo-Kahneman 2003 inside-vs-outside view).
    *
-   * Populated by `api.recall` itself via `computePlanningFallacyHint`.
+   * Populated by `api.recall` itself via `computePlanningFallacyOutput`.
    * Pipeline-invariant: the value depends only on (queryText, tenantId,
    * predictions table state) — all three are identical regardless of
    * which downstream search pipeline produces the memory list, so MCP
@@ -1000,6 +1005,13 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
       }));
     }
   }
+  if (!opts.keepHeldCopies) {
+    const shownIds = new Set(dropHeldCopies([...baseScored.map((r) => r.entry), ...substituted.map((s) => s.entry)], (e) => e).map((e) => e.id));
+    droppedPreRankCount += baseScored.filter((r) => !shownIds.has(r.entry.id)).length;
+    baseScored = baseScored.filter((r) => shownIds.has(r.entry.id));
+    baseSlice = baseScored.map((r) => r.entry);
+    substituted = substituted.filter((s) => shownIds.has(s.entry.id));
+  }
   // v1.12.13 / C5 — WYSIATI summary_substitutions_added counter.
   summarySubstitutionsCount = substituted.length;
 
@@ -1078,8 +1090,10 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
       ...baseRanked.map((r) => r.id),
       ...summaryRanked.map((r) => r.id),
     ]);
+    const shownKeys = storedTextKeys(opts.keepHeldCopies ? [] : [...baseSlice, ...substituted.map((s) => s.entry)]);
     for (const m of recentScoped) {
-      if (seenIds.has(m.id)) continue;
+      if (seenIds.has(m.id) || shownKeys.has(duplicateKey(m.content))) continue;
+      shownKeys.add(duplicateKey(m.content));
       const item: RecallResultItem = {
         id: m.id,
         content: m.content,
@@ -1213,10 +1227,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // per-pipeline). opts.actor threads through to the inner
   // computePredictionBaserate call so MCP/HTTP-originated hints attribute
   // correctly instead of defaulting to 'cli'. Disabled by HIPPO_AUTODEBIAS=off.
-  // v1.13.4: switched from computePlanningFallacyHint to
-  // computePlanningFallacyOutput so the no-class-match / tiebreak
-  // watching variant can also reach the caller surface. The two
-  // outputs are mutually exclusive; we splat both as optional fields.
+  // The hint and the no-class-match / tiebreak watching variant are mutually exclusive; both go out as optional fields.
   const planningFallacyOutput = computePlanningFallacyOutput(
     ctx.hippoRoot,
     ctx.tenantId,
@@ -1360,6 +1371,13 @@ export interface AssembleOpts {
    * is set on the result so the caller knows to widen.
    */
   rowCap?: number;
+  cost?: AssembleCost;
+}
+
+// Absent, the budget pays for content alone. `fixed` gets the largest count the header can print.
+export interface AssembleCost {
+  item: (it: AssembledContextItem) => number;
+  fixed: (widest: number) => number;
 }
 
 export interface AssembledContextItem {
@@ -1538,9 +1556,11 @@ export function assemble(
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   let items: AssembledContextItem[] = [...olderItems, ...tailItems];
 
-  let tokens = items.reduce((acc, it) => acc + estimateTokens(it.content), 0);
+  const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
+  const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
+  let tokens = items.reduce((acc, it) => acc + itemCost(it), 0);
   let evicted = 0;
-  while (tokens > budget && items.length > 0) {
+  while (tokens > room && items.length > 0) {
     let worstIdx = -1;
     let worstStrength = Infinity;
     for (let i = 0; i < items.length; i++) {
@@ -1551,7 +1571,7 @@ export function assemble(
       }
     }
     if (worstIdx === -1) break;
-    const cost = estimateTokens(items[worstIdx].content);
+    const cost = itemCost(items[worstIdx]);
     items = items.filter((_, i) => i !== worstIdx);
     tokens -= cost;
     evicted++;
@@ -1570,7 +1590,7 @@ export interface DrillDownOpts {
   /**
    * Optional token budget. When set, children are appended in chronological
    * order (created ASC) until adding the next child would exceed the budget.
-   * Token cost = ceil(content.length / 4) per child.
+   * Token cost = the child's printed line under `cost`, else ceil(content.length / 4).
    *
    * For depth > 1, the budget is GLOBAL cumulative (NOT per-level).
    */
@@ -1583,11 +1603,21 @@ export interface DrillDownOpts {
    * construction).
    */
   depth?: number;
+  cost?: DrillDownCost;
+}
+
+export interface DrillDownSummary { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null }
+export interface DrillDownChild { id: string; content: string; layer: string; dagLevel: number; created: string }
+
+// Absent, the budget pays for child content alone. `fixed` gets the largest child count the heading can print.
+export interface DrillDownCost {
+  child: (c: DrillDownChild) => number;
+  fixed: (summary: DrillDownSummary, widest: number) => number;
 }
 
 export interface DrillDownResult {
-  summary: { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null };
-  children: Array<{ id: string; content: string; layer: string; dagLevel: number; created: string }>;
+  summary: DrillDownSummary;
+  children: DrillDownChild[];
   totalChildren: number;
   truncated: boolean;
 }
@@ -1682,15 +1712,33 @@ export function drillDown(
     frontier = nextFrontier;
   }
 
+  const summaryOut: DrillDownSummary = {
+    id: summary.id,
+    content: summary.content,
+    // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
+    // level-0 children, never the BFS-depth-N total (independent-review MED #4).
+    descendantCount: summary.descendant_count ?? level0DirectCount,
+    earliestAt: summary.earliest_at ?? null,
+    latestAt: summary.latest_at ?? null,
+  };
+  const all: DrillDownChild[] = collected.map((c) => ({
+    id: c.id,
+    content: c.content,
+    layer: c.layer,
+    dagLevel: c.dag_level ?? 0,
+    created: c.created,
+  }));
+
   // Apply global cumulative token budget + limit cap on collected.
-  let children = collected;
+  let children = all;
   let truncated = false;
   if (opts.budget !== undefined) {
-    const out: MemoryEntry[] = [];
+    const out: DrillDownChild[] = [];
     let used = 0;
-    for (const c of collected) {
-      const t = estimateTokens(c.content);
-      if (out.length > 0 && used + t > opts.budget) {
+    const room = opts.budget - (opts.cost?.fixed(summaryOut, all.length) ?? 0);
+    for (const c of all) {
+      const t = opts.cost ? opts.cost.child(c) : estimateTokens(c.content);
+      if (out.length > 0 && used + t > room) {
         truncated = true;
         break;
       }
@@ -1705,25 +1753,8 @@ export function drillDown(
   }
 
   return {
-    summary: {
-      id: summary.id,
-      content: summary.content,
-      // v0.30 / E5: descendant_count stays the summary's STORED value
-      // (direct children at creation time). totalChildren below reflects
-      // the full BFS collection at the requested depth.
-      // independent-review MED #4 fold: legacy fallback uses level-0 direct
-      // count (NOT collected.length which is BFS-depth-N total).
-      descendantCount: summary.descendant_count ?? level0DirectCount,
-      earliestAt: summary.earliest_at ?? null,
-      latestAt: summary.latest_at ?? null,
-    },
-    children: children.map((c) => ({
-      id: c.id,
-      content: c.content,
-      layer: c.layer,
-      dagLevel: c.dag_level ?? 0,
-      created: c.created,
-    })),
+    summary: summaryOut,
+    children,
     // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
     // depth=1 this equals the eligible direct-children count (backward
     // compat). For depth>1 it is the cumulative count across levels.
@@ -2519,11 +2550,26 @@ export interface ContextOpts {
   currentSessionId?: string | null;
   /** Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
   prompt?: string;
+  /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
+  cost?: ContextCost;
+}
+
+/** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
+export interface ContextCost {
+  /** Tokens of one entry as printed. */
+  entry: (item: Pick<ContextResultEntry, 'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'>) => number;
+  /** Tokens of the headers and footer the block can print at this budget, reserved before any entry. */
+  fixed: (budget: number, can: { cross: boolean; promptRecall: boolean; ambient: boolean }) => number;
+  /** Tokens of the sections printed ahead of the memories, each as printed. */
+  snapshot: (s: TaskSnapshot) => number;
+  handoff: (h: SessionHandoff) => number;
+  trail: (events: SessionEvent[]) => number;
 }
 
 export interface ContextResultEntry {
   entry: MemoryEntry;
   score: number;
+  /** What this entry cost the budget: its printed line under `ContextOpts.cost`, else its memory text. */
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;
@@ -2605,12 +2651,6 @@ export async function getContext(
   const currentProjectName =
     opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
-  const ambientAdmit = (e: MemoryEntry): boolean =>
-    ambientAdmitEntry(e, currentProjectName, includeCrossProject);
-  // Superseded rows never inject, and ambientAdmitEntry regex-scans content for
-  // secrets, so WHICH rows reach this predicate is what loadAmbientEntries cares
-  // about below.
-  const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
 
   // Z1: decided before the ambient loads so the FTS candidate query below (pinned-only
   // branch) can piggyback on that connection instead of opening its own.
@@ -2623,19 +2663,20 @@ export async function getContext(
       ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(config.pinnedInject.promptRecallCandidates, 100, 1)) }
       : undefined;
 
-  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
-  const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
-    : { entries: [] };
-  const globalLoad: AmbientLoadResult = hasGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
-    : { entries: [] };
-  let localEntries = localLoad.entries;
-  let globalEntries = globalLoad.entries;
-
-  // Computed below, after markRetrieved runs, so avgStrength reflects the
-  // post-retrieval strengths rather than a stale pre-mutation snapshot.
-  let ambientState: AmbientState | undefined;
+  const cost = opts.cost;
+  const price = (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
+    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProjectName) })
+    : estimateTokens(entry.content);
+  const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
+  let left = cost
+    ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
+    : blockBudget;
+  // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry is.
+  const pays = (tokens: number): boolean => {
+    if (tokens > left) return false;
+    left -= tokens;
+    return true;
+  };
 
   // DF1 T2: bounded read — an orphaned snapshot (no later pre-compact
   // superseded it, no session-end closed it) must age out of this ambient
@@ -2677,14 +2718,43 @@ export async function getContext(
         limit: 5,
       }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
     : [];
+  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
+  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+  const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+
+  const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
+  let digestHiddenForHandoff = false;
+  const ambientAdmit = (e: MemoryEntry): boolean => {
+    // A printed handoff already carries the session's closing message, which its digest would print a second time.
+    if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) {
+      digestHiddenForHandoff = true;
+      return false;
+    }
+    return ambientAdmitEntry(e, currentProjectName, includeCrossProject);
+  };
+  // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
+  const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
+
+  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
+  const localLoad: AmbientLoadResult = hasLocal
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    : { entries: [] };
+  const globalLoad: AmbientLoadResult = hasGlobal
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
+    : { entries: [] };
+  let localEntries = localLoad.entries;
+  let globalEntries = globalLoad.entries;
+
+  // Computed after markRetrieved runs, so avgStrength reflects post-retrieval strengths.
+  let ambientState: AmbientState | undefined;
 
   if (
     !promptRecallPending &&
     localEntries.length === 0 &&
     globalEntries.length === 0 &&
-    !activeSnapshot &&
-    !sessionHandoff &&
-    recentSessionEvents.length === 0
+    !shownSnapshot &&
+    !shownHandoff &&
+    shownEvents.length === 0
   ) {
     return { entries: [], tokens: 0 };
   }
@@ -2698,8 +2768,8 @@ export async function getContext(
     if (!pinnedCfg.pinnedInject.enabled) {
       return { entries: [], tokens: 0 };
     }
-    // Effective budget: explicit opts.budget wins over config.
-    const effBudget = opts.budget !== undefined ? budget : pinnedCfg.pinnedInject.budget;
+    // Effective budget: explicit opts.budget wins over config, less what the sections took.
+    const effBudget = left;
     const nowP = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
     const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP);
     const selectedIds = new Set<string>();
@@ -2720,7 +2790,7 @@ export async function getContext(
         return {
           entry,
           score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
-          tokens: estimateTokens(entry.content),
+          tokens: price(entry, isGlobal),
           isGlobal,
         };
       })
@@ -2792,7 +2862,7 @@ export async function getContext(
         const gated = gatePromptRecall(p, candidateItems, gate);
         for (const g of gated) {
           if (selectedIds.has(g.item.id)) continue;
-          const tokens = estimateTokens(g.item.entry.content);
+          const tokens = price(g.item.entry, g.item.isGlobal, true);
           if (usedP + tokens > recentBudget) continue;
           selectedItems.push({ entry: g.item.entry, score: g.score, tokens, isGlobal: g.item.isGlobal, promptRecall: true });
           selectedIds.add(g.item.id);
@@ -2838,7 +2908,7 @@ export async function getContext(
         .map(({ entry, isGlobal }) => ({
           entry,
           score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
-          tokens: estimateTokens(entry.content),
+          tokens: price(entry, isGlobal),
           isGlobal,
         }));
 
@@ -2854,7 +2924,8 @@ export async function getContext(
     if (
       pinnedLocal.length === 0 &&
       pinnedGlobal.length === 0 &&
-      selectedItems.length === 0
+      selectedItems.length === 0 &&
+      !digestHiddenForHandoff
     ) {
       return { entries: [], tokens: 0 };
     }
@@ -2875,7 +2946,7 @@ export async function getContext(
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now),
-        tokens: estimateTokens(e.content),
+        tokens: price(e, false),
         isGlobal: false,
       }))
       .sort(compareScoredResults);
@@ -2884,7 +2955,7 @@ export async function getContext(
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now) * (1 / 1.2),
-        tokens: estimateTokens(e.content),
+        tokens: price(e, true),
         isGlobal: true,
       }))
       .sort(compareScoredResults);
@@ -2893,7 +2964,7 @@ export async function getContext(
 
     let used = 0;
     for (const r of combined) {
-      if (used + r.tokens > budget) continue;
+      if (used + r.tokens > left) continue;
       selectedItems.push(r);
       used += r.tokens;
     }
@@ -2901,6 +2972,7 @@ export async function getContext(
   } else {
     // Real query: hybrid search (global + local) or physics+hybrid (local only).
     let results: ContextResultEntry[];
+    const minResults = cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
     if (hasGlobal) {
       // searchBothHybrid loads from the store roots itself, so the ambient
       // filter above never saw its candidates. Admission runs INSIDE the
@@ -2909,38 +2981,46 @@ export async function getContext(
       // excluded row saturate the budget (codex rounds 1+3) or shadow its
       // admitted duplicate in the dedupe pass (codex round 4). Recall paths
       // never set entryFilter, so their behavior is unchanged.
+      const localIndex = loadIndex(ctx.hippoRoot);
+      const isGlobalHit = (e: MemoryEntry): boolean => !localIndex.entries[e.id];
       const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
-        budget,
+        budget: left,
+        minResults,
+        cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
         scope: activeScope,
         tenantId: ctx.tenantId,
         entryFilter: ambientAdmit,
       });
-      const localIndex = loadIndex(ctx.hippoRoot);
       results = merged.map((r) => ({
         entry: r.entry,
         score: r.score,
-        tokens: r.tokens,
-        isGlobal: !localIndex.entries[r.entry.id],
+        tokens: price(r.entry, isGlobalHit(r.entry)),
+        isGlobal: isGlobalHit(r.entry),
       }));
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
+      const localCost = cost && ((r: SearchResult) => price(r.entry, false));
       const ctxResults = usePhysicsCtx
         ? await physicsSearch(query, localEntries, {
-            budget,
+            budget: left,
+            minResults,
+            cost: localCost,
             hippoRoot: ctx.hippoRoot,
             physicsConfig: ctxConfig.physics,
             scope: activeScope,
           })
         : await hybridSearch(query, localEntries, {
-            budget,
+            budget: left,
+            minResults,
+            cost: localCost,
             hippoRoot: ctx.hippoRoot,
             scope: activeScope,
           });
       results = ctxResults.map((r) => ({
         entry: r.entry,
         score: r.score,
-        tokens: r.tokens,
+        tokens: price(r.entry, false),
         isGlobal: false,
       }));
     }
@@ -2986,8 +3066,9 @@ export async function getContext(
 
   if (limit < selectedItems.length) {
     selectedItems = selectedItems.slice(0, limit);
-    totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
+  selectedItems = dropHeldCopies(selectedItems, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
 
   // v39: annotate every returned entry with its origin and how it relates to
   // the active project, so renderers can demarcate cross-project inclusions.
@@ -2999,9 +3080,9 @@ export async function getContext(
 
   if (
     selectedItems.length === 0 &&
-    !activeSnapshot &&
-    !sessionHandoff &&
-    recentSessionEvents.length === 0
+    !shownSnapshot &&
+    !shownHandoff &&
+    shownEvents.length === 0
   ) {
     // LC1 F5 fix: this bare early-return used to skip tracing entirely — a
     // query that found nothing is exactly the coverage-gap signal Track LC
@@ -3089,9 +3170,9 @@ export async function getContext(
   return {
     entries: selectedItems,
     tokens: totalTokens,
-    activeSnapshot: activeSnapshot ?? undefined,
-    sessionHandoff: sessionHandoff ?? undefined,
-    recentEvents: recentSessionEvents.length > 0 ? recentSessionEvents : undefined,
+    activeSnapshot: shownSnapshot ?? undefined,
+    sessionHandoff: shownHandoff ?? undefined,
+    recentEvents: shownEvents.length > 0 ? shownEvents : undefined,
     ambientState,
   };
 }

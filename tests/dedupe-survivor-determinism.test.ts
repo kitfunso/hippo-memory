@@ -74,26 +74,19 @@ function permutationsOf3(): number[][] {
   return out;
 }
 
-// Near-duplicate probe pair: 14 tokens per entry, 13 shared, one word swapped
-// ("this" -> "last"). Jaccard = 13/15 = 0.8667 (> 0.7 dedupe threshold),
-// computed against src/search.ts textOverlap's tokenizer (lowercase,
-// punctuation-stripped, length>1 tokens, set-based Jaccard).
+// Duplicate probe pair: the same sentence, B with a double space before "this".
+// Dedup removes only text that matches apart from spacing; a swapped word is a
+// changed value and both copies stay (tests/sleep-keeps-both-versions.test.ts).
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';
-const CONTENT_B =
-  'The quarterly finance report shows revenue grew steadily across all four regions last year';
+const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
-// Three mutually near-duplicate contents for the permutation test: a 20
-// shared-token base sentence, each variant swapping a DIFFERENT single word
-// for a word that appears nowhere else in the set. Any two variants share
-// 18 of 20 tokens each (intersection 18, union 22) -> Jaccard 18/22 = 0.8182
-// (> 0.7), so all three pairs are near-duplicates of each other.
-const VARIANT_A =
-  'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+// Three mutual duplicates for the permutation test: one base sentence (B), with an
+// extra space at a different place in A and C, so A and C tie on length and B is shorter.
 const VARIANT_B =
-  'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
-const VARIANT_C =
-  'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
+  'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+const VARIANT_A = VARIANT_B.replace(' this time', '  this time');
+const VARIANT_C = VARIANT_B.replace(' each week', '  each week');
 
 describe('dedupe survivor determinism', () => {
   it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', () => {
@@ -268,15 +261,11 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('7. mergeContents equal-length tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
-    // Equal length (verified below), one same-length word swapped -->
-    // Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge
-    // pass fires and mergeContents' content.length primary key is a REAL
-    // tie; only the compareEntryIdentity tie key decides the base. Same
-    // `now` for both consolidate calls guards against decay flakiness.
+  it('7. mergeContents same-created tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
+    // One word swapped: Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge pass fires.
+    // Both rows share one `created`, so the newest-first key is a REAL tie and only compareEntryIdentity decides the base.
     const contentAlpha = 'cache refresh failure data pipeline alpha';
     const contentOmega = 'cache refresh failure data pipeline omega';
-    expect(contentAlpha.length).toBe(contentOmega.length);
 
     const now = new Date();
     const bases: string[] = [];
@@ -285,18 +274,18 @@ describe('dedupe survivor determinism', () => {
       const { home, restore } = tmpHome('hippo-dedupe-det-7-');
       try {
         for (const content of order) {
-          writeEntry(home, createMemory(content, { layer: Layer.Episodic }));
+          writeEntry(home, { ...createMemory(content, { layer: Layer.Episodic }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
         const semantics = loadAllEntries(home).filter(
-          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories]'),
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
-        // Content shape: '[Consolidated from 2 related memories]\n\n<base>'.
-        bases.push(semantics[0].content.split('\n\n')[1]);
+        // Content shape: '[Consolidated from 2 related memories, newest first]\n\n- <base>\n- <other>'.
+        bases.push(semantics[0].content.split('\n\n')[1].split('\n')[0]);
       } finally {
         restore();
       }
@@ -304,7 +293,7 @@ describe('dedupe survivor determinism', () => {
 
     expect(bases[0]).toBe(bases[1]);
     // content asc tie key: the lexicographically smaller content is the base.
-    expect(bases[0]).toBe(contentAlpha);
+    expect(bases[0]).toBe(`- ${contentAlpha}`);
   });
 
   it('8. strengthBucket maps non-finite strength to bucket 0 and the assembled comparator chain never returns NaN', () => {
@@ -423,34 +412,33 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: length desc -> content asc)', async () => {
-    // Guards: a future VARIANT_* edit that breaks the length tie/non-tie shape fails here loudly.
-    expect(VARIANT_A.length).toBe(VARIANT_C.length);
-    expect(VARIANT_B.length).toBeLessThan(VARIANT_A.length);
+  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: created desc -> content asc)', async () => {
+    // Distinct texts, one word swapped each: the merge writes each distinct text once, so the spacing-only VARIANT_* would make one bullet.
+    const textA = 'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textB = 'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textC = 'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
 
     const now = new Date();
     const variants = [
-      { content: VARIANT_A, tags: ['t-a'] },
-      { content: VARIANT_B, tags: ['t-b'] },
-      { content: VARIANT_C, tags: ['t-c'] },
+      { content: textA, tags: ['t-a'] },
+      { content: textB, tags: ['t-b'] },
+      { content: textC, tags: ['t-c'] },
     ];
-    const expectedOrder = [...variants].sort(
-      (a, b) => b.content.length - a.content.length || (a.content < b.content ? -1 : a.content > b.content ? 1 : 0),
-    );
-    const expectedBlock = expectedOrder.map((v) => `- ${v.content.slice(0, 120)}`).join('\n');
+    const expectedOrder = [...variants].sort((a, b) => (a.content < b.content ? -1 : a.content > b.content ? 1 : 0));
+    const expectedBlock = expectedOrder.map((v) => `- ${v.content}`).join('\n');
 
     for (const perm of permutationsOf3()) {
       const { home, restore } = tmpHome('hippo-dedupe-det-14-');
       try {
-        for (const idx of perm) {
-          writeEntry(home, createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }));
+        for (const idx of perm) { // one shared `created`, so the ingest order cannot reach the primary key
+          writeEntry(home, { ...createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
         const semantics = loadAllEntries(home).filter(
-          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories]'),
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
         expect(semantics[0].content.split('\n\n')[1]).toBe(expectedBlock);

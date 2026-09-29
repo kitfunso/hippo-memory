@@ -55,10 +55,18 @@ import { computeSchemaFit } from '../dist/memory.js';
 
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
 
+// mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
+const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));
+
 beforeEach(clearAblationEnv);
+beforeEach(() => {
+  process.env.HIPPO_MV_SCRATCH_ROOT = HARNESS_SCRATCH_ROOT;
+});
 afterEach(clearAblationEnv);
 
-afterAll(cleanupScratch);
+afterAll(() => {
+  fs.rmSync(HARNESS_SCRATCH_ROOT, { recursive: true, force: true });
+});
 
 // Typed seams over the untyped .mjs harness surface (CONFIG / readJsonl /
 // readJson / scratchRootDir all import as `any`, per the @ts-expect-error
@@ -444,9 +452,12 @@ describe('scratch-cleanup containment guard (codex review P2 fix verification)',
 
 describe('scratch-store hygiene', () => {
   it('scratch stores live under the OS temp dir, never under the repo', () => {
+    // Drop this file's override so the production default path is what gets checked.
+    delete process.env.HIPPO_MV_SCRATCH_ROOT;
     // SAFETY: scratchRootDir() (common.mjs) always returns the scratch-root
     // path as a string; it never returns a filesystem handle or undefined.
     const root = scratchRootDir() as string;
+    expect(path.relative(os.tmpdir(), root).startsWith('..')).toBe(false);
     expect(root.toLowerCase()).not.toContain('hippo-wt-lc2e1');
     expect(fs.existsSync(root) || true).toBe(true); // root need not exist yet; just checking the path shape
   });
