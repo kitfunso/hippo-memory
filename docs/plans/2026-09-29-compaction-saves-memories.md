@@ -50,10 +50,11 @@ Five real PostCompact payloads, paths scrubbed, are in `tests/fixtures/compactio
 3. **post-compact** (cli.ts:10445-10453): read stdin, do the work, then print exactly one line (design 9). Each step
    is independent: a failure logs to stderr and the next runs.
    a. **Record the summary** first, in one short statement: the `<summary>` body with `<analysis>` removed, through
-      `redactSecretsStrict` (secret-detect.ts:105), cap 256 KB, plus every parsed item in full in `items_json`;
-      status `summarised`. Updates the session's latest `started` record, or inserts one if pre-compact wrote none.
-   b. **Items**: write through the shared gated write (design 7); `items_written` and status `done` in the same
-      transaction as the last item. Missing section: log "no memories section" (the length-pressure measure).
+      `redactSecretsStrict` (secret-detect.ts:105), cap 256 KB, plus every parsed item in full in `items_json`,
+      each item through the same `redactSecretsStrict`, so no secret reaches the record; status `summarised`. Updates the session's latest `started` record, or inserts one if pre-compact wrote none.
+   b. **Items**: an item that `redactSecretsStrict` changes is skipped as `skipped:secret` before any write, so a
+      row never holds what the record redacted. The rest go through the shared gated write (design 7);
+      `items_written` and status `done` in the same transaction as the last item. Missing section: log "no memories section" (the length-pressure measure).
    c. No embedding in the hook. capture's fire-and-forget embed call (capture.ts:984) keeps Node alive past the
       hook's `break`; items get vectors from the next embedAll or sleep backfill.
    d. **Busy store**: the hook opens the DB with a short wait (about 2s; openHippoDb, db.ts:2593, gains an option;
@@ -96,10 +97,14 @@ Five real PostCompact payloads, paths scrubbed, are in `tests/fixtures/compactio
      same `duplicateKey` (same-text.ts: equal apart from spacing; case and punctuation kept). Lookup and insert run
      in one `BEGIN IMMEDIATE`, so two sessions writing the same text cannot both insert. Loaded by SQL, never
      loadAllEntries.
-7. **One gated write** shared by capture, compaction items and (PR 2) the note sync: createMemory options in, then
-   isContentWorthStoring (audit.ts:181), the secret veto, writeEntry, RejectedValueError (rejection.ts:45) as a
-   skip; returns `'written' | 'skipped:<reason>'`. Capture's write path (capture.ts:945-986) moves onto it, keeping
-   its embed call outside. No new behaviour for capture.
+7. **One gated write** shared by capture, compaction items and (PR 2) the note sync: the caller's open handle and
+   createMemory options in, then isContentWorthStoring (audit.ts:181), the secret veto, stampOriginProject and
+   `writeEntryDbOnly` (store.ts:1660) on that handle, RejectedValueError (rejection.ts:45) as a skip with
+   `auditRejectionRefusal` (store.ts:84) on the same handle; returns `'written' | 'skipped:<reason>'`. Never
+   `writeEntry` (store.ts:1613): it opens a second handle, which waits on the lock the repeat check's
+   `BEGIN IMMEDIATE` holds and fails. The caller runs `writeEntryMirrors` for each written row after its
+   transaction commits, the pattern supersede already uses. Capture's write path (capture.ts:945-986) moves onto
+   it with its own `openStore` handle, keeping its embed call outside. No new behaviour for capture.
 8. **Supersede keeps provenance**: api.supersede's createMemory (api.ts:2050-2059) copies `origin_project` and
    `source_session_id` from the old row. Today it drops origin, and stampOriginProject (api.ts:2097) then derives it
    from the store: in the global store every superseded project row turns user-global. Root fix, all rows.
