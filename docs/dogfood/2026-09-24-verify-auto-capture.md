@@ -18,7 +18,9 @@ hippo hook install claude-code
 
 This adds only what is missing, and is safe to re-run.
 
-## 2. Compaction capture works?
+## 2. Compaction snapshot works?
+
+**Changed 2026-09-26 (#258):** compaction now saves only the task snapshot. It no longer saves memories, so the rule below is not recallable until the session ends and SessionEnd capture runs. Saving memories at every compaction is being rebuilt; see ROADMAP Track Z, "Pre-compact audit".
 
 1. Start `claude` in the project and have a short conversation that states a rule plainly, for example:
    > "Never run npm install here; this repo uses pnpm."
@@ -34,11 +36,11 @@ hippo recall "pnpm npm install" --budget 500
 
 **Expect:**
 - right after `/compact`, Claude Code shows "Hippo saved your task snapshot … before compacting". If it does not appear, run `hippo hook install claude-code` (it adds the `PostCompact` hook) and check your Claude Code is recent enough to have that hook;
-- the log says `snapshot saved` and `capture: N items captured`;
+- the log says `snapshot saved`;
 - `snapshot show` prints the task;
-- recall finds the rule.
+- recall does not find the rule yet. Close the session with `/exit`, then run the recall again: SessionEnd capture should have stored it. SessionEnd fires only when a session ends (`/exit`, `/clear`, logout), so a session left open gets no capture. Whether archiving a session in the VS Code panel fires it is untested.
 
-**Known limit:** capture is rule-based, with no AI model. A rule phrased as "we use pnpm, never npm, because…" can be missed. The sandbox run missed exactly that one. Write down what it misses.
+**Known limit:** capture is rule-based, with no AI model, and reads only the last 20 user and 10 assistant turns. A rule phrased as "we use pnpm, never npm, because…" can be missed. The sandbox run missed exactly that one. Write down what it misses.
 
 ## 3. Failed-tool capture works?
 
