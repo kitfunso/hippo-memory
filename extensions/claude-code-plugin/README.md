@@ -1,6 +1,6 @@
 # Hippo Memory - Claude Code Plugin
 
-Biologically-inspired memory for Claude Code. Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation compresses episodes into patterns.
+Biologically-inspired memory for Claude Code. Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 
 ## Install
 
@@ -83,9 +83,9 @@ claude-code-plugin/
 | | Hippo | claude-mem |
 |---|---|---|
 | Memory model | Decay + retrieval strengthening | Save everything |
-| API calls | Zero (all local) | Uses Claude API for compression |
+| API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
 | Cross-tool | Works across Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| Token cost | ~1500 tokens/session (configurable) | Variable |
+| Token cost | About 1,500 tokens at session start (configurable), plus the pinned block when it changes | Variable |
 | Outcome feedback | Yes (strengthens/weakens memories) | No |
 | Error priority | 2x half-life for errors | No distinction |
 | Memecoin | No | Yes ($CMEM on Solana) |

@@ -10,12 +10,10 @@ Four integration methods, from easiest to most powerful.
 hippo setup
 ```
 
-Detects OpenCode at `~/.config/opencode/` and installs two hooks in `opencode.json`:
+Detects OpenCode at `~/.config/opencode/` and installs a plugin at `~/.config/opencode/plugins/hippo.ts`:
 
-- `SessionEnd` runs `hippo session-end --log-file ~/.hippo/logs/opencode-sleep.log`. This spawns a detached child that runs `hippo sleep` then `hippo capture --last-session` in sequence and tees both outputs to the log file. The parent returns in <100ms so the TUI teardown cannot SIGTERM the child mid-consolidation.
-- `SessionStart` runs `hippo last-sleep` at the next startup — prints the previous consolidation between banners and clears the log.
-
-OpenCode added Claude-Code-compatible session hooks in Jan 2026, so the schema matches exactly.
+- When a session goes idle, the plugin runs `hippo session-end`. This spawns a detached child that runs `hippo sleep`, so the TUI teardown cannot SIGTERM it mid-consolidation. OpenCode passes no transcript, so hippo does not read OpenCode's conversation.
+- When a session is created, the plugin runs `hippo last-sleep`.
 
 To install manually: `hippo hook install opencode`. To also patch `AGENTS.md` in a project, run `hippo init` inside the project.
 
@@ -37,7 +35,7 @@ Add hippo as an MCP server in your OpenCode config:
 }
 ```
 
-This exposes tools: `hippo_recall`, `hippo_remember`, `hippo_outcome`, `hippo_context`, `hippo_status`, `hippo_learn`.
+This exposes 13 tools, listed in the [MCP server README](../extensions/mcp/README.md#tools).
 
 ---
 

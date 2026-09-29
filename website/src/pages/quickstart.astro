@@ -30,7 +30,7 @@ const loop = [
   { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Store a memory. Errors get a longer half-life and stick.' },
   { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget, ranked by relevance and strength.' },
   { cmd: 'hippo outcome --good', note: 'Tell hippo the recall helped. Useful memories decay slower.' },
-  { cmd: 'hippo sleep', note: 'Consolidate repeats into patterns, decay the unused, flag conflicts.' },
+  { cmd: 'hippo sleep', note: 'Merge related episodes, decay the unused, flag conflicts.' },
 ];
 
 const howTo = {
@@ -56,7 +56,7 @@ const howTo = {
             Add memory in <span class="text-gradient">two commands</span>.
           </h1>
           <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
-            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run <code>hippo init</code> in a project, and it wires itself into the agents that project uses.
+            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run <code>hippo init</code> in a project, and it installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's <code>hooks.json</code> when Codex is installed, and adds instructions to an existing <code>AGENTS.md</code> for Codex, Cursor, OpenClaw and Pi.
           </p>
         </div>
         <!-- Setup-at-a-glance card fills the hero's right side on wide viewports. -->

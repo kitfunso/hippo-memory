@@ -71,8 +71,8 @@ If you prefer manual control:
 hippo sleep
 ```
 
-This decays unretrieved memories, merges related episodes into patterns, and
-removes entries below the strength threshold.
+This decays unretrieved memories, merges related episodes into one memory, and
+moves faded memories to a dormant store, deleted after 180 days unless restored.
 
 ### Check memory health
 
@@ -92,8 +92,8 @@ hippo init
 ```
 
 Hippo auto-detects Claude Code and:
-1. Patches `CLAUDE.md` with the hook block above
-2. Adds a `SessionEnd` hook to `~/.claude/settings.json` so `hippo sleep` runs on session exit
+1. Patches `CLAUDE.md` with hippo's own block, which is shorter than the snippet above
+2. Adds 7 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
 
 No copy-paste needed, no cron required.
 

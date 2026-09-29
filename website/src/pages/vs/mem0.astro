@@ -34,7 +34,7 @@ const strip = [
 const qa = [
   {
     q: 'Is hippo an open-source mem0 alternative?',
-    a: "Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project, needs no account or API key, and `hippo init` wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. mem0 is Apache-2.0 and runs as a library, a self-hosted server or a hosted platform; its open-source library calls a language model to extract memories, OpenAI by default.",
+    a: "Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, keeps memories in SQLite in your project, needs no account or API key, and `hippo init` installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's `hooks.json` when Codex is installed, and adds instructions to an existing `AGENTS.md` for Codex, Cursor, OpenClaw and Pi. mem0 is Apache-2.0 and runs as a library, a self-hosted server or a hosted platform; its open-source library calls a language model to extract memories, OpenAI by default.",
   },
   {
     q: "Is mem0's 94.4 on LongMemEval better than hippo's 85.6%?",
@@ -58,10 +58,13 @@ const qa = [
       <p>
         Both are open-source memory for AI agents. mem0 uses a language model to extract memories, and memories stored
         through its hosted MCP server live in your Mem0 account. Hippo keeps memories in SQLite on your machine, needs no
-        account and no model, and wires itself into the coding agents it finds.
+        account and no model, and installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's
+        <code>hooks.json</code> when Codex is installed, and adds instructions to an existing
+        <code>AGENTS.md</code> for Codex, Cursor, OpenClaw and Pi.
       </p>
       <p>
-        Both mark an older fact superseded when a newer one replaces it; mem0 does that on its hosted platform. Hippo also
+        mem0 marks an older fact superseded when a newer one replaces it, on its hosted platform; in hippo you run
+        <code>hippo supersede</code> yourself. Hippo also
         lets you mark a recalled memory wrong with <code>hippo outcome --bad</code>, and it drops out of the top results.
       </p>
     </PageIntro>

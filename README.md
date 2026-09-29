@@ -12,7 +12,7 @@
   <img src="https://raw.githubusercontent.com/kitfunso/hippo-memory/master/assets/hippo-init.svg" alt="hippo init adding memory to one project" width="720">
 </p>
 
-Hippo keeps your coding agents' memories in a SQLite store on your machine, with markdown mirrors you can read and commit. Search is BM25 out of the box, with no model and no network call; embeddings are an optional install. `hippo init` wires it into the agents you already use (Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi), and any MCP client can connect. Mark a memory wrong and it ranks lower; a newer fact replaces the old one. Zero runtime deps.
+Hippo keeps your coding agents' memories in a SQLite store on your machine, with markdown mirrors you can read and commit. Search is BM25 out of the box, with no model and no network call; embeddings are an optional install. `hippo init` installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's `hooks.json` when Codex is installed (Codex runs them once you trust them in `/hooks`), and adds instructions to an existing `AGENTS.md` for Codex, Cursor, OpenClaw and Pi. Any MCP client can connect. Mark a memory wrong and it ranks lower; run `hippo supersede` and the old fact leaves recall. Zero runtime deps.
 
 Install it, then run `hippo init` inside one project. Init creates the project's `.hippo/` store and adds a block to the `CLAUDE.md` or `AGENTS.md` already there. On your machine it adds hooks for the agents it finds, such as Claude Code's in `~/.claude/settings.json`, and a daily 6:15am run. [What hippo init changes](#what-hippo-init-changes) lists all of it and the flags that skip each part.
 
@@ -39,9 +39,9 @@ Dependencies:  Zero runtime deps. Node.js 22.16+. Optional embeddings: bring-you
 
 Most "AI memory" systems save everything and search later. That's storage with search on top. A note that turned out wrong ranks the same as one that held up, and an old fact sits beside the one that replaced it.
 
-Hippo learns from outcomes. When a recalled memory turns out wrong, mark it bad and it drops out of the top results. Memories you keep using get stronger. Those two are the parts we measured helping retrieval, on a synthetic test ([mechanism audit, round 2](https://github.com/kitfunso/hippo-memory/pull/232)). When a fact changes, the new version supersedes the old one; we have not measured whether that helps. The design borrows from the hippocampus (decay, three layers, sleep consolidation), but that is inspiration. In our tests, decay tied with decay switched off and sleep lowered recall ([Benchmarks](#benchmarks)).
+Hippo learns from outcomes. When a recalled memory turns out wrong, mark it bad and it drops out of the top results. Memories you keep using get stronger. Those two are the parts we measured helping retrieval, on a synthetic test ([mechanism audit, round 2](https://github.com/kitfunso/hippo-memory/pull/232)). When a fact changes, run `hippo supersede` and the old version leaves recall; we have not measured whether that helps. The design borrows from the hippocampus (decay, three layers, sleep consolidation), but that is inspiration. In our tests, decay tied with decay switched off and sleep lowered recall ([Benchmarks](#benchmarks)).
 
-It also fixes the portability problem. Your ChatGPT memories don't travel to Claude. Your `.cursorrules` don't travel to Codex. Hippo is one process behind every agent. CLAUDE.md, Cursor rules, ChatGPT exports, Slack history, all in one SQLite store, all queryable from any tool that speaks MCP or HTTP.
+It also fixes the portability problem. Your ChatGPT memories don't travel to Claude. Your `.cursorrules` don't travel to Codex. Hippo is one store behind every agent. CLAUDE.md, Cursor rules, ChatGPT exports, Slack history, all in one SQLite store, all queryable from any tool that speaks MCP or HTTP.
 
 ---
 
@@ -56,7 +56,7 @@ claim we retracted.
 - **LongMemEval oracle split, all 500 questions in one pooled store, BM25 only, no embeddings, v0.11: R@5 = 74.0%** ([benchmarks/README.md](benchmarks/README.md), scripts in [benchmarks/longmemeval/](benchmarks/longmemeval/)). A different setup from the per-haystack results under [Benchmarks](#benchmarks), so the two are not a before and after.
 - **On a private 300-query developer store, R@1 0.41 to 0.62 with `hippo recall "<query>" --reranker jev`**, the free local cross-encoder against Jev ([full eval](docs/evals/2026-09-19-jev-reranker.md)). The opt-in [TypeSafe Jev](https://typesafe.ai) reranker, off by default, about 0.0004 USD a recall. 2000-draw paired bootstrap; the margin held in 20 of 20 seeds and a permutation null reached it in 0 of 200 runs. Ranking only: three graded tests on one 150-question LongMemEval set did **not** show a better answer rate than the free local cross-encoder, and that negative result is in the same doc. What it buys today is a shorter context: on that set, 2 memories ranked by Jev answered as well as 5 ranked by the cross-encoder.
 - **Staged Slack corpus, 10 incident scenarios: recall beat transcript replay in 10 of 10** ([benchmarks/e1.3/](benchmarks/e1.3/)). The answers sit mid-channel by design. In every scenario hippo's top 10 results held all the answer messages, and the channel's last 10 messages held none.
-- **Slack connector, 1000-event ingestion smoke: 0 outbound HTTP** ([benchmarks/e1.3/](benchmarks/e1.3/)). Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero. Recall makes no network call by default. One default does: `hippo sleep` sends memory text to Anthropic for fact extraction when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that off. Opt-in features such as the Jev reranker above, the LLM reranker and the API embedders also call out.
+- **Slack connector, 1000-event ingestion smoke: 0 outbound HTTP** ([benchmarks/e1.3/](benchmarks/e1.3/)). Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero. Recall makes no network call by default. One default does: `hippo sleep` sends memory text to Anthropic for fact extraction when `ANTHROPIC_API_KEY` is set. Sleep runs at the end of every Claude Code and OpenCode session and in the daily job, so with the key set the call happens without you asking. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that off. Opt-in features such as the Jev reranker above, the LLM reranker and the API embedders also call out.
 - **3,500+ tests on a real database.** No module mocks and no mocked store; only paid network calls are stubbed. Project rule. The one mocks-vs-prod divergence that bit us early is now the constraint that kept the next ten releases honest.
 - **3-cluster fixture where BM25 alone cannot discriminate: dlPFC goal-conditioned cluster discrimination passes 3 of 3 queries.** Full goal stack with policy weighting and lifespan-windowed outcome propagation, one query per goal; deterministic test in [`benchmarks/micro/results/b3-depth.json`](benchmarks/micro/results/b3-depth.json).
 
@@ -89,7 +89,7 @@ hippo init
 hippo init --scan ~
 ```
 
-After setup, `hippo sleep` runs at session end (via auto-installed agent hooks) and does five things:
+After setup, `hippo sleep` runs when a Claude Code or OpenCode session ends, and in the daily 6:15am job for every project. Codex runs it at session end only if you installed its wrapper. It does five things:
 
 1. **Learns** from today's git commits
 2. **Imports** new entries from the project's Claude Code auto memory
@@ -241,7 +241,7 @@ hippo session resume              # re-inject latest handoff as context
 
 ### Working memory
 
-Working memory is a bounded scratchpad for current-state notes. It's separate from long-term memory and gets cleared between sessions.
+Working memory is a bounded scratchpad for current-state notes. It's separate from long-term memory. Entries stay until you run `hippo wm flush`.
 
 ```bash
 hippo wm push --scope repo \
@@ -271,7 +271,7 @@ hippo recall "data pipeline" --why --limit 5
 
 ## How It Works
 
-Input enters the buffer. Important things get encoded into episodic memory. During "sleep," repeated episodes compress into semantic patterns. Weak memories decay and disappear.
+Input enters the buffer. Important things get encoded into episodic memory. During "sleep," related episodes are merged into one semantic memory, by word overlap. Weak memories decay and disappear.
 
 The store is SQLite (`.hippo/hippo.db`). The markdown files are mirrors written after each change. `index.json` is no longer refreshed by writes, deletes or recalls: it is written only when you call `rebuildIndex()` from the package, so a copy an older version left on disk goes stale. Read the store through the CLI, the MCP server or the HTTP API.
 
@@ -279,7 +279,7 @@ The store is SQLite (`.hippo/hippo.db`). The markdown files are mirrors written 
 flowchart TD
     I[New information] --> B[Buffer<br/>session-only, no decay]
     B -->|encode: tags, strength, half-life| E[Episodic Store<br/>timestamped, decay by default<br/>retrieval strengthens, errors stick]
-    E -->|hippo sleep<br/>replay + merge| S[Semantic Store<br/>compressed patterns, stable<br/>schema-aware]
+    E -->|hippo sleep<br/>replay + merge| S[Semantic Store<br/>merged memories, stable<br/>schema-aware]
     E -.->|decay| X[forgotten]
     S -.->|recall| E
     classDef bio fill:#fff4dc,stroke:#a8742d,color:#2b1b00
@@ -373,14 +373,16 @@ One-off decisions don't repeat, so they can't earn their keep through retrieval 
 
 ```bash
 hippo decide "Use PostgreSQL for all new services" --context "JSONB support"
-# Decision recorded: mem_a1b2c3
+# Decision recorded: #1
+#   memory: mem_a1b2c3
 
 # Later, when the decision changes:
 hippo decide "Use CockroachDB for global services" \
   --context "Need multi-region" \
   --supersedes mem_a1b2c3
-# Superseded mem_a1b2c3 (half-life halved, marked stale)
-# Decision recorded: mem_d4e5f6
+# Decision recorded: #2
+#   memory: mem_d4e5f6
+#   supersedes memory: mem_a1b2c3 (decision #1 superseded)
 ```
 
 ---
@@ -420,7 +422,7 @@ When context is generated, confidence is shown inline:
 
 Agents can see at a glance what's established fact vs. a pattern worth questioning.
 
-Memories unretrieved for 30+ days are automatically marked `stale` during the next `hippo sleep`. If one gets recalled again, Hippo wakes it back up to `observed` so it can earn trust again instead of staying permanently stale.
+A memory not recalled for 30 days is shown as aged when it is read, and recalling it clears that. Pinned and `verified` memories are exempt. Nothing in the store changes.
 
 ### Conflict tracking
 
@@ -456,7 +458,7 @@ Three modes: `observe` (default), `suggest`, `assert`. Choose based on how direc
 
 ### Sleep consolidation
 
-Run `hippo sleep` and episodes compress into patterns.
+Run `hippo sleep` and related episodes merge into one memory.
 
 ```bash
 hippo sleep
@@ -641,7 +643,7 @@ hippo watch "npm run build"
 | `hippo capture --stdin` | Extract memories from piped conversation text |
 | `hippo capture --file <path>` | Extract memories from a file |
 | `hippo capture --dry-run` | Preview extraction without writing |
-| `hippo sleep` | Run consolidation (decay + merge + compress) |
+| `hippo sleep` | Run consolidation (decay + merge) |
 | `hippo sleep --dry-run` | Preview consolidation without writing |
 | `hippo status` | Memory health: counts, strengths, last sleep |
 | `hippo outcome --good` | Strengthen last recalled memories |
@@ -722,7 +724,7 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 | Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
 | Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
-| OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
+| OpenClaw | `.openclaw` or `AGENTS.md` | `AGENTS.md`; the native plugin is a separate install: `openclaw plugins install hippo-memory` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
 
@@ -748,11 +750,11 @@ This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the
 The block asks for nothing a hook already does, because each extra tool call re-reads the whole context. Re-running `hippo init` swaps a block an older hippo wrote for the current one, as long as nobody edited it. It leaves an edited block alone and says so, and never touches text outside the markers.
 
 For Claude Code, it also adds 7 hook entries to `~/.claude/settings.json`:
-- a `SessionEnd` hook that runs `hippo sleep` and then `hippo capture` on the session's transcript when the session exits
+- a `SessionEnd` hook that runs `hippo sleep` and then `hippo capture` when the session exits. Capture matches the last 20 user and 10 assistant messages of the transcript against word patterns for decisions, rules, errors and preferences. It uses no model and does not read earlier turns, so record lessons with `hippo remember` as you go.
 - a `SessionStart` hook that prints the previous session's consolidation output
-- a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus the last 5 writes, so fresh same-session lessons appear on the next prompt before you pin them. The block is rendered without live strength percentages, so it stays byte-identical while its memories do not change, and it is sent only when it changed since the session's last prompt: an unchanged block is skipped, resent every 10 skips (`pinnedInject.refreshTurns`, `0` never resends) and resent after compaction. `{"pinnedInject":{"skipUnchanged":false}}` sends it every turn as before. Opt out entirely with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
+- a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus the 5 newest memories in the store, so fresh same-session lessons appear on the next prompt before you pin them. It does not read your prompt unless you set `{"pinnedInject":{"promptRecall":true}}`, which swaps the 5 newest for memories that match the prompt. The block is rendered without live strength percentages, so it stays byte-identical while its memories do not change, and it is sent only when it changed since the session's last prompt: an unchanged block is skipped, resent every 10 skips (`pinnedInject.refreshTurns`, `0` never resends) and resent after compaction. `{"pinnedInject":{"skipUnchanged":false}}` sends it every turn as before. Opt out entirely with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
 - a `PreCompact` hook that runs `hippo pre-compact` before the transcript gets summarized. It saves a working-state snapshot (task/summary/next step) so mid-session compaction can't drop it; the `SessionEnd` hook still owns extracting durable memories.
-- a second `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume`, printing that snapshot plus the recent session trail back into context right after compaction.
+- a second `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume`, printing that snapshot back into context right after compaction, if it is under 15 minutes old.
 - a `PostCompact` hook that runs `hippo post-compact`, which tells you what was saved ("Hippo saved your task snapshot before compacting."). It prints nothing when nothing was saved.
 - a `PostToolUseFailure` hook that runs `hippo capture-error`, which stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once. It also logs every failure, stored or not, for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days.
 
@@ -1033,7 +1035,7 @@ Run `npm install -g hippo-memory`, then `hippo init` in the project. If the proj
 
 ### Which agents does hippo work with?
 
-`hippo init` detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. It only patches instruction files that already exist. Any MCP client can use the [MCP server](#mcp-server), and other tools can call the CLI or the HTTP API that `hippo serve` starts.
+`hippo init` detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. It installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's `hooks.json` when Codex is installed (Codex runs them once you trust them in `/hooks`), and adds instructions to an existing `AGENTS.md` for Codex, Cursor, OpenClaw and Pi. It only patches instruction files that already exist. Any MCP client can use the [MCP server](#mcp-server), and other tools can call the CLI or the HTTP API that `hippo serve` starts.
 
 ### Can I use hippo as an MCP memory server?
 
@@ -1041,7 +1043,7 @@ Yes. `hippo mcp` runs the server over stdio, and `npx -y hippo-memory mcp` runs 
 
 ### How is hippo different from mem0?
 
-mem0 uses a language model to extract memories, OpenAI by default in its open-source library, and memories stored through its hosted MCP server live in your Mem0 account ([mem0 docs](https://docs.mem0.ai/platform/mem0-mcp), checked 2026-09-28). Hippo stores memories in SQLite on your machine, needs no account and no model, and `hippo init` wires it into the coding agents it finds. mem0's platform and hippo both mark an older fact superseded when a newer one replaces it. Hippo also lets you mark a recalled memory wrong with `hippo outcome --bad`, and it drops out of the top results.
+mem0 uses a language model to extract memories, OpenAI by default in its open-source library, and memories stored through its hosted MCP server live in your Mem0 account ([mem0 docs](https://docs.mem0.ai/platform/mem0-mcp), checked 2026-09-28). Hippo stores memories in SQLite on your machine, needs no account and no model, and `hippo init` wires it into the coding agents it finds. mem0's platform marks an older fact superseded when a newer one replaces it; in hippo you run `hippo supersede` yourself. Hippo also lets you mark a recalled memory wrong with `hippo outcome --bad`, and it drops out of the top results.
 
 ### Is this just RAG?
 

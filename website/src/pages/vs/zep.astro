@@ -19,7 +19,7 @@ const qa = [
   },
   {
     q: 'Is hippo a Zep alternative?',
-    a: 'Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, stores memories in SQLite in your project, needs no account, graph database or model, and `hippo init` wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. Zep fits when you want a managed service that builds a knowledge graph from business data, documents and conversations.',
+    a: 'Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, stores memories in SQLite in your project, needs no account, graph database or model, and `hippo init` installs hooks for Claude Code and OpenCode, adds 2 hooks to `hooks.json` for Codex when Codex is installed, and adds instructions to an existing `AGENTS.md` for Codex, Cursor, OpenClaw and Pi. Zep fits when you want a managed service that builds a knowledge graph from business data, documents and conversations.',
   },
   {
     q: "Is Zep's 90.2% on LongMemEval comparable to hippo's 85.6%?",
@@ -36,7 +36,9 @@ const qa = [
       <p>
         Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its
         self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise
-        plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
+        plan. Hippo runs on your machine with no account. It installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's
+        <code>hooks.json</code> when Codex is installed, and adds instructions to an existing <code>AGENTS.md</code> for
+        Codex, Cursor, OpenClaw and Pi.
       </p>
       <p>
         Both keep an old fact when a newer one replaces it. Graphiti gives facts validity windows and invalidates old ones

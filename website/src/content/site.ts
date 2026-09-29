@@ -18,7 +18,7 @@ export const site = {
   // Hero headline, split for accent emphasis: what works on day one leads.
   tagline: { lead: 'Local memory for', accent: 'the agents you already use.' },
   description:
-    "Hippo keeps your coding agents' memories in SQLite on your machine. Search needs no model or network call, and hippo init wires it into Claude Code, Codex and Cursor; any MCP client can connect too. Mark a memory wrong and it ranks lower; a newer fact replaces the old one.",
+    "Hippo keeps your coding agents' memories in SQLite on your machine. Search needs no model or network call. hippo init installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's hooks.json when Codex is installed, and adds instructions to an existing AGENTS.md for Codex, Cursor, OpenClaw and Pi; any MCP client can connect too. Mark a memory wrong and it ranks lower; run hippo supersede and the old fact leaves recall.",
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init',
   // Every page that offers the scan states what it changes before the command.
@@ -68,7 +68,7 @@ export const nav = [
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-/** An illustrated two-day Claude Code session with hippo's hooks; the hippo lines paraphrase what hippo does (capture-error prints nothing).
+/** An illustrated two-day Claude Code session with hippo's hooks; the stored memory is the tool name plus the error text, as capture-error writes it (it prints nothing).
  *  Kinds: note = day label, cmd = prompt, out = agent output, err = failed tool call, caught = hippo storing it,
  *  ok = hippo, mem = a memory in context. */
 export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' | 'ok' | 'mem'; text: string }> = [
@@ -80,14 +80,14 @@ export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' |
   { kind: 'note', text: 'Tuesday · new session' },
   { kind: 'cmd', text: 'add a webhook for failed payments' },
   { kind: 'ok', text: 'hippo · 2 memories in context' },
-  { kind: 'mem', text: 'billing uses pnpm; never run npm install here' },
+  { kind: 'mem', text: 'Bash: lockfile is pnpm-lock.yaml; npm install would rewrite it' },
   { kind: 'cmd', text: '/compact' },
   { kind: 'ok', text: 'Hippo saved your task snapshot before compacting.' },
 ];
 
 /** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */
 export const commands = [
-  { cmd: 'hippo capture-error', body: 'Real failures become lessons. Interrupts, declined permissions and empty searches are skipped.' },
+  { cmd: 'hippo capture-error', body: 'Failed tool calls are stored as error memories, word for word. Interrupts, declined permissions and empty searches are skipped.' },
   { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and hippo ranks it down.' },
   { cmd: 'hippo doctor', body: 'One command checks the install and names the fix for anything missing.' },
 ] as const;
@@ -121,7 +121,7 @@ export const mechanics = [
   {
     title: 'Sleep consolidates',
     metric: '2+ → 1',
-    body: 'On `hippo sleep`, two or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy, but in hippo\'s own audit it cost 3.6 points of LongMemEval recall.',
+    body: 'On `hippo sleep`, two or more related episodes merge into one semantic memory. The originals decay; the merged memory survives. It keeps the store tidy, but in hippo\'s own audit it cost 3.6 points of LongMemEval recall.',
   },
 ] as const;
 
@@ -199,7 +199,7 @@ export const localFirst = {
   kicker: 'Local-first',
   points: [
     { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker, the LLM reranker and the API embedders do.' },
-    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set, and one config line turns that off.' },
+    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set. Sleep runs at every Claude Code session end and in the daily job, so it happens without you asking. One config line turns that off.' },
     { stat: '1 call', label: 'to forget', body: 'Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.' },
     { stat: 'tenant-safe', label: 'by default', body: 'Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.' },
   ],

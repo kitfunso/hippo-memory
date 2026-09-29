@@ -1,6 +1,6 @@
 # Hippo Memory - Pi Extension
 
-Biologically-inspired memory for [Pi coding agent](https://github.com/badlogic/pi-mono). Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation compresses episodes into patterns.
+Biologically-inspired memory for [Pi coding agent](https://github.com/badlogic/pi-mono). Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 
 ## Install
 
@@ -72,4 +72,4 @@ const DEFAULT_CONFIG = {
 
 ## How it differs from the OpenClaw plugin
 
-Same core behavior. The Pi extension uses Pi's event system (`session_start`, `tool_result`, `session_shutdown`) instead of OpenClaw's hook system. Both use `execFileSync` with args arrays (no shell injection).
+Sleep timing differs: the Pi extension runs `hippo sleep` on every exit (`autoSleep` is on by default), while the OpenClaw plugin's `autoSleep` is off by default and queues a sleep only after a session with 10 or more new memories. The Pi extension uses Pi's event system (`session_start`, `tool_result`, `session_shutdown`) instead of OpenClaw's hook system. Both use `execFileSync` with args arrays (no shell injection).

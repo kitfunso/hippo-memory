@@ -125,7 +125,7 @@ For agents that accept structured tool definitions:
   },
   {
     "name": "memory_consolidate",
-    "description": "Run the consolidation pass. Decays weak memories, merges related episodes into patterns, removes entries below threshold. Run at end of session.",
+    "description": "Run the consolidation pass. Decays weak memories, merges related episodes into one memory, moves faded memories to a dormant store (deleted after 180 days unless restored). Run at end of session.",
     "parameters": {},
     "command": "hippo sleep"
   },

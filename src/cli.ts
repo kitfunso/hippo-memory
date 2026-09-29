@@ -9698,6 +9698,9 @@ Commands:
     --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
+                           Runs at Claude Code and OpenCode session end and in the daily job.
+                           With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
+                           fact extraction; {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn before consolidation
     --no-share             Skip auto-sharing to global store
@@ -9905,14 +9908,16 @@ Commands:
   capture                  Extract memories from conversation text
     --stdin                Read from piped input
     --file <path>          Read from a file
-    --last-session         Read from the most recent agent session transcript
+    --last-session         Read the transcript a hook names on stdin, else the newest
+                           Claude Code one from any project
     --transcript <path>    Explicit transcript path (implies --last-session)
     --log-file <path>      Tee output to a log file (paired with 'hippo last-sleep')
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
-  setup                    One-shot: detect installed AI tools and install all
-                           available SessionEnd+SessionStart+PreCompact hooks,
-                           plus Codex's memory hooks in its hooks.json
+  setup                    One-shot: detect installed AI tools and install their hooks:
+                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
+                           a plugin, codex 2 hooks in its hooks.json plus a launcher
+                           wrapper; other tools get a hint
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
@@ -9920,23 +9925,23 @@ Commands:
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
-                           capture this session, in a detached worker
+                           capture from the session's last 20 user and 10 assistant messages,
+                           in a detached worker
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
   pre-compact              PreCompact hook: save a working-state snapshot before compaction
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
-  compact-resume           SessionStart(compact) hook: re-print the snapshot + session trail
+  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old
   post-compact             PostCompact hook: tell the user what pre-compact saved
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)
   codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code/opencode install SessionEnd+SessionStart;
-                           claude-code also installs PreCompact +
-                           SessionStart(compact) for mid-session continuity;
-                           codex adds UserPromptSubmit + SessionStart(compact)
-                           to $CODEX_HOME/hooks.json (trust them once in
-                           /hooks) and wraps the detected launcher in place
+                           claude-code adds 7 hooks to ~/.claude/settings.json;
+                           opencode installs a plugin; codex adds 2 hooks to
+                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           wraps the detected launcher in place; all but claude-code
+                           also patch an existing AGENTS.md
     hook uninstall <target> Remove hook
   predict "<claim>"        Record a prediction to score against the actual outcome later
     --class <c>            Reference class (required)
@@ -10057,7 +10062,7 @@ Commands:
     wm clear               Clear working memory entries
       --scope <scope>      Filter by scope
       --session <id>       Filter by session
-    wm flush               Flush working memory (session end)
+    wm flush               Same as clear; nothing runs it at session end
       --scope <scope>      Filter by scope
       --session <id>       Filter by session
   dashboard                Open web dashboard for memory health
