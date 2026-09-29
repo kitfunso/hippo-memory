@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   promoteToGlobal,
   shareMemory,
@@ -18,7 +19,7 @@ import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 // store by promote/share/autoShare/sync/import must enter that store's
 // embedding index under the same best-effort contract as `remember`.
 
-const HIPPO_BIN = path.join(process.cwd(), 'bin', 'hippo.js');
+const HIPPO_BIN = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
@@ -263,7 +264,7 @@ describe('resolveLastSessionTranscript', () => {
 
 describe('session workers never capture a transcript they were not handed', () => {
   let tmp: { dir: string; cleanup: () => void };
-  const binPath = path.resolve(process.cwd(), 'bin', 'hippo.js');
+  const binPath = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 
   beforeEach(() => {
     tmp = withTmpDir();
@@ -338,7 +339,7 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
 
     // Init a hippo store in the tmp cwd so capture doesn't bail out
     // on `No .hippo directory found`.
-    const binPath = path.resolve(process.cwd(), 'bin', 'hippo.js');
+    const binPath = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
     const init = spawnSync(
       process.execPath,
       [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'],

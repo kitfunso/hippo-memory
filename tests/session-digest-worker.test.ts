@@ -3,11 +3,12 @@ import { spawn, spawnSync, type SpawnSyncReturns } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isSessionDigestRow, sessionDigestId } from '../src/session-digest.js';
 import { initStore, loadAllEntries, loadLatestHandoff, saveSessionHandoff } from '../src/store.js';
 
-const HIPPO_JS = path.resolve(process.cwd(), 'bin', 'hippo.js');
+const HIPPO_JS = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
 const OTHER_REPLY = 'Split the queue worker in `queue.ts` so slow jobs no longer block quick ones.';
 const CODEX_REPLY = 'Retry now waits two seconds between attempts because the queue drains slowly.';

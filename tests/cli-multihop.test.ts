@@ -3,9 +3,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 
-// The worktree's own CLI, not a PATH-resolved global install (which may be an older release).
-const HIPPO = `node ${JSON.stringify(path.join(process.cwd(), 'bin', 'hippo.js'))}`;
+// This checkout's own CLI, found from this file: not a global install, nor another worktree's via the cwd.
+const HIPPO = `node ${JSON.stringify(fileURLToPath(new URL('../bin/hippo.js', import.meta.url)))}`;
 
 describe('hippo recall --multihop', () => {
   let hippoRoot: string;
