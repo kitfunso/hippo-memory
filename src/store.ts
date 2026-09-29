@@ -1999,7 +1999,7 @@ export function loadChildrenOf(
  * Default keeps `deleteEntry` byte-identical to its pre-split behavior.
  *
  * Returns `{tenantId, dagParentId}` for the removed row, or `null` if no row with `id`
- * existed or `automatic` refused it (pinned or raw at DELETE time, so a late pin wins).
+ * existed or `automatic` refused it (pinned, raw or kept for good at DELETE time, so a late pin wins).
  */
 export function deleteEntryCore(
   db: ReturnType<typeof openHippoDb>,
@@ -2075,7 +2075,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
  *  `dormant` (src/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
  *  leaves exactly like a delete (FTS row, DAG parent dirty-mark, mirrors), in the same transaction, so a memory
  *  is never in both places or in neither. Deletes and moves both skip rows that are no longer auto-deletable
- *  (pinned or raw since the caller decided). Returns the ids that left `memories`, deleted or moved. */
+ *  (pinned, raw or kept for good since the caller decided). Returns the ids that left `memories`, deleted or moved. */
 export function batchWriteAndDelete(
   hippoRoot: string,
   toWrite: MemoryEntry[],

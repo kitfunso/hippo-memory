@@ -218,7 +218,7 @@ export async function consolidate(
   const all = loadAllEntries(hippoRoot);
   if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
   const backingObjects = memoriesBackingObjects(hippoRoot);
-  // Retirable: auto-deletable (never pinned, never raw) and not backing a first-class object.
+  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
   const snapshot = new Map(structuredClone(all).map((e) => [e.id, e]));
 
@@ -242,7 +242,7 @@ export async function consolidate(
   // so it stays where it is (stored strength refreshed) but sits out the
   // rest of this cycle the way a deleted row would. Anything else goes
   // dormant when config.dormant is on, and is deleted otherwise.
-  // Only called for rows `retirable` allows (never pinned, never raw, never backing a first-class object).
+  // Only called for rows `retirable` allows (never pinned, raw, kept for good or backing a first-class object).
   const retireFaded = (entry: MemoryEntry, strength: number): void => {
     const why = `(strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`;
     // A faded secret is deleted, never kept dormant: keeping it would hold a

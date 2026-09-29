@@ -201,7 +201,8 @@ import {
   importVault,
   ImportOptions,
 } from './importers.js';
-import { cmdCapture, CaptureOptions, cmdPreCompact, postCompactMessage, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage, transcriptWorkingState } from './capture.js';
+import { cmdCapture, CaptureOptions, cmdPreCompact, cmdPostCompact, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage, transcriptWorkingState } from './capture.js';
+import { replayCompactionsAt } from './compaction-record.js';
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
@@ -3188,6 +3189,12 @@ async function cmdSleepCore(
 
     const memImported = learnFromMemoryMd(hippoRoot);
     if (memImported > 0) console.log(`Imported ${memImported} memories from this project's Claude Code auto memory.`);
+  }
+
+  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
+  if (!flags['dry-run']) {
+    const finished = replayCompactionsAt(hippoRoot, (message) => console.error(`compaction replay: ${message}`));
+    if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
@@ -9758,10 +9765,10 @@ Commands:
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
-  pre-compact              PreCompact hook: save a working-state snapshot before compaction
+  pre-compact              PreCompact hook: save a working-state snapshot and ask the summary for memories
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
   compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old
-  post-compact             PostCompact hook: tell the user what pre-compact saved
+  post-compact             PostCompact hook: keep the summary and save its memories
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)
   codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper
   hook <sub> [target]      Manage framework integrations
@@ -10275,12 +10282,14 @@ async function main(
     }
 
     case 'post-compact': {
-      // PostCompact hook: tells the user what pre-compact saved. Plain text,
-      // because Claude Code shows this hook's stdout as-is. Always exits 0.
+      // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
       const { text } = await readStdinBounded();
       const logFlag = flags['log-file'];
-      const message = postCompactMessage(text, logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag);
-      if (message !== null) console.log(message);
+      const line = cmdPostCompact(hookStoreRoot(hippoRoot), {
+        stdinText: text,
+        logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
+      });
+      if (line !== null) console.log(line);
       break;
     }
 

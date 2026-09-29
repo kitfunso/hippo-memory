@@ -75,6 +75,7 @@ import {
   type MemoryEntry,
   Layer,
   CHURN_STALE_TAG,
+  COMPACTION_MEMORY_TAG,
 } from './memory.js';
 import {
   appendAuditEvent,
@@ -2086,8 +2087,13 @@ export function supersede(
     confidence: 'verified',
     tenantId: ctx.tenantId,
     scope: old.scope,
+    source_session_id: old.source_session_id,
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
+  // A legacy null origin has nothing to carry, so stampOriginProject derives it from the store as before.
+  if (typeof old.origin_project === 'string') {
+    newEntry.origin_project = old.origin_project;
+  }
 
   // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
   // three steps (CAS on old + writeEntryDbOnly(new) + supersede audit row)
@@ -2732,8 +2738,14 @@ export async function getContext(
     }
     return ambientAdmitEntry(e, currentProjectName, includeCrossProject);
   };
+  const ownSessionId = opts.currentSessionId || '';
+  // Inside admit, not after the load, so the loader's window widens past a session's own items.
+  const isOwnCompactionItem = (e: MemoryEntry): boolean =>
+    ownSessionId !== '' &&
+    e.source_session_id === ownSessionId &&
+    e.tags.includes(COMPACTION_MEMORY_TAG);
   // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
-  const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
+  const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
 
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
@@ -3570,7 +3582,7 @@ export interface SleepResult {
  * api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
  *
  * Dedup and audit deletes each log a `forget` row with the ctx actor and a
- * `metadata.reason`. Pinned and raw rows are never auto-deleted (canAutoDelete).
+ * `metadata.reason`. Pinned, raw and kept compaction-memory rows are never auto-deleted (canAutoDelete).
  * dryRun previews consolidate, dedup and audit, then returns before share/ambient.
  */
 /**

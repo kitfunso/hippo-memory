@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { MemoryEntry, generateId } from './memory.js';
+import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
 import {
   initStore,
   loadAllEntries,
@@ -344,6 +344,7 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   'extracted',
   'session-digest',
+  COMPACTION_MEMORY_TAG,
 ]);
 
 /**

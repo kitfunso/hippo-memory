@@ -16,13 +16,26 @@ import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isContentWorthStoring } from './audit.js';
 import {
   isInitialized,
-  writeEntry,
+  openStore,
+  stampOriginProject,
+  writeEntryMirrors,
   loadAllEntries,
   updateStats,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   type TaskSnapshot,
 } from './store.js';
+import { gatedWrite } from './gated-write.js';
+import {
+  PRE_COMPACT_INSTRUCTION,
+  parsePostCompactPayload,
+  postCompactLine,
+  recordCompactionStart,
+  recordSnapshotSaved,
+  saveCompaction,
+  replayCompactionsAt,
+  COMPACTION_DB_WAIT_MS,
+} from './compaction-record.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { embedMemory } from './embeddings.js';
 import { resolveTenantId } from './tenant.js';
@@ -945,6 +958,7 @@ function cmdCaptureCore(
   // once, run the same checkRejectionGuard the real write path uses via
   // writeEntry, never write anything.
   const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
+  const writeDb = options.dryRun ? null : openStore(targetRoot);
   try {
     for (const item of extracted) {
       if (keys.has(duplicateKey(item.content))) {
@@ -989,18 +1003,20 @@ function cmdCaptureCore(
           }
         }
         console.log(`  [capture] (${item.category}) ${item.content}`);
-      } else {
+      } else if (writeDb !== null) {
         // AT1 (plan §3 containment): one rejected item must not abort the
         // rest of this capture's items.
-        try {
-          writeEntry(targetRoot, entry);
-        } catch (err) {
-          if (err instanceof RejectedValueError) {
-            rejected++;
-            continue;
-          }
-          throw err;
+        const stamped = stampOriginProject(targetRoot, entry);
+        const outcome = gatedWrite(writeDb, targetRoot, stamped);
+        if (outcome === 'skipped:rejected') {
+          rejected++;
+          continue;
         }
+        if (outcome !== 'written') {
+          skipped++;
+          continue;
+        }
+        writeEntryMirrors(targetRoot, stamped);
         updateStats(targetRoot, { remembered: 1 });
         keys.add(duplicateKey(item.content)); // within-batch dedup
         void embedMemory(targetRoot, entry);
@@ -1010,6 +1026,7 @@ function cmdCaptureCore(
     }
   } finally {
     if (dryRunDb) closeHippoDb(dryRunDb);
+    if (writeDb) closeHippoDb(writeDb);
   }
 
   const prefix = options.dryRun ? '[dry-run] ' : '';
@@ -1206,25 +1223,13 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-/** What one pre-compact run saved, reported to the user after compaction. */
-export interface PreCompactReport {
-  snapshotSaved: boolean;
-  /** Claude Code session the run belonged to, when the payload named one. */
-  sessionId: string | null;
-}
-
-/** Line shown after compaction, or null when nothing was saved (Claude Code's own generic message is the fallback). */
-export function preCompactMessage(report: Pick<PreCompactReport, 'snapshotSaved'>): string | null {
-  if (!report.snapshotSaved) return null;
-  return 'Hippo saved your task snapshot before compacting. The snapshot is restored into the new context.';
-}
-
-/**
- * Where pre-compact leaves its report for `hippo post-compact`: next to the
- * pre-compact log, so both hooks find it from the same `--log-file`.
- */
-export function preCompactReportPath(logFile: string): string {
-  return path.join(path.dirname(logFile), 'pre-compact-last.json');
+/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 10 s limit, and via writeSync because process.exit drops buffered pipe output. */
+function printPreCompactInstruction(logFile: string): void {
+  try {
+    fs.writeSync(1, `${PRE_COMPACT_INSTRUCTION}\n`);
+  } catch (err) {
+    appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`);
+  }
 }
 
 /** A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null with a logged reason when nothing is derivable. */
@@ -1266,8 +1271,8 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
   };
 }
 
-/** Runs the PreCompact producer: saves a working-state snapshot into `report`. Never extracts memories; SessionEnd capture owns that. */
-function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean, logFile: string, report: PreCompactReport): void {
+/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
+function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean, logFile: string): void {
   // X3: the PreCompact hook fires in every Claude Code project, including
   // ones that never ran `hippo init`, so gate before any store-opening call
   // (saveActiveTaskSnapshot etc. call initStore, which would create one).
@@ -1293,6 +1298,8 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
   const manualInvocation = !stdinText || stdinText.trim() === '';
   let sessionId: string | null = null;
   let payloadTranscriptPath: string | null = null;
+  let payloadCwd: string | null = null;
+  let payloadTrigger: string | null = null;
 
   if (!manualInvocation) {
     let payload: unknown;
@@ -1310,8 +1317,9 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
       return;
     }
     if ('session_id' in payload && isStringValue(payload.session_id)) sessionId = payload.session_id;
-    report.sessionId = sessionId;
     payloadTranscriptPath = payload.transcript_path;
+    payloadCwd = 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null;
+    payloadTrigger = 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null;
   }
 
   // X11: payload transcript_path must end .jsonl. No directory-containment
@@ -1324,6 +1332,17 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
   if (payloadTranscriptPath !== null && !/\.jsonl$/i.test(payloadTranscriptPath)) {
     appendPreCompactLog(logFile, `skip: payload transcript_path is not a .jsonl file: ${payloadTranscriptPath}`);
     return;
+  }
+
+  // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
+  let recordId: string | null = null;
+  if (sessionId !== null && sessionId !== '') {
+    recordId = recordCompactionStart(
+      hippoRoot,
+      { sessionId, trigger: payloadTrigger, cwd: payloadCwd, transcriptPath: payloadTranscriptPath },
+      (message) => appendPreCompactLog(logFile, message),
+    );
+    printPreCompactInstruction(logFile);
   }
 
   // A payload transcript_path is EXCLUSIVE: never fall back to
@@ -1397,7 +1416,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
         session_id: sessionId,
       });
       appendPreCompactLog(logFile, 'snapshot saved');
-      report.snapshotSaved = true;
+      if (recordId !== null) recordSnapshotSaved(hippoRoot, recordId, (message) => appendPreCompactLog(logFile, message));
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }
@@ -1419,63 +1438,47 @@ export interface PreCompactOptions {
  */
 export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
-  const report: PreCompactReport = { snapshotSaved: false, sessionId: null };
   try {
-    runPreCompact(hippoRoot, options.stdinText, options.stdinTimedOut ?? false, logFile, report);
+    runPreCompact(hippoRoot, options.stdinText, options.stdinTimedOut ?? false, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
-  }
-
-  // Nothing goes to stdout: Claude Code passes PreCompact stdout to the
-  // summarising model as extra instructions. The PostCompact hook
-  // (`hippo post-compact`) tells the user instead, from this report.
-  if (report.snapshotSaved) {
-    try {
-      fs.writeFileSync(preCompactReportPath(logFile), JSON.stringify({ ...report, at: new Date().toISOString() }));
-    } catch {
-      // Losing the message must never fail the hook.
-    }
   }
 
   process.exit(0);
 }
 
-/** How old a pre-compact report may be and still describe this compaction. */
-const POST_COMPACT_REPORT_MAX_AGE_MS = 10 * 60_000;
+export interface PostCompactOptions {
+  stdinText?: string;
+  logFile?: string;
+}
 
-/**
- * The message for the PostCompact hook, from the report pre-compact left,
- * or null when there is nothing to say. Consumes the report, so the message
- * shows once. A report from another session, or an old one, is dropped.
- * Never throws.
- */
-export function postCompactMessage(stdinText: string | undefined, logFile: string = defaultPreCompactLogPath(), now: Date = new Date()): string | null {
-  const reportFile = preCompactReportPath(logFile);
-  let raw: string;
+/** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
+const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
+
+/** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show. Never throws, so the hook exits 0. */
+export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): string | null {
+  const logFile = options.logFile ?? defaultPreCompactLogPath();
+  const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);
+  const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;
   try {
-    raw = fs.readFileSync(reportFile, 'utf8');
-    fs.rmSync(reportFile, { force: true });
-  } catch {
-    return null;
-  }
-  try {
-    const report: unknown = JSON.parse(raw);
-    if (!isObjectLike(report)) return null;
-    const at = 'at' in report && isStringValue(report.at) ? Date.parse(report.at) : Number.NaN;
-    if (Number.isNaN(at) || now.getTime() - at > POST_COMPACT_REPORT_MAX_AGE_MS) return null;
-    let payloadSession: string | null = null;
-    try {
-      const payload: unknown = JSON.parse((stdinText ?? '').trim() || 'null');
-      if (isObjectLike(payload) && 'session_id' in payload && isStringValue(payload.session_id)) payloadSession = payload.session_id;
-    } catch {
-      // No usable payload: fall back to the age check alone.
+    if (!isInitialized(hippoRoot)) {
+      log('skip: no hippo store');
+      return null;
     }
-    const reportSession = 'sessionId' in report && isStringValue(report.sessionId) ? report.sessionId : null;
-    if (payloadSession !== null && reportSession !== null && payloadSession !== reportSession) return null;
-    return preCompactMessage({
-      snapshotSaved: 'snapshotSaved' in report && report.snapshotSaved === true,
-    });
-  } catch {
+    const payload = parsePostCompactPayload(options.stdinText);
+    let line: string | null = null;
+    let storeBusy = false;
+    if (payload === null) {
+      log('skip: no PostCompact payload naming a session');
+    } else {
+      const saved = saveCompaction(hippoRoot, payload, log);
+      line = postCompactLine(saved);
+      storeBusy = saved.deferred;
+    }
+    if (!storeBusy) replayCompactionsAt(hippoRoot, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
+    return line;
+  } catch (err) {
+    log(`failed: ${errorMessage(err)}`);
     return null;
   }
 }

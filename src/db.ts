@@ -28,7 +28,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 48;
+const CURRENT_SCHEMA_VERSION = 49;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2529,6 +2529,36 @@ const MIGRATIONS: Migration[] = [
       db.exec(MEMORY_QUARANTINE_DDL);
     },
   },
+  {
+    version: 49,
+    up: (db) => {
+      // Compaction record (src/compaction-record.ts): one row per Claude Code compaction, written before it (started)
+      // and after it (summarised, done). Not a memory row. Additive only: no min_compatible_binary bump.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS compactions (
+          tenant_id       TEXT NOT NULL DEFAULT 'default',
+          id              TEXT NOT NULL,
+          session_id      TEXT NOT NULL,
+          origin_project  TEXT NOT NULL DEFAULT '',
+          compact_trigger TEXT,
+          cwd             TEXT,
+          transcript_path TEXT,
+          snapshot_saved  INTEGER NOT NULL DEFAULT 0,
+          started_at      TEXT NOT NULL,
+          summarised_at   TEXT,
+          summary         TEXT,
+          items_json      TEXT,
+          items_written   INTEGER NOT NULL DEFAULT 0,
+          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done')),
+          PRIMARY KEY (tenant_id, id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_compactions_session
+          ON compactions(tenant_id, session_id, started_at);
+        CREATE INDEX IF NOT EXISTS idx_compactions_status
+          ON compactions(tenant_id, status);
+      `);
+    },
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
@@ -2568,7 +2598,7 @@ function assertBinaryCompatible(db: DatabaseSyncLike): void {
   }
 }
 
-function isSqliteBusy(error: unknown): boolean {
+export function isSqliteBusy(error: unknown): boolean {
   const code = (error as { errcode?: number } | null)?.errcode;
   return code === 5 || code === 6 || code === 517;
 }
@@ -2590,16 +2620,18 @@ function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000)
   }
 }
 
-export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
+/** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
+export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   fs.mkdirSync(hippoRoot, { recursive: true });
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
+  const busyWaitMs = opts?.busyWaitMs;
   try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    execWithBusyRetry(db, 'PRAGMA journal_mode = WAL');
+    db.exec(`PRAGMA busy_timeout = ${busyWaitMs ?? 5000}`);
+    execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec('PRAGMA wal_autocheckpoint = 100');
     db.exec('PRAGMA foreign_keys = ON');
-    runMigrations(db, hippoRoot);
+    runMigrations(db, hippoRoot, busyWaitMs);
     // Path A backfill: delete any orphan markdown mirrors for already-archived
     // raw_archive rows. Idempotent via per-row raw_archive.mirror_cleaned_at
     // (v21). Wrapped in try/catch — a filesystem failure must not prevent DB open.
@@ -2636,7 +2668,7 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
   }
 }
 
-function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
+function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): void {
   ensureMetaTable(db);
   // Before anything writes, so a stale binary never repairs or migrates a store it does not understand.
   assertBinaryCompatible(db);
@@ -2646,7 +2678,7 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
   for (const migration of MIGRATIONS) {
     if (migration.version <= currentVersion) continue;
 
-    execWithBusyRetry(db, 'BEGIN IMMEDIATE');
+    execWithBusyRetry(db, 'BEGIN IMMEDIATE', busyWaitMs);
     try {
       // A newer binary may have migrated and raised the minimum while we waited for the lock.
       assertBinaryCompatible(db);

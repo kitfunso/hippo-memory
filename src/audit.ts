@@ -127,9 +127,10 @@ function hasNoSpecificity(text: string): boolean {
 
 export function auditMemory(entry: MemoryEntry): AuditIssue | null {
   const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned or raw row is never auto-removed, so it can only warn.
+  // Error means "auto-remove"; a pinned, raw or kept-for-good row is never auto-removed, so it can only warn.
   if (issue?.severity === 'error' && !canAutoDelete(entry)) {
-    return { ...issue, severity: 'warning', reason: `${issue.reason} (${entry.pinned ? 'pinned' : 'raw'}, kept)` };
+    const why = entry.pinned ? 'pinned' : entry.kind === 'raw' ? 'raw' : 'keep rule';
+    return { ...issue, severity: 'warning', reason: `${issue.reason} (${why}, kept)` };
   }
   return issue;
 }

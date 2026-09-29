@@ -267,10 +267,10 @@ describe('consolidation conflicts', () => {
 });
 
 describe('fresh store schema', () => {
-  it('is at v48 and has memory_quarantine', () => {
+  it('is at v49 and has memory_quarantine', () => {
     const home = makeRoot();
     try {
-      expect(getCurrentSchemaVersion()).toBe(48);
+      expect(getCurrentSchemaVersion()).toBe(49);
       const db = openHippoDb(home);
       try {
         const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memory_quarantine'`).get();
