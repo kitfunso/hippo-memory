@@ -19,7 +19,7 @@ import { legacyWork, type LegacyWork } from './legacy.js';
 import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
-import { containerId, containerPrefix } from './source.js';
+import { containerId, containerPrefix, splitSource } from './source.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, isToolId, toolSourcePrefix, type AgentMemoryTool, type ToolId } from './tools.js';
 import type { Adapter, AdapterContext, Listing, Scope } from './types.js';
 
@@ -149,7 +149,7 @@ function runPass(pass: Pass, opts: SyncOptions): ImportReport {
   } finally {
     store?.close();
   }
-  if (pass.handover && !opts.dryRun) handOver(synced, opts, report);
+  if (pass.handover && !opts.dryRun) handOver(synced, path.dirname(pass.target), opts, report);
   return report;
 }
 
@@ -215,6 +215,8 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
     isDuplicate: duplicateCheck(store, tenantId, pass.originProject, legacy?.adopted ?? new Set()),
     dryRun: opts.dryRun === true,
   };
+  // A project's rows in the global store are parted by origin: a worktree and its main checkout share a Claude folder.
+  const partition = store.global && pass.scope === 'project' ? pass.originProject ?? '' : null;
   const synced: ContainerWork[] = [];
   let remembered = 0;
   for (const listing of listings) {
@@ -225,26 +227,28 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
         out.tally.unreadable++;
         continue;
       }
-      const work = containerWork(tool, container, opts.machine.platform, legacy);
+      const work = containerWork(tool, container, opts.machine.platform, legacy, partition ?? '');
       const outcome = syncOne(session, work, out, report);
       if (outcome === null) continue;
       synced.push(work);
       remembered += outcome.tally.imported + outcome.tally.replaced;
       if (!session.dryRun) afterCommit(store.root, outcome, report);
     }
-    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, tool, pass.scope, listing, opts.machine.platform);
+    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, tool, pass.scope, listing, opts.machine.platform, partition);
   }
   if (remembered > 0 && !session.dryRun) bumpRemembered(store.root, remembered, report);
   return synced;
 }
 
-function containerWork(tool: AgentMemoryTool, container: ContainerWork['container'], platform: NodeJS.Platform, legacy: LegacyWork | null): ContainerWork {
+function containerWork(
+  tool: AgentMemoryTool, container: ContainerWork['container'], platform: NodeJS.Platform, legacy: LegacyWork | null, origin: string,
+): ContainerWork {
   const none = new Map<string, readonly MemoryEntry[]>();
   const own = tool.id === 'claude-code' ? legacy?.byContainer.get(container.path) : undefined;
   return {
     tool,
     container,
-    prefix: containerPrefix(tool.id, containerId(container.path, container.scope, platform)),
+    prefix: containerPrefix(tool.id, containerId(container.path, container.scope, platform, origin)),
     adopt: own?.adopt ?? none,
     replace: own?.replace ?? none,
   };
@@ -307,22 +311,26 @@ function otherPathKeys(store: OpenStore, tenantId: string, origin: string, adopt
   return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 
-/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder). */
-function unlistedRows(db: DatabaseSyncLike, tenantId: string, tool: AgentMemoryTool, scope: Scope, listing: Listing, platform: NodeJS.Platform): number {
-  const listed = listing.containers.map((c) => containerPrefix(tool.id, containerId(c.path, c.scope, platform)));
+/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition` limits it to one origin. */
+function unlistedRows(
+  db: DatabaseSyncLike, tenantId: string, tool: AgentMemoryTool, scope: Scope, listing: Listing, platform: NodeJS.Platform, partition: string | null,
+): number {
+  const listed = listing.containers.map((c) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, partition ?? '')));
   return selectLiveEntriesBySourcePrefix(db, tenantId, `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
-    .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p))).length;
+    .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
+    .filter((row) => partition === null || (row.origin_project ?? '') === partition).length;
 }
 
-/** Design 2's handover: rows the store-less hook path left in the global store for containers a project store now syncs. */
-function handOver(synced: readonly ContainerWork[], opts: SyncOptions, report: ImportReport): void {
+/** Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for containers its store now syncs. */
+function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: SyncOptions, report: ImportReport): void {
   const globalRoot = resolveGlobalRootDir();
   if (synced.length === 0 || !isInitialized(globalRoot)) return;
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
     const tenantId = resolveTenantId({});
-    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, report);
+    const origin = deriveOriginProject(projectRoot);
+    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, origin, opts.machine.platform, report);
   } catch (err) {
     report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);
   } finally {
@@ -330,13 +338,18 @@ function handOver(synced: readonly ContainerWork[], opts: SyncOptions, report: I
   }
 }
 
-function handOverContainer(db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, report: ImportReport): void {
+function handOverContainer(
+  db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, origin: string, platform: NodeJS.Platform, report: ImportReport,
+): void {
+  const prefix = containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, platform, origin));
+  // A note the local pass could not read has no local row yet, so its global copy stays until it does.
+  const unread = new Set(work.container.skipped);
   const mirror: MemoryEntry[] = [];
   const purge: string[] = [];
   db.exec('BEGIN IMMEDIATE');
   try {
-    for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, work.prefix)) {
-      if (!row.tags.includes(work.tool.tag)) continue;
+    for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, prefix)) {
+      if (!row.tags.includes(work.tool.tag) || unread.has(splitSource(row.source, prefix).key)) continue;
       const result = setAsideRow(db, work.tool.tag, row, 'handover');
       if (result.kind === 'untagged') mirror.push(result.entry);
       else purge.push(result.id);

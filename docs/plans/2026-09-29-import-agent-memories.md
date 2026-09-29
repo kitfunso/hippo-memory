@@ -63,9 +63,10 @@ and test is kept, the session-end import for folders without a store included; t
      the global store by the same rule: no sleep, no git call, no legacy adoption, no user pass. PR 1's hook has a
      10-second limit, and PR 2 kept git and adoption off it for that reason.
    - Handover: when a project pass into a local store commits, the global store's tagged rows under the containers
-     that pass read are set aside (design 6). Container ids hash the path, not the store, so they match. Without
-     this, rows the hook path wrote before the project had a store would stay kept and be served beside the local
-     copy after the note is deleted.
+     that pass read, and under the project's own origin (`deriveOriginProject` of the store's folder, what
+     post-compact stamps), are set aside (design 6). Rows of a note the pass could not read stay until it can.
+     Without this, rows the hook path wrote before the project had a store would stay kept and be served beside the
+     local copy after the note is deleted.
 
 3. **Row shape.** `kind: 'distilled'`, `layer: Episodic`, `confidence: 'observed'`, one tag per tool
    (`claude-code-memory` stays; `codex-memory`, `gemini-memory`, ...), and
@@ -77,7 +78,9 @@ and test is kept, the session-end import for folders without a store included; t
    - `<container>`: `p-` (project) or `u-` (user) plus the first 12 hex of the sha256 of the container's real path
      (`fs.realpathSync.native`, falling back to `path.resolve` as `realpathOrResolve` does in project-identity.ts),
      with `/` separators and lowercased on win32. Fixed length, never a `/`, never a user path, and two config
-     folders with the same project folder name stay apart.
+     folders with the same project folder name stay apart. A project pass into the global store hashes the origin
+     in too: a linked worktree shares its main checkout's Claude folder but not its origin, so each gets its own rows
+     and recall in either one sees the note.
    - `<item>`: the item's path inside the container with `/` separators; for a single-file store,
      `<heading slug>/<first 12 hex of the item text's sha256>`, with `~2`, `~3` added to repeats of the same text
      under the same heading.
@@ -185,7 +188,8 @@ and test is kept, the session-end import for folders without a store included; t
     - `hippo sleep`: a local store gets its project pass and the user pass; the global store gets the user pass only.
     - Session end (Claude and Codex): through sleep when the folder has a store; otherwise directly, as design 2 says.
     - Post-compact (PR 1's hook, merged): the transcript folder's container only, after PR 1's own write (design 2).
-    - `hippo import --agents [--dry-run]`: runs the import by hand. `--dry-run` writes nothing and prints each tool's
+    - `hippo import --agents [--dry-run]`: runs the import by hand, in a folder without a store as session end does
+      there. `--dry-run` writes nothing and prints each tool's
       resolved home, its containers, what would be written, replaced and set aside, and how many kept rows sit in
       containers not listed this run (a moved project's old copy). Z0's stage 0 check uses it.
     - Opt out: `--no-learn` (init, sleep) as today; config `agentMemories.tools`, a list of tool ids (default every
@@ -333,6 +337,8 @@ their users); then Gemini and OpenClaw. If the diff passes about 2,500 lines, th
     10 characters, rejected) sets its tagged row aside;
   - the handover: global `p-` rows from the store-less hook path are set aside when the project's own store syncs
     that container; a project Y row with the same text does not hide the note from project X in the global store;
+    a worktree and its main checkout each keep a global row of their shared folder, and handover retires only its
+    own origin's; a note the local pass could not read keeps its global row;
   - post-compact reads the transcript folder only and runs no git call;
   - a malformed dormant snapshot does not stop the sync; a superseded dormant snapshot is never restored;
   - `HIPPO_AGENT_MEMORY_TOOLS` overrides config; `[]` in a project store stops that project's user pass;
@@ -474,3 +480,13 @@ cutting two needs his yes. The build order puts them last and allows a second PR
 8. Smaller points: dead "complete" flag dropped (`skipped` and `Listing.warnings` instead); origin needs no PR 1
    option; the rejection pre-check digests the capped text; auto-share filters on source; non-git store-less folders
    land user-global; moved-project and `dormant.enabled: false` lines added (designs 1, 2, 4, 6, 9; Loss windows).
+
+**Build review, codex on the branch (2 findings, both reproduced, both applied):**
+1. Handover set aside the global copy of a note the new local store could not read (over 256 KB, a failed read),
+   leaving no live copy anywhere: unread keys are skipped (design 2).
+2. A worktree and its main checkout share a Claude folder but not an origin, so the second store-less import saw the
+   first one's row as unchanged and recall in the second could not see it; handover from one would also retire the
+   other's rows: a project pass into the global store hashes the origin into the container id, and handover retires
+   only its own origin's rows (designs 2, 3).
+Found while verifying: `hippo import --agents` in a folder without a store ran only the user pass and hid the
+folder's own notes; it now does what session end does there (design 11).

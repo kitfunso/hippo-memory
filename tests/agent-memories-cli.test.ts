@@ -238,4 +238,37 @@ describe('hooks in a folder without a store', () => {
     expect(byText.get(USER_NOTE)).toBe('');
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
   });
+
+  it('a worktree and its main checkout keep their own global rows of the Claude folder they share, and handover retires only its own', () => {
+    const b = box();
+    const git = (cwd: string, ...args: string[]): void => { execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'ignore' }); };
+    git(b.project, 'commit', '-q', '--allow-empty', '-m', 'base');
+    const worktree = join(tmp(), 'feature-wt');
+    git(b.project, 'worktree', 'add', '-q', worktree);
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    const [main, wt] = [deriveOriginProject(b.project), deriveOriginProject(worktree)];
+    expect(main).not.toBe(wt);
+
+    hippo(b, b.project, ['import', '--agents']);
+    hippo(b, worktree, ['import', '--agents']);
+    const origins = (): string[] => (isInitialized(b.global) ? loadAllEntries(b.global) : [])
+      .filter((e) => e.content === PROJECT_NOTE).map((e) => e.origin_project ?? '').sort();
+    expect(origins()).toEqual([main, wt].sort());
+
+    hippo(b, worktree, ['init', '--no-hooks', '--no-schedule']);
+    expect(origins()).toEqual([main]);
+    expect(imported(join(worktree, '.hippo'))).toEqual([PROJECT_NOTE]);
+  });
+
+  it('handover leaves the global copy of a note the new local store could not read', () => {
+    const b = box();
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    hippo(b, b.project, ['import', '--agents']);
+    expect(imported(b.global)).toEqual([PROJECT_NOTE]);
+
+    note(projectNotes(b), 'schema.md', `${PROJECT_NOTE}\n${'x'.repeat(300 * 1024)}`);
+    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
+    expect(imported(join(b.project, '.hippo'))).toEqual([]);
+    expect(imported(b.global)).toEqual([PROJECT_NOTE]);
+  });
 });

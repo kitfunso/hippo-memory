@@ -8,10 +8,11 @@ import type { Scope } from './types.js';
 export const CONTENT_CAP = 1500;
 export const MIN_ITEM_CHARS = 10;
 
-/** `p-`/`u-` and 12 hex of the real path, so no user path reaches a row and two config folders stay apart. */
-export function containerId(dir: string, scope: Scope, platform: NodeJS.Platform): string {
+/** `p-`/`u-` and 12 hex of the real path, so no user path reaches a row; `origin` parts projects sharing a folder in the global store. */
+export function containerId(dir: string, scope: Scope, platform: NodeJS.Platform, origin = ''): string {
   const real = realpathOrResolve(dir).replace(/\\/g, '/');
-  return `${scope === 'project' ? 'p' : 'u'}-${sha256Hex(platform === 'win32' ? real.toLowerCase() : real).slice(0, 12)}`;
+  const folder = platform === 'win32' ? real.toLowerCase() : real;
+  return `${scope === 'project' ? 'p' : 'u'}-${sha256Hex(origin === '' ? folder : `${folder}\n${origin}`).slice(0, 12)}`;
 }
 
 export function containerPrefix(tool: ToolId, container: string): string {
