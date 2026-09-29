@@ -42,6 +42,7 @@ import { appendAuditEvent } from './audit.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
 import { derivationScope, commonDerivationScope, derivationPartitionKey } from './recall-scope.js';
 import { isQuarantineScope } from './quarantine.js';
+import { NO_MERGE_TAGS } from './shared.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -120,6 +121,10 @@ export interface ConsolidationResult {
 }
 
 const REPLAY_COUNT_DEFAULT = 5;
+
+function keptAsWritten(entry: MemoryEntry): boolean {
+  return entry.tags.some((tag) => NO_MERGE_TAGS.has(tag));
+}
 
 /** JSON value shape for a session event's free-form metadata field, cast to
  *  once at its `Record<string, unknown>` origin so it can be narrowed via
@@ -600,7 +605,7 @@ export async function consolidate(
     survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
   );
   const extractionCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id),
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e),
   );
   result.extractionCandidates = extractionCandidates.length;
 
@@ -801,7 +806,7 @@ export async function consolidate(
   // -------------------------------------------------------------------------
   const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
   const mergeCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted') && !alreadyMergedIds.has(e.id)
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
       && !e.pinned // a pin merged with a look-alike would read as one of two values
       && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
   );
@@ -1134,7 +1139,7 @@ function detectConflicts(
       // exists for stated-rule disagreement, not strategy diversity.
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
-      if (survivors[i].tags.includes('extracted') || survivors[j].tags.includes('extracted')) continue;
+      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) continue;
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
       if (!reasonAndScore) continue;
       detected.push({

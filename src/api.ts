@@ -112,6 +112,7 @@ import {
   type PromptRecallGate,
 } from './prompt-recall.js';
 import { detectSecret } from './secret-detect.js';
+import { isSessionDigestRow } from './session-digest.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
@@ -2650,12 +2651,6 @@ export async function getContext(
   const currentProjectName =
     opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
-  const ambientAdmit = (e: MemoryEntry): boolean =>
-    ambientAdmitEntry(e, currentProjectName, includeCrossProject);
-  // Superseded rows never inject, and ambientAdmitEntry regex-scans content for
-  // secrets, so WHICH rows reach this predicate is what loadAmbientEntries cares
-  // about below.
-  const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
 
   // Z1: decided before the ambient loads so the FTS candidate query below (pinned-only
   // branch) can piggyback on that connection instead of opening its own.
@@ -2682,20 +2677,6 @@ export async function getContext(
     left -= tokens;
     return true;
   };
-
-  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
-  const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
-    : { entries: [] };
-  const globalLoad: AmbientLoadResult = hasGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
-    : { entries: [] };
-  let localEntries = localLoad.entries;
-  let globalEntries = globalLoad.entries;
-
-  // Computed below, after markRetrieved runs, so avgStrength reflects the
-  // post-retrieval strengths rather than a stale pre-mutation snapshot.
-  let ambientState: AmbientState | undefined;
 
   // DF1 T2: bounded read — an orphaned snapshot (no later pre-compact
   // superseded it, no session-end closed it) must age out of this ambient
@@ -2740,6 +2721,32 @@ export async function getContext(
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
   const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+
+  const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
+  let digestHiddenForHandoff = false;
+  const ambientAdmit = (e: MemoryEntry): boolean => {
+    // A printed handoff already carries the session's closing message, which its digest would print a second time.
+    if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) {
+      digestHiddenForHandoff = true;
+      return false;
+    }
+    return ambientAdmitEntry(e, currentProjectName, includeCrossProject);
+  };
+  // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
+  const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
+
+  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
+  const localLoad: AmbientLoadResult = hasLocal
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    : { entries: [] };
+  const globalLoad: AmbientLoadResult = hasGlobal
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
+    : { entries: [] };
+  let localEntries = localLoad.entries;
+  let globalEntries = globalLoad.entries;
+
+  // Computed after markRetrieved runs, so avgStrength reflects post-retrieval strengths.
+  let ambientState: AmbientState | undefined;
 
   if (
     !promptRecallPending &&
@@ -2917,7 +2924,8 @@ export async function getContext(
     if (
       pinnedLocal.length === 0 &&
       pinnedGlobal.length === 0 &&
-      selectedItems.length === 0
+      selectedItems.length === 0 &&
+      !digestHiddenForHandoff
     ) {
       return { entries: [], tokens: 0 };
     }

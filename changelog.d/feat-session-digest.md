@@ -1,0 +1,7 @@
+### Added
+
+- **Each ended session now leaves one short digest memory, written without a model call.** With no API key, session-end capture kept only sentences that match keyword patterns, so the plain-prose account of what was wrong, where, and what fixed it was lost, along with the list of files the session touched. The Claude Code and Codex session-end workers now store up to five whole sentences from the agent's final message, ranked by whether they name a place in the code or give a reason, plus a `Changed:` line with the repo-relative files whose edits applied. Sentences that repeat a prompt or something hippo injected, open on a word pointing outside the sentence, ask a question, or name a home directory are left out; secrets are redacted and the digest stays under 1200 characters. It is tagged `session-digest`, is never shared to the global store automatically, is left out of consolidation, and is not shown next to the session handoff that already carries the same closing message. Re-running session end for the same session updates the row, and `hippo reject <id> --reason "<why>"` keeps it out for good.
+
+### Fixed
+
+- **A captured never / always / must rule keeps its subject.** "We must never push master to origin" was stored as "must never push master to origin"; it is now stored from the start of the sentence. A lead over 300 characters or a keyword inside brackets keeps the old form. "Whenever" no longer counts as "never".

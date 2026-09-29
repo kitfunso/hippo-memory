@@ -72,7 +72,7 @@ const DECISION_PATTERNS = [
 ];
 
 const RULE_PATTERNS = [
-  /((?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s+)(.{1,500})/i,
+  /\b((?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s+)(.{1,500})/i,
   /((?:the rule is|rule:)\s*)(.{1,500})/i,
   /((?:important|critical|remember):\s*)(.{1,500})/i,
   /((?:make sure|ensure)\s+(?:to\s+)?)(.{1,500})/i,
@@ -104,7 +104,7 @@ const SPEC_HEADING_PATTERNS = [
 // Extraction engine
 // ---------------------------------------------------------------------------
 
-function splitSentences(text: string): string[] {
+export function splitSentences(text: string): string[] {
   // Split on sentence boundaries, keeping reasonable chunks
   return text
     .split(/(?<=[.!?])\s+|\n/)
@@ -322,6 +322,20 @@ function cleanExtract(raw: string): string {
   return content;
 }
 
+/** The 500-char write gate minus the 200-char bound counted from the keyword. */
+const RULE_LEAD_CAP = 300;
+
+/** A modal rule keeps its subject ("We must never ..."); null keeps the keyword-start form when the lead is long or the keyword sits inside a bracket. */
+function ruleLead(sentence: string, keywordStart: number, contentStart: number): string | null {
+  if (keywordStart < 0 || contentStart < 0 || contentStart > RULE_LEAD_CAP) return null;
+  let depth = 0;
+  for (const ch of sentence.slice(0, keywordStart)) {
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if ((ch === ')' || ch === ']' || ch === '}') && depth > 0) depth--;
+  }
+  return depth > 0 ? null : sentence.slice(0, contentStart);
+}
+
 function extractFromPatterns(
   sentence: string,
   patterns: RegExp[],
@@ -381,7 +395,11 @@ function extractFromPatterns(
         // capture, shipped in the previous commit. Codex P1, r6.
         const contentStart = match.indices?.[2]?.[0] ?? -1;
         const afterKeyword = contentStart >= 0 ? sentence.slice(contentStart) : (match[2] ?? match[0]);
-        bounded = boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
+        const keywordStart = match.indices?.[1]?.[0] ?? -1;
+        const lead = pat === RULE_PATTERNS[0] ? ruleLead(sentence, keywordStart, contentStart) : null;
+        bounded = lead !== null
+          ? boundToClause(lead + afterKeyword, lead.length, keywordStart + 200)
+          : boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
       }
       const content = cleanExtract(bounded);
       if (content.length >= 8 && content.length <= 500) {
@@ -493,6 +511,7 @@ export interface CaptureOptions {
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
   stdinText?: string;
   stdinTimedOut?: boolean;
+  sessionTurns?: readonly SessionTurn[];
   /**
    * Tee stdout/stderr to this log file while capture runs. Mirrors the
    * pattern used by `hippo sleep --log-file` so the SessionEnd hook output
@@ -524,16 +543,16 @@ export interface CaptureOptions {
  * anything `JSON.parse` can produce (the only divergence is boxed
  * primitives, which JSON.parse never yields).
  */
-function isStringValue<T>(value: T): value is T & string {
+export function isStringValue<T>(value: T): value is T & string {
   return String(value) === value;
 }
 
-function isObjectLike<T>(value: T): value is T & object {
+export function isObjectLike<T>(value: T): value is T & object {
   return value !== null && value instanceof Object;
 }
 
 /** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
-function errorMessage(cause: unknown): string {
+export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
@@ -588,10 +607,20 @@ function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): 
   return text && !isNonHumanUserLine(entry, text) ? text : '';
 }
 
-export function summariseTranscript(jsonl: string): string {
+export interface SessionTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface TranscriptRecord extends TranscriptLineFlags {
+  message?: unknown;
+  payload?: unknown;
+  cwd?: unknown;
+}
+
+export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRecord) => void): SessionTurn[] {
   const lines = jsonl.split('\n').filter((l) => l.trim());
-  const userMessages: string[] = [];
-  const assistantTexts: string[] = [];
+  const turns: SessionTurn[] = [];
 
   for (const line of lines) {
     let entry: unknown;
@@ -600,16 +629,17 @@ export function summariseTranscript(jsonl: string): string {
     } catch {
       continue;
     }
-    if (!isObjectLike(entry)) continue;
+    if (!isObjectLike(entry) || !('type' in entry)) continue;
+    visit?.(entry);
 
-    if (('type' in entry) && (entry.type === 'user' || entry.type === 'assistant')) {
+    if (entry.type === 'user' || entry.type === 'assistant') {
       const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
       if (!message) continue;
       const content = 'content' in message ? message.content : undefined;
 
       if (entry.type === 'user') {
         const text = humanUserText(entry, message);
-        if (text) userMessages.push(text);
+        if (text) turns.push({ role: 'user', text });
       } else if (Array.isArray(content)) {
         // Keep assistant text blocks; drop thinking + tool_use
         const chunks: string[] = [];
@@ -622,14 +652,14 @@ export function summariseTranscript(jsonl: string): string {
           }
         }
         if (chunks.length > 0) {
-          assistantTexts.push(chunks.join('\n'));
+          turns.push({ role: 'assistant', text: chunks.join('\n') });
         }
       }
       continue;
     }
 
     // Codex rollout transcript shape: response_item -> payload.message
-    if ('type' in entry && entry.type === 'response_item') {
+    if (entry.type === 'response_item') {
       const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
       if (!payload || !('type' in payload) || payload.type !== 'message') continue;
       const role = 'role' in payload ? payload.role : undefined;
@@ -650,11 +680,21 @@ export function summariseTranscript(jsonl: string): string {
       }
 
       if (chunks.length === 0) continue;
-      if (role === 'user') userMessages.push(chunks.join('\n'));
-      if (role === 'assistant') assistantTexts.push(chunks.join('\n'));
+      if (role === 'user') turns.push({ role: 'user', text: chunks.join('\n') });
+      if (role === 'assistant') turns.push({ role: 'assistant', text: chunks.join('\n') });
     }
   }
 
+  return turns;
+}
+
+export function summariseTranscript(jsonl: string): string {
+  return summariseSessionTurns(collectSessionTurns(jsonl));
+}
+
+function summariseSessionTurns(turns: readonly SessionTurn[]): string {
+  const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.text);
+  const assistantTexts = turns.filter((t) => t.role === 'assistant').map((t) => t.text);
   if (userMessages.length === 0 && assistantTexts.length === 0) return '';
 
   // Keep the tail: last ~20 user turns and last ~10 assistant replies.
@@ -853,14 +893,16 @@ function cmdCaptureCore(
       break;
     }
     case 'last-session': {
-      const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, options.stdinTimedOut);
-      if (!resolved) {
-        console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
-        return;
+      let turns = options.sessionTurns;
+      if (!turns) {
+        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, options.stdinTimedOut);
+        if (!resolved) {
+          console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
+          return;
+        }
+        turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
       }
-
-      const jsonl = fs.readFileSync(resolved, 'utf8');
-      text = summariseTranscript(jsonl);
+      text = summariseSessionTurns(turns);
       if (!text) {
         console.log('Transcript had no user/assistant messages to summarise.');
         return;

@@ -122,6 +122,7 @@ import {
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
+import { readSessionScan, recordSessionDigest } from './session-digest.js';
 import { type Card, isCardStatus } from './card.js';
 import { loadCardDetail, type CardDetail } from './card-detail.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
@@ -3464,6 +3465,8 @@ async function cmdSessionEndWorker(
     appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
   }
   flushRereadLog();
+  const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
+  const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
   try {
     const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
     // With no stdin of its own, capture would read this as a manual run and scan every project.
@@ -3479,11 +3482,17 @@ async function cmdSessionEndWorker(
         tenantId: resolveTenantId({}),
         // In the global store, rows would otherwise read as user-global and show up in every project.
         originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+        sessionTurns: scan?.turns,
       });
     }
   } catch {
     // Same treatment — the failure line is already in the log.
   }
+  recordSessionDigest(hippoRoot, scan, {
+    key: closeSessionId || path.basename(transcriptPath ?? '', '.jsonl'),
+    tenantId: resolveTenantId({}),
+    log: digestLog,
+  });
 
   // DF1 T3: close the ending session's own active task snapshot AFTER
   // sleep+capture complete — neither producer (runPreCompact,
@@ -3741,6 +3750,8 @@ async function cmdCodexSessionEndWorker(
       return;
     }
 
+    const digestLog = (message: string): void => appendSessionEndCloseLog(logFile ?? null, message);
+    const scan = readSessionScan(transcriptPath, digestLog);
     const captureOpts: CaptureOptions = {
       source: 'last-session',
       transcriptPath,
@@ -3749,8 +3760,15 @@ async function cmdCodexSessionEndWorker(
       global: false,
       tenantId: resolveTenantId({}),
       originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+      sessionTurns: scan?.turns,
     };
-    cmdCapture(store, captureOpts);
+    try {
+      cmdCapture(store, captureOpts);
+    } catch {
+      // capture path logs its own failures
+    }
+    // The Codex wrapper passes no session id, so the rollout file names the session.
+    recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId: resolveTenantId({}), log: digestLog });
   } catch {
     // capture path logs its own failures
   }

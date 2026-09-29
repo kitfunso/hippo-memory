@@ -333,11 +333,18 @@ const TRANSFERABLE_TAGS = new Set([
 /** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows inherit them. */
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
   'git-learned',
+  'session-digest',
 ]);
 
 export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
 }
+
+/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own list. */
+export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
+  'extracted',
+  'session-digest',
+]);
 
 /**
  * Estimate how well a memory would transfer to other projects.
