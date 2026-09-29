@@ -510,6 +510,7 @@ export interface CaptureOptions {
    * behaviour. Ignored when `global: true` (global captures are host-wide).
    */
   tenantId?: string;
+  originProject?: string;
 }
 
 /**
@@ -922,7 +923,7 @@ function cmdCaptureCore(
       // global: true, the global store is host-wide and tenant is irrelevant
       // (createMemory's default 'default' applies). When global: false,
       // options.tenantId scopes the write to the same tenant as the dedup.
-      const entry = createMemory(item.content, {
+      const created = createMemory(item.content, {
         layer: Layer.Episodic,
         tags: item.tags,
         source: 'capture',
@@ -930,6 +931,7 @@ function cmdCaptureCore(
         tenantId: useGlobal ? undefined : options.tenantId,
         baseHalfLifeDays,
       });
+      const entry = options.originProject === undefined ? created : { ...created, origin_project: options.originProject };
 
       if (options.dryRun) {
         if (dryRunDb) {

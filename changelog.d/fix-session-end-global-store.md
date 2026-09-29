@@ -1,0 +1,3 @@
+### Fixed
+
+- **Session end now saves the session into your global hippo store when the folder has no store of its own.** Before, the end-of-session worker in such a folder stopped at its first step and saved nothing: no captured memories, no handoff, and the session's task snapshot stayed open. It now captures, writes the handoff and closes the snapshot in the global store, for Claude Code and for Codex. The memories it saves there keep the folder's project, so they show up in that project and not in every other one. It skips the consolidation (sleep) there, since the global store has its own daily one, and it still never creates a store in a folder that has none.
