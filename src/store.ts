@@ -2280,6 +2280,29 @@ export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): Memor
   return rows.map(rowToEntry);
 }
 
+/** Live rows whose source starts with `prefix`, on the caller's handle; LIKE folds case, so the prefix is checked again exactly. */
+export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db.prepare(
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
+  ).all(tenantId, `${prefix.replace(/[%_\\]/g, '\\$&')}%`) as MemoryRow[];
+  return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
+}
+
+/** Rewrites a live row's tags and its full-text row on the caller's transaction, with no audit row. */
+export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
+  db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`)
+    .run(JSON.stringify(entry.tags), entry.id, entry.tenantId);
+  syncFtsRow(db, entry);
+}
+
+/** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's dormant move does, and marks its summary parent dirty. */
+export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenantId);
+  deleteFtsRow(db, entry.id);
+  if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+}
+
 // Content of every tenant row tagged `tag`, without reading the rest of the store.
 // `instr` is a substring prefilter over the raw JSON; `includes` below re-checks exactly.
 export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: string): string[] {

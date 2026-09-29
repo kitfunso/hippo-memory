@@ -142,6 +142,10 @@ export interface HippoConfig {
   churnStaleness: {
     enabled: boolean;
   };
+  /** Which agents' own memories init, sleep and session end import: tool ids, null for every tool, [] for none. */
+  agentMemories: {
+    tools: string[] | null;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -221,6 +225,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   churnStaleness: {
     enabled: false,
   },
+  agentMemories: {
+    tools: null,
+  },
 };
 
 function isMemoryValueConfig(
@@ -239,6 +246,16 @@ function isChurnStalenessConfig(
   value: HippoConfig['churnStaleness'] | undefined,
 ): value is HippoConfig['churnStaleness'] {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function agentMemoryTools(value: string[] | null | undefined): string[] | null {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value) && value.every((t) => String(t) === t)) return value;
+  console.error(
+    `Warning: config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
+    `(got ${JSON.stringify(value)}) - importing none.`,
+  );
+  return [];
 }
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -357,6 +374,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       churnStaleness: {
         enabled: churnStalenessEnabled,
       },
+      agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

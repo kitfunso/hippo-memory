@@ -8,7 +8,7 @@ import type { JsonValue } from '../working-memory.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
-import type { Adapter, AdapterContext, Container, Scope } from './types.js';
+import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
 
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
@@ -47,6 +47,13 @@ export const claudeCodeAdapter: Adapter = {
     return { tool: 'claude-code', home: config, containers: readFolders(folders, scope, ctx.platform), warnings };
   },
 };
+
+/** Post-compact's read: the session's own notes folder and nothing else, so no git call runs inside the hook's time limit. */
+export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
+  const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
+  const folder = path.join(path.dirname(transcriptPath), 'memory');
+  return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
+}
 
 function projectFolders(ctx: AdapterContext, config: string): string[] {
   const projects = path.join(config, 'projects');

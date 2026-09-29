@@ -180,6 +180,18 @@ export function listDormantSnapshots(db: DatabaseSyncLike, tenantId: string): Do
   return rows.flatMap((row) => toSnapshot(row) ?? []);
 }
 
+/** Readable snapshots whose entry's source starts with `prefix`; a malformed snapshot is passed over, not an error. */
+export function dormantSnapshotsBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): DormantSnapshot[] {
+  // SAFETY: rows' shape matches the seven columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+       FROM dormant_memories
+      WHERE tenant_id = ?
+        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END LIKE ? ESCAPE '\\'`,
+  ).all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
+  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
+}
+
 function toSnapshot(row: DormantRow): DormantSnapshot | null {
   const entry = parseSnapshot(row);
   return entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;

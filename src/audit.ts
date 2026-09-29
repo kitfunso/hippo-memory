@@ -252,6 +252,8 @@ export const AUDIT_OPS = [
   'quarantine', // emitted by recordQuarantine inside remember's write transaction
   'quarantine_approve', // emitted by api.quarantineApprove
   'quarantine_reject', // emitted by api.quarantineReject
+  'agent_memory_restore', // emitted by the agent memory sync when a deleted note comes back
+  'agent_memory_set_aside', // emitted by the agent memory sync when a note is deleted or refused
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];
