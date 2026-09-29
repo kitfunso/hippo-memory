@@ -27,6 +27,8 @@ export interface Container {
   /** False when it exists but could not be read or failed its shape check, so nothing in it is set aside. */
   readonly readable: boolean;
   readonly items: readonly MemoryItem[];
+  /** Keys of items on disk that were not read (too big, not text, a failed read); their rows are left alone. */
+  readonly skipped: readonly string[];
   readonly warnings: readonly string[];
   /** Keys made from text, so an edit is matched by heading rather than by key. */
   readonly textKeyed: boolean;
@@ -36,6 +38,8 @@ export interface Listing {
   readonly tool: ToolId;
   readonly home: string;
   readonly containers: readonly Container[];
+  /** Problems finding containers, such as a malformed index file; an unlisted container is left alone. */
+  readonly warnings: readonly string[];
 }
 
 export interface Adapter {

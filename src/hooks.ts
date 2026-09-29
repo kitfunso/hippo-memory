@@ -220,8 +220,8 @@ function homeDir(): string {
 }
 
 /** Codex's config folder: $CODEX_HOME, else ~/.codex, as the Codex hooks docs describe. */
-export function codexHomeDir(home: string = homeDir()): string {
-  return process.env.CODEX_HOME || path.join(home, '.codex');
+export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<string, string | undefined>> = process.env): string {
+  return env.CODEX_HOME || path.join(home, '.codex');
 }
 
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder. */
