@@ -80,7 +80,7 @@ Every arm starts from the same one-line stub `CLAUDE.md` committed into each tas
 - **A1, built-in memory.** Auto memory on, in the run's own config directory. Instruction files the agent writes (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/`) carry to later tasks. This is Claude Code with nothing installed.
 - **A2, built-in memory plus hippo.** A1 plus `hippo init --no-schedule` on the stub, at the freeze tag: its hooks, its `CLAUDE.md` block and its store, all kept across tasks. This is the primary treatment, because users do not turn auto memory off to install hippo.
 - **A4, perfect memory.** A0 plus the family's teach message, written by the runner into `CLAUDE.md` right after each teach task. That is perfect saving and perfect recall. This is the positive control.
-- **A5, sham hippo.** A2 with capture removed. hippo's capture hooks (session end, pre-compact, tool failure) are dropped, and a `hippo` shim on `PATH` turns `remember`, `capture`, `learn` and `outcome` into no-ops. The same block, prompt hook and injection channel stay, fed only by what init seeded. Only the lessons hippo captured differ from A2.
+- **A5, sham hippo.** A2 with capture removed. hippo's capture hooks (session end, pre-compact, post-compact once it exists, tool failure) are dropped, and a `hippo` shim on `PATH` turns `remember`, `capture`, `learn` and `outcome` into no-ops. The same block, prompt hook and injection channel stay, fed only by what init seeded. Only the lessons hippo captured differ from A2.
 
 **Codex (set X, the portability test).** Each family's teach task runs in Claude Code, and its apply tasks run in Codex in the same workspace. Codex apply tasks get **no teach messages**, so Codex's own memory cannot learn the lesson there, and the second apply task still measures what crossed over.
 - **X1, built-in memory, the floor.** Claude Code auto memory is on for the teach task, Codex memories are on for the apply tasks, and instruction files carry. Codex reads `AGENTS.md` and not `CLAUDE.md`, so a lesson crosses only if the agent wrote it into `AGENTS.md`.
@@ -89,6 +89,8 @@ Every arm starts from the same one-line stub `CLAUDE.md` committed into each tas
 - **X4, perfect memory.** X1 plus the teach message written into `AGENTS.md` after the teach task.
 
 How Codex hooks are trusted in a fresh Codex home is settled in the smoke stage and written into the runner, the same way for every Codex arm. If Codex memories cannot run headless, or are not offered on the account, X1 to X4 run with them off, and the write-up says so.
+
+**hippo's agent-memory import is part of hippo.** `hippo init` and `hippo sleep` copy the memories each agent keeps on disk (Claude Code auto memory notes, Codex memories and the rest) into hippo's store (`docs/plans/2026-09-29-import-agent-memories.md`). Every store a run creates sets `agentMemories.tools` to `claude-code` and `codex`, so the import reads no other tool, and each tool's home is found the way the tool finds it, so a run reads only its own `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. At init both are empty. Session end imports, so in A2 and X2 the notes Claude Code wrote during a task can reach the next task through hippo, and in X2 that is one way a lesson crosses to Codex. A5 drops the session-end and compaction hooks, so A2 minus A5 measures hippo's capture and this import together. In A2, hippo can repeat a note Claude Code already loads itself; the run ledger records the source prefix of every row hippo injects, so the write-up reports what share of A2's injected memory was imported notes, and the token measures price it.
 
 **Dropped from the first design, and why.**
 - **Random repository text** is replaced by A5, which matches hippo's own channel.
@@ -153,7 +155,7 @@ If H4 fails, the write-up leads with it.
 
 Every gate must pass before any hypothesis gets a verdict. A failed gate makes the run **invalid**, reported under that gate's name, never as a null.
 
-- **G1, isolation and delivery.** Checked on what the model received. If the smoke stage shows a local logging proxy works with plan login, it records every request. Otherwise, unique canary strings are planted in the operator's own Claude Code and Codex configuration, and in each arm's memory surfaces at probe time, and every transcript and tool output is searched for them. A session is void if:
+- **G1, isolation and delivery.** Checked on what the model received. If the smoke stage shows a local logging proxy works with plan login, it records every request. Otherwise, unique canary strings are planted in the operator's own Claude Code and Codex configuration and memories, and in each arm's memory surfaces at probe time, and every transcript and tool output is searched for them. A session is void if:
   - A0 or A4 received auto memory;
   - any arm but A2, A5 and X2 received hippo text;
   - an operator canary appears anywhere;
@@ -222,6 +224,7 @@ If any of these exceeds 60 families, or the session total exceeds the ceiling se
    - adds snapshot-and-restore on retry, and the three grading checks listed under TE5 in the ROADMAP;
    - adds a Codex runner with per-run installs and `CODEX_HOME`;
    - fixes hippo's Codex wrapper, which reads `~/.codex` and ignores `CODEX_HOME` (`src/hooks.ts:254`);
+   - sets `agentMemories.tools` to `claude-code` and `codex` in every store a run creates, and shows in the dry run that hippo's agent-memory import reads only the run's own homes: `hippo import --agents --dry-run` in each run lists only those two tools, resolved to that run's `CLAUDE_CONFIG_DIR` and `CODEX_HOME` (the dry run fails when either is unset), and a canary note in the operator's real Claude Code and Codex memories never reaches a run's store;
    - adds the sham-hippo shim, the memory-surface ledger, the read check, the two-level bootstrap and blind mode in the analyzer.
 
    **Check:** a unit test per change, and a dry run showing fresh, empty memory directories per run.
