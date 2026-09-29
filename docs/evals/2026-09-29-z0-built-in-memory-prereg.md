@@ -65,7 +65,7 @@ A **teach message** is built from the maintainer's own sentence plus a fixed rea
 
 ### Screen
 
-Before scoring, each candidate family runs under the two control arms only, A0 and A4, on two seeds. A0 runs the teach and screen tasks; A4 runs the screen task. A family is kept if A0 breaks the lesson on at least 2 of its 4 attempts, so there is something to learn, and A4 follows it on both of its attempts, so memory can fix it. The drop list is published. The screen never runs a hippo or built-in arm, so it cannot select for or against either.
+Before scoring, each candidate family runs under the two control arms only, A0 and A4, on two seeds. A0 runs the teach and screen tasks. A4 runs the screen task with the family's teach message already written into `CLAUDE.md`, exactly as its arm definition does after a teach task. A family is kept if A0 breaks the lesson on at least 2 of its 4 attempts, so there is something to learn, and A4 follows it on both of its attempts, so memory can fix it. The drop list is published. The screen never runs a hippo or built-in arm, so it cannot select for or against either.
 
 ## Arms
 
@@ -208,7 +208,7 @@ K, the number of scored families, is set with 2,000 simulated runs of the full a
 - H1 a win when the true effect is 15 points;
 - H1 a tie when the true effect is zero.
 
-Set X gets its own K from the same rule for H2, and set N its size from 80% power for H4 to pass at a true difference of zero.
+Set X gets its own K from the same rule for H2, and set N its size from 80% power for H4 to pass at a true difference of zero. H3 is sized too: calibration also measures the spread of paired token ratios, and sets R and N together must give H3 80% power, at the same level, to be a win at a true ratio of 0.95 and a tie at a true ratio of 1. Where H3 needs more tasks than H1 and H4 give, the larger size is used.
 
 If any of these exceeds 60 families, or the session total exceeds the ceiling set at the founder's go, the run does not start, and the needed sizes are reported instead. An underpowered run is not started.
 
