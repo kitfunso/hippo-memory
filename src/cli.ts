@@ -47,7 +47,10 @@ import {
   defaultSleepLogPath,
   ensureCodexWrapperInstalled,
   installCodexWrapper,
+  detectRealCodexPath,
+  isCodexPresent,
   isCodexWrapperInstalled,
+  CODEX_TRUST_LINE,
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
   resolveCodexSessionTranscript,
@@ -652,7 +655,7 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
     (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
     '.');
   console.log(`Global store: ${globalRoot}`);
-  if (!flags['no-hooks']) {
+  if (initInstallsIntegrations(flags)) {
     // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
     const agents = detectAgentHooks(repos);
     if (agents.length === 0) {
@@ -698,8 +701,7 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
   const globalRoot = getGlobalRoot();
   registerWorkspace(globalRoot, path.dirname(hippoRoot));
 
-  // Auto-detect and install hooks (unless --no-hooks)
-  if (!flags['no-hooks']) {
+  if (initInstallsIntegrations(flags)) {
     autoInstallHooks();
   }
 
@@ -726,6 +728,14 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
       console.log(`   Imported ${memImported} memories from this project's Claude Code auto memory.`);
     }
   }
+}
+
+/** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
+function initInstallsIntegrations(flags: Record<string, string | boolean | string[]>): boolean {
+  if (flags['no-hooks']) return false;
+  if (process.env.HIPPO_SKIP_AUTO_INTEGRATIONS !== '1') return true;
+  console.log('   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');
+  return false;
 }
 
 /** Plain init: patch the detected agents' instruction files in cwd, then install their user-level hooks. */
@@ -806,13 +816,32 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
 }
 
-/** Claude Code settings hooks and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
+/** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
+function installCodexMemoryHooks(indent: string): void {
+  const result = installJsonHooks('codex');
+  if (result.invalidJson) {
+    console.log(`${indent}WARNING: ${result.settingsPath} is not a hooks file hippo can merge into; fix it, then run \`hippo hook install codex\`.`);
+    return;
+  }
+  const added = [
+    result.installedUserPromptSubmit ? 'UserPromptSubmit' : '',
+    result.installedCompactResume ? 'SessionStart(compact)' : '',
+  ].filter(Boolean);
+  console.log(added.length > 0
+    ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
+    : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
+  console.log(`${indent}${CODEX_TRUST_LINE}`);
+}
+
+/** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
     // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in (issue #133).
     if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
       console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }
+    // Checked first so init never creates ~/.codex on a machine without Codex.
+    if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
     // For Claude Code, also install SessionEnd+SessionStart entries in its
     // settings.json. Keeps `hippo init` in lockstep with `hippo hook install
@@ -8182,9 +8211,15 @@ function cmdHook(
         console.log(`WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
       }
     } else if (target === 'codex') {
-      const result = installCodexWrapper();
-      console.log(`Installed Codex session-end integration -> ${result.metadataPath}`);
-      console.log(`   Wrapped detected Codex launcher at ${result.commandPath}`);
+      installCodexMemoryHooks('');
+      // The wrapper stays the capture path; the hooks above work without it, so a missing launcher is not an error.
+      if (detectRealCodexPath()) {
+        const result = installCodexWrapper();
+        console.log(`Installed Codex session-end integration -> ${result.metadataPath}`);
+        console.log(`   Wrapped detected Codex launcher at ${result.commandPath}`);
+      } else {
+        console.log('No codex launcher on PATH, so session-end capture was not set up; re-run once `codex` is on PATH.');
+      }
     }
 
     return;
@@ -8228,6 +8263,9 @@ function cmdHook(
         console.log(`Removed hippo opencode plugin (and any legacy hooks block from opencode.json)`);
       }
     } else if (target === 'codex') {
+      if (uninstallJsonHooks('codex')) {
+        console.log(`Removed hippo's Codex memory hooks from ${resolveJsonHookPaths('codex').settings}`);
+      }
       if (uninstallCodexWrapper()) {
         console.log('Removed Codex wrapper integration');
       }
@@ -8318,10 +8356,12 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
 
   for (const tool of wrapperTools) {
     if (dryRun) {
+      if (tool.name === 'codex') console.log(`[dry-run] would install Codex memory hooks in ${resolveJsonHookPaths('codex').settings}`);
       console.log(`[dry-run] would wrap the detected ${tool.name} launcher in place`);
       continue;
     }
     if (tool.name === 'codex') {
+      installCodexMemoryHooks(`  ${tool.name.padEnd(14)} `);
       const result = ensureCodexWrapperInstalled();
       if (result.status === 'installed') {
         console.log(`  ${tool.name.padEnd(14)} wrapped launcher -> ${result.commandPath}`);
@@ -9523,6 +9563,7 @@ Commands:
     --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
     --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
     --no-hooks             Skip auto-detecting and installing agent hooks
+                           (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
     --no-schedule          Skip auto-creating the machine-level daily runner
     --no-learn             Skip seeding memories from git history
   remember <text>          Store a memory
@@ -9870,7 +9911,8 @@ Commands:
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
   setup                    One-shot: detect installed AI tools and install all
-                           available SessionEnd+SessionStart+PreCompact hooks
+                           available SessionEnd+SessionStart+PreCompact hooks,
+                           plus Codex's memory hooks in its hooks.json
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
@@ -9892,7 +9934,9 @@ Commands:
                            claude-code/opencode install SessionEnd+SessionStart;
                            claude-code also installs PreCompact +
                            SessionStart(compact) for mid-session continuity;
-                           codex wraps the detected launcher in place
+                           codex adds UserPromptSubmit + SessionStart(compact)
+                           to $CODEX_HOME/hooks.json (trust them once in
+                           /hooks) and wraps the detected launcher in place
     hook uninstall <target> Remove hook
   predict "<claim>"        Record a prediction to score against the actual outcome later
     --class <c>            Reference class (required)

@@ -12,6 +12,7 @@ import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { isEmbeddingAvailable } from './embeddings.js';
+import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks.js';
 import type { JsonValue } from './working-memory.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
@@ -38,7 +39,7 @@ export interface DoctorReport {
 /** Inputs for {@link runDoctor}; defaults come from the process. */
 export interface DoctorOpts {
   cwd?: string;
-  /** Home directory used to find agent configuration (~/.claude). */
+  /** Home directory used to find agent configuration (~/.claude, ~/.codex). */
   home?: string;
   version: string;
   nodeVersion?: string;
@@ -66,6 +67,29 @@ function readJson(file: string): JsonValue | null {
   } catch {
     return null;
   }
+}
+
+// Trust lives in Codex's own config.toml rows; doctor reads only the hooks file and reminds.
+function codexCheck(home: string): DoctorCheck {
+  const file = path.join(codexHomeDir(home), 'hooks.json');
+  const parsed = readJson(file);
+  // Codex drops every hook in a hooks.json it cannot parse, hippo's included.
+  if (fs.existsSync(file) && !isJsonObject(parsed)) {
+    return { id: 'codex', status: 'warn', detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it", fix: 'repair hooks.json, then run: hippo hook install codex' };
+  }
+  const text = JSON.stringify(parsed ?? '');
+  const codexHooks: Array<[string, string]> = [
+    ['hippo context --pinned-only', 'per-prompt memory'],
+    ['hippo compact-resume', 'resume after compaction'],
+  ];
+  const missing = codexHooks.filter(([marker]) => !text.includes(marker)).map(([, what]) => what);
+  if (missing.length === 0) return { id: 'codex', status: 'pass', detail: `Codex: hippo memory hooks installed. ${CODEX_TRUST_LINE}` };
+  return {
+    id: 'codex',
+    status: 'warn',
+    detail: missing.length === codexHooks.length ? "Codex found, but hippo's memory hooks are not installed" : `Codex: hippo hooks missing for ${missing.join(', ')}`,
+    fix: 'hippo hook install codex   (then trust the hooks once in /hooks)',
+  };
 }
 
 // Migration 46 creates failure_log; a read-only open no longer creates it on an older store.
@@ -213,6 +237,8 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   } else {
     checks.push({ id: 'claude-code', status: 'info', detail: 'Claude Code not found; other agents can use hippo over MCP (hippo mcp)' });
   }
+
+  if (isCodexPresent(home)) checks.push(codexCheck(home));
 
   checks.push({ id: 'embeddings', status: 'info', detail: isEmbeddingAvailable() ? 'local embeddings available (hybrid search)' : 'embeddings not installed; recall uses BM25 (optional: hippo embed --help)' });
 

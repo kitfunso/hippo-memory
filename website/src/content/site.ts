@@ -186,6 +186,7 @@ export const getStarted = {
     'A .hippo/ store in the project. On the first run it learns from the last 30 days of git history.',
     'A hippo block in the CLAUDE.md or AGENTS.md the project already has. It never creates either file.',
     'If the project uses Claude Code: 7 hook entries in ~/.claude/settings.json, for session start and end, each prompt, compaction and failed tool calls.',
+    "If the project has AGENTS.md or .codex and Codex is installed: 2 hook entries in Codex's hooks.json, for each prompt and after a compaction. Codex runs them once you trust them in /hooks.",
     'If the project uses OpenCode: a plugin at ~/.config/opencode/plugins/hippo.ts.',
     "A daily run at 6:15am, through crontab on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs hippo sleep there.",
     "On the first run, it imports the project's Claude Code auto memory, from its folder under ~/.claude/projects/.",

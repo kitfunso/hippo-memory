@@ -116,7 +116,7 @@ Run `hippo init` inside one project. This is everything it writes, in the projec
 - **Instruction files.** A block between `<!-- hippo:start -->` and `<!-- hippo:end -->` in the project's `CLAUDE.md` or `AGENTS.md`, only if that file already exists. Codex, Cursor, OpenClaw, OpenCode and Pi read `AGENTS.md`.
 - **Claude Code,** when the project has `CLAUDE.md` or `.claude/settings.json`: 7 hook entries in `~/.claude/settings.json`, one each on SessionEnd, UserPromptSubmit, PreCompact, PostCompact and PostToolUseFailure and two on SessionStart. [Framework Integrations](#framework-integrations) says what each one runs.
 - **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
-- **Codex:** no change. Init prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` undoes it.
+- **Codex,** when the project has `AGENTS.md` or `.codex` and Codex is installed (`$CODEX_HOME`, else `~/.codex`, exists): 2 hook entries in Codex's `hooks.json`, one on UserPromptSubmit that sends your pinned memories with every prompt and one on SessionStart after a compaction. **Codex runs them only after you trust them once in `/hooks`.** Init also prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` removes hippo's hooks and the wrapper.
 - **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
 - **Claude Code auto memory.** On the first run, the notes with YAML front matter in this project's own folder under `~/.claude/projects/` are imported into its store. A file that looks like it holds a secret is skipped.
 
@@ -133,7 +133,7 @@ hippo init
 #    Scheduled machine-level daily runner (6:15am) via crontab
 ```
 
-To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and auto memory import.
+To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and auto memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does.
 
 ---
 
@@ -720,7 +720,7 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
 | Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
-| Codex | `AGENTS.md` or `.codex` | `AGENTS.md`; session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
+| Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
 | Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
@@ -734,7 +734,7 @@ If you prefer explicit control:
 
 ```bash
 hippo hook install claude-code   # patches CLAUDE.md + adds the 7 settings.json hook entries listed below
-hippo hook install codex         # optional repair/manual run: patches AGENTS.md + wraps the detected Codex launcher
+hippo hook install codex         # patches AGENTS.md + adds hooks to Codex's hooks.json + wraps the detected Codex launcher
 hippo hook install cursor        # patches AGENTS.md
 hippo hook install openclaw      # patches AGENTS.md
 hippo hook install opencode      # patches AGENTS.md + installs the opencode TS plugin
@@ -757,6 +757,12 @@ For Claude Code, it also adds 7 hook entries to `~/.claude/settings.json`:
 - a `PostToolUseFailure` hook that runs `hippo capture-error`, which stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once. It also logs every failure, stored or not, for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days.
 
 To remove: `hippo hook uninstall claude-code`
+
+For Codex, it adds two hooks to `$CODEX_HOME/hooks.json` (else `~/.codex/hooks.json`) and keeps every hook already there:
+- a `UserPromptSubmit` hook that runs the same `hippo context --pinned-only` command as Claude Code's, so pinned memories and recent writes reach every prompt as developer context
+- a `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume` after a compaction, so the next prompt sends the pinned block again. Codex gets no `PreCompact` hook from hippo, so it restores a task snapshot only if one was saved with `hippo snapshot save` in the last 15 minutes
+
+**Codex runs a new or changed hook only after you trust it, so open `/hooks` in Codex once and trust both;** `hippo doctor` reminds you. The per-prompt hook was checked against a real Codex request; the compaction hook follows Codex's documented `compact` start source and has not been watched end to end in Codex. Each hook also carries a `commandWindows` form (`hippo.cmd ...`), because Codex runs hooks through PowerShell on Windows, where the execution policy can block npm's `hippo.ps1`. hippo only ever appends these two entries and never rewrites one, since Codex treats a changed command as a new hook to trust. To remove: `hippo hook uninstall codex`, which takes out only hippo's exact commands and leaves every other hook, including one of yours that runs hippo.
 
 ### What the hook adds (Claude Code example)
 
@@ -1023,7 +1029,7 @@ Run `npm install -g hippo-memory`, then `hippo init` in the project. If the proj
 
 ### How do I give Codex memory across sessions?
 
-`hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. Capturing Codex sessions is opt-in: `hippo hook install codex` wraps the Codex launcher, and `hippo hook uninstall codex` removes the wrapper.
+`hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. When Codex is installed, init also adds two hooks to Codex's `hooks.json`: one puts your pinned memories into every prompt, the other makes the next prompt send them again after a compaction. Codex asks you to trust each new hook once in `/hooks`, and skips it until you do. Capturing Codex sessions is opt-in: `hippo hook install codex` wraps the Codex launcher, and `hippo hook uninstall codex` removes the wrapper and the hooks.
 
 ### Which agents does hippo work with?
 

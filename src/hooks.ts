@@ -16,6 +16,8 @@
  *      - < 0.20.2: `Stop` hook firing `hippo sleep` on every assistant turn.
  *      - < 0.21.0: bare `hippo sleep` in SessionEnd, no `--log-file`.
  *      - 0.22.x: separate sleep + capture SessionEnd entries.
+ *    Codex's hooks.json gets only two groups (per-prompt memory and
+ *    compact-resume); see installCodexHooks.
  *
  * 2. Plugin install (OpenCode only). OpenCode does NOT share Claude Code's
  *    JSON-hook schema — its config has `additionalProperties: false` and no
@@ -44,11 +46,11 @@ function isJsonString(value: JsonValue | undefined): value is string {
 
 /** JSON-value plain-object check (excludes arrays and null), typeof-free for the same
  *  reason as isJsonString above. */
-function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
 }
 
-export type JsonHookTarget = 'claude-code';
+export type JsonHookTarget = 'claude-code' | 'codex';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;
@@ -120,6 +122,8 @@ export interface InstallResult {
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
   migratedSplitSessionEnd: boolean;
+  /** The file exists but is not JSON hippo can merge into, so it was left untouched. */
+  invalidJson: boolean;
 }
 
 export interface ToolDetection {
@@ -212,6 +216,19 @@ export { HIPPO_OPENCODE_PLUGIN_MARKER };
 function homeDir(): string {
   return process.env.HOME || process.env.USERPROFILE || os.homedir();
 }
+
+/** Codex's config folder: $CODEX_HOME, else ~/.codex, as the Codex hooks docs describe. */
+export function codexHomeDir(home: string = homeDir()): string {
+  return process.env.CODEX_HOME || path.join(home, '.codex');
+}
+
+/** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder. */
+export function isCodexPresent(home: string = homeDir()): boolean {
+  return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
+}
+
+/** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`. */
+export const CODEX_TRUST_LINE = "Codex runs hippo's hooks only after you trust them once in `/hooks`.";
 
 /**
  * Default log path consumed by `hippo last-sleep`. Shared fallback when
@@ -648,6 +665,12 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
         logFile: path.join(logsDir, 'claude-code-sleep.log'),
         display: 'Claude Code',
       };
+    case 'codex':
+      return {
+        settings: path.join(codexHomeDir(home), 'hooks.json'),
+        logFile: path.join(logsDir, 'codex-sleep.log'),
+        display: 'Codex',
+      };
   }
 }
 
@@ -700,6 +723,59 @@ function hasLegacySplitSessionEnd(hookArray: JsonValue | undefined): boolean {
   return (hasSleep || hasCapture) && !serialized.includes(HIPPO_SESSION_END_MARKER);
 }
 
+function nothingInstalled(target: JsonHookTarget, settingsPath: string): InstallResult {
+  return {
+    target,
+    settingsPath,
+    installedSessionEnd: false,
+    installedSessionStart: false,
+    installedUserPromptSubmit: false,
+    installedPreCompact: false,
+    installedCompactResume: false,
+    installedPostCompact: false,
+    installedCaptureError: false,
+    migratedPinnedInjectRecent: false,
+    migratedFromStop: false,
+    migratedLegacySessionEnd: false,
+    migratedSplitSessionEnd: false,
+    invalidJson: false,
+  };
+}
+
+/** A command hook with a Windows form: Codex runs hooks in PowerShell there, whose execution policy can block npm's hippo.ps1. */
+function codexCommandHook(command: string, timeout: number): JsonObject {
+  return { type: 'command', command, commandWindows: command.replace(/^hippo /, 'hippo.cmd '), timeout };
+}
+
+/** Codex keys trust to each hook's position and hash and re-asks for a changed one, so hippo only appends and never edits an entry. */
+function installCodexHooks(settingsPath: string, settings: JsonValue): InstallResult {
+  const result = nothingInstalled('codex', settingsPath);
+  if (!isJsonObject(settings)) return { ...result, invalidJson: true };
+  if (settings.hooks === undefined) settings.hooks = {};
+  const hooks = settings.hooks;
+  const events = ['UserPromptSubmit', 'SessionStart'];
+  if (!isJsonObject(hooks) || events.some((e) => hooks[e] !== undefined && !Array.isArray(hooks[e]))) {
+    return { ...result, invalidJson: true };
+  }
+  const append = (event: string, marker: string, group: JsonObject): boolean => {
+    const groups = hooks[event];
+    if (hookArrayContains(groups, marker)) return false;
+    hooks[event] = [...(Array.isArray(groups) ? groups : []), group];
+    return true;
+  };
+  const installedUserPromptSubmit = append('UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER, {
+    hooks: [codexCommandHook(HIPPO_PINNED_INJECT_COMMAND, 5)],
+  });
+  const installedCompactResume = append('SessionStart', HIPPO_COMPACT_RESUME_MARKER, {
+    matcher: 'compact',
+    hooks: [codexCommandHook(HIPPO_COMPACT_RESUME_MARKER, 10)],
+  });
+  if (installedUserPromptSubmit || installedCompactResume) {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  }
+  return { ...result, installedUserPromptSubmit, installedCompactResume };
+}
+
 export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const { settings: settingsPath, logFile } = resolveJsonHookPaths(target);
   const dir = path.dirname(settingsPath);
@@ -710,23 +786,10 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     try {
       settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     } catch {
-      return {
-        target,
-        settingsPath,
-        installedSessionEnd: false,
-        installedSessionStart: false,
-        installedUserPromptSubmit: false,
-        installedPreCompact: false,
-        installedCompactResume: false,
-        installedPostCompact: false,
-        installedCaptureError: false,
-        migratedPinnedInjectRecent: false,
-        migratedFromStop: false,
-        migratedLegacySessionEnd: false,
-        migratedSplitSessionEnd: false,
-      };
+      return { ...nothingInstalled(target, settingsPath), invalidJson: true };
     }
   }
+  if (target === 'codex') return installCodexHooks(settingsPath, settings);
 
   if (!settings.hooks) settings.hooks = {};
   // SAFETY: settings.hooks is either freshly initialised to {} on the line above, or an
@@ -920,25 +983,59 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     migratedFromStop,
     migratedLegacySessionEnd,
     migratedSplitSessionEnd,
+    invalidJson: false,
   };
+}
+
+/** The exact command hippo writes for each Codex event; uninstall removes only these handlers. */
+const CODEX_HOOK_COMMANDS: ReadonlyArray<readonly [string, string]> = [
+  ['UserPromptSubmit', HIPPO_PINNED_INJECT_COMMAND],
+  ['SessionStart', HIPPO_COMPACT_RESUME_MARKER],
+];
+
+/** A group loses only hippo's handlers and goes only once empty, so a user's hook beside or like hippo's stays. */
+function uninstallCodexHooks(hooks: JsonObject): boolean {
+  let changed = false;
+  for (const [event, command] of CODEX_HOOK_COMMANDS) {
+    const groups = hooks[event];
+    if (!Array.isArray(groups)) continue;
+    let removed = false;
+    const kept = groups.flatMap((group): JsonValue[] => {
+      if (!isJsonObject(group) || !Array.isArray(group.hooks)) return [group];
+      const handlers = group.hooks.filter((h) => !(isJsonObject(h) && h.command === command));
+      if (handlers.length === group.hooks.length) return [group];
+      removed = true;
+      return handlers.length > 0 ? [{ ...group, hooks: handlers }] : [];
+    });
+    if (!removed) continue;
+    changed = true;
+    if (kept.length > 0) hooks[event] = kept;
+    else delete hooks[event];
+  }
+  return changed;
 }
 
 export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return false;
 
-  let settings: JsonObject;
+  let settings: JsonValue;
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   } catch {
     return false;
   }
+  if (!isJsonObject(settings) || !isJsonObject(settings.hooks)) return false;
+  const changed = target === 'codex' ? uninstallCodexHooks(settings.hooks) : uninstallClaudeCodeHooks(settings.hooks);
+  if (!changed) return false;
+  if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  return true;
+}
 
-  // SAFETY: Claude Code's settings.json always stores `hooks` as an object when
-  // present; each event key below is still re-validated with Array.isArray before use.
-  const hooks = settings.hooks as Record<string, JsonValue[]> | undefined;
-  if (!hooks) return false;
-
+function uninstallClaudeCodeHooks(settingsHooks: JsonObject): boolean {
+  // SAFETY: each event key below is re-validated with Array.isArray before use.
+  const hooks = settingsHooks as Record<string, JsonValue[]>;
   let changed = false;
   const markersByKey = {
     SessionEnd: [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER],
@@ -963,11 +1060,7 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
       if (hooks[key].length === 0) delete hooks[key];
     }
   }
-
-  if (!changed) return false;
-  if (Object.keys(hooks).length === 0) delete settings.hooks;
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-  return true;
+  return changed;
 }
 
 // ---------------------------------------------------------------------------
@@ -1135,7 +1228,7 @@ export function detectInstalledTools(): ToolDetection[] {
     { name: 'claude-code', configDir: '~/.claude', detected: exists('.claude'), kind: 'json-hook' },
     { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
-    { name: 'codex', configDir: '~/.codex', detected: exists('.codex'), kind: 'wrapper', notes: 'wraps the detected codex launcher for session-end consolidation' },
+    { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },
     { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
     { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
   ];
