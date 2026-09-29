@@ -3371,7 +3371,7 @@ async function cmdSessionEnd(
   // Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
   // extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
-  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  const { text: stdinText } = await readStdinBounded();
   try {
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
@@ -3383,7 +3383,8 @@ async function cmdSessionEnd(
     // No stdin, not JSON, or read failure: the snapshot close below will no-op.
   }
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
-  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, stdinTimedOut);
+  // Always a hook, so never scan: an empty stdin here is not a manual run.
+  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false });
 
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);

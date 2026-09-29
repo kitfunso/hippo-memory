@@ -719,14 +719,14 @@ function summariseSessionTurns(turns: readonly SessionTurn[]): string {
  * Priority, where the first source present is the only one tried:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only on a proven manual run (no path, no stdin text, no timed-out read), because this scan spans every project on the box
+ *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
  *
  * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
   stdinText: string | undefined,
-  stdinTimedOut = false
+  opts: { mayScan: boolean }
 ): string | null {
   if (explicit) return fs.existsSync(explicit) ? explicit : null;
 
@@ -743,7 +743,7 @@ export function resolveLastSessionTranscript(
     return null;
   }
 
-  if (stdinTimedOut) return null;
+  if (!opts.mayScan) return null;
 
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!home) return null;
@@ -895,7 +895,7 @@ function cmdCaptureCore(
     case 'last-session': {
       let turns = options.sessionTurns;
       if (!turns) {
-        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, options.stdinTimedOut);
+        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, { mayScan: !options.stdinTimedOut });
         if (!resolved) {
           console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
           return;
@@ -1341,7 +1341,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
       return;
     }
   } else {
-    transcriptPath = resolveLastSessionTranscript(undefined, stdinText);
+    transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
   }
 
   if (!transcriptPath) {
