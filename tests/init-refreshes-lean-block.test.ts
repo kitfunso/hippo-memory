@@ -207,6 +207,7 @@ For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extens
 `.trim(),
 };
 const REMEMBER_LINE = 'hippo remember "<what you learned and why>"\n';
+const NO_SECRETS = 'Leave out secrets and personal details:';
 
 let home: string;
 let proj: string;
@@ -251,6 +252,7 @@ describe('the instruction block', () => {
     expect(codex).not.toContain('hippo outcome');
     expect(codex).toContain('hippo capture --stdin');
     expect(codex).toContain(REMEMBER_LINE);
+    expect(codex).toContain(NO_SECRETS);
   });
 
   it.each(['cursor', 'openclaw', 'opencode', 'pi'])('keeps context, errors and capture, drops the outcome mark and asks for a plain remember for %s, which has no capture hook', (agent) => {
@@ -260,6 +262,7 @@ describe('the instruction block', () => {
     expect(text).toContain('hippo context --auto --budget 1500');
     expect(text).toContain('hippo remember "<description of what went wrong>" --error');
     expect(text).toContain(REMEMBER_LINE);
+    expect(text).toContain(NO_SECRETS);
     expect(text).not.toContain('hippo outcome');
     expect(text).toContain('hippo capture --stdin');
   });

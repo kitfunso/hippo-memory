@@ -69,7 +69,7 @@ When something goes wrong:
 hippo remember "<description of what went wrong>" --error
 \```
 
-When you learn something that should outlive this session:
+When you learn something that should outlive this session (leave out secrets and personal details):
 
 \```bash
 hippo remember "<what you learned and why>"
