@@ -5,7 +5,7 @@
 > - **Part I (Grant-Tied Deliverables)** is the former `ROADMAP.md`: work organized by funding status (committed, grant-conditional, speculative) plus the grant work packages (Frontier AI Discovery, AI Champions Phase 1).
 > - **Part II (Canonical Execution Roadmap)** is the former `ROADMAP-RESEARCH.md`: the engineering execution plan (Tracks A-F, north star, benchmark priority, schema-migration order, test commitments, bets, non-goals).
 >
-> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats no memory.** Start there.
+> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats the memory Claude Code and Codex already have.** Z0 was redesigned on 2026-09-29 (`docs/evals/2026-09-29-z0-built-in-memory-prereg.md`). The next to-do is its stage 0, the runner fixes, then the smoke stage. Start there.
 >
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
@@ -1413,6 +1413,7 @@ LongMemEval and LoCoMo at budgets 250 to 8000, reporting answer recall against i
 Replays recorded (anonymised) agent sessions through the hooks with no LLM calls and prices the injected text with a cache model (Anthropic 0.1x read, 1.25x write). Reports tokens injected per session, share re-injected unchanged, and byte-stability. **Success:** runs in CI and fails on a regression, such as a hook that doubles its output.
 
 #### TE5. Paired agent A/B on task sequences [critical; runner, analyzer and protocol shipped in PR #227; scored runs pending; budget about $1-4k]
+**Re-registered 2026-09-29 as Z0 (Part XV):** the comparison is now built-in memory, not no memory, on lesson families with scripted corrections; see `docs/evals/2026-09-29-z0-built-in-memory-prereg.md`. The text below is the first registration.
 **Status:** protocol registered in `docs/evals/2026-09-23-te5-token-ab-preregistration.md`. `scripts/token-eval/make-tasks.mjs` drafts and verifies tasks from git history, `ab-run.mjs` runs real Claude Code sessions per arm (no-memory, hippo, random-text, stale-memory; stale-memory is another repository's memory, so it tests irrelevant rather than outdated memory, and should be renamed irrelevant-memory before the first scored run) with history truncated at the task base and the user's own settings excluded, and `ab-analyze.mjs` reports cost per resolved task with CIs. Plumbing verified with a stand-in in CI and once with real Claude Code on a toy repository. No scored run exists; the next step is a reviewed task set on two or more real repositories, run on the founder's machine.
 Sequences of related coding tasks where early tasks produce lessons later ones can use: SWE-ContextBench plus fresh issues from hippo's own history and post-cutoff public repositories. Six arms on the same model and harness: no memory, hippo as shipped, all memories dumped, naive top-k at equal budget, random repository text at equal budget, stale or irrelevant memories. 3-5 seeds, standard errors clustered by repository, four-bucket costs from provider usage fields, execution-based grading. Reports dollars per resolved task, resolve-rate delta (pass@1, pass^k), turns, file reads and repeated-error rate, and net token ROI. Pre-registered in `docs/evals`; harness and every arm's configuration published (the Mem0/Zep dispute shows vendor-run baselines are not trusted). This is the eval EI12 runs on a tenant's own history. **Success:** a published result with CIs, whatever it says.
 **Grading and plumbing checks (added 2026-09-28).** Anthropic's eval guide (Lance Martin, "Automating eval design and hillclimbing with Claude", 2026-09-28) asks for three checks the runner lacks: grade the same output twice, count plumbing failures on their own, and keep state left over from one attempt away from the next. Close them before any scored run:
@@ -1957,14 +1958,67 @@ Resource requests come from profiling hippo's own write, recall and sleep phases
 
 **Order is load-bearing.** Z0 comes first and is the scoreboard for every later item. Z2 cannot credit memories until Z1 makes injections relevant; Z4 needs Z2 and Z3 to know which lessons were ignored.
 
-#### Z0. Prove hippo beats no memory [top priority; started 2026-09-26]
-Hippo has never been shown to beat an agent with no memory. TE5 is the test and has had no scored run. It runs real Claude Code sessions on the founder's signed-in plan, so it bills nothing; the limit is plan usage, and the full registration is about 1,200 sessions. Staged:
+#### Z0. Prove hippo beats the memory agents already have [top priority; started 2026-09-26; redesigned 2026-09-29]
+**Design:** `docs/evals/2026-09-29-z0-built-in-memory-prereg.md`. It is TE5's scored run, re-registered.
+
+**Why the redesign.** Claude Code turns its own auto memory on by default, and Codex ships opt-in memories, so "beats no memory" answers a question no buyer asks. The first design's runner could not have answered it anyway:
+- it never turned auto memory off, so the no-memory arm could keep notes;
+- the hippo arm never had its `CLAUDE.md` block: init writes it only into an existing `CLAUDE.md` (`src/cli.ts:778`), and where one existed, `checkoutBase` restored the committed file before every task (`scripts/token-eval/ab-run.mjs:241-247`, `:416`, `:433`);
+- tasks mined from commits, with nobody correcting the agent, gave either memory little to do;
+- no arm showed whether memory could help on the task set at all.
+
+The pilot under the first design is a runner shakedown, not evidence.
+
+**The new test.** Lesson families built from real maintainer rules. Each is taught once, by a scripted user message (a correction, or a confirmation if the agent already complied), then needed again in later fresh sessions.
+
+Claude Code arms:
+- no memory;
+- Claude Code's built-in memory;
+- built-in plus hippo (the primary arm);
+- a perfect-memory positive control;
+- a sham hippo, with the same block and hooks but capture removed.
+
+A Codex set teaches in Claude Code and applies in Codex. There, hippo is compared with the free route: `CLAUDE.md` importing `AGENTS.md`.
+
+Hypotheses, Holm-adjusted. Each ends in loss, win, tie or inconclusive:
+- H1: fewer repeated mistakes than built-in memory;
+- H2: the lesson reaches Codex better than the shared-file setup;
+- H3: fewer tokens per task.
+
+H4 is a harm gate: hippo must cost little when nothing it holds is relevant.
+
+**Checks before any result counts:**
+- Five validity gates must pass first.
+- The perfect-memory arm must beat no memory by 30 points, or the run says nothing about hippo either way.
+- The analysis is blind until the gates pass.
+- Sample size comes from calibration by a written rule, and an underpowered run does not start.
+
+**Stages, next first:**
+0. Runner and hippo prerequisites, as code PRs:
+   - per-arm auto memory, and a Claude Code config directory per run;
+   - a stub `CLAUDE.md`, and carry lists instead of the wipe;
+   - teach and correction resumes, and lockstep arm rotation;
+   - wider file reads, snapshot restore on retry, and the three TE5 grading checks;
+   - a Codex runner;
+   - hippo's Codex wrapper honouring `CODEX_HOME` (`src/hooks.ts:254`);
+   - the sham-hippo shim, a memory-surface ledger, a two-level bootstrap and blind analysis.
+1. Smoke, about 30 sessions. It settles two questions: does auto memory save under `claude -p` (if not, the Claude Code arms run through an interactive driver), and do Codex memories and hooks work under `codex exec`?
+2. Development task set and calibration on the pilot's repositories. Then the hippo freeze tag.
+3. Scored task set: authored after the freeze, blind to hippo, screened on the control arms only. Only its hash is committed until the result is published.
+4. The scored run.
+5. Write-up, whatever it says.
+
+Stages 1 onward spend plan usage and wait on the founder's go. A rough guess before calibration is about 3,000 sessions at a 15-point minimum effect. The session ceiling and the minimum effect are set at that go.
+
+**Expectation, written down first:** H1 may tie or lose. With about ten lessons per repository, Claude Code's index loads whole, while hippo's hook injects pinned and recent memories, not the relevant ones. H2 is not a gimme either: the shared-file setup is free.
+
+**First design (superseded 2026-09-29; kept as the record).** Hippo has never been shown to beat an agent with no memory. TE5 is the test and has had no scored run. It runs real Claude Code sessions on the founder's signed-in plan, so it bills nothing; the limit is plan usage, and the full registration is about 1,200 sessions. Staged:
 1. **Task set.** Draft sequences with `make-tasks.mjs --verify` from 3 repositories with commits after 2026-07-01, rewrite every prompt as a symptom, grep memories against gold patches. **Done 2026-09-26:** 28 tasks (22 scored) from hippo, project-f and project-a, in `hippo-archive/te5-pilot/` (outside the repo; its README lists every drop and each original commit beside its rewritten prompt). Harness faults found in the pilot, **fixed in #257** (2026-09-26): a failed `--setup` or a test timeout now drops the candidate in `make-tasks.mjs --verify`, and a failed setup in `ab-run.mjs` spends no session (`invalid: 'setup'`); fixtures, snapshots and `conftest.py` are written but not run, and `e2e/` specs are neither tests nor code; a scope gate skips commits with more than 4 runnable test files or 400 changed code lines, which catches 25 of the 48 tasks review dropped and none of the 28 kept (the other 23 were judged on pinned names or strings in the tests, a human review call); `ab-run.mjs` loads `dist` only for a real run, so `--dry-run` needs no build; the stale-memory arm borrows a hippo store from an earlier run of another cluster with `--donor-runs DIR`. Still open: project-f's tests run the live `.venv`, so it needs an isolated environment first.
 2. **Pilot, descriptive only.** Arms `no-memory` and `hippo` (as shipped), about 20 scored tasks, 2 seeds, one model. Proposed first run: hippo and project-a only (15 scored tasks, 76 sessions), project-f after its environment is isolated. Waits on the founder's go, since it spends several days of plan usage. Outputs: resolve rate, cost per resolved task, repeated errors, seed-to-seed spread, sessions per plan window. It sizes the full run and catches harness faults. Pilot repositories never enter the scored run, so Z1 may be tuned on them. Harness faults the pilot found, **fixed in #270** (2026-09-28): `hippo init` and the hook shim ran with the operator's real HOME, so init could write the operator's `~/.claude/settings.json`, register a machine-wide scheduled task and import the operator's Claude Code memory files into the arm's store (leaking answers); hippo now runs with HOME set to the run's output dir and init gets `--no-schedule`. On Windows `ab-run.mjs` added a second `PATH` beside the existing `Path`, so a child `npm ci` lost the system path; it now prepends to the existing key. A usage-limit or overload result from `claude -p` now waits 15 minutes, resets the checkout and reruns the session for up to 24 hours, instead of recording the task as not resolved. Open: `fileReads` counts only the Read tool, so a session that reads files through shell `sed`, `cat` or `grep` records 0; widening it is a metric change for the preregistration, not a harness fix.
 3. **Scored run** as registered (H1 to H4), on fresh repositories.
 4. **Every Z item re-runs the same tasks** with its own `hippo` arm; an item that does not move cost per resolved task or repeated errors does not ship as a default.
 
-**Harm from wrong memory (added 2026-09-28).** H4's harm check uses another repository's memories, so it tests irrelevant memory, which an agent can ignore. The dangerous case is an on-topic memory that is confidently wrong, and Z3 and Z6 will create some. XYEval (Google DeepMind, September 2026) added one confident, misleading hint to agent tasks with the right fix unchanged and cut scores by up to 46.7% relative; agents often doubted the hint in their reasoning, then followed it without saying so. The next registration adds a `misleading-memory` arm built the same way: one plausible memory per task that points to a wrong fix. It reports the drop against `hippo` and how often the agent follows the memory silently. Plan usage only, no paid call.
+**Harm from wrong memory (added 2026-09-28).** H4's harm check uses another repository's memories, so it tests irrelevant memory, which an agent can ignore. The dangerous case is an on-topic memory that is confidently wrong, and Z3 and Z6 will create some. XYEval (Google DeepMind, September 2026) added one confident, misleading hint to agent tasks with the right fix unchanged and cut scores by up to 46.7% relative; agents often doubted the hint in their reasoning, then followed it without saying so. The next registration adds a `misleading-memory` arm built the same way: one plausible memory per task that points to a wrong fix. It reports the drop against `hippo` and how often the agent follows the memory silently. Plan usage only, no paid call. **Update 2026-09-29:** the redesigned Z0 covers an on-topic lesson going out of date through its reversal families. The planted misleading memory is the registration after Z0, because built-in memory needs a planted note of its own for the arm to be fair.
 
 **Pre-compact audit (2026-09-26, 1.46.0 on the founder's box).** The snapshot is saved and re-injected after every compaction, and 1.46's global-store fallback ended the "store not initialized" losses. Three defects remain, all before Z0's pilot so the hippo arm is not measured with them:
 - **Task field is a background-agent notice** in 66 of 71 snapshots: `isNonHumanUserLine` (`src/capture.ts:648`) does not skip user lines Claude Code tags `promptSource: "system"`. Fix there; it cleans Task, Summary and extraction together.
@@ -2032,4 +2086,4 @@ Claude Code spends its effort when a memory is written: the model decides what i
 
 **What not to build.** New commands for users to learn. Every Z item is reached through hooks `hippo init` already installs; a new CLI verb is for debugging only.
 
-**Evidence gate.** TE5 (paired agent A/B) is still the proof that any of this beats no memory. Z1's replay is the cheap check; TE5 is the claim.
+**Evidence gate.** Z0 (TE5's scored run, re-registered 2026-09-29) is the proof that any of this beats the memory agents already have. Z1's replay is the cheap check; Z0 is the claim.
