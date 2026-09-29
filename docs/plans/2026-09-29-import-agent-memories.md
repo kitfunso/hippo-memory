@@ -1,8 +1,7 @@
 # Plan: hippo imports the agent memories a user already has
 
-Rev 3 (plan-eng review r1 applied, see Review log). Status: not started. Branch `feat/import-agent-memories`, cut
-from 723e89e. The edits to cli.ts, memory.ts, shared.ts and hooks.ts wait on PR 1 of
-`2026-09-29-compaction-saves-memories.md` (the keep rule and the gated write); the new files do not.
+Rev 4 (plan-eng reviews r1 and r2 applied, see Review log). Status: building. Branch `feat/import-agent-memories`,
+rebased onto 34f165f (compaction PR 1, which brought the keep rule and the gated write).
 
 Goal (Keith, verbatim): "build this for hippo imports reads the user's current agent memories please(agnostic of
 what tool)". On install and at every sleep and session end, hippo reads the memories each coding agent on the machine
@@ -31,9 +30,9 @@ and test is kept, the session-end import for folders without a store included; t
 ## Design
 
 1. **One sync, many adapters.** An adapter knows one tool: where its memory lives and how to read it. It returns
-   containers (a folder, or a section of a file), each `readable` or not, with items `{ key, text, updatedAt }`, and
-   whether its listing was complete. The sync knows no tool: it owns keys, change detection, supersede, set-aside,
-   secrets, store routing and counts. New files, one concern each:
+   containers (a folder, or a section of a file), each `readable` or not, with items `{ key, text, updatedAt }` and
+   the keys of files it found but could not read (`skipped`). The sync knows no tool: it owns keys, change
+   detection, supersede, set-aside, secrets, store routing and counts. New files, one concern each:
    - `src/agent-memories/tools.ts`: a leaf module (no imports) listing each tool's id and tag. memory.ts
      (`KEEP_PAIRS`) and shared.ts (`NO_MERGE_TAGS`, `NEVER_AUTO_SHARE_TAGS`) read it, so the lists cannot drift.
    - `src/agent-memories/claude-code.ts`, `codex.ts`, `gemini.ts`, `copilot.ts`, `openclaw.ts`, `qwen-code.ts`: the
@@ -41,7 +40,8 @@ and test is kept, the session-end import for folders without a store included; t
      process, so tests never touch `process.env`. `claudeMemoryFolderNames` (taking `platform`), `claudeCheckoutRoot`
      and `claudeFolderName` move here from cli.ts; `codexHomeDir` (hooks.ts:221) gains an `env` parameter.
    - `src/agent-memories/markdown.ts` (built): splits one markdown file into items (top-level bullets with their
-     sub-lines, and paragraphs), each with its nearest heading.
+     sub-lines, and paragraphs), each with its nearest heading. `keys.ts` holds the hashes and single-file keys, and
+     `files.ts` and `git.ts` the shared reads.
    - `src/agent-memories/plan.ts`: a pure function from (a container's items, the live and dormant rows for its keys)
      to actions. The state matrix is tested here without a store.
    - `src/agent-memories/sync.ts`: runs the adapters, applies each container's actions in one transaction, mirrors
@@ -54,10 +54,18 @@ and test is kept, the session-end import for folders without a store included; t
      run do (`initGlobal`, shared.ts:44), with `origin_project = ''`.
    - A sync of the global store itself (a `hippo sleep` with no local store, the daily runner on the global store)
      runs the user pass only. A project pass rooted at home would match every workspace on the machine.
-   - Session end and post-compact in a folder without a store run the project pass for the session's own project (the
-     cwd's project, project-identity.ts) into the global store, with `origin_project` set to that project, plus the
-     user pass. For Claude Code the transcript's own folder, `dirname(transcript_path)/memory/`, is one of its
-     containers. This is PR 2's hook rule.
+   - Session end in a folder without a store runs the project pass for the session's own project (the cwd's
+     project, project-identity.ts) into the global store, with `origin_project` set to that project, plus the user
+     pass. For Claude Code the transcript's own folder, `dirname(transcript_path)/memory/`, is one of its
+     containers. This is PR 2's hook rule. A store-less folder outside any git repository resolves to home with the
+     name '' (project-identity.ts:117-118), so its notes land as user-global, as hippo files that folder's captures.
+   - Post-compact reads only the transcript folder's container, after PR 1's own write, into the folder's store or
+     the global store by the same rule: no sleep, no git call, no legacy adoption, no user pass. PR 1's hook has a
+     10-second limit, and PR 2 kept git and adoption off it for that reason.
+   - Handover: when a project pass into a local store commits, the global store's tagged rows under the containers
+     that pass read are set aside (design 6). Container ids hash the path, not the store, so they match. Without
+     this, rows the hook path wrote before the project had a store would stay kept and be served beside the local
+     copy after the note is deleted.
 
 3. **Row shape.** `kind: 'distilled'`, `layer: Episodic`, `confidence: 'observed'`, one tag per tool
    (`claude-code-memory` stays; `codex-memory`, `gemini-memory`, ...), and
@@ -76,12 +84,14 @@ and test is kept, the session-end import for folders without a store included; t
    - No new table.
 
 4. **Content.** The item's text, cut at 1500 characters plus ` [truncated]` (the cap is unchanged; see Out of scope).
-   Skipped and counted: text under 10 characters after trim, a secret (`detectSecret`), and a rejected value (looked
-   up with `findRejectedValue`, rejection.ts:108, before writing, so a rejected note writes no audit row at every
-   sync). Writes go through PR 1's `gatedWrite` with its worth check off for imports: that check drops short text with
-   no number or proper noun, which is exactly a one-line preference bullet. The secret veto, origin stamp and
-   rejection audit stay on. The option (and an explicit `origin_project` for the hook case in design 2) is agreed
-   with dev-cd, in PR 1 or here. For Claude notes the frontmatter is still required and `MEMORY.md` still skipped.
+   Refused and counted: text under 10 characters after trim, a secret (`detectSecret`), and a rejected value (looked
+   up with `findRejectedValue`, rejection.ts:108, on the text as stored, after the cap, before writing, so a rejected
+   note writes no audit row at every sync). A refused item is present with a hash that cannot be written (design 6).
+   Writes go through PR 1's `gatedWrite` with `worthCheck: false`: that check drops short text with no number or
+   proper noun, which is exactly a one-line preference bullet. The secret veto, origin stamp and rejection audit stay
+   on. The hook case's origin needs no option: the sync sets `origin_project` on the entry and stampOriginProject
+   keeps a preset origin (store.ts:1591). For Claude notes the frontmatter is still required and `MEMORY.md` still
+   skipped.
 
 5. **Time.** `created` and `valid_from` take the item's own time (frontmatter `modified`, else file mtime) when it is
    earlier than now, written as `new Date(t).toISOString()` (the loader treats any other form as drift,
@@ -92,32 +102,47 @@ and test is kept, the session-end import for folders without a store included; t
    import of 200 notes no longer takes every recent slot.
 
 6. **The state matrix** (per item key, within one container; plan.ts). "Tagged" is a live row with the key's source
-   and the tool tag. "Untagged" is a live row with the key's source and no tag: a set-aside row the user restored.
-   "Dormant" is a `dormant_memories` snapshot with the key's source.
-   - item present, no row of any kind: write a row.
-   - item present, tagged, same hash: nothing.
-   - item present, tagged or untagged, other hash: write the new row and set the old row's `superseded_by`, in the
-     container's transaction (the api.supersede pattern, api.ts:2092-2128). The note is the source.
-   - item present, untagged, same hash: the tag goes back on. Its id and recall history stay.
-   - item present, no live row, dormant with the same hash: restored with its tag (a deleted note came back). Other
-     hash: write a row; the dormant snapshot stays until retention purges it.
-   - item gone, container readable, tagged row: **set aside**, meaning moved to `dormant_memories` with reason
-     `source-deleted` and its tool tag removed, in the container's transaction, with the same steps as sleep's dormant
-     move (store.ts:2199-2224). It stops reaching recall and context at once, `hippo dormant restore` brings it back,
-     and `retentionDays` purges it. A note deleted as wrong is never served again; with plain decay it would be
-     served for years (`DEFAULT_HALF_LIFE_DAYS = 365`, memory.ts:491).
-   - item gone, untagged row: nothing. The user restored it on purpose.
-   - more than one live row for a key (a restore after a rewrite, legacy adoption, a copy): the newest wins and the
-     others are superseded by it.
+   and the tool tag. "Untagged" is a live row with the key's source and no tag: a set-aside row the user restored,
+   or a pinned row whose note went. "Dormant" is a readable `dormant_memories` snapshot with the key's source and no
+   `superseded_by`. A row's hash is the one in its source. An item is **present** (read, with its hash), **refused**
+   (read, but short, a secret or rejected: design 4), **unread** (in `skipped`: over 256 KB, a NUL byte, a failed
+   read) or **gone**.
+   - present, a live row has its hash: that row is kept (the newest such tagged row by `created`, then id; else an
+     untagged one, whose tag goes back on with its id and recall history). Every other tagged row of the key is
+     superseded by it. Untagged rows with another hash are left alone, so a `hippo dormant restore` survives.
+   - present, no live row has its hash, some live row exists: write the new row and set `superseded_by` on every
+     live row of the key, tagged and untagged (the note changed after any restore), in the container's transaction
+     (the api.supersede pattern, api.ts:2092-2128). The note is the source.
+   - present, no live row: the newest dormant snapshot with its hash comes back with its tag (a deleted note came
+     back). This is the sync's own restore with its own audit op, not `dormant_restore`, which marks "forgot it, then
+     needed it" for ROADMAP LC3 (api.ts:3321-3335). No such snapshot: write a row; other snapshots stay until
+     retention purges them.
+   - refused: nothing written; every tagged row of the key is set aside, since the note no longer says what the row
+     says.
+   - unread: nothing for its key.
+   - gone, container readable: every tagged row is set aside. Untagged rows: nothing; the user restored them on
+     purpose.
+   - **Set aside**, on the container's handle and in its transaction: (1) UPDATE the tool tag off; (2)
+     insertDormantRow with reason `source-deleted`; (3) DELETE from `memories` and FTS and mark dirty DAG parents, as
+     sleep does (store.ts:2216-2228), but without sleep's `AUTO_DELETABLE_SQL` filter, which skips exactly these rows;
+     (4) after commit, purge the mirror (removeEntryMirrors, store.ts:1030), since a mirror left on disk comes back
+     through rebuildIndex (store.ts:2481-2484). A pinned row loses its tag and stays live, counted. A set-aside row
+     stops reaching recall and context at once; `hippo dormant` lists it with its reason, `hippo dormant restore`
+     brings it back and `retentionDays` purges it. Set-asides go to dormant even with `dormant.enabled: false`. A
+     note deleted as wrong is never served again; with plain decay it would be served for years
+     (`DEFAULT_HALF_LIFE_DAYS = 365`, memory.ts:491).
    - container unreadable, missing or busy: nothing for any of its keys.
    - a container the adapter no longer lists (a moved repository, an uninstalled tool, another config folder): its
-     rows are left as they are. Keeping what an old tool knew is part of the point; a false set-aside after a git
-     timeout or a different environment would be worse than a stale keep.
-   - single-file stores key an item by its text. When one sync finds exactly one item gone and exactly one new under
-     the same heading, that is an edit: the new row supersedes the old. Any other mix is set-asides plus new rows.
+     rows are left as they are, apart from the handover in design 2. Keeping what an old tool knew is part of the
+     point; a false set-aside after a git timeout or a different environment would be worse than a stale keep.
+   - single-file stores key an item by its text. When one sync finds exactly one key gone and exactly one new key
+     under the same heading, that is an edit: the new row supersedes the old. Any other mix is set-asides plus new
+     rows.
    - text already stored live by another path (a remember, a capture): skipped and counted, as today. Rows whose source
      starts `agent-memory:` do not count, so each tool's copy is tracked apart and deleting it in one tool sets aside
-     only that copy. Checked after legacy adoption.
+     only that copy. In the global store only rows visible where the new row goes count (origin '' or the new row's
+     own origin): a row from project Y would otherwise hide the note from every other project. Checked after legacy
+     adoption.
    - the user superseded an imported row (`hippo supersede`): api.supersede copies tags and source to the new row
      (api.ts:2081-2090), so the user's text becomes the key's tagged row with the same hash, left alone until the note
      changes.
@@ -126,20 +151,23 @@ and test is kept, the session-end import for folders without a store included; t
 
 7. **Lookup.** From `memories`: rows where `tenant_id = ?`, `superseded_by` is null and `source` starts with
    `agent-memory:<tool>:<container>/` (LIKE with ESCAPE, as importVault does, importers.ts:820), bucketed by key
-   (everything before the last `#`) as importVault buckets, importers.ts:807-810. From `dormant_memories`: the same
-   prefix on `json_extract(entry_json, '$.source')`. Loaded once per container. No `loadAllEntries`.
+   (everything before the last `#`) as importVault buckets, importers.ts:807-810. Loaded once per container. From
+   `dormant_memories` only when some present item's key has no live row (after the first import, usually none): the
+   same prefix on `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END`, so one malformed
+   snapshot is passed over rather than failing every sync. No `loadAllEntries`.
 
 8. **Concurrency.** Lookup and every write for one container run in one `BEGIN IMMEDIATE` on one handle, through
    `gatedWrite` on that handle. Transactions never nest: a process holds one store's transaction at a time, and the
    project pass commits before the user pass opens the global store. `SQLITE_BUSY` after the busy timeout (db.ts:2597)
    skips that container with one warning and nothing set aside; sleep goes on. Every changed row (written,
-   superseded, re-tagged, restored, set aside) is mirrored after commit.
+   superseded, re-tagged, restored) is mirrored after commit; a set-aside row's mirror is purged.
 
 9. **Keep rule, merge and sharing.** From tools.ts: one `KEEP_PAIRS` entry per tool (its tag plus
-   `agent-memory:<tool>:`), each tool tag in `NO_MERGE_TAGS` and in `NEVER_AUTO_SHARE_TAGS` (shared.ts:547). And
-   `syncGlobalToLocal` (shared.ts:645-656) skips `agent-memory:` sources, so a user-pass row is never copied into a
-   project store where no pass would ever set it aside. An imported row is kept as written: never merged, never
-   sent to LLM extraction, never auto-shared, never auto-deleted while its item exists.
+   `agent-memory:<tool>:`), each tool tag in `NO_MERGE_TAGS` and in `NEVER_AUTO_SHARE_TAGS`. Auto-share
+   (shared.ts:551) and `syncGlobalToLocal` (shared.ts:645-656) also skip `agent-memory:` sources, so a restored,
+   untagged row does not travel either, and a user-pass row is never copied into a project store where no pass would
+   ever set it aside. An imported row is kept as written: never merged, never sent to LLM extraction, never
+   auto-shared, never auto-deleted while its item exists.
 
 10. **Legacy rows** (`source: claude-memory:<file>`, tag `claude-code-memory`, written by `learnFromMemoryMd`) are
     adopted at init and sleep, for the store's own Claude folders only, in two rounds across all of them:
@@ -155,21 +183,28 @@ and test is kept, the session-end import for folders without a store included; t
     - `hippo init --scan`: each repo's project pass, then the user pass once.
     - `hippo setup`: the user pass.
     - `hippo sleep`: a local store gets its project pass and the user pass; the global store gets the user pass only.
-    - Session end (Claude and Codex) and post-compact: through sleep when the folder has a store; otherwise directly,
-      as design 2 says. Post-compact is added by whichever of this PR and compaction PR 1 lands second.
+    - Session end (Claude and Codex): through sleep when the folder has a store; otherwise directly, as design 2 says.
+    - Post-compact (PR 1's hook, merged): the transcript folder's container only, after PR 1's own write (design 2).
     - `hippo import --agents [--dry-run]`: runs the import by hand. `--dry-run` writes nothing and prints each tool's
-      resolved home, its containers and what would be written, replaced and set aside. Z0's stage 0 check uses it.
-    - Opt out: `--no-learn` (init, sleep) as today, and config `agentMemories.tools`, a list of tool ids (default
-      every tool, `[]` turns the import off), read from the store being written.
+      resolved home, its containers, what would be written, replaced and set aside, and how many kept rows sit in
+      containers not listed this run (a moved project's old copy). Z0's stage 0 check uses it.
+    - Opt out: `--no-learn` (init, sleep) as today; config `agentMemories.tools`, a list of tool ids (default every
+      tool, `[]` turns the import off); and the environment variable `HIPPO_AGENT_MEMORY_TOOLS` (comma-separated
+      ids, empty or `none` for off), which overrides config. Without the variable a pass runs only the tools that
+      both the invoking store and the target store allow, so `[]` in a project store also stops that project's
+      sleeps writing the user pass into the global store. The variable exists because config is per store and `hippo
+      init` creates the store in the same command that imports.
 
 12. **Reading another tool's store.** Files only, read and never written; no adapter opens another tool's database.
-    A file over 256 KB, a file holding a NUL byte, or a failed read skips that item. An unreadable folder, a failed
-    git call, or a single-file store whose shape check fails marks the container unreadable: one warning line,
-    nothing set aside, and the sync goes on. The old bare catch (cli.ts:2976) goes.
+    A file over 256 KB, a file holding a NUL byte, or a failed read is unread (design 6): its rows are left alone. An
+    unreadable folder or a single-file store whose shape check fails marks the container unreadable: one warning
+    line, nothing set aside, and the sync goes on. A failed git call only lists fewer containers, which changes
+    nothing (design 6). The old bare catch (cli.ts:2976) goes.
 
 13. **Tool homes.** Each adapter resolves its home the way its tool does (environment variables, then settings, then
     the default), never a hard-coded `~/.tool`. Z0's stage 0 gives every run its own `CLAUDE_CONFIG_DIR` and
-    `CODEX_HOME` (planned there, not yet in the runner) and sets `agentMemories.tools` to those two tools.
+    `CODEX_HOME` (planned there, not yet in the runner) and sets `HIPPO_AGENT_MEMORY_TOOLS=claude-code,codex` in each
+    run's environment, which its hooks inherit.
 
 ## Adapters
 Every fact below is checked against the tool's own docs or source (see Research). "Home" is the injected home unless a
@@ -181,7 +216,7 @@ the file's mtime as the item time unless a better one is named.
 - Project containers: `<config>/projects/<name>/memory/` for each name `claudeMemoryFolderNames` gives the project
   root (unchanged rules); `<config>/projects/$CLAUDE_CODE_PROJECT_DIR_NAME/memory/` when `CLAUDE_CONFIG_DIR` is also
   set and the name is 1-64 of `[A-Za-z0-9_-]`; at a hook, `dirname(transcript_path)/memory/`. When the git call
-  fails the listing is marked incomplete (design 12).
+  fails fewer folders are listed (design 12).
 - User container: `autoMemoryDirectory` from `<config>/settings.json` (absolute, or `~/` expanded against home).
   Claude does not say it makes per-project folders under it, so every project shares it and it goes to the global
   store.
@@ -273,6 +308,11 @@ their users); then Gemini and OpenClaw. If the diff passes about 2,500 lines, th
 - A tool changes its store's shape: that container reads as unreadable, one warning line, nothing set aside.
 - A note is edited and deleted between syncs: hippo sees only the end state.
 - A busy store: the container waits for the next sync.
+- The process dies after a set-aside commits but before its mirror is purged: rebuildIndex brings the row back live
+  and tagged, and the next sync sets it aside again.
+- A moved project whose memory folder was copied: both containers' rows stay kept and live, so a note deleted in the
+  new folder is still served from the old container's row. `import --agents --dry-run` prints how many such rows
+  exist; clearing them is by hand (`hippo forget`).
 
 ## Tests (named after the behaviour; seeded through initStore/createMemory/writeEntry)
 - plan.ts, table-driven over every line of design 6, legacy adoption's two rounds included.
@@ -286,7 +326,16 @@ their users); then Gemini and OpenClaw. If the diff passes about 2,500 lines, th
   - a user-superseded row left alone while the note is unchanged, then superseded when it changes;
   - a deleted note that comes back unchanged is restored from dormant with its id; a restored set-aside row is left
     alone while the note stays gone;
-  - A to B to A; two live rows for one key collapse to the newest;
+  - A to B to A; two tagged rows for one key collapse to the newest; a restore after a rewrite survives two syncs;
+  - a tagged row set aside through the real SQL (the keep rule does not block it); a pinned row loses its tag and
+    stays live; `hippo rebuild-index` after a set-aside does not bring it back;
+  - an unread item (a failed read, 256 KB) leaves its row alone; a refused item (edited to hold a secret, cut under
+    10 characters, rejected) sets its tagged row aside;
+  - the handover: global `p-` rows from the store-less hook path are set aside when the project's own store syncs
+    that container; a project Y row with the same text does not hide the note from project X in the global store;
+  - post-compact reads the transcript folder only and runs no git call;
+  - a malformed dormant snapshot does not stop the sync; a superseded dormant snapshot is never restored;
+  - `HIPPO_AGENT_MEMORY_TOOLS` overrides config; `[]` in a project store stops that project's user pass;
   - a rejected value counted with no write and no audit row; a forgotten row re-imported;
   - a one-line preference bullet is imported (the worth check is off);
   - `created` carries the item's time as a 24-character Z timestamp, from an offset `modified` too, and a 40-note
@@ -318,10 +367,12 @@ rows follow their note). No em dashes; house word list.
 
 ## Z0 prereg
 Done in this branch (docs/evals/2026-09-29-z0-built-in-memory-prereg.md):
-- the import is part of hippo; every store a run creates sets `agentMemories.tools` to `claude-code` and `codex`, and
-  each run reads only its own `CLAUDE_CONFIG_DIR` and `CODEX_HOME`;
-- stage 0's dry run runs `hippo import --agents --dry-run` in each run, fails when either home is unset, and keeps
-  the canary check on the operator's real Claude Code and Codex memories;
+- the import is part of hippo; each run's environment sets `HIPPO_AGENT_MEMORY_TOOLS=claude-code,codex` (config
+  cannot, since `hippo init` creates the store in the same command that imports), and each run reads only its own
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME`;
+- stage 0's dry run runs `hippo import --agents --dry-run` in each run, fails when either home is unset or any other
+  tool is listed, and keeps the canary check on the operator's real Claude Code and Codex memories, with one more
+  canary in the operator's Copilot user memories (the shim changes HOME and USERPROFILE but not APPDATA);
 - A5 drops the compaction hooks as well as session end, so A2 minus A5 measures capture and import together;
 - the run ledger records the source prefix of every injected row, so the write-up reports what share of A2's injected
   memory was imported notes.
@@ -403,3 +454,23 @@ Prior art: Codex (`external-agent-migration/src/memory.rs`) and OpenClaw both im
    Same folder in both scopes: moot once project settings are not read.
 Not taken: 11 (ship Claude Code and Codex, defer Gemini and OpenClaw until someone asks). Keith asked for every tool;
 cutting two needs his yes. The build order puts them last and allows a second PR instead.
+
+**r2, Opus plan-eng critic (REVISE, 8 findings, text fixes only; plan-review-r2.md).** All applied:
+1. The collapse undid a `hippo dormant restore`: collapse among tagged rows only, newest by `created` then id; an
+   untagged row is superseded only when the note's hash matches no live row (design 6).
+2. The set-aside could not use sleep's steps (its filter skips kept and pinned rows; its helpers open their own
+   handle; a written mirror comes back through rebuildIndex): the four steps written out on the sync's handle, pinned
+   rows lose the tag and stay, the sync's restore has its own audit op, `DormantReason` widened (design 6, 8).
+3. Skipped items had no row: unread items leave rows alone, refused items set the tagged row aside (designs 4, 6, 12).
+4. Hook-path rows froze once the project got a store: the handover sets them aside; the global duplicate check
+   counts only rows visible to the new row's origin (designs 2, 6).
+5. Post-compact through sleep broke PR 1's 10-second hook: post-compact reads the transcript folder only (designs 2,
+   11).
+6. The allowlist could not act on a store init creates, so Z0 leaked Copilot memories on Windows:
+   `HIPPO_AGENT_MEMORY_TOOLS` overrides config, a pass needs both stores' consent, a Copilot canary (design 11, 13;
+   prereg).
+7. One malformed dormant snapshot failed every sync, and the scan ran on every container: `json_valid` guard, lookup
+   only for present keys with no live row, superseded snapshots never restored (designs 6, 7).
+8. Smaller points: dead "complete" flag dropped (`skipped` and `Listing.warnings` instead); origin needs no PR 1
+   option; the rejection pre-check digests the capped text; auto-share filters on source; non-git store-less folders
+   land user-global; moved-project and `dormant.enabled: false` lines added (designs 1, 2, 4, 6, 9; Loss windows).
