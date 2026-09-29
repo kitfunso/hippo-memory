@@ -39,6 +39,7 @@
   "src/db.ts": 67,
   "src/decisions.ts": 5,
   "src/dedupe.ts": 9,
+  "src/doctor.ts": 1,
   "src/embedding-provider.ts": 2,
   "src/embeddings.ts": 3,
   "src/eval-stats.ts": 1,
