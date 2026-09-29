@@ -7,7 +7,7 @@ Hippo puts memory into Codex requests through Codex's own [hooks](https://learn.
 Hippo's Codex integration does three things:
 
 1. Patches `AGENTS.md` in the current project if it exists, so the agent runs `hippo context` at the start of a task and `hippo remember` when something goes wrong. Without the wrapper, the block also asks for a `hippo capture` summary at session end.
-2. Adds two memory hooks to Codex's `hooks.json` (see below), so pinned memories reach every prompt without the model having to run a command.
+2. Adds two memory hooks to Codex's `hooks.json` (see below), so your pinned memories plus the five most recent ones reach every prompt without the model having to run a command.
 3. Only if you opt in, wraps the detected `codex` launcher in place and writes metadata in `~/.hippo/integrations/codex.json`.
 
 ## Memory hooks
@@ -46,8 +46,8 @@ Hippo's Codex integration does three things:
 }
 ```
 
-- The `UserPromptSubmit` hook runs the same command as Claude Code's. Codex adds its output to the request as developer context and, as with Claude Code, a block that has not changed since the session's last prompt is skipped.
-- The `SessionStart` hook runs only when a session starts after a compaction (`matcher` is applied to the start source). It marks the session so the next prompt sends the pinned block again, since the compaction dropped it. Codex gets no `PreCompact` hook from hippo, so nothing saves a task snapshot on the way in; the hook prints one only if it was saved with `hippo snapshot save` in the last 15 minutes, and prints nothing otherwise.
+- The `UserPromptSubmit` hook runs the same command as Claude Code's, which sends your pinned memories plus the five most recent ones (`--include-recent 5`). Codex adds its output to the request as developer context and, as with Claude Code, a block that has not changed since the session's last prompt is skipped.
+- The `SessionStart` hook runs only when a session starts after a compaction (`matcher` is applied to the start source). It marks the session so the next prompt sends that block again, since the compaction dropped it. Codex gets no `PreCompact` hook from hippo, so nothing saves a task snapshot on the way in; the hook prints one only if it was saved with `hippo snapshot save` in the last 15 minutes, and prints nothing otherwise.
 - **Codex asks you to trust each new hook once.** Codex skips a hook it has not reviewed, so open `/hooks` in Codex after installing and trust both. `hippo doctor` reports whether the hooks are in the file, warns when the file is not valid JSON, and repeats this reminder; hippo never writes Codex's trust settings for you.
 - What has been seen: the per-prompt hook, run by Codex 0.153.4, put hippo's block into the request Codex sent as developer context. The compaction hook follows Codex's documented `compact` start source and its tests use Codex's payload shape, but it has not been watched end to end in a live Codex session.
 - `commandWindows` runs `hippo.cmd`, because Codex runs hooks through PowerShell on Windows, where the execution policy can block npm's `hippo.ps1`.

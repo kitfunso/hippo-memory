@@ -11,7 +11,7 @@ import { mdInline } from '../content/readme';
 
 const title = 'Claude Code memory between sessions | hippo-memory';
 const description =
-  'Persistent memory for Claude Code. hippo init adds hooks that keep pinned memories in context, save state before compaction and store failed tool calls.';
+  'Persistent memory for Claude Code. hippo init adds hooks that keep pinned memories plus the five most recent ones in context, save state before compaction and store failed tool calls.';
 
 // README "Framework Integrations": what `hippo init` adds to Claude Code's settings.
 const hooks = [
@@ -38,7 +38,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
         fixed it, and which facts changed.
       </p>
       <p>
-        It recalls the lessons that match the task, keeps pinned ones in context, ranks the ones you mark wrong lower,
+        It recalls the lessons that match the task, keeps pinned ones and the five newest in context, ranks the ones you mark wrong lower,
         and leaves out the ones you replace. The store is SQLite in your project, with markdown mirrors you can read and commit.
       </p>
     </PageIntro>

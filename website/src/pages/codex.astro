@@ -41,8 +41,8 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
         Codex reads <code>AGENTS.md</code> files before it starts work. <code>hippo init</code> adds a short block there
         telling Codex to run <code>hippo context --auto</code> at the start of every task, so lessons from earlier
         sessions, and from your other agents, come back when they match the task. When Codex is installed, init also adds
-        a hook to Codex's <code>hooks.json</code> that puts your pinned memories into every prompt, with no command for
-        the model to run.
+        a hook to Codex's <code>hooks.json</code> that puts your pinned memories plus the five most recent ones into every
+        prompt, with no command for the model to run.
       </p>
     </PageIntro>
 
@@ -57,7 +57,7 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
       </p>
       <p>
         Codex asks you to trust a new hook once: after <code>hippo init</code>, open <code>/hooks</code> in Codex and
-        trust hippo's two hooks. One sends your pinned memories with every prompt. The other runs when a session restarts
+        trust hippo's two hooks. One sends your pinned memories plus the five most recent ones with every prompt. The other runs when a session restarts
         after a compaction, so the next prompt sends them again. Codex skips both until you trust them.
       </p>
       <Cmd lines={[site.installCmd, site.initCmd]} />
