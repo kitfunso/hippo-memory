@@ -1274,7 +1274,9 @@ async function cmdRecall(
 
   const loadSuperseded = includeSuperseded || Boolean(asOf);
   let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded);
-  let globalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded) : [];
+  let globalEntries = globalRoot !== hippoRoot && isInitialized(globalRoot)
+    ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded)
+    : [];
 
   // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
   // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
@@ -10189,7 +10191,7 @@ async function main(
         console.error('Please provide a search query.');
         process.exit(1);
       }
-      await cmdRecall(hippoRoot, query, flags);
+      await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
       break;
     }
 
@@ -10609,7 +10611,7 @@ async function main(
       // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
       // the hot stdin path and a manual run share this one command.
       const { text: stdinText } = await readStdinBounded();
-      await cmdContext(hippoRoot, args, flags, stdinText);
+      await cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText);
       break;
     }
 

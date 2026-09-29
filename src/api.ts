@@ -2633,6 +2633,7 @@ export async function getContext(
 
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
+  const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
 
   // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
   // S2: envelope-filter parity with api.recall for AMBIENT context - private
@@ -2740,8 +2741,8 @@ export async function getContext(
   const localLoad: AmbientLoadResult = hasLocal
     ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
     : { entries: [] };
-  const globalLoad: AmbientLoadResult = hasGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
+  const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;
@@ -2974,7 +2975,7 @@ export async function getContext(
     // Real query: hybrid search (global + local) or physics+hybrid (local only).
     let results: ContextResultEntry[];
     const minResults = cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
-    if (hasGlobal) {
+    if (hasGlobal && !primaryIsGlobal) {
       // searchBothHybrid loads from the store roots itself, so the ambient
       // filter above never saw its candidates. Admission runs INSIDE the
       // search via the opt-in entryFilter, BEFORE ranking, cross-store
@@ -3050,7 +3051,7 @@ export async function getContext(
         closeHippoDb(localDb);
       }
     }
-    if (hasGlobal) {
+    if (hasGlobal && !primaryIsGlobal) {
       const globalDb = openHippoDb(globalRoot);
       try {
         appendAuditEvent(globalDb, {

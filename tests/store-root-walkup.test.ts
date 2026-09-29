@@ -6,7 +6,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { getHippoRoot, isInitialized } from '../src/store.js';
+import { getHippoRoot, initStore, isInitialized, loadIndex, readEntry, writeEntry } from '../src/store.js';
+import { createMemory } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { queryAuditEvents } from '../src/audit.js';
 import { findHippoStoreDir } from '../src/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';
 
@@ -113,6 +116,54 @@ describe('getHippoRoot ancestor walk', () => {
 });
 
 describe('CLI end to end', () => {
+  it('uses one initialized global store for projectless recall and context', () => {
+    const globalStore = mkdirs('global-store');
+    const work = mkdirs('home', 'projectless');
+    initStore(globalStore);
+    const entry = createMemory('projectless-orbit release staging flag', { pinned: true });
+    entry.origin_project = '';
+    writeEntry(globalStore, entry);
+    const opts = { cwd: work, env: { ...process.env, HIPPO_HOME: globalStore }, encoding: 'utf-8' as const };
+
+    const recall = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--json'], opts));
+    expect(recall.results.map((r: { id: string }) => r.id)).toContain(entry.id);
+    expect(recall.suppressionSummary.totalCandidates).toBe(1);
+    expect(execFileSync('node', [hippoBin, 'context', '--auto'], opts)).toContain(entry.content);
+
+    const before = readEntry(globalStore, entry.id)!.retrieval_count;
+    const beforeDb = openHippoDb(globalStore);
+    const priorTraces = beforeDb.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all().length;
+    closeHippoDb(beforeDb);
+    expect(execFileSync('node', [hippoBin, 'context', 'projectless-orbit'], opts)).toContain(entry.content);
+    expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
+    const db = openHippoDb(globalStore);
+    try {
+      const contextAudits = queryAuditEvents(db, { tenantId: 'default', op: 'recall' })
+        .filter((e) => e.metadata?.mode === 'context');
+      expect(contextAudits).toHaveLength(1);
+      const traces = db.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all();
+      expect(traces).toHaveLength(priorTraces + 1);
+      // SAFETY: the query selects only the numeric id column.
+      expect(loadIndex(globalStore).last_trace_id).toBe(String((traces.at(-1) as { id: number }).id));
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(execFileSync('node', [hippoBin, 'context', 'absentxylophonezzq'], opts)).toBe('');
+    const missedDb = openHippoDb(globalStore);
+    try {
+      const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' })
+        .filter((e) => e.metadata?.mode === 'context');
+      expect(audits).toHaveLength(2);
+      const traces = missedDb.prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id").all();
+      expect(traces).toHaveLength(priorTraces + 2);
+      expect(traces.at(-1)?.result_count).toBe(0);
+    } finally {
+      closeHippoDb(missedDb);
+    }
+    expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
+    expect(fs.existsSync(path.join(work, '.hippo'))).toBe(false);
+  });
+
   it('recall from <proj>/src finds the project store and creates no nested one', () => {
     const globalStore = mkdirs('global-store');
     const env = { ...process.env, HIPPO_HOME: globalStore };
@@ -144,6 +195,15 @@ describe('CLI end to end', () => {
     expect(res.stderr).toContain(path.join(lone, '.hippo'));
     expect(res.stderr).toContain('up to your home directory');
     expect(fs.existsSync(path.join(lone, '.hippo'))).toBe(false);
+    for (const args of [['context', '--auto'], ['context', 'anything']]) {
+      const context = spawnSync('node', [hippoBin, ...args], {
+        cwd: lone,
+        env: { ...process.env, HIPPO_HOME: globalStore },
+        encoding: 'utf-8',
+      });
+      expect(context.status).not.toBe(0);
+      expect(context.stderr).toContain('No hippo store at');
+    }
   });
 });
 
