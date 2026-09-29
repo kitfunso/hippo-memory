@@ -1,6 +1,7 @@
 // An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text: plan design 3 and 4.
 import { realpathOrResolve } from '../project-identity.js';
 import { truncateCodePointSafe } from '../capture.js';
+import { maskEmails } from '../secret-detect.js';
 import { itemHash, sha256Hex } from './keys.js';
 import { toolSourcePrefix, type ToolId } from './tools.js';
 import type { Scope } from './types.js';
@@ -30,7 +31,8 @@ export function splitSource(source: string, prefix: string): { readonly key: str
   return cut < 0 ? { key: rest, hash: '' } : { key: rest.slice(0, cut), hash: rest.slice(cut + 1) };
 }
 
-/** The text as stored: the cap is unchanged from the old Claude import, and the hash still sees past it. */
+/** The text as stored: emails masked as on every capture path, then the old Claude import's cap; the hash still sees the raw note. */
 export function storedText(text: string): string {
-  return text.length > CONTENT_CAP ? `${truncateCodePointSafe(text, CONTENT_CAP)} [truncated]` : text;
+  const masked = maskEmails(text);
+  return masked.length > CONTENT_CAP ? `${truncateCodePointSafe(masked, CONTENT_CAP)} [truncated]` : masked;
 }

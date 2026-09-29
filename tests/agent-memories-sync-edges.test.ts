@@ -200,6 +200,15 @@ describe('agent memory sync: the Added list', () => {
     expect(dormantRows(w.local).map((d) => d.reason)).toEqual(['source-deleted', 'source-deleted', 'source-deleted']);
   });
 
+  it('a note holding a Bearer header or a JWT is refused, and an email address is stored masked', () => {
+    note(dir, 'bearer.md', 'The staging API takes Authorization: Bearer abcdefghijklmnop123456 on every call.');
+    note(dir, 'jwt.md', 'Replay the session with eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl to reproduce it.');
+    note(dir, 'email.md', 'Send the release notes to alice@example.com before tagging.');
+
+    expect(claude(sync())).toMatchObject({ secret: 2, imported: 1 });
+    expect(liveTexts(w.local)).toEqual(['Send the release notes to [email] before tagging.']);
+  });
+
   it('a rejected value is counted with no write and no audit row, at every sync', () => {
     const REJECTED = 'The release branch is cut every second Thursday.';
     reject(ctxFor(w.local), { value: REJECTED, reason: 'wrong cadence' });

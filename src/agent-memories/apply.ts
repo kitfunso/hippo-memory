@@ -5,7 +5,7 @@ import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, rea
 import { gatedWrite } from '../gated-write.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
-import { detectSecret } from '../secret-detect.js';
+import { redactSecretsStrict } from '../secret-detect.js';
 import { deleteEntryRowInTx, markSummaryDirtyInTx, selectLiveEntriesBySourcePrefix, setEntryTagsInTx, stampOriginProject } from '../store.js';
 import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
@@ -157,7 +157,8 @@ class ContainerRun {
   // The rejection lookup reads the capped text, as the write would store it, so a rejected note writes no audit row.
   private refusal(item: MemoryItem): Refusal | null {
     if (item.text.trim().length < MIN_ITEM_CHARS) return 'short';
-    if (detectSecret({ content: item.text, tags: [this.tag] }).flagged) return 'secret';
+    // Imported rows reach prompts, so the bar is text leaving the machine: Bearer headers and JWTs count too.
+    if (redactSecretsStrict(item.text) !== item.text) return 'secret';
     if (findRejectedValue(this.s.db, this.s.tenantId, rejectionDigest(storedText(item.text))) !== null) return 'rejected';
     return null;
   }

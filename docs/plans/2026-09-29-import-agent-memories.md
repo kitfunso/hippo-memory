@@ -87,8 +87,10 @@ and test is kept, the session-end import for folders without a store included; t
      under the same heading.
    - No new table.
 
-4. **Content.** The item's text, cut at 1500 characters plus ` [truncated]` (the cap is unchanged; see Out of scope).
-   Refused and counted: text under 10 characters after trim, a secret (`detectSecret`), and a rejected value (looked
+4. **Content.** The item's text with email addresses masked, as every capture path does, then cut at 1500 characters
+   plus ` [truncated]` (the cap is unchanged; see Out of scope). The source hash is taken on the raw note text.
+   Refused and counted: text under 10 characters after trim, a secret (any text `redactSecretsStrict` would change,
+   Bearer and Basic headers, JWTs and PEM blocks included, since imported rows reach prompts), and a rejected value (looked
    up with `findRejectedValue`, rejection.ts:108, on the text as stored, after the cap, before writing, so a rejected
    note writes no audit row at every sync). A refused item is present with a hash that cannot be written (design 6).
    Writes go through PR 1's `gatedWrite` with `worthCheck: false`: that check drops short text with no number or
@@ -451,7 +453,8 @@ Prior art: Codex (`external-agent-migration/src/memory.rs`) and OpenClaw both im
 5. Session end in a folder without a store now imports into the global store with the project's origin (PR 2's rule
    kept; designs 2, 11).
 6. `hippo sync` skips `agent-memory:` sources and imported tags never auto-share (design 9).
-7. The worth check is off for imports; secret veto, origin stamp and audit stay (design 4).
+7. The worth check is off for imports; secret veto, origin stamp and audit stay (design 4; the secret bar was
+   tightened after PR review, see below).
 8. `autoMemoryDirectory` read from user settings only (Adapters, Claude Code).
 9. More than one live row for a key collapses to the newest (design 6).
 10. Transactions never nest; a busy container is skipped (design 8).
@@ -522,3 +525,12 @@ folder's own notes; it now does what session end does there (design 11).
     container's rollback; with no store there is nothing to be a duplicate of, so the count is what a first run does.
 11. Rejected: a deadline for the post-compact import. Replay's deadline is absolute, so the import's time comes out
     of replay's budget and replay's leftovers wait for the next compaction; the import reads one folder.
+
+**PR review, Codex bot on #342 (2 findings, both applied):**
+1. `detectSecret` let a note holding a Bearer header or a JWT through, and imported rows reach prompts: the secret
+   bar is now any text the strict redactor would change (design 4).
+2. Email addresses were stored raw, against AGENTS.md: the stored text masks them before the cap, and the hash stays
+   on the raw note so a masked row still matches its note (design 4). A legacy row holding a raw email is replaced
+   rather than adopted.
+CI's Node 22 floor job also failed a test, not the product: `utimes` passes seconds as a double, so a `.123` mtime
+read back as `.122`; the test now uses `.500`.

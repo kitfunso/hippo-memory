@@ -147,7 +147,8 @@ describe('agent memory sync: options, time and reporting', () => {
   it('created carries the item\'s time as a 24-character Z timestamp, from an offset modified too, capped at now', () => {
     note(dir, 'offset.md', A, 'type: feedback\nmodified: 2026-03-04T10:00:00+02:00');
     const byMtime = note(dir, 'mtime.md', B);
-    utimesSync(byMtime, new Date('2025-11-05T06:07:08.123Z'), new Date('2025-11-05T06:07:08.123Z'));
+    // Node 22's utimes passes seconds as a double, so .123 lands at .1229999; half a second is exact.
+    utimesSync(byMtime, new Date('2025-11-05T06:07:08.500Z'), new Date('2025-11-05T06:07:08.500Z'));
     note(dir, 'future.md', USER_NOTE, 'type: feedback\nmodified: 2099-01-01T00:00:00Z');
     const start = Date.now();
     sync();
@@ -155,7 +156,7 @@ describe('agent memory sync: options, time and reporting', () => {
 
     const byText = new Map(liveRows(w.local).map((e) => [e.content, e]));
     expect([byText.get(A)?.created, byText.get(A)?.valid_from]).toEqual(['2026-03-04T08:00:00.000Z', '2026-03-04T08:00:00.000Z']);
-    expect(byText.get(B)?.created).toBe('2025-11-05T06:07:08.123Z');
+    expect(byText.get(B)?.created).toBe('2025-11-05T06:07:08.500Z');
     const future = Date.parse(byText.get(USER_NOTE)?.created ?? '');
     expect(future >= start - 1000 && future <= end).toBe(true);
     expect(liveRows(w.local).map((e) => ISO_Z.test(e.created))).toEqual([true, true, true]);

@@ -150,7 +150,7 @@ What is read, per tool (each tool's own environment variables and settings decid
 - **OpenClaw:** the workspace's `MEMORY.md`.
 - **Qwen Code:** the project's auto memory folder and your user memories.
 
-Each imported memory follows its note. It stays while the note exists, is replaced when the note changes, and is set aside as dormant when the note is deleted (`hippo dormant` lists it and can restore it). A note shorter than 10 characters, one that looks like it holds a secret, and one whose text you rejected with `hippo reject` are skipped. Notes are cut at 1,500 characters.
+Each imported memory follows its note. It stays while the note exists, is replaced when the note changes, and is set aside as dormant when the note is deleted (`hippo dormant` lists it and can restore it). A note shorter than 10 characters, one that looks like it holds a secret (an API key, a password, an auth header or a token), and one whose text you rejected with `hippo reject` are skipped. Email addresses are stored masked, and notes are cut at 1,500 characters.
 
 Not read: Windsurf (the file format is not documented, and Cascade reached end of life on 1 July 2026); Cursor, Copilot CLI and GitHub's Copilot Memory (the memories live on the vendor's servers); Kiro (the local store is not documented); Cline and Roo memory banks (files in the repository, which `hippo import --markdown` covers); Amp, Aider, Continue, OpenCode and pi (no memory feature found).
 
