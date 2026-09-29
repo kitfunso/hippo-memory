@@ -169,7 +169,7 @@ import {
 } from './autolearn.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
-import { deriveOriginProject, realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
+import { deriveOriginProject, isGlobalStoreRoot, realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -1252,6 +1252,7 @@ async function cmdRecall(
     process.exit(1);
   }
   const globalRoot = getGlobalRoot();
+  const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
 
   // A5 stub auth: resolve the active tenant once and thread it through every
   // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
@@ -1408,7 +1409,7 @@ async function cmdRecall(
   // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
   const localIndex = loadIndex(hippoRoot);
   const globalOn = isInitialized(globalRoot);
-  const entryText = (r: SearchResult): string => recallEntryText(r, query, showWhy, globalOn && !localIndex.entries[r.entry.id]);
+  const entryText = (r: SearchResult): string => recallEntryText(r, query, showWhy, primaryIsGlobal || (globalOn && !localIndex.entries[r.entry.id]));
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
@@ -1919,7 +1920,7 @@ async function cmdRecall(
   let activeSnapshot: TaskSnapshot | null = null;
   let sessionHandoff: SessionHandoff | null = null;
   let recentSessionEvents: SessionEvent[] = [];
-  if (includeContinuity) {
+  if (includeContinuity && !primaryIsGlobal) {
     const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
     const sessionId = rawSnapshot?.session_id ?? undefined;
     const rawHandoff = sessionId
@@ -2171,7 +2172,7 @@ async function cmdRecall(
 
   if (asJson) {
     const output = results.map((r) => {
-      const isGlobal = isInitialized(globalRoot) && !localIndex.entries[r.entry.id];
+      const isGlobal = primaryIsGlobal || (isInitialized(globalRoot) && !localIndex.entries[r.entry.id]);
       const base: Record<string, unknown> = {
         id: r.entry.id,
         score: r.score,

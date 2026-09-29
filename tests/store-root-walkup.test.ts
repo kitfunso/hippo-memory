@@ -6,10 +6,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { getHippoRoot, initStore, isInitialized, loadIndex, readEntry, saveSessionHandoff, writeEntry } from '../src/store.js';
+import { appendSessionEvent, getHippoRoot, initStore, isInitialized, loadIndex, readEntry, saveActiveTaskSnapshot, saveSessionHandoff, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
+import { adminActor, recall as apiRecall } from '../src/api.js';
 import { findHippoStoreDir } from '../src/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';
 
@@ -124,6 +125,13 @@ describe('CLI end to end', () => {
     entry.origin_project = '';
     writeEntry(globalStore, entry);
     const foreignFolder = mkdirs('other-project');
+    saveActiveTaskSnapshot(globalStore, 'default', {
+      task: 'Foreign global active task',
+      summary: 'Foreign global snapshot summary',
+      next_step: 'Resume unrelated global action',
+      session_id: 'other-project-session',
+      source: 'test',
+    });
     saveSessionHandoff(globalStore, 'default', {
       version: 1,
       sessionId: 'other-project-session',
@@ -132,14 +140,27 @@ describe('CLI end to end', () => {
       nextAction: 'Resume unrelated global action',
       artifacts: [],
     });
+    appendSessionEvent(globalStore, 'default', {
+      session_id: 'other-project-session',
+      event_type: 'note',
+      content: 'Foreign global event trail',
+      source: 'test',
+    });
     const opts = { cwd: work, env: { ...process.env, HIPPO_HOME: globalStore }, encoding: 'utf-8' as const };
 
     const recall = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--json'], opts));
     expect(recall.results.map((r: { id: string }) => r.id)).toContain(entry.id);
     expect(recall.suppressionSummary.totalCandidates).toBe(1);
+    for (const query of ['projectless-orbit', 'absentxylophonezzq']) {
+      const packet = JSON.parse(execFileSync('node', [hippoBin, 'recall', query, '--continuity', '--json'], opts));
+      expect(packet.continuity).toEqual({ activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] });
+      expect(packet.results.map((r: { id: string }) => r.id)).toEqual(query === 'projectless-orbit' ? [entry.id] : []);
+    }
     const autoContext = execFileSync('node', [hippoBin, 'context', '--auto'], opts);
     expect(autoContext).toContain(entry.content);
     expect(autoContext).not.toContain('Foreign global handoff summary');
+    expect(autoContext).not.toContain('Foreign global snapshot summary');
+    expect(autoContext).not.toContain('Foreign global event trail');
     expect(autoContext).not.toContain('Resume unrelated global action');
 
     const before = readEntry(globalStore, entry.id)!.retrieval_count;
@@ -149,6 +170,8 @@ describe('CLI end to end', () => {
     const queriedContext = execFileSync('node', [hippoBin, 'context', 'projectless-orbit'], opts);
     expect(queriedContext).toContain(entry.content);
     expect(queriedContext).not.toContain('Foreign global handoff summary');
+    expect(queriedContext).not.toContain('Foreign global snapshot summary');
+    expect(queriedContext).not.toContain('Foreign global event trail');
     expect(queriedContext).not.toContain('Resume unrelated global action');
     expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
     const db = openHippoDb(globalStore);
@@ -177,6 +200,23 @@ describe('CLI end to end', () => {
     }
     expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
     expect(fs.existsSync(path.join(work, '.hippo'))).toBe(false);
+    const contextJson = JSON.parse(execFileSync('node', [hippoBin, 'context', 'projectless-orbit', '--format', 'json'], opts));
+    expect(contextJson.memories[0].global).toBe(true);
+    const why = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--why', '--json'], opts));
+    expect(why.results[0].source).toBe('global');
+    const priorHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = globalStore;
+    try {
+      const direct = apiRecall(
+        { hippoRoot: globalStore, tenantId: 'default', actor: adminActor('test') },
+        { query: 'projectless-orbit', includeContinuity: true },
+      );
+      expect(direct.continuity).toEqual({ activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] });
+      expect(direct.results.map((r) => r.id)).toContain(entry.id);
+    } finally {
+      if (priorHome === undefined) delete process.env.HIPPO_HOME;
+      else process.env.HIPPO_HOME = priorHome;
+    }
   });
 
   it('recall from <proj>/src finds the project store and creates no nested one', () => {

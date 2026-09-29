@@ -1168,7 +1168,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   let continuity: ContinuityBlock | undefined;
   let continuityTokens: number | undefined;
   if (opts.includeContinuity) {
-    const snapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId);
+    const snapshot = isGlobalStoreRoot(ctx.hippoRoot) ? null : loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId);
     // No active snapshot = no anchor = no handoff/events. Avoids resurrecting
     // a stale handoff from a deleted/completed session.
     const sessionId = snapshot?.session_id ?? undefined;
@@ -2782,7 +2782,7 @@ export async function getContext(
     const pinnedLocal = localPool.filter((e) => e.pinned);
     const pinnedGlobal = globalPool.filter((e) => e.pinned);
     const rankedPinned = [
-      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
+      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: primaryIsGlobal })),
       ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
     ]
       .map(({ entry, isGlobal }) => {
@@ -2853,7 +2853,7 @@ export async function getContext(
         for (const e of localCandidates) {
           if (seenCandidateIds.has(e.id)) continue;
           seenCandidateIds.add(e.id);
-          candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: false });
+          candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: primaryIsGlobal });
         }
         for (const e of globalCandidates) {
           if (seenCandidateIds.has(e.id)) continue;
@@ -2872,7 +2872,7 @@ export async function getContext(
       }
     } else if (includeRecent > 0) {
       const recent = [
-        ...localPool.map((entry) => ({ entry, isGlobal: false })),
+        ...localPool.map((entry) => ({ entry, isGlobal: primaryIsGlobal })),
         ...globalPool.map((entry) => ({ entry, isGlobal: true })),
       ]
         // T2 (src/compare.ts) note: this already carries an explicit
@@ -2947,8 +2947,8 @@ export async function getContext(
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now),
-        tokens: price(e, false),
-        isGlobal: false,
+        tokens: price(e, primaryIsGlobal),
+        isGlobal: primaryIsGlobal,
       }))
       .sort(compareScoredResults);
 
@@ -3001,7 +3001,7 @@ export async function getContext(
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
-      const localCost = cost && ((r: SearchResult) => price(r.entry, false));
+      const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
       const ctxResults = usePhysicsCtx
         ? await physicsSearch(query, localEntries, {
             budget: left,
@@ -3021,8 +3021,8 @@ export async function getContext(
       results = ctxResults.map((r) => ({
         entry: r.entry,
         score: r.score,
-        tokens: price(r.entry, false),
-        isGlobal: false,
+        tokens: price(r.entry, primaryIsGlobal),
+        isGlobal: primaryIsGlobal,
       }));
     }
 

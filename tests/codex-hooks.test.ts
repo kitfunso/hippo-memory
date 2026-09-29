@@ -371,6 +371,7 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     const first = runCodexHook(m, command, { ...base, turn_id: 't1' });
     const context = JSON.parse(first).hookSpecificOutput.additionalContext;
     expect(context).toContain('projectless hook remembers the staging flag');
+    expect(context).toContain('[global]');
     expect(context).not.toContain('Foreign project handoff summary');
     expect(context).not.toContain('Resume the unrelated deployment');
     expect(runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
