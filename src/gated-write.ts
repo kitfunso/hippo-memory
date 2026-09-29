@@ -1,4 +1,4 @@
-// The one write path for text no person typed: capture and compaction items.
+// The one write path for text no person typed into hippo: capture, compaction items and imported agent memories.
 import { isContentWorthStoring } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
@@ -13,9 +13,10 @@ export function gatedWrite(
   db: DatabaseSyncLike,
   hippoRoot: string,
   entry: MemoryEntry,
-  opts?: { actor?: string },
+  opts?: { actor?: string; worthCheck?: boolean },
 ): GatedWriteResult {
-  if (!isContentWorthStoring(entry.content)) return 'skipped:not-worth-storing';
+  // Off for imported agent memories: a person wrote those notes, and a one-line preference fails the check.
+  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) return 'skipped:not-worth-storing';
   if (detectSecret(entry).flagged) return 'skipped:secret';
   try {
     writeEntryDbOnly(db, stampOriginProject(hippoRoot, entry), opts);

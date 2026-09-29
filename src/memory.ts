@@ -10,6 +10,7 @@ import {
   isRecallBoostAblated,
   evalNow,
 } from './ablation.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -498,7 +499,10 @@ export interface KeepPair {
   readonly tag: string;
   readonly sourcePrefix: string;
 }
-export const KEEP_PAIRS: readonly KeepPair[] = [{ tag: COMPACTION_MEMORY_TAG, sourcePrefix: COMPACTION_SOURCE_PREFIX }];
+export const KEEP_PAIRS: readonly KeepPair[] = [
+  { tag: COMPACTION_MEMORY_TAG, sourcePrefix: COMPACTION_SOURCE_PREFIX },
+  ...AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) })),
+];
 
 const sqlText = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.

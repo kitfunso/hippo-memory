@@ -21,8 +21,8 @@ import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
 import { rejectionDigest } from './rejection.js';
 
-/** Why sleep made a memory dormant. Only the decay pass does today. */
-export type DormantReason = 'decay';
+/** Why a memory went dormant: sleep's decay pass, or an imported agent memory whose note was deleted. */
+export type DormantReason = 'decay' | 'source-deleted';
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
 export interface DormantMove {
@@ -43,7 +43,7 @@ export interface DormantMemory {
   tags: string[];
   /** Live strength when it went dormant. */
   strength: number;
-  /** Why it went dormant (`decay`). */
+  /** Why it went dormant (`decay` or `source-deleted`). */
   reason: string;
   /** ISO time it went dormant. */
   dormantAt: string;

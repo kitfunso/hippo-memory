@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
 import {
   initStore,
   loadAllEntries,
@@ -334,6 +335,7 @@ const TRANSFERABLE_TAGS = new Set([
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
   'git-learned',
   'session-digest',
+  ...AGENT_MEMORY_TAGS,
 ]);
 
 export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
@@ -345,6 +347,7 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   'extracted',
   'session-digest',
   COMPACTION_MEMORY_TAG,
+  ...AGENT_MEMORY_TAGS,
 ]);
 
 /**
@@ -545,7 +548,7 @@ export function autoShare(
     // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
     if (isQuarantineScope(entry.scope ?? null)) return false;
     // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
-    if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t))) {
+    if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
       if (options.stats) options.stats.neverAutoShareSkipped = (options.stats.neverAutoShareSkipped ?? 0) + 1;
       return false;
     }
@@ -636,16 +639,14 @@ export function syncGlobalToLocal(
   // only stamps when the field is missing).
   const currentName = deriveOriginProject(path.dirname(path.resolve(localRoot)));
   let count = 0;
-  // AT1 (plan §3 containment, the roadmap threat this whole feature targets
-  // — a locally-rejected value must not silently resurrect via sync down
-  // from global): per-item catch, no signature change (bare number return;
-  // see the syncGlobalToLocal callers in cli.ts + tests). Counted locally
-  // and printed as one summary line, same pattern as learnFromMemoryMd.
+  // A locally rejected value must not come back through sync down: caught per item, printed as one line.
   let rejected = 0;
 
   for (const entry of globalEntries) {
     // Skip if already present by ID
     if (localIndex.entries[entry.id]) continue;
+    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
+    if (entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) continue;
     if (localText.has(textKey(entry))) continue;
     if (detectSecret(entry).flagged) continue;
     if (
