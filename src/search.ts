@@ -237,6 +237,22 @@ export interface SearchResult {
   graphVia?: { hops: number; relType: string; direction: 'from' | 'to' };
 }
 
+/** What a result costs against a budget: the tokens of the text it prints as. */
+export type ResultCost = (r: SearchResult) => number;
+
+// Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine spends alike.
+export function fitBudget<T extends SearchResult>(ordered: T[], budget: number, minResults: number, cost?: ResultCost): T[] {
+  const results: T[] = [];
+  let used = 0;
+  for (const r of ordered) {
+    const tokens = cost ? cost(r) : r.tokens;
+    if (results.length >= minResults && used + tokens > budget) continue;
+    used += tokens;
+    results.push(r);
+  }
+  return results;
+}
+
 export interface ScoreBreakdown {
   /**
    * - `hybrid`: BM25 blended with a non-zero cosine from a cached doc vector.
@@ -386,6 +402,8 @@ export async function hybridSearch(
     /** Minimum number of results to return regardless of budget.
      *  Prevents budget saturation when memories are large. Default 1. */
     minResults?: number;
+    /** Budget cost per result; the caller that prints passes the cost of its printed text. */
+    cost?: ResultCost;
     /** Active scope for scope-boost scoring. Auto-detected if not provided. */
     scope?: string | null;
     /** Include superseded memories in results. Default false. */
@@ -788,18 +806,7 @@ export async function hybridSearch(
     ordered = [...withPostRank, ...tail];
   }
 
-  // Apply token budget (guarantee at least minResults items)
-  const results: SearchResult[] = [];
-  let usedTokens = 0;
-
-  for (let i = 0; i < ordered.length; i++) {
-    const tokens = ordered[i].tokens;
-    if (results.length >= minResults && usedTokens + tokens > budget) continue;
-    usedTokens += tokens;
-    results.push(ordered[i]);
-  }
-
-  return results;
+  return fitBudget(ordered, budget, minResults, options.cost);
 }
 
 /**
@@ -888,6 +895,7 @@ export async function physicsSearch(
     queryEmbedding?: number[]; // pre-computed query vector (for testing/benchmarks)
     explain?: boolean;
     minResults?: number;
+    cost?: ResultCost;
     /** Active scope for scope-boost scoring. Auto-detected if not provided. */
     scope?: string | null;
     /** Include superseded memories. Default false. Must be threaded through
@@ -1074,16 +1082,7 @@ export async function physicsSearch(
   // Sort and apply budget, deterministic tiebreak on ties.
   merged.sort(compareScoredResults);
 
-  const results: SearchResult[] = [];
-  let usedTokens = 0;
-  for (let i = 0; i < merged.length; i++) {
-    const tokens = merged[i].tokens;
-    if (results.length >= minResults && usedTokens + tokens > budget) continue;
-    usedTokens += tokens;
-    results.push(merged[i]);
-  }
-
-  return results;
+  return fitBudget(merged, budget, minResults, options.cost);
 }
 
 /** Normalize two score pools to [0,1] and combine. */
@@ -1114,7 +1113,7 @@ function mergeScorePools(poolA: SearchResult[], poolB: SearchResult[]): SearchRe
 export function search(
   query: string,
   entries: MemoryEntry[],
-  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; includeSuperseded?: boolean; asOf?: string } = {}
+  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; cost?: ResultCost; includeSuperseded?: boolean; asOf?: string } = {}
 ): SearchResult[] {
   // Synchronous path: BM25 only (no async hybrid)
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
@@ -1237,18 +1236,7 @@ export function search(
     dedupedSync.sort(compareScoredResults);
   }
 
-  // Apply token budget
-  const results: SearchResult[] = [];
-  let usedTokens = 0;
-
-  for (let i = 0; i < dedupedSync.length; i++) {
-    const tokens = dedupedSync[i].tokens;
-    if (results.length >= minResults && usedTokens + tokens > budget) continue;
-    usedTokens += tokens;
-    results.push(dedupedSync[i]);
-  }
-
-  return results;
+  return fitBudget(dedupedSync, budget, minResults, options.cost);
 }
 
 /**

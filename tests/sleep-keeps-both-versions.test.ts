@@ -442,6 +442,13 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     for (const cmd of ['recall', 'explain']) expect(json(hippo(root, cmd, QUERY, '--json')).results.map((r) => r.id), cmd).toEqual([row.id]);
   });
 
+  it('CLI recall whose budget cuts the merged row still shows the sources it holds', async () => {
+    const { root } = await mergedStore();
+    // 140 tokens print both source lines but not the merged row ranked after them.
+    const shown = json(hippo(root, 'recall', QUERY, '--json', '--budget', '140', '--min-results', '0')).results.map((r) => r.content);
+    expect(shown.sort()).toEqual([...FACTS].sort());
+  });
+
   it('CLI recall filtered to the episodic layer still shows the sources', async () => {
     const { root } = await mergedStore();
     const shown = json(hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic')).results.map((r) => r.content);

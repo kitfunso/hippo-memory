@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse, type Server } 
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from './project-identity.js';
+import { assembleCost, contextCost, drillCost } from './context-render.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -974,7 +975,7 @@ async function handleRequest(
     if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
     if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
     if (scope !== undefined) assembleExtra.scope = scope;
-    const result = assemble(ctx, assembleMatch.id!, assembleExtra);
+    const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
     recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
     sendJson(res, 200, result);
     return;
@@ -1015,7 +1016,7 @@ async function handleRequest(
     if (limit !== undefined) drillExtra.limit = limit;
     if (budget !== undefined) drillExtra.budget = budget;
     if (depth !== undefined) drillExtra.depth = depth;
-    const result = drillDown(ctx, drillMatch.id!, drillExtra);
+    const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
     if ('failure' in result) {
       // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
       // as 404 to avoid leaking cross-tenant existence or scope grants.
@@ -1178,6 +1179,7 @@ async function handleRequest(
       includeRecent,
       crossProject,
       currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))).name,
+      cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
     });
     recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
     sendJson(res, 200, result);

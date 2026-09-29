@@ -38,7 +38,7 @@
  */
 import { loadEntriesByIds } from './store.js';
 import type { MemoryEntry } from './memory.js';
-import { type SearchResult, estimateTokens } from './search.js';
+import { type ResultCost, type SearchResult, estimateTokens } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import {
   loadEntitiesByMemoryId,
@@ -80,6 +80,8 @@ export interface GraphExpandOpts {
   asOf?: string;
   /** Token budget for the augmented set (defaults to 4000, matching recall's default). */
   budget?: number;
+  /** Budget cost per result; defaults to the memory text. */
+  cost?: ResultCost;
   /** The recall --min-results floor: this many top base rows are kept regardless of
    *  budget, so graph expansion never violates the floor. Defaults to 1. */
   minResults?: number;
@@ -289,14 +291,16 @@ export function graphExpandRecall(
   // baseResults is score-ordered, so slice(0, N) is the top N.
   const protectedCount = Math.min(Math.max(minResults, 1), baseResults.length);
   const keep = new Set<SearchResult>(baseResults.slice(0, protectedCount));
-  let usedTokens = [...keep].reduce((s, r) => s + r.tokens, 0);
+  const price = opts.cost ?? ((r: SearchResult) => r.tokens);
+  let usedTokens = [...keep].reduce((s, r) => s + price(r), 0);
   // T2 note: PLAIN stable score sort on purpose -- both input lists are
   // deterministically ordered by this point, stability inherits that, and a
   // base-vs-graph-hit tie keeps the BASE result first (the concat order),
   // preserving pre-T2 semantics.
   for (const r of [...baseResults.slice(protectedCount), ...allHits].sort((a, b) => b.score - a.score)) {
-    if (usedTokens + r.tokens > budget) continue;
-    usedTokens += r.tokens;
+    const tokens = price(r);
+    if (usedTokens + tokens > budget) continue;
+    usedTokens += tokens;
     keep.add(r);
   }
 

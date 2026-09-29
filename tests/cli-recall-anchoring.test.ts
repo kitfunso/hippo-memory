@@ -58,15 +58,16 @@ describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   });
 
   it('bumps cmdSuppressionSummary.suppressedByInterference on R2', () => {
-    expect(cliText).toMatch(/cmdSuppressedByInterference\s*=\s*cmdAnchoringHint\?\.reason\s*===\s*['"]memory_dominance['"]\s*\?\s*1\s*:\s*0/);
+    expect(cliText).toMatch(/suppressedByInterference:\s*anchoring\?\.reason\s*===\s*['"]memory_dominance['"]\s*\?\s*1\s*:\s*0/);
   });
 
   it('renders the anchoring hint line above the result list', () => {
-    expect(cliText).toContain('[anchored_on: ${cmdAnchoringHint.memoryId}]');
+    expect(cliText).toContain('[anchored_on: ${h.anchoring.memoryId}]');
+    expect(cliText.indexOf('[anchored_on: ${h.anchoring.memoryId}]')).toBeLessThan(cliText.indexOf('console.log(recallHeading('));
   });
 
   it('appends to the ring AFTER detect with anchoredOn from the hint (cooldown feed)', () => {
-    expect(cliText).toMatch(/appendRecall\(ring,\s*queryHash,\s*topId,\s*cmdAnchoringHint\?\.memoryId\)/);
+    expect(cliText).toMatch(/appendRecall\(anchorRing,\s*queryHash,\s*results\[0\]\?\.entry\.id \?\? null,\s*cmdAnchoringHint\?\.memoryId\)/);
   });
 
   it('emits recall_anchor_skipped_no_session telemetry when sessionId absent', () => {

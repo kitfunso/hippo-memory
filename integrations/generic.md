@@ -81,7 +81,7 @@ For agents that accept structured tool definitions:
       },
       "budget": {
         "type": "integer",
-        "description": "Maximum tokens to return (default: 3000)",
+        "description": "Token budget, counted on the text form recall prints; the JSON carries extra fields (default: 3000)",
         "default": 3000
       }
     },

@@ -566,6 +566,12 @@ hippo recall "api errors" --budget 1000 --json
 
 Results are ranked by `relevance * strength * recency`. The highest-signal memories fill the budget first.
 
+The budget counts the whole block as printed: the heading, each memory's label, date and tags,
+and any snapshot or hint lines, so the token figure in the heading is the size of what the
+model reads. Recall always keeps its first `--min-results` memories (default 1), even one
+larger than the budget; `hippo context` skips a memory that does not fit and keeps filling.
+`--json` returns the memories the text form would print.
+
 ---
 
 ### Auto-learn from git

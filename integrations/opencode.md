@@ -87,6 +87,6 @@ hippo outcome --good
 ## Notes
 
 - Hippo stores everything in `.hippo/` in your project root. Commit it or gitignore it.
-- `--budget 1500` is a good default. Increase for larger context tasks.
+- `--budget 1500` is a good default. Increase for larger context tasks. The budget counts the whole printed block, headings and tags included.
 - Run `hippo init` first if the project has no `.hippo/` yet.
 - For global memory: `hippo init --global`

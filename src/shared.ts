@@ -19,7 +19,7 @@ import {
   readEntry,
 } from './store.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
-import { search, hybridSearch, SearchResult } from './search.js';
+import { search, hybridSearch, fitBudget, SearchResult, type ResultCost } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
@@ -188,6 +188,8 @@ export interface HybridSearchOptions extends SearchOptions {
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
   asOf?: string;
+  /** Budget cost per result, spent the same way in each store and in the merged list. */
+  cost?: ResultCost;
   /** v0.30 / E4 — propagated to underlying hybridSearch calls.
    *  Per-call > env HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
@@ -229,7 +231,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
+  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
 
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
@@ -276,10 +278,10 @@ export async function searchBothHybrid(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
+    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   });
   const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
+    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   });
 
   // Tag global results. Local memories get a configurable priority bump.
@@ -308,18 +310,7 @@ export async function searchBothHybrid(
   // same rationale (deterministic inputs + stability; local-first on ties).
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget (guarantee at least minResults items)
-  const effectiveMinHybrid = minResults ?? 1;
-  const results: typeof deduped = [];
-  let usedTokens = 0;
-
-  for (let i = 0; i < deduped.length; i++) {
-    if (results.length >= effectiveMinHybrid && usedTokens + deduped[i].tokens > budget) continue;
-    usedTokens += deduped[i].tokens;
-    results.push(deduped[i]);
-  }
-
-  return results;
+  return fitBudget(deduped, budget, minResults ?? 1, cost);
 }
 
 // ---------------------------------------------------------------------------

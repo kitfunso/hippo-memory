@@ -72,4 +72,5 @@ Older hippo versions wrote their block to `.cursorrules`. `hippo hook uninstall 
 | Full session | `--budget 4000` |
 | Big refactor | `--budget 6000` |
 
-Adjust based on how much context you want injected before starting work.
+Adjust based on how much context you want injected before starting work. The budget counts
+everything recall prints, headings and tags included.

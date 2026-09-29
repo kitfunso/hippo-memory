@@ -97,7 +97,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep } from './search.js';
+import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';
@@ -1373,6 +1373,13 @@ export interface AssembleOpts {
    * is set on the result so the caller knows to widen.
    */
   rowCap?: number;
+  cost?: AssembleCost;
+}
+
+// Absent, the budget pays for content alone. `fixed` gets the largest count the header can print.
+export interface AssembleCost {
+  item: (it: AssembledContextItem) => number;
+  fixed: (widest: number) => number;
 }
 
 export interface AssembledContextItem {
@@ -1551,9 +1558,11 @@ export function assemble(
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   let items: AssembledContextItem[] = [...olderItems, ...tailItems];
 
-  let tokens = items.reduce((acc, it) => acc + estimateTokens(it.content), 0);
+  const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
+  const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
+  let tokens = items.reduce((acc, it) => acc + itemCost(it), 0);
   let evicted = 0;
-  while (tokens > budget && items.length > 0) {
+  while (tokens > room && items.length > 0) {
     let worstIdx = -1;
     let worstStrength = Infinity;
     for (let i = 0; i < items.length; i++) {
@@ -1564,7 +1573,7 @@ export function assemble(
       }
     }
     if (worstIdx === -1) break;
-    const cost = estimateTokens(items[worstIdx].content);
+    const cost = itemCost(items[worstIdx]);
     items = items.filter((_, i) => i !== worstIdx);
     tokens -= cost;
     evicted++;
@@ -1583,7 +1592,7 @@ export interface DrillDownOpts {
   /**
    * Optional token budget. When set, children are appended in chronological
    * order (created ASC) until adding the next child would exceed the budget.
-   * Token cost = ceil(content.length / 4) per child.
+   * Token cost = the child's printed line under `cost`, else ceil(content.length / 4).
    *
    * For depth > 1, the budget is GLOBAL cumulative (NOT per-level).
    */
@@ -1596,11 +1605,21 @@ export interface DrillDownOpts {
    * construction).
    */
   depth?: number;
+  cost?: DrillDownCost;
+}
+
+export interface DrillDownSummary { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null }
+export interface DrillDownChild { id: string; content: string; layer: string; dagLevel: number; created: string }
+
+// Absent, the budget pays for child content alone. `fixed` gets the largest child count the heading can print.
+export interface DrillDownCost {
+  child: (c: DrillDownChild) => number;
+  fixed: (summary: DrillDownSummary, widest: number) => number;
 }
 
 export interface DrillDownResult {
-  summary: { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null };
-  children: Array<{ id: string; content: string; layer: string; dagLevel: number; created: string }>;
+  summary: DrillDownSummary;
+  children: DrillDownChild[];
   totalChildren: number;
   truncated: boolean;
 }
@@ -1695,15 +1714,33 @@ export function drillDown(
     frontier = nextFrontier;
   }
 
+  const summaryOut: DrillDownSummary = {
+    id: summary.id,
+    content: summary.content,
+    // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
+    // level-0 children, never the BFS-depth-N total (independent-review MED #4).
+    descendantCount: summary.descendant_count ?? level0DirectCount,
+    earliestAt: summary.earliest_at ?? null,
+    latestAt: summary.latest_at ?? null,
+  };
+  const all: DrillDownChild[] = collected.map((c) => ({
+    id: c.id,
+    content: c.content,
+    layer: c.layer,
+    dagLevel: c.dag_level ?? 0,
+    created: c.created,
+  }));
+
   // Apply global cumulative token budget + limit cap on collected.
-  let children = collected;
+  let children = all;
   let truncated = false;
   if (opts.budget !== undefined) {
-    const out: MemoryEntry[] = [];
+    const out: DrillDownChild[] = [];
     let used = 0;
-    for (const c of collected) {
-      const t = estimateTokens(c.content);
-      if (out.length > 0 && used + t > opts.budget) {
+    const room = opts.budget - (opts.cost?.fixed(summaryOut, all.length) ?? 0);
+    for (const c of all) {
+      const t = opts.cost ? opts.cost.child(c) : estimateTokens(c.content);
+      if (out.length > 0 && used + t > room) {
         truncated = true;
         break;
       }
@@ -1718,25 +1755,8 @@ export function drillDown(
   }
 
   return {
-    summary: {
-      id: summary.id,
-      content: summary.content,
-      // v0.30 / E5: descendant_count stays the summary's STORED value
-      // (direct children at creation time). totalChildren below reflects
-      // the full BFS collection at the requested depth.
-      // independent-review MED #4 fold: legacy fallback uses level-0 direct
-      // count (NOT collected.length which is BFS-depth-N total).
-      descendantCount: summary.descendant_count ?? level0DirectCount,
-      earliestAt: summary.earliest_at ?? null,
-      latestAt: summary.latest_at ?? null,
-    },
-    children: children.map((c) => ({
-      id: c.id,
-      content: c.content,
-      layer: c.layer,
-      dagLevel: c.dag_level ?? 0,
-      created: c.created,
-    })),
+    summary: summaryOut,
+    children,
     // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
     // depth=1 this equals the eligible direct-children count (backward
     // compat). For depth>1 it is the cumulative count across levels.
@@ -2532,11 +2552,26 @@ export interface ContextOpts {
   currentSessionId?: string | null;
   /** Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
   prompt?: string;
+  /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
+  cost?: ContextCost;
+}
+
+/** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
+export interface ContextCost {
+  /** Tokens of one entry as printed. */
+  entry: (item: Pick<ContextResultEntry, 'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'>) => number;
+  /** Tokens of the headers and footer the block can print at this budget, reserved before any entry. */
+  fixed: (budget: number, can: { cross: boolean; promptRecall: boolean; ambient: boolean }) => number;
+  /** Tokens of the sections printed ahead of the memories, each as printed. */
+  snapshot: (s: TaskSnapshot) => number;
+  handoff: (h: SessionHandoff) => number;
+  trail: (events: SessionEvent[]) => number;
 }
 
 export interface ContextResultEntry {
   entry: MemoryEntry;
   score: number;
+  /** What this entry cost the budget: its printed line under `ContextOpts.cost`, else its memory text. */
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;
@@ -2636,6 +2671,21 @@ export async function getContext(
       ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(config.pinnedInject.promptRecallCandidates, 100, 1)) }
       : undefined;
 
+  const cost = opts.cost;
+  const price = (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
+    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProjectName) })
+    : estimateTokens(entry.content);
+  const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
+  let left = cost
+    ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
+    : blockBudget;
+  // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry is.
+  const pays = (tokens: number): boolean => {
+    if (tokens > left) return false;
+    left -= tokens;
+    return true;
+  };
+
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
     ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
@@ -2690,14 +2740,17 @@ export async function getContext(
         limit: 5,
       }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
     : [];
+  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
+  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+  const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
 
   if (
     !promptRecallPending &&
     localEntries.length === 0 &&
     globalEntries.length === 0 &&
-    !activeSnapshot &&
-    !sessionHandoff &&
-    recentSessionEvents.length === 0
+    !shownSnapshot &&
+    !shownHandoff &&
+    shownEvents.length === 0
   ) {
     return { entries: [], tokens: 0 };
   }
@@ -2711,8 +2764,8 @@ export async function getContext(
     if (!pinnedCfg.pinnedInject.enabled) {
       return { entries: [], tokens: 0 };
     }
-    // Effective budget: explicit opts.budget wins over config.
-    const effBudget = opts.budget !== undefined ? budget : pinnedCfg.pinnedInject.budget;
+    // Effective budget: explicit opts.budget wins over config, less what the sections took.
+    const effBudget = left;
     const nowP = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
     const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP);
     const selectedIds = new Set<string>();
@@ -2733,7 +2786,7 @@ export async function getContext(
         return {
           entry,
           score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
-          tokens: estimateTokens(entry.content),
+          tokens: price(entry, isGlobal),
           isGlobal,
         };
       })
@@ -2805,7 +2858,7 @@ export async function getContext(
         const gated = gatePromptRecall(p, candidateItems, gate);
         for (const g of gated) {
           if (selectedIds.has(g.item.id)) continue;
-          const tokens = estimateTokens(g.item.entry.content);
+          const tokens = price(g.item.entry, g.item.isGlobal, true);
           if (usedP + tokens > recentBudget) continue;
           selectedItems.push({ entry: g.item.entry, score: g.score, tokens, isGlobal: g.item.isGlobal, promptRecall: true });
           selectedIds.add(g.item.id);
@@ -2851,7 +2904,7 @@ export async function getContext(
         .map(({ entry, isGlobal }) => ({
           entry,
           score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
-          tokens: estimateTokens(entry.content),
+          tokens: price(entry, isGlobal),
           isGlobal,
         }));
 
@@ -2888,7 +2941,7 @@ export async function getContext(
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now),
-        tokens: estimateTokens(e.content),
+        tokens: price(e, false),
         isGlobal: false,
       }))
       .sort(compareScoredResults);
@@ -2897,7 +2950,7 @@ export async function getContext(
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now) * (1 / 1.2),
-        tokens: estimateTokens(e.content),
+        tokens: price(e, true),
         isGlobal: true,
       }))
       .sort(compareScoredResults);
@@ -2906,7 +2959,7 @@ export async function getContext(
 
     let used = 0;
     for (const r of combined) {
-      if (used + r.tokens > budget) continue;
+      if (used + r.tokens > left) continue;
       selectedItems.push(r);
       used += r.tokens;
     }
@@ -2914,6 +2967,7 @@ export async function getContext(
   } else {
     // Real query: hybrid search (global + local) or physics+hybrid (local only).
     let results: ContextResultEntry[];
+    const minResults = cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
     if (hasGlobal) {
       // searchBothHybrid loads from the store roots itself, so the ambient
       // filter above never saw its candidates. Admission runs INSIDE the
@@ -2922,38 +2976,46 @@ export async function getContext(
       // excluded row saturate the budget (codex rounds 1+3) or shadow its
       // admitted duplicate in the dedupe pass (codex round 4). Recall paths
       // never set entryFilter, so their behavior is unchanged.
+      const localIndex = loadIndex(ctx.hippoRoot);
+      const isGlobalHit = (e: MemoryEntry): boolean => !localIndex.entries[e.id];
       const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
-        budget,
+        budget: left,
+        minResults,
+        cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
         scope: activeScope,
         tenantId: ctx.tenantId,
         entryFilter: ambientAdmit,
       });
-      const localIndex = loadIndex(ctx.hippoRoot);
       results = merged.map((r) => ({
         entry: r.entry,
         score: r.score,
-        tokens: r.tokens,
-        isGlobal: !localIndex.entries[r.entry.id],
+        tokens: price(r.entry, isGlobalHit(r.entry)),
+        isGlobal: isGlobalHit(r.entry),
       }));
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
+      const localCost = cost && ((r: SearchResult) => price(r.entry, false));
       const ctxResults = usePhysicsCtx
         ? await physicsSearch(query, localEntries, {
-            budget,
+            budget: left,
+            minResults,
+            cost: localCost,
             hippoRoot: ctx.hippoRoot,
             physicsConfig: ctxConfig.physics,
             scope: activeScope,
           })
         : await hybridSearch(query, localEntries, {
-            budget,
+            budget: left,
+            minResults,
+            cost: localCost,
             hippoRoot: ctx.hippoRoot,
             scope: activeScope,
           });
       results = ctxResults.map((r) => ({
         entry: r.entry,
         score: r.score,
-        tokens: r.tokens,
+        tokens: price(r.entry, false),
         isGlobal: false,
       }));
     }
@@ -3013,9 +3075,9 @@ export async function getContext(
 
   if (
     selectedItems.length === 0 &&
-    !activeSnapshot &&
-    !sessionHandoff &&
-    recentSessionEvents.length === 0
+    !shownSnapshot &&
+    !shownHandoff &&
+    shownEvents.length === 0
   ) {
     // LC1 F5 fix: this bare early-return used to skip tracing entirely — a
     // query that found nothing is exactly the coverage-gap signal Track LC
@@ -3103,9 +3165,9 @@ export async function getContext(
   return {
     entries: selectedItems,
     tokens: totalTokens,
-    activeSnapshot: activeSnapshot ?? undefined,
-    sessionHandoff: sessionHandoff ?? undefined,
-    recentEvents: recentSessionEvents.length > 0 ? recentSessionEvents : undefined,
+    activeSnapshot: shownSnapshot ?? undefined,
+    sessionHandoff: shownHandoff ?? undefined,
+    recentEvents: shownEvents.length > 0 ? shownEvents : undefined,
     ambientState,
   };
 }

@@ -28,7 +28,7 @@ const heroSteps = [
 
 const loop = [
   { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Store a memory. Errors get a longer half-life and stick.' },
-  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget, ranked by relevance and strength.' },
+  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget that counts the whole printed block, ranked by relevance and strength.' },
   { cmd: 'hippo outcome --good', note: 'Tell hippo the recall helped. Useful memories decay slower.' },
   { cmd: 'hippo sleep', note: 'Merge related episodes, decay the unused, flag conflicts.' },
 ];
