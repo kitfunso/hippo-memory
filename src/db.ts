@@ -2549,7 +2549,7 @@ const MIGRATIONS: Migration[] = [
           summary         TEXT,
           items_json      TEXT,
           items_written   INTEGER NOT NULL DEFAULT 0,
-          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done')),
+          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done','no-summary')),
           PRIMARY KEY (tenant_id, id)
         );
         CREATE INDEX IF NOT EXISTS idx_compactions_session

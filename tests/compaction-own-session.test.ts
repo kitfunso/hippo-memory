@@ -72,7 +72,7 @@ afterEach(() => {
 
 describe('own-session compaction items in recent context', () => {
   // 40 items outnumber the loader's first window (32), so admit has to reject them for the load to widen.
-  function seedFortyItemsAndOlderRows(): { items: MemoryEntry[]; older: MemoryEntry[] } {
+  function seedFortyItemsAndOlderRows() {
     const older = Array.from({ length: 8 }, (_, i) =>
       seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }));
     const items = Array.from({ length: 40 }, (_, i) =>
@@ -128,7 +128,7 @@ describe('own-session compaction items in recent context', () => {
 describe('own-session compaction items under prompt recall', () => {
   const prompt = 'how should the postgres migration rollback plan work';
 
-  function seedRecallRows(): { items: MemoryEntry[]; older: MemoryEntry } {
+  function seedRecallRows() {
     const older = seed(local, 'the postgres migration script needs a rollback plan before deploy', { created: minute(0, 0) });
     const items = ['first', 'second', 'third'].map((word, i) =>
       seedItem(local, OWN, `the ${word} lesson from this session is that the postgres migration rollback plan needs a dry run`, minute(5, i)));
@@ -185,6 +185,7 @@ describe('explicit recall is not filtered', () => {
         encoding: 'utf8',
       });
 
+      // SAFETY: `hippo recall --json` prints one object whose results each carry an id.
       const found = (JSON.parse(out) as { results: Array<{ id: string }> }).results.map((r) => r.id);
       expect(found.sort()).toEqual(wanted.sort());
     } finally {

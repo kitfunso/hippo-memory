@@ -11,6 +11,7 @@ import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
+import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { isEmbeddingAvailable } from './embeddings.js';
 import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks.js';
 import type { JsonValue } from './working-memory.js';
@@ -131,14 +132,10 @@ function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
-// The ages replay works to (compaction-record.ts): a live hook has finished by 10 minutes, and a transcript is gone after 30 days.
-const COMPACTION_STUCK_MS = 10 * 60_000;
-const COMPACTION_TRANSCRIPT_MS = 30 * 86_400_000;
-
 /** Compaction records the PostCompact hook left unfinished, which `hippo sleep` replays. */
 function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
-  const stuckBefore = new Date(now.getTime() - COMPACTION_STUCK_MS).toISOString();
-  const transcriptFloor = new Date(now.getTime() - COMPACTION_TRANSCRIPT_MS).toISOString();
+  const stuckBefore = new Date(now.getTime() - REPLAY_AFTER_MS).toISOString();
+  const transcriptFloor = new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString();
   try {
     // SAFETY: COUNT aggregate row.
     const row = db.prepare(

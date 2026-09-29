@@ -63,6 +63,7 @@ import {
 } from './hooks.js';
 import {
   createMemory,
+  createSuccessor,
   calculateStrength,
   calculateRewardFactor,
   deriveHalfLife,
@@ -1189,24 +1190,21 @@ function cmdSupersede(
     process.exit(1);
   }
 
-  const layer = (typeof flags['layer'] === 'string' ? flags['layer'] : old.layer) as Layer;
+  const layer = typeof flags['layer'] === 'string' ? (flags['layer'] as Layer) : undefined;
   const rawTags = flags['tag'];
   const tags = Array.isArray(rawTags)
     ? (rawTags as string[]).map((t) => String(t))
     : typeof rawTags === 'string'
       ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
-      : [...old.tags];
+      : undefined;
   const pinned = flags['pin'] === true || old.pinned;
 
-  const newEntry = createMemory(newContent, {
+  const newEntry = createSuccessor(old, newContent, {
+    tenantId: old.tenantId,
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     layer,
     tags,
     pinned,
-    source: old.source,
-    confidence: 'verified',
-    tenantId: old.tenantId,
-    scope: old.scope,
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
   });
 
   // AT1: write the SUCCESSOR first. The rejection guard fires on the new

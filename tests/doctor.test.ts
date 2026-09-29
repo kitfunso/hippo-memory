@@ -76,7 +76,7 @@ describe('hippo doctor', () => {
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'warn' });
   });
 
-  it('names compactions left unfinished for over 10 minutes and points at sleep, ignoring live and finished ones', () => {
+  it('names compactions left unfinished for over 10 minutes and points at sleep, ignoring live, finished and closed ones', () => {
     const cwd = tmp('doctor-compactions-');
     process.env.HIPPO_HOME = join(cwd, 'global');
     const hippoRoot = join(cwd, '.hippo');
@@ -95,10 +95,12 @@ describe('hippo doctor', () => {
     const summarisedStuck = begin('summarised-stuck', ago(30));
     const summarisedLive = begin('summarised-live', ago(30));
     const finished = begin('finished', ago(30));
+    const closed = begin('closed-no-summary', ago(30));
     const setStatus = db.prepare(`UPDATE compactions SET status = ?, summarised_at = ? WHERE id = ?`);
     setStatus.run('summarised', ago(20).toISOString(), summarisedStuck);
     setStatus.run('summarised', ago(3).toISOString(), summarisedLive);
     setStatus.run('done', ago(20).toISOString(), finished);
+    setStatus.run('no-summary', ago(20).toISOString(), closed);
     closeHippoDb(db);
 
     const check = runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')!;

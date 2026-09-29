@@ -8,7 +8,7 @@ import { auditRejectionRefusal, stampOriginProject, writeEntryDbOnly } from './s
 
 export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
 
-/** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait on that lock); the caller mirrors after commit with an entry it stamped itself. */
+/** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait on that lock); the caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that transaction, which is safe because a batch that rolls back stays `summarised` and replay writes the audit again. */
 export function gatedWrite(
   db: DatabaseSyncLike,
   hippoRoot: string,

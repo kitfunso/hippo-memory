@@ -69,11 +69,11 @@ import { summarizeFailures, type FailureSummary } from './failure-log.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
 import {
   createMemory,
+  createSuccessor,
   applyOutcome,
   calculateStrength,
   type MemoryKind,
   type MemoryEntry,
-  Layer,
   CHURN_STALE_TAG,
   COMPACTION_MEMORY_TAG,
 } from './memory.js';
@@ -2079,21 +2079,10 @@ export function supersede(
     );
   }
 
-  const newEntry = createMemory(newContent, {
-    layer: old.layer ?? Layer.Episodic,
-    tags: [...old.tags],
-    pinned: old.pinned,
-    source: old.source,
-    confidence: 'verified',
+  const newEntry = createSuccessor(old, newContent, {
     tenantId: ctx.tenantId,
-    scope: old.scope,
-    source_session_id: old.source_session_id,
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
-  // A legacy null origin has nothing to carry, so stampOriginProject derives it from the store as before.
-  if (typeof old.origin_project === 'string') {
-    newEntry.origin_project = old.origin_project;
-  }
 
   // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
   // three steps (CAS on old + writeEntryDbOnly(new) + supersede audit row)

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
 import { initStore, readEntry, writeEntry } from '../src/store.js';
 import { supersede, type Context } from '../src/api.js';
 
@@ -73,5 +73,69 @@ describe('supersede keeps provenance', () => {
     const { newId } = supersede(ctxFor(projectStore), old.id, 'the nightly export job writes its files to the cold archive bucket');
 
     expect(readEntry(projectStore, newId)?.origin_project).toBe('proj');
+  });
+});
+
+describe('createSuccessor', () => {
+  const opts = { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
+  const oldRow = (extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
+    ...createMemory('the deploy pipeline signs every artifact before upload', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      tags: ['deploy', 'signing'],
+      pinned: true,
+      source: 'compaction:sess-old',
+      scope: 'project:billing',
+    }),
+    source_session_id: 'sess-old',
+    origin_project: 'proj-a',
+    ...extra,
+  });
+
+  it('keeps source, scope, session and origin, and defaults layer, tags and pin to the old row', () => {
+    const old = oldRow();
+
+    const next = createSuccessor(old, 'the deploy pipeline signs and scans every artifact before upload', opts);
+
+    expect(next.id).not.toBe(old.id);
+    expect(next.content).toBe('the deploy pipeline signs and scans every artifact before upload');
+    expect(next.source).toBe('compaction:sess-old');
+    expect(next.scope).toBe('project:billing');
+    expect(next.source_session_id).toBe('sess-old');
+    expect(next.origin_project).toBe('proj-a');
+    expect(next.layer).toBe(Layer.Semantic);
+    expect(next.tags).toEqual(['deploy', 'signing']);
+    expect(next.tags).not.toBe(old.tags);
+    expect(next.pinned).toBe(true);
+    expect(next.confidence).toBe('verified');
+    expect(next.superseded_by).toBeNull();
+  });
+
+  it('keeps a user-global origin', () => {
+    expect(createSuccessor(oldRow({ origin_project: '' }), 'the deploy pipeline now signs twice', opts).origin_project).toBe('');
+  });
+
+  it('leaves a legacy null or unset origin unset so the store stamps it', () => {
+    expect(createSuccessor(oldRow({ origin_project: null }), 'the deploy pipeline now signs twice', opts).origin_project).toBeUndefined();
+    expect(createSuccessor(oldRow({ origin_project: undefined }), 'the deploy pipeline now signs twice', opts).origin_project).toBeUndefined();
+  });
+
+  it('lets layer, tags and pinned overrides win, including an empty tag list and pinned false', () => {
+    const next = createSuccessor(oldRow(), 'the deploy pipeline now signs twice', {
+      ...opts,
+      layer: Layer.Episodic,
+      tags: [],
+      pinned: false,
+    });
+
+    expect(next.layer).toBe(Layer.Episodic);
+    expect(next.tags).toEqual([]);
+    expect(next.pinned).toBe(false);
+    expect(next.source_session_id).toBe('sess-old');
+    expect(next.origin_project).toBe('proj-a');
+  });
+
+  it('takes the tenant from the options', () => {
+    expect(createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenantId).toBe('tenant-b');
   });
 });

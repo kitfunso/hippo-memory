@@ -1223,7 +1223,7 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 10 s limit, and via writeSync because process.exit drops buffered pipe output. */
+/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
 function printPreCompactInstruction(logFile: string): void {
   try {
     fs.writeSync(1, `${PRE_COMPACT_INSTRUCTION}\n`);

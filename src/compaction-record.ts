@@ -10,10 +10,10 @@ import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, g
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { duplicateKey } from './same-text.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
-import { writeEntryMirrors } from './store.js';
+import { updateStats, writeEntryMirrors } from './store.js';
 import { resolveTenantId } from './tenant.js';
 
-/** A hook has 10 s in all, so a locked store must be given up on early. */
+/** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */
 export const COMPACTION_DB_WAIT_MS = 2000;
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
@@ -22,15 +22,16 @@ export const PRE_COMPACT_INSTRUCTION =
 
 const SUMMARY_MAX_CHARS = 256 * 1024;
 /** Long enough that a live hook has finished with its own record. */
-const REPLAY_AFTER_MS = 10 * 60_000;
+export const REPLAY_AFTER_MS = 10 * 60_000;
 /** Claude Code deletes transcripts after 30 days, so an older gap can never be filled. */
-const TRANSCRIPT_FILL_WINDOW_MS = 30 * 24 * 60 * 60_000;
+export const TRANSCRIPT_FILL_WINDOW_MS = 30 * 24 * 60 * 60_000;
 const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
 const SPOOL_DIR = 'compactions-spool';
+const CLAIMED_SUFFIX = '.claimed';
 /** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
-export type CompactionStatus = 'started' | 'summarised' | 'done';
+export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
 export interface CompactionRecord {
   id: string;
@@ -143,15 +144,24 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
   return selectRecords(db, 'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1', tenantId, sessionId)[0] ?? null;
 }
 
-/** Pre-compact's record for the compaction that is ending: the session's newest `started` one no later than `before`. */
-function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, before: string): CompactionRecord | null {
+/** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
+function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
   return selectRecords(
     db,
-    `tenant_id = ? AND session_id = ? AND status = 'started' AND started_at <= ? ORDER BY started_at DESC, id DESC LIMIT 1`,
+    `tenant_id = ? AND session_id = ? AND status = 'started' AND started_at <= ? AND started_at >= ? ORDER BY started_at DESC, id DESC LIMIT 1`,
     tenantId,
     sessionId,
-    before,
+    at.toISOString(),
+    new Date(at.getTime() - REPLAY_AFTER_MS).toISOString(),
   )[0] ?? null;
+}
+
+/** Moves a `started` record to `summarised`; false when another process already moved it. */
+function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string): boolean {
+  const result = db.prepare(
+    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
+  ).run(text.summary, JSON.stringify(text.items), summarisedAt, tenantId, id);
+  return (result.changes ?? 0) > 0;
 }
 
 /** Best effort, never throws: a compaction must not fail because its record could not be written. */
@@ -196,10 +206,8 @@ function recordSummary(
 ): CompactionRecord {
   const now = new Date().toISOString();
   const itemsJson = JSON.stringify(text.items);
-  const started = latestStarted(db, tenantId, meta.sessionId, at.toISOString());
-  if (started) {
-    db.prepare(`UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised' WHERE tenant_id = ? AND id = ?`)
-      .run(text.summary, itemsJson, now, tenantId, started.id);
+  const started = latestStarted(db, tenantId, meta.sessionId, at);
+  if (started && markSummarised(db, tenantId, started.id, text, now)) {
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
   const originProject = compactionOrigin(hippoRoot, meta.cwd);
@@ -214,7 +222,7 @@ function recordSummary(
   };
 }
 
-interface ItemContext {
+export interface ItemContext {
   tenantId: string;
   /** null when the record step failed: the items still go in, with no record to close. */
   recordId: string | null;
@@ -233,7 +241,7 @@ function liveItemKeys(db: DatabaseSyncLike, tenantId: string, originProject: str
 }
 
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
-function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
+export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
   const usable = ctx.items.filter((item) => !item.includes(REDACTED));
   if (usable.length < ctx.items.length) log(`skipped ${ctx.items.length - usable.length} item(s) as secret`);
   const { rows, tooLong, capped } = selectItemRows(usable);
@@ -246,6 +254,16 @@ function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, lo
   let refused = 0;
   db.exec('BEGIN IMMEDIATE');
   try {
+    if (ctx.recordId !== null) {
+      // A replayer that read the record before another finished it must not write its items again.
+      const current = db.prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
+        .get<{ status: CompactionStatus; items_written: number } | undefined>(ctx.tenantId, ctx.recordId);
+      if (current?.status !== 'summarised') {
+        db.exec('ROLLBACK');
+        log(`${ctx.recordId} was already finished by another process`);
+        return current?.items_written ?? 0;
+      }
+    }
     const seen = liveItemKeys(db, ctx.tenantId, ctx.originProject);
     for (const text of rows) {
       const key = duplicateKey(text);
@@ -289,6 +307,14 @@ function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, lo
   if (repeats > 0) log(`skipped ${repeats} item(s) an earlier compaction already saved`);
   if (refused > 0) log(`skipped ${refused} item(s) the write gate refused`);
   for (const entry of written) writeEntryMirrors(hippoRoot, entry);
+  if (written.length > 0) {
+    try {
+      updateStats(hippoRoot, { remembered: written.length });
+    } catch (err) {
+      // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
+      log(`remembered counter not updated: ${errorMessage(err)}`);
+    }
+  }
   return written.length;
 }
 
@@ -331,11 +357,13 @@ function spoolFile(hippoRoot: string, sessionId: string): string {
   return path.join(hippoRoot, SPOOL_DIR, `${sessionId.replace(/[^\w-]/g, '_').slice(0, 80)}-${Date.now()}.json`);
 }
 
-function spool(hippoRoot: string, payload: PostCompactPayload, text: CompactionText, at: Date): void {
+function spool(hippoRoot: string, tenantId: string, payload: PostCompactPayload, text: CompactionText, at: Date): void {
   const file = spoolFile(hippoRoot, payload.sessionId);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const body = { sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
-  fs.writeFileSync(file, JSON.stringify(body), 'utf8');
+  const body = { tenantId, sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
+  // Renamed into place so a replayer listing `.json` files never reads half a file.
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify(body), 'utf8');
+  fs.renameSync(`${file}.tmp`, file);
 }
 
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or defers. Never throws. */
@@ -379,7 +407,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
   } catch (err) {
     if (isSqliteBusy(err) || db === undefined) {
       try {
-        spool(hippoRoot, payload, text, at);
+        spool(hippoRoot, resolveTenantId({}), payload, text, at);
         result.deferred = true;
         log(`store busy, summary spooled: ${errorMessage(err)}`);
       } catch (spoolErr) {
@@ -439,6 +467,11 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
   return null;
 }
 
+function closeWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string, log: Log): void {
+  const result = db.prepare(`UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`).run(tenantId, id);
+  if ((result.changes ?? 0) > 0) log(`${id} closed as no-summary: its transcript holds no summary for it`);
+}
+
 function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string | null {
   const row = db.prepare(`SELECT MIN(started_at) AS at FROM compactions WHERE tenant_id = ? AND session_id = ? AND started_at > ?`)
     .get<{ at: string | null } | undefined>(record.tenantId, record.sessionId, record.startedAt);
@@ -446,12 +479,13 @@ function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string |
 }
 
 interface SpooledCompaction {
+  tenantId: string;
   payload: PostCompactPayload;
   text: CompactionText;
   at: Date;
 }
 
-function readSpooled(file: string): SpooledCompaction | null {
+function readSpooled(file: string, fallbackTenantId: string): SpooledCompaction | null {
   let raw: unknown;
   try {
     raw = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -462,6 +496,7 @@ function readSpooled(file: string): SpooledCompaction | null {
   if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;
   const items: string[] = 'items' in raw && Array.isArray(raw.items) ? raw.items.filter(isStringValue) : [];
   return {
+    tenantId: 'tenantId' in raw && isStringValue(raw.tenantId) && raw.tenantId !== '' ? raw.tenantId : fallbackTenantId,
     payload: {
       sessionId: raw.sessionId,
       trigger: 'trigger' in raw && isStringValue(raw.trigger) ? raw.trigger : null,
@@ -474,27 +509,68 @@ function readSpooled(file: string): SpooledCompaction | null {
   };
 }
 
+function isMissingFile(cause: unknown): boolean {
+  return cause instanceof Error && 'code' in cause && cause.code === 'ENOENT';
+}
+
+/** A live replayer refreshes its claim's mtime when it takes it, so an old claim means the replayer died. */
+function recoverStaleClaims(dir: string, log: Log): void {
+  const staleBefore = Date.now() - REPLAY_AFTER_MS;
+  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(`.json${CLAIMED_SUFFIX}`))) {
+    const claimed = path.join(dir, name);
+    try {
+      if (fs.statSync(claimed).mtimeMs >= staleBefore) continue;
+      fs.renameSync(claimed, claimed.slice(0, -CLAIMED_SUFFIX.length));
+      log(`spool file ${name} was claimed by a replayer that never finished, put back`);
+    } catch (err) {
+      if (!isMissingFile(err)) log(`spool file ${name} not recovered: ${errorMessage(err)}`);
+    }
+  }
+}
+
+function releaseClaim(claimed: string, file: string, log: Log): void {
+  try {
+    fs.renameSync(claimed, file);
+  } catch (err) {
+    log(`spool file ${path.basename(file)} could not be put back: ${errorMessage(err)}`);
+  }
+}
+
+/** Each file is claimed by rename before it is read, so two replayers never import the same one. */
 function importSpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, log: Log, deadline: number): number {
   const dir = path.join(hippoRoot, SPOOL_DIR);
   if (!fs.existsSync(dir)) return 0;
+  recoverStaleClaims(dir, log);
   let finished = 0;
   for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort()) {
     if (Date.now() > deadline) break;
     const file = path.join(dir, name);
-    const spooled = readSpooled(file);
-    if (!spooled) {
-      log(`spool file ${name} is not readable, set aside`);
-      fs.renameSync(file, `${file}.bad`);
+    const claimed = `${file}${CLAIMED_SUFFIX}`;
+    try {
+      fs.renameSync(file, claimed);
+      const now = new Date();
+      fs.utimesSync(claimed, now, now);
+    } catch (err) {
+      if (!isMissingFile(err)) log(`spool file ${name} not claimed: ${errorMessage(err)}`);
       continue;
     }
+    const spooled = readSpooled(claimed, tenantId);
+    if (!spooled) {
+      log(`spool file ${name} is not readable, set aside`);
+      fs.renameSync(claimed, `${file}.bad`);
+      continue;
+    }
+    let removed = false;
     try {
-      const record = recordSummary(db, hippoRoot, tenantId, spooled.payload, spooled.text, spooled.at);
+      const record = recordSummary(db, hippoRoot, spooled.tenantId, spooled.payload, spooled.text, spooled.at);
       // The record holds the items now, so the file is done even if the write below fails.
-      fs.rmSync(file, { force: true });
-      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: record.items }, log);
+      fs.rmSync(claimed, { force: true });
+      removed = true;
+      saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: record.items }, log);
       finished++;
     } catch (err) {
       log(`spool file ${name} not imported: ${errorMessage(err)}`);
+      if (!removed) releaseClaim(claimed, file, log);
     }
   }
   return finished;
@@ -536,11 +612,18 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
       if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) continue;
       const next = nextStartedAt(db, record);
       const found = transcriptSummary(record.transcriptPath, Date.parse(record.startedAt), next === null ? Number.POSITIVE_INFINITY : Date.parse(next));
-      if (found === null) continue;
+      if (found === null) {
+        // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays empty.
+        closeWithoutSummary(db, tenantId, record.id, log);
+        continue;
+      }
       const { found: listed, ...text } = readCompactionText(found);
       if (!listed) log(`no memories section in the transcript summary for ${record.id}`);
-      const summarised = recordSummary(db, hippoRoot, tenantId, { ...record }, text, new Date(record.startedAt));
-      saveItems(db, hippoRoot, { tenantId, recordId: summarised.id, sessionId: record.sessionId, originProject: record.originProject, items: text.items }, log);
+      if (!markSummarised(db, tenantId, record.id, text, new Date().toISOString())) {
+        log(`${record.id} was filled by another process`);
+        continue;
+      }
+      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: text.items }, log);
       finished++;
     } catch (err) {
       log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);

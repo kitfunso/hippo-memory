@@ -154,7 +154,8 @@ The row in the `compactions` table for one Claude Code compaction: `hippo pre-co
 `started`, `hippo post-compact` moves it to `summarised` and then `done`. It holds the session,
 whether a task snapshot was saved, the summary with secrets scrubbed, every item of the "Memories
 for hippo" list and how many became memories. It is not a memory: recall, context and sleep's memory
-passes never read it. `hippo sleep` finishes one left `started` or `summarised` for over 10 minutes.
+passes never read it. `hippo sleep` finishes one left `started` or `summarised` for over 10 minutes;
+a compaction that never wrote a summary is closed as `no-summary`.
 _Avoid_: compaction summary, compaction log, snapshot
 
 **User correction**:

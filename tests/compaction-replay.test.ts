@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { replayCompactionsAt } from '../src/compaction-record.js';
+import { replayCompactionsAt, saveCompaction, saveItems } from '../src/compaction-record.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { initStore } from '../src/store.js';
 import {
@@ -72,6 +72,25 @@ function transcriptLine(minutesAgo: number, isSummary: boolean, text: string): s
 
 const CONTINUED = (items: string[]): string =>
   `This session is being continued from a previous conversation that ran out of context.\n\nSummary:\n1. Primary Request: fix the login test.\n\nMemories for hippo:\n${items.map((i) => `- ${i}`).join('\n')}`;
+
+function rows<T>(sql: string): T[] {
+  const db = openHippoDb(s.hippoRoot);
+  try {
+    // SAFETY: every caller names the columns its row type declares.
+    return db.prepare(sql).all() as T[];
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+const spoolDir = (): string => path.join(s.hippoRoot, 'compactions-spool');
+
+function writeSpool(name: string, over: { tenantId?: string; sessionId?: string; items?: string[] } = {}): string {
+  fs.mkdirSync(spoolDir(), { recursive: true });
+  const file = path.join(spoolDir(), name);
+  fs.writeFileSync(file, JSON.stringify({ sessionId: 's1', trigger: 'auto', cwd: s.proj, transcriptPath: null, at: ago(30), summary: 'the summary', items: ITEMS, ...over }));
+  return file;
+}
 
 describe('replay of records a killed hook left', () => {
   beforeEach(() => initStore(s.hippoRoot));
@@ -148,7 +167,7 @@ describe('replay of records a killed hook left', () => {
     fs.writeFileSync(path.join(s.proj, 'fresh.jsonl'), transcriptLine(1, true, CONTINUED(ITEMS)) + '\n');
     seed(s.hippoRoot, { id: 'cmp-new', status: 'started', startedMinutesAgo: 3, transcript: path.join(s.proj, 'fresh.jsonl'), session: 's2' });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
-    expect(compactionRows(s.hippoRoot).map((r) => r.status)).toEqual(['started', 'started']);
+    expect(compactionRows(s.hippoRoot).map((r) => r.status)).toEqual(['no-summary', 'started']);
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
   });
 
@@ -158,7 +177,65 @@ describe('replay of records a killed hook left', () => {
     seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 40, transcript });
     seed(s.hippoRoot, { id: 'cmp-2', status: 'started', startedMinutesAgo: 20, transcript });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
-    expect(compactionRows(s.hippoRoot).map((r) => [r.id, r.status])).toEqual([['cmp-1', 'done'], ['cmp-2', 'started']]);
+    expect(compactionRows(s.hippoRoot).map((r) => [r.id, r.status])).toEqual([['cmp-1', 'done'], ['cmp-2', 'no-summary']]);
+  });
+
+  it('gives a compaction with no fresh record its own record, and leaves an older started one its own summary', () => {
+    const transcript = path.join(s.proj, 't.jsonl');
+    fs.writeFileSync(transcript, transcriptLine(89, true, CONTINUED([ITEMS[0]])) + '\n');
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 90, transcript });
+    const saved = saveCompaction(s.hippoRoot, { sessionId: 's1', trigger: 'auto', cwd: s.proj, transcriptPath: transcript, compactSummary: summaryWith([ITEMS[1]]) }, log);
+    expect(saved.written).toBe(1);
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
+
+    const [first, second] = compactionRows(s.hippoRoot);
+    expect(first).toMatchObject({ id: 'cmp-1', status: 'done' });
+    expect(JSON.parse(first.items_json!)).toEqual([ITEMS[0]]);
+    expect(second.id).not.toBe('cmp-1');
+    expect(JSON.parse(second.items_json!)).toEqual([ITEMS[1]]);
+    expect(compactionMemories(s.hippoRoot).map((r) => r.content).sort()).toEqual([...ITEMS].sort());
+  });
+
+  it('still gives a summary to the started record its own pre-compact wrote minutes before', () => {
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 5 });
+    saveCompaction(s.hippoRoot, { sessionId: 's1', trigger: 'auto', cwd: s.proj, transcriptPath: null, compactSummary: summaryWith(ITEMS) }, log);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([{ id: 'cmp-1', status: 'done', items_written: 2 }]);
+  });
+
+  it('leaves a record another process filled first alone instead of writing a second one', () => {
+    const transcript = path.join(s.proj, 't.jsonl');
+    fs.writeFileSync(transcript, transcriptLine(29, true, 'Summary:\n1. Primary Request: fix the login test.') + '\n');
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 30, transcript });
+    // The transcript summary has no memories list, so this log line is the moment between the search and the update.
+    const otherProcessFinishes = (message: string): void => {
+      log(message);
+      if (message.includes('no memories section')) run(s.hippoRoot, `UPDATE compactions SET status = 'done', items_written = 7 WHERE id = 'cmp-1'`);
+    };
+    expect(replayCompactionsAt(s.hippoRoot, otherProcessFinishes)).toBe(0);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([{ id: 'cmp-1', status: 'done', items_written: 7, summary: null }]);
+    expect(logs.join('\n')).toContain('cmp-1 was filled by another process');
+  });
+
+  it('closes a started record whose transcript has no summary in its window, and does not look again', () => {
+    const transcript = path.join(s.proj, 't.jsonl');
+    fs.writeFileSync(transcript, transcriptLine(60, false, 'Fix the flaky login test.') + '\n');
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 30, transcript });
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
+    expect(compactionRows(s.hippoRoot)[0].status).toBe('no-summary');
+    expect(logs.join('\n')).toContain('cmp-1 closed as no-summary');
+
+    fs.appendFileSync(transcript, transcriptLine(25, true, CONTINUED(ITEMS)) + '\n');
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
+    expect(compactionRows(s.hippoRoot)[0].status).toBe('no-summary');
+    expect(compactionMemories(s.hippoRoot)).toEqual([]);
+  });
+
+  it('counts the rows it writes in the remembered counter', () => {
+    const remembered = (): number => Number(rows<{ value: string }>(`SELECT value FROM meta WHERE key = 'total_remembered'`)[0]?.value ?? 0);
+    const before = remembered();
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
+    expect(remembered() - before).toBe(2);
   });
 
   it('returns 0 and logs instead of throwing when the store cannot be opened', () => {
@@ -173,6 +250,69 @@ describe('replay of records a killed hook left', () => {
     seed(s.hippoRoot, { id: 'cmp-2', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS, session: 's2' });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(compactionRows(s.hippoRoot).map((r) => [r.id, r.status]).sort()).toEqual([['cmp-2', 'done'], ['cmp-gone', 'started']]);
+  });
+});
+
+describe('two replayers working the same store', () => {
+  beforeEach(() => initStore(s.hippoRoot));
+
+  it('a stale replayer writes nothing and reports what the first one wrote', () => {
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    const db = openHippoDb(s.hippoRoot);
+    try {
+      const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', items: ITEMS };
+      expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
+      run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
+      expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(compactionMemories(s.hippoRoot)).toEqual([]);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([{ status: 'done', items_written: 2 }]);
+    expect(logs.join('\n')).toContain('cmp-1 was already finished by another process');
+  });
+
+  it('skips a spool file another replayer has claimed', () => {
+    const claimed = writeSpool('s1-1.json.claimed');
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
+    expect(fs.existsSync(claimed)).toBe(true);
+    expect(compactionRows(s.hippoRoot)).toEqual([]);
+  });
+
+  it('recovers and imports a claim whose replayer died', () => {
+    const claimed = writeSpool('s1-1.json.claimed');
+    const past = new Date(Date.now() - 20 * MINUTE);
+    fs.utimesSync(claimed, past, past);
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+    expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
+  });
+
+  it('puts a spool file back when its import fails, so the next replay retries it', () => {
+    writeSpool('s1-1.json');
+    run(s.hippoRoot, `CREATE TRIGGER block_compaction_insert BEFORE INSERT ON compactions BEGIN SELECT RAISE(ABORT, 'blocked'); END`);
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual(['s1-1.json']);
+    expect(logs.join('\n')).toContain('spool file s1-1.json not imported');
+
+    run(s.hippoRoot, `DROP TRIGGER block_compaction_insert`);
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
+  it('records each spool file under the tenant it was spooled for', () => {
+    writeSpool('sa-1.json', { tenantId: 'acme', sessionId: 'sa', items: [ITEMS[0]] });
+    writeSpool('sb-1.json', { sessionId: 'sb', items: [ITEMS[1]] });
+    expect(replayCompactionsAt(s.hippoRoot, log)).toBe(2);
+    expect(rows(`SELECT tenant_id, session_id, status FROM compactions ORDER BY session_id`)).toEqual([
+      { tenant_id: 'acme', session_id: 'sa', status: 'done' },
+      { tenant_id: 'default', session_id: 'sb', status: 'done' },
+    ]);
+    expect(rows(`SELECT tenant_id, content FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0 ORDER BY content`)).toEqual([
+      { tenant_id: 'acme', content: ITEMS[0] },
+      { tenant_id: 'default', content: ITEMS[1] },
+    ]);
   });
 });
 

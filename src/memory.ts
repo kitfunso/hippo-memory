@@ -599,6 +599,30 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   return entry;
 }
 
+/** The row that replaces `old`: a supersede never changes where a memory belongs, so source, scope, session and a stamped origin carry over. */
+export function createSuccessor(
+  old: MemoryEntry,
+  content: string,
+  opts: { tenantId: string; baseHalfLifeDays: number; layer?: Layer; tags?: string[]; pinned?: boolean },
+): MemoryEntry {
+  const next = createMemory(content, {
+    layer: opts.layer ?? old.layer,
+    tags: opts.tags ?? [...old.tags],
+    pinned: opts.pinned ?? old.pinned,
+    source: old.source,
+    confidence: 'verified',
+    tenantId: opts.tenantId,
+    scope: old.scope,
+    source_session_id: old.source_session_id,
+    baseHalfLifeDays: opts.baseHalfLifeDays,
+  });
+  // A legacy null origin has nothing to carry, so the store stamps it from its own location.
+  if (typeof old.origin_project === 'string') {
+    next.origin_project = old.origin_project;
+  }
+  return next;
+}
+
 /**
  * Compute how well new content fits existing knowledge patterns.
  * Returns 0..1 where:
