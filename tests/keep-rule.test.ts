@@ -284,6 +284,18 @@ describe('forget and supersede still work on a kept row', () => {
     expect(readEntry(root, kept.id)?.superseded_by).toBe(result.newId);
     expect(readEntry(root, result.newId)?.content).toBe('the release train leaves on tuesdays now');
   });
+
+  it('the superseded old version stops being kept in both the function and the SQL, and its successor is kept', () => {
+    const root = newRoot();
+    const kept = keptRow('the release train leaves on thursdays');
+    writeEntry(root, kept);
+
+    const { newId } = supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
+
+    expect(canAutoDelete(readEntry(root, kept.id)!)).toBe(true);
+    expect(canAutoDelete(readEntry(root, newId)!)).toBe(false);
+    expect(sqlDeletableIds(root)).toEqual([kept.id]);
+  });
 });
 
 describe('kept rows are not merged and not sent to extraction', () => {

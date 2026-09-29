@@ -503,14 +503,14 @@ export const KEEP_PAIRS: readonly KeepPair[] = [{ tag: COMPACTION_MEMORY_TAG, so
 const sqlText = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
 const keepPairSql = (p: KeepPair): string =>
-  `(EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN tags_json ELSE '[]' END) WHERE value = ${sqlText(p.tag)}) AND substr(source, 1, ${p.sourcePrefix.length}) = ${sqlText(p.sourcePrefix)})`;
+  `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN tags_json ELSE '[]' END) WHERE value = ${sqlText(p.tag)}) AND substr(source, 1, ${p.sourcePrefix.length}) = ${sqlText(p.sourcePrefix)})`;
 
-// Pinned and kept rows stay; raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
+// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
 export const AUTO_DELETABLE_SQL = `pinned = 0 AND kind != 'raw'${KEEP_PAIRS.map((p) => ` AND NOT ${keepPairSql(p)}`).join('')}`;
-export function isKeptForGood(entry: Pick<MemoryEntry, 'tags' | 'source'>): boolean {
-  return KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix));
+export function isKeptForGood(entry: Pick<MemoryEntry, 'tags' | 'source' | 'superseded_by'>): boolean {
+  return !entry.superseded_by && KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix));
 }
-export function canAutoDelete(entry: Pick<MemoryEntry, 'pinned' | 'kind' | 'tags' | 'source'>): boolean {
+export function canAutoDelete(entry: Pick<MemoryEntry, 'pinned' | 'kind' | 'tags' | 'source' | 'superseded_by'>): boolean {
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
