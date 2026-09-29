@@ -106,6 +106,16 @@ export function buildDailyRunnerCommand(
   return `cd "${resolved}" && hippo daily-runner`;
 }
 
+/** What the Windows task runs. A plain `cmd /c` task opens a visible console every morning. */
+export function buildWindowsTaskRun(cmd: string): string {
+  return `conhost.exe --headless cmd /c ${cmd}`;
+}
+
+/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the command. */
+export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[] {
+  return ['/create', '/tn', taskName, '/tr', buildWindowsTaskRun(cmd), '/sc', 'daily', '/st', '06:15', '/f'];
+}
+
 export function runDailyMaintenance(
   workspaces: readonly string[],
   runCommand: (cwd: string, args: string[]) => void,

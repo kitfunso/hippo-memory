@@ -179,6 +179,8 @@ import {
 import {
   DAILY_TASK_NAME,
   buildDailyRunnerCommand,
+  buildSchtasksCreateArgs,
+  buildWindowsTaskRun,
   listRegisteredWorkspaces,
   registerWorkspace,
   runDailyMaintenance,
@@ -893,15 +895,12 @@ function setupDailySchedule(globalRoot: string): void {
     }
 
     try {
-      execSync(
-        `schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd.replace(/"/g, '""')}" /sc daily /st 06:15 /f`,
-        { stdio: 'pipe', windowsHide: true }
-      );
+      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true });
       console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
     } catch {
       // No admin rights or schtasks unavailable, fall back to printing instructions
       console.log(`   To schedule the machine-level daily runner, run:`);
-      console.log(`   schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd}" /sc daily /st 06:15`);
+      console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
     }
   } else {
     // Unix: check crontab for existing entry
