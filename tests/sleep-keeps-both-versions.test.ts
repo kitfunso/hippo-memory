@@ -13,7 +13,8 @@ import { queryAuditEvents } from '../src/audit.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
 import * as api from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { learnFromMemoryMd } from '../src/cli.js';
+import { importProjectMemories } from '../src/agent-memories/sync.js';
+import { totalTally } from '../src/agent-memories/report.js';
 import { importEntries } from '../src/importers.js';
 import { autoShare, getGlobalRoot, initGlobal, searchBoth, searchBothHybrid } from '../src/shared.js';
 import { cmdCapture, extractFromText } from '../src/capture.js';
@@ -554,8 +555,9 @@ describe('a new value is never skipped as a copy of an old one', () => {
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
 
-    expect(learnFromMemoryMd(root, home)).toBe(1);
-    expect(learnFromMemoryMd(root, home)).toBe(0);
+    const imported = (): number => totalTally(importProjectMemories(root, { machine: { home, env: {}, platform: process.platform } })).imported;
+    expect(imported()).toBe(1);
+    expect(imported()).toBe(0);
   });
 
   it('import', () => {

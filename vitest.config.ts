@@ -21,8 +21,14 @@ const isolatedUserHome = mkdtempSync(join(tmpdir(), 'hippo-test-userhome-'));
 process.env.HIPPO_TEST_TMP_USERHOME = isolatedUserHome;
 process.env.HOME = isolatedUserHome;
 process.env.USERPROFILE = isolatedUserHome;
-delete process.env.XDG_DATA_HOME;
-delete process.env.CODEX_HOME;
+// Agent memory folders the import finds through the environment rather than the home folder (Copilot's VS Code data, and each tool's override).
+const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
+process.env.APPDATA = isolatedAppData;
+const AGENT_HOME_KEYS = [
+  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_PROJECT_DIR_NAME', 'VSCODE_PORTABLE', 'VSCODE_APPDATA',
+  'GEMINI_CLI_HOME', 'QWEN_HOME', 'QWEN_RUNTIME_DIR', 'QWEN_CODE_MEMORY_BASE_DIR',
+];
+for (const k of AGENT_HOME_KEYS) delete process.env[k];
 const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 
@@ -33,7 +39,8 @@ export default defineConfig({
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
-      HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, XDG_DATA_HOME: '', CODEX_HOME: '',
+      HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
+      ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
     globalSetup: ['tests/_real-store-guard.ts'],

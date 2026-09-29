@@ -95,7 +95,7 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
   return report;
 }
 
-/** Post-compact: the transcript folder's notes only, with no git call, no legacy adoption and no user pass (PR 1's hook has 10 seconds). */
+/** Post-compact: the transcript folder's notes only, with no git call, no legacy adoption and no user pass, as the hook has 10 seconds. */
 export function importAtCompaction(hippoRoot: string, transcriptPath: string, originProject: string | undefined, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
   return runPass({

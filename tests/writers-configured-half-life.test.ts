@@ -13,7 +13,7 @@ import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts } from '../src/extract.js';
 import { importGenericFile, importVault } from '../src/importers.js';
 import { cmdCapture } from '../src/capture.js';
-import { learnFromMemoryMd } from '../src/cli.js';
+import { importProjectMemories } from '../src/agent-memories/sync.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -99,7 +99,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     const memDir = path.join(home, '.claude', 'projects', project, 'memory');
     fs.mkdirSync(memDir, { recursive: true });
     fs.writeFileSync(path.join(memDir, 'lesson.md'), '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n');
-    return added(root, () => learnFromMemoryMd(root, home));
+    return added(root, () => importProjectMemories(root, { machine: { home, env: {}, platform: process.platform } }));
   }],
   ['capture', (root) => {
     const file = path.join(tmp(), 'session.txt');

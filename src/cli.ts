@@ -38,7 +38,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { execFileSync, execSync, spawn, spawnSync } from 'child_process';
+import { execFileSync, execSync, spawn } from 'child_process';
 import {
   installJsonHooks,
   uninstallJsonHooks,
@@ -76,7 +76,6 @@ import {
   MemoryEntry,
   ConfidenceLevel,
 } from './memory.js';
-import { detectSecret } from './secret-detect.js';
 import {
   getHippoRoot,
   isInitialized,
@@ -168,8 +167,17 @@ import {
   isGitRepo,
 } from './autolearn.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
+import {
+  currentMachine,
+  importAtCompaction,
+  importAtSessionEnd,
+  importForStore,
+  importProjectMemories,
+  importUserMemories,
+} from './agent-memories/sync.js';
+import { detailLines, emptyReport, mergeReports, summaryLine, type ImportReport } from './agent-memories/report.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
-import { deriveOriginProject, realpathOrResolve, resolveProjectIdentity } from './project-identity.js';
+import { deriveOriginProject, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -203,7 +211,7 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions, cmdPreCompact, cmdPostCompact, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage, transcriptWorkingState } from './capture.js';
-import { replayCompactionsAt } from './compaction-record.js';
+import { COMPACTION_DB_WAIT_MS, replayCompactionsAt } from './compaction-record.js';
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
@@ -451,7 +459,7 @@ async function runViaServerIfAvailable(
 // and as off under === true (`--pin=true` would not pin), so parseArgs and main() refuse one.
 // tests/cli-parse-flag-equals.test.ts fails when a switch read is missing from this set.
 export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
-  'all', 'all-tenants', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'churn', 'continuity',
+  'agents', 'all', 'all-tenants', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'churn', 'continuity',
   'cross-project', 'dry-run', 'equal-sources', 'error', 'evc-adaptive', 'extract',
   'filter-conflicts', 'fix', 'force', 'forget', 'git', 'global', 'good', 'graph-stream',
   'help', 'include-logs', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
@@ -690,6 +698,8 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
   // that a dropped subject is never invisible.
   let totalLowInfo = 0;
   const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
+  const machine = currentMachine();
+  const agentImport = emptyReport();
 
   for (const repo of repos) {
     const name = path.basename(repo);
@@ -710,6 +720,7 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
       totalLessons += added;
       totalLowInfo += result.lowInfo;
     }
+    if (!flags['no-learn']) mergeReports(agentImport, importProjectMemories(repoHippo, { machine }));
 
     const status = alreadyExists ? 'existing' : 'new';
     const entries = loadAllEntries(repoHippo);
@@ -719,6 +730,10 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
   console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned` +
     (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
     '.');
+  if (!flags['no-learn']) {
+    mergeReports(agentImport, importUserMemories(globalRoot, { machine }));
+    printAgentImport(agentImport, '');
+  }
   console.log(`Global store: ${globalRoot}`);
   if (initInstallsIntegrations(flags)) {
     // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
@@ -746,10 +761,11 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
     const globalRoot = getGlobalRoot();
     if (isInitialized(globalRoot)) {
       console.log('Already initialized global store at', globalRoot);
-      return;
+    } else {
+      initGlobal();
+      console.log('Initialized global Hippo store at', globalRoot);
     }
-    initGlobal();
-    console.log('Initialized global Hippo store at', globalRoot);
+    if (!flags['no-learn']) printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }));
     return;
   }
 
@@ -787,12 +803,17 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
         console.log(`   No matching commits found in git history.`);
       }
     }
-
-    const memImported = learnFromMemoryMd(hippoRoot);
-    if (memImported > 0) {
-      console.log(`   Imported ${memImported} memories from this project's Claude Code auto memory.`);
-    }
   }
+
+  // Every run, not only the first: an agent's notes change between inits.
+  if (!flags['no-learn']) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
+}
+
+/** One line when an agent memory import moved anything; its warnings go to stderr. */
+function printAgentImport(report: ImportReport, indent = '   '): void {
+  const line = summaryLine(report);
+  if (line !== null) console.log(`${indent}${line}`);
+  for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
 }
 
 /** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
@@ -2873,118 +2894,6 @@ async function cmdRefine(
   }
 }
 
-/** Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself outside a repository. */
-function claudeMemoryFolderNames(projectRoot: string): Set<string> {
-  const roots = [projectRoot, realpathOrResolve(projectRoot)];
-  const git = spawnSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--absolute-git-dir', '--git-common-dir'], { cwd: projectRoot, encoding: 'utf8', timeout: 10000, windowsHide: true });
-  if (git.status === 0) {
-    const [top, gitDir, common] = git.stdout.trim().split(/\r?\n/);
-    roots.push(claudeCheckoutRoot(top, gitDir, common));
-  }
-  return new Set(roots.map((root) => (process.platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))));
-}
-
-/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
-function claudeCheckoutRoot(top: string, gitDir: string, common: string): string {
-  if (gitDir === common) return top;
-  if (path.basename(common) === '.git') return path.dirname(common);
-  return fs.existsSync(path.join(common, '.git')) ? top : common;
-}
-
-/** Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters cut to 200 plus a base-36 hash of the whole path. */
-function claudeFolderName(root: string): string {
-  const full = path.resolve(root);
-  const name = full.replace(/[^a-zA-Z0-9]/g, '-');
-  if (name.length <= 200) return name;
-  let hash = 0;
-  for (let i = 0; i < full.length; i++) hash = ((hash << 5) - hash + full.charCodeAt(i)) | 0;
-  return `${name.slice(0, 200)}-${Math.abs(hash).toString(36)}`;
-}
-
-/** Import new entries from the Claude Code auto memory of the store's project, the frontmatter .md files in ~/.claude/projects/<project>/memory/. */
-export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedir()): number {
-  // Only this project's folder, because every entry written here counts as this project's memory.
-  // SHORTCUT: an autoMemoryDirectory or CLAUDE_CODE_PROJECT_DIR_NAME setting imports nothing; read Claude's settings if users ask.
-  const claudeProjectsDir = path.join(homeDir, '.claude', 'projects');
-  const memoryDirs = [...claudeMemoryFolderNames(path.dirname(hippoRoot))]
-    .map((folder) => path.join(claudeProjectsDir, folder, 'memory'))
-    .filter((memDir) => fs.existsSync(memDir));
-
-  if (memoryDirs.length === 0) return 0;
-
-  const keys = storedTextKeys(loadAllEntries(hippoRoot, resolveTenantId({})));
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
-  let imported = 0;
-  let skippedSecret = 0;
-  // AT1 (plan §3 containment): a rejection guard refusal is per-VALUE — one
-  // tombstoned memory file must not abort the whole directory scan. No
-  // signature change (bare number return, cli.ts:540 + cli.ts:2903 callers
-  // unchanged) — counted internally and printed as one summary line.
-  let rejected = 0;
-
-  for (const memDir of memoryDirs) {
-    try {
-      const files = fs.readdirSync(memDir).filter(f => f.endsWith('.md') && f !== 'MEMORY.md');
-      for (const file of files) {
-        const raw = fs.readFileSync(path.join(memDir, file), 'utf8');
-
-        // Parse YAML frontmatter
-        const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-        if (!fmMatch) continue;
-
-        const body = fmMatch[2].trim();
-        if (!body || body.length < 10) continue;
-
-        // Truncate to reasonable size
-        const content = body.length > 1500 ? body.slice(0, 1500) + ' [truncated]' : body;
-
-        // Never ingest secret-bearing memory files. Some Claude Code memory
-        // files exist purely to hold a live credential (e.g. an API-key
-        // reference). The scope-isolation secret veto (v1.24.0) gated
-        // share/promote/sync/ambient but missed this import path, so a live
-        // key could land in the store here. Veto it at ingest. (v1.24.1)
-        if (detectSecret({ content, tags: ['claude-code-memory'] }).flagged) {
-          skippedSecret++;
-          continue;
-        }
-
-        // Dedup: skip only when the same text is already stored
-        if (keys.has(duplicateKey(content))) continue;
-
-        const entry = createMemory(content, {
-          layer: Layer.Episodic,
-          tags: ['claude-code-memory'],
-          source: `claude-memory:${file}`,
-          confidence: 'observed',
-          tenantId: resolveTenantId({}),
-          baseHalfLifeDays,
-        });
-
-        try {
-          writeEntry(hippoRoot, entry);
-        } catch (err) {
-          if (err instanceof RejectedValueError) {
-            rejected++;
-            continue;
-          }
-          throw err;
-        }
-        keys.add(duplicateKey(content)); // prevent self-dedup within batch
-        imported++;
-      }
-    } catch { /* skip broken dirs */ }
-  }
-
-  if (skippedSecret > 0) {
-    console.log(`Skipped ${skippedSecret} secret-bearing memory file${skippedSecret === 1 ? '' : 's'} (not ingested).`);
-  }
-  if (rejected > 0) {
-    console.log(`Skipped ${rejected} rejected value${rejected === 1 ? '' : 's'} (run \`hippo unreject\` to allow).`);
-  }
-
-  return imported;
-}
-
 function cmdDedup(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -3166,10 +3075,10 @@ async function cmdSleepCore(
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  // Phase 1: Auto-learn from git + Claude Code auto memory (CLI-only, uses process.cwd() / os.homedir()).
+  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
   // Stays in cli.ts; api.sleep covers Phase 2-6 only.
   if (!flags['no-learn'] && flags['dry-run']) {
-    console.log("Dry run: skipped learning from git commits and this project's Claude Code auto memory.");
+    console.log("Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` previews those).");
   } else if (!flags['no-learn']) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
@@ -3185,8 +3094,7 @@ async function cmdSleepCore(
       }
     }
 
-    const memImported = learnFromMemoryMd(hippoRoot);
-    if (memImported > 0) console.log(`Imported ${memImported} memories from this project's Claude Code auto memory.`);
+    printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }), '');
   }
 
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
@@ -3440,6 +3348,18 @@ function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testSt
   return { gitRef, dirtyTree, testStatus };
 }
 
+/** A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here. */
+function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
+  try {
+    const report = importAtSessionEnd(process.cwd(), transcriptPath, { machine: currentMachine() });
+    const line = summaryLine(report);
+    if (line !== null) appendSessionEndCloseLog(logFile, line);
+    for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
+  } catch (err) {
+    appendSessionEndCloseLog(logFile, `agent memory import failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function cmdSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -3469,6 +3389,7 @@ async function cmdSessionEndWorker(
     }
   } else {
     appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
+    logSessionEndImport(closeLogFile, transcriptPath);
   }
   flushRereadLog();
   const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
@@ -3733,6 +3654,7 @@ async function cmdCodexSessionEndWorker(
     }
   } else {
     appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
+    logSessionEndImport(logFile ?? null, undefined);
   }
 
   try {
@@ -7570,6 +7492,15 @@ function cmdImport(
 
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
+  if (flags['agents']) {
+    // Without a store of its own the folder has no project to import, so only the user pass runs.
+    const store = useGlobal || !isInitialized(hippoRoot) ? getGlobalRoot() : hippoRoot;
+    const report = importForStore(store, { machine: currentMachine(), dryRun });
+    for (const line of detailLines(report, dryRun)) console.log(line);
+    for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
+    return;
+  }
+
   if (useGlobal) {
     initGlobal();
   } else {
@@ -7674,7 +7605,7 @@ function cmdImport(
   }
 
   if (!filePath || !importer) {
-    console.error('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>');
+    console.error('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
     process.exit(1);
   }
 
@@ -8306,6 +8237,11 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
     }
   }
 
+  if (!flags['no-learn']) {
+    console.log('');
+    printAgentImport(importUserMemories(globalRoot, { machine: currentMachine(), dryRun }), dryRun ? '[dry-run] ' : '');
+  }
+
   console.log('');
   console.log('Done. Restart your AI tool to activate the hooks.');
 }
@@ -8317,6 +8253,7 @@ function cmdDailyRunner(): void {
     const finished = replayCompactionsAt(globalRoot, (message) => console.error(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
   }
+  printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   if (workspaces.length === 0) {
@@ -9405,7 +9342,8 @@ Commands:
     --no-hooks             Skip auto-detecting and installing agent hooks
                            (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
     --no-schedule          Skip auto-creating the machine-level daily runner
-    --no-learn             Skip seeding memories from git history
+    --no-learn             Skip seeding memories from git history and importing
+                           coding agents' own memories (every init imports those)
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
@@ -9542,7 +9480,7 @@ Commands:
                            With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
                            fact extraction; {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
-    --no-learn             Skip auto git-learn before consolidation
+    --no-learn             Skip auto git-learn and the agent memory import before consolidation
     --no-share             Skip auto-sharing to global store
   daily-runner             Sweep registered workspaces and run daily learn+sleep
   dedup                    Remove duplicate memories (keeps stronger copy)
@@ -9740,6 +9678,11 @@ Commands:
     --vault <path>         Import a markdown-vault FOLDER as kind='raw' notes
                              (Obsidian/Foam/Dendron). Requires --name <vault>.
                              [--scope <scope>]
+    --agents               Sync every coding agent's own memories (Claude Code, Codex,
+                             Gemini CLI, Copilot, OpenClaw, Qwen Code) now; with
+                             --dry-run, print each tool's folders and what would change.
+                             HIPPO_AGENT_MEMORY_TOOLS=<ids> or config agentMemories.tools
+                             picks the tools; "none" or [] turns the import off
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
     --tag <tag>            Add extra tag (repeatable)
@@ -9757,10 +9700,12 @@ Commands:
   setup                    One-shot: detect installed AI tools and install their hooks:
                            claude-code gets 7 hooks in ~/.claude/settings.json, opencode
                            a plugin, codex 2 hooks in its hooks.json plus a launcher
-                           wrapper; other tools get a hint
+                           wrapper; other tools get a hint. Then imports each agent's
+                           user-level memories into the global store
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
+    --no-learn             Skip the agent memory import
   last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
@@ -10290,9 +10235,17 @@ async function main(
       // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
       const { text } = await readStdinBounded();
       const logFlag = flags['log-file'];
-      const line = cmdPostCompact(hookStoreRoot(hippoRoot), {
+      const store = hookStoreRoot(hippoRoot);
+      const line = cmdPostCompact(store, {
         stdinText: text,
         logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
+        // Passed in, since capture.ts importing the sync would close an import cycle.
+        afterSave: (transcriptPath, originProject, log) => {
+          const report = importAtCompaction(store, transcriptPath, originProject, { machine: currentMachine(), busyWaitMs: COMPACTION_DB_WAIT_MS });
+          const summary = summaryLine(report);
+          if (summary !== null) log(summary);
+          for (const warning of report.warnings) log(`agent memories: ${warning}`);
+        },
       });
       if (line !== null) console.log(line);
       break;

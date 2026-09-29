@@ -14,7 +14,7 @@ export const openclawAdapter: Adapter = {
   },
 };
 
-// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (JSON5, no parser here); read it if users ask.
+// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and there is no parser for that here); read it if users ask.
 function workspaceDir(ctx: AdapterContext): string {
   const { OPENCLAW_WORKSPACE_DIR: workspace } = ctx.env;
   return path.resolve(workspace || path.join(stateDir(ctx), 'workspace'));
