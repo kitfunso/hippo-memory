@@ -186,6 +186,21 @@ describe('context prints the handoff or the digest, never both', SLOW, () => {
     expect(memoryIds()).not.toContain(sessionDigestId('default', 'S2'));
   });
 
+  it('shows the digest in place of a handoff the budget drops, and never both at any budget', () => {
+    claudeWorker('S1', claudeTranscript('s1'));
+    const seen = [40, 60, 80, 100, 150, 200, 1500].map((budget) => {
+      const result = hippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'json', '--budget', String(budget)], '');
+      expect(result.status).toBe(0);
+      // Nothing fits the smallest budgets, and then context prints nothing at all.
+      const json = result.stdout.trim() ? JSON.parse(result.stdout) : { memories: [] };
+      const digest = json.memories.some((m: { id: string }) => m.id === sessionDigestId('default', 'S1'));
+      return { budget, handoff: json.sessionHandoff?.sessionId === 'S1', digest };
+    });
+    expect(seen.filter((s) => s.handoff && s.digest)).toEqual([]);
+    expect(seen.some((s) => !s.handoff && s.digest)).toBe(true);
+    expect(seen.at(-1)).toMatchObject({ handoff: true, digest: false });
+  });
+
   it('shows the digest when its session handoff is scope-hidden', () => {
     claudeWorker('S1', claudeTranscript('s1'));
     saveSessionHandoff(path.join(repo, '.hippo'), 'default', {
