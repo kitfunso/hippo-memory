@@ -10,6 +10,7 @@ import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
+import { neverAutoShareTags } from './shared.js';
 
 export interface FactCluster {
   label: string;
@@ -181,7 +182,7 @@ export async function buildDag(
       // (memory.ts:535 defaults tenantId when the option is omitted).
       const summaryEntry = createMemory(summary, {
         layer: Layer.Semantic,
-        tags: [...cluster.entityTags, 'dag-summary'],
+        tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
         confidence: 'inferred',
         dag_level: 2,
         tenantId: factTenant,
@@ -456,7 +457,7 @@ export async function buildEntityProfiles(
       const nowIso = new Date().toISOString();
       const profileEntry = createMemory(summary, {
         layer: Layer.Semantic,
-        tags: [...cluster.entityTags, 'dag-entity-profile'],
+        tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
         confidence: 'inferred',
         dag_level: 3,
         tenantId, // HIGH #1 fold: thread tenant explicitly

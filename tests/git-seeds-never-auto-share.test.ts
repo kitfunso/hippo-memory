@@ -8,7 +8,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sleep, adminActor } from '../src/api.js';
 import { loadConfig } from '../src/config.js';
-import { createMemory } from '../src/memory.js';
+import { buildDag, buildEntityProfiles } from '../src/dag.js';
+import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
+import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { autoShare, getGlobalRoot, promoteToGlobal, shareMemory, transferScore } from '../src/shared.js';
 import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
 
@@ -23,7 +25,7 @@ function globalContents(): string[] {
 describe('git-learned rows and the global store', () => {
   let tmp: string;
   let hippoRoot: string;
-  let seedId: string;
+  let seed: MemoryEntry;
   let origHippoHome: string | undefined;
 
   beforeEach(() => {
@@ -33,10 +35,9 @@ describe('git-learned rows and the global store', () => {
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(tmp, 'global');
     // The tags learnFromRepo gives every seed.
-    const seed = createMemory(SEED, { tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
+    seed = createMemory(SEED, { tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
     writeEntry(hippoRoot, seed);
     writeEntry(hippoRoot, createMemory(ORDINARY, { tags: ['error'], tenantId: 'default' }));
-    seedId = seed.id;
     expect(transferScore(seed)).toBeGreaterThanOrEqual(0.6);
   });
 
@@ -62,13 +63,45 @@ describe('git-learned rows and the global store', () => {
   });
 
   it('a hand-run share of a git-learned row still copies it', () => {
-    expect(shareMemory(hippoRoot, seedId)?.content).toBe(SEED);
+    expect(shareMemory(hippoRoot, seed.id)?.content).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
 
   it('a hand-run promote of a git-learned row still copies it', () => {
-    expect(promoteToGlobal(hippoRoot, seedId).content).toBe(SEED);
+    expect(promoteToGlobal(hippoRoot, seed.id).content).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
+  });
+
+  it('a fact extracted from a git-learned row keeps the tag and stays local after three recalls', () => {
+    const [fact] = storeExtractedFacts(hippoRoot, seed, [
+      { content: 'The uploader retries when the storage token expires mid-transfer.', tags: ['topic:upload'], valence: 'neutral' },
+    ]);
+    expect(fact.tags).toContain('git-learned');
+    const recalled = { ...fact, retrieval_count: 3 };
+    writeEntry(hippoRoot, recalled);
+    expect(transferScore(recalled)).toBeGreaterThanOrEqual(0.6);
+    autoShare(hippoRoot);
+    expect(globalContents()).toEqual([ORDINARY]);
+  });
+
+  it('DAG summaries and entity profiles built over git-learned facts keep the tag', async () => {
+    let calls = 0;
+    // Stands in for the summary model, so no API key is read.
+    const fetcher = async (): Promise<Response> =>
+      new Response(JSON.stringify({ content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }] }), { status: 200 });
+    const facts = storeExtractedFacts(hippoRoot, seed, [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => (
+      { content: `Upload fact ${n}: the storage token can expire mid-transfer.`, tags: ['topic:upload'], valence: 'neutral' }
+    ))).map((f) => ({ ...f, dag_level: 1 }));
+    await buildDag(hippoRoot, facts.slice(0, 3), { apiKey: 'test', fetcher });
+    await buildDag(hippoRoot, facts.slice(3), { apiKey: 'test', fetcher });
+    const summaries = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 2);
+    expect(summaries).toHaveLength(2);
+    for (const s of summaries) expect(s.tags).toContain('git-learned');
+
+    await buildEntityProfiles(hippoRoot, summaries, { apiKey: 'test', fetcher });
+    const profiles = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 3);
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].tags).toContain('git-learned');
   });
 });
 

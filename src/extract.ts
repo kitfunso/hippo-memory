@@ -3,6 +3,7 @@ import { writeEntry } from './store.js';
 import { loadConfig } from './config.js';
 import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
+import { neverAutoShareTags } from './shared.js';
 
 export interface ExtractedFact {
   content: string;
@@ -117,9 +118,10 @@ export function storeExtractedFacts(
   source: MemoryEntry,
   facts: ExtractedFact[],
 ): MemoryEntry[] {
-  const inheritedTags = source.tags.filter((t) =>
-    INHERITABLE_PREFIXES.some((p) => t.startsWith(p)),
-  );
+  const inheritedTags = [
+    ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
+    ...neverAutoShareTags([source]),
+  ];
 
   const entries: MemoryEntry[] = [];
   let rejected = 0;

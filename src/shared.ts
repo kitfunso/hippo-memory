@@ -341,10 +341,14 @@ const TRANSFERABLE_TAGS = new Set([
   'sub-agent', 'review', 'best-practice',
 ]);
 
-/** Tags whose rows only a hand-run share or promote may copy to the global store. */
+/** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows inherit them. */
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
   'git-learned',
 ]);
+
+export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
+  return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
+}
 
 /**
  * Estimate how well a memory would transfer to other projects.
