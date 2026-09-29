@@ -2459,7 +2459,7 @@ const MIGRATIONS: Migration[] = [
       // memory text hippo hands an agent (hook, CLI, MCP, HTTP). `event` is 'inject'
       // (sent), 'skip' (unchanged since the session's last inject, not sent), 'reset'
       // (compaction dropped earlier injections, so the next one must be sent) or
-      // 'reread' (re-read by later model calls, booked at session end). block_hash
+      // 'reread' (re-read by later calls, booked at session end per call day). block_hash
       // lets the per-prompt hook skip an unchanged block. Rows older than the retention
       // window are pruned on write. Additive only: no min_compatible_binary bump.
       db.exec(`

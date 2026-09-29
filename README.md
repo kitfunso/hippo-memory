@@ -514,11 +514,13 @@ per-prompt hook, the block `hippo compact-resume` restores after compaction, `hi
 `hippo recall`, the MCP tools, the HTTP API) is recorded in a token ledger: counts, surface
 and session, never the text. A block stays in the conversation, so each later model call
 reads it again until the host compacts. When a Claude Code session ends, hippo counts those
-calls in the session's transcript and records the re-read tokens too. `hippo tokens` shows
-sent and re-read totals for the last 30 days (`--days`, `--json`). A session that is still
-open, or that crashed, shows what was sent only. Re-reads usually bill at the provider's
-cached-input rate, a fraction of the full input price. Counts are estimates (characters / 4),
-the same estimate every budget uses. Rows older than 90 days are pruned.
+calls in the session's transcript and records the re-read tokens for the per-prompt hook's
+blocks and the compact-resume block, dated by the day of the calls. The other surfaces show sent tokens only: their rows
+cannot tell a sub-agent's call from its parent's. `hippo tokens` shows sent and re-read
+totals for the last 30 days (`--days`, `--json`). A session that is still open, or that
+crashed, shows what was sent only. Re-reads usually bill at the provider's cached-input rate,
+a fraction of the full input price. Counts are estimates (characters / 4), the same estimate
+every budget uses. Rows older than 90 days are pruned.
 
 ---
 
@@ -652,7 +654,7 @@ hippo watch "npm run build"
 | `hippo dormant forget <id>` | Delete a dormant memory permanently |
 | `hippo doctor [--json]` | Check the install: Node, store, schema, sleep, agent hooks; each problem names its fix. It never changes `hippo.db`, though SQLite may leave empty `hippo.db-wal` and `hippo.db-shm` files beside it |
 | `hippo support-bundle [--out <file>] [--include-logs]` | Write a redacted JSON file for a support ticket: versions, doctor checks, config, store counts and log names, never memory text; `--include-logs` adds each log's last 200 lines, which can quote it |
-| `hippo tokens [--days n]` | Estimated tokens of memory text handed to agents, per surface, what later model calls re-read, and what skipping unchanged hook blocks saved |
+| `hippo tokens [--days n]` | Estimated tokens of memory text handed to agents, per surface, what later model calls re-read of the hook and compact-resume blocks, and what skipping unchanged hook blocks saved |
 | `hippo failures [--days n]` | Failed tool calls the capture-error hook saw, by outcome, and how many errors first happened in another session |
 | `hippo embed` | Embed all memories for semantic search |
 | `hippo embed --status` | Show embedding coverage |
@@ -1057,7 +1059,7 @@ On your machine, in SQLite: `.hippo/hippo.db` in each project, plus a global sto
 
 ### What does hippo cost?
 
-Nothing. Hippo is MIT-licensed and needs no account or API key. Optional features that call an outside provider bill through it: the Jev reranker costs about 0.0004 USD a recall, and API embedders and sleep's fact extraction bill your own keys. Memory text handed to your agent uses context tokens when it is sent, and again, usually at the cheaper cached-input rate, on each later model call until the host compacts. `hippo tokens` shows both.
+Nothing. Hippo is MIT-licensed and needs no account or API key. Optional features that call an outside provider bill through it: the Jev reranker costs about 0.0004 USD a recall, and API embedders and sleep's fact extraction bill your own keys. Memory text handed to your agent uses context tokens when it is sent, and again, usually at the cheaper cached-input rate, on each later model call until the host compacts. `hippo tokens` shows both for the hook and compact-resume blocks, and the sent tokens for the rest.
 
 ### Is it production-ready?
 

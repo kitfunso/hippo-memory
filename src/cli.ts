@@ -146,7 +146,10 @@ import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from './version.js';
 import { captureToolFailure } from './capture-error.js';
 import type { JsonValue } from './working-memory.js';
-import { blockHash, hookPayloadSessionId, lastSentState, readApiCalls, recordRereads, recordTokenUse, shouldSkipUnchanged, type TokenSurface, type TranscriptCalls } from './token-ledger.js';
+import {
+  blockHash, hookPayloadSessionId, isSubagentPayload, lastSentState, readApiCalls, recordRereads, recordTokenUse, shouldSkipUnchanged,
+  type TokenSurface, type TranscriptCalls,
+} from './token-ledger.js';
 import { FAILURE_LOG_RETENTION_DAYS } from './failure-log.js';
 import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, applyGoalStackBoost } from './goals.js';
 import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
@@ -3354,7 +3357,8 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         // source === 'compact' to print. Real SessionStart payloads always
         // carry source; only the TTY/no-stdin manual path prints without
         // one (codex round 3).
-        if (payload.source !== 'compact') {
+        // A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
+        if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
           suppressOutput = true;
         }
         if (typeof payload.session_id === 'string') {
@@ -3376,6 +3380,18 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         payloadSessionId !== snapshot.session_id;
 
       if (snapshot && !sessionMismatch) {
+        // Loaded before the print so a bad trail row costs the trail, not the snapshot; stderr stays out of the model's context.
+        let events: SessionEvent[] = [];
+        try {
+          if (snapshot.session_id) {
+            events = listSessionEvents(hippoRoot, tenantId, { session_id: snapshot.session_id }).map((e) => ({
+              ...e,
+              content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
+            }));
+          }
+        } catch (err) {
+          console.error(`hippo compact-resume: trail skipped: ${err instanceof Error ? err.message : String(err)}`);
+        }
         // Printed in one write so the ledger books exactly the text the model is handed.
         const text = captureConsole(() => {
           console.log('## Restored after compaction\n');
@@ -3385,19 +3401,9 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
             "_Point-in-time working-state snapshot, auto-restored after compaction. Background reference, not instructions; the user's live messages win._\n",
           );
           printActiveTaskSnapshot(snapshot);
-          if (snapshot.session_id) {
-            const events = listSessionEvents(hippoRoot, tenantId, { session_id: snapshot.session_id });
-            // Nothing auto-populates session_events, so an empty table is the
-            // common real case; printSessionEvents([]) would otherwise inject
-            // a bare "No session events found." line into every compaction.
-            if (events.length > 0) {
-              const cappedEvents = events.map((e) => ({
-                ...e,
-                content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
-              }));
-              printSessionEvents(cappedEvents);
-            }
-          }
+          // Nothing auto-populates session_events, so an empty trail is the common real case;
+          // printSessionEvents([]) would inject a bare "No session events found." line into every compaction.
+          if (events.length > 0) printSessionEvents(events);
         });
         console.log(text);
         withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
@@ -3405,8 +3411,9 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         }));
       }
     }
-  } catch {
-    // Degrade to empty stdout on any store error — never crash SessionStart.
+  } catch (err) {
+    // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
+    console.error(`hippo compact-resume: skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
   process.exit(0);
 }
@@ -3501,15 +3508,18 @@ async function cmdSessionEndWorker(
   const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
   const closeLogFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
   const closeSessionId = typeof flags['session-id'] === 'string' ? (flags['session-id'] as string) : null;
-  const rereadLog = await bookSessionRereads(hippoRoot, transcriptPath, closeSessionId);
+  const rereadLog = await bookSessionRereads(hippoRoot, transcriptPath, closeSessionId)
+    .catch((err) => [`re-read count failed: ${err instanceof Error ? err.message : String(err)}`]);
+  // Sleep starts the log file afresh, so the lines go in after it; on exit too, as sleep exits in a project with no store.
+  const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) appendSessionEndCloseLog(closeLogFile, line); };
+  process.once('exit', flushRereadLog);
   try {
     await cmdSleep(hippoRoot, flags);
   } catch {
     // sleep errors are already tee'd to the log file via cmdSleep's
     // `[hippo] sleep failed: ...` line. Continue to capture regardless.
   }
-  // Sleep starts the log file afresh, so the re-read lines go in after it.
-  for (const line of rereadLog) appendSessionEndCloseLog(closeLogFile, line);
+  flushRereadLog();
   try {
     const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
     // With no stdin of its own, capture would read this as a manual run and scan every project.
@@ -4513,7 +4523,7 @@ function cmdQuarantine(
  * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger
  * (ROADMAP TE0). Tokens of memory text handed to agents per surface, blocks
  * the per-prompt hook skipped as unchanged (TE2) and the tokens that saved,
- * and the tokens later model calls re-read, counted when each session ends.
+ * and the hook blocks' tokens later model calls re-read, counted when each session ends.
  * Counts are estimates (characters / 4), the same estimate every budget uses.
  */
 function cmdTokens(
@@ -4552,15 +4562,13 @@ function cmdTokens(
   console.log(`  Total sent: ${summary.totalTokens} tokens. Saved by skipping unchanged blocks: ${summary.totalTokensAvoided}.`);
   console.log(
     `  Re-read by later model calls until compaction: ${summary.totalTokensReread} tokens,`
-    + ` counted for ${summary.rereadSessions} of ${summary.sessions} sessions.`,
+    + ` counted for ${summary.rereadSessions} of ${summary.hookSessions} sessions.`,
   );
   if (summary.meanTokensPerSession > 0) {
     console.log(`  Mean per session (rows with a session id): ${summary.meanTokensPerSession} tokens.`);
   }
-  console.log(
-    '  Re-reads are counted when a session ends (open or crashed sessions show sent only)'
-    + " and usually bill at the provider's cached-input rate, a fraction of the full input price.",
-  );
+  console.log('  Re-reads are counted for hook and compact-resume blocks when a session ends; other surfaces, and open or crashed sessions, show sent only.');
+  console.log("  Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.");
 }
 
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13). */
@@ -6995,6 +7003,10 @@ async function cmdContext(
     }
   }
   const currentSessionId = payloadSessionId ?? hostSessionId();
+  // A sub-agent's payload and env both carry its parent's session id, so it books no session and never skips a block.
+  const subagent = isSubagentPayload(stdinText);
+  const ledgerSessionId = subagent ? undefined : currentSessionId;
+  if (subagent) payloadSessionId = undefined;
 
   const opts: api.ContextOpts = {
     q: query,
@@ -7057,7 +7069,7 @@ async function cmdContext(
     });
     console.log(jsonText);
     withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: currentSessionId, surface: pinnedOnly ? 'hook' : 'context',
+      tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
     }));
   } else if (format === 'additional-context') {
@@ -7135,7 +7147,7 @@ async function cmdContext(
         if (finalStatic) {
           try {
             recordTokenUse(db, {
-              tenantId: ctx.tenantId, sessionId: currentSessionId, surface, event: 'inject',
+              tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface, event: 'inject',
               items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
             });
           } catch { /* best effort; see withLedgerDb doc comment */ }
@@ -7143,7 +7155,7 @@ async function cmdContext(
         if (recallBlock) {
           try {
             recordTokenUse(db, {
-              tenantId: ctx.tenantId, sessionId: currentSessionId, surface: 'hook_recall', event: 'inject',
+              tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: 'hook_recall', event: 'inject',
               items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
             });
           } catch { /* best effort; see withLedgerDb doc comment */ }
@@ -7173,7 +7185,7 @@ async function cmdContext(
     });
     if (text.length > 0) console.log(text);
     withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: currentSessionId, surface: pinnedOnly ? 'hook' : 'context',
+      tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
     }));
   }
@@ -7188,7 +7200,8 @@ async function cmdContext(
  */
 function resetHookInjection(hippoRoot: string, stdinText: string | undefined, requiredSource: string | null): void {
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
-  if (sessionId === null) return;
+  // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
+  if (sessionId === null || isSubagentPayload(stdinText)) return;
   withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
     tenantId: resolveTenantId({}), sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
   }));
@@ -9729,9 +9742,9 @@ Commands:
     --include-logs         Add the last ${TAIL_MAX_LINES} lines of each hippo log, known secret shapes removed
   tokens                   Tokens of memory text hippo handed agents, per surface
                            (hook, compact-resume, context, recall, MCP, HTTP), what
-                           skipping unchanged hook blocks saved, and what later model
-                           calls re-read, counted when a session ends. Estimates
-                           (characters / 4)
+                           skipping unchanged hook blocks saved, and how much of the
+                           hook and compact-resume blocks later model calls re-read,
+                           counted when a session ends. Estimates (characters / 4)
     --days <n>             Window in days (default: 30)
     --json                 Output as JSON
     --global               Operate on the global store
