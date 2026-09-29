@@ -893,8 +893,8 @@ function cmdCaptureCore(
     return;
   }
 
-  // Extract items
-  const extracted = extractFromText(text);
+  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
+  const extracted = extractFromText(redactSecretsStrict(text));
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');

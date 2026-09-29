@@ -46,6 +46,28 @@ describe('transcript mining', () => {
     expect(extractFromText('Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.')).toEqual([]);
   });
 
+  it('SessionEnd capture scrubs a token from a VS Code prompt before it becomes a memory', () => {
+    const { dir, env } = scratch();
+    const token = 'ghp_' + 'a'.repeat(36);
+    try {
+      expect(run(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, env).status).toBe(0);
+      const transcript = path.join(dir, 't.jsonl');
+      const lines = [
+        { type: 'user', message: { role: 'user', content: [{ type: 'text', text: `We decided to use the deploy token ${token} for the release bot.` }] } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'OK, noted.' }] } },
+      ];
+      fs.writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+      const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: dir, hook_event_name: 'SessionEnd' });
+      expect(run(['capture', '--last-session'], dir, env, payload).status).toBe(0);
+
+      const contents = loadAllEntries(getHippoRoot(dir), 'default').map((e) => e.content);
+      expect(contents.some((c) => c.includes('deploy token [REDACTED]'))).toBe(true);
+      expect(contents.join('\n')).not.toContain(token);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('pre-compact skips Claude Code compact summaries and slash-command lines', () => {
     const { dir, env } = scratch();
     try {
