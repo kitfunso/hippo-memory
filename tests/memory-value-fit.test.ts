@@ -50,7 +50,8 @@ import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memo
 // Hook order matters: clearAblationEnv deletes HIPPO_MV_SCRATCH_ROOT, so the
 // override is re-set in a LATER beforeEach (vitest runs same-level hooks in
 // registration order).
-const FIT_SCRATCH_ROOT = path.join(os.tmpdir(), 'hippo-mv-fit-test-scratch');
+// mkdtemp per process: two worktrees running this suite at once must not share a root.
+const FIT_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-fit-test-scratch-'));
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {

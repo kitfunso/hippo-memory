@@ -46,9 +46,8 @@ const createMemory7 = (content: string, options: Parameters<typeof createMemory>
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-// File-unique scratch root (see file header comment).
-const SCRATCH_ROOT = path.join(os.tmpdir(), 'hippo-mv-wiring-test-scratch');
-fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
+// mkdtemp per process: two worktrees running this suite at once must not share a root.
+const SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-wiring-test-scratch-'));
 
 let dir: string;
 beforeEach(() => {
