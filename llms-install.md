@@ -20,13 +20,7 @@ No global installs allowed? Use `npx -y hippo-memory <command>` in place of `hip
 
 ## 3. Create the project store and wire in the agent
 
-In the root of the project the user works in:
-
-```bash
-hippo init
-```
-
-Tell the user what `hippo init` changes before you run it:
+Before you run anything in this step, tell the user what `hippo init` changes:
 
 - `.hippo/` in the project, seeded on the first run with lessons from the last 30 days of git history.
 - A hippo block in each instruction file that already exists, such as `CLAUDE.md` or `AGENTS.md`. It never creates one.
@@ -35,6 +29,12 @@ Tell the user what `hippo init` changes before you run it:
 - On the first run, an import of this project's Claude Code auto memory, from its folder under `~/.claude/projects/`.
 
 `--no-hooks` leaves out the instruction-file blocks and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and auto memory import. Codex session capture is opt-in: run `hippo hook install codex`.
+
+Then, in the root of the project the user works in, run it with any flags the user chose:
+
+```bash
+hippo init
+```
 
 Run `hippo init --scan <folder>` only if the user asks to set up many repositories at once, and say first what it changes: every git repo in the folder and up to three levels below gets its own `.hippo/` store, seeded from a year of its git history, and the same user-level hooks and daily run go in. It patches no instruction file.
 
