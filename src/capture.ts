@@ -25,7 +25,6 @@ import {
 } from './store.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { embedMemory } from './embeddings.js';
-import { isEmbeddingConfigured } from './embedding-provider.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
 import { redactSecretsStrict } from './secret-detect.js';
@@ -959,10 +958,7 @@ function cmdCaptureCore(
         }
         updateStats(targetRoot, { remembered: 1 });
         keys.add(duplicateKey(item.content)); // within-batch dedup
-
-        if (isEmbeddingConfigured(targetRoot)) {
-          embedMemory(targetRoot, entry).catch(() => {});
-        }
+        void embedMemory(targetRoot, entry);
       }
 
       captured++;

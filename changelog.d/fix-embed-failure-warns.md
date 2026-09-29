@@ -1,0 +1,3 @@
+### Fixed
+
+- **A bad embedding API key now prints a warning instead of failing silently.** With the OpenAI, Voyage or Cohere provider and a wrong or expired key, every `hippo remember` stored the memory without a vector and said nothing, so semantic recall quietly fell back to keyword recall. The first failed embed in a process now prints one line to stderr, `hippo: embedding failed (<provider>): <reason>. Memories are stored without embeddings until this is fixed.`, with any key or token in the reason redacted. The write still succeeds, and `hippo embed` backfills the missing vectors once the key works. A typo in `embeddings.provider` or an invalid `embeddings.apiBaseUrl` now warns the same way (`embedding failed (config)`); before, it quietly switched embedding off.

@@ -94,11 +94,8 @@ export function promoteToGlobal(
 
   writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
 
-  // Fire-and-forget: embedMemory's own availability gate (embeddings.ts:438)
-  // already no-ops when embeddings are unavailable/disabled, so a pre-guard
-  // here would be redundant (capture.ts:598 pre-guards instead; both
-  // contracts are correct, see docs/plans/2026-07-18-global-row-embeddings.md).
-  void embedMemory(globalRoot, globalEntry).catch(() => {});
+  // Fire-and-forget: embedMemory gates on availability and never rejects.
+  void embedMemory(globalRoot, globalEntry);
 
   return globalEntry;
 }
@@ -437,10 +434,9 @@ export function shareMemory(
   // Single-row producer: embed here unless the caller opts out. autoShare
   // sets skipEmbed so it can batch its whole run through one embedAll() at
   // the end instead of N serialized full-index rewrites (embedMemory rewrites
-  // the whole index JSON per call). Same redundant-pre-guard reasoning as
-  // promoteToGlobal above.
+  // the whole index JSON per call).
   if (!options.skipEmbed) {
-    void embedMemory(globalRoot, globalEntry).catch(() => {});
+    void embedMemory(globalRoot, globalEntry);
   }
 
   return globalEntry;

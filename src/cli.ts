@@ -139,7 +139,7 @@ import {
   resolveEmbeddingModel,
   embeddingModelRequiresReindex,
 } from './embeddings.js';
-import { isEmbeddingConfigured, resolveEmbeddingProvider } from './embedding-provider.js';
+import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
@@ -1069,12 +1069,7 @@ async function cmdRemember(
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
 
-  // Auto-embed if available (provider-aware: local dep installed, or API key present)
-  if (isEmbeddingConfigured(targetRoot)) {
-    embedMemory(targetRoot, entry).catch(() => {
-      // Silently ignore embedding errors
-    });
-  }
+  void embedMemory(targetRoot, entry);
 
   const config = loadConfig(targetRoot);
   const shouldExtract = flags['extract'] || config.extraction.enabled === true;
@@ -7523,10 +7518,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   try {
     writeEntry(hippoRoot, entry);
     updateStats(hippoRoot, { remembered: 1 });
-
-    if (isEmbeddingConfigured(hippoRoot)) {
-      embedMemory(hippoRoot, entry).catch(() => {});
-    }
+    void embedMemory(hippoRoot, entry);
 
     const preview = stderr.trim().slice(0, 80);
     console.error(`\nHippo learned from failure: "${preview}"`);
@@ -7659,10 +7651,7 @@ function learnFromRepo(
     }
     updateStats(hippoRoot, { remembered: 1 });
     keys.add(duplicateKey(lesson));
-
-    if (isEmbeddingConfigured(hippoRoot)) {
-      embedMemory(hippoRoot, entry).catch(() => {});
-    }
+    void embedMemory(hippoRoot, entry);
 
     added++;
   }

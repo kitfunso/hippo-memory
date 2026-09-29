@@ -14,6 +14,7 @@ import { openHippoDb, closeHippoDb, getMeta, setMeta } from './db.js';
 import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
+import { redactSecretsStrict } from './secret-detect.js';
 
 // Use createRequire for synchronous module resolution check in ESM
 const _require = createRequire(import.meta.url);
@@ -501,6 +502,17 @@ async function withEmbedLock<T>(hippoRoot: string, fn: () => Promise<T>): Promis
   }
 }
 
+// A bad key fails every write; one warning tells the user, N would bury the command's own output.
+let _embedFailureWarned = false;
+
+function warnEmbedFailureOnce(source: string, rawMessage: string): void {
+  if (_embedFailureWarned) return;
+  _embedFailureWarned = true;
+  // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
+  const message = redactSecretsStrict(rawMessage).replace(/\s+/g, ' ').replace(/\.+$/, '');
+  console.error(`hippo: embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
+}
+
 /**
  * Embed a single memory entry and cache the result in the embedding index.
  */
@@ -509,7 +521,14 @@ export async function embedMemory(
   entry: MemoryEntry,
   model?: string
 ): Promise<void> {
-  const provider = resolveEmbeddingProvider(hippoRoot, { model });
+  let provider: EmbeddingProvider;
+  try {
+    provider = resolveEmbeddingProvider(hippoRoot, { model });
+  } catch (err) {
+    // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
+    warnEmbedFailureOnce('config', err instanceof Error ? err.message : String(err));
+    return;
+  }
   if (!provider.isAvailable()) return;
 
   return withEmbedLock(hippoRoot, async () => {
@@ -558,8 +577,9 @@ export async function embedMemory(
       } catch {
         // Physics init is best-effort — don't break embedding
       }
-    } catch {
-      // Provider failure (API down / bad key). Best-effort: leave the index as-is.
+    } catch (err) {
+      // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
+      warnEmbedFailureOnce(provider.kind, err instanceof Error ? err.message : String(err));
     }
   }).catch((err) => {
     console.error(`hippo: skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
