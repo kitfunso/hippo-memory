@@ -8,7 +8,7 @@ import { CODEX_TRUST_LINE, installJsonHooks, uninstallJsonHooks } from '../src/h
 import { formatDoctor, runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/working-memory.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore, saveSessionHandoff, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -353,13 +353,26 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     const entry = createMemory('projectless hook remembers the staging flag', { pinned: true });
     entry.origin_project = '';
     writeEntry(globalStore, entry);
+    const foreignFolder = path.join(m.root, 'other-project');
+    fs.mkdirSync(foreignFolder);
+    saveSessionHandoff(globalStore, 'default', {
+      version: 1,
+      sessionId: 'other-project-session',
+      repoRoot: foreignFolder,
+      summary: 'Foreign project handoff summary',
+      nextAction: 'Resume the unrelated deployment',
+      artifacts: [],
+    });
     const env = { CODEX_HOME: path.join(m.root, 'codex-home') };
     hippo(m, env, m.repo, 'hook', 'install', 'codex');
     expect(readJson(path.join(env.CODEX_HOME, 'hooks.json'))).toEqual(HIPPO_ONLY);
     const command = PROMPT_GROUP.hooks[0].command;
     const base = { session_id: 'projectless-codex', transcript_path: null, cwd: m.repo, model: 'gpt-5-codex', permission_mode: 'default', hook_event_name: 'UserPromptSubmit' as const, prompt: 'what flag?' };
     const first = runCodexHook(m, command, { ...base, turn_id: 't1' });
-    expect(JSON.parse(first).hookSpecificOutput.additionalContext).toContain('projectless hook remembers the staging flag');
+    const context = JSON.parse(first).hookSpecificOutput.additionalContext;
+    expect(context).toContain('projectless hook remembers the staging flag');
+    expect(context).not.toContain('Foreign project handoff summary');
+    expect(context).not.toContain('Resume the unrelated deployment');
     expect(runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
     expect(fs.existsSync(path.join(m.repo, '.hippo'))).toBe(false);
   });

@@ -10611,7 +10611,7 @@ async function main(
       // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
       // the hot stdin path and a manual run share this one command.
       const { text: stdinText } = await readStdinBounded();
-      await cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText);
+      await cmdContext(flags['pinned-only'] === true ? hippoRoot : hookStoreRoot(hippoRoot), args, flags, stdinText);
       break;
     }
 
