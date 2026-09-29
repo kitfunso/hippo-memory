@@ -14,7 +14,7 @@ import {
   hashQueryText,
   RingBuffer,
 } from './recall-history.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent, AUDIT_OPS } from './audit.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
 // for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
@@ -168,65 +168,7 @@ function isPublicRoute(method: string, path: string): boolean {
   return PUBLIC_ROUTES.has(`${method} ${path}`);
 }
 
-const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
-  'remember',
-  'recall',
-  'promote',
-  'supersede',
-  'forget',
-  'archive_raw',
-  'auth_revoke',
-  'auth_create', // v1.12.4: emitted by api.authCreate
-  'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
-  'consolidate', // v1.11.5: emitted by api.sleep / POST /v1/sleep
-  'audit_prune', // v1.12.9: emitted by pruneAuditLog
-  'summary_marked_dirty', // v0.30 / E1 — lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS (v1.11.5 CRIT A institutional rule)
-  'summary_marked_clean', // v0.30 / E3 — buildDag post-link clean op; lockstep
-  'summary_rebuilt',      // v0.30 / E3 — sleep-cycle rebuild op; lockstep
-  'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
-  'predict_close',        // v0.31 / E2 — emitted by closePrediction
-  'predict_baserate',     // v0.31 / J3 — emitted by computePredictionBaserate
-  'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
-  'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
-  'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
-  'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
-  'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
-  'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
-  'recall_availability_detected',             // v1.13.x / J2 - emitted when availability/recency-bias hint fires
-  'decision_create',       // E2 decision first-class object — emitted by saveDecision
-  'decision_supersede',    // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
-  'decision_close',        // E2 — emitted by closeDecision
-  'incident_open',         // E2 incident first-class object — emitted by saveIncident
-  'incident_resolve',      // E2 — emitted by resolveIncident (open -> resolved)
-  'incident_close',        // E2 — emitted by closeIncident (open|resolved -> closed)
-  'process_create',        // E2 process first-class object — emitted by saveProcess
-  'process_supersede',     // E2 — emitted by saveProcess on a supersession
-  'process_close',         // E2 — emitted by closeProcess
-  'policy_create',         // E2 policy first-class object — emitted by savePolicy
-  'policy_supersede',      // E2 — emitted by savePolicy on a supersession
-  'policy_close',          // E2 — emitted by closePolicy
-  'skill_create',          // E2 skill first-class object — emitted by saveSkill
-  'skill_supersede',       // E2 — emitted by saveSkill on a supersession
-  'skill_close',           // E2 — emitted by closeSkill
-  'project_brief_create',  // E2 project_brief first-class object — emitted by saveProjectBrief
-  'project_brief_supersede', // E2 — emitted by saveProjectBrief on a supersession (incl. refresh)
-  'project_brief_close',   // E2 — emitted by closeProjectBrief
-  'customer_note_create',  // E2 customer_note first-class object — emitted by saveCustomerNote
-  'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
-  'customer_note_close',   // E2 — emitted by closeCustomerNote
-  'mv_rescue',             // LC2-E3 — emitted by consolidate() per rescue; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
-  'reject_value',          // AT1 — emitted by `hippo reject`; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
-  'reject_refusal',        // AT1 — emitted when the rejection guard refuses a write; lockstep
-  'unreject_value',        // AT1 — emitted by `hippo unreject`; lockstep
-  'conflict_resolve',      // AT1 — emitted by resolveConflict on every resolution path; lockstep
-  'half_life_migrate',     // Decay default change — emitted by migrateDefaultHalfLife; lockstep with AuditOp union
-  'dormant_restore',       // Dormant memories — emitted by api.restoreDormant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
-  'auth_grant',            // EI2: emitted by api.authGrant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
-  'auth_ungrant',          // EI2: emitted by api.authUngrant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
-  'quarantine',            // CD5: emitted by recordQuarantine; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
-  'quarantine_approve',    // CD5: emitted by api.quarantineApprove; lockstep
-  'quarantine_reject',     // CD5: emitted by api.quarantineReject; lockstep
-]);
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
 // enough to dump a small deployment's full audit log without paginating, but
