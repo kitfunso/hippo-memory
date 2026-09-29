@@ -7493,9 +7493,11 @@ function cmdImport(
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
   if (flags['agents']) {
-    // Without a store of its own the folder has no project to import, so only the user pass runs.
-    const store = useGlobal || !isInitialized(hippoRoot) ? getGlobalRoot() : hippoRoot;
-    const report = importForStore(store, { machine: currentMachine(), dryRun });
+    const opts = { machine: currentMachine(), dryRun };
+    // A folder without a store of its own imports as session end would there, so its notes are not hidden.
+    const report = useGlobal || isInitialized(hippoRoot)
+      ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
+      : importAtSessionEnd(process.cwd(), undefined, opts);
     for (const line of detailLines(report, dryRun)) console.log(line);
     for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
     return;

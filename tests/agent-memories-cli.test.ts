@@ -175,6 +175,23 @@ describe('hippo import --agents', () => {
     expect(hippo(b, b.project, ['import', '--agents'])).toContain('1 new');
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
+
+  it('in a folder without a store, imports as session end does: the project notes into the global store under its origin', () => {
+    const b = box();
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    note(userNotes(b), 'voice.md', USER_NOTE);
+
+    const dry = hippo(b, b.project, ['import', '--agents', '--dry-run']);
+    expect(dry.toLowerCase()).toContain(`project ${projectNotes(b)}: 1 note`.toLowerCase());
+    expect(dry).toContain('would be 2 new');
+    expect(imported(b.global)).toEqual([]);
+
+    hippo(b, b.project, ['import', '--agents']);
+    const byText = new Map(loadAllEntries(b.global).filter((e) => e.source?.startsWith('agent-memory:')).map((e) => [e.content, e.origin_project]));
+    expect(byText.get(PROJECT_NOTE)).toBe(deriveOriginProject(b.project));
+    expect(byText.get(USER_NOTE)).toBe('');
+    expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
+  });
 });
 
 describe('hooks in a folder without a store', () => {
