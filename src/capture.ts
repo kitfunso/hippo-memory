@@ -27,7 +27,7 @@ import { getGlobalRoot, initGlobal } from './shared.js';
 import { embedMemory } from './embeddings.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
-import { redactSecretsStrict } from './secret-detect.js';
+import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
@@ -917,7 +917,7 @@ function cmdCaptureCore(
   }
 
   // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromText(redactSecretsStrict(text));
+  const extracted = extractFromText(maskEmails(redactSecretsStrict(text)));
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -1256,9 +1256,9 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
 
   // X9: these fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
   // re-injection token budget and never split a surrogate pair (X2); `hippo snapshot save` stays uncapped.
-  const task = redactSecretsStrict(rawTask);
-  const summary = redactSecretsStrict(rawSummary);
-  const nextStep = redactSecretsStrict(rawNextStep);
+  const task = maskEmails(redactSecretsStrict(rawTask));
+  const summary = maskEmails(redactSecretsStrict(rawSummary));
+  const nextStep = maskEmails(redactSecretsStrict(rawNextStep));
   return {
     task: task.trim() ? truncateCodePointSafe(task, PRE_COMPACT_TASK_CAP) : '',
     summary: summary.trim() ? truncateKeepNewest(summary, PRE_COMPACT_SUMMARY_CAP) : '',

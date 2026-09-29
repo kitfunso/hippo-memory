@@ -26,6 +26,19 @@ describe('Claude Code transcripts', () => {
     expect(scan.turns.filter((t) => t.role === 'user').map((t) => t.text)).toEqual(['fix the upload retry']);
   });
 
+  it.each([
+    'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+    'Claude AI usage limit reached|1790000000',
+    'Prompt is too long',
+  ])("skips Claude Code's own notice as the closing message: %s", (notice) => {
+    const scan = scanSessionTranscript(jsonl([
+      userSays('fix the upload retry'),
+      assistantSays([text('Fixed `retry()` because tokens expire.')]),
+      { type: 'assistant', cwd: CWD, message: { role: 'assistant', model: '<synthetic>', content: [text(notice)] } },
+    ]));
+    expect(scan.finalText).toBe('Fixed `retry()` because tokens expire.');
+  });
+
   it('counts Edit, Write, MultiEdit and NotebookEdit only once their results come back clean', () => {
     const scan = scanSessionTranscript(jsonl([
       userSays('go'),

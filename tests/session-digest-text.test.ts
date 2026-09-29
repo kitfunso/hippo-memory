@@ -17,7 +17,7 @@ let repo: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-text-'));
-  repo = realFsPath(path.join(tmp, 'repo'));
+  repo = String(realFsPath(path.join(tmp, 'repo')));
   fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
 });
 
@@ -128,16 +128,30 @@ describe('secrets and paths in sentences', () => {
     expect(digest(sentence)).toBe('Called `hook()` with [REDACTED] because staging needs it.');
   });
 
-  it('never cuts a secret at the total cap', () => {
-    const filler = (i: number): string => `Fixed \`part${i}()\` because ${'the input was empty and '.repeat(10)}done.`;
-    const secret = jwt(60);
-    const text = [0, 1, 2, 3].map(filler).join(' ') + ` Fixed \`last()\` with ${secret} because ${'staging needed it and '.repeat(6)}done.`;
-    const start = text.indexOf(secret);
-    expect(start < MAX_DIGEST_CHARS && start + secret.length > MAX_DIGEST_CHARS).toBe(true);
-    const out = digest(text);
-    expect(out.length).toBeLessThanOrEqual(MAX_DIGEST_CHARS);
-    expect(out).not.toContain(secret.slice(0, 20));
-    for (const line of lines(out)) expect(text.replace(secret, '[REDACTED]')).toContain(line);
+  it('redacts before the total cap, so a kept secret is masked and costs no other sentence its place', () => {
+    const top = 'Switched `retry()` to backoff because the API rate limits.';
+    const filler = (i: number): string => `Plain filler sentence number ${i} ${'with some more words '.repeat(12)}here.`;
+    const secret = jwt(80);
+    const second = `Fixed \`last()\` with ${secret} because staging needed it.`;
+    const kept = [top, filler(1), filler(2), filler(3), second];
+    expect(kept.join('\n').length).toBeGreaterThan(MAX_DIGEST_CHARS);
+    expect(lines(digest(kept.join(' ')))).toEqual([...kept.slice(0, 4), 'Fixed `last()` with [REDACTED] because staging needed it.']);
+  });
+
+  it('redacts a private key block that spans lines', () => {
+    const pem = `-----BEGIN RSA PRIVATE KEY-----\n${'A'.repeat(64)}\n${'B'.repeat(64)}\n-----END RSA PRIVATE KEY-----`;
+    const out = digest(`Rotated the key in \`sign()\` because it leaked.\n${pem}\nMoved it to the vault because \`deploy()\` reads it there.`);
+    expect(out).toContain('Rotated the key');
+    expect(out).not.toMatch(/AAAA|BBBB|PRIVATE KEY/);
+  });
+
+  it('redacts a secret inside a path, in a sentence and in the Changed line', () => {
+    const file = path.join(repo, 'src', 'AKIAIOSFODNN7EXAMPLE.ts');
+    const out = digest(`Moved the loader into src/AKIAIOSFODNN7EXAMPLE.ts because \`load()\` reads it.`, {
+      edits: [{ filePath: file, base: null }],
+    });
+    expect(out).not.toContain('AKIAIOSFODNN7EXAMPLE');
+    expect(lines(out)).toEqual(['Moved the loader into src/[REDACTED].ts because `load()` reads it.', 'Changed: src/[REDACTED].ts']);
   });
 
   it('rewrites an absolute path inside the repo to a repo-relative one', () => {
@@ -153,6 +167,10 @@ describe('secrets and paths in sentences', () => {
     ['a Linux home', '/home/alice/notes/todo.md'],
     ['a macOS home', '/Users/alice/notes/todo.md'],
     ['an 8.3 short name', 'E:\\ALICEM~1\\notes\\todo.md'],
+    ['a WSL home', '/mnt/d/Users/alice/notes/todo.md'],
+    ['a Silverblue home', '/var/home/alice/notes/todo.md'],
+    ['the root home', '/root/notes/todo.md'],
+    ['an XP-era home', 'D:\\Documents and Settings\\alice\\todo.md'],
   ])('drops a sentence naming %s', (_label, where) => {
     expect(digest(`Kept the notes in ${where} because \`sync()\` reads them.`)).toBe('');
   });
@@ -183,6 +201,11 @@ describe('the Changed line', () => {
       { filePath: at('src', 'kept.ts'), base: null },
     ];
     expect(digest('', { edits })).toBe('Changed: src/kept.ts');
+  });
+
+  it('lists deleted files differing only in case once on Windows, twice elsewhere', () => {
+    const edits: DigestEdit[] = [{ filePath: at('src', 'Old.ts'), base: null }, { filePath: at('src', 'old.ts'), base: null }];
+    expect(digest('', { edits })).toBe(process.platform === 'win32' ? 'Changed: src/Old.ts' : 'Changed: src/Old.ts, src/old.ts');
   });
 
   it('caps the list at ten files', () => {

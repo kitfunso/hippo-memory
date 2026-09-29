@@ -16,8 +16,9 @@ import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
-import { redactSecretsStrict } from './secret-detect.js';
+import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS, isInitialized, loadAllEntries, loadLatestHandoff, writeEntry } from './store.js';
+import { isSyntheticMessage } from './token-ledger.js';
 
 export const SESSION_DIGEST_TAG = 'session-digest';
 
@@ -80,7 +81,6 @@ interface ScanState {
   firstCwd: string | null;
   pending: PendingEdit[];
   landed: Set<string>;
-  failed: Set<string>;
   claudeFinal: string;
   codexFinal: string;
   codexUnphased: string;
@@ -120,8 +120,8 @@ function readClaudeAssistant(record: TranscriptRecord, state: ScanState): void {
     const target = editTarget(block);
     if (target) state.pending.push({ callId: block.id, filePath: target, base: state.cwd });
   }
-  // Sidechain edits changed files, but a sub-agent's reply is not this session's closing message.
-  if (record.isMeta === true || record.isSidechain === true) return;
+  // Sidechain edits changed files, but a sub-agent's reply is not this session's closing message, nor is Claude Code's own notice.
+  if (record.isMeta === true || record.isSidechain === true || isSynthetic(record)) return;
   for (let i = blocks.length - 1; i >= 0; i--) {
     const text = blocks[i].type === 'text' ? blocks[i].text : undefined;
     if (isStringValue(text) && text.trim()) {
@@ -131,10 +131,14 @@ function readClaudeAssistant(record: TranscriptRecord, state: ScanState): void {
   }
 }
 
+function isSynthetic(record: TranscriptRecord): boolean {
+  const message = record.message;
+  return isObjectLike(message) && isSyntheticMessage(message);
+}
+
 function readClaudeResults(record: TranscriptRecord, state: ScanState): void {
   for (const block of messageItems(record)) {
-    if (block.type !== 'tool_result' || !isStringValue(block.tool_use_id)) continue;
-    (block.is_error === true ? state.failed : state.landed).add(block.tool_use_id);
+    if (block.type === 'tool_result' && isStringValue(block.tool_use_id) && block.is_error !== true) state.landed.add(block.tool_use_id);
   }
 }
 
@@ -165,8 +169,9 @@ function nativePath(p: string): string {
 
 /** p resolved against base; null for a relative path with no base to resolve it against. */
 function resolveFrom(base: string | null, p: string): string | null {
+  if (isNetworkPath(p)) return null;
   if (isAbsoluteAnywhere(p)) return nativePath(p);
-  return base === null ? null : path.resolve(nativePath(base), p);
+  return base === null || isNetworkPath(base) ? null : path.resolve(nativePath(base), p);
 }
 
 function addPatch(state: ScanState, callId: string, body: string, base: string | null): void {
@@ -255,7 +260,7 @@ function visitRecord(record: TranscriptRecord, state: ScanState): void {
 /** One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message, and the edits that landed. */
 export function scanSessionTranscript(jsonl: string): SessionScan {
   const state: ScanState = {
-    cwd: null, firstCwd: null, pending: [], landed: new Set(), failed: new Set(), claudeFinal: '', codexFinal: '', codexUnphased: '',
+    cwd: null, firstCwd: null, pending: [], landed: new Set(), claudeFinal: '', codexFinal: '', codexUnphased: '',
   };
   const turns = collectSessionTurns(jsonl, (record) => visitRecord(record, state));
   return {
@@ -264,7 +269,7 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     cwd: state.firstCwd,
     // An unanswered call may never have run, so an edit counts only once its result says it applied.
     edits: state.pending
-      .filter((e) => state.landed.has(e.callId) && !state.failed.has(e.callId))
+      .filter((e) => state.landed.has(e.callId))
       .map(({ filePath, base }) => ({ filePath, base })),
   };
 }
@@ -286,12 +291,26 @@ export function readSessionScan(transcriptPath: string, log: (message: string) =
   }
 }
 
-/** The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its own. */
-export function realFsPath(p: string): string {
+let existsProbe: (p: string) => boolean = fs.existsSync;
+
+/** Test-only seam, the scheduler's pattern: lets a test prove a network path never reaches the probe. Null restores it. */
+export function __setDigestExistsProbe(probe: ((p: string) => boolean) | null): void {
+  existsProbe = probe ?? fs.existsSync;
+}
+
+/** A \\host or //host path would make existsSync open an SMB connection to a host named in transcript text. */
+function isNetworkPath(p: string): boolean {
+  return /^[\\/]{2}(?:(?![?.][\\/])|[?.][\\/]UNC[\\/])/i.test(p);
+}
+
+/** The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its own. Null for a network path. */
+export function realFsPath(p: string): string | null {
+  if (isNetworkPath(p)) return null;
   const abs = nativePath(p);
+  if (isNetworkPath(abs)) return null;
   const rest: string[] = [];
   let head = abs;
-  while (!fs.existsSync(head)) {
+  while (!existsProbe(head)) {
     const parent = path.dirname(head);
     if (parent === head) return abs;
     rest.unshift(path.basename(head));
@@ -304,7 +323,9 @@ export function realFsPath(p: string): string {
 export function repoRelative(p: string, repoRoot: string): string | null {
   let rel: string;
   try {
-    rel = path.relative(repoRoot, realFsPath(p));
+    const real = realFsPath(p);
+    if (real === null) return null;
+    rel = path.relative(repoRoot, real);
   } catch {
     // SHORTCUT: an unresolvable path counts as outside the repo; only that path is lost, never the digest.
     return null;
@@ -330,15 +351,16 @@ function changedFiles(edits: readonly DigestEdit[], repoRoot: string): string[] 
 
 // A home-directory path names its user and the store may be shared, so such a sentence is dropped.
 export const USER_SEGMENT: readonly RegExp[] = [
-  /[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s]+/i,
-  /(?<![\w.])\/[A-Za-z]\/Users\/[^/\s]+/i,
+  /[A-Za-z]:[\\/]+(?:Users|Documents and Settings)[\\/]+[^\\/\s]+/i,
+  /(?<![\w.])(?:\/mnt)?\/[A-Za-z]\/Users\/[^/\s]+/i,
   /\\\\\?\\/,
-  /(?<![\w.~-])\/home\/[^/\s]+/,
+  /(?<![\w.~-])(?:\/var)?\/home\/[^/\s]+/,
+  /(?<![\w.~-])(?:\/var)?\/root(?![\w.-])/,
   /(?<![\w.~-])\/Users\/[^/\s]+/,
   /[\\/][A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?(?![\w~])|\b[A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?[\\/]/,
 ];
 
-const ABSOLUTE_PATH = /(?<![\w.~/\\-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
+const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
 
 function rewriteRepoPaths(sentence: string, repoRoot: string): string {
   return sentence.replace(ABSOLUTE_PATH, (token) => {
@@ -445,7 +467,7 @@ interface Candidate {
 function rankedSentences(finalText: string, windows: ReadonlySet<string>, repoRoot: string): Candidate[] {
   const kept: Candidate[] = [];
   // Redact the whole reply before splitting and capping, so a secret is never cut into pieces that no pattern matches.
-  digestSentences(redactSecretsStrict(finalText)).forEach((sentence, index) => {
+  digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, repoRoot);
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
@@ -457,7 +479,7 @@ function rankedSentences(finalText: string, windows: ReadonlySet<string>, repoRo
 function changedLine(files: readonly string[]): string {
   for (let shown = Math.min(files.length, MAX_FILES); shown > 0; shown--) {
     const more = files.length - shown;
-    const line = redactSecretsStrict(`Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`);
+    const line = maskEmails(redactSecretsStrict(`Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`));
     if (line.length <= MAX_DIGEST_CHARS) return line;
   }
   return '';
@@ -541,6 +563,7 @@ export function writeSessionDigest(hippoRoot: string, scan: SessionScan, opts: S
   if (!scan.finalText.trim() && scan.edits.length === 0) return skipped('no final message and no edits');
   if (!scan.cwd) return skipped('the transcript names no working directory');
   const repoRoot = realFsPath(path.dirname(hippoRoot));
+  if (repoRoot === null) return skipped('the repo is on a network path');
   if (repoRelative(scan.cwd, repoRoot) === null) return skipped('the session ran outside this repo');
 
   const draft = buildSessionDigest({

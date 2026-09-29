@@ -91,6 +91,13 @@ describe('writing the digest row', () => {
     expect(write('s1', scan(REPLY))).toMatchObject({ written: false, reason: 'it matches a rejected value' });
     expect(digests()).toEqual([]);
   });
+
+  it('a reject blocks that text only, so a re-run with a new reply writes the row again', () => {
+    write('s1', scan(REPLY));
+    reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.')).written).toBe(true);
+    expect(digests()).toHaveLength(1);
+  });
 });
 
 describe('text hippo injected is not stored again', () => {
