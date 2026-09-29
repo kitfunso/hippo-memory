@@ -452,9 +452,12 @@ describe('scratch-cleanup containment guard (codex review P2 fix verification)',
 
 describe('scratch-store hygiene', () => {
   it('scratch stores live under the OS temp dir, never under the repo', () => {
+    // Drop this file's override so the production default path is what gets checked.
+    delete process.env.HIPPO_MV_SCRATCH_ROOT;
     // SAFETY: scratchRootDir() (common.mjs) always returns the scratch-root
     // path as a string; it never returns a filesystem handle or undefined.
     const root = scratchRootDir() as string;
+    expect(path.relative(os.tmpdir(), root).startsWith('..')).toBe(false);
     expect(root.toLowerCase()).not.toContain('hippo-wt-lc2e1');
     expect(fs.existsSync(root) || true).toBe(true); // root need not exist yet; just checking the path shape
   });
