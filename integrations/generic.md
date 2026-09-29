@@ -46,8 +46,8 @@ This is how the system learns what to keep.
 **Run consolidation periodically:**
   hippo sleep
 
-This removes weak memories, merges related episodes into patterns, and
-keeps the store clean. Run it at end of session or via cron.
+This moves faded memories to a dormant store (deleted after 180 days unless
+restored) and merges related episodes into one memory. Run it at end of session or via cron.
 
 ### What NOT to do
 
@@ -220,7 +220,7 @@ Agents that want to understand what they're working with:
 - Pin: no decay
 - Decision (`hippo decide`) and the other objects: the default half-life (on a store made before 1.52.7, 90 days until its first `hippo sleep` on 1.52.7 or later)
 - Recall boost: 1.2x for decisions, up to 1.3x for path-matching memories
-- Consolidation removes memories below strength 0.05
+- Consolidation moves memories below strength 0.05 to the dormant store, deleted after 180 days unless restored
 
 Strength at any point: `base * (0.5 ^ (days_since_retrieval / half_life)) * retrieval_boost`
 

@@ -10,7 +10,7 @@ Add this block to your `CLAUDE.md` (project root or `~/.claude/CLAUDE.md` for gl
 ## Memory (Hippo)
 
 Hippo manages project memory across sessions. It decays old memories, strengthens
-retrieved ones, and compresses episodes into patterns during sleep cycles.
+retrieved ones, and merges related episodes into one memory during sleep.
 
 ### At session start
 
