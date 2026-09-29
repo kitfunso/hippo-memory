@@ -583,6 +583,30 @@ function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolea
   return CLAUDE_CODE_COMMAND_PREFIXES.some((p) => head.startsWith(p));
 }
 
+interface TranscriptMessage {
+  content?: unknown;
+}
+
+const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
+
+/** The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own open-file, selection and interrupt blocks. */
+function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
+  const content = message.content;
+  let text = '';
+  if (isStringValue(content)) {
+    text = content;
+  } else if (Array.isArray(content) && !content.some((b) => isObjectLike(b) && 'type' in b && b.type === 'tool_result')) {
+    const parts: string[] = [];
+    for (const block of content) {
+      const blockText = isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p))) parts.push(blockText);
+    }
+    text = parts.join('\n');
+  }
+  text = text.trim();
+  return text && !isNonHumanUserLine(entry, text) ? text : '';
+}
+
 export function summariseTranscript(jsonl: string): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   const userMessages: string[] = [];
@@ -603,11 +627,8 @@ export function summariseTranscript(jsonl: string): string {
       const content = 'content' in message ? message.content : undefined;
 
       if (entry.type === 'user') {
-        // Plain text user messages only (skip tool_result arrays), and only
-        // ones the human wrote (see isNonHumanUserLine).
-        if (isStringValue(content) && content.trim() && !isNonHumanUserLine(entry, content)) {
-          userMessages.push(content.trim());
-        }
+        const text = humanUserText(entry, message);
+        if (text) userMessages.push(text);
       } else if (Array.isArray(content)) {
         // Keep assistant text blocks; drop thinking + tool_use
         const chunks: string[] = [];
@@ -1087,8 +1108,8 @@ function lastPlainUserMessage(jsonl: string): string {
     if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
     const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
     if (!message) continue;
-    const content = 'content' in message ? message.content : undefined;
-    if (isStringValue(content) && content.trim() && !isNonHumanUserLine(entry, content)) return content.trim();
+    const text = humanUserText(entry, message);
+    if (text) return text;
   }
   return '';
 }
@@ -1187,18 +1208,19 @@ export function preCompactReportPath(logFile: string): string {
 
 /** A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null with a logged reason when nothing is derivable. */
 export function transcriptWorkingState(transcriptPath: string, log: (message: string) => void): Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null {
-  let tail: string;
+  let tail = '';
+  let rawTask = '';
+  let rawNextStep = '';
   try {
-    // CX7 (codex round 2): a final record bigger than the window leaves an empty tail, as when a huge tool_result
-    // triggered compaction, so grow the window a bounded number of times until one complete line survives.
-    tail = readTranscriptTail(transcriptPath, PRE_COMPACT_TAIL_BYTES);
-    let prevCap = PRE_COMPACT_TAIL_BYTES;
-    for (const grownCap of [PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
-      if (tail.trim() !== '') break;
-      if (fs.statSync(transcriptPath).size <= prevCap) break; // already read the whole file
-      log(`tail window grown to ${grownCap} bytes (oversized final record)`);
-      tail = readTranscriptTail(transcriptPath, grownCap);
-      prevCap = grownCap;
+    // Compaction fires when a big tool_result lands (CX7), so the last human and assistant turns can sit
+    // megabytes back: grow the window a bounded number of times until both turns are in it.
+    const size = fs.statSync(transcriptPath).size;
+    for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
+      if (cap > PRE_COMPACT_TAIL_BYTES) log(`tail window grown to ${cap} bytes (last ${rawTask ? 'assistant' : 'user'} turn is further back)`);
+      tail = readTranscriptTail(transcriptPath, cap);
+      rawTask = lastPlainUserMessage(tail);
+      rawNextStep = lastAssistantTextBlock(tail);
+      if ((rawTask && rawNextStep) || size <= cap) break;
     }
   } catch (err) {
     log(`skip: could not read transcript tail: ${errorMessage(err)}`);
@@ -1206,8 +1228,6 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
   }
 
   const rawSummary = summariseTranscript(tail);
-  const rawTask = lastPlainUserMessage(tail);
-  const rawNextStep = lastAssistantTextBlock(tail);
   if (!rawTask.trim() && !rawSummary.trim() && !rawNextStep.trim()) {
     log('skip: empty summary');
     return null;

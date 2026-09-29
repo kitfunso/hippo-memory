@@ -140,6 +140,27 @@ describe('summariseTranscript', () => {
     expect(summary).toContain('please fix the login bug');
     expect(summary).not.toContain('session idle timeout reached');
   });
+
+  it('keeps VS Code prompts stored as text blocks, minus IDE context and interrupt notices', () => {
+    const jsonl = transcriptJsonl([
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '<ide_selection>const limit = 10;</ide_selection>' },
+            { type: 'text', text: 'raise the webhook rate limit' },
+          ],
+        },
+      },
+      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('raise the webhook rate limit');
+    expect(summary).not.toContain('const limit');
+    expect(summary).not.toContain('Request interrupted');
+  });
 });
 
 describe('resolveLastSessionTranscript', () => {

@@ -82,6 +82,31 @@ describe('transcriptWorkingState', () => {
     expect(derived!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP + marker.length);
   });
 
+  it('looks past a tail of tool output for the last request and reply', () => {
+    const toolResult = { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'x'.repeat(10 * 1024) }] } };
+    const log: string[] = [];
+    const file = transcript([user('ship the search-back fix'), assistant('Reading further back next.'), ...Array(40).fill(toolResult)]);
+
+    const derived = transcriptWorkingState(file, (m) => log.push(m));
+    expect(derived!.task).toBe('ship the search-back fix');
+    expect(derived!.next_step).toBe('Reading further back next.');
+    expect(log).toEqual(['tail window grown to 1048576 bytes (last user turn is further back)']);
+  });
+
+  it('reads a VS Code prompt stored as text blocks, without its IDE context', () => {
+    const vscodePrompt = (...texts: string[]) => ({ type: 'user', message: { role: 'user', content: texts.map((text) => ({ type: 'text', text })) } });
+    const file = transcript([
+      vscodePrompt('<ide_opened_file>The user opened src/limiter.ts</ide_opened_file>', 'add rate limiting to the webhook'),
+      assistant('Adding the limiter.'),
+      vscodePrompt('[Request interrupted by user]'),
+    ]);
+
+    const derived = transcriptWorkingState(file, () => {});
+    expect(derived!.task).toBe('add rate limiting to the webhook');
+    expect(derived!.summary).not.toContain('ide_opened_file');
+    expect(derived!.summary).not.toContain('Request interrupted');
+  });
+
   it('returns null and logs why when the transcript has nothing to read', () => {
     const log: string[] = [];
     expect(transcriptWorkingState(transcript([{ type: 'summary' }]), (m) => log.push(m))).toBeNull();
