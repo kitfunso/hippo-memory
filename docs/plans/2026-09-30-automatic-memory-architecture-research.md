@@ -104,6 +104,10 @@ The fresh [Z12 draft](../evals/2026-09-30-z12-supervision-growth-prereg.md) sepa
 
 **Scope of the other ideas.** Team/subproject memory reuses the existing A5 and scope/provenance work; a broader hierarchy needs explicit permissions, inheritance/override and conflict rules before a separate pilot. It does not imply the local store is ready for arbitrary shared enterprise serving. Model-weight learning is a different loop from external memory updates. Harness changes and context/skill changes need separate controls. S5 may prototype a bounded, versioned procedure from verified experience; a factory of generated skill files is not a success metric and does not expand Track G. Cache/RoPE/model-internal work stays a research branch requiring backend access, version/invalidation/isolation checks and actual task evidence. Numerical attention fidelity alone cannot establish semantic truth or reliable “I don't know” behaviour.
 
+## Cross-platform follow-up
+
+The [capability and packaging plan](./2026-09-30-cross-platform-memory-surfaces.md) extends Track AZ with ChatGPT, Claude, Grok and Grok Bot routes checked against current official docs. Reuse the Hippo core and existing MCP/Claude Code assets, then verify the actual client mode. The [AZ3 draft](../evals/2026-09-30-az3-consumer-connectors-prereg.md) separates connector reliability, supported automation and task/supervision benefit beyond each host's built-in memory. Muse remains pending exact product/runtime identification.
+
 ## Boundaries
 
 No defaults, schemas, package dependencies, runtime adapters or retention policies change through this research note. No new benchmark or task run has been performed. The linked evaluation drafts remain unregistered/unrun; their freeze, thresholds, samples and resource requirements must be settled before scoring. Existing locked registrations and protected compaction-item rules remain intact.

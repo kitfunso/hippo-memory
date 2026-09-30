@@ -2289,6 +2289,19 @@ Z8 above remains Claude Code cloud memory. Register Devin cloud as its own surfa
 
 Import/export is explicit and flagged, with external IDs, tenant/project admission, provenance, authority/conflict rules, idempotent replay and closure/deletion handling. No silent dual-write or feedback loop. Supported source events may become receipts; claim writes still pass the common write contract. Confirm cross-session persistence and task benefit separately.
 
+### AZ3. Cross-platform plugins and consumer connectors [capability/pilot; explicit opt-in]
+
+Prioritize ChatGPT and Claude packaging around the existing core, then a demand-backed Grok/Grok Bot pilot. Reuse the shipping Claude Code plugin and `hippo mcp`; build one common integration contract with small manifests/event mappings.
+
+- ChatGPT: [plugins](https://developers.openai.com/plugins/concepts/plugins) can bundle MCP tools, skills and Codex/Work lifecycle hooks. Validate each mode; web installation does not deploy hook scripts. [MCP Events](https://developers.openai.com/plugins/build/mcp-events) deliver subscribed server updates into ChatGPT, not every user prompt back to Hippo.
+- Claude: package local MCP as a [Desktop extension](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop); reuse an authenticated remote endpoint for other [supported surfaces](https://support.claude.com/en/articles/11725091-when-to-use-desktop-and-web-connectors). Tool access alone does not establish automatic chat capture.
+- Grok: test [custom MCP connectors](https://docs.x.ai/grok/connectors). Grok Bot's [Remote HTTPS/Command routes](https://docs.x.ai/grok-bot/team-bots) need separate computer/store and private/team identity mapping.
+- Muse: identify the exact product/runtime and supported interface before allocating an adapter. Other clients start with a tested MCP recipe.
+
+First check protocol/transport, local Node/SQLite support, authentication/scope, actual invocation and offline behaviour. Remote access projects a chosen canonical store; no silent cloud replication. Enforce permissions on the server regardless of client approval UI. Keep raw trajectory exports as permitted evidence outside recall.
+
+The [capability and packaging plan](docs/plans/2026-09-30-cross-platform-memory-surfaces.md) records sources, implementation gaps and pilot order. [AZ3's draft](docs/evals/2026-09-30-az3-consumer-connectors-prereg.md) separates connector fixtures, capture/delivery coverage and task benefit beyond built-in memory. Automatic-memory support needs all three; rich UI and browser scraping are not prerequisites.
+
 ### Other surfaces: capability checks, then demand-based order
 
 | Surface | Capability known from current official docs | Hippo work still required |
@@ -2305,7 +2318,7 @@ Import/export is explicit and flagged, with external IDs, tenant/project admissi
 2. Prototype S0/S9 on the existing store, with equal-budget chunk controls, evidence scoring and the retrieval floor. Dogfood development data without spending held-out sets.
 3. Run S1 ablations, then S3/S4/S5/S6 in the order the trace identifies. Prepare Z12 burden labels and growth fixtures on development data alongside Z10; scored extensions need their own freeze. Keep current defaults and capture paths.
 4. Confirm Z1d and Z3b on fresh registered Z0 families, then the combined arm. If repeat mistakes or task quality regress, fix writes/admission and retain defaults.
-5. Add AZ1 only for an actual Devin pilot; verify Cursor/Gemini capability instead of deferring them on obsolete hook assumptions. Add S2 only for demonstrated paraphrase misses. AZ2 and S8 remain deferred.
+5. Prepare AZ3 compatibility fixtures and ChatGPT/Claude packaging for an available pilot; add Grok/Grok Bot with real demand and source/scope coverage. Add AZ1 only for an actual Devin pilot; verify Cursor/Gemini capability instead of deferring them on obsolete hook assumptions. Add S2 only for demonstrated paraphrase misses. AZ2 and S8 remain deferred.
 
 No new spending authorization, release, live-store migration or installer run is implied by these milestones.
 
@@ -2324,3 +2337,4 @@ The following files are **DRAFT / NOT REGISTERED**, not empty registrations. The
 | [S3 temporal closure](docs/evals/2026-09-30-s3-temporal-closure-prereg.md) | History semantics, integrity and the recall floor. |
 | [S4 hygiene](docs/evals/2026-09-30-s4-sleep-hygiene-prereg.md) | Reversible merges, evidence preservation and the recall floor. |
 | [AZ1 Devin](docs/evals/2026-09-30-az1-devin-hooks-prereg.md) | Versioned delivery fixtures and a separate runtime task family. |
+| [AZ3 cross-platform connectors](docs/evals/2026-09-30-az3-consumer-connectors-prereg.md) | Packaging/identity/delivery fixtures, then fresh runtime task and supervision evidence. |
