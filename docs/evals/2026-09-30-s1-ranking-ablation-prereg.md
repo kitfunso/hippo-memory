@@ -13,10 +13,11 @@ Removing unsupported age/strength weighting can preserve or improve retrieval wh
 
 ## Proposed arms
 
-- A: frozen shipping ranking.
-- B: same BM25 and candidate generation with age/strength factors removed and the existing explicit outcome channel retained.
-- C: same as B with the outcome channel removed.
-- D: separately registered native FTS5 BM25 comparison; physics is an optional labelled ablation, not a new default.
+- A: frozen shipping lexical ranking, with the zero-dependency/default embedder setting.
+- B: same candidate generation and scorer with recency/strength removed; all other shipping multipliers fixed. Evaluate each removal separately before the combined arm.
+- C: plain JavaScript BM25 on the same candidates, with all soft score modifiers removed.
+- D: C plus the explicitly registered evidence-based outcome multiplier; all other soft modifiers remain off.
+- Native FTS5 BM25, physics and optional hybrid/graph/MMR/reranker settings require separate declared comparisons. Mandatory admission/invalidation and representation/packing stay fixed in all arms.
 
 ## Primary metric and gates
 
@@ -28,7 +29,8 @@ Primary ranking metric: paired R@5 at the frozen actual recall budget. All-evide
 
 ## Controls and failure cases
 
-- Fix representation and packing. Remove recency and strength separately before evaluating the combined removal.
+- Fix representation, candidate construction and packing. Remove recency and strength separately before evaluating the combined removal.
+- Freeze exact equations and every configured score factor per arm, including decision/path/scope-tag/extraction/churn/temporal/DAG boosts and local/global weighting. B is not pure BM25; C has no soft factors and D has only its declared outcome factor. Mandatory scope/temporal eligibility remains in all arms.
 - JS BM25 and native FTS5 BM25 are different scorers; fix candidate limits, tokenizer and corpus statistics per declared arm.
 - Filter tenant/project/scope and temporal eligibility before candidate limits. Recheck admission after ranking.
 - Run correct and noisy/irrelevant outcome marks; the previous synthetic perfect-mark gain cannot be assumed in real tasks.

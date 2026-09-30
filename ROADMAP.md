@@ -2109,6 +2109,8 @@ Claude Code spends its effort when a memory is written: the model decides what i
 
 **Purpose.** Diagnose why a lesson did not help, then test the component responsible. Z0 remains first. Z0-Z9 above retain their identifiers and history; the ledger is Z10. Z1d extends Z1, Z2b extends Z2, and Z3b shares the Z3/Z6/Z9 write path. Track S7 refers to Z10 rather than creating another ledger.
 
+**Evidence and engineering scope.** [Automatic memory architecture research](docs/plans/2026-09-30-automatic-memory-architecture-research.md) records the code snapshot, primary sources, measured limits and proposed stack. SQLite/FTS5 remain the local foundation; retrieval granularity, semantic coverage and feedback are experiments. A vector database replacement or a neuroscience analogy is not evidence of better task outcomes.
+
 **Boundaries.** Hippo does not run agents. SQLite stays the local store; no Neo4j, Pinecone or LanceDB replacement, no second live ranking policy per runtime, no silent dual-write into cloud memory, no raw transcript as the automatic retrieval unit, and no new required user verb. Optional embedders and explicit existing rerankers remain optional. Track G is outside this queue.
 
 ### Two evidence gates
@@ -2134,7 +2136,7 @@ The mutation audit's recall entry is not the whole trace system. [`src/recall-tr
 
 ### Z1d. Trigger-then-gate [experiment; after Z10]
 
-Register a new arm using scoped path, error class, test identity or command family, with task state when available. A path match alone is not relevance. Retrieve a small set and admit it only when the registered gate clears; otherwise inject no additional claims. Applicable pins remain.
+Register a new arm using the current prompt, bounded recent conversational context and task state, alongside scoped path, error class, test identity or command-family triggers. Include indirect references such as continuing a previously agreed approach; do not require an explicit file or error to qualify. A path match alone is not relevance. Freeze query construction, allowed context sources and bounds before scoring. Retrieve a small set and admit it only when the registered gate clears; otherwise inject no additional claims. Applicable pins remain.
 
 The 2026-09-26 lexical `promptRecall` arm stays off by default. Z1c's locked judge-gate experiment continues unchanged. Its 0.15 helpfulness difference is not automatically a threshold for shown-rate or task success: Z1d must define its own denominator, false-positive cost, sample and smallest useful effect. Compare useful delivered coverage on relevant tasks, irrelevant injection on no-match tasks, repeat mistakes, tokens and latency. A replay or judge pass permits an experimental arm; default promotion still requires Z0. Draft: [Z1d trigger and gate](docs/evals/2026-09-30-z1d-trigger-gate-prereg.md).
 
@@ -2150,6 +2152,22 @@ User preferences update in their stated scope; technical claims remain observati
 
 Register false-write and false-closure bounds, label agreement and abstention coverage before scoring. Include quotations, hypothetical changes, branch-specific facts, confidently wrong corrections and reversals. Task confirmation must lower stale-follow without raising repeat mistakes or failing H4. Draft: [Z3b correction writes](docs/evals/2026-09-30-z3b-correction-write-prereg.md).
 
+### Zero-touch acceptance contract [shared by Z0, Z10, S6 and AZ]
+
+For each claimed runtime, install/trust once, teach through an ordinary conversation, need the lesson in a later session, correct it, compact or interrupt, then resume. Verify the appropriate scoped version is durably stored and available, reaches the actual agent context, and is applied on a task where it matters. Include a no-match task, a plausible wrong memory, a long-lived session that never ends normally, duplicate events and a missing-input case. No routine user `remember`, `outcome` or `supersede` command is part of the acceptance path.
+
+Report stages separately on labelled fixtures or independently labelled eligible events:
+
+| Stage | Measure | Limitation |
+|---|---|---|
+| Capture | Gold durable lessons saved within the registered delay; useful/correct write precision | Stored row count is not capture coverage. |
+| Retrieval | Applicable evidence found and retained within the real token budget; irrelevant injection | CLI R@5 cannot establish automatic prompt usefulness. |
+| Delivery | Confirmed context availability per eligible turn, including valid reuse/reset of an unchanged block | Emitting JSON or installing a hook is not confirmation. |
+| Application | Observed or independently judged use, with unknowns reported | Presence is not use; correlated success is not causal credit. |
+| Task impact | Registered repeat mistakes, stale-follow, task quality, priced cost and latency | A valid comparator and Z0 gates establish benefit. |
+
+Freeze denominators, clustering and acceptance bounds before scoring. Publish descriptive per-prompt/per-session coverage only within the sampled runtime, repositories and users; general claims require broader independent pilots. Fixtures establish mechanics; task-benefit and default claims retain the gates above.
+
 ### Z11. Preserve defaults while experiments run
 
 `hippo init` retains the current pinned + newest 5 hook, `promptRecall` off, no batch auto `--bad`, and no required embedder. This roadmap change does not change extraction settings, live-store half-lives, installed hooks or compaction capture. Existing compaction-item writes and their keep rules remain; their presence is not a claim of task benefit. A ranker-only win cannot promote a hook default.
@@ -2164,7 +2182,7 @@ Register false-write and false-closure bounds, label agreement and abstention co
 
 ### S0. Test the write unit before replacing the schema
 
-Compare existing rows, deterministic sentence/turn chunks and structured claims under equal retrieval and injection budgets. Prototype on the current store and Z9's write contract first. A claim preserves one assertion plus necessary reason, application conditions, subject/attribute, source and epistemic status. About 40-120 tokens is a target, not a minimum or permission to truncate exceptions; a short useful rule needs no padding.
+Profile actual automatic writes on development data first: source, size, useful assertions, missing conditions, duplicate rate and missed lessons. The CLI benchmark's whole-session rows are not the unit of every ordinary Hippo write. Compare current short notes and larger rows, deterministic sentence/turn chunks and structured claims under equal retrieval and injection budgets. Use a separate representative automatic-write corpus alongside LongMemEval; preserving the benchmark floor alone cannot justify a live-store redesign. Prototype on the current store and Z9's write contract first. A claim preserves one assertion plus necessary reason, application conditions, subject/attribute, source and epistemic status. About 40-120 tokens is a target, not a minimum or permission to truncate exceptions; a short useful rule needs no padding.
 
 Carry owner, tenant, origin project, scope, pin, source evidence, effective time and outcome links explicitly. Receipts are source evidence kept out of automatic injection. Retain source spans so a claim is credited only for evidence its returned text contains, not everything its parent session once said. Existing legacy-store tests must be accompanied by fixtures that actually write and retrieve the experimental units.
 
@@ -2172,7 +2190,7 @@ Carry owner, tenant, origin project, scope, pin, source evidence, effective time
 
 ### S1. Ranking ablations, including the outcome channel
 
-Freeze the representation and compare the shipping rank path, BM25 without age/strength factors, and BM25 with only evidence-based outcome feedback. Ablate recency and strength separately. Preserve explicit invalidation, scope admission and manual feedback; removing age is not removing evidence of wrongness.
+Freeze the representation and candidate construction. Compare the shipping lexical rank path, that same path with recency/strength removed and other factors fixed, plain JavaScript BM25, and plain BM25 plus evidence-based outcome feedback. Ablate recency and strength separately before their combined removal. Register exact score equations and settings: decision, path, scope-tag, extraction, churn, temporal and DAG boosts, local/global source weighting and any other configured factor must be explicitly retained, removed or disabled per arm. Removing age/strength alone is not a pure-BM25 baseline. Mandatory tenant/project/scope/temporal admission and invalidation stay in every arm. Keep optional hybrid/graph/MMR/reranker changes out of these component comparisons or register them separately.
 
 The current JavaScript BM25 and SQLite FTS5's native BM25 have different scoring contracts; switching between them is a separate comparison. Physics remains an explicit experimental arm. No pure-BM25 or physics-off default is established by this plan.
 
@@ -2208,6 +2226,10 @@ A fail/resolve sequence can produce one experience: trigger, observed action, ch
 
 Start with structured existing inputs and conservative heuristics. Supported corrections use Z3b; repeated errors use S5. Preserve the existing compaction lesson-list capture and reuse it for the experimental write format; do not delay today's capture until a new schema exists or make a compaction dump retrievable. LLM extraction is a separately registered opt-in arm. Write precision, duplicate rate, evidence completeness and temporal correctness precede task confirmation.
 
+**Durable capture contract.** Declare supported events and source coverage per runtime. Register a maximum lesson-write delay and test decisions stated early in a long session, before compaction and without a normal SessionEnd. Extend existing compaction replay and provenance machinery: persist supported ingestion progress, retry interrupted work, deduplicate stable event/source identities, and atomically commit a write with its progress marker where possible. Distinguish received, pending, processed, skipped and unavailable input; doctor/logs expose missing inputs, backlog and degraded capture without silently claiming success. Recovery is bounded and idempotent, respects retention and does not collect unsupported transcripts.
+
+Separate durable receipt/progress handling from semantic extraction and the read path. Extraction failure or an unavailable optional model leaves recoverable pending work while the agent continues. Register provider/mode, extraction and embedding costs, timeout, retry/backlog limits and token/latency budgets; retries cannot cause unbounded spend. These are engineering fixtures on development data before the zero-touch task acceptance family.
+
 ### S7. Ledger
 
 Use Z10. Extend the same trace producer and schema; no second ledger.
@@ -2224,7 +2246,7 @@ Without a qualifying trigger, add no experimental claims or experience; the exis
 
 Keep unchanged rendering deterministic. Measure cached tokens, cache placement and actual priced input before claiming savings; byte-stable text does not guarantee a cache hit.
 
-**Order.** Z10 and valid Z0 baseline -> S0/S9 representation -> S1 ranking -> S3/S4 integrity -> S5/S6 writing -> Z1d/Z3b task confirmation. Run single-component ablations before the combined arm. S2 follows only a measured paraphrase gap; S8 follows only a measured graph gap.
+**Order.** Build Z10, capture reliability fixtures and S0/S9 development prototypes alongside Z0 runner/smoke preparation; they need not wait for the scored baseline write-up. Freeze and preserve the shipping comparator before confirmatory runs. Use observed failure stages to order S1 ranking, S3/S4 integrity and S5/S6 writing, then confirm Z1d/Z3b and the combined arm on fresh registered families. Run single-component ablations before the combined arm. S2 follows only a measured paraphrase gap; S8 follows only a measured graph gap. This parallel engineering work does not weaken the retrieval floor, independent confirmation or default-promotion gates.
 
 ---
 
@@ -2266,7 +2288,7 @@ Import/export is explicit and flagged, with external IDs, tenant/project admissi
 
 ### Next 90 days: gated milestones
 
-1. Extend Z10 while completing Z0 stage 0, then smoke, calibration, freeze and the scored write-up under the existing plan-usage go. Publish whatever the verdict is; the calendar is not a result.
+1. Extend Z10, test capture/recovery fixtures and prototype S0/S9 on development data while completing Z0 stage 0. Then smoke, calibration, freeze and the scored write-up under the existing plan-usage go. Publish whatever the verdict is; prototypes need not wait for that write-up, and the calendar is not a result.
 2. Prototype S0/S9 on the existing store, with equal-budget chunk controls, evidence scoring and the retrieval floor. Dogfood development data without spending held-out sets.
 3. Run S1 ablations, then S3/S4/S5/S6 in the order the trace identifies. Keep current defaults and capture paths.
 4. Confirm Z1d and Z3b on fresh registered Z0 families, then the combined arm. If repeat mistakes or task quality regress, fix writes/admission and retain defaults.

@@ -28,6 +28,7 @@ Primary confirmatory metric: Z0 H1 repeat-mistake rate on fresh lesson families.
 ## Controls and failure cases
 
 - Use Z10 delivery evidence, relevant/no-match/wrong-project cases, pins retained and identical budgets.
+- Include conversational task intent and indirect references without a path/error/test name. Freeze current-prompt, recent-context and task-state query construction, source access and bounds. A technical trigger is an additional route, not a prerequisite for all useful memory.
 - Keep the 2026-09-26 promptRecall arm off; do not inspect or alter Z1c's locked held-out window.
 - Declare the trigger match, gate, abstention rule, denominator and judge protocol before freeze. Do not transfer Z1c's 0.15 helpfulness threshold to a different metric.
 

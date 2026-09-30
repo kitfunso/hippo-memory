@@ -27,6 +27,8 @@ Primary engineering metric: fraction of known fixture events reconstructed with 
 ## Controls and failure cases
 
 - Fixture oracle includes rejected candidates, emitted-but-undelivered context, unknown application, concurrent turns, compaction, missing hooks and duplicate events.
+- Freeze stage-specific denominators for capture, budgeted evidence, context availability and application. Include unchanged-block reuse and compaction resets; a new emission is not required when valid context persists. Do not infer truth or missed host events from the ledger alone; use known fixtures or independent labels.
+- Link receipt/progress states to supported S6 recovery. Test pending/skipped/unavailable input and interruption before a write or progress commit.
 - Compare selected IDs and rendered text byte-for-byte; logging failure is fail-soft and cannot alter selection.
 - Application labels require an observation or registered judge; causal use remains unknown without supporting evidence.
 

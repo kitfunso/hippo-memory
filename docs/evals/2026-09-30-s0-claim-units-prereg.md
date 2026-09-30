@@ -28,6 +28,7 @@ Primary representation metric: paired complete-evidence coverage within the froz
 ## Controls and failure cases
 
 - Use identical source access, ranking, query set and budgets; freeze render overhead and tokenizer.
+- Profile actual automatic writes on development data and include a representative automatic-write corpus, with current short notes as a control. The whole-session benchmark bottleneck is not evidence that ordinary writes share that shape. Report results by source and size; no schema replacement from the benchmark alone.
 - Gold source spans must be present in the returned text. Do not inherit credit for all evidence in a parent session.
 - Exercise actual new-unit writes, not only readable legacy rows. Test short rules, exceptions, multi-evidence questions, false extraction, pins, closed rows, no-match and isolation.
 - A 40-120-token target never pads a short rule or truncates an applicability condition.
