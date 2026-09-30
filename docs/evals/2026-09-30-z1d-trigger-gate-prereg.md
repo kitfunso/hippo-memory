@@ -9,7 +9,7 @@ This is a planning draft. No corpus or implementation is frozen, no scored data 
 
 ## Hypothesis
 
-Scoped path/error/test/command triggers with a relevance gate reduce repeated mistakes relative to the current pinned + newest 5 hook, while preserving no-lesson task quality and overhead.
+Scoped conversational intent and path/error/test/command triggers with a relevance gate reduce repeated mistakes relative to the current pinned + newest 5 hook, while preserving no-lesson task quality and overhead.
 
 ## Proposed arms
 
@@ -31,6 +31,8 @@ Primary confirmatory metric: Z0 H1 repeat-mistake rate on fresh lesson families.
 - Include conversational task intent and indirect references without a path/error/test name. Freeze current-prompt, recent-context and task-state query construction, source access and bounds. A technical trigger is an additional route, not a prerequisite for all useful memory.
 - Keep the 2026-09-26 promptRecall arm off; do not inspect or alter Z1c's locked held-out window.
 - Declare the trigger match, gate, abstention rule, denominator and judge protocol before freeze. Do not transfer Z1c's 0.15 helpfulness threshold to a different metric.
+- Distinguish no-memory admission from agent uncertainty/clarification. Label missing evidence, conflicts, stale/wrong claims and wrong-project matches; measure false-confident memory use and needless abstention at useful coverage. An always-empty or always-refusing arm cannot pass.
+- Report new injection events, valid reused context and user correction/re-teaching separately. Fewer blocks or input tokens are not a benefit unless task quality and applicable-memory coverage hold; use the fresh Z12 registration for a supervision claim.
 
 ## Required decisions before registration
 

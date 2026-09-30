@@ -85,6 +85,25 @@ These are architecture references and bounded experimental reports, not evidence
 
 The zero-touch acceptance journey is install/trust once, teach in ordinary conversation, apply in a later session, correct, compact or interrupt, and resume. Routine user memory commands are absent. It verifies scoped durable capture and context availability, then separately measures use, repeat mistakes, stale-follow, task quality and full priced overhead.
 
+## Event follow-up: supervision, trajectories and memory growth
+
+Keith's notes from [AAIF London x Prolific, 2026-09-30](https://luma.com/rs92x0u9) motivate these proposals. The published agenda covers harness/context, rollouts, trajectory evaluation and KV-cache routing; it does not establish speaker endorsement of this Hippo design or provide a transcript of the conversations. These are planning recommendations, not measured results.
+
+**Product test.** Does memory reduce repeated corrections and explanation across sessions, beyond built-in memory, while preserving task quality and full cost? A quiet successful session is compatible with both valuable memory and no memory effect. A controlled comparison can detect useful gains the user barely notices; satisfaction and perceived friction complement, rather than establish, attribution.
+
+The fresh [Z12 draft](../evals/2026-09-30-z12-supervision-growth-prereg.md) separates controlled correction counts from actual active supervision time in a human pilot. It keeps failure/abandonment visible and grows unrelated source histories while preserving the relevant evidence. Bad-memory delivery, bad-memory use, irrelevant context, admission abstention and agent uncertainty have distinct denominators. Always refusing or injecting nothing cannot win by construction.
+
+| Primary source | Relevance and limit |
+|---|---|
+| [MemoryArena, February 2026](https://arxiv.org/abs/2602.16313) | Evaluates interdependent multi-session tasks where experience must guide later actions. Useful application fixtures; its environments/results are not Hippo coding-task proof. |
+| [LongMemEval-V2, May 2026](https://arxiv.org/abs/2605.12493) | Tests environment experience from trajectories through compact evidence and downstream QA, including workflow/gotcha knowledge. Useful diagnostic coverage, not a measure of human supervision; accuracy and latency remain separate. |
+| [Scale-conditioned agent-memory evaluation, May 2026](https://arxiv.org/abs/2605.07313) | Holds task evidence fixed while adding irrelevant sessions and reports reliability under interaction budgets. Supports a growth stress test; its studied systems and scale boundaries do not transfer to Hippo. |
+| [vLLM prefix-cache design](https://docs.vllm.ai/en/latest/design/prefix_caching/) | Reuses computed token-prefix blocks under cache identity/isolation rules. Cached computation is distinct from durable semantic memory; real placement, provider conditions, misses and priced cost need measurement. |
+
+**Trajectory evidence.** Extend Z10, not a second tracing system. Correlate observable prompts/turns, tool calls/results, delivery decisions, memory versions, checks and interruptions. Snapshot permitted inputs outside the repository, with hashes, scoped access and retention/redaction rules. Gaps remain unknown; private model reasoning is not assumed available. Keep raw evidence out of automatic recall and preserve existing protected compaction boundaries.
+
+**Scope of the other ideas.** Team/subproject memory reuses the existing A5 and scope/provenance work; a broader hierarchy needs explicit permissions, inheritance/override and conflict rules before a separate pilot. It does not imply the local store is ready for arbitrary shared enterprise serving. Model-weight learning is a different loop from external memory updates. Harness changes and context/skill changes need separate controls. S5 may prototype a bounded, versioned procedure from verified experience; a factory of generated skill files is not a success metric and does not expand Track G. Cache/RoPE/model-internal work stays a research branch requiring backend access, version/invalidation/isolation checks and actual task evidence. Numerical attention fidelity alone cannot establish semantic truth or reliable “I don't know” behaviour.
+
 ## Boundaries
 
 No defaults, schemas, package dependencies, runtime adapters or retention policies change through this research note. No new benchmark or task run has been performed. The linked evaluation drafts remain unregistered/unrun; their freeze, thresholds, samples and resource requirements must be settled before scoring. Existing locked registrations and protected compaction-item rules remain intact.

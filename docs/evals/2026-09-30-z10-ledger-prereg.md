@@ -31,6 +31,9 @@ Primary engineering metric: fraction of known fixture events reconstructed with 
 - Link receipt/progress states to supported S6 recovery. Test pending/skipped/unavailable input and interruption before a write or progress commit.
 - Compare selected IDs and rendered text byte-for-byte; logging failure is fail-soft and cannot alter selection.
 - Application labels require an observation or registered judge; causal use remains unknown without supporting evidence.
+- Correlate observable user/tool events, memory mutations, compaction/resume and check outcomes without assuming private model reasoning. Evaluation source snapshots require explicit authorised access, redaction/retention rules, outside-repo hashes and references. Missing/redacted events are gaps, not successful capture; raw trajectories never become automatic recall units.
+- Label user correction, repeated explanation, legitimate new requirement, voluntary clarification, automatic injection and valid unchanged context separately. Replay correction counts cannot establish active human supervision time. Record bad-memory delivery separately from observed/judged/unknown downstream use.
+- Link Z12 scale level, source-history identity and pre/post-store snapshots so a growth result can be attributed to its registered condition, not merely to row count.
 
 ## Required decisions before registration
 

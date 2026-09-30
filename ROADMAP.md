@@ -2128,6 +2128,7 @@ The mutation audit's recall entry is not the whole trace system. [`src/recall-tr
 
 - Correlate runtime, store identity, tenant/project, session, turn and triggering event. Record admitted candidate IDs, ranked IDs, gate/budget rejection reasons, emitted IDs and delivery evidence. Distinguish returned, emitted and confirmed delivered.
 - Record injected tokens and elapsed time. Keep query hashing and structured-field allowlists; do not add raw prompts or tool outputs to the audit by default.
+- For an authorised evaluation, correlate the observable trajectory: user turns, tool calls/results, store-version changes, compaction/resume and task checks. Keep permitted source snapshots outside the repo with hashes, access/retention rules and trace references; raw trajectories are evidence, not recall units. Redacted or unavailable inputs remain explicit gaps, and private model reasoning is not assumed available.
 - Record task/check signals with their evidence and timing: repeated error, failed check, explicit correction, revert, resolved check or unknown. Application is `observed`, `judged` or `unknown`, never inferred solely from prompt presence.
 - Cover prompt submission, relevant tool failures, compaction and session end. Define duplicate-event handling, concurrent-session isolation and unavailable-event states per runtime. A logging failure must not break the agent or change recall.
 - On labelled fixtures, distinguish not-written, not-retrieved, rejected/not-injected, delivery-unconfirmed, delivered/application-unknown, applied-but-wrong and applied-with-supporting-outcome. A causal explanation requires more evidence than a trace.
@@ -2138,7 +2139,7 @@ The mutation audit's recall entry is not the whole trace system. [`src/recall-tr
 
 Register a new arm using the current prompt, bounded recent conversational context and task state, alongside scoped path, error class, test identity or command-family triggers. Include indirect references such as continuing a previously agreed approach; do not require an explicit file or error to qualify. A path match alone is not relevance. Freeze query construction, allowed context sources and bounds before scoring. Retrieve a small set and admit it only when the registered gate clears; otherwise inject no additional claims. Applicable pins remain.
 
-The 2026-09-26 lexical `promptRecall` arm stays off by default. Z1c's locked judge-gate experiment continues unchanged. Its 0.15 helpfulness difference is not automatically a threshold for shown-rate or task success: Z1d must define its own denominator, false-positive cost, sample and smallest useful effect. Compare useful delivered coverage on relevant tasks, irrelevant injection on no-match tasks, repeat mistakes, tokens and latency. A replay or judge pass permits an experimental arm; default promotion still requires Z0. Draft: [Z1d trigger and gate](docs/evals/2026-09-30-z1d-trigger-gate-prereg.md).
+The 2026-09-26 lexical `promptRecall` arm stays off by default. Z1c's locked judge-gate experiment continues unchanged. Its 0.15 helpfulness difference is not automatically a threshold for shown-rate or task success: Z1d must define its own denominator, false-positive cost, sample and smallest useful effect. Compare useful delivered coverage on relevant tasks, irrelevant injection on no-match tasks, repeat mistakes, tokens and latency. A replay or judge pass permits an experimental arm; default promotion still requires Z0. Distinguish admission abstention (no additional memory) from agent uncertainty or a clarification request. Test missing, contradictory and confidently wrong evidence; report useful coverage, false-confident use and needless abstention, not refusal rate alone. Separate newly emitted blocks from valid unchanged context and user rescue turns; Z12 measures burden. Draft: [Z1d trigger and gate](docs/evals/2026-09-30-z1d-trigger-gate-prereg.md).
 
 ### Z2b. Evidence-specific outcomes [extends Z2]
 
@@ -2171,6 +2172,18 @@ Freeze denominators, clustering and acceptance bounds before scoring. Publish de
 ### Z11. Preserve defaults while experiments run
 
 `hippo init` retains the current pinned + newest 5 hook, `promptRecall` off, no batch auto `--bad`, and no required embedder. This roadmap change does not change extraction settings, live-store half-lives, installed hooks or compaction capture. Existing compaction-item writes and their keep rules remain; their presence is not a claim of task benefit. A ranker-only win cannot promote a hook default.
+
+### Z12. Human supervision and memory growth [evaluation draft; after Z10]
+
+Test whether Hippo reduces the effort needed to complete later tasks beyond built-in memory, while preserving task quality. Z0 already records teach/correction turns and work; this is a fresh extension with explicit burden labels and growth conditions, not an amendment to its locked endpoints or arms. A smooth session alone cannot establish memory benefit.
+
+Separate user rescue/re-teaching from automatic memory delivery. Count correction turns and repeated explanation per assigned task under a fixed intervention/stopping protocol; measure active supervision time only in an independently registered human pilot. Simulated correction counts are a burden proxy, not measured human time. Keep unresolved tasks, abandonment, intervention limits and outcome censoring visible. Fewer prompts, injected blocks or input tokens alone cannot pass.
+
+Freeze model, harness, task family, budgets and memory settings. Keep isolated stores and matched teach/apply/reversal sequences; retain no-memory and perfect-memory controls. Compare built-in memory, shipping Hippo and one frozen experimental component. Preserve relevant source evidence while adding unrelated histories at registered scale levels, with matched source access, distractor mix and scope across systems. Test plausible wrong, stale, conflicting, missing and wrong-project memories, compaction/resume and no-match tasks. Report both bad-memory delivery and supported evidence of bad-memory use; neither a model's self-report nor prompt presence proves attribution.
+
+Register supervision benefit and growth reliability separately, including quality non-inferiority, no-lesson harm, useful coverage, false-confident use and needless-abstention bounds. Include extraction/embedding/maintenance/retry costs, priced cached and uncached input, output and latency tails. Cluster by independent repository/lesson sequence; a live team pilot randomises independent projects or teams so shared memory cannot contaminate arms. Success with little noticeable friction may still be valuable if the controlled difference is useful and quality holds; a ceiling, null or extra cost is reported honestly.
+
+**Exit.** Publish the preregistered burden/quality result and scale-conditioned reliability with intervals and failure stages. No claim of real human-time savings from synthetic replay, no default change from Z12 alone, and no benchmark score replacing Z0. Draft: [Z12 supervision and growth](docs/evals/2026-09-30-z12-supervision-growth-prereg.md).
 
 ---
 
@@ -2244,7 +2257,7 @@ The experimental automatic memory block has a hard 1,500-token cap including IDs
 
 Without a qualifying trigger, add no experimental claims or experience; the existing applicable pin path remains. Closed facts do not enter live context as current instructions. Use a fixture containing 10 live claims, two closed claims and one experience to verify selection and budget, with a separate historical-view case.
 
-Keep unchanged rendering deterministic. Measure cached tokens, cache placement and actual priced input before claiming savings; byte-stable text does not guarantee a cache hit.
+Keep unchanged rendering deterministic. Measure cached tokens, cache placement and actual priced input before claiming savings; byte-stable text does not guarantee a cache hit. Report input cache reads/writes or misses where exposed, output, extraction, embeddings, maintenance and retries, plus time to first token and end-to-end latency tails. Distinguish a smaller prompt from cheaper cached computation; freeze provider/model, placement and cache conditions for a cache comparison.
 
 **Order.** Build Z10, capture reliability fixtures and S0/S9 development prototypes alongside Z0 runner/smoke preparation; they need not wait for the scored baseline write-up. Freeze and preserve the shipping comparator before confirmatory runs. Use observed failure stages to order S1 ranking, S3/S4 integrity and S5/S6 writing, then confirm Z1d/Z3b and the combined arm on fresh registered families. Run single-component ablations before the combined arm. S2 follows only a measured paraphrase gap; S8 follows only a measured graph gap. This parallel engineering work does not weaken the retrieval floor, independent confirmation or default-promotion gates.
 
@@ -2290,7 +2303,7 @@ Import/export is explicit and flagged, with external IDs, tenant/project admissi
 
 1. Extend Z10, test capture/recovery fixtures and prototype S0/S9 on development data while completing Z0 stage 0. Then smoke, calibration, freeze and the scored write-up under the existing plan-usage go. Publish whatever the verdict is; prototypes need not wait for that write-up, and the calendar is not a result.
 2. Prototype S0/S9 on the existing store, with equal-budget chunk controls, evidence scoring and the retrieval floor. Dogfood development data without spending held-out sets.
-3. Run S1 ablations, then S3/S4/S5/S6 in the order the trace identifies. Keep current defaults and capture paths.
+3. Run S1 ablations, then S3/S4/S5/S6 in the order the trace identifies. Prepare Z12 burden labels and growth fixtures on development data alongside Z10; scored extensions need their own freeze. Keep current defaults and capture paths.
 4. Confirm Z1d and Z3b on fresh registered Z0 families, then the combined arm. If repeat mistakes or task quality regress, fix writes/admission and retain defaults.
 5. Add AZ1 only for an actual Devin pilot; verify Cursor/Gemini capability instead of deferring them on obsolete hook assumptions. Add S2 only for demonstrated paraphrase misses. AZ2 and S8 remain deferred.
 
@@ -2303,6 +2316,7 @@ The following files are **DRAFT / NOT REGISTERED**, not empty registrations. The
 | Draft | Scope |
 |---|---|
 | [Z10 ledger](docs/evals/2026-09-30-z10-ledger-prereg.md) | Trace correctness and overhead, linked to Z0 validity/H4. |
+| [Z12 supervision/growth](docs/evals/2026-09-30-z12-supervision-growth-prereg.md) | Correction burden, quality and reliability as unrelated history grows; fresh task registration. |
 | [Z1d trigger/gate](docs/evals/2026-09-30-z1d-trigger-gate-prereg.md) | Useful delivery and a fresh Z0 task family. |
 | [Z3b correction writes](docs/evals/2026-09-30-z3b-correction-write-prereg.md) | False closure and a fresh Z0 reversal family. |
 | [S0 claim units](docs/evals/2026-09-30-s0-claim-units-prereg.md) | Representation, evidence and the recall floor. |
