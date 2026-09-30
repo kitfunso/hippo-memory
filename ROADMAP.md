@@ -7,6 +7,8 @@
 >
 > **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats the memory Claude Code and Codex already have.** Z0 was redesigned on 2026-09-29 (`docs/evals/2026-09-29-z0-built-in-memory-prereg.md`). The next to-do is its stage 0, the runner fixes, then the smoke stage. Start there.
 >
+> **2026-09-30 execution addendum:** Parts XVI-XVIII reconcile delivery tracing, compact-memory experiments and runtime adapters with the current Z0 design. Instrument first; defaults remain frozen pending the separate retrieval and task gates.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ---
@@ -1950,6 +1952,9 @@ Resource requests come from profiling hippo's own write, recall and sleep phases
 
 ## Part XV - 2026-09-26 update: zero-touch memory (Track Z) [top priority]
 
+> **Default freeze (2026-09-30).** Track S and Track AZ behaviour changes ship behind explicit flags. Defaults change only after the retrieval floor in Part XVI holds and a valid, preregistered Z0 task-family result shows benefit, with G1-G5 and H4 explicitly passing. Instrumentation and connector plumbing may ship on their correctness and overhead checks; neither establishes task benefit. This policy preserves the existing Z0-Z9 record and does not amend a locked preregistration.
+
+
 **Why.** Users prompt; they do not call hippo. Any mechanism that needs a command is, in practice, off. Two facts from source and data:
 - **The per-prompt hook never reads the prompt.** `UserPromptSubmit` runs `hippo context --pinned-only --include-recent 5` (`src/hooks.ts:138`): pinned rules plus the five newest memories, whatever was asked. The SI0 kill test measured the result: injected memories had a median overlap of 0.057 with the work.
 - **The best measured mechanism is manual.** Outcome feedback (a memory marked wrong stops coming back) is the one lifecycle mechanism that clearly helped in the audit, and it runs only when someone calls `hippo outcome`.
@@ -2097,3 +2102,189 @@ Claude Code spends its effort when a memory is written: the model decides what i
 **What not to build.** New commands for users to learn. Every Z item is reached through hooks `hippo init` already installs; a new CLI verb is for debugging only.
 
 **Evidence gate.** Z0 (TE5's scored run, re-registered 2026-09-29) is the proof that any of this beats the memory agents already have. Z1's replay is the cheap check; Z0 is the claim.
+
+---
+
+## Part XVI - 2026-09-30 update: Track Z evaluation and delivery addendum
+
+**Purpose.** Diagnose why a lesson did not help, then test the component responsible. Z0 remains first. Z0-Z9 above retain their identifiers and history; the ledger is Z10. Z1d extends Z1, Z2b extends Z2, and Z3b shares the Z3/Z6/Z9 write path. Track S7 refers to Z10 rather than creating another ledger.
+
+**Boundaries.** Hippo does not run agents. SQLite stays the local store; no Neo4j, Pinecone or LanceDB replacement, no second live ranking policy per runtime, no silent dual-write into cloud memory, no raw transcript as the automatic retrieval unit, and no new required user verb. Optional embedders and explicit existing rerankers remain optional. Track G is outside this queue.
+
+### Two evidence gates
+
+1. **Store/ranker release floor.** A distributed S-track store, ranking or hygiene flag must preserve the existing LongMemEval and actual `hippo recall` paths: paired R@5 difference at least -1 percentage point against the frozen shipping baseline. Fix the commit, corpus hashes, scorer, candidate limits, embedder setting and token budget before comparison. Report the paired interval and counts; an observed difference inside this band is a regression check on that corpus, not proof of population equivalence. Keep both the current CLI-budget run and the script-ranking run; neither substitutes for the other.
+2. **Task benefit and default promotion.** LongMemEval cannot pass Z0, an AZ task-benefit claim or a change to `hippo init` defaults. The governing design is [the 2026-09-29 Z0 preregistration](docs/evals/2026-09-29-z0-built-in-memory-prereg.md): H1 repeat mistakes, H2 portability and H3 priced tokens per task, with its declared multiplicity, effect sizes and verdict rules. Cost per resolved task is reported separately unless a fresh preregistration makes it primary. All G1-G5 validity gates must pass, including the positive control. H4 must explicitly pass: the upper 95% bound on the no-lesson cost ratio is below 1.10 and the lower bound on the resolve-rate difference is above -5 points. A new runtime registers its own applicable task family and comparator before scoring.
+
+For default promotion, name the intended primary benefit and minimum useful effect before the freeze, require a win meeting that effect, and retain task quality and the retrieval floor. A favourable point estimate, a tie, an inconclusive harm check or a failed validity gate does not promote a default. Instrumentation can ship without a task win if it preserves decisions and passes correctness and overhead checks; a connector can be supported for the delivery mechanics it proves without claiming better task outcomes.
+
+**Independent confirmation.** Development tasks and frozen regression corpora may be reused for debugging. A scored task set is evaluated under its locked protocol, not repeatedly tuned against. After its result is inspected, a new component needs fresh held-out families or an explicitly registered sequential design and multiplicity budget. Do not peek at Z1c or any other locked held-out window to choose the next arm. Publish win, loss, tie, inconclusive or invalid; do not preselect a tie.
+
+### Z10. Extend the per-turn delivery ledger [first; instrumentation]
+
+The mutation audit's recall entry is not the whole trace system. [`src/recall-trace.ts`](src/recall-trace.ts) already writes `recall_traces`, `recall_trace_results` and `recall_trace_outcomes`, including returned IDs, ranks, scores and linked feedback. Extend that producer and Z0's memory-surface ledger.
+
+- Correlate runtime, store identity, tenant/project, session, turn and triggering event. Record admitted candidate IDs, ranked IDs, gate/budget rejection reasons, emitted IDs and delivery evidence. Distinguish returned, emitted and confirmed delivered.
+- Record injected tokens and elapsed time. Keep query hashing and structured-field allowlists; do not add raw prompts or tool outputs to the audit by default.
+- Record task/check signals with their evidence and timing: repeated error, failed check, explicit correction, revert, resolved check or unknown. Application is `observed`, `judged` or `unknown`, never inferred solely from prompt presence.
+- Cover prompt submission, relevant tool failures, compaction and session end. Define duplicate-event handling, concurrent-session isolation and unavailable-event states per runtime. A logging failure must not break the agent or change recall.
+- On labelled fixtures, distinguish not-written, not-retrieved, rejected/not-injected, delivery-unconfirmed, delivered/application-unknown, applied-but-wrong and applied-with-supporting-outcome. A causal explanation requires more evidence than a trace.
+
+**Exit.** Known fixture events are reconstructable end to end, existing recall decisions are unchanged, and overhead is measured against H4's budget before broad default installation. No task-benefit claim from instrumentation alone. Draft: [Z10 ledger](docs/evals/2026-09-30-z10-ledger-prereg.md).
+
+### Z1d. Trigger-then-gate [experiment; after Z10]
+
+Register a new arm using scoped path, error class, test identity or command family, with task state when available. A path match alone is not relevance. Retrieve a small set and admit it only when the registered gate clears; otherwise inject no additional claims. Applicable pins remain.
+
+The 2026-09-26 lexical `promptRecall` arm stays off by default. Z1c's locked judge-gate experiment continues unchanged. Its 0.15 helpfulness difference is not automatically a threshold for shown-rate or task success: Z1d must define its own denominator, false-positive cost, sample and smallest useful effect. Compare useful delivered coverage on relevant tasks, irrelevant injection on no-match tasks, repeat mistakes, tokens and latency. A replay or judge pass permits an experimental arm; default promotion still requires Z0. Draft: [Z1d trigger and gate](docs/evals/2026-09-30-z1d-trigger-gate-prereg.md).
+
+### Z2b. Evidence-specific outcomes [extends Z2]
+
+Link feedback only to IDs confirmed delivered in the applicable turn/task, using Z10. A later pass does not credit every shown memory, and an unrelated failure does not blame them. Record ambiguous signals as unknown. Use evidence tied to the claim's prediction or prescribed action; log the rule, source and reversal. Preserve manual explicit-ID feedback. No default batch auto `--bad`, and no strengthening merely because a row appeared in context. Re-run SI0's validity checks before enabling automatic outcome writes.
+
+### Z3b. Correction writes [shared with Z3, Z6 and Z9]
+
+Detect the correction, identify the claim it addresses, and establish whether it replaces that claim as separate steps. Match subject, attribute, tenant/project, environment or branch applicability and effective time. A next-turn contradiction alone does not close a row.
+
+User preferences update in their stated scope; technical claims remain observations until supported. An uncertain conflict stays pending and preserves both sources. A supported replacement atomically closes the old version and writes its successor, with evidence, reason and reversal. Duplicate delivery is idempotent. No `hippo supersede` command on the happy path.
+
+Register false-write and false-closure bounds, label agreement and abstention coverage before scoring. Include quotations, hypothetical changes, branch-specific facts, confidently wrong corrections and reversals. Task confirmation must lower stale-follow without raising repeat mistakes or failing H4. Draft: [Z3b correction writes](docs/evals/2026-09-30-z3b-correction-write-prereg.md).
+
+### Z11. Preserve defaults while experiments run
+
+`hippo init` retains the current pinned + newest 5 hook, `promptRecall` off, no batch auto `--bad`, and no required embedder. This roadmap change does not change extraction settings, live-store half-lives, installed hooks or compaction capture. Existing compaction-item writes and their keep rules remain; their presence is not a claim of task benefit. A ranker-only win cannot promote a hook default.
+
+---
+
+## Part XVII - 2026-09-30 update: Track S, compact memory experiments
+
+**Motivation, measured and limited.** The [CLI recall evaluation](docs/evals/2026-09-28-recall-cli-longmemeval-result.md) found whole-session rows consumed most of the token budget; it did not test structured claims or generate answers. The [mechanism audit](docs/evals/2026-09-23-mechanism-audit-round2-result.md) found physics lost largely through missing BM25, sleep did not show a recall benefit, and correct outcome marks helped on a synthetic workload. These motivate component experiments, not a measured claim-stack win or a conclusion that age never matters.
+
+**Flag and compatibility.** `{"stack":"claims-v1"}` is a proposed opt-in interface, not an implemented setting. It does not commit to new tables or a live-store migration. Keep separate evaluation controls for representation, ranking, closure, writes and packing; one public flag must not make their effects inseparable. Preserve CLI/API input contracts, mirrors, provenance and old rows. No automatic splitting of legacy rows in v1. Any new schema requires its own migration, rollback and compatibility plan.
+
+### S0. Test the write unit before replacing the schema
+
+Compare existing rows, deterministic sentence/turn chunks and structured claims under equal retrieval and injection budgets. Prototype on the current store and Z9's write contract first. A claim preserves one assertion plus necessary reason, application conditions, subject/attribute, source and epistemic status. About 40-120 tokens is a target, not a minimum or permission to truncate exceptions; a short useful rule needs no padding.
+
+Carry owner, tenant, origin project, scope, pin, source evidence, effective time and outcome links explicitly. Receipts are source evidence kept out of automatic injection. Retain source spans so a claim is credited only for evidence its returned text contains, not everything its parent session once said. Existing legacy-store tests must be accompanied by fixtures that actually write and retrieve the experimental units.
+
+**Exit.** Pass the retrieval floor plus evidence-completeness, false-extraction, multi-evidence, no-match and scope fixtures. Task benefit is confirmed separately on Z0. Introduce claims/experiences tables only if the prototype exposes a concrete need the existing model cannot meet. Draft: [S0 claim units](docs/evals/2026-09-30-s0-claim-units-prereg.md).
+
+### S1. Ranking ablations, including the outcome channel
+
+Freeze the representation and compare the shipping rank path, BM25 without age/strength factors, and BM25 with only evidence-based outcome feedback. Ablate recency and strength separately. Preserve explicit invalidation, scope admission and manual feedback; removing age is not removing evidence of wrongness.
+
+The current JavaScript BM25 and SQLite FTS5's native BM25 have different scoring contracts; switching between them is a separate comparison. Physics remains an explicit experimental arm. No pure-BM25 or physics-off default is established by this plan.
+
+Apply tenant/project/scope and temporal eligibility before candidate limits and ranking, and recheck admission before injection. Report all-evidence coverage, stale intrusion, per-category regressions and latency alongside paired R@5. Draft: [S1 ranking](docs/evals/2026-09-30-s1-ranking-ablation-prereg.md).
+
+### S2. Optional hybrid, only when misses justify it
+
+Use the existing optional embedder. Lexical and dense retrieval generate independent eligible candidate lists; union them, fuse through RRF, then pack. Dense retrieval restricted to BM25 candidates cannot rescue zero-overlap paraphrases. The zero-dependency path stays lexical.
+
+Use at most 20 claims and one experience, with the token cap taking precedence. Preserve existing explicitly selected rerankers; do not introduce a required MS MARCO cross-encoder, cloud embedder or vector dependency. Optional SQLite vector indexing needs its own compatibility and latency evidence. Hybrid gains must hold after the claims exist and still cannot change defaults without Z0.
+
+### S3. Forget by evidence-based closure
+
+Reuse `valid_from`, successor linkage and the existing `--as-of` contract. Current recall excludes closed/rejected/superseded versions; historical recall applies the requested temporal view. Closure and successor writes preserve scope, evidence, pins and reversibility.
+
+Validity time and recorded knowledge time are separate: specify how late corrections and backdated facts behave before calling the design bitemporal. Preserve the existing public `--as-of` semantics; register any additional recorded-time selector and migration separately. Test historical queries before and after the correction was learned, gaps, chains, reversals and isolated scopes.
+
+Age-only archival is deferred. A 180-day policy requires a retention study, protected-row checks and recoverable archive semantics; a short Z0 run cannot validate forgetting over months. Draft: [S3 temporal closure](docs/evals/2026-09-30-s3-temporal-closure-prereg.md).
+
+### S4. Sleep as reversible hygiene
+
+Close only supported contradictions through Z3b/S3. Merge duplicates only when assertion, scope, applicability and exceptions are equivalent; preserve all provenance and a reversible record. Shorter text alone is not a merge criterion. Do not concatenate episodes to manufacture a lesson.
+
+Keep receipts and compaction records under their existing retention/privacy rules. Do not delete orphan evidence merely because no current claim references it. Compaction records remain outside recall/FTS/sleep memory passes, and protected compaction-item memories retain their keep rules. No new LLM extraction path unless `extraction.enabled` and the applicable provider opt-in permit it; this does not change today's extraction default.
+
+Pass the recall floor and evidence/temporal integrity checks. Deduplication alone is a useful hygiene outcome; do not label it better memory without task evidence. Draft: [S4 sleep hygiene](docs/evals/2026-09-30-s4-sleep-hygiene-prereg.md).
+
+### S5. Scoped experiences
+
+A fail/resolve sequence can produce one experience: trigger, observed action, check evidence, outcome and a bounded lesson. A failure alone does not prove a remedy. Reuse trace/provenance infrastructure before creating another table. Retrieve by scoped trigger; inject at most one per turn. Version-dependent remedies carry applicability, and unproven lessons remain observations.
+
+### S6. Automatic writes
+
+Start with structured existing inputs and conservative heuristics. Supported corrections use Z3b; repeated errors use S5. Preserve the existing compaction lesson-list capture and reuse it for the experimental write format; do not delay today's capture until a new schema exists or make a compaction dump retrievable. LLM extraction is a separately registered opt-in arm. Write precision, duplicate rate, evidence completeness and temporal correctness precede task confirmation.
+
+### S7. Ledger
+
+Use Z10. Extend the same trace producer and schema; no second ledger.
+
+### S8. Graph reasoning [deferred; opt-in]
+
+Reuse the existing entities, relations, graph recall and scope checks. PPR is a later traversal/ranking experiment, not a second graph product or required database. Register it only when a Z0 family demonstrates a multi-constraint retrieval gap that lexical/optional hybrid recall does not solve.
+
+### S9. Packing and cache measurement
+
+The experimental automatic memory block has a hard 1,500-token cap including IDs, provenance, labels, pins and any experience. Admit eligible pins first with deterministic ordering, then whole claims; never cut an assertion away from its conditions. If pins alone exceed the budget, inject the deterministic fitting subset and record/report omissions. Item limits never override the token cap.
+
+Without a qualifying trigger, add no experimental claims or experience; the existing applicable pin path remains. Closed facts do not enter live context as current instructions. Use a fixture containing 10 live claims, two closed claims and one experience to verify selection and budget, with a separate historical-view case.
+
+Keep unchanged rendering deterministic. Measure cached tokens, cache placement and actual priced input before claiming savings; byte-stable text does not guarantee a cache hit.
+
+**Order.** Z10 and valid Z0 baseline -> S0/S9 representation -> S1 ranking -> S3/S4 integrity -> S5/S6 writing -> Z1d/Z3b task confirmation. Run single-component ablations before the combined arm. S2 follows only a measured paraphrase gap; S8 follows only a measured graph gap.
+
+---
+
+## Part XVIII - 2026-09-30 update: Track AZ, runtime delivery surfaces
+
+**Contract.** Every adapter uses the same store discovery, admission, ranking, trace and packing contracts. Prefer a route that reliably delivers useful memory on that runtime; the order hooks/MCP/instruction files is a hypothesis to test. Keep agent-initiated recall available. Install only for a runtime the maintainer or a pilot actually uses.
+
+Separate a supported connector (installation and delivery fixtures pass) from a task-benefit claim (its preregistered Z0 family passes). `hippo doctor` reports version, loaded config source, active events, store selection, opt-out state and delivery limitations. No task-benefit claim from a successful install.
+
+### AZ1. Devin CLI and local surfaces [after baseline; explicit opt-in]
+
+The [official hook configuration](https://docs.devin.ai/cli/extensibility/hooks/overview) documents project `.devin/hooks.v1.json` (the hook object is the whole file) and user settings, including automatic Claude-config import. The [lifecycle reference](https://docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks) documents prompt/session events, `PostToolUse` and `PostCompaction`. These establish an adapter candidate, not a Hippo runtime result.
+
+- SessionStart: discover the correct store and inject scoped context through the documented output envelope.
+- UserPromptSubmit: retain pinned + newest 5 as the comparator; Z1d is a separate flag.
+- PostToolUse: normalize `tool_response.success/output/error` before failed-tool capture. Do not assume Claude Code's separate failure event or payload.
+- PostCompaction: consume the documented nullable `summary`; test capture and context restoration separately. Do not map it blindly to Claude's compact-resume command.
+- SessionEnd: sleep/capture only from an established supported input. The documented event does not establish a transcript path; do not invent one.
+- MCP: install the documented stdio route as an alternative; distinguish an available tool from a tool actually called.
+- Installer/doctor: merge and uninstall only Hippo-owned entries, preserve other hooks, detect inherited Claude hooks to prevent duplicate injection, and test supported versions and local modes individually.
+
+Cover nested/worktree/projectless discovery, concurrent sessions, resume, compaction without summary, no-match, wrong-project, install/update/opt-out and missing-input cases. Leftover Cascade-note import is optional, provenance-preserving and never silently enabled. Draft: [AZ1 Devin delivery](docs/evals/2026-09-30-az1-devin-hooks-prereg.md).
+
+### AZ2. Cloud Devin knowledge exchange [separate from Z8; deferred]
+
+Z8 above remains Claude Code cloud memory. Register Devin cloud as its own surface. Verify supported Knowledge read/write APIs, authentication and session access before designing import/export. MCP connectivity does not establish a transcript or lifecycle event stream.
+
+Import/export is explicit and flagged, with external IDs, tenant/project admission, provenance, authority/conflict rules, idempotent replay and closure/deletion handling. No silent dual-write or feedback loop. Supported source events may become receipts; claim writes still pass the common write contract. Confirm cross-session persistence and task benefit separately.
+
+### Other surfaces: capability checks, then demand-based order
+
+| Surface | Capability known from current official docs | Hippo work still required |
+|---|---|---|
+| Cursor | [Session, prompt and tool hooks; Claude-hook import](https://prod.cursor.com/docs/reference/third-party-hooks) | Validate payload/output mappings and real delivery; it is not waiting for lifecycle hooks to exist. |
+| Gemini CLI | [SessionStart/SessionEnd, BeforeAgent and tool hooks](https://geminicli.com/docs/hooks/writing-hooks/) | Normalize its event vocabulary and test memory delivery; session hooks already exist. |
+| Copilot CLI / coding agent | Verify the specific local/cloud mode at registration. | Capability matrix and connector fixtures before claiming coverage. |
+| Cline / one VS Code adapter | Verify current extension events and MCP configuration. | Choose only when a pilot needs this surface; reuse the common contract. |
+| Other MCP clients | Document the supported MCP setup. | Test discovery, actual recall invocation and delivery; other memory products are importers only. |
+
+### Next 90 days: gated milestones
+
+1. Extend Z10 while completing Z0 stage 0, then smoke, calibration, freeze and the scored write-up under the existing plan-usage go. Publish whatever the verdict is; the calendar is not a result.
+2. Prototype S0/S9 on the existing store, with equal-budget chunk controls, evidence scoring and the retrieval floor. Dogfood development data without spending held-out sets.
+3. Run S1 ablations, then S3/S4/S5/S6 in the order the trace identifies. Keep current defaults and capture paths.
+4. Confirm Z1d and Z3b on fresh registered Z0 families, then the combined arm. If repeat mistakes or task quality regress, fix writes/admission and retain defaults.
+5. Add AZ1 only for an actual Devin pilot; verify Cursor/Gemini capability instead of deferring them on obsolete hook assumptions. Add S2 only for demonstrated paraphrase misses. AZ2 and S8 remain deferred.
+
+No new spending authorization, release, live-store migration or installer run is implied by these milestones.
+
+### Evaluation drafts
+
+The following files are **DRAFT / NOT REGISTERED**, not empty registrations. They contain hypotheses, proposed arms, primary metrics, controls and the decisions required before a freeze. No experiment has run under them, no default changes, and no result is implied. Fill corpus snapshots/hashes, independent hold-outs, sample/power rules, acceptance bounds, scorer, stopping rules and resource authorization before changing their status.
+
+| Draft | Scope |
+|---|---|
+| [Z10 ledger](docs/evals/2026-09-30-z10-ledger-prereg.md) | Trace correctness and overhead, linked to Z0 validity/H4. |
+| [Z1d trigger/gate](docs/evals/2026-09-30-z1d-trigger-gate-prereg.md) | Useful delivery and a fresh Z0 task family. |
+| [Z3b correction writes](docs/evals/2026-09-30-z3b-correction-write-prereg.md) | False closure and a fresh Z0 reversal family. |
+| [S0 claim units](docs/evals/2026-09-30-s0-claim-units-prereg.md) | Representation, evidence and the recall floor. |
+| [S1 ranking](docs/evals/2026-09-30-s1-ranking-ablation-prereg.md) | Ranking/outcome ablations and the recall floor. |
+| [S3 temporal closure](docs/evals/2026-09-30-s3-temporal-closure-prereg.md) | History semantics, integrity and the recall floor. |
+| [S4 hygiene](docs/evals/2026-09-30-s4-sleep-hygiene-prereg.md) | Reversible merges, evidence preservation and the recall floor. |
+| [AZ1 Devin](docs/evals/2026-09-30-az1-devin-hooks-prereg.md) | Versioned delivery fixtures and a separate runtime task family. |
