@@ -177,7 +177,7 @@ import {
 } from './agent-memories/sync.js';
 import { detailLines, emptyReport, mergeReports, summaryLine, type ImportReport } from './agent-memories/report.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
-import { deriveOriginProject, resolveProjectIdentity } from './project-identity.js';
+import { deriveOriginProject, isGlobalStoreRoot, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -1273,6 +1273,7 @@ async function cmdRecall(
     process.exit(1);
   }
   const globalRoot = getGlobalRoot();
+  const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
 
   // A5 stub auth: resolve the active tenant once and thread it through every
   // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
@@ -1295,7 +1296,9 @@ async function cmdRecall(
 
   const loadSuperseded = includeSuperseded || Boolean(asOf);
   let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded);
-  let globalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded) : [];
+  let globalEntries = globalRoot !== hippoRoot && isInitialized(globalRoot)
+    ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded)
+    : [];
 
   // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
   // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
@@ -1427,7 +1430,7 @@ async function cmdRecall(
   // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
   const localIndex = loadIndex(hippoRoot);
   const globalOn = isInitialized(globalRoot);
-  const entryText = (r: SearchResult): string => recallEntryText(r, query, showWhy, globalOn && !localIndex.entries[r.entry.id]);
+  const entryText = (r: SearchResult): string => recallEntryText(r, query, showWhy, primaryIsGlobal || (globalOn && !localIndex.entries[r.entry.id]));
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
@@ -1938,7 +1941,7 @@ async function cmdRecall(
   let activeSnapshot: TaskSnapshot | null = null;
   let sessionHandoff: SessionHandoff | null = null;
   let recentSessionEvents: SessionEvent[] = [];
-  if (includeContinuity) {
+  if (includeContinuity && !primaryIsGlobal) {
     const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
     const sessionId = rawSnapshot?.session_id ?? undefined;
     const rawHandoff = sessionId
@@ -2190,7 +2193,7 @@ async function cmdRecall(
 
   if (asJson) {
     const output = results.map((r) => {
-      const isGlobal = isInitialized(globalRoot) && !localIndex.entries[r.entry.id];
+      const isGlobal = primaryIsGlobal || (isInitialized(globalRoot) && !localIndex.entries[r.entry.id]);
       const base: Record<string, unknown> = {
         id: r.entry.id,
         score: r.score,
@@ -10136,7 +10139,7 @@ async function main(
         console.error('Please provide a search query.');
         process.exit(1);
       }
-      await cmdRecall(hippoRoot, query, flags);
+      await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
       break;
     }
 
@@ -10564,7 +10567,7 @@ async function main(
       // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
       // the hot stdin path and a manual run share this one command.
       const { text: stdinText } = await readStdinBounded();
-      await cmdContext(hippoRoot, args, flags, stdinText);
+      await cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText);
       break;
     }
 

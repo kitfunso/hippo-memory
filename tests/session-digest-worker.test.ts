@@ -141,7 +141,7 @@ describe('the Codex session-end worker', SLOW, () => {
 
 describe('a folder with only the global store', SLOW, () => {
   it('gets capture and the handoff in the global store, no digest anywhere, and no store of its own', () => {
-    const folder = path.join(tmp, 'billing');
+    const folder = path.join(env.USERPROFILE!, 'billing');
     fs.mkdirSync(path.join(folder, '.git'), { recursive: true });
     const globalRoot = path.join(tmp, 'global');
     initStore(globalRoot);

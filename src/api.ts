@@ -2624,15 +2624,15 @@ export async function getContext(
     return { entries: [], tokens: 0 };
   }
 
-  // Pinned-only path is allowed against an un-initialised local store (the
-  // UserPromptSubmit hook can run in directories without a .hippo). Non-pinned
-  // path requires an initialised local store; callers should check first.
+  // Global memories do not establish a project boundary for task state.
   const hasLocal = isInitialized(ctx.hippoRoot);
 
   const query = (opts.q ?? '').trim() || '*';
 
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
+  const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
+  const hasLocalTaskState = hasLocal && !primaryIsGlobal;
 
   // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
   // S2: envelope-filter parity with api.recall for AMBIENT context - private
@@ -2680,7 +2680,7 @@ export async function getContext(
   // unbounded; see loadFreshActiveTaskSnapshot's own doc comment for the
   // exact null/empty-id matching rules.
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
-  const rawActiveSnapshot = hasLocal
+  const rawActiveSnapshot = hasLocalTaskState
     ? loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, {
         sessionId: opts.currentSessionId,
       })
@@ -2692,7 +2692,7 @@ export async function getContext(
       ? rawActiveSnapshot
       : null;
   // Key on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
-  const rawSessionHandoff = !hasLocal
+  const rawSessionHandoff = !hasLocalTaskState
     ? null
     : rawActiveSnapshot?.session_id
       ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, rawActiveSnapshot.session_id)
@@ -2707,7 +2707,7 @@ export async function getContext(
       ? rawSessionHandoff
       : null;
   // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
-  const recentSessionEvents = hasLocal && rawActiveSnapshot?.session_id
+  const recentSessionEvents = hasLocalTaskState && rawActiveSnapshot?.session_id
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
         session_id: rawActiveSnapshot.session_id,
         limit: 5,
@@ -2740,8 +2740,8 @@ export async function getContext(
   const localLoad: AmbientLoadResult = hasLocal
     ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
     : { entries: [] };
-  const globalLoad: AmbientLoadResult = hasGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
+  const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;
@@ -2782,7 +2782,7 @@ export async function getContext(
     const pinnedLocal = localPool.filter((e) => e.pinned);
     const pinnedGlobal = globalPool.filter((e) => e.pinned);
     const rankedPinned = [
-      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
+      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: primaryIsGlobal })),
       ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
     ]
       .map(({ entry, isGlobal }) => {
@@ -2853,7 +2853,7 @@ export async function getContext(
         for (const e of localCandidates) {
           if (seenCandidateIds.has(e.id)) continue;
           seenCandidateIds.add(e.id);
-          candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: false });
+          candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: primaryIsGlobal });
         }
         for (const e of globalCandidates) {
           if (seenCandidateIds.has(e.id)) continue;
@@ -2872,7 +2872,7 @@ export async function getContext(
       }
     } else if (includeRecent > 0) {
       const recent = [
-        ...localPool.map((entry) => ({ entry, isGlobal: false })),
+        ...localPool.map((entry) => ({ entry, isGlobal: primaryIsGlobal })),
         ...globalPool.map((entry) => ({ entry, isGlobal: true })),
       ]
         // T2 (src/compare.ts) note: this already carries an explicit
@@ -2947,8 +2947,8 @@ export async function getContext(
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now),
-        tokens: price(e, false),
-        isGlobal: false,
+        tokens: price(e, primaryIsGlobal),
+        isGlobal: primaryIsGlobal,
       }))
       .sort(compareScoredResults);
 
@@ -2974,7 +2974,7 @@ export async function getContext(
     // Real query: hybrid search (global + local) or physics+hybrid (local only).
     let results: ContextResultEntry[];
     const minResults = cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
-    if (hasGlobal) {
+    if (hasGlobal && !primaryIsGlobal) {
       // searchBothHybrid loads from the store roots itself, so the ambient
       // filter above never saw its candidates. Admission runs INSIDE the
       // search via the opt-in entryFilter, BEFORE ranking, cross-store
@@ -3001,7 +3001,7 @@ export async function getContext(
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
-      const localCost = cost && ((r: SearchResult) => price(r.entry, false));
+      const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
       const ctxResults = usePhysicsCtx
         ? await physicsSearch(query, localEntries, {
             budget: left,
@@ -3021,8 +3021,8 @@ export async function getContext(
       results = ctxResults.map((r) => ({
         entry: r.entry,
         score: r.score,
-        tokens: price(r.entry, false),
-        isGlobal: false,
+        tokens: price(r.entry, primaryIsGlobal),
+        isGlobal: primaryIsGlobal,
       }));
     }
 
@@ -3050,7 +3050,7 @@ export async function getContext(
         closeHippoDb(localDb);
       }
     }
-    if (hasGlobal) {
+    if (hasGlobal && !primaryIsGlobal) {
       const globalDb = openHippoDb(globalRoot);
       try {
         appendAuditEvent(globalDb, {
