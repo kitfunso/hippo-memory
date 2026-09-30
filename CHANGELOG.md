@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.53.0 - 2026-09-30
+
+### Added
+
+- **hippo now saves memories at every Claude Code compaction.** Before the summary is written, the PreCompact hook asks the summariser to end it with a "Memories for hippo" list of the lessons, decisions and corrections from the session. After compaction, the PostCompact hook saves each item as a memory, up to 10 per compaction, and prints one line, such as "Hippo saved 3 memories from this compaction and restored your task snapshot." Items an earlier compaction already saved, and items that look like secrets, are skipped.
+- **Memories saved at a compaction are kept for good.** Sleep never deletes them, moves them to dormant or merges them, and never sends them to fact extraction; `hippo forget` and `hippo supersede` still work on them. The session that compacted does not have them injected back into its own prompts. An older hippo running `hippo sleep` on the same store does not know this rule.
+- **Every compaction leaves a record, and a busy store no longer loses the save.** A new `compactions` table (schema 49) holds the summary with secrets scrubbed and the list. If the store is locked, the summary waits in a spool folder and `hippo sleep` finishes it (the daily runner, for the global store), along with any compaction whose hook was killed. `hippo doctor` gains a `compactions` line that names one left unfinished for over 10 minutes.
+
+### Changed
+
+- **CI now stops comments that carry ticket codes, version tags, reviewer notes or dates from growing.** `scripts/check-comment-history.mjs` counts them per file in `src/` against `.comment-history-baseline.json` and fails a PR that raises a count; no source file changed, and later PRs rewrite the existing 1,538 lines.
+- **hippo now imports the memories every coding agent on the machine keeps, whatever the tool.** `hippo init` (every run, not just the first), `hippo init --scan`, `hippo init --global`, `hippo setup`, every `hippo sleep`, the daily run, session end and each compaction read Claude Code auto memory, Codex memories, Gemini CLI, GitHub Copilot, OpenClaw and Qwen Code notes. A project's notes go into that project's store; notes about you go into the global store. Items that look like secrets (auth headers and tokens included), and notes under 10 characters, are skipped and counted; email addresses are stored masked. `hippo import --agents --dry-run` lists what each tool has and where it would land; `HIPPO_AGENT_MEMORY_TOOLS` or `agentMemories.tools` in config picks the tools, and an empty list or `HIPPO_AGENT_MEMORY_TOOLS=none` turns the import off.
+- **Imported rows follow their note.** A row is kept while its note exists, replaced when the note changes, and set aside as dormant when the note is deleted, so it can be restored if the note comes back. Rows the old Claude-only import wrote are taken over rather than copied again.
+- **The CLI tests run this checkout's own `bin/hippo.js`, found from the test file.** They used to resolve it from the working directory, so a run started from any other folder failed, and a run from another worktree tested that worktree's build.
+
+### Fixed
+
+- **Projectless recall and ordinary context now find the global store.** CLI store discovery falls back outside projects and counts each store once. Context reads global memories and configuration without borrowing global project task state. Real-command fixtures prove context, recall continuity and Codex pin delivery exclude a foreign snapshot, handoff and events. Fallback results carry their global source label, and global hook opt-out is respected.
+- Refresh the UI's Undici lock entry to the patched release so the dependency security audit passes.
+- **`hippo supersede` keeps the old memory's project and session.** It dropped them, so in the global store every superseded project memory turned user-global.
+- **OpenCode's idle hook no longer saves another project's Claude Code session.** The hook runs `hippo session-end` with no payload, and an empty stdin made session end look like a manual run, so it captured the newest transcript under `~/.claude/projects/`, usually a different project's session. Session end now never scans for a transcript and logs `skip capture: no transcript for this session` instead. Only a manual `hippo capture --last-session` scans.
+
 ## 1.52.9 - 2026-09-29
 
 ### Added
