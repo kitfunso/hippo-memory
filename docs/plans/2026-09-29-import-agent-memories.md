@@ -534,3 +534,5 @@ folder's own notes; it now does what session end does there (design 11).
    rather than adopted.
 CI's Node 22 floor job also failed a test, not the product: `utimes` passes seconds as a double, so a `.123` mtime
 read back as `.122`; the test now uses `.500`.
+After master's #343 was merged in, the Windows job timed out #343's six-launch CLI test: the new win32 test files
+tripled every file's time on four cores. The Windows job now runs its files one at a time.

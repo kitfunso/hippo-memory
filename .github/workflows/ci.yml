@@ -137,6 +137,7 @@ jobs:
 
   # Every other job is Linux, where Windows-only tests skip and win32 branches never run.
   # Selecting files that name win32 keeps a new Windows test covered without editing this list.
+  # One file at a time, since that list grows by itself and parallel files on four cores ate a test's 30 s budget.
   windows:
     runs-on: windows-latest
     timeout-minutes: 20
@@ -152,7 +153,7 @@ jobs:
         shell: bash
         run: |
           files=$(git grep -l win32 -- 'tests/*.test.ts' 'tests/*.test.mjs')
-          npx vitest run $files
+          npx vitest run --no-file-parallelism $files
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
