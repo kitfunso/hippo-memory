@@ -130,7 +130,8 @@ import { passesScopeFilterForRecall } from './recall-scope.js';
 import { search, estimateTokens, fitBudget, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
-import { writeRecallTraceAtRoot } from './recall-trace.js';
+import { writeDeliveryEventAtRoot, writeRecallTraceAtRoot } from './recall-trace.js';
+import { createDeliveryRecorder, type DeliveryRecorder } from './delivery-recorder.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
 import {
@@ -6800,6 +6801,53 @@ async function cmdContext(
   flags: Record<string, string | boolean | string[]>,
   stdinText?: string
 ): Promise<void> {
+  const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
+  // No try/finally: a render throw keeps its own exit code and writes no event.
+  await renderContext(hippoRoot, args, flags, stdinText, rec);
+  flushDeliveryRecorder(rec);
+}
+
+/** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
+function startDeliveryRecorder(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+  stdinText: string | undefined,
+): DeliveryRecorder | null {
+  if (flags['pinned-only'] !== true) return null;
+  try {
+    // The same store withLedgerDb writes the token ledger to, so its config governs both.
+    const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
+    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
+    return createDeliveryRecorder({
+      root,
+      storeHash: blockHash(path.resolve(hippoRoot)),
+      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
+      tenantId: resolveTenantId({}),
+      stdinText,
+      envSessionId: hostSessionId(),
+    });
+  } catch (error) {
+    console.error(`[hippo] delivery ledger skipped: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+function flushDeliveryRecorder(rec: DeliveryRecorder | null): void {
+  if (rec === null) return;
+  try {
+    rec.flush((input) => writeDeliveryEventAtRoot(rec.root, input));
+  } catch (error) {
+    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function renderContext(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+  stdinText: string | undefined,
+  rec: DeliveryRecorder | null,
+): Promise<void> {
   // --pinned-only fires on every UserPromptSubmit — including in directories
   // that don't have a local .hippo. Skip requireInit for that path and fall
   // back to global-only inside api.getContext. The non-pinned path still
@@ -6810,7 +6858,10 @@ async function cmdContext(
   }
 
   const budget = parseBudgetFlag(flags['budget'], 1500);
-  if (budget <= 0) return;
+  if (budget <= 0) {
+    rec?.disabled();
+    return;
+  }
 
   // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
   // fall through to api.getContext's '*' fallback. api.getContext is host-
@@ -6873,6 +6924,7 @@ async function cmdContext(
     prompt: payloadPrompt,
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
     cost: contextCost(format === 'additional-context' ? 'additional-context' : 'markdown', framing),
+    deliveryObserver: rec ?? undefined,
   };
 
   const result = await api.getContext(ctx, opts);
@@ -6883,7 +6935,10 @@ async function cmdContext(
     result.activeSnapshot ||
     result.sessionHandoff ||
     (result.recentEvents && result.recentEvents.length > 0);
-  if (!hasContextData) return;
+  if (!hasContextData) {
+    rec?.delivered({ state: 'empty' });
+    return;
+  }
 
   // Adapter: ContextResultEntry -> the print-helper input shape. v39:
   // cross-project inclusions (only present under --cross-project or with
@@ -6919,6 +6974,7 @@ async function cmdContext(
       tokens: result.tokens,
     });
     console.log(jsonText);
+    rec?.delivered({ state: 'sent', emittedText: jsonText });
     withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
       tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
@@ -6945,7 +7001,10 @@ async function cmdContext(
     const recallBlock = recallItems.length > 0
       ? settleTokens((t) => captureConsole(() => printContextMarkdown(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' })))
       : '';
-    if (!staticBlock.trim() && !recallBlock.trim()) return;
+    if (!staticBlock.trim() && !recallBlock.trim()) {
+      rec?.delivered({ state: 'empty' });
+      return;
+    }
 
     const surface: TokenSurface = pinnedOnly ? 'hook' : 'context';
     let sendStatic = staticBlock.trim().length > 0;
@@ -6975,7 +7034,11 @@ async function cmdContext(
     const additionalContext = finalStatic && recallBlock
       ? `${finalStatic}\n\n${recallBlock}`
       : finalStatic || recallBlock;
-    if (!additionalContext.trim()) return;
+    const staticReused = !sendStatic && staticBlock.trim().length > 0;
+    if (!additionalContext.trim()) {
+      rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
+      return;
+    }
 
     const payload = {
       hookSpecificOutput: {
@@ -6984,6 +7047,13 @@ async function cmdContext(
       },
     };
     process.stdout.write(JSON.stringify(payload));
+    rec?.delivered({
+      state: staticReused ? 'reused-recall-sent' : 'sent',
+      staticHash: staticBlock.trim() ? blockHash(staticBlock) : null,
+      recallHash: recallBlock ? blockHash(recallBlock) : null,
+      emittedText: additionalContext,
+      staticReused,
+    });
     if (finalStatic || recallBlock) {
       // One connection for both rows; each insert in its own try so one failing doesn't skip the other.
       withLedgerDb(hippoRoot, (db) => {
@@ -7024,6 +7094,7 @@ async function cmdContext(
       }
     }));
     if (text.length > 0) console.log(text);
+    rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: text } : { state: 'empty' });
     withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
       tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
