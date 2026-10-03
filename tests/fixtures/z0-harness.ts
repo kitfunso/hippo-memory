@@ -111,7 +111,10 @@ export async function run(s: ReturnType<typeof spec>, arms: string[], out: strin
 }
 
 const jsonl = <T>(f: string): T[] => (existsSync(f) ? readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
-export const readRecords = (out: string): Z0Record[] => jsonl<Z0Record>(join(out, 'runs.jsonl'));
+export interface VoidHit { reason: string; class: string | null; tool: string | null; path: string | null; file: string | null }
+/** A record with the runner's fields beyond the z0-record/1 contract. */
+export type RunRecord = Z0Record & { voidHits?: VoidHit[]; turnsSource?: string };
+export const readRecords = (out: string): RunRecord[] => jsonl<RunRecord>(join(out, 'runs.jsonl'));
 export const readPlan = (out: string): Z0PlanCell[] => JSON.parse(readFileSync(join(out, 'plan.json'), 'utf8'));
 export interface LedgerEntry { path: string; sha256?: string; size?: number; link?: true; error?: string }
 export interface LedgerLine {
@@ -123,6 +126,6 @@ export const readLedger = (out: string): LedgerLine[] => jsonl<LedgerLine>(join(
 export const logLines = (log: string) => (existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []);
 /** The fake's whole result JSON for a session (`<id>.json`) or its resume (`<id>.resume.json`). */
 export const rawResult = (out: string, arm: string, name: string) => JSON.parse(readFileSync(join(out, 'raw', 'seqF', arm, 'seed1', name), 'utf8'));
-export const find = (recs: Z0Record[], arm: string, id: string) => recs.find((x) => x.arm === arm && x.taskId === id)!;
+export const find = <T extends Z0Record>(recs: T[], arm: string, id: string): T => recs.find((x) => x.arm === arm && x.taskId === id)!;
 export const runRoot = (out: string, arm: string) => join(out, 'runs', 'seqF', arm, 'seed1');
 export const workDir = (out: string, arm: string) => join(runRoot(out, arm), 'work');

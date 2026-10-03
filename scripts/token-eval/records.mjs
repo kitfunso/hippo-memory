@@ -103,23 +103,52 @@ function parseLine(line) {
   }
 }
 
-/** tool_use and tool_result blocks across transcript files, each file once and each tool_use id once. */
-function* toolBlocks(files) {
-  const seen = new Set();
+/** Parsed lines of each transcript file, each file once, as `{file, o}`. */
+function* fileLines(files) {
   for (const file of uniqueFiles(files)) {
     for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
       const o = parseLine(line);
-      const content = Array.isArray(o?.message?.content) ? o.message.content : [];
-      for (const block of content) {
-        if (block.type !== 'tool_use' && block.type !== 'tool_result') continue;
-        const id = block.type === 'tool_use' ? block.id : block.tool_use_id;
-        const key = id === undefined ? null : `${block.type}:${id}`;
-        if (key && seen.has(key)) continue;
-        if (key) seen.add(key);
-        yield block;
-      }
+      if (o) yield { file, o };
     }
   }
+}
+
+/** tool_use and tool_result blocks across transcript files as `{file, block}`, each tool_use id once. */
+function* fileBlocks(files) {
+  const seen = new Set();
+  for (const { file, o } of fileLines(files)) {
+    const content = Array.isArray(o.message?.content) ? o.message.content : [];
+    for (const block of content) {
+      if (block.type !== 'tool_use' && block.type !== 'tool_result') continue;
+      const id = block.type === 'tool_use' ? block.id : block.tool_use_id;
+      const key = id === undefined ? null : `${block.type}:${id}`;
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      yield { file, block };
+    }
+  }
+}
+
+function* toolBlocks(files) {
+  for (const { block } of fileBlocks(files)) yield block;
+}
+
+/** Every tool call as `{file, name, input}`. */
+export function toolInputs(files) {
+  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_use').map(({ file, block }) => ({ file, name: block.name, input: block.input ?? {} }));
+}
+
+const blockText = (content) => (Array.isArray(content) ? content.map((c) => c.text ?? '').join('\n') : String(content ?? ''));
+
+/** Every tool result's text as `{file, text}`. */
+export function toolResultTexts(files) {
+  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_result').map(({ file, block }) => ({ file, text: blockText(block.content) }));
+}
+
+/** Text a hook added to the context (`hook_additional_context` attachments, as z1-replay.mjs reads them) as `{file, text}`. */
+export function hookContexts(files) {
+  const text = (c) => (Array.isArray(c) ? c.join('\n') : String(c ?? ''));
+  return [...fileLines(files)].filter(({ o }) => o.attachment?.type === 'hook_additional_context').map(({ file, o }) => ({ file, text: text(o.attachment.content) }));
 }
 
 /** Tool calls, file reads (Read, Grep and shell reads; `shellReads` is the shell share) and repeated error signatures; all null with no transcript. */
@@ -135,7 +164,7 @@ export function transcriptWork(files, seenErrors) {
         work.shellReads++;
       }
     } else if (block.is_error) {
-      const text = Array.isArray(block.content) ? block.content.map((c) => c.text ?? '').join(' ') : String(block.content ?? '');
+      const text = blockText(block.content);
       const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
       if (!sig) continue;
       if (seenErrors.has(sig)) work.repeatedErrors++;

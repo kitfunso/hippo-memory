@@ -111,6 +111,28 @@ const lessonState = () => {
   return prompt.includes('LESSON_BAD') ? 'bad' : null;
 };
 
+// The run's out dir and root: claude-config sits at <out>/runs/<seq>/<arm>/seed<n>/claude-config.
+const OUT = path.resolve(process.env.CLAUDE_CONFIG_DIR, '..', '..', '..', '..', '..');
+const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.dirname(process.env.CLAUDE_CONFIG_DIR))
+  .replaceAll('{WT}', process.env.FAKE_WT_DIR ?? '').replaceAll('{HOME}', process.env.HOME ?? '');
+const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
+
+/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT. */
+function probes() {
+  const lines = [];
+  for (const m of prompt.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT)$/gm)) {
+    const [kind, ...rest] = m[1].split(':');
+    const arg = fill(rest.join(':'));
+    if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
+    else if (kind === 'READ_PAST') lines.push(toolUse('Read', { file_path: path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${randomUUID()}.jsonl`) }));
+    else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
+    else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg }));
+    else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));
+    else lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${JSON.stringify({ type: 'user', sessionId: randomUUID(), message: { content: 'old' } })}\n`));
+  }
+  return lines;
+}
+
 /** HANG: two streamed assistant messages (one id repeated, 5 then 40 output tokens), a ticking grandchild, then no exit for 120 s. */
 function hang(tag) {
   if (prompt.includes('HANG_STDERR')) fs.writeSync(2, 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}\n');
@@ -120,11 +142,9 @@ function hang(tag) {
     { type: 'user', message: { role: 'user', content: input } },
     said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
   ]);
-  // The run's out dir: claude-config sits at <out>/runs/<seq>/<arm>/seed<n>/claude-config.
-  const out = path.resolve(process.env.CLAUDE_CONFIG_DIR, '..', '..', '..', '..', '..');
-  const tick = `const fs=require('fs');const end=Date.now()+20000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(out, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  const tick = `const fs=require('fs');const end=Date.now()+20000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
-  fs.writeFileSync(path.join(out, 'grandchild.pid'), String(child.pid));
+  fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
   log(`hang ${tag}`);
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120_000);
   process.exit(0);
@@ -165,6 +185,8 @@ function firstSession() {
   }
   for (const m of prompt.matchAll(/MEMWRITE:([^\n]+)/g)) memWrite(m[1].trim());
   if (/\bHANG(?:_STDERR)?\b/.test(prompt)) hang('s1');
+  for (const m of prompt.matchAll(/^USERMEM:(.+)$/gm)) fs.appendFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'CLAUDE.md'), `${m[1]}\n`);
+  if (prompt.includes('WORKTREE')) sh(`git worktree add -q --detach "${process.env.FAKE_WT_DIR}"`);
   const commands = [...prompt.matchAll(/^RUN_CMD (.+)$/gm)].map((m) => m[1]);
   appendTurn([
     { type: 'user', message: { role: 'user', content: input } },
@@ -173,9 +195,11 @@ function firstSession() {
     toolUse('Edit', {}),
     toolUse('Bash', { command: 'git status && cat lib.js' }),
     ...commands.map((command) => toolUse('Bash', { command })),
+    ...(/\bSUBAGENT\b/.test(prompt) ? [] : probes()),
   ]);
   const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
   if (delegated.length) writeSubagent('agent-a1', delegated);
+  if (/\bSUBAGENT\b/.test(prompt)) write(path.join(path.dirname(transcript), sessionId, 'subagents', 'agent-probe.jsonl'), probes().map((l) => JSON.stringify(l)).join('\n'));
   if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
 }
 

@@ -1,0 +1,126 @@
+// Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
+import { validateCorpus } from './fixtures/z0-contract';
+import { cleanup, tmp, isolate, makeRepo, task, plain, spec, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness';
+
+const classes = (r: RunRecord) => (r.voidHits ?? []).map((h) => h.class);
+
+describe('reads outside the cell (one A1 run, one read per task)', () => {
+  let recs: RunRecord[] = [];
+  const reads = {
+    otherRun: 'READ:{OUT}/runs/seqF/A2/seed1/claude-config/x',
+    past: 'READ_PAST',
+    operator: 'BASH:cat ~/.claude/projects/p/s.jsonl',
+    envConfig: 'BASH:cat $CLAUDE_CONFIG_DIR/history.jsonl',
+    envUp: 'BASH:ls ${HIPPO_HOME}/../../../A2',
+    rgHome: 'BASH:rg secret ~',
+    grepRun: 'GREP:{RUN}',
+    rgHere: 'BASH:rg secret .',
+    content: 'BASH:sh x.sh\nECHO_TRANSCRIPT',
+    subagent: 'SUBAGENT\nREAD:{OUT}/runs/seqF/A2/seed1/work/lib.js',
+    own: 'READ:lib.js\nREAD:{RUN}/claude-config/CLAUDE.md\nGREP:.\nBASH:cat $CLAUDE_CONFIG_DIR/projects/x/memory/MEMORY.md',
+    cache: 'READ:{OUT}/repo-cache/seqF/HEAD',
+  };
+
+  beforeAll(async () => {
+    const { out } = isolate('reads');
+    const r = makeRepo();
+    await run(spec(r, [], [...Object.entries(reads).map(([id, prompt]) => task(r, id, prompt)), plain(r, 'after')]), ['A1'], out);
+    recs = readRecords(out);
+    expect(validateCorpus(recs, readPlan(out))).toEqual([]);
+  }, 300_000);
+  afterAll(cleanup);
+
+  const expectRead = (id: string, cls: string) => {
+    const rec = find(recs, 'A1', id);
+    expect(rec, id).toMatchObject({ invalid: null, void: 'read' });
+    expect(classes(rec), id).toContain(cls);
+  };
+
+  it('reading another arm\'s dir voids only that session', () => {
+    expectRead('otherRun', 'other-run');
+    expect(find(recs, 'A1', 'after').void).toBeNull();
+  });
+  it('reading a past transcript voids', () => expectRead('past', 'past-transcript'));
+  it('a shell read of the operator\'s ~/.claude voids', () => expectRead('operator', 'operator'));
+  it('env forms resolve against the agent\'s env', () => {
+    expectRead('envConfig', 'past-transcript');
+    expectRead('envUp', 'other-run');
+  });
+  it('a recursive search from an ancestor of a forbidden root voids; one from the workspace does not', () => {
+    expectRead('rgHome', 'ancestor-search');
+    expectRead('grepRun', 'ancestor-search');
+    expect(find(recs, 'A1', 'rgHere').void).toBeNull();
+  });
+  it('a tool result holding another session\'s transcript lines voids', () => expectRead('content', 'transcript-content'));
+  it('a subagent\'s read counts', () => expectRead('subagent', 'other-run'));
+  it('own memory, own instructions and own workspace reads do not void', () => {
+    expect(find(recs, 'A1', 'own')).toMatchObject({ invalid: null, void: null });
+    expect(find(recs, 'A1', 'own').voidHits).toBeUndefined();
+  });
+  it('reading the repo cache, which holds every fix ref, voids as other-arm', () => expectRead('cache', 'other-arm'));
+});
+
+describe('resolveToken', () => {
+  it('maps a Git Bash drive path on win32 and expands env forms', () => {
+    expect(resolveToken('/c/Users/x', { platform: 'win32', env: {}, cwd: 'C:/w' })).toBe('C:/Users/x');
+    expect(resolveToken('%HIPPO_HOME%/a', { platform: 'win32', env: { HIPPO_HOME: 'D:/h' }, cwd: 'C:/w' })).toBe('D:/h/a');
+    expect(resolveToken('$env:HOME/a', { platform: 'win32', env: { HOME: 'D:/h' }, cwd: 'C:/w' })).toBe('D:/h/a');
+    expect(resolveToken('~/x', { platform: 'linux', env: { HOME: '/home/u' }, cwd: '/w' })).toBe('/home/u/x');
+    expect(resolveToken('../y', { platform: 'linux', env: {}, cwd: '/w/a' })).toBe('/w/y');
+  });
+});
+
+describe('delivery voids and the worktree read', () => {
+  afterEach(cleanup);
+
+  it('auto memory or a user-level CLAUDE.md voids A0 from the next session on, and never A1', async () => {
+    const { out } = isolate('delivery');
+    const r = makeRepo();
+    await run(spec(r, [], [task(r, 't1', 'MEMWRITE:a note\nUSERMEM:a user rule'), plain(r, 't2')]), ['A0', 'A1'], out);
+    const recs = readRecords(out);
+    expect(find(recs, 'A0', 't1').void).toBeNull();
+    const t2 = find(recs, 'A0', 't2');
+    expect(t2).toMatchObject({ invalid: null, void: 'auto-memory' });
+    expect((t2.voidHits ?? []).map((h) => h.reason)).toEqual(expect.arrayContaining(['auto-memory', 'user-instructions']));
+    expect(find(recs, 'A1', 't2').void).toBeNull();
+  }, 300_000);
+
+  it('a user-level CLAUDE.md alone voids A0 as user-instructions', async () => {
+    const { out } = isolate('usermem');
+    const r = makeRepo();
+    await run(spec(r, [], [task(r, 't1', 'USERMEM:a user rule'), plain(r, 't2')]), ['A0'], out);
+    expect(find(readRecords(out), 'A0', 't2')).toMatchObject({ invalid: null, void: 'user-instructions' });
+  }, 300_000);
+
+  it('a hippo marker outside A2/A5 voids, from setup or from a user-level file', async () => {
+    const { out } = isolate('hippo-text');
+    const r = makeRepo();
+    const setup = 'node -e "require(\'fs\').writeFileSync(\'CLAUDE.md\', \'<!-- hippo:start -->\\n\')"';
+    await run(spec(r, [], [task(r, 't1', 'look around only', { setup }), task(r, 't2', 'USERMEM:<!-- hippo:start -->'), plain(r, 't3')]), ['A1'], out);
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 't1')).toMatchObject({ invalid: null, void: 'hippo-text' });
+    expect(find(recs, 'A1', 't2').void).toBeNull();
+    expect(find(recs, 'A1', 't3')).toMatchObject({ invalid: null, void: 'hippo-text' });
+  }, 300_000);
+
+  it('a worktree made outside the workspace voids later reads of it; a canary wins over a read in its session', async () => {
+    const { out } = isolate('worktree');
+    const r = makeRepo();
+    process.env.FAKE_WT_DIR = `${tmp('z0-wt-')}/wt`;
+    const s = spec(r, [], [
+      task(r, 't1', 'WORKTREE'), task(r, 't2', 'READ:{WT}/lib.js'),
+      task(r, 't3', 'ECHO:zz-canary-1\nREAD:{OUT}/runs/seqF/A2/seed1/claude-config/x'), plain(r, 't4'),
+    ]);
+    await run(s, ['A1'], out, { canaries: ['zz-canary-1'] });
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 't1').void).toBeNull();
+    expect(find(recs, 'A1', 't2')).toMatchObject({ invalid: null, void: 'read' });
+    expect(classes(find(recs, 'A1', 't2'))).toEqual(['worktree']);
+    const t3 = find(recs, 'A1', 't3');
+    expect(t3).toMatchObject({ invalid: null, void: 'operator-canary' });
+    expect((t3.voidHits ?? []).map((h) => h.reason)).toEqual(['operator-canary', 'read']);
+    expect(find(recs, 'A1', 't4').void).toBeNull();
+  }, 300_000);
+});

@@ -10,9 +10,10 @@ import {
 } from './records.mjs';
 import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { runSession, resumeSession } from './turns.mjs';
-import { runCheck, stateCommit, holdPre, dropPre, CheckerError, WorkspaceGitError } from './checks.mjs';
+import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 import { cellName, snapshotSurfaces, restoreSurfaces } from './surfaces.mjs';
+import { deliveryHits, sessionVoid } from './readcheck.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
@@ -89,6 +90,8 @@ function stageTask(ctx, run, step) {
   stage.step = step;
   stage.restores = [];
   stage.snap = snapshotSurfaces(ctx, run, 'pre-session', step);
+  // A retry restores every surface to this snapshot, so the delivery verdict holds for the rerun too.
+  stage.delivery = deliveryHits(run, stage.snap, stage.preSession);
   stage.transcriptsBefore = new Set(listTranscripts(projectsOf(run)));
   return stage;
 }
@@ -227,7 +230,9 @@ function sessionRecord(ctx, run, step, parts) {
   const found = sessionIds.length > 0 && sessionIds.every((id) => findTranscript(projects, id));
   const resume = turns?.resume ?? null;
   const resumeId = resume?.result?.session_id ?? (resume?.cc.timedOut ? sessionIds.at(-1) : null);
+  const g1 = sessionVoid(ctx, run, step, { files: transcriptsOf(run, sessionIds), ownIds: sessionIds, delivery: stage.delivery });
   const shared = {
+    void: g1.void, voidHits: g1.void ? g1.voidHits : undefined,
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
@@ -254,6 +259,18 @@ function firstSessionIds(ctx, run, t, session, stage) {
   return fresh.slice(0, 1);
 }
 
+/** Worktrees the agent added outside work/, kept with the step that made them: a later session that reads one is void (162). */
+function noteWorktrees(ctx, run, step) {
+  const work = run.dirs.work;
+  const listed = agentGit(work, (rgit) => rgit(['worktree', 'list', '--porcelain'], work));
+  for (const m of listed.matchAll(/^worktree (.+)$/gm)) {
+    const dir = path.resolve(m[1].trim());
+    const rel = path.relative(work, dir);
+    const outside = rel.startsWith('..') || path.isAbsolute(rel);
+    if (outside && !ctx.foreignDirs.some((f) => path.relative(f.path, dir) === '')) ctx.foreignDirs.push({ path: dir, order: step.order });
+  }
+}
+
 /** Session 1, checks and resume, the end-of-task steps once after the last turn, then the hidden tests. */
 async function runTurns(ctx, run, step, stage, base) {
   const { t } = step;
@@ -268,6 +285,7 @@ async function runTurns(ctx, run, step, stage, base) {
   const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
   await settle(ctx, run, t.id, 'end');
   snapshotSurfaces(ctx, run, 'end', step);
+  guarded(run, t, stage, () => noteWorktrees(ctx, run, step));
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   // Reading 8: A4 holds a lesson only once its teach resume delivered it.
   if (step.role.kind === 'teach' && turns?.delivered) run.taught = withTaught(run.taught, turns.lesson);
