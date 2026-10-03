@@ -1,6 +1,6 @@
 # Z7b sub-agent lessons the parent loses, with a stricter judge: pre-registration
 
-**Date:** 2026-10-03. **Status:** DRAFT, calibrating (dev round 3; Amendment 4). The scored draw has not been judged.
+**Date:** 2026-10-03. **Status:** INVALID before the lock. No calibration round passed in the three allowed (round 3 under Amendment 4: precision 5 of 9); the scored draw was never judged. Result: `docs/evals/2026-10-03-z7b-sidechain-strict-result.md`.
 
 ## Why a second run
 
