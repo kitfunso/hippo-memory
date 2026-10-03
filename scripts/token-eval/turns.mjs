@@ -3,9 +3,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { sh } from './exec.mjs';
-import { isUsageLimit, findTranscript } from './records.mjs';
+import { isUsageLimit, sessionFiles } from './records.mjs';
 import { sleep } from './runs.mjs';
-import { withScratchGit } from './checks.mjs';
+import { agentGit } from './checks.mjs';
 import { instructionSnapshot, restoreInstructions } from './workspace.mjs';
 
 function claudeArgs(ctx, run) {
@@ -26,20 +26,21 @@ function lastJson(stdout) {
 
 /** Run claude until it is not at the plan limit, calling `reset` before each rerun. */
 async function untilNotLimited(ctx, run, t, { args, input, rawName, reset }) {
-  let waitedMs = 0;
+  // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
+  let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
   for (let attempt = 1; ; attempt++) {
-    const cc = sh(`${ctx.claude} ${args.join(' ')}`, run.dirs.work, run.env, 60 * 60_000, input);
+    const start = Date.now();
+    const cc = sh(`${ctx.claude} ${args.join(' ')}`, run.dirs.work, run.env, ctx.sessionTimeoutMs, input);
     const result = lastJson(cc.stdout);
-    if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1, waitedMs };
+    if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
     fs.writeFileSync(path.join(run.rawDir, `${t.id}.${rawName}${attempt}.txt`), `${cc.stdout}\n${cc.stderr}`.slice(-20000));
     // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
-    const start = Date.now();
     await sleep(ctx.limitWaitMs);
-    waitedMs += Date.now() - start;
     reset();
+    cutOffMs += Date.now() - start;
   }
 }
 
@@ -51,36 +52,37 @@ export async function runSession(ctx, run, t, reset) {
 /** One resume of `sessionId` with `message` on stdin; a cut-off attempt is undone exactly before the rerun. */
 export async function resumeSession(ctx, run, t, sessionId, message, afterReset = () => {}) {
   const args = [...claudeArgs(ctx, run), '--resume', sessionId];
-  const snap = workSnapshot(run, sessionId);
+  let dir = null;
   try {
+    // Outside the workspace, so nothing the cut-off attempt does to .git (gc, refs, config, hooks, even rm) reaches the saved state.
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-resume-'));
+    const snap = workSnapshot(run, sessionId, dir);
     const reset = () => {
       restoreWork(run, snap, sessionId);
       afterReset();
     };
     return await untilNotLimited(ctx, run, t, { args, input: message, rawName: 'resume-limit', reset });
   } finally {
-    fs.rmSync(snap.dir, { recursive: true, force: true, maxRetries: 3 });
+    if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   }
 }
 
-/** fn(rgit, env): the runner's isolated git with a throwaway index. */
-const withTempIndex = (fn) => withScratchGit((rgit, scratch) => fn(rgit, { GIT_INDEX_FILE: path.join(scratch, 'index') }));
+/** fn(rgit, env): the runner's git on the agent's .git with a throwaway index. */
+const withTempIndex = (work, fn) => agentGit(work, (rgit, scratch) => fn(rgit, { GIT_INDEX_FILE: path.join(scratch, 'index') }));
 
-const transcriptOf = (run, sessionId) => findTranscript(path.join(run.dirs.claudeConfig, 'projects'), sessionId);
+const transcriptsOf = (run, sessionId) => sessionFiles(path.join(run.dirs.claudeConfig, 'projects'), sessionId);
 
-/** The post-session-1 state: a copy of .git outside the workspace holding the work tree as a tree, instruction files, transcript bytes. */
-function workSnapshot(run, sessionId) {
+/** The post-session-1 state in `dir`: a copy of .git holding the work tree as a tree, instruction files, every transcript's bytes. */
+function workSnapshot(run, sessionId, dir) {
   const work = run.dirs.work;
-  const tree = withTempIndex((rgit, env) => {
+  const tree = withTempIndex(work, (rgit, env) => {
     rgit(['read-tree', 'HEAD'], work, env);
     rgit(['add', '-A'], work, env);
     return rgit(['write-tree'], work, env).trim();
   });
-  // Outside the workspace, so nothing the cut-off attempt does to .git (gc, refs, config, hooks, even rm) reaches the saved state.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-resume-'));
   fs.cpSync(path.join(work, '.git'), path.join(dir, 'git'), { recursive: true });
-  const transcript = transcriptOf(run, sessionId);
-  return { dir, tree, instructions: instructionSnapshot(work), transcript, transcriptBytes: transcript ? fs.readFileSync(transcript) : null };
+  const transcripts = new Map(transcriptsOf(run, sessionId).map((f) => [f, fs.readFileSync(f)]));
+  return { dir, tree, instructions: instructionSnapshot(work), transcripts };
 }
 
 /** Undo a cut-off resume: .git comes back byte for byte, then the work tree from the saved tree. */
@@ -89,16 +91,14 @@ function restoreWork(run, snap, sessionId) {
   fs.rmSync(path.join(work, '.git'), { recursive: true, force: true, maxRetries: 3 });
   fs.cpSync(path.join(snap.dir, 'git'), path.join(work, '.git'), { recursive: true });
   // SHORTCUT: git-ignored files the cut-off attempt wrote stay; snapshot them too if an agent ever leans on one.
-  withTempIndex((rgit, env) => {
+  withTempIndex(work, (rgit, env) => {
     rgit(['read-tree', snap.tree], work, env);
     rgit(['checkout-index', '-a', '-f'], work, env);
     // -ff also drops a nested repo the cut-off attempt made.
     rgit(['clean', '-ffdq'], work, env);
   });
   restoreInstructions(work, snap.instructions);
-  if (snap.transcript) fs.writeFileSync(snap.transcript, snap.transcriptBytes);
-  else {
-    const made = transcriptOf(run, sessionId);
-    if (made) fs.rmSync(made);
-  }
+  // Subagent transcripts too, so a cut-off attempt's subagent commands never reach Z0_COMMANDS.
+  for (const f of transcriptsOf(run, sessionId)) if (!snap.transcripts.has(f)) fs.rmSync(f);
+  for (const [f, bytes] of snap.transcripts) fs.writeFileSync(f, bytes);
 }

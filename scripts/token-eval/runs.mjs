@@ -44,12 +44,14 @@ export function storeLeaks(hippoRoot, lines) {
   return lines.some((l) => text.includes(l));
 }
 
-export function hippoSentFor(hippoRoot, sessionId) {
-  if (!sessionId || !hippoLib.isInitialized(hippoRoot)) return null;
+/** Hippo's sent tokens summed over every session id of the cell, the resume's own id included; keyed by session 1's id. */
+export function hippoSentFor(hippoRoot, sessionIds) {
+  if (!sessionIds.length || !hippoLib.isInitialized(hippoRoot)) return null;
   const db = hippoLib.openHippoDb(hippoRoot);
   try {
-    const row = hippoLib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').find((r) => r.sessionId === sessionId);
-    return row ?? { sessionId, sent: 0, skipped: 0, injections: 0 };
+    const rows = hippoLib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').filter((r) => sessionIds.includes(r.sessionId));
+    const total = (k) => rows.reduce((n, r) => n + r[k], 0);
+    return { sessionId: sessionIds[0], sent: total('sent'), skipped: total('skipped'), injections: total('injections') };
   } catch {
     return null;
   } finally {
@@ -81,7 +83,7 @@ export async function openContext(opts) {
   const ctx = {
     outDir, passEnv, claude, records: [], fakeHome: outDir, hookHome: path.join(outDir, 'hook-home'), cacheDir: path.join(outDir, 'repo-cache'),
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
-    limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
+    limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });

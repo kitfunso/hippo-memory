@@ -181,6 +181,16 @@ describe('drawOrder', () => {
     expect(() => drawOrder(fixed, families(), 1)).toThrow(/task n4.*lesson f2-l1/);
   });
 
+  it('keyPhraseAllowed exempts only the task\'s own lesson: a pre-reversal apply naming the reversal still leaks', () => {
+    const tasks = seq().tasks.map((x) => (x.id === 'a1' ? { ...x, prompt: 'move the changelog.d entry to NEWS.md', keyPhraseAllowed: true } : x));
+    expect(() => validateFamilies({ ...spec(), sequences: [{ ...seq(), tasks }] }, checkDir())).not.toThrow();
+    expect(promptLeaks(tasks, families())).toEqual([{ taskId: 'a1', lessonId: 'f1-l2' }]);
+    expect(() => drawOrder({ ...seq(), tasks }, families(), 1)).toThrow(/seqA.*task a1.*lesson f1-l2/);
+    // Placed ahead of its own teach, the flagged apply is still no leak of its own lesson.
+    const own = { ...seq().tasks.find((x) => x.id === 'a1')!, prompt: 'add a changelog.d entry', keyPhraseAllowed: true };
+    expect(promptLeaks([own, ...seq().tasks.filter((x) => x.id !== 'a1')], families())).toEqual([]);
+  });
+
   it('names the task and lesson of a leak no draw can avoid', () => {
     const leaky = { ...seq(), tasks: seq().tasks.map((x) => (x.id === 'a1' ? { ...x, prompt: 'add the line to NEWS.md' } : x)) };
     expect(() => drawOrder(leaky, families(), 1)).toThrow(/seqA.*task a1.*lesson f1-l2/);
@@ -239,6 +249,14 @@ describe('runCheck verdicts', () => {
     expect(check(['0'])).toBe('pass');
     expect(check(['1'])).toBe('fail');
     expect(check(['3'])).toBe('na');
+  });
+
+  it('runs the checker with no system or global git config', () => {
+    const dir = checkDir();
+    writeFileSync(join(dir, 'checks', 'env.mjs'), "process.exit(process.env.GIT_CONFIG_NOSYSTEM === '1' && process.env.GIT_CONFIG_GLOBAL === '/dev/null' ? 0 : 1);\n");
+    const l = { id: 'e', check: { script: 'checks/env.mjs' }, checkPath: join(dir, 'checks', 'env.mjs') };
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: join(dir, 'agent-gitconfig') };
+    expect(runCheck(l, { work: dir, env, preCommit: 'p', postCommit: 'q', commands: [], scratch: join(dir, 'scratch') })).toBe('pass');
   });
 
   it('throws CheckerError on any other exit and on a timeout', () => {

@@ -136,9 +136,11 @@ function orderContext(sequence, families) {
 
 /** The lesson whose key phrase task t would leak at the next position (G3), or null. */
 function leakedLesson(t, state, ctx) {
-  if (t.keyPhraseAllowed || !ctx.keyed.length) return null;
+  if (!ctx.keyed.length) return null;
   const prompt = t.prompt.toLowerCase();
-  const open = (l) => !state.teachAt.has(l.id) && !(t.kind === 'teach' && t.lessonId === l.id);
+  // keyPhraseAllowed lets a task name its own lesson only; every other untaught lesson is still checked.
+  const own = (l) => t.lessonId === l.id && (t.kind === 'teach' || t.keyPhraseAllowed);
+  const open = (l) => !state.teachAt.has(l.id) && !own(l);
   return ctx.keyed.find((l) => open(l) && prompt.includes(l.keyPhrase.toLowerCase())) ?? null;
 }
 

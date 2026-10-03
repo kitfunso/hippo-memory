@@ -20,6 +20,19 @@ export function findTranscript(projectsDir, sessionId) {
   return null;
 }
 
+/** A session's main transcript and its subagent transcripts (`<id>/subagents/*.jsonl`, as claude-usage.mjs reads them). */
+export function sessionFiles(projectsDir, sessionId) {
+  if (!sessionId || !fs.existsSync(projectsDir)) return [];
+  const files = [];
+  for (const p of fs.readdirSync(projectsDir)) {
+    const main = path.join(projectsDir, p, `${sessionId}.jsonl`);
+    if (fs.existsSync(main)) files.push(main);
+    const sub = path.join(projectsDir, p, sessionId, 'subagents');
+    if (fs.existsSync(sub)) files.push(...fs.readdirSync(sub).filter((f) => f.endsWith('.jsonl')).sort().map((f) => path.join(sub, f)));
+  }
+  return files;
+}
+
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;
 // `type` reads a file only in PowerShell; in Git Bash it is a builtin that names a command.
@@ -87,7 +100,7 @@ export function transcriptWork(files, seenErrors) {
   return work;
 }
 
-/** Every Bash and PowerShell command in the transcripts, in order: what a checker reads through Z0_COMMANDS. */
+/** Every Bash and PowerShell command in the transcripts, file by file in order: what a checker reads through Z0_COMMANDS. */
 export function commandLog(files) {
   const commands = [];
   for (const block of toolBlocks(files)) {

@@ -43,6 +43,9 @@ function seededOrder(sequence, families, seed) {
   return { tasks, roles: taskRoles(tasks, families) };
 }
 
+// --seeds only lowers a count: E7 refuses an A0 or A4 seed past the prereg's two (prereg 122-124).
+const seedCap = (seeds) => (arm) => Math.min(seeds ?? ARM_SEEDS[arm], ARM_SEEDS[arm]);
+
 /** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, arm order rotated by position + seed. */
 export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
   const steps = [];
@@ -85,7 +88,7 @@ export function preflight(spec, out, mode, stopAt, { screen = false } = {}) {
 export async function runAll(opts) {
   const { spec, arms, seeds = null, outDir } = opts;
   const ctx = await openContext(opts);
-  const steps = planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]);
+  const steps = planRuns(spec, arms, seedCap(seeds));
   writePlan(outDir, steps);
   return runSteps(ctx, steps);
 }
@@ -154,7 +157,7 @@ function dryRun(args, steps) {
 async function main() {
   const args = parseArgs(process.argv);
   const { flag, spec, arms, seeds, out, mode, passEnv } = args;
-  const steps = args.screen ? planScreen(spec) : planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]);
+  const steps = args.screen ? planScreen(spec) : planRuns(spec, arms, seedCap(seeds));
   const records = path.join(out, args.screen ? 'screen.jsonl' : 'runs.jsonl');
   // A run appends to its records file and both modes rewrite plan.json, so an earlier run's records would end up unplanned.
   const rewrite = args.screen ? '' : ' and rewrite plan.json';
@@ -168,7 +171,7 @@ async function main() {
   // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
   preflight(spec, out, mode, stopAt, { screen: args.screen });
   if (args.screen) console.log(`${steps.length} screen sessions: A0 and A4 only, seeds 1 and 2.`);
-  else console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seeds ?? ARM_SEEDS[a]}`).join(' ')}.`);
+  else console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seedCap(seeds)(a)}`).join(' ')}.`);
   if (mode === 'dry') return dryRun(args, steps);
   const dirName = (st) => st.runName ?? st.sequence.id;
   const runs = [...new Map(steps.map((st) => [`${dirName(st)}|${st.arm}|${st.seed}`, { seq: dirName(st), arm: st.arm, seed: st.seed }])).values()];

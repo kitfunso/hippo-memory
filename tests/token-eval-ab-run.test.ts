@@ -554,6 +554,12 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const ok = cli('--seeds', '2', '--arms', 'A0,A1');
     expect(ok.status, ok.stderr).toBe(0);
     expect(ok.stdout).toContain('seeds A0:2 A1:2');
+    const more = cli('--seeds', '5', '--arms', 'A0,A1,A4');
+    expect(more.status, more.stderr).toBe(0);
+    expect(more.stdout).toContain('seeds A0:2 A1:3 A4:2');
+    const cells: Array<{ arm: string; seed: number }> = JSON.parse(readFileSync(join(scratch, 'out', 'plan.json'), 'utf8'));
+    expect(Math.max(...cells.filter((c) => c.arm !== 'A1').map((c) => c.seed))).toBe(2);
+    expect(Math.max(...cells.map((c) => c.seed))).toBe(3);
   });
 
   it('a real run refuses an --out that already holds runs.jsonl and leaves it untouched', () => {

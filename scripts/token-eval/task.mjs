@@ -5,16 +5,32 @@ import { sh } from './exec.mjs';
 import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
-import { findTranscript, transcriptWork, commandLog, usageFromResult, invalidRecord, validRecord } from './records.mjs';
+import { findTranscript, sessionFiles, transcriptWork, commandLog, usageFromResult, invalidRecord, validRecord } from './records.mjs';
 import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { runSession, resumeSession } from './turns.mjs';
-import { runCheck, stateCommit, holdPre, dropPre, CheckerError } from './checks.mjs';
+import { runCheck, stateCommit, holdPre, dropPre, CheckerError, WorkspaceGitError } from './checks.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
 const cellName = (run, t) => `${run.s.id} ${t.id} ${run.arm} seed${run.seed}`;
-const writeRaw = (run, name, text) => fs.writeFileSync(path.join(run.rawDir, name), text.slice(-20000));
+// Raw session JSON is evidence and is kept whole; only plain-text logs are tail-cut.
+const writeRaw = (run, name, text) => fs.writeFileSync(path.join(run.rawDir, name), text);
+const writeLog = (run, name, text) => writeRaw(run, name, text.slice(-20000));
+
+/** fn() with a broken workspace git kept as the cell's fault (null back); anything else still throws. */
+function guarded(run, t, stage, fn) {
+  try {
+    return fn();
+  } catch (err) {
+    if (!(err instanceof WorkspaceGitError)) throw err;
+    if (!stage.fault) writeLog(run, `${t.id}.workspace.txt`, `${err.message}\n${err.stderr}`);
+    stage.fault ??= err;
+    return null;
+  }
+}
+
+const transcriptsOf = (run, sessionIds) => sessionIds.flatMap((id) => sessionFiles(path.join(run.dirs.claudeConfig, 'projects'), id));
 
 /** The fields every record of the cell carries, valid or not (E7 contract). */
 function baseFields(ctx, run, step) {
@@ -78,15 +94,16 @@ function checker(ctx, run, t, stage, sessionIds) {
   const state = { error: null };
   state.check = (lesson) => {
     const work = run.dirs.work;
-    const files = sessionIds.map((id) => findTranscript(path.join(run.dirs.claudeConfig, 'projects'), id)).filter(Boolean);
+    const postCommit = stage.fault ? null : guarded(run, t, stage, () => stateCommit(work, stage.pre));
+    if (!postCommit) return null;
     try {
       return runCheck(lesson, {
-        work, env: childEnv(run.env), preCommit: stage.pre, postCommit: stateCommit(work, stage.pre),
-        commands: commandLog(files), scratch: path.join(run.dirs.root, 'scratch'),
+        work, env: childEnv(run.env), preCommit: stage.pre, postCommit,
+        commands: commandLog(transcriptsOf(run, sessionIds)), scratch: path.join(run.dirs.root, 'scratch'),
       });
     } catch (err) {
       if (!(err instanceof CheckerError)) throw err;
-      writeRaw(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
+      writeLog(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
       state.error ??= err;
       return null;
     }
@@ -106,14 +123,18 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const teach = role.kind === 'teach';
   const form = teach ? (first === 'fail' ? 'correction' : 'confirmation') : 'correction';
   // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session never (reading 4).
-  if (role.kind === 'screen' || (!teach && (first !== 'fail' || c.error))) return { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
+  const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
+  // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
+  if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
   // The resume would load a file session 1 left above work/, so the cell is void already and the resume never spends plan usage.
   if (ancestorHits(ctx, run, t)) {
     stage.ancestors = true;
-    return { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
+    return noResume;
   }
   await settle(ctx, run, t.id, 'pre-resume');
-  const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), () => { stage.ancestors ||= ancestorHits(ctx, run, t); });
+  const afterReset = () => { stage.ancestors ||= ancestorHits(ctx, run, t); };
+  const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
+  if (!resume) return noResume;
   writeRaw(run, `${t.id}.resume.json`, resume.cc.stdout || JSON.stringify({ error: resume.cc.stderr.slice(0, 4000), status: resume.cc.status }));
   if (resume.result?.session_id && !sessionIds.includes(resume.result.session_id)) sessionIds.push(resume.result.session_id);
   const final = resume.result && !c.error ? c.check(lesson) : first;
@@ -123,10 +144,11 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
 const sum = (a, b) => (a === null || a === undefined ? null : a + (b ?? 0));
 
 /** Why the cell is invalid, in precedence order, or null. */
-function invalidReason(stage, session, turns, transcriptsFound) {
+function invalidReason(session, turns, transcriptsFound, stage) {
   // The environment void comes first: it taints the session whatever the session itself did.
   if (stage.ancestors) return 'ancestor-instructions';
   if (session.result === null) return 'no-result';
+  if (stage.fault) return 'workspace';
   if (turns?.checkerError) return 'checker';
   if (turns?.resume && turns.resume.result === null) return 'resume';
   return transcriptsFound ? null : 'no-transcript';
@@ -142,23 +164,24 @@ function agentError(session, turns) {
 function sessionRecord(ctx, run, step, parts) {
   const { session, turns, sessionIds, acceptancePassed, wallMs, stage } = parts;
   const projects = path.join(run.dirs.claudeConfig, 'projects');
-  const files = sessionIds.map((id) => findTranscript(projects, id));
+  // A result without a session id has no transcript to read, so it is no-transcript, never a record with null work counts.
+  const found = sessionIds.length > 0 && sessionIds.every((id) => findTranscript(projects, id));
   const resume = turns?.resume ?? null;
   const shared = {
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? null, resumeSessionId: resume?.result?.session_id ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
   };
-  const reason = invalidReason(stage, session, turns, files.every(Boolean));
+  const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
   const r = session.result;
   return validRecord(parts.base, {
     lessons: turns ? [{ lessonId: turns.lesson.id, first: turns.first, final: turns.final, staleFollow: turns.staleFollow }] : [],
     acceptancePassed, usage: { firstSession: usageFromResult(r), extra: resume ? usageFromResult(resume.result) : ZERO_USAGE },
     costUsd: sum(r.total_cost_usd ?? null, resume?.result.total_cost_usd), turns: (r.num_turns ?? 0) + (resume?.result.num_turns ?? 0),
-    ...transcriptWork(files, run.seenErrors), transcriptFound: true, wallMs,
+    ...transcriptWork(transcriptsOf(run, sessionIds), run.seenErrors), transcriptFound: true, wallMs,
     teachTurns: step.role.kind === 'teach' ? 1 : 0, correctionTurns: step.role.kind === 'apply' && resume ? 1 : 0, teachForm: turns?.form ?? null,
-    hippo: HIPPO_ARMS.has(run.arm) ? hippoSentFor(path.join(run.dirs.work, '.hippo'), r.session_id) : null, ...shared,
+    hippo: HIPPO_ARMS.has(run.arm) ? hippoSentFor(path.join(run.dirs.work, '.hippo'), sessionIds) : null, ...shared,
   });
 }
 
@@ -171,15 +194,18 @@ async function runTurns(ctx, run, step, stage, base) {
   run.sessionRan = true;
   writeRaw(run, `${t.id}.json`, session.cc.stdout || JSON.stringify({ error: session.cc.stderr.slice(0, 4000), status: session.cc.status }));
   const sessionIds = session.result?.session_id ? [session.result.session_id] : [];
-  const turns = session.result ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
-  const wallMs = Date.now() - started - session.waitedMs - (turns?.resume?.waitedMs ?? 0);
+  const turns = session.result && sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
+  const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
   await settle(ctx, run, t.id, 'end');
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   // Reading 8: A4 holds a lesson only once its teach resume delivered it.
   if (step.role.kind === 'teach' && turns?.resume?.result) run.taught = withTaught(run.taught, turns.lesson);
   writeHiddenTests(run.cached, work, t);
   const test = sh(t.test, work, childEnv(run.env));
-  writeRaw(run, `${t.id}.test.txt`, `${test.stdout}\n${test.stderr}`);
+  writeLog(run, `${t.id}.test.txt`, `${test.stdout}\n${test.stderr}`);
+  // Dropped here, not in runTask's finally, so a .git the agent broke voids this cell instead of throwing.
+  stage.dropped = true;
+  guarded(run, t, stage, () => dropPre(work));
   return sessionRecord(ctx, run, step, { base, session, turns, sessionIds, acceptancePassed: test.status === 0, wallMs, stage });
 }
 
@@ -209,7 +235,7 @@ async function runTask(ctx, run, step) {
   base.baseCommit = stage.commit;
   if (stage.failed) {
     // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved". Carry never ran, so its counts are null.
-    writeRaw(run, `${t.id}.setup.txt`, `${stage.setup.stdout}\n${stage.setup.stderr}`);
+    writeLog(run, `${t.id}.setup.txt`, `${stage.setup.stdout}\n${stage.setup.stderr}`);
     const nulls = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
     writeRecord(ctx, invalidRecord(base, 'setup', { agentError: `setup failed (exit ${stage.setup.status})`, ...nulls, ...meta }));
     return;
@@ -230,6 +256,6 @@ async function runTask(ctx, run, step) {
     writeRecord(ctx, await runTurns(ctx, run, step, stage, base));
   } finally {
     // The runner's ref never outlives its task, an abandoned run's included.
-    dropPre(run.dirs.work);
+    if (!stage.dropped) dropPre(run.dirs.work);
   }
 }

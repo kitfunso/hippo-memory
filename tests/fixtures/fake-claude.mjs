@@ -3,6 +3,7 @@
 // runs the UserPromptSubmit hooks from --settings with a real payload, calls `hippo` through PATH, writes a transcript
 // under $CLAUDE_CONFIG_DIR/projects/ and prints a result shaped like Claude Code's, plus what it saw.
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execSync, spawnSync } from 'node:child_process';
@@ -26,6 +27,10 @@ const write = (f, text) => {
   fs.writeFileSync(f, text);
 };
 const LIMIT_TEXT = JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1790000000' });
+const napFor = (marker) => {
+  const ms = new RegExp(`${marker}=(\\d+)`).exec(prompt);
+  if (ms) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(ms[1]));
+};
 
 if (prompt.includes('CRASH') && !resumeId) {
   console.error('fake crash before any result');
@@ -48,7 +53,7 @@ if (!resumeId && prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs
   process.exit(1);
 }
 
-const sessionId = resumeId ?? randomUUID();
+const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : randomUUID();
 const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
 let injected = '';
 for (const group of settings.hooks?.UserPromptSubmit ?? []) {
@@ -73,6 +78,8 @@ const appendTurn = (lines) => {
   const prefix = fs.existsSync(transcript) && fs.statSync(transcript).size > 0 ? '\n' : '';
   fs.appendFileSync(transcript, prefix + lines.map((l) => JSON.stringify(l)).join('\n'));
 };
+// Where Claude Code keeps a subagent's own transcript: <session>/subagents/<agent>.jsonl beside the session's file.
+const writeSubagent = (name, commands) => write(path.join(path.dirname(transcript), sessionId, 'subagents', `${name}.jsonl`), commands.map((command) => JSON.stringify(toolUse('Bash', { command }))).join('\n'));
 const lessonState = () => {
   const seeded = /SEED(\d+)_(OK|BAD)/g;
   for (const m of prompt.matchAll(seeded)) if (m[1] === process.env.EVAL_SEED) return m[2] === 'OK' ? 'ok' : 'bad';
@@ -85,6 +92,7 @@ function firstSession() {
   fs.mkdirSync(promptsDir, { recursive: true });
   fs.writeFileSync(path.join(promptsDir, `${sessionId}.prompt`), prompt);
   if (prompt.includes('ON_BRANCH')) sh('git switch -q -c work');
+  if (prompt.includes('ORPHAN')) sh('git checkout -q --orphan scratch');
   if (prompt.includes('FIX')) {
     fs.writeFileSync('lib.js', 'module.exports.add = (a, b) => a + b;\n');
     if (fs.existsSync('.hippo') && !prompt.includes('NOREMEMBER')) {
@@ -122,6 +130,9 @@ function firstSession() {
     toolUse('Bash', { command: 'git status && cat lib.js' }),
     ...commands.map((command) => toolUse('Bash', { command })),
   ]);
+  const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
+  if (delegated.length) writeSubagent('agent-a1', delegated);
+  if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
 }
 
 /** A cut-off resume leaves staged, committed and transcript traces, then hits the plan limit. */
@@ -141,12 +152,21 @@ function cutOff() {
     log(`cutoff-commit ${execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()}`);
   }
   appendTurn([{ type: 'user', message: { role: 'user', content: input } }, toolUse('Bash', { command: 'echo cut-off turn' })]);
+  if (prompt.includes('CUT_SUBAGENT')) writeSubagent('agent-cut', ['echo cut-off subagent']);
+  napFor('CUT_SLEEP_MS');
   log('cutoff-written');
   console.log(LIMIT_TEXT);
   process.exit(1);
 }
 
 function resumeTurn() {
+  if (/RESUME_HANG_MS=/.test(prompt)) {
+    // Windows kills only the shell on a timeout, so the orphan lets go of the workspace and the runner's pipes before it hangs.
+    process.chdir(os.tmpdir());
+    for (const fd of [1, 2]) fs.closeSync(fd);
+    napFor('RESUME_HANG_MS');
+    process.exit(0);
+  }
   log(`transcript-bytes ${fs.existsSync(transcript) ? fs.statSync(transcript).size : 0}`);
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
   cutOff();
@@ -164,7 +184,8 @@ else firstSession();
 const PLAIN = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', 'ANTHROPIC_BASE_URL'];
 const extra = Math.ceil(injected.length / 4);
 console.log(JSON.stringify({
-  type: 'result', subtype: 'success', is_error: false, session_id: sessionId, num_turns: resumeId ? 1 : 3, total_cost_usd: 0.01,
+  type: 'result', subtype: 'success', is_error: false, session_id: prompt.includes('NO_SESSION_ID') ? undefined : sessionId, num_turns: resumeId ? 1 : 3, total_cost_usd: 0.01,
+  pad: prompt.includes('BIG_RESULT') ? 'x'.repeat(30_000) : undefined,
   strayFile: fs.existsSync('stray.txt'), argv, files,
   envKeys: Object.keys(process.env).sort(),
   env: { ...Object.fromEntries(PLAIN.map((k) => [k, process.env[k] ?? null])), PATH: process.env[pathKey] },
