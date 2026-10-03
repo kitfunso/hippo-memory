@@ -1,0 +1,16 @@
+{
+  "stdin": "{\"transcript_path\":\"/home/u/.claude/projects/p/sess-1.jsonl\",\"session_id\":7,\"cwd\":null,\"trigger\":[\"auto\"]}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "claude-code",
+      "event": "pre-compact",
+      "manual": false,
+      "sessionId": null,
+      "cwd": null,
+      "transcriptPath": "/home/u/.claude/projects/p/sess-1.jsonl",
+      "trigger": null
+    }
+  }
+}

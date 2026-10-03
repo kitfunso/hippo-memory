@@ -46,6 +46,7 @@ import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
 import { classifyOriginProject } from './project-identity.js';
+import { isObjectLike, isStringValue, readClaudeCodePreCompact } from './capture-contract.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -544,25 +545,6 @@ export interface CaptureOptions {
    */
   tenantId?: string;
   originProject?: string;
-}
-
-/**
- * Runtime shape guards used throughout this file wherever a value arrives
- * unparsed (JSONL transcript records, stdout/stderr write() chunks). Generic
- * over the input so the parameter is never annotated `unknown` directly — TS
- * infers it from the call site — while the check itself avoids `typeof` by
- * testing identity against the coercion (`String(x) === x`) /
- * prototype-chain (`instanceof Object`) instead. Behaviourally equivalent to
- * `typeof x === 'string'` / a truthy `typeof x === 'object'` check for
- * anything `JSON.parse` can produce (the only divergence is boxed
- * primitives, which JSON.parse never yields).
- */
-export function isStringValue<T>(value: T): value is T & string {
-  return String(value) === value;
-}
-
-export function isObjectLike<T>(value: T): value is T & object {
-  return value !== null && value instanceof Object;
 }
 
 /** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
@@ -1282,58 +1264,12 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
     return;
   }
 
-  // Same hazard X4 guards below, different trigger: a read that timed out
-  // must not reach auto-discovery either, or it snapshots another session.
-  if (stdinTimedOut && (!stdinText || stdinText.trim() === '')) {
-    appendPreCompactLog(logFile, 'skip: no PreCompact payload arrived before the stdin wait window closed');
+  const receipt = readClaudeCodePreCompact(stdinText, stdinTimedOut);
+  if (receipt.status !== 'received') {
+    appendPreCompactLog(logFile, `skip: ${receipt.reason}`);
     return;
   }
-
-  // A true manual invocation has no stdin at all (TTY, or a non-TTY pipe
-  // that yielded an empty read) — that's the ONLY case newest-transcript
-  // auto-discovery is allowed to run. Any other non-empty stdin must
-  // JSON-parse to an object carrying a string transcript_path, or it is
-  // treated as malformed input and skipped (X4) rather than silently
-  // falling back to discovery, which could snapshot an unrelated session's
-  // transcript under this payload's session_id.
-  const manualInvocation = !stdinText || stdinText.trim() === '';
-  let sessionId: string | null = null;
-  let payloadTranscriptPath: string | null = null;
-  let payloadCwd: string | null = null;
-  let payloadTrigger: string | null = null;
-
-  if (!manualInvocation) {
-    let payload: unknown;
-    try {
-      payload = JSON.parse(stdinText!.trim());
-    } catch {
-      // payload stays undefined; the isObjectLike check below rejects it
-      // the same way it would reject an explicit null.
-    }
-    if (!isObjectLike(payload) || !('transcript_path' in payload) || !isStringValue(payload.transcript_path)) {
-      // Covers non-JSON stdin, a JSON value that isn't an object, and
-      // `"transcript_path": null` (or the key missing entirely) — all fail
-      // the string check. Log and skip; never fall through to auto-discovery.
-      appendPreCompactLog(logFile, 'skip: malformed or incomplete PreCompact payload (missing string transcript_path)');
-      return;
-    }
-    if ('session_id' in payload && isStringValue(payload.session_id)) sessionId = payload.session_id;
-    payloadTranscriptPath = payload.transcript_path;
-    payloadCwd = 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null;
-    payloadTrigger = 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null;
-  }
-
-  // X11: payload transcript_path must end .jsonl. No directory-containment
-  // check is applied on top of this — CLAUDE_CONFIG_DIR can relocate the
-  // transcript root entirely, so a path-prefix allowlist would just reject
-  // legitimate relocated installs. The trust boundary here is process
-  // identity, not path shape: a local process able to feed this hook
-  // arbitrary stdin already runs as the same user who owns every transcript
-  // this check could gate on, so containment buys no real isolation.
-  if (payloadTranscriptPath !== null && !/\.jsonl$/i.test(payloadTranscriptPath)) {
-    appendPreCompactLog(logFile, `skip: payload transcript_path is not a .jsonl file: ${payloadTranscriptPath}`);
-    return;
-  }
+  const { sessionId, transcriptPath: payloadTranscriptPath, cwd: payloadCwd, trigger: payloadTrigger } = receipt.input;
 
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
   let recordId: string | null = null;

@@ -1,7 +1,8 @@
 // One record per Claude Code compaction, and what turns its summary into kept memories.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, isObjectLike, isStringValue, readTranscriptTail, truncateCodePointSafe } from './capture.js';
+import { errorMessage, readTranscriptTail, truncateCodePointSafe } from './capture.js';
+import { isObjectLike, isStringValue } from './capture-contract.js';
 import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
