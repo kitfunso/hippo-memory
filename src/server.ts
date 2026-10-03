@@ -3352,6 +3352,7 @@ async function handleRequest(
         // The caller's real role: MCP tools must not run a member key as admin.
         role: ctx.actor.role,
         scopes: ctx.actor.scopes,
+        viaAuthResolver: ctx.actor.viaAuthResolver,
         clientKey: buildMcpClientKey(req),
       });
     } catch (err) {

@@ -115,6 +115,7 @@ export interface McpContext {
   role?: 'admin' | 'member';
   /** EI2: scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
+  viaAuthResolver?: true;
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
@@ -130,7 +131,9 @@ export interface McpContext {
  * a member key never acts as admin through MCP.
  */
 function mcpActor(ctx: McpContext | undefined): ApiActor {
-  return { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
+  const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
+  if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
+  return actor;
 }
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.

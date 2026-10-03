@@ -2370,12 +2370,12 @@ export function authRevoke(
   }
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    // SAFETY: row's shape matches the three columns named in the SELECT
+    // SAFETY: row's shape matches the four columns named in the SELECT
     // above.
     const row = db
-      .prepare(`SELECT key_id, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
+      .prepare(`SELECT key_id, tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
       .get(keyId) as
-      | { key_id: string; tenant_id: string; revoked_at: string | null }
+      | { key_id: string; tenant_id: string; revoked_at: string | null; role: string }
       | undefined;
     if (!row) {
       throw new Error(`Unknown key_id: ${keyId}`);
@@ -2383,6 +2383,9 @@ export function authRevoke(
     // Cross-tenant access denied: same message as missing key, no info leak.
     if (row.tenant_id !== ctx.tenantId) {
       throw new Error(`Unknown key_id: ${keyId}`);
+    }
+    if (ctx.actor.viaAuthResolver && row.role === 'admin') {
+      throw new ForbiddenError('An auth resolver admin cannot revoke an admin key, which outranks it');
     }
 
     let revokedAt: string;

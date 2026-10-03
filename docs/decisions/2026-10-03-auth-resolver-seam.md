@@ -14,7 +14,7 @@ Paid add-ons (OIDC SSO first) need to vouch for bearer tokens that are not hippo
 
 ## Decision
 - Route by the public `hk_` prefix: an `hk_` token only ever reaches API-key validation, any other token only the resolver.
-- The core tags resolver identities. They are tenant admins at most: cross-tenant audit and host-wide sleep are 403, and `authCreate` never issues a key that outranks its minter, so they mint member keys only.
+- The core tags resolver identities. They are tenant admins at most: cross-tenant audit and host-wide sleep are 403, and no key they touch may outrank them: `authCreate` gives them member keys only, `authRevoke` refuses them an admin key, and the tag rides into MCP tool calls too.
 - A resolver throw or missed deadline (5 s default) is a 503, which a stream heartbeat skips; only a 4xx closes a stream as revoked.
 
 ## Alternatives considered

@@ -374,6 +374,22 @@ describe('auth resolver and key routes', () => {
     expect((await post('/v1/sleep', minted.plaintext, {})).status).toBe(403);
     expect((await post('/v1/auth/keys', minted.plaintext, {})).status).toBe(403);
   });
+
+  it('lets a resolver admin revoke member keys in its tenant but not an admin key', async () => {
+    const db = openHippoDb(home);
+    let admin: CreatedApiKey;
+    let member: CreatedApiKey;
+    try {
+      admin = createApiKey(db, { tenantId: 'ext-tenant', label: 'host-admin', role: 'admin' });
+      member = createApiKey(db, { tenantId: 'ext-tenant', label: 'cli', role: 'member' });
+    } finally {
+      closeHippoDb(db);
+    }
+    await start(tokenResolver({ role: 'admin' }));
+    expect((await del(`/v1/auth/keys/${admin.keyId}`, EXT)).status).toBe(403);
+    expect((await get('/v1/memories?q=x', admin.plaintext)).status).toBe(200);
+    expect((await del(`/v1/auth/keys/${member.keyId}`, EXT)).status).toBe(200);
+  });
 });
 
 describe('auth resolver stream', () => {
