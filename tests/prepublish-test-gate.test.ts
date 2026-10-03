@@ -139,12 +139,16 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
   });
 });
 
+// The fake agent's bare `hippo` is the behaviour under test; token-eval-ab-run pins it to the run's bin/ shim.
+const AGENT_STANDINS = new Set([path.join('tests', 'fixtures', 'fake-claude.mjs')]);
+
 describe('tests run the worktree CLI, never a PATH-resolved hippo', () => {
   test('no test or benchmark helper spawns a bare `hippo` command', () => {
     // benchmarks/ holds adapters the tests import, so it is scanned too (codex round 2).
     const offenders = ['tests', 'benchmarks']
       .flatMap((dir) => readdirSync(path.join(REPO, dir), { recursive: true, encoding: 'utf-8' }).map((f) => path.join(dir, f)))
       .filter((f) => /\.(ts|mjs|js)$/.test(f))
+      .filter((f) => !AGENT_STANDINS.has(f))
       .filter((f) => /(exec|spawn)\w*\(\s*[`'"]hippo\b/.test(readFileSync(path.join(REPO, f), 'utf-8')));
     expect(offenders).toEqual([]);
   });

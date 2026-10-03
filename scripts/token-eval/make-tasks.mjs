@@ -155,10 +155,13 @@ export function draftTasks(candidates, { repo, cluster, testCmd, setup = null, p
       id: `${cluster}-${sequences.length + 1}`,
       cluster,
       repo,
+      fixedOrder: false,
       tasks: chunk.map((c) => {
         const runFiles = c.runFiles ?? c.testFiles;
         const task = {
           id: c.sha.slice(0, 10),
+          // History tasks teach nothing on purpose: they are set N (prereg 46).
+          kind: 'no-lesson',
           baseRef: c.parent,
           fixRef: c.sha,
           needsReview: true,

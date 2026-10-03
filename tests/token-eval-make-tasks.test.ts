@@ -145,6 +145,8 @@ describe('make-tasks (TE5)', () => {
     const tasks = draftTasks(findCandidates(repo), { repo, cluster: 'demo', testCmd: 'node {files}', perSequence: 5 });
     expect(tasks.sequences).toHaveLength(1);
     expect(tasks.sequences[0].tasks[0]).toMatchObject({ needsReview: true, test: 'node tests/add.test.js' });
+    expect(tasks.sequences[0].fixedOrder).toBe(false);
+    for (const t of tasks.sequences[0].tasks) expect(t.kind).toBe('no-lesson');
     expect(() => validateTasks(tasks)).toThrow(/needsReview/);
     for (const t of tasks.sequences[0].tasks) delete t.needsReview;
     expect(() => validateTasks(tasks)).not.toThrow();
