@@ -16,6 +16,7 @@ import {
   harmGate,
   type Estimate,
   type Repository,
+  type TestedEstimate,
   type VerdictResult,
   type VerdictSpec,
 } from '../src/eval-stats.js';
@@ -301,10 +302,11 @@ describe('holmAdjust', () => {
 });
 
 describe('verdict', () => {
-  const est = (estimate: number, low: number, high: number): Estimate => ({ estimate, low, high, iterations: 10_000 });
+  const est = (estimate: number, low: number, high: number, nullValue = 0): TestedEstimate =>
+    ({ estimate, low, high, iterations: 10_000, p: 0, dropped: 0, nullValue });
   const lowerSpec: VerdictSpec = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt: -0.15 };
   const higherSpec: VerdictSpec = { helpful: 'higher', tieBand: [-0.05, 0.05], minimumEffectAt: 0.1 };
-  const ratioSpec: VerdictSpec = { helpful: 'lower', nullValue: 1, tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 };
+  const ratioSpec: VerdictSpec = { helpful: 'lower', tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 };
 
   it('calls a loss, and never reports a minimum for it', () => {
     expect(verdict(est(0.2, 0.1, 0.3), 0.01, lowerSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
@@ -320,12 +322,30 @@ describe('verdict', () => {
     expect(verdict(est(0.07, 0.02, 0.12), 0.01, higherSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
   });
 
-  it('reads ratios against nullValue 1', () => {
-    expect(verdict(est(0.9, 0.85, 0.94), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
-    expect(verdict(est(0.95, 0.9, 0.99), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
-    expect(verdict(est(0.97, 0.96, 0.99), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
-    expect(verdict(est(1.2, 1.1, 1.3), 0.01, ratioSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
-    expect(verdict(est(1, 0.97, 1.03), 0.5, ratioSpec)).toEqual({ verdict: 'tie', reachesMinimum: false });
+  it('reads ratios against the estimate\'s nullValue of 1', () => {
+    expect(verdict(est(0.9, 0.85, 0.94, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(0.95, 0.9, 0.99, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(0.97, 0.96, 0.99, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
+    expect(verdict(est(1.2, 1.1, 1.3, 1), 0.01, ratioSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
+    expect(verdict(est(1, 0.97, 1.03, 1), 0.5, ratioSpec)).toEqual({ verdict: 'tie', reachesMinimum: false });
+  });
+
+  it('takes the null from the bootstrap run that built the estimate', () => {
+    type Pair = { c: number; t: number };
+    const ratio = (u: readonly Pair[]): number =>
+      u.reduce((s, x) => s + x.t, 0) / u.reduce((s, x) => s + x.c, 0);
+    const saving: Repository<Pair>[] = [[[{ c: 1, t: 0.5 }]], [[{ c: 1, t: 0.6 }]], [[{ c: 1, t: 0.4 }]]];
+    const atOne = twoLevelBootstrap(saving, ratio, { iterations: 300, nullValue: 1 });
+    expect(atOne.nullValue).toBe(1);
+    expect(verdict(atOne, 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    // The same data judged around 0 sits on the harmful side of a lower-is-better ratio.
+    const atZero = twoLevelBootstrap(saving, ratio, { iterations: 300 });
+    expect(atZero.nullValue).toBe(0);
+    expect(verdict(atZero, 0.01, ratioSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
+  });
+
+  it('is inconclusive on a NaN estimate, even with a CI inside the tie band', () => {
+    expect(verdict(est(Number.NaN, -0.1, -0.01), 0.01, lowerSpec)).toEqual({ verdict: 'inconclusive', reachesMinimum: false });
   });
 
   it('calls a tie when the interval sits inside the band, edges included', () => {
