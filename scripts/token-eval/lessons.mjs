@@ -136,7 +136,7 @@ function orderContext(sequence, families) {
 
 /** The lesson whose key phrase task t would leak at the next position (G3), or null. */
 function leakedLesson(t, state, ctx) {
-  if (t.keyPhraseAllowed) return null;
+  if (t.keyPhraseAllowed || !ctx.keyed.length) return null;
   const prompt = t.prompt.toLowerCase();
   const open = (l) => !state.teachAt.has(l.id) && !(t.kind === 'teach' && t.lessonId === l.id);
   return ctx.keyed.find((l) => open(l) && prompt.includes(l.keyPhrase.toLowerCase())) ?? null;

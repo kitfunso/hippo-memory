@@ -3,9 +3,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, STRIP_ENV, pathKey } from './exec.mjs';
 
-export const ARMS = ['A0', 'A1', 'A2', 'A5'];
-// Prereg "Seeds": A0's gate needs a large effect, so it runs two.
-export const ARM_SEEDS = { A0: 2, A1: 3, A2: 3, A5: 3 };
+export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];
+// Prereg "Seeds": A0's and A4's gates need a large effect, so they run two.
+export const ARM_SEEDS = { A0: 2, A1: 3, A2: 3, A4: 2, A5: 3 };
+const NO_AUTO_MEMORY = new Set(['A0', 'A4']);
 export const HIPPO_ARMS = new Set(['A2', 'A5']);
 export const CARRY_ARMS = new Set(['A1', 'A2', 'A5']);
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
@@ -21,7 +22,7 @@ const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CO
 
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
-  if (arm === 'A0') return { autoMemoryEnabled: false };
+  if (NO_AUTO_MEMORY.has(arm)) return { autoMemoryEnabled: false };
   if (arm === 'A1') return {};
   if (arm === 'A2') return hippoSettings;
   if (arm === 'A5') {
@@ -52,7 +53,7 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
   env.CLAUDE_CONFIG_DIR = dirs.claudeConfig;
   env.CODEX_HOME = dirs.codexHome;
   env.HIPPO_HOME = dirs.hippoHome;
-  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = arm === 'A0' ? '1' : '0';
+  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
   env.HIPPO_AGENT_MEMORY_TOOLS = 'claude-code,codex';
   env.DISABLE_AUTOUPDATER = '1';
   env.EVAL_SEED = String(dirs.seed);

@@ -33,39 +33,67 @@ function isShellRead(tool, command) {
   });
 }
 
-/** Tool calls, file reads (Read, Grep and shell reads; `shellReads` is the shell share) and repeated error signatures; all null with no transcript. */
-export function transcriptWork(file, seenErrors) {
-  if (!file) return { toolCalls: null, fileReads: null, shellReads: null, repeatedErrors: null };
-  const work = { toolCalls: 0, fileReads: 0, shellReads: 0, repeatedErrors: 0 };
-  const seenTools = new Set();
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue;
-    let o;
-    try {
-      o = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const content = o.message && Array.isArray(o.message.content) ? o.message.content : [];
-    for (const block of content) {
-      if (block.type === 'tool_use' && !seenTools.has(block.id)) {
-        seenTools.add(block.id);
-        work.toolCalls++;
-        if (block.name === 'Read' || block.name === 'Grep') work.fileReads++;
-        else if (SHELL_TOOLS.has(block.name) && isShellRead(block.name, block.input?.command)) {
-          work.fileReads++;
-          work.shellReads++;
-        }
-      } else if (block.type === 'tool_result' && block.is_error) {
-        const text = Array.isArray(block.content) ? block.content.map((c) => c.text ?? '').join(' ') : String(block.content ?? '');
-        const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
-        if (!sig) continue;
-        if (seenErrors.has(sig)) work.repeatedErrors++;
-        else seenErrors.add(sig);
+const uniqueFiles = (files) => [...new Set((files ?? []).filter(Boolean).map((f) => path.resolve(f)))];
+
+function parseLine(line) {
+  if (!line.trim()) return null;
+  try {
+    return JSON.parse(line);
+  } catch {
+    // A live session can leave its last line half-written; that line holds no finished tool call.
+    return null;
+  }
+}
+
+/** tool_use and tool_result blocks across transcript files, each file once and each tool_use id once. */
+function* toolBlocks(files) {
+  const seen = new Set();
+  for (const file of uniqueFiles(files)) {
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+      const o = parseLine(line);
+      const content = Array.isArray(o?.message?.content) ? o.message.content : [];
+      for (const block of content) {
+        if (block.type !== 'tool_use' && block.type !== 'tool_result') continue;
+        const id = block.type === 'tool_use' ? block.id : block.tool_use_id;
+        const key = id === undefined ? null : `${block.type}:${id}`;
+        if (key && seen.has(key)) continue;
+        if (key) seen.add(key);
+        yield block;
       }
     }
   }
+}
+
+/** Tool calls, file reads (Read, Grep and shell reads; `shellReads` is the shell share) and repeated error signatures; all null with no transcript. */
+export function transcriptWork(files, seenErrors) {
+  if (uniqueFiles(files).length === 0) return { toolCalls: null, fileReads: null, shellReads: null, repeatedErrors: null };
+  const work = { toolCalls: 0, fileReads: 0, shellReads: 0, repeatedErrors: 0 };
+  for (const block of toolBlocks(files)) {
+    if (block.type === 'tool_use') {
+      work.toolCalls++;
+      if (block.name === 'Read' || block.name === 'Grep') work.fileReads++;
+      else if (SHELL_TOOLS.has(block.name) && isShellRead(block.name, block.input?.command)) {
+        work.fileReads++;
+        work.shellReads++;
+      }
+    } else if (block.is_error) {
+      const text = Array.isArray(block.content) ? block.content.map((c) => c.text ?? '').join(' ') : String(block.content ?? '');
+      const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
+      if (!sig) continue;
+      if (seenErrors.has(sig)) work.repeatedErrors++;
+      else seenErrors.add(sig);
+    }
+  }
   return work;
+}
+
+/** Every Bash and PowerShell command in the transcripts, in order: what a checker reads through Z0_COMMANDS. */
+export function commandLog(files) {
+  const commands = [];
+  for (const block of toolBlocks(files)) {
+    if (block.type === 'tool_use' && SHELL_TOOLS.has(block.name)) commands.push(String(block.input?.command ?? ''));
+  }
+  return commands;
 }
 
 /** Sum Claude Code's per-model usage; the top-level `usage` can read zero when a run stops on its budget cap, so it is only a fallback. */
@@ -87,10 +115,21 @@ export function usageFromResult(result) {
   return usage;
 }
 
-/** A step whose session never ran (a failed setup, or a leak known beforehand): nothing graded, every session metric null. */
-export function skippedRecord(base, fields) {
+const INVALID_NULLS = {
+  usage: null, costUsd: null, turns: null, toolCalls: null, fileReads: null, shellReads: null, repeatedErrors: null,
+  wallMs: null, teachTurns: null, correctionTurns: null, acceptancePassed: null, teachForm: null,
+};
+
+/** Every invalid shape (setup, leak, no-result, no-transcript, resume, checker): the full field set, nothing graded. */
+export function invalidRecord(base, reason, fields) {
   return {
-    ...base, resolved: false, usage: null, costUsd: null, turns: null, ...transcriptWork(null),
-    sessionId: null, transcriptFound: false, hippo: null, limitRetries: 0, ...fields,
+    ...base, ...INVALID_NULLS, lessons: [], resolved: false, timedOut: false, void: null, leak: false, invalid: reason,
+    limitRetries: 0, sessionId: null, resumeSessionId: null, transcriptFound: false, hippo: null, agentError: null, ...fields,
   };
+}
+
+/** A graded record; `resolved` is the prereg's literal formula. */
+export function validRecord(base, fields) {
+  const resolved = fields.acceptancePassed && fields.lessons.every((l) => l.final === 'pass') && !fields.timedOut;
+  return { ...base, ...fields, resolved, void: null, leak: false, invalid: null };
 }

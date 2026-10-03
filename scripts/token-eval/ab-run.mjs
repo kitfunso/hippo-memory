@@ -1,30 +1,18 @@
 #!/usr/bin/env node
-// Z0 Claude Code runner: arms A0, A1, A2 and A5 in lockstep, one record per (task, arm, seed) for z0-analyze.mjs.
+// Z0 Claude Code runner: arms A0, A1, A2, A4 and A5 in lockstep, one record per (task, arm, seed) for z0-analyze.mjs.
 // Protocol: docs/evals/2026-09-29-z0-built-in-memory-prereg.md. Usage, tasks file and fairness: benchmarks/token-eval/README.md.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HIPPO_JS, sh, git } from './exec.mjs';
-import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
-import { runDirs, freshRunDirs, homeFiles, ancestorInstructionFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
-import { checkoutBase, stubBaseCommit, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
-import { isUsageLimit, findTranscript, transcriptWork, usageFromResult, skippedRecord } from './records.mjs';
-import { validateFamilies } from './lessons.mjs';
+import { sh, git } from './exec.mjs';
+import { ARMS, ARM_SEEDS, TOKEN_KEY, armEnv, startupTools } from './arms.mjs';
+import { runDirs, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
+import { stubBaseCommit, assertNoInstructionLinks } from './workspace.mjs';
+import { validateFamilies, drawOrder, taskRoles, lessonIndex } from './lessons.mjs';
+import { loadHippo, startRun } from './runs.mjs';
+import { runTask } from './task.mjs';
 
-// Loading or validating a tasks file never needs dist/; only a real run does.
-let hippoLib = null;
-async function loadHippo() {
-  if (hippoLib) return hippoLib;
-  try {
-    const [{ installJsonHooks }, { openHippoDb, closeHippoDb }, { tokensBySession }, { loadAllEntries, isInitialized }] = await Promise.all([
-      import('../../dist/hooks.js'), import('../../dist/db.js'), import('../../dist/token-ledger.js'), import('../../dist/store.js'),
-    ]);
-    hippoLib = { installJsonHooks, openHippoDb, closeHippoDb, tokensBySession, loadAllEntries, isInitialized };
-  } catch (err) {
-    throw new Error(`run npm run build first (ab-run needs dist/): ${err.message}`);
-  }
-  return hippoLib;
-}
+export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
 
 /** Validate a tasks file; `baseDir` (the file's folder) resolves checker scripts. Throws on the first problem. */
 export function validateTasks(spec, baseDir = null) {
@@ -47,209 +35,42 @@ export function validateTasks(spec, baseDir = null) {
   return validateFamilies(spec, baseDir);
 }
 
-/** The settings hippo's installer writes for Claude Code, generated under a throwaway HOME. */
-function hippoHookSettings(tmpHome) {
-  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
-  process.env.HOME = tmpHome;
-  process.env.USERPROFILE = tmpHome;
-  try {
-    hippoLib.installJsonHooks('claude-code');
-    return JSON.parse(fs.readFileSync(path.join(tmpHome, '.claude', 'settings.json'), 'utf8'));
-  } finally {
-    for (const [k, v] of Object.entries(saved)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-  }
-}
-
-function storeLeaks(hippoRoot, lines) {
-  if (!hippoLib.isInitialized(hippoRoot) || lines.length === 0) return false;
-  const text = hippoLib.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
-  return lines.some((l) => text.includes(l));
-}
-
-function hippoSentFor(hippoRoot, sessionId) {
-  if (!sessionId || !hippoLib.isInitialized(hippoRoot)) return null;
-  const db = hippoLib.openHippoDb(hippoRoot);
-  try {
-    const row = hippoLib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').find((r) => r.sessionId === sessionId);
-    return row ?? { sessionId, sent: 0, skipped: 0, injections: 0 };
-  } catch {
-    return null;
-  } finally {
-    hippoLib.closeHippoDb(db);
-  }
-}
-
 const rotate = (list, k) => list.map((_, i) => list[(i + k) % list.length]);
 
-/** Every session in execution order, `{ seed, position, arm, sequence }`: position-major, arm order rotated by position + seed. */
+/** A sequence's tasks in this seed's drawn order with their roles; every arm on the seed shares it (prereg 117). */
+function seededOrder(sequence, families, seed) {
+  const tasks = drawOrder(sequence, families, seed).map((id) => sequence.tasks.find((t) => t.id === id));
+  return { tasks, roles: taskRoles(tasks, families) };
+}
+
+/** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, arm order rotated by position + seed. */
 export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
   const steps = [];
   const maxSeed = Math.max(...arms.map(seedsFor));
   const maxTasks = Math.max(...spec.sequences.map((s) => s.tasks.length));
   for (let seed = 1; seed <= maxSeed; seed++) {
     const active = arms.filter((a) => seed <= seedsFor(a));
+    const orders = new Map(spec.sequences.map((s) => [s.id, seededOrder(s, spec.families ?? [], seed)]));
     for (let position = 0; position < maxTasks; position++) {
       for (const arm of rotate(active, position + seed)) {
-        for (const sequence of spec.sequences) if (position < sequence.tasks.length) steps.push({ seed, position, arm, sequence });
+        for (const sequence of spec.sequences) {
+          if (position >= sequence.tasks.length) continue;
+          const { tasks, roles } = orders.get(sequence.id);
+          steps.push({ seed, position, arm, sequence, taskId: tasks[position].id, t: tasks[position], role: roles[position] });
+        }
       }
     }
   }
   return steps;
 }
 
-/** A run's first step: fresh dirs, its env, settings and shim; checkoutBase makes the work repo. */
-function startRun(ctx, s, arm, seed) {
-  const dirs = runDirs(ctx.outDir, s.id, arm, seed);
-  freshRunDirs(dirs);
-  const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv });
-  if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, arm === 'A5' ? 'sham' : 'real');
-  const settingsFile = path.join(ctx.outDir, 'settings', `${s.id}-${arm}-seed${seed}.json`);
-  fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-  fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
-  return { s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), rawDir: path.join(ctx.outDir, 'raw', s.id, arm, `seed${seed}`) };
-}
-
-/** hippo init on the stub base (A2/A5, position 0), through the child env, with LLM extraction off. */
-function hippoInit(run, fakeHome) {
-  const env = { ...childEnv(run.env), HOME: fakeHome, USERPROFILE: fakeHome };
-  // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
-  const r = sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, run.dirs.work, env);
-  if (r.status !== 0) throw new Error(`hippo init failed in ${run.dirs.work}: ${r.stderr.slice(-500)}`);
-  const cfgPath = path.join(run.dirs.work, '.hippo', 'config.json');
-  const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-  fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false } }, null, 2));
-}
-
-const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already in the store, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };
-
-/** Instruction files in the agent-writable dirs between work/ and the out dir, written to the raw dir when there are any. */
-function ancestorHits(ctx, run, t) {
-  // Claude Code loads every ancestor's CLAUDE.md, and preflight checked only the out dir, before any agent ran.
-  const hits = ancestorInstructionFiles(path.dirname(run.dirs.work), { stopAt: ctx.outDir });
-  if (hits.length) fs.writeFileSync(path.join(run.rawDir, `${t.id}.ancestor.txt`), `${hits.join('\n')}\n`);
-  return hits;
-}
-
-function writeRecord(ctx, record) {
-  ctx.records.push(record);
-  fs.appendFileSync(path.join(ctx.outDir, 'runs.jsonl'), `${JSON.stringify(record)}\n`);
-  const outcome = SKIPPED[record.invalid] ?? (record.resolved ? 'resolved' : 'not resolved');
-  ctx.log(`${record.sequence} ${record.taskId} ${record.arm} seed${record.seed}: ${outcome}${record.costUsd ? `, $${record.costUsd.toFixed(4)}` : ''}${record.invalid ? ` (invalid: ${record.invalid})` : ''}`);
-}
-
-// Async, so a run inside a test worker never blocks the worker's RPC with its parent.
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
-
-/** Run claude, rerunning after a plan limit once `reset` has put the checkout back. */
-async function runSession(ctx, run, t, reset) {
-  const args = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', JSON.stringify(run.settingsFile), '--strict-mcp-config', '--permission-mode', ctx.permissionMode];
-  if (ctx.model) args.push('--model', ctx.model);
-  if (ctx.maxBudgetUsd) args.push('--max-budget-usd', String(ctx.maxBudgetUsd));
-  // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
-  for (let attempt = 1; ; attempt++) {
-    const cc = sh(`${ctx.claude} ${args.join(' ')}`, run.dirs.work, run.env, 60 * 60_000, t.prompt);
-    let result = null;
-    try {
-      result = JSON.parse(cc.stdout.trim().split('\n').filter(Boolean).pop() ?? '');
-    } catch {
-      result = null;
-    }
-    if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1 };
-    fs.writeFileSync(path.join(run.rawDir, `${t.id}.limit${attempt}.txt`), `${cc.stdout}\n${cc.stderr}`.slice(-20000));
-    // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
-    if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
-    ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
-    await sleep(ctx.limitWaitMs);
-    reset();
-  }
-}
-
-/** One step: prepare the checkout, skip the session if the step is void before it starts, else run, grade and record it. */
-async function runTask(ctx, run, position, order) {
-  const { s, arm, seed, dirs, env, rawDir } = run;
-  const t = s.tasks[position];
-  const work = dirs.work;
-  const prepare = () => ({ commit: checkoutBase(run.cached, work, s.id, t, arm), setup: t.setup ? sh(t.setup, work, childEnv(env)) : null });
-  const { commit, setup } = prepare();
-  const base = { taskId: t.id, cluster: s.cluster, sequence: s.id, position, order, scored: position > 0, arm, seed, model: ctx.model, claudeVersion: ctx.claudeVersion, startedAt: new Date().toISOString(), baseCommit: commit };
-  const meta = { envKeys: Object.keys(env).sort(), passEnv: ctx.passEnv };
-  fs.mkdirSync(rawDir, { recursive: true });
-  if (setup && setup.status !== 0) {
-    // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved". Carry never ran, so its counts are null.
-    fs.writeFileSync(path.join(rawDir, `${t.id}.setup.txt`), `${setup.stdout}\n${setup.stderr}`.slice(-20000));
-    writeRecord(ctx, skippedRecord(base, { agentError: `setup failed (exit ${setup.status})`, leak: false, invalid: 'setup', carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null, ...meta }));
-    return;
-  }
-  const hippoRoot = path.join(work, '.hippo');
-  // Setup's own writes are part of the baseline, so they are never counted as the agent's and never carried.
-  const baseline = instructionSnapshot(work);
-  // Init waits for the first step whose setup passed, so a skipped first task cannot leave A2/A5 without hippo.
-  if (HIPPO_ARMS.has(arm) && !run.initDone) {
-    hippoInit(run, ctx.fakeHome);
-    run.initDone = true;
-  }
-  const carry = CARRY_ARMS.has(arm) ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
-  const homesAtStart = run.sessionRan ? null : homeFiles(dirs);
-  if (HIPPO_ARMS.has(arm) && storeLeaks(hippoRoot, goldLines(run.cached, t))) {
-    // The leak is known before the session, so a session the analysis voids is never run and costs no plan usage.
-    run.changes = instructionDelta(baseline, instructionSnapshot(work));
-    writeRecord(ctx, skippedRecord(base, { agentError: null, leak: true, invalid: 'leak', ...carry, homesAtStart, ...meta }));
-    return;
-  }
-  if (ancestorHits(ctx, run, t).length) {
-    // Like a leak, the void is known before the session, so the session never runs; later cells of this run stay void while the file stays.
-    run.changes = instructionDelta(baseline, instructionSnapshot(work));
-    writeRecord(ctx, skippedRecord(base, { agentError: null, leak: false, invalid: 'ancestor-instructions', ...carry, homesAtStart, ...meta }));
-    return;
-  }
-  const preSession = instructionSnapshot(work);
-  let rerunAncestors = false;
-  const session = await runSession(ctx, run, t, () => {
-    // SHORTCUT: restores instruction files only; store and auto memory wait for the E3 surface restore, so the analyzer voids that position and the rest of its (sequence, seed) in A1/A2/A5
-    const again = prepare().setup;
-    if (again && again.status !== 0) throw new Error(`${s.id} ${t.id} ${arm} seed${seed}: setup failed on the usage-limit rerun (exit ${again.status})`);
-    restoreInstructions(work, preSession);
-    rerunAncestors ||= ancestorHits(ctx, run, t).length > 0;
-  });
-  run.sessionRan = true;
-  const graded = await gradeSession(ctx, run, t, baseline, { ...session, rerunAncestors });
-  writeRecord(ctx, { ...base, ...graded, ...carry, homesAtStart, ...meta });
-}
-
-/** After a session: let hippo's capture settle, take the carry delta, run the hidden tests and read the result into record fields. */
-async function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries, rerunAncestors }) {
-  const { arm, dirs, env, rawDir } = run;
-  const work = dirs.work;
-  fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
-  // SessionEnd runs capture and sleep in a background worker; let it finish.
-  if (HIPPO_ARMS.has(arm)) await sleep(ctx.settleMs);
-  if (CARRY_ARMS.has(arm)) run.changes = instructionDelta(baseline, instructionSnapshot(work));
-  writeHiddenTests(run.cached, work, t);
-  const test = sh(t.test, work, childEnv(env));
-  fs.writeFileSync(path.join(rawDir, `${t.id}.test.txt`), `${test.stdout}\n${test.stderr}`.slice(-20000));
-  const sessionId = result?.session_id ?? null;
-  const transcript = findTranscript(path.join(dirs.claudeConfig, 'projects'), sessionId);
-  // A valid record always has integer work counts, so a session without its transcript is void like one without a result.
-  const invalid = rerunAncestors ? 'ancestor-instructions' : (result === null ? 'no-result' : (transcript === null ? 'no-transcript' : null));
-  const counted = invalid === null;
-  return {
-    resolved: counted && test.status === 0,
-    usage: counted ? usageFromResult(result) : null, costUsd: counted ? result.total_cost_usd ?? null : null, turns: counted ? result.num_turns ?? null : null,
-    ...transcriptWork(counted ? transcript : null, run.seenErrors),
-    sessionId, transcriptFound: transcript !== null,
-    agentError: result === null ? `claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}` : (result.is_error ? result.subtype ?? 'error' : null),
-    hippo: HIPPO_ARMS.has(arm) ? hippoSentFor(path.join(work, '.hippo'), sessionId) : null,
-    leak: false, invalid, limitRetries,
-  };
-}
-
-/** The expected cells, written before any session so the analysis can tell a run cut off in lockstep. */
+/** The expected cells, written before any session so the analysis can tell a run cut off in lockstep; kind, familyId and set match the records. */
 function writePlan(outDir, steps) {
   fs.mkdirSync(outDir, { recursive: true });
-  const cells = steps.map((st) => ({ seed: st.seed, position: st.position, arm: st.arm, sequence: st.sequence.id, taskId: st.sequence.tasks[st.position].id, repo: st.sequence.repo }));
+  const cells = steps.map((st) => ({
+    seed: st.seed, position: st.position, arm: st.arm, sequence: st.sequence.id, taskId: st.taskId, repo: st.sequence.repo,
+    kind: st.role.kind, familyId: st.role.familyId, set: st.role.set,
+  }));
   fs.writeFileSync(path.join(outDir, 'plan.json'), `${JSON.stringify(cells, null, 2)}\n`);
 }
 
@@ -284,6 +105,7 @@ export async function runAll(opts) {
     outDir, passEnv, claude, records: [], fakeHome: outDir, hookHome: path.join(outDir, 'hook-home'), cacheDir: path.join(outDir, 'repo-cache'),
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
+    lessons: lessonIndex(spec.families ?? []),
   };
   cacheTaskRepos(spec, ctx.cacheDir);
   const warmDir = path.join(outDir, 'warmup');
@@ -299,15 +121,38 @@ export async function runAll(opts) {
   writePlan(outDir, steps);
   const state = new Map();
   for (const [order, step] of steps.entries()) {
-    const { seed, position, arm, sequence: s } = step;
+    // Every session is synchronous; yielding once a step keeps the host's event loop (signals, a test worker's RPC) alive.
+    await new Promise((resolve) => setImmediate(resolve));
+    const { seed, arm, sequence: s } = step;
     const key = `${s.id}|${arm}|${seed}`;
     if (!state.has(key)) state.set(key, startRun(ctx, s, arm, seed));
-    await runTask(ctx, state.get(key), position, order);
-    // Every step is spawnSync, so yield once per step to let a host event loop (a test worker's RPC) run.
-    await new Promise(setImmediate);
-    progress.last = `step ${order}: ${s.id} ${s.tasks[position].id} ${arm} seed${seed}`;
+    await runTask(ctx, state.get(key), { ...step, order });
+    progress.last = `step ${order}: ${s.id} ${step.taskId} ${arm} seed${seed}`;
   }
   return ctx.records;
+}
+
+/** Per sequence and seed, the drawn order; per sequence, the tasksSinceTeach spread, so a bunched draw shows before any session. */
+function orderReport(steps) {
+  const lines = [];
+  const spread = new Map();
+  const seen = new Set();
+  for (const st of steps) {
+    const key = `${st.sequence.id}|${st.seed}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const cells = steps.filter((x) => x.arm === st.arm && x.seed === st.seed && x.sequence === st.sequence).sort((a, b) => a.position - b.position);
+    lines.push(`order ${st.sequence.id} seed${st.seed}: ${cells.map((x) => x.taskId).join(' ')}`);
+    const gaps = cells.filter((x) => x.role.kind === 'apply').map((x) => x.role.tasksSinceTeach);
+    spread.set(st.sequence.id, [...(spread.get(st.sequence.id) ?? []), ...gaps]);
+  }
+  for (const [id, gaps] of spread) {
+    if (!gaps.length) continue;
+    const g = gaps.sort((a, b) => a - b);
+    const mid = g.length % 2 ? g[(g.length - 1) / 2] : (g[g.length / 2 - 1] + g[g.length / 2]) / 2;
+    lines.push(`${id} tasksSinceTeach over ${g.length} applies: min ${g[0]}, median ${mid}, max ${g[g.length - 1]}`);
+  }
+  return lines;
 }
 
 async function main() {
@@ -346,7 +191,8 @@ async function main() {
   console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seeds ?? ARM_SEEDS[a]}`).join(' ')}.`);
   if (mode === 'dry') {
     writePlan(out, steps);
-    for (const [i, r] of steps.entries()) console.log(`  ${i} seed${r.seed} pos${r.position} ${r.arm} ${r.sequence.id}/${r.sequence.tasks[r.position].id}`);
+    for (const [i, r] of steps.entries()) console.log(`  ${i} seed${r.seed} pos${r.position} ${r.arm} ${r.sequence.id}/${r.taskId}`);
+    for (const line of orderReport(steps)) console.log(line);
     return;
   }
   const runs = [...new Map(steps.map((st) => [`${st.sequence.id}|${st.arm}|${st.seed}`, { seq: st.sequence.id, arm: st.arm, seed: st.seed }])).values()];

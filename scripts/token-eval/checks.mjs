@@ -37,26 +37,34 @@ export function runCheck(lesson, { work, env, preCommit, postCommit, commands, s
   return verdict;
 }
 
+/** fn(git, scratch): the runner's isolated git and a throwaway dir for a temp index. */
+export function withScratchGit(fn) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));
+  try {
+    return fn(git, scratch);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 /** The work tree as on disk (tracked and untracked, not ignored) as a commit on `parent`; HEAD, index and tree untouched. */
 export function stateCommit(work, parent) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-state-'));
-  const env = { ...process.env, ...SNAPSHOT_IDENT, GIT_INDEX_FILE: path.join(tmp, 'index') };
-  try {
-    git(['read-tree', 'HEAD'], work, env);
-    git(['add', '-A'], work, env);
-    const tree = git(['write-tree'], work, env).trim();
+  return withScratchGit((rgit, scratch) => {
+    const env = { ...SNAPSHOT_IDENT, GIT_INDEX_FILE: path.join(scratch, 'index') };
+    rgit(['read-tree', 'HEAD'], work, env);
+    rgit(['add', '-A'], work, env);
+    const tree = rgit(['write-tree'], work, env).trim();
     // A neutral message: the agent can see this commit through `git log --all` while the task runs.
-    return git(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'snapshot'], work, env).trim();
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
+    return rgit(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'snapshot'], work, env).trim();
+  });
 }
 
 /** Hold the pre-session commit under PRE_REF so a gc during the task cannot prune it. */
 export function holdPre(work, sha) {
-  git(['update-ref', '--no-deref', PRE_REF, sha], work);
+  withScratchGit((rgit) => rgit(['update-ref', '--no-deref', PRE_REF, sha], work));
 }
 
 export function dropPre(work) {
-  git(['update-ref', '-d', PRE_REF], work);
+  // After the session, so a hook the agent wrote into .git/hooks must not run here.
+  withScratchGit((rgit) => rgit(['update-ref', '-d', PRE_REF], work));
 }

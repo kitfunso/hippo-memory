@@ -93,6 +93,7 @@ describe('armEnv and childEnv', () => {
 
   it('strips every provider, Claude, Codex and hippo key, any case, and sets the run homes', () => {
     const { run, base } = setup();
+    expect(ARMS).toEqual(['A0', 'A1', 'A2', 'A4', 'A5']);
     for (const arm of ARMS) {
       const env = armEnv(arm, { ...run, seed: 2 }, base);
       expect(env.KEEP_ME).toBe('k');
@@ -102,7 +103,7 @@ describe('armEnv and childEnv', () => {
       expect(env.CLAUDE_CONFIG_DIR).toBe(run.claudeConfig);
       expect(env.CODEX_HOME).toBe(run.codexHome);
       expect(env.HIPPO_HOME).toBe(run.hippoHome);
-      expect(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe(arm === 'A0' ? '1' : '0');
+      expect(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, arm).toBe(arm === 'A0' || arm === 'A4' ? '1' : '0');
       expect(env.HIPPO_AGENT_MEMORY_TOOLS).toBe('claude-code,codex');
       expect(env.DISABLE_AUTOUPDATER).toBe('1');
       expect(env.EVAL_SEED).toBe('2');
@@ -181,6 +182,7 @@ describe('armSettings', () => {
 
   it('gives each arm its prereg settings; A5 keeps only the two injection events', () => {
     expect(armSettings('A0', hippo)).toEqual({ autoMemoryEnabled: false });
+    expect(armSettings('A4', hippo)).toEqual({ autoMemoryEnabled: false });
     expect(armSettings('A1', hippo)).toEqual({});
     expect(armSettings('A2', hippo)).toEqual(hippo);
     expect(Object.keys(armSettings('A5', hippo).hooks).sort()).toEqual(['SessionStart', 'UserPromptSubmit']);
@@ -827,7 +829,7 @@ describe('homes check (built CLI, no claude session)', () => {
   const runs = ARMS.map((arm) => ({ seq: 'seqH', arm, seed: 1 }));
   const textUnder = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? textUnder(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
 
-  it('passes for all four arms with a hippo decoy on PATH, and a real A2 init plus import keeps the canaries out', () => {
+  it('passes for every arm (A4 included, with no hippo) with a hippo decoy on PATH, and a real A2 init plus import keeps the canaries out', () => {
     operatorWithCanaries();
     decoy();
     const out = tmp('z0-check-');

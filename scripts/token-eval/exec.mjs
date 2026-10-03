@@ -17,7 +17,7 @@ export function pathKey(env) {
 
 export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
   const r = spawnSync(cmd, { cwd, env, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28, input });
-  return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+  return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '', timedOut: r.error?.code === 'ETIMEDOUT' };
 }
 
 // Git for Windows opens /dev/null as the null device but joins hook names onto it as <drive>:\dev\null, which any user can create; Win32 refuses '|' in a name.
