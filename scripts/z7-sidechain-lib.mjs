@@ -648,9 +648,9 @@ export function parsePins(md) {
 export const claudeVersionToken = (out) => /^\s*(\d+(?:\.\d+)*)(?=\s|$)/.exec(String(out))?.[1] ?? null;
 
 // Checks only the keys given in actual; a pin that is missing counts as a mismatch. Returns the mismatched names.
-export function checkPins(pins, actual) {
+export function checkPins(pins, actual, promptNames = PIN_PROMPTS) {
   const bad = [];
-  for (const [group, names] of [['dist', PIN_DIST], ['prompts', PIN_PROMPTS]]) {
+  for (const [group, names] of [['dist', PIN_DIST], ['prompts', promptNames]]) {
     if (!actual[group]) continue;
     for (const n of names) if (!pins[group][n] || pins[group][n] !== actual[group][n]) bad.push(group === 'dist' ? `dist/${n}` : n);
   }

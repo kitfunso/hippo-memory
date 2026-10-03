@@ -20,10 +20,10 @@ const MANIFEST_SHA = '84028a76df0a4c9b16ea4aaffcaed3284f26ef37985c4cd0a783776549
 const CONCURRENCY = 3;
 const QUOTA_RE = /usage limit|rate limit|quota|overloaded|try again later/i;
 const [SONNET, OPUS] = L.MODELS;
-const out = (k, v) => console.log(`${k}=${v}`);
-const fmt = (x) => (x === null ? 'n/a' : Number.isInteger(x) ? String(x) : x.toFixed(3));
-const hash = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
-const byStr = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+export const out = (k, v) => console.log(`${k}=${v}`);
+export const fmt = (x) => (x === null ? 'n/a' : Number.isInteger(x) ? String(x) : x.toFixed(3));
+export const hash = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+export const byStr = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 function parseArgs(argv) {
   const a = { cmd: argv[0], archive: DEFAULT_ARCHIVE, split: null, round: null, resume: false, confirmed: null };
@@ -43,7 +43,7 @@ function parseArgs(argv) {
 
 // --- archive: every file opened is checked against the manifest ---
 
-function openArchive(archive) {
+export function openArchive(archive) {
   const raw = fs.readFileSync(path.join(archive, 'manifest.json'));
   if (hash(raw) !== MANIFEST_SHA) throw new Error('manifest sha256 differs from the pinned value');
   const files = new Map(Object.values(JSON.parse(raw.toString('utf8')).files).map((f) => [f.rel.replace(/\\/g, '/'), f]));
@@ -59,7 +59,7 @@ function openArchive(archive) {
   };
 }
 
-function layout(ar) {
+export function layout(ar) {
   const sessions = new Map();
   const get = (sid) => sessions.get(sid) ?? sessions.set(sid, { sid, parent: null, subs: [], workflow: [] }).get(sid);
   for (const rel of ar.files.keys()) {
@@ -72,7 +72,7 @@ function layout(ar) {
   return sessions;
 }
 
-function readMeta(ar, sid, file) {
+export function readMeta(ar, sid, file) {
   const rel = `${sid}/subagents/${file.replace(/\.jsonl$/, '.meta.json')}`;
   return ar.files.has(rel) ? JSON.parse(ar.read(rel)) : null;
 }
@@ -89,7 +89,7 @@ function ineligible(meta, sub, parent) {
   return null;
 }
 
-function scanArchive(ar) {
+export function scanArchive(ar) {
   const lay = layout(ar);
   const sessions = [];
   for (const s of [...lay.values()].sort((x, y) => byStr(x.sid, y.sid))) {
@@ -109,7 +109,7 @@ function scanArchive(ar) {
   return sessions;
 }
 
-const eligibleItems = (sessions) => sessions.flatMap((s) => s.subs.filter((x) => !x.why).map((x) => ({
+export const eligibleItems = (sessions) => sessions.flatMap((s) => s.subs.filter((x) => !x.why).map((x) => ({
   session: s.sid, file: x.file, template: x.template, agentType: x.meta.agentType, project: s.project,
 })));
 
@@ -148,7 +148,7 @@ function cmdProfile(a) {
   out('eligible_sessions', new Set(el.map((i) => i.session)).size);
 }
 
-function writeIdempotent(file, data) {
+export function writeIdempotent(file, data) {
   const text = L.isStr(data) ? data : JSON.stringify(data, null, 1);
   if (fs.existsSync(file)) { if (fs.readFileSync(file, 'utf8') !== text) throw new Error(`${path.basename(file)} exists and differs; refusing to overwrite`); return; }
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -224,13 +224,13 @@ function buildSession(ar, deps, lay, sid, wanted, augment) {
   return loaded.map((x) => assembleItem(x, sid, m, pending, capture, project, augment));
 }
 
-function writeOut(dir, name, data, idem) {
+export function writeOut(dir, name, data, idem) {
   fs.mkdirSync(dir, { recursive: true });
   if (idem) return writeIdempotent(path.join(dir, name), data);
   fs.writeFileSync(path.join(dir, name), L.isStr(data) ? data : JSON.stringify(data, null, 1));
 }
 
-async function buildIds(ar, dir, ids, draw, idem, augment) {
+export async function buildIds(ar, dir, ids, draw, idem, augment) {
   const deps = await loadDeps();
   const lay = layout(ar);
   const bySession = new Map();
@@ -250,9 +250,9 @@ async function buildIds(ar, dir, ids, draw, idem, augment) {
   return built;
 }
 
-const loadBuilt = (dir, ids) => ids.map((id) => JSON.parse(fs.readFileSync(path.join(dir, `${id}.json`), 'utf8')));
+export const loadBuilt = (dir, ids) => ids.map((id) => JSON.parse(fs.readFileSync(path.join(dir, `${id}.json`), 'utf8')));
 
-function printBuild(items) {
+export function printBuild(items) {
   const sum = (f) => items.reduce((n, i) => n + f(i.flags), 0);
   out('items', items.length);
   out('sessions', new Set(items.map((i) => i.session)).size);
@@ -268,10 +268,10 @@ function printBuild(items) {
 
 // --- claude -p ---
 
-const promptText = (name) => fs.readFileSync(path.join(PROMPT_DIR, name), 'utf8');
-const fill = (tpl, vars) => tpl.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+export const promptText = (name, dir = PROMPT_DIR) => fs.readFileSync(path.join(dir, name), 'utf8');
+export const fill = (tpl, vars) => tpl.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 
-function resolveClaudeExe() {
+export function resolveClaudeExe() {
   if (process.platform !== 'win32') return 'claude';
   // Only a real .exe: Node refuses to spawn a .cmd shim with shell:false, and a shell would re-quote the prompt.
   const r = spawnSync('where', ['claude'], { encoding: 'utf8' });
@@ -296,15 +296,16 @@ function runClaude(exe, model, system, prompt, cwd) {
   });
 }
 
-function makeCtx(dir) {
+export function makeCtx(dir, opts = {}) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'z7-judge-'));
   const callsDir = path.join(dir, 'calls');
   fs.mkdirSync(callsDir, { recursive: true });
-  return { dir, cwd, callsDir, exe: resolveClaudeExe(), system: promptText('judge-system.txt').trim() };
+  const promptDir = opts.promptDir ?? PROMPT_DIR;
+  return { dir, cwd, callsDir, exe: resolveClaudeExe(), promptDir, seedPrefix: opts.seedPrefix ?? 'z7', system: promptText('judge-system.txt', promptDir).trim() };
 }
 
 // Scored runs (strict) cache a passing reply, and an exhausted exit-0 reply as a fixed G2 failure; any other failure aborts so --resume can re-ask.
-async function callClaude(ctx, model, prompt, check, fresh) {
+export async function callClaude(ctx, model, prompt, check, fresh) {
   const file = path.join(ctx.callsDir, `${L.sha256(`${model}\n${prompt}`).slice(0, 32)}.json`);
   const failFile = `${file.slice(0, -5)}.fail.json`;
   for (const f of ctx.strict ? [file, failFile] : [file]) if (!fresh && fs.existsSync(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -319,7 +320,7 @@ async function callClaude(ctx, model, prompt, check, fresh) {
   return last;
 }
 
-async function runPool(tasks) {
+export async function runPool(tasks) {
   let next = 0;
   await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
     while (next < tasks.length) {
@@ -346,7 +347,7 @@ async function isolationOk(ctx, model) {
   return !heads.map(bare).some((h) => h && reply.has(h));
 }
 
-async function isolationBoth(ctx) {
+export async function isolationBoth(ctx) {
   const res = {};
   for (const model of L.MODELS) res[model] = await isolationOk(ctx, model);
   return res;
@@ -354,8 +355,8 @@ async function isolationBoth(ctx) {
 
 // --- stages: judge, recheck, rule arm ---
 
-async function judgeStage(ctx, items, tag, control) {
-  const tpl = promptText('judge-prompt.txt');
+export async function judgeStage(ctx, items, tag, control) {
+  const tpl = promptText('judge-prompt.txt', ctx.promptDir);
   const results = { [SONNET]: {}, [OPUS]: {} };
   const tasks = L.MODELS.flatMap((model) => items.map((it) => async () => {
     const C = control ? `${it.C}\n\n[The sub-agent's whole work, now also kept by the parent]\n${it.B}` : it.C;
@@ -377,7 +378,7 @@ async function recheckItem(ctx, tpl, it, judge, decoyPool, prior) {
   const real = L.MODELS.flatMap((m) => (judge[m][it.id]?.verified ?? []).map((l, k) => ({ src: m, k, kind: l.kind, text: l.text })));
   const ask = prior ? real.filter((l) => !prior.keptKeys.includes(`${l.src}:${l.k}`)) : real;
   if (!ask.length) return prior;
-  const rng = L.rngFromString(`z7-decoy|${it.id}${prior ? '|aug' : ''}`);
+  const rng = L.rngFromString(`${ctx.seedPrefix}-decoy|${it.id}${prior ? '|aug' : ''}`);
   const coinPlanted = rng() < 0.5;
   const picked = L.pickDecoy(decoyPool, { id: it.id, session: it.session, project: it.project, kinds: real.map((l) => l.kind) }, rng);
   let side = fs.readFileSync(path.join(ctx.dir, it.parentSideFile), 'utf8');
@@ -401,8 +402,8 @@ async function recheckItem(ctx, tpl, it, judge, decoyPool, prior) {
 }
 
 // Rechecks every item where either judge verified a lesson, so the union share is also taken after the recheck.
-async function recheckStage(ctx, items, judge, name, priorMap) {
-  const tpl = promptText('recheck-prompt.txt');
+export async function recheckStage(ctx, items, judge, name, priorMap) {
+  const tpl = promptText('recheck-prompt.txt', ctx.promptDir);
   const verified = (m, id) => judge[m][id]?.verified ?? [];
   const decoyPool = items.map((it) => ({ id: it.id, session: it.session, project: it.project, lessons: L.MODELS.flatMap((m) => verified(m, it.id).map(({ kind, text }) => ({ kind, text }))) })).filter((p) => p.lessons.length);
   const res = {};
@@ -433,11 +434,11 @@ async function ruleArmStage(ctx, ar, deps, items) {
 
 // --- figures, printing, dev commands ---
 
-const asRows = (items) => items.map((it) => ({ id: it.id, session: it.session, agentType: it.agentType, cut: it.cut }));
-const readJson = (dir, name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
-const gatesOf = (f, isolation, control) => L.gateResults({ isolation, parse: f.parse, evidenceFail: f.evidenceFail, control, unplanted: f.unplanted, planted: f.planted });
+export const asRows = (items) => items.map((it) => ({ id: it.id, session: it.session, agentType: it.agentType, cut: it.cut }));
+export const readJson = (dir, name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+export const gatesOf = (f, isolation, control) => L.gateResults({ isolation, parse: f.parse, evidenceFail: f.evidenceFail, control, unplanted: f.unplanted, planted: f.planted });
 
-function printFigures(f, g) {
+export function printFigures(f, g) {
   out('n', f.n);
   out('before_recheck_both_judges', f.pBefore);
   out('lesson_overturned_by_recheck', f.overturned);
@@ -490,7 +491,7 @@ async function cmdJudgeDev(a) {
   for (const m of L.MODELS) out(`judged_${m}`, Object.keys(res[m]).length);
 }
 
-const loadJudge = (dir, tag) => ({ [SONNET]: readJson(dir, `judge-${tag}-${SONNET}.json`), [OPUS]: readJson(dir, `judge-${tag}-${OPUS}.json`) });
+export const loadJudge = (dir, tag) => ({ [SONNET]: readJson(dir, `judge-${tag}-${SONNET}.json`), [OPUS]: readJson(dir, `judge-${tag}-${OPUS}.json`) });
 
 async function cmdRecheckDev(a) {
   const { dir, ids } = devSetup(a);
@@ -528,7 +529,7 @@ function cmdCalib(a) {
 
 // --- scored run: lock config, draw check, stages ---
 
-const claudeVersion = () => spawnSync(resolveClaudeExe(), ['--version'], { encoding: 'utf8' }).stdout.trim();
+export const claudeVersion = () => spawnSync(resolveClaudeExe(), ['--version'], { encoding: 'utf8' }).stdout.trim();
 const lockConfig = () => ({ repo: REPO, prereg: PREREG, scriptFiles: SCRIPT_FILES, promptDir: PROMPT_DIR, distDir: path.join(REPO, 'dist'), claudeVersion, lockDir: path.join(os.homedir(), '.hippo-eval-locks') });
 
 // The draw is recomputed from the verified archive, so a stale or edited draw.json cannot stand.
@@ -679,12 +680,16 @@ async function selftestCache(t) {
   }
 }
 
+export async function runSelftests(t) {
+  for (const group of libSelftests) group(t);
+  await selftestCache(t);
+}
+
 async function selftest() {
   let n = 0;
   const failed = [];
   const t = (name, ok) => { n++; if (!ok) failed.push(name); };
-  for (const group of libSelftests) group(t);
-  await selftestCache(t);
+  await runSelftests(t);
   console.log(`selftest: ${n} cases, ${failed.length} failed`);
   for (const name of failed) console.log(`FAIL: ${name}`);
   process.exit(failed.length ? 1 : 0);
@@ -702,4 +707,5 @@ async function main() {
   return table[a.cmd](a);
 }
 
-main().catch((e) => { console.error(`z7: ${e.message}`); process.exit(1); });
+const isMain = path.resolve(fileURLToPath(import.meta.url)).toLowerCase() === path.resolve(process.argv[1] ?? '').toLowerCase();
+if (isMain) main().catch((e) => { console.error(`z7: ${e.message}`); process.exit(1); });

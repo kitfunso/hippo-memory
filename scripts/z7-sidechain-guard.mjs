@@ -42,7 +42,8 @@ function checkFrozen(cfg, lockCommit) {
   const changed = diff.stdout.split('\n').filter(Boolean).map((p) => path.basename(p));
   if (changed.length) throw new Error('changed after the lock commit: ' + changed.join(', '));
   const pins = L.parsePins(fs.readFileSync(cfg.prereg, 'utf8'));
-  const bad = L.checkPins(pins, { dist: pinHashes(cfg.distDir, L.PIN_DIST), prompts: pinHashes(cfg.promptDir, L.PIN_PROMPTS), claude: cfg.claudeVersion() });
+  const pinPrompts = cfg.pinPrompts ?? L.PIN_PROMPTS;
+  const bad = L.checkPins(pins, { dist: pinHashes(cfg.distDir, L.PIN_DIST), prompts: pinHashes(cfg.promptDir, pinPrompts), claude: cfg.claudeVersion() }, pinPrompts);
   if (bad.length) throw new Error(`pin mismatch: ${bad.join(', ')}`);
   return pins;
 }
@@ -50,7 +51,7 @@ function checkFrozen(cfg, lockCommit) {
 export function guardScored(cfg, resume = false) {
   const lockCommit = checkRepoState(cfg);
   const pins = checkFrozen(cfg, lockCommit);
-  const marker = path.join(cfg.lockDir, LOCK_NAME);
+  const marker = path.join(cfg.lockDir, cfg.lockName ?? LOCK_NAME);
   if (resume && !fs.existsSync(marker)) throw new Error('no lock marker to resume from');
   if (!resume && fs.existsSync(marker)) throw new Error('the lock marker exists; the scored run happens once (use --resume to continue it)');
   const pin = (files) => Object.fromEntries(files.map((f) => [path.basename(f), hash(fs.readFileSync(f))]));
