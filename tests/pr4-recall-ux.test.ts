@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { search, hybridSearch, explainMatch, tokenize, SearchResult } from '../src/search.js';
+import { search, hybridSearch, explainMatch, SearchResult } from '../src/search.js';
+import { tokenize } from '../src/tokenize.js';
 import { createMemory, resolveConfidence, Layer } from '../src/memory.js';
 
 // ---------------------------------------------------------------------------

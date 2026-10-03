@@ -57,8 +57,8 @@ function spec(repo: string, base: string, fix: string) {
   const task = (id: string, prompt: string) => ({ id, baseRef: base, fixRef: fix, prompt, testFiles: ['test.js'], test: 'node test.js' });
   return validateTasks({
     sequences: [
-      { id: 'seqA', cluster: 'repoA', repo, tasks: [task('a1', 'FIX add in lib.js'), task('a2', 'FIX add again NOREMEMBER'), task('a3', 'look around only')] },
-      { id: 'seqB', cluster: 'repoB', repo, tasks: [task('b1', 'FIX add in lib.js'), task('b2', 'look around only')] },
+      { id: 'seqA', cluster: 'repoA', repo, tasks: [task('a1', 'FIX add in lib.js'), task('a2', 'FIX add in lib.js again NOREMEMBER'), task('a3', 'look around only')] },
+      { id: 'seqB', cluster: 'repoB', repo, tasks: [task('b1', 'FIX add in lib.js'), task('b2', 'look around add in lib.js only')] },
     ],
   });
 }
@@ -229,7 +229,7 @@ describe('A/B runner (TE5)', () => {
 
       const task = (id: string, prompt: string) => ({ id, baseRef: base, fixRef: fix, prompt, testFiles: ['test.js'], test: 'node test.js' });
       const singleClusterSpec = validateTasks({
-        sequences: [{ id: 'seqC', cluster: 'repoC', repo, tasks: [task('c1', 'FIX add in lib.js'), task('c2', 'look around only')] }],
+        sequences: [{ id: 'seqC', cluster: 'repoC', repo, tasks: [task('c1', 'FIX add in lib.js'), task('c2', 'look around add in lib.js only')] }],
       });
       const out2 = mkdtempSync(join(tmpdir(), 'ab-run-donor2-'));
       const projects2 = mkdtempSync(join(tmpdir(), 'ab-run-donor2-projects-'));

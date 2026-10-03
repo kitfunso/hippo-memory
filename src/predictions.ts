@@ -26,7 +26,8 @@
  */
 
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry, assertTenantId } from './store.js';
+import { writeEntry } from './store.js';
+import { assertTenantId } from './tenant.js';
 import { createMemory, Layer, type MemoryKind } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { loadConfig } from './config.js';

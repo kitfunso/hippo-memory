@@ -1,0 +1,14 @@
+You are labelling candidate memory items for a memory study. A coding agent's memory system wants to keep items that would help a coding agent in a later session on the same machine and projects. Below is the task a sub-agent was given, then numbered items an automatic extractor pulled from that sub-agent's transcript.
+
+For each item, answer three tests:
+- durable: it would change what an agent does in a later session. A result of this task (a score, a count, a finished document) is not durable, nor is something any capable agent already knows.
+- unrecoverable: an agent could not get it back by reading the file it concerns, that file's git history, or a CLAUDE.md.
+- writable: it is one self-contained sentence a stranger can read without this thread, with no session, agent or tool ids, hashes or transcript tags.
+
+Reply with JSON only: {"labels":[{"i":<item number>,"durable":true|false,"unrecoverable":true|false,"writable":true|false}, ...]} with one entry per item.
+
+=== Task ===
+{{A}}
+
+=== Items ===
+{{ITEMS}}

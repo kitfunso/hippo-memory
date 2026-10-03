@@ -188,6 +188,9 @@ function exclusion(text, entries, sinceMs, outDir, frozenMsgs) {
   for (const e of entries) {
     // Extractor dev sessions on the extractor branches, even when they never type a module name.
     if (e?.gitBranch && /capture-extractor/i.test(String(e.gitBranch))) return 'ownWork';
+    // Amendment 1: `claude -p` runs are scripted wherever they ran; a path rule missed the TE5 pilot.
+    // Decided per entry, so the reason counter depends on entry order; eligibility does not.
+    if (e?.entrypoint === 'sdk-cli') return 'headless';
     if (!e?.cwd) continue;
     if (String(e.cwd).split(/[\\/]/).includes('eval-runs')) return 'evalRuns';
     if (outDir && isPathInside(e.cwd, outDir)) return 'scratch';
@@ -213,7 +216,7 @@ function frozenMessages(dir) {
 function collectFresh(projectsDir, outDir, frozenMsgs) {
   const sinceMs = Date.parse(SINCE);
   const kept = [];
-  const excluded = { before: 0, evalRuns: 0, scratch: 0, ownWork: 0, frozenOverlap: 0, noHuman: 0 };
+  const excluded = { before: 0, evalRuns: 0, headless: 0, scratch: 0, ownWork: 0, frozenOverlap: 0, noHuman: 0 };
   for (const pd of fs.readdirSync(projectsDir, { withFileTypes: true }).filter((d) => d.isDirectory())) {
     for (const file of listJsonl(path.join(projectsDir, pd.name), false)) {
       const text = fs.readFileSync(file, 'utf8');
@@ -373,6 +376,8 @@ function selftest() {
   const human = { type: 'user', message: { content: 'please keep the release notes short and plain for every tag' } };
   assert.equal(exclusion('', [ts('2026-09-27T22:59:59Z'), ts('2026-09-29T10:00:00Z')], since, null, new Set()), 'before');
   assert.equal(exclusion('', [ts('2026-09-28T10:00:00Z', { cwd: '/w/eval-runs/x' })], since, null, new Set()), 'evalRuns');
+  assert.equal(exclusion('', [{ ...ts('2026-09-28T10:00:00Z'), ...human, cwd: '/a/te5-pilot/runs/w', entrypoint: 'sdk-cli' }], since, null, new Set()), 'headless');
+  assert.equal(exclusion('', [{ ...ts('2026-09-28T10:00:00Z'), ...human, entrypoint: 'cli' }], since, null, new Set()), null);
   assert.equal(exclusion('see scripts/z0-capture-eval.mjs', [ts('2026-09-28T10:00:00Z')], since, null, new Set()), 'ownWork');
   assert.equal(exclusion('', [{ ...ts('2026-09-28T10:00:00Z'), ...human, gitBranch: 'fix/capture-extractor-3' }], since, null, new Set()), 'ownWork');
   assert.equal(exclusion('', [{ ...ts('2026-09-28T10:00:00Z'), ...human }], since, null, new Set([human.message.content])), 'frozenOverlap');

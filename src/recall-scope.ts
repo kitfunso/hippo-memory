@@ -7,7 +7,37 @@
  * (`api.isPrivateScope`, test imports of `passesScopeFilterForRecall`).
  */
 
-import { RECALL_DEFAULT_DENY_SCOPES } from './store.js';
+/**
+ * Literal scopes excluded from recall by default-deny when the
+ * caller passes no `scope`. The SQL clause in `loadSearchRows` and the JS
+ * helper `passesScopeFilterForRecall` (src/api.ts) both read from this
+ * constant. Adding a deny scope is a one-place change.
+ *
+ * Regex-based denies (e.g. `<source>:private:*`) stay in
+ * `passesScopeFilterForRecall` as a separate JS step — they don't translate
+ * cleanly to SQL.
+ *
+ * Invariant: never empty. An empty array would silently allow quarantine
+ * scopes through both paths (SQL clause omitted, JS check vacuous). The
+ * module-load assertion below pins this loudly.
+ */
+export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
+
+/**
+ * @internal Runtime guard against a future maintainer blanking a
+ * load-bearing literal array. Extracted from the inline guard so the throw
+ * path is directly testable. `as const` arrays widen via `readonly T[]` at
+ * the call site so the empty case is reachable at runtime.
+ */
+export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
+  if (arr.length === 0) {
+    throw new Error(
+      `${name} cannot be empty — would silently allow quarantine scopes`,
+    );
+  }
+}
+
+assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
 /**
  * v1.2.1: source-agnostic private-scope detector. A scope string is treated

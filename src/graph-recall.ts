@@ -38,7 +38,8 @@
  */
 import { loadEntriesByIds } from './store.js';
 import type { MemoryEntry } from './memory.js';
-import { type ResultCost, type SearchResult, estimateTokens } from './search.js';
+import type { ResultCost, SearchResult } from './search.js';
+import { estimateTokens } from './token-ledger.js';
 import { compareEntryIdentity } from './compare.js';
 import {
   loadEntitiesByMemoryId,

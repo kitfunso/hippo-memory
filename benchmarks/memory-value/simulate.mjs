@@ -60,7 +60,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyOutcome } from '../../dist/memory.js';
 import { writeEntry, loadAllEntries, readEntry } from '../../dist/store.js';
-import { hybridSearch, markRetrieved, buildCorpus } from '../../dist/search.js';
+import { hybridSearch, buildCorpus } from '../../dist/search.js';
+import { markRetrieved } from '../../dist/memory.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';
 

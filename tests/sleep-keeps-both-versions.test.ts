@@ -463,7 +463,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     expect(copies(recalled)).toBe(1);
 
     const cwd = process.cwd();
-    process.chdir(tmp()); // outside a git repo hippo_context queries 'project context general'
+    process.chdir(tmp()); // outside a git repo hippo_context has no query and lists by strength
     try {
       const context = await mcp(root, 'hippo_context', {});
       expect(context).toContain(row.content);

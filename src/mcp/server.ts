@@ -17,27 +17,26 @@ import {
   applyOutcome,
   calculateStrength,
 } from '../memory.js';
-import { hybridSearch, physicsSearch, estimateTokens, type SearchResult } from '../search.js';
+import { fitBudget, estimateTokens, type SearchResult } from '../search.js';
 import { evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep, type SessionEvent, type TaskSnapshot } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
-import { execSync } from 'child_process';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, passesScopeFilterForRecall, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext, type Actor as ApiActor } from '../api.js';
-import { assertScopeRequestAllowed } from '../recall-scope.js';
-import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
+import { retrieve as apiRetrieve, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type Actor as ApiActor, type ContextCost } from '../api.js';
+import { autoDetectContext } from '../context-auto.js';
+import { resolveProjectIdentity, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent, auditQueryFields } from '../audit.js';
 import { RejectedValueError } from '../rejection.js';
-import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
   hashQueryText,
+  biasHintEnabled,
   buildSessionKey,
   getOrCreateRing,
   appendRecall,
@@ -55,7 +54,6 @@ const sessionRecallHistoryMcp = new Map<string, RingBuffer>();
 export function __resetSessionRecallHistoryMcp(): void {
   sessionRecallHistoryMcp.clear();
 }
-import { applyGoalStackBoost } from '../goals.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -115,6 +113,7 @@ export interface McpContext {
   role?: 'admin' | 'member';
   /** EI2: scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
+  viaAuthResolver?: true;
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
@@ -130,7 +129,9 @@ export interface McpContext {
  * a member key never acts as admin through MCP.
  */
 function mcpActor(ctx: McpContext | undefined): ApiActor {
-  return { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
+  const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
+  if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
+  return actor;
 }
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
@@ -183,8 +184,27 @@ interface DrillDownExtraOpts {
 // ── Format helpers ──
 
 import type { ContinuityBlock, RecallResult, RecallResultItem } from '../api.js';
-import { formatHandoffEvidenceLine } from '../handoff.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../handoff.js';
 import { assembleCost, assembleText, drillCost, drillText, printedTokens } from '../context-render.js';
+
+function handoffLines(h: SessionHandoff): string[] {
+  const lines = [`- Summary: ${h.summary}`];
+  if (h.nextAction) lines.push(`- Next action: ${h.nextAction}`);
+  if ((h.artifacts ?? []).length > 0) lines.push(`- Artifacts: ${(h.artifacts ?? []).join(', ')}`);
+  if (h.outcome) lines.push(`- Outcome: ${h.outcome}`);
+  if (h.targetRuntime) lines.push(`- Target runtime: ${h.targetRuntime}`);
+  if (h.cardId) lines.push(`- Card: ${h.cardId}`);
+  if ((h.constraints ?? []).length > 0) lines.push(`- Constraints: ${(h.constraints ?? []).join(', ')}`);
+  if (h.evidence) lines.push(`- Evidence: ${formatHandoffEvidenceLine(h.evidence)}`);
+  return lines;
+}
+
+function trailLines(events: readonly SessionEvent[]): string[] {
+  return events.map((e) => {
+    const preview = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
+    return `- [${e.event_type}] ${preview}`;
+  });
+}
 
 function formatContinuityBlock(block: ContinuityBlock): string {
   const lines: string[] = ['## Continuity'];
@@ -198,36 +218,12 @@ function formatContinuityBlock(block: ContinuityBlock): string {
   if (block.sessionHandoff) {
     lines.push('');
     lines.push('### Session Handoff');
-    lines.push(`- Summary: ${block.sessionHandoff.summary}`);
-    if (block.sessionHandoff.nextAction) {
-      lines.push(`- Next action: ${block.sessionHandoff.nextAction}`);
-    }
-    if ((block.sessionHandoff.artifacts ?? []).length > 0) {
-      lines.push(`- Artifacts: ${(block.sessionHandoff.artifacts ?? []).join(', ')}`);
-    }
-    if (block.sessionHandoff.outcome) {
-      lines.push(`- Outcome: ${block.sessionHandoff.outcome}`);
-    }
-    if (block.sessionHandoff.targetRuntime) {
-      lines.push(`- Target runtime: ${block.sessionHandoff.targetRuntime}`);
-    }
-    if (block.sessionHandoff.cardId) {
-      lines.push(`- Card: ${block.sessionHandoff.cardId}`);
-    }
-    if ((block.sessionHandoff.constraints ?? []).length > 0) {
-      lines.push(`- Constraints: ${(block.sessionHandoff.constraints ?? []).join(', ')}`);
-    }
-    if (block.sessionHandoff.evidence) {
-      lines.push(`- Evidence: ${formatHandoffEvidenceLine(block.sessionHandoff.evidence)}`);
-    }
+    lines.push(...handoffLines(block.sessionHandoff));
   }
   if (block.recentSessionEvents.length > 0) {
     lines.push('');
     lines.push('### Recent Session Trail');
-    for (const e of block.recentSessionEvents) {
-      const preview = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
-      lines.push(`- [${e.event_type}] ${preview}`);
-    }
+    lines.push(...trailLines(block.recentSessionEvents));
   }
   if (lines.length === 1) {
     lines.push('');
@@ -242,24 +238,70 @@ function memoriesHeading(count: number): string {
   return `Found ${count} memories:\n`;
 }
 
-function formatMemory(r: SearchResult): string {
+function formatMemory(r: Pick<SearchResult, 'entry'>): string {
   const conf = confidenceLabel(r.entry).text;
   const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
   return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${r.entry.content}\n`;
 }
 
-function formatMemories(results: SearchResult[]): string {
+function formatMemories(results: ReadonlyArray<Pick<SearchResult, 'entry'>>): string {
   if (results.length === 0) return NO_MEMORIES;
   return [memoriesHeading(results.length), ...results.map(formatMemory)].join('\n');
 }
 
+interface RenderedRecall {
+  anchoring: ReturnType<typeof detectAnchoring>;
+  availability: ReturnType<typeof detectAvailabilityBias>;
+  text: string;
+  list: SearchResult[];
+}
+
+// api.retrieve hands the ranking to a callback, so the render it produces comes back through this slot.
+interface RenderSlot {
+  rendered?: RenderedRecall;
+}
+
 /** What a memory costs the budget: the text formatMemories prints for it. */
-const memoryCost = (r: SearchResult): number => printedTokens(formatMemory(r));
+const memoryCost = (r: Pick<SearchResult, 'entry'>): number => printedTokens(formatMemory(r));
 
 // The widest heading or the empty-list line, whichever costs more, so either prints inside the budget.
 function memoriesReserve(budget: number): number {
   return Math.max(printedTokens(memoriesHeading(budget)), estimateTokens(NO_MEMORIES));
 }
+
+function snapshotPiece(s: TaskSnapshot): string {
+  return [
+    '## Active Task Snapshot',
+    `- Task: ${s.task}`,
+    `- Status: ${s.status}`,
+    `- Updated: ${s.updated_at}`,
+    '',
+    '### Summary',
+    s.summary,
+    '',
+    '### Next step',
+    s.next_step,
+    '',
+    '',
+  ].join('\n');
+}
+
+function handoffPiece(h: SessionHandoff): string {
+  return ['## Session Handoff', ...handoffLines(h), '', ''].join('\n');
+}
+
+function trailPiece(events: readonly SessionEvent[]): string {
+  return ['## Recent Session Trail', ...trailLines(events), '', ''].join('\n');
+}
+
+// Sections print ahead of the memories in hippo_context, so getContext pays for each as printed before any memory.
+const contextCost: ContextCost = {
+  entry: memoryCost,
+  fixed: (budget) => memoriesReserve(budget),
+  snapshot: (s) => estimateTokens(snapshotPiece(s)),
+  handoff: (h) => estimateTokens(handoffPiece(h)),
+  trail: (events) => estimateTokens(trailPiece(events)),
+};
 
 // Rows the ranked list already shows drop out of this section, so pricing every row bounds what it prints.
 function tailSection(rows: RecallResultItem[]): string {
@@ -277,7 +319,7 @@ function tailSection(rows: RecallResultItem[]): string {
   return '\n' + lines.join('\n');
 }
 
-// J3.2: the hint depends on the query alone, so api.recall's copy is the one shown; JSON.stringify fences the phrase.
+// J3.2: the hint depends on the query alone, so api.retrieve's copy is the one shown; JSON.stringify fences the phrase.
 function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;
@@ -324,12 +366,12 @@ const TOOLS = [
         },
         scorer_window: {
           type: 'number',
-          description: 'Candidate pool size that api.recall evaluates. Affects fresh-tail / summarize-overflow appendix paths and continuity hits. Note: the primary ranked block over MCP is driven by a separate physics/hybrid scorer over the full tenant store, so scorer_window does NOT narrow the main results — only the appendix. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
+          description: 'How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
         },
         session_id: {
           type: 'string',
           maxLength: 256,
-          description: 'Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the primary physics/hybrid result band before formatting AND to api.recall\'s primary BM25 band (so the audit + appendix paths see the same session). Mirrors fresh_tail_session_id shape (256-char cap).',
+          description: 'Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the ranked memories before formatting. Mirrors fresh_tail_session_id shape (256-char cap).',
         },
       },
       required: ['query'],
@@ -431,14 +473,14 @@ const TOOLS = [
   {
     name: 'hippo_context',
     description:
-      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot. Use at the start of any session. Memories and snapshot are scope-filtered: a no-scope caller does NOT see ANY <source>:private:* (slack, github, ...) or legacy-quarantine rows.',
+      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot, session handoff and recent session trail (the same bundle as GET /v1/context). Use at the start of any session. Memories and those sections are scope-filtered: a no-scope caller does NOT see ANY <source>:private:* (slack, github, ...) or legacy-quarantine rows.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         budget: { type: 'number', minimum: 0, description: 'Max tokens (default: config.defaultContextBudget, 3000)' },
         scope: {
           type: 'string',
-          description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
+          description: 'Restrict memories, snapshot, handoff and trail to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
       },
     },
@@ -631,7 +673,7 @@ async function executeTool(
         ? args.summarize_overflow
         : undefined;
       // v1.7.2 T4 — scorer_window: Number-coerce so non-numeric input
-      // (string 'abc', boolean, etc.) reaches api.recall() and produces
+      // (string 'abc', boolean, etc.) reaches api.retrieve() and produces
       // the same typed RecallContractError(code='invalid_scorer_window')
       // as HTTP. Codex CRITICAL[2]: do NOT use `typeof === 'number'` — that
       // would silently default-200 on string `"5"` while HTTP 400s on the
@@ -639,13 +681,7 @@ async function executeTool(
       const scorerWindow = args.scorer_window === undefined
         ? undefined
         : Number(args.scorer_window);
-      // v1.7.4 -- session_id for the dlPFC goal-stack boost. Mirrors
-      // fresh_tail_session_id shape: trim, 256-char cap. When set and the
-      // (tenant, session) has active goals, the boost is applied (a) inside
-      // api.recall on its primary BM25 band (so the audit + fresh-tail /
-      // summary appendix paths see consistent ranking), and (b) below on the
-      // physics/hybrid result list before formatMemories (since MCP's
-      // user-visible primary ordering does NOT come from api.recall).
+      // session_id drives the goal-stack boost inside api.retrieve; same trim and 256-char cap as fresh_tail_session_id.
       const sessionIdRaw = isJsonString(args.session_id) ? args.session_id.trim() : '';
       const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= 256
         ? sessionIdRaw
@@ -655,168 +691,100 @@ async function executeTool(
         tenantId,
         actor: mcpActor(ctx),
       };
-      // Route through api.recall for audit + (when requested) continuity block.
-      // api.recall already applies the same default-deny / exact-match rules
-      // we want here, so its continuity output is the source of truth.
-      // RecallContractError throws propagate raw to the MCP caller (per the
-      // v1.6.5 F5 contract documented in mcp-recall-fresh-tail-policy.test.ts).
       const recallExtra: RecallExtraOpts = {};
       if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
       if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
       if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
       if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
       if (sessionId !== undefined) recallExtra.sessionId = sessionId;
-      const apiResult = apiRecall(apiCtx, {
+      const anchorRing = biasHintEnabled('anchoring') && sessionId
+        ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
+        : null;
+      const queryHash = hashQueryText(query);
+      const out: RenderSlot = {};
+      // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
+      await apiRetrieve(apiCtx, {
         query,
         limit: 50,
         scope: explicitScope,
         includeContinuity,
-        // v1.13.x / J2 — MCP computes its OWN availability hint over the
-        // physics/hybrid result set below; suppress api.recall's BM25-band copy
-        // so one MCP recall does not emit recall_availability_detected twice.
+        mode: config.physics?.enabled !== false ? 'physics' : 'hybrid',
+        // The hint is computed below over the list MCP shows; the window band's copy would emit its audit row twice.
         suppressAvailabilityHint: true,
-        // LC1 F2 fix — MCP's user-visible primary ordering comes from the
-        // physics/hybrid scorer below, NOT this api.recall call's BM25 band
-        // (see the comment above apiRecall). Tracing this call as pipeline
-        // 'api' would mislabel training data with ids/ranks/scores the user
-        // never actually saw. Real MCP tracing is the reserved 'mcp'
-        // pipeline value (schema v40) — a follow-up, not v1 scope.
-        suppressRecallTrace: true,
         keepHeldCopies: true,
         ...recallExtra,
+        showRanked: ({ ranked, pool, droppedByScope }, apiResult) => {
+          // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
+          let left = budget - memoriesReserve(budget);
+          const pays = (piece: string): boolean => {
+            const tokens = estimateTokens(piece);
+            if (tokens > left) return false;
+            left -= tokens;
+            return true;
+          };
+          const planPiece = planningSection(apiResult);
+          const showPlan = planPiece !== '' && pays(planPiece);
+          const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
+          const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
+          const continuityPiece = includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
+          const showContinuity = continuityPiece !== '' && pays(continuityPiece);
+
+          // J1, J2 and C5: the hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
+          const render = (cut: SearchResult[]): RenderedRecall => {
+            const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
+            const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
+            const availability = biasHintEnabled('availability')
+              ? detectAvailabilityBias({
+                  topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+                  pool: pool.map((e) => ({ id: e.id, created: e.created })),
+                })
+              : null;
+            const shownIds = new Set(list.map((r) => r.entry.id));
+            const shownKeys = storedTextKeys(list.map((r) => r.entry));
+            const tail = showTail
+              ? dropHeldCopies(tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))), (r) => r)
+              : [];
+            const s = buildSuppressionSummary({
+              totalCandidates: pool.length + droppedByScope,
+              droppedPreRank: droppedByScope + cut.length - list.length, // the bucket CLI and API recall put hidden copies in
+              droppedByBudget: Math.max(0, pool.length - cut.length), // an upper bound: rows that never matched count too
+              summarySubstitutionsAdded: tail.filter((r) => r.isSummary).length,
+              freshTailAdded: tail.filter((r) => r.isFreshTail && !r.isSummary).length,
+              suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
+            });
+            // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads it.
+            let text = anchoring ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n` : '';
+            if (availability) text += `## Availability bias\n${availability.summary}\n\n---\n\n`;
+            if (showPlan) text += planPiece;
+            const cutoffClauses: string[] = [];
+            if (s.droppedByBudget > 0) cutoffClauses.push(`${s.droppedByBudget} dropped to fit limit`);
+            if (s.droppedPreRank > 0) cutoffClauses.push(`${s.droppedPreRank} filtered pre-rank`);
+            if (s.summarySubstitutionsAdded > 0) cutoffClauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+            if (s.freshTailAdded > 0) cutoffClauses.push(`${s.freshTailAdded} fresh-tail added`);
+            if (s.suppressedByInterference > 0) cutoffClauses.push(`${s.suppressedByInterference} suppressed by interference`);
+            if (cutoffClauses.length > 0) {
+              text += `## Cutoff\nShowing ${list.length} of ${s.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n\n---\n\n`;
+            }
+            // The window band's fresh-tail and summary rows follow the ranked list, or the MCP fields go unanswered.
+            text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
+            return { anchoring, availability, text, list };
+          };
+          let results = fitBudget(ranked, Math.max(0, left), 1, memoryCost);
+          let rendered = render(results);
+          // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response fits.
+          while (results.length > 1 && estimateTokens(rendered.text) > budget) {
+            results = results.slice(0, -1);
+            rendered = render(results);
+          }
+          out.rendered = rendered;
+          return rendered.list.map((r) => r.entry.id);
+        },
       });
+      if (!out.rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
+      const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown, text: recallText } = out.rendered;
+      lastRecalledIds.set(resolveClientKey(ctx), shown.map((r) => r.entry.id));
 
-      // Existing physics/hybrid scorer continues to drive user-visible
-      // ordering and the strength bump on retrieval. Apply the same scope
-      // rule as api.recall: explicit scope = exact match; no scope =
-      // default-deny on ANY `<source>:private:*` AND 'unknown:legacy'.
-      // EI2: one shared predicate (passesScopeFilterForRecall) so MCP never admits what SQL hides.
-      const allEntries = loadAllEntries(hippoRoot, tenantId);
-      // v1.12.13 / C5 — WYSIATI counters for the MCP physics/hybrid pipeline.
-      // Per the plan-eng-critic round 1 CRIT resolution: MCP's user-visible
-      // memory list comes from THIS pipeline (loadAllEntries -> scope filter
-      // -> physicsSearch/hybridSearch), NOT from apiResult. The MCP
-      // suppressionSummary must describe what the user actually sees, so we
-      // track filter activity here and replace apiResult.suppressionSummary
-      // in the user-facing response.
-      const totalCandidatesCountMcp = allEntries.length;
-      const entries = explicitScope
-        ? allEntries.filter((e) => e.scope === explicitScope)
-        : allEntries.filter((e) => passesScopeFilterForRecall(e.scope ?? null, undefined));
-      const droppedPreRankCountMcp = allEntries.length - entries.length;
-      // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
-      let left = budget - memoriesReserve(budget);
-      const pays = (piece: string): boolean => {
-        const tokens = estimateTokens(piece);
-        if (tokens > left) return false;
-        left -= tokens;
-        return true;
-      };
-      const planPiece = planningSection(apiResult);
-      const showPlan = planPiece !== '' && pays(planPiece);
-      const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
-      const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
-      const continuityPiece = includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
-      const showContinuity = continuityPiece !== '' && pays(continuityPiece);
-      const usePhysics = config.physics?.enabled !== false;
-      const fit = { budget: Math.max(0, left), cost: memoryCost, hippoRoot };
-      let results = usePhysics
-        ? await physicsSearch(query, entries, { ...fit, physicsConfig: config.physics })
-        : await hybridSearch(query, entries, fit);
-      // v1.12.13 / C5 — droppedByBudget for MCP is an UPPER BOUND. The
-      // difference (entries.length - results.length) lumps three things
-      // together: rows hybridSearch/physicsSearch internally dropped because
-      // they scored zero (didn't match the query at all), rows the search
-      // engine filtered internally (e.g. superseded when --include-
-      // superseded isn't set), and rows that genuinely didn't fit the
-      // `budget` token cap. The honest fix needs hybridSearch/physicsSearch
-      // to expose their pre-budget-cut scored-count. Until then this is an
-      // upper bound that conflates "not relevant" with "no budget" on
-      // no-match / sparse-match queries. Plan-eng-critic round 1 MED and
-      // codex-review-critic P2 both flagged this; documented + tracked as
-      // a v1.12.14 follow-up. Independent-review-critic and code-review-
-      // critic both graded as non-blocking for v1.12.13 ship.
-      // TODO(c5.1): expose scoredCount from hybridSearch/physicsSearch and
-      // compute droppedByBudget = scoredCount - results.length, with the
-      // remainder (entries.length - scoredCount) attributed to
-      // droppedPreRank or a new "noQueryMatch" counter.
-      const droppedByBudgetFor = (shown: number): number => Math.max(0, entries.length - shown);
-
-      // v1.7.4 -- dlPFC goal-stack boost on the MCP physics/hybrid result
-      // list BEFORE formatMemories. MCP's user-visible primary ordering does
-      // NOT come from api.recall (apiResult above), so the boost has to run
-      // here too. Helper signature accepts any { entry, score } shape; the
-      // physics/hybrid result rows are already in that shape.
-      if (sessionId !== undefined) {
-        const dbForBoost = openHippoDb(hippoRoot);
-        try {
-          results = applyGoalStackBoost(dbForBoost, results, {
-            sessionId,
-            tenantId,
-            limit: results.length,
-          });
-        } finally {
-          closeHippoDb(dbForBoost);
-        }
-      }
-
-      // J1, J2 and C5: MCP ranks its own list (its top-1 can differ from api.recall's), so its hints and Cutoff block are its own.
-      const anchorRing = process.env.HIPPO_ANCHORING !== 'off' && sessionId
-        ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
-        : null;
-      const queryHash = hashQueryText(query);
-      const render = (cut: SearchResult[]) => {
-        const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
-        const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
-        const availability = process.env.HIPPO_AVAILABILITY !== 'off'
-          ? detectAvailabilityBias({
-              topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
-              pool: entries.map((e) => ({ id: e.id, created: e.created })),
-            })
-          : null;
-        const shownIds = new Set(list.map((r) => r.entry.id));
-        const shownKeys = storedTextKeys(list.map((r) => r.entry));
-        const tail = showTail
-          ? dropHeldCopies(tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))), (r) => r)
-          : [];
-        const s = buildSuppressionSummary({
-          totalCandidates: totalCandidatesCountMcp,
-          droppedPreRank: droppedPreRankCountMcp + cut.length - list.length, // the bucket CLI and API recall put hidden copies in
-          droppedByBudget: droppedByBudgetFor(cut.length),
-          summarySubstitutionsAdded: tail.filter((r) => r.isSummary).length,
-          freshTailAdded: tail.filter((r) => r.isFreshTail && !r.isSummary).length,
-          suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
-        });
-        // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads it.
-        let text = anchoring ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n` : '';
-        if (availability) text += `## Availability bias\n${availability.summary}\n\n---\n\n`;
-        if (showPlan) text += planPiece;
-        const cutoffClauses: string[] = [];
-        if (s.droppedByBudget > 0) cutoffClauses.push(`${s.droppedByBudget} dropped to fit limit`);
-        if (s.droppedPreRank > 0) cutoffClauses.push(`${s.droppedPreRank} filtered pre-rank`);
-        if (s.summarySubstitutionsAdded > 0) cutoffClauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
-        if (s.freshTailAdded > 0) cutoffClauses.push(`${s.freshTailAdded} fresh-tail added`);
-        if (s.suppressedByInterference > 0) cutoffClauses.push(`${s.suppressedByInterference} suppressed by interference`);
-        if (cutoffClauses.length > 0) {
-          text += `## Cutoff\nShowing ${list.length} of ${s.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n\n---\n\n`;
-        }
-        // v1.6.3: the fresh-tail and summary rows api.recall produced follow the ranked list, or the MCP fields go unanswered.
-        text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
-        return { anchoring, availability, text, list };
-      };
-      let rendered = render(results);
-      // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response fits.
-      while (results.length > 1 && estimateTokens(rendered.text) > budget) {
-        results = results.slice(0, -1);
-        rendered = render(results);
-      }
-      const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown } = rendered;
-
-      const retrievedIds = shown.map((r) => r.entry.id);
-      strengthenRetrieved(hippoRoot, retrievedIds);
-      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
-
-      if (process.env.HIPPO_ANCHORING !== 'off') {
+      if (biasHintEnabled('anchoring')) {
         if (anchorRing) {
           // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
           appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);
@@ -863,10 +831,7 @@ async function executeTool(
               actor: ctx?.actor ?? 'mcp',
               op: 'recall_anchor_skipped_no_session',
               targetId: undefined,
-              metadata: {
-                query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
-                query_length: query.length,
-              },
+              metadata: auditQueryFields(query),
             });
           } finally {
             closeHippoDb(dbForAudit);
@@ -892,7 +857,7 @@ async function executeTool(
         }
       }
 
-      return rendered.text;
+      return recallText;
     }
 
     case 'hippo_assemble': {
@@ -1050,91 +1015,27 @@ async function executeTool(
         : Number(args.budget);
       if (!Number.isFinite(budget) || budget < 0) return 'budget must be a non-negative number.';
       if (budget === 0) return '';
-      const explicitScope = isJsonString(args.scope) && args.scope.length > 0
+      if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
+      const exactScope = isJsonString(args.scope) && args.scope.length > 0
         ? args.scope
         : undefined;
-      // Auto-detect query from git
-      let query = '';
-      try {
-        const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
-        const diff = execSync('git diff --cached --stat 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
-        const log = execSync('git log -1 --pretty=format:"%s" 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
-        query = [branch, log, diff].filter(Boolean).join(' ');
-      } catch { /* not a git repo */ }
-
-      if (!query) query = 'project context general';
-
-      // v1.2 codex audit: same scope filter as hippo_recall on BOTH the memory
-      // results and the snapshot. Pre-v1.2 this surface returned all memories
-      // and the snapshot unfiltered, which would have leaked private-channel
-      // content to no-scope MCP callers once scope writers shipped.
-      assertScopeRequestAllowed(mcpActor(ctx), explicitScope);
-      const allEntries = loadAllEntries(hippoRoot, tenantId);
-      // v39 memory scope isolation: this surface reads the LOCAL store only,
-      // but synced-down or legacy rows can still carry another project's
-      // origin, and secrets must never ambient-inject outside their owner.
-      // Same policy as api.getContext; the scope filter above keeps this
-      // surface's own explicit-scope exact-match semantics.
-      //
-      // Identity resolution handles both transports (codex rounds 4+5):
-      // - The SERVED store is authoritative when it is a project store -
-      //   an HTTP /mcp daemon launched from anywhere still isolates the
-      //   project it serves.
-      // - When the served store is the global root (stdio in a git repo
-      //   with no local .hippo falls back to it), dirname(store) is home
-      //   ('' would admit everything), so fall back to the launch cwd -
-      //   stdio servers launch in the project they serve.
-      const mcpStoreIdentity = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
-      const mcpProjectName = mcpStoreIdentity.name !== ''
-        ? mcpStoreIdentity.name
-        : resolveProjectIdentity(process.cwd()).name;
-      const isolationOff = config.contextProjectIsolation === false;
-      const entries = allEntries.filter((e) => {
-        if (!passesScopeFilterForRecall(e.scope ?? null, explicitScope)) return false;
-        if (!ambientSecretAdmit(e, mcpProjectName)) return false;
-        if (isolationOff) return true;
-        return classifyOriginProject(e.origin_project, mcpProjectName) !== 'cross-project';
-      });
-
-      // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): bounded
-      // read, no session id available on this surface (freshness bound
-      // only) — an orphaned snapshot must age out here too, not just on the
-      // UserPromptSubmit path.
-      const rawSnapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId);
-      const snapshot = rawSnapshot && passesScopeFilterForRecall(rawSnapshot.scope, explicitScope)
-        ? rawSnapshot
-        : null;
-      const snapshotText = snapshot
-        ? [
-            '## Active Task Snapshot',
-            `- Task: ${snapshot.task}`,
-            `- Status: ${snapshot.status}`,
-            `- Updated: ${snapshot.updated_at}`,
-            '',
-            '### Summary',
-            snapshot.summary,
-            '',
-            '### Next step',
-            snapshot.next_step,
-            '',
-          ].join('\n')
-        : '';
-
-      // The snapshot prints first, so it is paid first after the heading; context keeps no hit past the budget, even the top one.
-      let left = budget - memoriesReserve(budget);
-      if (left < 0) return ''; // not even the heading fits, so nothing prints, as at budget 0
-      const snapshotPiece = snapshotText ? `${snapshotText}\n` : '';
-      const showSnapshot = snapshotPiece !== '' && estimateTokens(snapshotPiece) <= left;
-      if (showSnapshot) left -= estimateTokens(snapshotPiece);
-      const usePhysicsCtx = config.physics?.enabled !== false;
-      const fit = { budget: left, minResults: 0, cost: memoryCost, hippoRoot };
-      const results = dropHeldCopies(usePhysicsCtx
-        ? await physicsSearch(query, entries, { ...fit, physicsConfig: config.physics })
-        : await hybridSearch(query, entries, fit), (r) => r.entry);
-      const retrievedIds = results.map((r) => r.entry.id);
-      strengthenRetrieved(hippoRoot, retrievedIds);
-      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
-      return (showSnapshot ? snapshotPiece : '') + formatMemories(results);
+      // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
+      const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot))).name;
+      const result = await apiGetContext(
+        { hippoRoot, tenantId, actor: mcpActor(ctx) },
+        {
+          q: autoDetectContext(),
+          budget,
+          exactScope,
+          currentProject: storeProject !== '' ? storeProject : resolveProjectIdentity(process.cwd()).name,
+          cost: contextCost,
+        },
+      );
+      lastRecalledIds.set(resolveClientKey(ctx), result.entries.map((r) => r.entry.id));
+      return (result.activeSnapshot ? snapshotPiece(result.activeSnapshot) : '')
+        + (result.sessionHandoff ? handoffPiece(result.sessionHandoff) : '')
+        + (result.recentEvents ? trailPiece(result.recentEvents) : '')
+        + formatMemories(result.entries);
     }
 
     case 'hippo_status': {

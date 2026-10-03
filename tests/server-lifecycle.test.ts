@@ -248,6 +248,31 @@ describe('/v1 rate limiting', () => {
     }
   });
 
+  it('throttles /mcp and /mcp/stream from the same per-IP bucket', async () => {
+    const home = makeRoot();
+    const prev = process.env.HIPPO_V1_RPS;
+    process.env.HIPPO_V1_RPS = '1'; // rate 1/s, burst 2
+    const ac = new AbortController();
+    try {
+      const handle = await serve({ hippoRoot: home, port: 0 });
+      try {
+        const mcp = await Promise.all(
+          Array.from({ length: 12 }, () => fetch(`${handle.url}/mcp`, { method: 'POST', body: '{}' })),
+        );
+        expect(mcp.some((r) => r.status === 429)).toBe(true);
+        const stream = await fetch(`${handle.url}/mcp/stream`, { signal: ac.signal });
+        expect(stream.status).toBe(429);
+      } finally {
+        ac.abort();
+        await handle.stop();
+      }
+    } finally {
+      if (prev === undefined) delete process.env.HIPPO_V1_RPS;
+      else process.env.HIPPO_V1_RPS = prev;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('HIPPO_V1_RPS=0 disables the limiter (no 429s under a burst)', async () => {
     const home = makeRoot();
     const prev = process.env.HIPPO_V1_RPS;

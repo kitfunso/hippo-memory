@@ -26,7 +26,7 @@ import { loadDecisions } from './decisions.js';
 import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
 import { loadProjectBriefs } from './project-briefs.js';
-import { assertTenantId } from './store.js';
+import { assertTenantId } from './tenant.js';
 
 /** Per-type load cap (the loaders default to 100). A type whose active or superseded
  *  set exceeds this is truncated; `ExtractResult.truncated` records it so the

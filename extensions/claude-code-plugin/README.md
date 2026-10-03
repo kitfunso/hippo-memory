@@ -46,7 +46,7 @@ The `SessionStart` hook automatically runs `hippo context --auto --budget 1500` 
 
 ### Pinned rules on every prompt
 
-The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories and the five newest writes stay in context through long sessions.
+The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories stay in context through long sessions, with up to 5 memories that share words with the prompt. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the five newest writes instead.
 
 ### Auto-capture errors
 

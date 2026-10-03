@@ -8,7 +8,7 @@
  */
 
 import { evalNow, isRecallBoostAblated } from './ablation.js';
-import { MemoryEntry, Layer, calculateStrength, canAutoDelete, createMemory, type DecayOptions } from './memory.js';
+import { MemoryEntry, Layer, calculateStrength, canAutoDelete, createMemory, markRetrieved, type DecayOptions } from './memory.js';
 import {
   loadAllEntries,
   writeEntry,
@@ -23,7 +23,8 @@ import {
   listSessionEvents,
   memoriesBackingObjects,
 } from './store.js';
-import { textOverlap, markRetrieved, tokenize } from './search.js';
+import { textOverlap } from './search.js';
+import { tokenize } from './tokenize.js';
 import { compareEntryIdentity } from './compare.js';
 import { duplicateKey, mergedText } from './same-text.js';
 import { successorAfterRetirement } from './merged-row.js';

@@ -9,8 +9,8 @@ describe('B3 schema migration v18', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(49);
-      expect(getCurrentSchemaVersion()).toBe(49);
+      expect(getSchemaVersion(db)).toBe(50);
+      expect(getCurrentSchemaVersion()).toBe(50);
     } finally {
       closeHippoDb(db);
       rmSync(home, { recursive: true, force: true });
