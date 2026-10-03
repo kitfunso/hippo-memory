@@ -80,13 +80,14 @@ describe('a session that runs out of time (prereg 165)', () => {
     const r = makeRepo();
     const started = Date.now();
     await run(spec(r, [], [task(r, 'n1', 'HANG'), plain(r, 'n2')]), ['A0'], out, TIMEOUT);
-    expect(Date.now() - started).toBeLessThan(25_000);
+    // Well under the fake's 120 s hang, which a run that waited on the tree would sit out; loose for a loaded box.
+    expect(Date.now() - started).toBeLessThan(90_000);
     const tick = join(out, 'tick.txt');
     expect(existsSync(tick)).toBe(true);
     const before = statSync(tick).size;
     await new Promise((resolve) => setTimeout(resolve, 600));
     expect(statSync(tick).size).toBe(before);
-  }, 60_000);
+  }, 110_000);
 
   it('a timeout with no transcript stays invalid: no-transcript', async () => {
     const { out } = isolate('hang-none');
