@@ -72,7 +72,7 @@ export function checkDevDrawZ7b(inp, z7Pin = Z7_SCORED_SHA) {
 // Gate names whose value is null, nested ones dotted (G2.recheck).
 export function untestedGates(g) {
   return Object.entries(g).flatMap(([k, v]) => (v === null ? [k]
-    : v && typeof v === 'object' ? Object.entries(v).filter(([, x]) => x === null).map(([s]) => `${k}.${s}`) : []));
+    : isObj(v) ? Object.entries(v).filter(([, x]) => x === null).map(([s]) => `${k}.${s}`) : []));
 }
 
 // --- prompt hashes ---

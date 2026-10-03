@@ -31,7 +31,7 @@ Across the three rounds, 34 distinct dev sub-agents were marked by hand and **at
 
 - Floor: 5 of 114, or 0.044 (Wilson 95% interval 0.019 to 0.099, not adjusted for session clusters).
 - Ceiling: 27 of 114, or 0.237, if every unmarked candidate held a confirmed lesson.
-- The 22 filter-removed sub-agents drawn for the false-exclusion samples confirmed 0 of 22, which points toward the floor, but one confirmed sub-agent shows that the filter does remove true lessons.
+- The 22 filter-removed sub-agents drawn for the false-exclusion samples confirmed 0 of 22 on the lessons the filter removed, which points toward the floor. The two sets are not disjoint: one of the 22 was confirmed in rounds 2 and 3 on a different lesson set. And one confirmed sub-agent had every lesson removed by the round-2 filter, so the filter does remove true lessons.
 
 This is a dev figure on a definition fixed after Z7's result, not a pre-registered estimate. Z7b's BUILD line was a precision-discounted rate of at least one in ten. The marked sample sits under it; the unmarked candidates leave it open.
 
