@@ -130,6 +130,14 @@ The extractor code is not on master. It lives at the freeze tag, and the PR that
 - Held-out text read before the score (beyond the counts the scorer prints): retract and move the window start.
 - A window session later found to be the extractor's own development: report it; if more than 5 such sessions, the verdict is retracted.
 
+## Amendment 1 (2026-10-03, before any scored run; no marker exists)
+
+Found by a count of the window from session metadata only (timestamps, `entrypoint`, `cwd`, git branch, turn types); no held-out text was read and no arm was run. No arm, rubric, labeller, seed, bar or window start changed.
+
+- **Headless sessions excluded.** The `eval-runs` path rule missed the 2026-09-28 TE5 pilot, which ran under `hippo-archive/te5-pilot/runs/...`. As locked, the window held about 105 eligible sessions and 80 of them were the pilot's scripted `claude -p` runs, so the scorer would have cleared the 110 floor within days on mostly automated data. Any session with an entry whose `entrypoint` is `sdk-cli` (a `claude -p` or SDK run) is now excluded, wherever it ran, and counted as `headless`. Of the 100 headless sessions in the window, 94 had one typed prompt and 6 had two or more. The `eval-runs` rule stays.
+- **Counts after the change:** 13 interactive sessions in the window, about 5 eligible after the other exclusions (frozen-overlap not yet applied).
+- **Scoring date withdrawn.** The 4.6 a day rate behind 110 was measured without this rule and is overstated by an unknown share. Unless the interactive rate rises sharply, the window stays short and the result on 2026-10-26 is NO VERDICT (window too small), as the rule above already says.
+
 ## Disclosures
 
 - One user wrote every session in the corpus and the window.

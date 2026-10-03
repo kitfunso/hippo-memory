@@ -157,7 +157,7 @@ function isPathInside(child, parent) {
 // step 1: collect transcripts
 function collect(projectsDir, outDir) {
   const kept = [];
-  const excluded = { z1c: 0, evalRuns: 0, scratch: 0, stale: 0 };
+  const excluded = { z1c: 0, evalRuns: 0, headless: 0, scratch: 0, stale: 0 };
   const cwds = new Set();
   let latestTs = -Infinity;
   const sinceMs = Date.parse(SINCE);
@@ -170,13 +170,15 @@ function collect(projectsDir, outDir) {
       const filePath = path.join(dirPath, f.name);
       const text = fs.readFileSync(filePath, 'utf8');
       if (text.split(/\r?\n/).some((l) => l && mentionsZ1c(l))) { excluded.z1c++; continue; }
-      let hasEvalRuns = false, hasScratch = false, hasRecent = false;
+      let hasEvalRuns = false, isHeadless = false, hasScratch = false, hasRecent = false;
       const fileCwds = new Set();
       let fileMaxTs = -Infinity;
       for (const line of text.split(/\r?\n/)) {
         if (!line) continue;
         let o;
         try { o = JSON.parse(line); } catch { continue; }
+        // Amendment 2: `claude -p` runs are scripted wherever they ran; a path rule missed the TE5 pilot.
+        if (o.entrypoint === 'sdk-cli') isHeadless = true;
         if (o.cwd) {
           fileCwds.add(o.cwd);
           const segs = String(o.cwd).split(/[\\/]/);
@@ -189,6 +191,7 @@ function collect(projectsDir, outDir) {
         }
       }
       if (hasEvalRuns) { excluded.evalRuns++; continue; }
+      if (isHeadless) { excluded.headless++; continue; }
       if (hasScratch) { excluded.scratch++; continue; }
       if (!hasRecent) { excluded.stale++; continue; }
       const destDir = path.join(outDir, 'corpus', pd.name);
