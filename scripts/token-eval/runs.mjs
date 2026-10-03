@@ -123,7 +123,7 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   };
 }
 
-/** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off. */
+/** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off and prompt recall pinned on. */
 export function hippoInit(run, fakeHome) {
   const env = { ...childEnv(run.env), HOME: fakeHome, USERPROFILE: fakeHome };
   // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
@@ -131,7 +131,8 @@ export function hippoInit(run, fakeHome) {
   if (r.status !== 0) throw new Error(`hippo init failed in ${run.dirs.work}: ${r.stderr.slice(-500)}`);
   const cfgPath = path.join(run.dirs.work, '.hippo', 'config.json');
   const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-  fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false } }, null, 2));
+  // Pinned, so a change to hippo's promptRecall default cannot move what the arms receive.
+  fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false }, pinnedInject: { ...cfg.pinnedInject, promptRecall: true } }, null, 2));
 }
 
 const SKIPPED = { setup: 'setup failed, skipped', leak: 'a leak voids this sequence and seed, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };

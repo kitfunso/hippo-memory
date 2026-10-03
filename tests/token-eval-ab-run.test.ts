@@ -222,6 +222,12 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
       if (arm === 'A1') expect(settings).toEqual({});
       if (arm === 'A2') expect(Object.keys(settings.hooks)).toContain('SessionEnd');
       if (arm === 'A5') expect(Object.keys(settings.hooks).sort()).toEqual(['SessionStart', 'UserPromptSubmit']);
+      // Pinned, so a hippo default change cannot move what the hippo arms receive.
+      if (arm === 'A2' || arm === 'A5') {
+        const hippoCfg = JSON.parse(readFileSync(join(dirsOf, 'work', '.hippo', 'config.json'), 'utf8'));
+        expect(hippoCfg.pinnedInject?.promptRecall).toBe(true);
+        expect(hippoCfg.extraction?.enabled).toBe(false);
+      }
       if (arm === 'A0' || arm === 'A1') {
         expect(res.hippoProbe.status).not.toBe(0);
         expect(res.hippoProbe.stderr).toMatch(/not recognized|not found/i);
