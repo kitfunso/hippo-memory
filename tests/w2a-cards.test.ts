@@ -8,6 +8,9 @@ import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import {
   initStore,
+  saveSessionHandoff,
+} from '../src/store.js';
+import {
   createCard,
   loadCard,
   loadCardDeps,
@@ -19,9 +22,8 @@ import {
   addCardComment,
   loadCardComments,
   transitionCard,
-  saveSessionHandoff,
   loadLatestHandoffForCard,
-} from '../src/store.js';
+} from '../src/store-cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { CARD_TRANSITIONS, type CardStatus } from '../src/card.js';
 

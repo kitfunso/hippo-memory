@@ -42,6 +42,8 @@ export {
   writeSessionEndHandoff,
   loadSessionDecayContext,
   SessionDecayContext,
+} from './store.js';
+export {
   createCard,
   loadCard,
   listCards,
@@ -56,7 +58,7 @@ export {
   reclaimExpiredCards,
   addCardComment,
   loadLatestHandoffForCard,
-} from './store.js';
+} from './store-cards.js';
 
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
