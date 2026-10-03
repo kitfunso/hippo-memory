@@ -52,7 +52,6 @@ import {
   outcomeForLastRecall,
   getContext,
   sleep,
-  adminActor,
   recordTokens,
   quarantineList,
   quarantineApprove,
@@ -133,25 +132,18 @@ import {
   type NoteStatus,
 } from './customer-notes.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
-import { verifySlackSignature } from './connectors/slack/signature.js';
-import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
-import { ingestMessage } from './connectors/slack/ingest.js';
-import { handleMessageDeleted } from './connectors/slack/deletion.js';
-import { writeToDlq } from './connectors/slack/dlq.js';
-import { resolveTenantForTeam } from './connectors/slack/tenant-routing.js';
-import { verifyGitHubSignature } from './connectors/github/signature.js';
+import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
+import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import {
-  isGitHubWebhookEnvelope,
-  isGitHubIssueEvent,
-  isGitHubIssueCommentEvent,
-  isGitHubPullRequestEvent,
-  isGitHubPullRequestReviewCommentEvent,
-} from './connectors/github/types.js';
-import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './connectors/github/ingest.js';
-import { handleCommentDeleted as handleGitHubCommentDeleted } from './connectors/github/deletion.js';
-import { writeToDlq as writeToGitHubDlq } from './connectors/github/dlq.js';
-import { resolveTenantForGitHub } from './connectors/github/tenant-routing.js';
-import { computeIdempotencyKey as computeGitHubIdempotencyKey, computeDeletionKey as computeGitHubDeletionKey } from './connectors/github/signature.js';
+  HttpError,
+  JSON_HEADERS,
+  BodyTooLargeError,
+  isHeaderString,
+  isJsonObjectRecord,
+  readBody,
+  sendJson,
+  type JsonValue,
+} from './http-util.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -178,13 +170,6 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 // small enough that a malicious client can't ask for the world.
 const MAX_AUDIT_LIMIT = 10000;
 
-// Shared JSON-value domain type for the HTTP boundary (request bodies,
-// JSON.parse results). Runtime shape checks against it go through the
-// predicates below rather than a bare `typeof` (banned unconditionally by
-// anti-slop/no-runtime-typeof in this repo's oxlint config). Mirrors the
-// pattern already used in src/connectors/slack/types.ts.
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
 function isJsonString(value: JsonValue | undefined): value is string {
   return typeof value === 'string';
 }
@@ -195,16 +180,6 @@ function isJsonNumber(value: JsonValue | undefined): value is number {
 
 function isJsonBoolean(value: JsonValue | undefined): value is boolean {
   return typeof value === 'boolean';
-}
-
-function isJsonObjectRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
-  return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-// node:http header values are `string | string[] | undefined` (never a bare
-// unknown), so this gets its own predicate rather than reusing isJsonString.
-function isHeaderString(value: string | string[] | undefined): value is string {
-  return typeof value === 'string';
 }
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
@@ -300,10 +275,6 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
 // v1.3.1: source from src/version.ts so /health no longer reports stale 0.39.0.
 const VERSION = PACKAGE_VERSION;
 
-// 1 MB body cap. The CLI never sends payloads near this; anything bigger is
-// almost certainly a misconfigured client or a deliberate memory-blowup attempt.
-const MAX_BODY_BYTES = 1024 * 1024;
-
 export interface ServerHandle {
   port: number;
   url: string;
@@ -341,46 +312,8 @@ export interface ServeOpts {
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
-const JSON_HEADERS = { 'content-type': 'application/json' } as const;
-
-class HttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-class BodyTooLargeError extends Error {}
-
-function sendJson<T>(res: ServerResponse, status: number, body: T): void {
-  res.writeHead(status, JSON_HEADERS);
-  res.end(JSON.stringify(body));
-}
-
 function sendError(res: ServerResponse, status: number, message: string): void {
   sendJson(res, status, { error: message });
-}
-
-/**
- * Read the entire request body into a Buffer. Caps at MAX_BODY_BYTES to keep
- * a malicious or buggy client from exhausting memory. The cap is enforced
- * mid-stream so we don't wait for an attacker to finish before erroring out.
- */
-async function readBody(req: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of req) {
-    // SAFETY: IncomingMessage never runs setEncoding() here, so every
-    // streamed chunk is a Buffer, not a decoded string.
-    const buf = chunk as Buffer;
-    total += buf.length;
-    if (total > MAX_BODY_BYTES) {
-      throw new BodyTooLargeError('request body exceeds 1MB');
-    }
-    chunks.push(buf);
-  }
-  return Buffer.concat(chunks).toString('utf8');
 }
 
 async function parseJsonBody(req: IncomingMessage): Promise<Record<string, JsonValue>> {
@@ -2860,521 +2793,22 @@ async function handleRequest(
 
   if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
 
-  // ── POST /v1/connectors/slack/events ──
-  //
-  // Slack Events API webhook. Auth is signature-based (HMAC over the raw
-  // body with SLACK_SIGNING_SECRET); Bearer is NOT required, which is why
-  // this route is in PUBLIC_ROUTES. The route is responsible for:
-  //   1. Echoing the one-time url_verification challenge.
-  //   2. Verifying the HMAC on every other inbound payload.
-  //   3. Resolving body.team_id → tenantId via slack_workspaces, falling
-  //      back to HIPPO_TENANT then 'default'.
-  //   4. Dispatching event_callback envelopes to ingestMessage /
-  //      handleMessageDeleted.
-  //   5. Parking malformed or unhandled payloads in slack_dlq and STILL
-  //      ACKing 200 — Slack retries forever otherwise.
-  //
-  // Review patch #7: when SLACK_SIGNING_SECRET is unset we return 404, not
-  // 503, so an external probe cannot distinguish "route gated off by config"
-  // from "route does not exist on this build".
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
-    // Bearer auth deliberately skipped — this route is in PUBLIC_ROUTES
-    // and authenticates via the Slack HMAC signature instead.
+    // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
     if (!isPublicRoute(method, path)) {
       // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
       throw new HttpError(401, 'auth required');
     }
-    const rawBody = await readBody(req);
-    const secret = process.env.SLACK_SIGNING_SECRET;
-    if (!secret) {
-      res.writeHead(404, JSON_HEADERS);
-      res.end(JSON.stringify({ error: 'not found' }));
-      return;
-    }
-    const previousSecret = process.env.SLACK_SIGNING_SECRET_PREVIOUS;
-    const sig = req.headers['x-slack-signature'];
-    const tsHdr = req.headers['x-slack-request-timestamp'];
-    const sigStr = isHeaderString(sig) ? sig : null;
-    const tsStr = isHeaderString(tsHdr) ? tsHdr : null;
-    if (
-      sigStr === null ||
-      tsStr === null ||
-      !verifySlackSignature({
-        rawBody,
-        timestamp: tsStr,
-        signature: sigStr,
-        signingSecret: secret,
-        previousSecret,
-      })
-    ) {
-      throw new HttpError(401, 'invalid Slack signature');
-    }
-    // Cheap regex extracts team_id from a (possibly malformed) raw body so the
-    // DLQ row carries it for triage even when JSON.parse fails.
-    const teamIdFromRaw = (() => {
-      const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
-      return m ? m[1] : null;
-    })();
-    let body: JsonValue | undefined;
-    try {
-      body = JSON.parse(rawBody);
-    } catch {
-      // v1.12.6 (B4): parse-failure tenant attribution. Pre-fix this path
-      // wrote tenant_id=HIPPO_TENANT regardless of the originating workspace,
-      // silently routing parse failures from workspace A into the deployment's
-      // tenant DLQ. Fix: use the regex-extracted teamIdFromRaw to resolve
-      // tenant via the same slack_workspaces table the happy path uses
-      // (resolveTenantForTeam at line ~1044). When teamIdFromRaw is null
-      // (totally unparseable body) OR the team is unknown, write with
-      // tenantId=null so the row lands as '__unroutable__' (matching the
-      // existing unroutable bucket convention).
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        const parseFailTenant =
-          teamIdFromRaw !== null ? resolveTenantForTeam(db, teamIdFromRaw) : null;
-        writeToDlq(db, {
-          tenantId: parseFailTenant, // null → '__unroutable__' sentinel
-          teamId: teamIdFromRaw,
-          rawPayload: rawBody,
-          error: 'invalid JSON',
-          bucket: 'parse_error',
-          signature: sigStr,
-          slackTimestamp: tsStr,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-    if (isJsonObjectRecord(body)) {
-      const bodyRecord = body;
-      if (bodyRecord.type === 'url_verification') {
-        sendJson(res, 200, {
-          challenge: String(bodyRecord.challenge ?? ''),
-        });
-        return;
-      }
-    }
-    // Resolve tenant. v0.39 fail-closed: when slack_workspaces is non-empty
-    // and the team_id is unknown, resolveTenantForTeam returns null and we
-    // park the envelope in slack_dlq with bucket='unroutable'. Mandatory ACK
-    // 200 so Slack stops retrying; do NOT call ingest.
-    let resolvedTenant: string | null = null;
-    if (body !== undefined && isSlackEventEnvelope(body)) {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        resolvedTenant = resolveTenantForTeam(db, body.team_id);
-      } finally {
-        closeHippoDb(db);
-      }
-      if (resolvedTenant === null) {
-        const db2 = openHippoDb(opts.hippoRoot);
-        try {
-          writeToDlq(db2, {
-            tenantId: null, // unroutable — stored as '__unroutable__'
-            teamId: body.team_id,
-            rawPayload: rawBody,
-            error: `unroutable team_id: ${body.team_id}`,
-            bucket: 'unroutable',
-            signature: sigStr,
-            slackTimestamp: tsStr,
-          });
-        } finally {
-          closeHippoDb(db2);
-        }
-        sendJson(res, 200, { ok: true, status: 'dlq' });
-        return;
-      }
-    } else {
-      // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
-      resolvedTenant = resolveTenantId({});
-    }
-    const ctx: Context = {
-      hippoRoot: opts.hippoRoot,
-      tenantId: resolvedTenant,
-      actor: adminActor('connector:slack'),
-    };
-    if (body === undefined || !isSlackEventEnvelope(body)) {
-      const db = openHippoDb(ctx.hippoRoot);
-      try {
-        writeToDlq(db, {
-          tenantId: ctx.tenantId,
-          teamId: teamIdFromRaw,
-          rawPayload: rawBody,
-          error: 'not an event_callback envelope',
-          bucket: 'parse_error',
-          signature: sigStr,
-          slackTimestamp: tsStr,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-    const inner = body.event;
-    if (isSlackMessageEvent(inner)) {
-      if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
-        const r = handleMessageDeleted(ctx, {
-          teamId: body.team_id,
-          channelId: inner.channel,
-          deletedTs: inner.deleted_ts,
-          eventId: body.event_id,
-        });
-        sendJson(res, 200, { ok: true, status: r.status });
-        return;
-      }
-      const r = ingestMessage(ctx, {
-        teamId: body.team_id,
-        // channel privacy isn't on the inner event; use channel_type as a
-        // proxy. 'group'|'im'|'mpim' → private. 'channel' → public. Unknown
-        // → private (fail closed).
-        channel: {
-          id: inner.channel,
-          is_private: inner.channel_type !== 'channel',
-          is_im: inner.channel_type === 'im',
-          is_mpim: inner.channel_type === 'mpim',
-        },
-        message: inner,
-        eventId: body.event_id,
-      });
-      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
-      return;
-    }
-    const db = openHippoDb(ctx.hippoRoot);
-    try {
-      writeToDlq(db, {
-        tenantId: ctx.tenantId,
-        teamId: body.team_id,
-        rawPayload: rawBody,
-        error: `unhandled event type: ${inner.type ?? 'unknown'}`,
-        bucket: 'parse_error',
-        signature: sigStr,
-        slackTimestamp: tsStr,
-      });
-    } finally {
-      closeHippoDb(db);
-    }
-    sendJson(res, 200, { ok: true, status: 'dlq' });
+    await handleSlackEventsWebhook({ req, res, opts });
     return;
   }
 
-  // ── POST /v1/connectors/github/events ──
-  //
-  // GitHub webhook receiver. Mirrors the Slack route shape but with
-  // GitHub-specific idioms:
-  //   1. HMAC SHA-256 over the raw body (X-Hub-Signature-256), no timestamp.
-  //   2. Event type discriminated by the X-GitHub-Event header (not body.type).
-  //   3. X-GitHub-Delivery is required audit metadata (NOT the dedupe seam — see
-  //      computeIdempotencyKey, which folds the signed body into the key so a
-  //      replayed body with a fresh delivery UUID still dedupes).
-  //   4. Tenant resolved by installation.id → github_installations, then by
-  //      repository.full_name → github_repositories (PAT-mode multi-tenant).
-  //   5. ALWAYS ACK 200 on signed envelopes (DLQ included). 401 only on bad
-  //      signature; 404 only when GITHUB_WEBHOOK_SECRET is unset (don't expose
-  //      the route's existence on builds where it's gated off).
   if (method === 'POST' && path === '/v1/connectors/github/events') {
     if (!isPublicRoute(method, path)) {
       throw new HttpError(401, 'auth required');
     }
-    const rawBody = await readBody(req);
-    const secret = process.env.GITHUB_WEBHOOK_SECRET;
-    if (!secret) {
-      res.writeHead(404, JSON_HEADERS);
-      res.end(JSON.stringify({ error: 'not found' }));
-      return;
-    }
-    const previousSecret = process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS;
-    const sigHdr = req.headers['x-hub-signature-256'];
-    const eventHdr = req.headers['x-github-event'];
-    const deliveryHdr = req.headers['x-github-delivery'];
-    const sigStr = isHeaderString(sigHdr) ? sigHdr : null;
-    const eventName = isHeaderString(eventHdr) ? eventHdr : null;
-    const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
-
-    if (
-      sigStr === null ||
-      !verifyGitHubSignature({
-        rawBody,
-        signature: sigStr,
-        webhookSecret: secret,
-        previousSecret,
-      })
-    ) {
-      throw new HttpError(401, 'invalid GitHub signature');
-    }
-
-    // Signature OK from here on. Everything else is ACK-200; bad envelopes go
-    // to the DLQ and a human can replay later.
-
-    // Cheap regex extraction of installation_id / repo for DLQ rows that fail
-    // to JSON.parse — gives operators something to triage.
-    const installationFromRaw = (() => {
-      const m = rawBody.match(/"installation"\s*:\s*\{[^}]*"id"\s*:\s*(\d+)/);
-      return m ? m[1] : null;
-    })();
-    const repoFromRaw = (() => {
-      const m = rawBody.match(/"full_name"\s*:\s*"([^"]+)"/);
-      return m ? m[1] : null;
-    })();
-
-    if (deliveryId === null) {
-      // Body was signed but caller omitted the audit header. Park.
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        writeToGitHubDlq(db, {
-          tenantId: resolveTenantId({}),
-          rawPayload: rawBody,
-          error: 'missing X-GitHub-Delivery header',
-          bucket: 'parse_error',
-          eventName,
-          deliveryId: null,
-          signature: sigStr,
-          installationId: installationFromRaw,
-          repoFullName: repoFromRaw,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-
-    // Ping fires once at hook creation. Don't ingest, don't DLQ — just pong.
-    if (eventName === 'ping') {
-      sendJson(res, 200, { pong: true });
-      return;
-    }
-
-    const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
-      'issues',
-      'issue_comment',
-      'pull_request',
-      'pull_request_review_comment',
-    ]);
-    if (eventName === null || !ALLOWED_EVENTS.has(eventName)) {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        writeToGitHubDlq(db, {
-          tenantId: resolveTenantId({}),
-          rawPayload: rawBody,
-          error: `unhandled event: ${eventName ?? '(missing X-GitHub-Event)'}`,
-          bucket: 'unhandled',
-          eventName,
-          deliveryId,
-          signature: sigStr,
-          installationId: installationFromRaw,
-          repoFullName: repoFromRaw,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-
-    let body: JsonValue | undefined;
-    try {
-      body = JSON.parse(rawBody);
-    } catch {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        writeToGitHubDlq(db, {
-          tenantId: resolveTenantId({}),
-          rawPayload: rawBody,
-          error: 'invalid JSON',
-          bucket: 'parse_error',
-          eventName,
-          deliveryId,
-          signature: sigStr,
-          installationId: installationFromRaw,
-          repoFullName: repoFromRaw,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-
-    if (body === undefined || !isGitHubWebhookEnvelope(body)) {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        writeToGitHubDlq(db, {
-          tenantId: resolveTenantId({}),
-          rawPayload: rawBody,
-          error: 'not a GitHub webhook envelope',
-          bucket: 'parse_error',
-          eventName,
-          deliveryId,
-          signature: sigStr,
-          installationId: installationFromRaw,
-          repoFullName: repoFromRaw,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-
-    const installationId = body.installation?.id != null ? String(body.installation.id) : null;
-    const repoFullName = body.repository?.full_name ?? null;
-
-    // Tenant resolution. Fail closed on multi-tenant installs with unknown
-    // routing — same policy as Slack.
-    let resolvedTenant: string | null;
-    {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        resolvedTenant = resolveTenantForGitHub(db, {
-          installationId,
-          repoFullName,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-    }
-    if (resolvedTenant === null) {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        writeToGitHubDlq(db, {
-          tenantId: null,
-          rawPayload: rawBody,
-          error: `unroutable: installation_id=${installationId ?? '(none)'} repo=${repoFullName ?? '(none)'}`,
-          bucket: 'unroutable',
-          eventName,
-          deliveryId,
-          signature: sigStr,
-          installationId,
-          repoFullName,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
-
-    const ctx: Context = {
-      hippoRoot: opts.hippoRoot,
-      tenantId: resolvedTenant,
-      actor: adminActor('connector:github'),
-    };
-
-    // Dispatch by event header. Type guards cross-check the body shape against
-    // the header so a payload of one event type cannot satisfy another's guard.
-    if (eventName === 'issues' && isGitHubIssueEvent(body, 'issues')) {
-      if (body.action === 'deleted') {
-        // GitHub does fire issues.deleted (admin-initiated). Don't archive — V1
-        // policy is to log and let an operator decide. Archive could lose the
-        // memory if the issue is being moved between accounts.
-        const db = openHippoDb(opts.hippoRoot);
-        try {
-          writeToGitHubDlq(db, {
-            tenantId: resolvedTenant,
-            rawPayload: rawBody,
-            error: 'issues.deleted requires manual review',
-            bucket: 'unhandled',
-            eventName,
-            deliveryId,
-            signature: sigStr,
-            installationId,
-            repoFullName,
-          });
-        } finally {
-          closeHippoDb(db);
-        }
-        sendJson(res, 200, { ok: true, status: 'dlq' });
-        return;
-      }
-      const ingestInput: GitHubIngestEvent = { eventName: 'issues', payload: body };
-      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
-      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
-      return;
-    }
-
-    if (eventName === 'issue_comment' && isGitHubIssueCommentEvent(body, 'issue_comment')) {
-      if (body.action === 'deleted') {
-        const repo = body.repository?.full_name ?? '';
-        const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
-        // v1.3.2: deletion key uses a 'deleted:' namespace so it doesn't collide
-        // with the ingest path's key for the same artifact. Without the prefix,
-        // a previously-ingested comment's log row would make hasSeenKey return
-        // true on the first deletion, short-circuiting archive. Codex round 3
-        // P0 fix evolved through two iterations to land here.
-        const idempotencyKey = computeGitHubDeletionKey(artifactRef, body.comment.updated_at ?? null);
-        const r = handleGitHubCommentDeleted(ctx, {
-          artifactRef,
-          idempotencyKey,
-          deliveryId,
-          eventName,
-        });
-        sendJson(res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
-        return;
-      }
-      const ingestInput: GitHubIngestEvent = { eventName: 'issue_comment', payload: body };
-      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
-      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
-      return;
-    }
-
-    if (eventName === 'pull_request' && isGitHubPullRequestEvent(body, 'pull_request')) {
-      const ingestInput: GitHubIngestEvent = { eventName: 'pull_request', payload: body };
-      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
-      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
-      return;
-    }
-
-    if (
-      eventName === 'pull_request_review_comment' &&
-      isGitHubPullRequestReviewCommentEvent(body, 'pull_request_review_comment')
-    ) {
-      if (body.action === 'deleted') {
-        const repo = body.repository?.full_name ?? '';
-        const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
-        // v1.3.2: see issue_comment branch comment above for the namespace rationale.
-        const idempotencyKey = computeGitHubDeletionKey(artifactRef, body.comment.updated_at ?? null);
-        const r = handleGitHubCommentDeleted(ctx, {
-          artifactRef,
-          idempotencyKey,
-          deliveryId,
-          eventName,
-        });
-        sendJson(res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
-        return;
-      }
-      const ingestInput: GitHubIngestEvent = {
-        eventName: 'pull_request_review_comment',
-        payload: body,
-      };
-      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
-      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
-      return;
-    }
-
-    // Header allow-listed but body shape didn't satisfy the matching guard.
-    {
-      const db = openHippoDb(opts.hippoRoot);
-      try {
-        writeToGitHubDlq(db, {
-          tenantId: resolvedTenant,
-          rawPayload: rawBody,
-          error: `body shape did not match X-GitHub-Event=${eventName}`,
-          bucket: 'parse_error',
-          eventName,
-          deliveryId,
-          signature: sigStr,
-          installationId,
-          repoFullName,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
-      return;
-    }
+    await handleGitHubEventsWebhook({ req, res, opts });
+    return;
   }
 
   // ── MCP-over-HTTP/SSE transport (Task 11) ──
