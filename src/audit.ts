@@ -365,7 +365,7 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
   const where: string[] = ['id > ?'];
   const params: unknown[] = [opts.afterId];
   if (opts.tenantId !== undefined) {
-    where.push('tenant_id = ?');
+    where.push('+tenant_id = ?');
     params.push(opts.tenantId);
   }
   const limit = Math.max(1, Math.min(opts.limit ?? 1000, 10000));

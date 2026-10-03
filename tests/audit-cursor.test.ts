@@ -50,6 +50,23 @@ describe('listAuditEventsAfter', () => {
     expect([...seen].sort((a, b) => a - b)).toEqual(seen);
   });
 
+  // SHORTCUT: a rowid seek also reads other tenants' rows; add a (tenant_id, id) index if wide per-tenant exports get slow.
+  it('seeks a tenant page by rowid, not via the tenant_ts index and its per-page sort', () => {
+    add('tenant-a', 3);
+    const seen: string[] = [];
+    // SAFETY: listAuditEventsAfter only calls prepare, which the spy forwards to the real db.
+    const spy = { prepare: (sql: string) => (seen.push(sql), db.prepare(sql)) } as DatabaseSyncLike;
+    listAuditEventsAfter(spy, { afterId: 0, limit: 10, tenantId: 'tenant-a' });
+    expect(seen).toHaveLength(1);
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${seen[0]!}`)
+      .all(0, 'tenant-a', 10)
+      .map((r) => String(r.detail))
+      .join(' | ');
+    expect(plan).toContain('INTEGER PRIMARY KEY');
+    expect(plan).not.toContain('TEMP B-TREE');
+  });
+
   it('filters by tenant and returns every tenant when omitted', () => {
     add('tenant-a', 3);
     add('tenant-b', 2);
