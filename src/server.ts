@@ -444,7 +444,9 @@ export function isCrossSite(req: IncomingMessage): boolean {
 }
 
 // A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.
-const PROXY_HEADERS = ['forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip'] as const;
+const PROXY_HEADERS = [
+  'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'cf-connecting-ip', 'true-client-ip',
+] as const;
 
 // The auth helpers only see the request, so its id rides here for their log lines.
 const requestIds = new WeakMap<IncomingMessage, string>();
@@ -3002,7 +3004,7 @@ async function handleRequest(
  * secrets and 404 when those secrets are unset. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
  * requests from a loopback remote address (unless they carry Forwarded,
- * X-Forwarded-For/-Host/-Proto or X-Real-IP, which mark a same-host proxy and get
+ * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip or True-Client-Ip, which mark a same-host proxy and get
  * a 401 like any keyless remote request), so binding to a non-loopback host
  * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
  * which forces every request (loopback or not) through Bearer-token

@@ -15,6 +15,8 @@ const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['X-Forwarded-Host', 'hippo.example.com'],
   ['X-Forwarded-Proto', 'https'],
   ['X-Real-IP', '203.0.113.7'],
+  ['Cf-Connecting-Ip', '203.0.113.7'],
+  ['True-Client-Ip', '203.0.113.7'],
 ];
 
 let home: string;
