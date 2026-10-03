@@ -3,7 +3,7 @@
 **Date:** 2026-10-03  
 **Scope:** engineering bounds from the [Z10 draft](./2026-09-30-z10-ledger-prereg.md), "Slice 1: engineering scope (settled)". No task or efficacy claim.  
 **Verdict:** stdout, token and bytes bounds PASS in every run. On the final code the p95 bound FAILS in every run, and the p50 bound passes only in the rebased run on a quieter machine (worst +13.4 ms). Runs 1 and 2 are dominated by load on the test machine; the quiet re-runs are below.  
-**Status: the overhead gate is open.** The p95 ratio bound FAILS in all four runs (1.44 to 1.75). The quiet counterbalanced re-runs below pass at 30 turns and fail at 100, and an A/A run with the ledger off in both arms also breaks both latency bounds, so this runner cannot decide them. This gate blocks any decision to turn `deliveryLedger` on by default; it does not block merging this slice, which ships the flag off.
+**Status: the overhead gate passes under Amendment 1.** The whole-process p95 ratio failed in all four original runs (1.44 to 1.75) and in the 100-turn quiet re-run, but an A/A run with the ledger off in both arms broke both latency bounds too, so that runner cannot decide them. Amendment 1 moved the latency bounds to an in-process timing of the ledger's own work: worst p50 1.49 ms against 15 ms, worst p95 2.09 ms against 30 ms.
 
 ## Runner
 
@@ -86,8 +86,26 @@ The 30-turn run passes every bound (worst p95 ratio 1.09, worst p50 delta +10.9 
 
 **A/A check.** The same 100-turn command with `deliveryLedger` off in both arms (a temporary copy of the runner, not committed) gives p95 ratios of 1.00, 1.12, 0.91 and 1.23 across the four timed cells, 0.64 to 1.23 with contention, and a p50 delta of +44.3 ms in one cell. Two identical arms break both latency bounds, so whole-process wall clock at about 200 to 900 ms per turn cannot resolve a 10% p95 ratio or a 15 ms p50 delta against a profiled ledger cost of about 1.5 ms.
 
-**Next measurement.** Time the ledger's own work inside the hook process (observer plus write, lock wait included) and bound that directly, keeping the stdout, token and bytes bounds. This changes the slice 1 latency bounds, so it needs a committed amendment to the draft before the run.
+## In-process ledger time (Amendment 1)
+
+[Amendment 1](./2026-09-30-z10-ledger-prereg.md) replaced the two latency bounds with the ledger's own time per turn, measured in one process, before this run (`cabfe25`). Runner: `node scripts/ledger-overhead.mjs --memories 2000 --runs 200`, 10 warm-ups, same machine and build as the re-runs above. Ledger time is recorder creation, time inside observer calls net of the admit they wrap, `delivered`, and the event write on the token ledger's handle after its inject row. Times in ms.
+
+| promptRecall | Mode | Ledger p50 / p95 / max | Observer p95 | Write p95 | getContext p50 / p95 | Dropped |
+|---|---|---|---|---|---|---|
+| off | fresh | 1.09 / 1.58 / 2.8 | 0.89 | 0.60 | 40.9 / 57.2 | 0 / 200 |
+| off | steady | 1.03 / 1.65 / 3.9 | 0.84 | 0.66 | 38.3 / 57.8 | 0 / 200 |
+| off | contention | 1.52 / 13.26 / 95.7 | 1.24 | 12.14 | 51.6 / 76.5 | 0 / 200 |
+| on | fresh | 1.33 / 2.03 / 13.7 | 0.85 | 1.01 | 59.1 / 95.7 | 0 / 200 |
+| on | steady | 1.49 / 2.09 / 9.4 | 0.90 | 1.15 | 57.5 / 72.4 | 0 / 200 |
+| on | contention | 1.23 / 10.24 / 74.8 | 0.93 | 9.57 | 46.2 / 71.1 | 0 / 200 |
+
+| Bound (Amendment 1) | Worst | Verdict |
+|---|---|---|
+| ledger p50 <= 15 ms | 1.49 | PASS |
+| ledger p95 <= 30 ms | 2.09 | PASS |
+
+With the stdout, token and bytes bounds passing in every whole-process run above, every slice 1 overhead bound now passes. Under contention the write waits for the lock, so its tail reaches 96 ms; no event was dropped in 1200 in-process turns, against 1 in 103 contention turns of the 100-turn whole-process run. Not counted: the array spreads built at four `dropMissing` call sites before the observer is entered, and the timer's own overhead, which adds to the measured time.
 
 ## Not done
 
-- The latency gate: the whole-process runner cannot decide it (A/A above). The in-process measurement is not built.
+- The known limitations in the changelog (recent-window quality drops, empty or disabled turns opening their own connection, unsalted `prompt_hash`, null `recall_trace_id` and `query_hash`) are slice 2 and are not measured here.
