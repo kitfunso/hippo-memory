@@ -33,6 +33,51 @@ export function sessionFiles(projectsDir, sessionId) {
   return files;
 }
 
+/** Every transcript under projects/, subagent files included. */
+export function listTranscripts(projectsDir) {
+  if (!fs.existsSync(projectsDir)) return [];
+  return fs.readdirSync(projectsDir, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+    .map((e) => path.join(e.parentPath, e.name));
+}
+
+/** Parsed lines of each `{file, fromBytes, toBytes}` segment, one turn's share of a file; a missing file has none. */
+function* segmentLines(segments) {
+  for (const seg of segments) {
+    const { file, fromBytes = 0, toBytes } = seg;
+    if (!file || !fs.existsSync(file)) continue;
+    const bytes = fs.readFileSync(file);
+    for (const line of bytes.subarray(fromBytes, toBytes ?? bytes.length).toString('utf8').split('\n')) {
+      const o = parseLine(line);
+      if (o) yield o;
+    }
+  }
+}
+
+/** Usage of a turn with no result: per message id the largest value in each bucket (a streamed message repeats its id), summed over ids. */
+export function transcriptUsage(segments) {
+  const byId = new Map();
+  let anon = 0;
+  for (const o of segmentLines(segments)) {
+    const u = o.type === 'assistant' ? o.message?.usage : null;
+    if (!u) continue;
+    const key = o.message.id ?? `anon-${anon++}`;
+    const prev = byId.get(key) ?? [0, 0, 0, 0];
+    const cur = [u.input_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens, u.output_tokens].map((n) => Number(n) || 0);
+    byId.set(key, prev.map((p, i) => Math.max(p, cur[i])));
+  }
+  const total = [0, 0, 0, 0];
+  for (const v of byId.values()) v.forEach((n, i) => { total[i] += n; });
+  return { inputTokens: total[0], cacheWriteTokens: total[1], cacheReadTokens: total[2], outputTokens: total[3] };
+}
+
+/** Turns of a turn with no result: distinct assistant message ids, a different unit from the result's num_turns. */
+export function assistantTurns(segments) {
+  const ids = new Set();
+  for (const o of segmentLines(segments)) if (o.type === 'assistant' && o.message?.id) ids.add(o.message.id);
+  return ids.size;
+}
+
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;
 // `type` reads a file only in PowerShell; in Git Bash it is a builtin that names a command.
@@ -144,5 +189,5 @@ export function invalidRecord(base, reason, fields) {
 /** A graded record; `resolved` is the prereg's literal formula. */
 export function validRecord(base, fields) {
   const resolved = fields.acceptancePassed && fields.lessons.every((l) => l.final === 'pass') && !fields.timedOut;
-  return { ...base, ...fields, resolved, void: null, leak: false, invalid: null };
+  return { ...base, ...fields, resolved, void: fields.void ?? null, leak: false, invalid: null };
 }

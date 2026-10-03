@@ -5,7 +5,9 @@ import { sh } from './exec.mjs';
 import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
-import { findTranscript, sessionFiles, transcriptWork, commandLog, usageFromResult, invalidRecord, validRecord } from './records.mjs';
+import {
+  findTranscript, sessionFiles, listTranscripts, transcriptWork, transcriptUsage, assistantTurns, commandLog, usageFromResult, invalidRecord, validRecord,
+} from './records.mjs';
 import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { runSession, resumeSession } from './turns.mjs';
 import { runCheck, stateCommit, holdPre, dropPre, CheckerError, WorkspaceGitError } from './checks.mjs';
@@ -30,7 +32,17 @@ function guarded(run, t, stage, fn) {
   }
 }
 
-const transcriptsOf = (run, sessionIds) => sessionIds.flatMap((id) => sessionFiles(path.join(run.dirs.claudeConfig, 'projects'), id));
+const projectsOf = (run) => path.join(run.dirs.claudeConfig, 'projects');
+const transcriptsOf = (run, sessionIds) => sessionIds.flatMap((id) => sessionFiles(projectsOf(run), id));
+
+/** Session ids of top-level transcripts not in `before`, newest first. */
+function newSessionIds(run, before) {
+  const projects = projectsOf(run);
+  return listTranscripts(projects)
+    .filter((f) => !before.has(f) && path.dirname(path.dirname(f)) === projects)
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)
+    .map((f) => path.basename(f, '.jsonl'));
+}
 
 /** The fields every record of the cell carries, valid or not (E7 contract). */
 function baseFields(ctx, run, step) {
@@ -77,6 +89,7 @@ function stageTask(ctx, run, step) {
   stage.step = step;
   stage.restores = [];
   stage.snap = snapshotSurfaces(ctx, run, 'pre-session', step);
+  stage.transcriptsBefore = new Set(listTranscripts(projectsOf(run)));
   return stage;
 }
 
@@ -89,6 +102,8 @@ function resetTask(ctx, run, t, stage) {
   restoreInstructions(work, stage.preSession);
   stage.pre = stateCommit(work, stage.commit);
   holdPre(work, stage.pre);
+  // The cut-off attempt's transcript stays (prereg 113), so it must never be taken for the rerun's.
+  stage.transcriptsBefore = new Set(listTranscripts(projectsOf(run)));
   stage.ancestors ||= ancestorHits(ctx, run, t);
   ctx.log(`${cellName(run, t)}: Z0_PRE_COMMIT rebuilt after the usage-limit reset`);
 }
@@ -144,9 +159,18 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
   if (!resume) return noResume;
   writeRaw(run, `${t.id}.resume.json`, resume.cc.stdout || JSON.stringify({ error: resume.cc.stderr.slice(0, 4000), status: resume.cc.status }));
-  if (resume.result?.session_id && !sessionIds.includes(resume.result.session_id)) sessionIds.push(resume.result.session_id);
-  const final = resume.result && !c.error ? c.check(lesson) : first;
-  return { lesson, first, final, staleFollow, checkerError: c.error, resume, form: teach ? form : null };
+  const timedOut = !resume.result && resume.cc.timedOut;
+  // A resume killed before its result names no id; one that forked a new id left a new top-level file.
+  const fresh = timedOut ? newSessionIds(run, resume.filesBefore)[0] : null;
+  const resumeId = resume.result?.session_id ?? fresh;
+  if (resumeId && !sessionIds.includes(resumeId)) sessionIds.push(resumeId);
+  // Prereg 165: a timed-out resume is graded on the state at the kill.
+  const final = (resume.result || timedOut) && !c.error ? c.check(lesson) : first;
+  const main = findTranscript(projectsOf(run), sessionIds[0]);
+  const grew = Boolean(fresh) || (main !== null && fs.statSync(main).size > resume.bytesBefore);
+  // Decision 7: a timed-out teach resume delivered the lesson once its transcript grew past the teach message.
+  const delivered = Boolean(resume.result) || (timedOut && grew);
+  return { lesson, first, final, staleFollow, checkerError: c.error, resume, delivered, form: teach ? form : null };
 }
 
 const sum = (a, b) => (a === null || a === undefined ? null : a + (b ?? 0));
@@ -155,43 +179,79 @@ const sum = (a, b) => (a === null || a === undefined ? null : a + (b ?? 0));
 function invalidReason(session, turns, transcriptsFound, stage) {
   // The environment void comes first: it taints the session whatever the session itself did.
   if (stage.ancestors) return 'ancestor-instructions';
-  if (session.result === null) return 'no-result';
+  // A timed-out turn has no result but is graded (prereg 165); with no transcript it falls to no-transcript below.
+  if (session.result === null && !session.cc.timedOut) return 'no-result';
   if (stage.fault) return 'workspace';
   if (turns?.checkerError) return 'checker';
-  if (turns?.resume && turns.resume.result === null) return 'resume';
+  if (turns?.resume && turns.resume.result === null && !turns.resume.cc.timedOut) return 'resume';
   return transcriptsFound ? null : 'no-transcript';
 }
 
 function agentError(session, turns) {
-  const say = (cc, result, who) => (result === null ? `${who}claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}` : (result.is_error ? result.subtype ?? 'error' : null));
+  const exited = (cc, who) => (cc.timedOut ? `${who}claude timed out` : `${who}claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}`);
+  const say = (cc, result, who) => (result === null ? exited(cc, who) : (result.is_error ? result.subtype ?? 'error' : null));
   const resumed = turns?.resume ? say(turns.resume.cc, turns.resume.result, 'resume: ') : null;
   return say(session.cc, session.result, '') ?? resumed;
+}
+
+/** Usage, cost and turns per turn: the result's, or for a turn killed before its result (prereg 165) its share of the transcripts. */
+function pricing(run, session, resume, sessionIds) {
+  const r = session.result;
+  const rr = resume?.result ?? null;
+  const projects = projectsOf(run);
+  const main = findTranscript(projects, sessionIds[0]);
+  const subs = sessionFiles(projects, sessionIds[0]).filter((f) => f !== main);
+  const whole = (files) => files.map((file) => ({ file }));
+  // Turns count the main transcripts only; usage takes subagent files too, each on the side of the resume it appeared.
+  const first = [{ file: main, toBytes: resume?.bytesBefore }];
+  const extra = [{ file: main, fromBytes: resume?.bytesBefore }, ...whole(sessionIds.slice(1).map((id) => findTranscript(projects, id)))];
+  const firstFiles = [...first, ...whole(subs.filter((f) => !resume || resume.filesBefore.has(f)))];
+  const extraFiles = [extra[0], ...whole(subs.filter((f) => resume && !resume.filesBefore.has(f))), ...whole(transcriptsOf(run, sessionIds.slice(1)))];
+  const priced = Boolean(r) && (!resume || Boolean(rr));
+  return {
+    usage: {
+      firstSession: r ? usageFromResult(r) : transcriptUsage(firstFiles),
+      extra: !resume ? ZERO_USAGE : (rr ? usageFromResult(rr) : transcriptUsage(extraFiles)),
+    },
+    costUsd: priced ? sum(r.total_cost_usd ?? null, rr?.total_cost_usd) : null,
+    turns: (r ? r.num_turns ?? 0 : assistantTurns(first)) + (!resume ? 0 : (rr ? rr.num_turns ?? 0 : assistantTurns(extra))),
+    turnsSource: priced ? 'result' : 'transcript',
+  };
 }
 
 /** The record for a cell whose session ran. */
 function sessionRecord(ctx, run, step, parts) {
   const { session, turns, sessionIds, acceptancePassed, wallMs, stage } = parts;
-  const projects = path.join(run.dirs.claudeConfig, 'projects');
+  const projects = projectsOf(run);
   // A result without a session id has no transcript to read, so it is no-transcript, never a record with null work counts.
   const found = sessionIds.length > 0 && sessionIds.every((id) => findTranscript(projects, id));
   const resume = turns?.resume ?? null;
+  const resumeId = resume?.result?.session_id ?? (resume?.cc.timedOut ? sessionIds.at(-1) : null);
   const shared = {
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
-    sessionId: session.result?.session_id ?? null, resumeSessionId: resume?.result?.session_id ?? null, agentError: agentError(session, turns),
+    sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
     surfaceRestored: stage.restores.every(Boolean),
   };
   const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
-  const r = session.result;
   return validRecord(parts.base, {
     lessons: turns ? [{ lessonId: turns.lesson.id, first: turns.first, final: turns.final, staleFollow: turns.staleFollow }] : [],
-    acceptancePassed, usage: { firstSession: usageFromResult(r), extra: resume ? usageFromResult(resume.result) : ZERO_USAGE },
-    costUsd: sum(r.total_cost_usd ?? null, resume?.result.total_cost_usd), turns: (r.num_turns ?? 0) + (resume?.result.num_turns ?? 0),
+    acceptancePassed, ...pricing(run, session, resume, sessionIds),
     ...transcriptWork(transcriptsOf(run, sessionIds), run.seenErrors), transcriptFound: true, wallMs,
     teachTurns: step.role.kind === 'teach' ? 1 : 0, correctionTurns: step.role.kind === 'apply' && resume ? 1 : 0, teachForm: turns?.form ?? null,
     hippo: HIPPO_ARMS.has(run.arm) ? hippoSentFor(path.join(run.dirs.work, '.hippo'), sessionIds) : null, ...shared,
   });
+}
+
+/** Session 1's id: the result's, or for a session killed before its result the id it was started under, else its one new transcript. */
+function firstSessionIds(ctx, run, t, session, stage) {
+  if (session.result?.session_id) return [session.result.session_id];
+  if (!session.cc.timedOut) return [];
+  if (findTranscript(projectsOf(run), session.sessionId)) return [session.sessionId];
+  const fresh = newSessionIds(run, stage.transcriptsBefore);
+  if (fresh.length > 1) ctx.log(`${cellName(run, t)}: ${fresh.length} new transcripts after a timeout; taking the newest, ${fresh[0]}`);
+  return fresh.slice(0, 1);
 }
 
 /** Session 1, checks and resume, the end-of-task steps once after the last turn, then the hidden tests. */
@@ -202,14 +262,15 @@ async function runTurns(ctx, run, step, stage, base) {
   const session = await runSession(ctx, run, t, () => resetTask(ctx, run, t, stage));
   run.sessionRan = true;
   writeRaw(run, `${t.id}.json`, session.cc.stdout || JSON.stringify({ error: session.cc.stderr.slice(0, 4000), status: session.cc.status }));
-  const sessionIds = session.result?.session_id ? [session.result.session_id] : [];
-  const turns = session.result && sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
+  const sessionIds = firstSessionIds(ctx, run, t, session, stage);
+  // A timed-out session is still checked and resumed (prereg 109, 165).
+  const turns = sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
   const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
   await settle(ctx, run, t.id, 'end');
   snapshotSurfaces(ctx, run, 'end', step);
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   // Reading 8: A4 holds a lesson only once its teach resume delivered it.
-  if (step.role.kind === 'teach' && turns?.resume?.result) run.taught = withTaught(run.taught, turns.lesson);
+  if (step.role.kind === 'teach' && turns?.delivered) run.taught = withTaught(run.taught, turns.lesson);
   writeHiddenTests(run.cached, work, t);
   const test = sh(t.test, work, childEnv(run.env));
   writeLog(run, `${t.id}.test.txt`, `${test.stdout}\n${test.stderr}`);

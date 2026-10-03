@@ -116,7 +116,7 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--screen] [--dry-run | --check-homes]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--screen] [--dry-run | --check-homes]';
 
 /** The command line, checked: the tasks file, out dir, arms, seeds, pass-env names and mode. */
 function parseArgs(argv) {
@@ -134,10 +134,12 @@ function parseArgs(argv) {
   const arms = flag('--arms', ARMS.join(',')).split(',').map((a) => a.trim());
   for (const a of arms) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
   if (new Set(arms).size !== arms.length) throw new Error(`--arms names an arm twice (${arms.join(',')}); each arm runs once`);
+  const timeoutArg = flag('--session-timeout-min', '60');
+  if (!/^[1-9]\d*$/.test(timeoutArg)) throw new Error(`--session-timeout-min must be a positive integer, got ${timeoutArg}`);
   const seedsArg = flag('--seeds', null);
   if (seedsArg !== null && !/^[1-9]\d*$/.test(seedsArg)) throw new Error(`--seeds must be a positive integer, got ${seedsArg}`);
   return {
-    flag, spec, arms, seeds: seedsArg === null ? null : Number(seedsArg), out: path.resolve(outDir), screen: argv.includes('--screen'),
+    flag, spec, arms, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen: argv.includes('--screen'),
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])),
     mode: argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real'),
   };
@@ -182,7 +184,7 @@ async function main() {
   const opts = {
     spec, arms, seeds, outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
     maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: !process.argv.includes('--no-warmup'),
-    permissionMode: flag('--permission-mode', 'bypassPermissions'),
+    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs,
   };
   try {
     if (args.screen) {

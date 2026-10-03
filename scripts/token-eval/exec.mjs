@@ -1,6 +1,6 @@
 // Process helpers shared by the token-eval runner modules. A leaf: it imports nothing local, so any module can take it.
 import * as path from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFile, execFileSync, spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,69 @@ export function pathKey(env) {
 export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
   const r = spawnSync(cmd, { cwd, env, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28, input });
   return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '', timedOut: r.error?.code === 'ETIMEDOUT' };
+}
+
+const MAX_OUTPUT = 1 << 28;
+
+/** Kill `pid` and everything under it; a kill that fails is said in the returned text, never thrown. */
+async function killTree(child) {
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+      return '';
+    } catch (err) {
+      child.kill('SIGKILL');
+      return `\n[kill -${child.pid}: ${err.code ?? err.message}]`;
+    }
+  }
+  const said = await new Promise((resolve) => {
+    execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], (err, _out, stderr) => resolve(err ? `\n[taskkill: ${String(stderr).trim() || err.message}]` : ''));
+  });
+  if (said) child.kill('SIGKILL');
+  return said;
+}
+
+/** sh() without blocking the event loop; a timeout kills the whole process tree, since spawnSync kills only the shell. */
+export async function spawnTree(cmd, cwd, env, timeoutMs, input = undefined) {
+  // POSIX: its own process group, so one kill reaches every descendant.
+  const child = spawn(cmd, { cwd, env, shell: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
+  const out = { stdout: '', stderr: '' };
+  let timedOut = false;
+  let killing = null;
+  const stop = () => (killing ??= killTree(child).then((said) => { out.stderr += said; }));
+  for (const key of ['stdout', 'stderr']) {
+    child[key].setEncoding('utf8');
+    child[key].on('data', (chunk) => {
+      out[key] += chunk;
+      if (out[key].length > MAX_OUTPUT) {
+        out.stderr += `\n[${key} over ${MAX_OUTPUT} chars; killed]`;
+        stop();
+      }
+    });
+  }
+  // A child that exits without reading its stdin breaks the pipe; the result says what the child did, so the write error is only noted.
+  child.stdin.on('error', (err) => { out.stderr += `\n[stdin: ${err.code ?? err.message}]`; });
+  child.stdin.end(input);
+  const timer = setTimeout(() => {
+    timedOut = true;
+    stop();
+  }, timeoutMs);
+  const status = await new Promise((resolve) => {
+    child.on('error', (err) => {
+      out.stderr += `\n[spawn: ${err.message}]`;
+      resolve(null);
+    });
+    child.on('exit', (code) => resolve(code));
+  });
+  clearTimeout(timer);
+  if (killing) await killing;
+  // A descendant that outlived the kill can hold the pipes open, so 'close' gets 2 s and then the pipes are cut.
+  const closed = new Promise((resolve) => child.on('close', resolve));
+  const grace = new Promise((resolve) => setTimeout(resolve, 2000).unref());
+  if (child.stdout.readable || child.stderr.readable) await Promise.race([closed, grace]);
+  child.stdout.destroy();
+  child.stderr.destroy();
+  return { status: status ?? 1, stdout: out.stdout, stderr: out.stderr, timedOut };
 }
 
 // Git for Windows opens /dev/null as the null device but joins hook names onto it as <drive>:\dev\null, which any user can create; Win32 refuses '|' in a name.

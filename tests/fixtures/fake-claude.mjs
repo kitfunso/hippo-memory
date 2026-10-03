@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync, spawn, spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
 if (argv.includes('--version')) {
@@ -76,7 +76,8 @@ if (!resumeId && prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs
   process.exit(1);
 }
 
-const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : randomUUID();
+const fixedId = argv.includes('--session-id') ? argv[argv.indexOf('--session-id') + 1] : null;
+const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : (fixedId ?? randomUUID());
 const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
 let injected = '';
 for (const group of settings.hooks?.UserPromptSubmit ?? []) {
@@ -109,6 +110,25 @@ const lessonState = () => {
   if (prompt.includes('LESSON_OK')) return 'ok';
   return prompt.includes('LESSON_BAD') ? 'bad' : null;
 };
+
+/** HANG: two streamed assistant messages (one id repeated, 5 then 40 output tokens), a ticking grandchild, then no exit for 120 s. */
+function hang(tag) {
+  if (prompt.includes('HANG_STDERR')) fs.writeSync(2, 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}\n');
+  const usage = (input, output) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: 100, cache_creation_input_tokens: 20 });
+  const said = (id, input, output) => ({ type: 'assistant', message: { id, usage: usage(input, output), content: [{ type: 'text', text: 'working' }] } });
+  appendTurn([
+    { type: 'user', message: { role: 'user', content: input } },
+    said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
+  ]);
+  // The run's out dir: claude-config sits at <out>/runs/<seq>/<arm>/seed<n>/claude-config.
+  const out = path.resolve(process.env.CLAUDE_CONFIG_DIR, '..', '..', '..', '..', '..');
+  const tick = `const fs=require('fs');const end=Date.now()+20000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(out, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
+  fs.writeFileSync(path.join(out, 'grandchild.pid'), String(child.pid));
+  log(`hang ${tag}`);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120_000);
+  process.exit(0);
+}
 
 function firstSession() {
   fs.mkdirSync(promptsDir, { recursive: true });
@@ -144,6 +164,7 @@ function firstSession() {
     write(staged[1], 'v2\n');
   }
   for (const m of prompt.matchAll(/MEMWRITE:([^\n]+)/g)) memWrite(m[1].trim());
+  if (/\bHANG(?:_STDERR)?\b/.test(prompt)) hang('s1');
   const commands = [...prompt.matchAll(/^RUN_CMD (.+)$/gm)].map((m) => m[1]);
   appendTurn([
     { type: 'user', message: { role: 'user', content: input } },
@@ -185,7 +206,7 @@ function cutOff() {
 
 function resumeTurn() {
   if (/RESUME_HANG_MS=/.test(prompt)) {
-    // Windows kills only the shell on a timeout, so the orphan lets go of the workspace and the runner's pipes before it hangs.
+    // A hang that already let go of the workspace and the runner's pipes: the timeout must still end it.
     process.chdir(os.tmpdir());
     for (const fd of [1, 2]) fs.closeSync(fd);
     napFor('RESUME_HANG_MS');
@@ -195,6 +216,7 @@ function resumeTurn() {
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
   for (const m of prompt.matchAll(/MEMWRITE_ON_RESUME:([^\n]+)/g)) memWrite(m[1].trim());
   cutOff();
+  if (/\bHANG_ON_RESUME\b/.test(prompt)) hang('r');
   if (prompt.includes('NO_RESULT_ON_RESUME')) process.exit(0);
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
   if (line) fs.appendFileSync('CLAUDE.md', `${line[1]}\n`);
