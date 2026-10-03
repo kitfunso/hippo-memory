@@ -82,6 +82,25 @@ describe('MCP tool argument validation', () => {
     expect(r.text).toContain('budget must be a number');
   });
 
+  it('accepts a numeric string, as LLM clients often send numbers that way', async () => {
+    await call('hippo_remember', { text: 'numeric strings still recall' });
+    const r = await call('hippo_recall', { query: 'numeric', budget: '4000' });
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain('numeric strings still recall');
+  });
+
+  it('applies the cap to a numeric string', async () => {
+    const r = await call('hippo_recall', { query: 'x', budget: '999999' });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('budget must be <= 100000');
+  });
+
+  it('rejects a string that is only partly numeric', async () => {
+    const r = await call('hippo_recall', { query: 'x', budget: '12abc' });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('budget must be a number');
+  });
+
   it('rejects a fractional integer field', async () => {
     const r = await call('hippo_drill', { summary_id: 'missing', depth: 1.5 });
     expect(r.isError).toBe(true);
@@ -139,5 +158,22 @@ describe('validateToolArgs', () => {
 
   it('rejects null for a typed field', () => {
     expect(validateToolArgs(schema, { mode: null })).toEqual(['mode must be a string (got null)']);
+  });
+});
+
+describe('validateToolArgs numeric strings', () => {
+  const schema: ToolInputSchema = {
+    type: 'object',
+    properties: { depth: { type: 'integer', minimum: 1, maximum: 10 } },
+  };
+
+  it('coerces a trimmed numeric string before the integer and range checks', () => {
+    expect(validateToolArgs(schema, { depth: ' 3 ' })).toEqual([]);
+    expect(validateToolArgs(schema, { depth: '1.5' })).toEqual(['depth must be an integer (got "1.5")']);
+    expect(validateToolArgs(schema, { depth: '11' })).toEqual(['depth must be <= 10 (got "11")']);
+  });
+
+  it('skips names the API layer checks itself', () => {
+    expect(validateToolArgs(schema, { depth: 'abc' }, new Set(['depth']))).toEqual([]);
   });
 });

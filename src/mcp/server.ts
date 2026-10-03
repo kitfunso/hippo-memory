@@ -599,6 +599,9 @@ const TOOLS: readonly McpToolDefinition[] = [
 
 const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
+// api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the same bad value.
+const ARGS_CHECKED_BY_API = new Map<string, ReadonlySet<string>>([['hippo_recall', new Set(['scorer_window'])]]);
+
 // ── Track last recalled IDs for outcome feedback ──
 //
 // Keyed per-client so two HTTP-MCP clients hitting the same tenant cannot
@@ -702,7 +705,7 @@ async function executeTool(
       const summarizeOverflow = isJsonBoolean(args.summarize_overflow)
         ? args.summarize_overflow
         : undefined;
-      // The inputSchema already rejected non-numbers; api.retrieve still rejects 0 or negative with RecallContractError.
+      // Number-coerce, never typeof-check: "abc" must reach api.retrieve and fail as invalid_scorer_window, the same code HTTP returns.
       const scorerWindow = args.scorer_window === undefined
         ? undefined
         : Number(args.scorer_window);
@@ -1230,7 +1233,7 @@ export async function handleMcpRequest(
       }
       const toolArgs = isJsonObjectRecord(argumentsValue) ? argumentsValue : {};
       // The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
-      const problems = validateToolArgs(tool.inputSchema, toolArgs);
+      const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
       if (problems.length > 0) {
         return {
           jsonrpc: '2.0',
