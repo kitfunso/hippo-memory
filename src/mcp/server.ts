@@ -19,18 +19,17 @@ import {
 } from '../memory.js';
 import { hybridSearch, physicsSearch, estimateTokens, type SearchResult } from '../search.js';
 import { evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep } from '../store.js';
+import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep, type SessionEvent, type TaskSnapshot } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
-import { execSync } from 'child_process';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, passesScopeFilterForRecall, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext, type Actor as ApiActor } from '../api.js';
-import { assertScopeRequestAllowed } from '../recall-scope.js';
-import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, passesScopeFilterForRecall, buildSuppressionSummary, type Context as ApiContext, type Actor as ApiActor, type ContextCost } from '../api.js';
+import { autoDetectContext } from '../context-auto.js';
+import { resolveProjectIdentity, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
 import { appendAuditEvent, auditQueryFields } from '../audit.js';
 import { RejectedValueError } from '../rejection.js';
@@ -185,8 +184,27 @@ interface DrillDownExtraOpts {
 // ── Format helpers ──
 
 import type { ContinuityBlock, RecallResult, RecallResultItem } from '../api.js';
-import { formatHandoffEvidenceLine } from '../handoff.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../handoff.js';
 import { assembleCost, assembleText, drillCost, drillText, printedTokens } from '../context-render.js';
+
+function handoffLines(h: SessionHandoff): string[] {
+  const lines = [`- Summary: ${h.summary}`];
+  if (h.nextAction) lines.push(`- Next action: ${h.nextAction}`);
+  if ((h.artifacts ?? []).length > 0) lines.push(`- Artifacts: ${(h.artifacts ?? []).join(', ')}`);
+  if (h.outcome) lines.push(`- Outcome: ${h.outcome}`);
+  if (h.targetRuntime) lines.push(`- Target runtime: ${h.targetRuntime}`);
+  if (h.cardId) lines.push(`- Card: ${h.cardId}`);
+  if ((h.constraints ?? []).length > 0) lines.push(`- Constraints: ${(h.constraints ?? []).join(', ')}`);
+  if (h.evidence) lines.push(`- Evidence: ${formatHandoffEvidenceLine(h.evidence)}`);
+  return lines;
+}
+
+function trailLines(events: readonly SessionEvent[]): string[] {
+  return events.map((e) => {
+    const preview = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
+    return `- [${e.event_type}] ${preview}`;
+  });
+}
 
 function formatContinuityBlock(block: ContinuityBlock): string {
   const lines: string[] = ['## Continuity'];
@@ -200,36 +218,12 @@ function formatContinuityBlock(block: ContinuityBlock): string {
   if (block.sessionHandoff) {
     lines.push('');
     lines.push('### Session Handoff');
-    lines.push(`- Summary: ${block.sessionHandoff.summary}`);
-    if (block.sessionHandoff.nextAction) {
-      lines.push(`- Next action: ${block.sessionHandoff.nextAction}`);
-    }
-    if ((block.sessionHandoff.artifacts ?? []).length > 0) {
-      lines.push(`- Artifacts: ${(block.sessionHandoff.artifacts ?? []).join(', ')}`);
-    }
-    if (block.sessionHandoff.outcome) {
-      lines.push(`- Outcome: ${block.sessionHandoff.outcome}`);
-    }
-    if (block.sessionHandoff.targetRuntime) {
-      lines.push(`- Target runtime: ${block.sessionHandoff.targetRuntime}`);
-    }
-    if (block.sessionHandoff.cardId) {
-      lines.push(`- Card: ${block.sessionHandoff.cardId}`);
-    }
-    if ((block.sessionHandoff.constraints ?? []).length > 0) {
-      lines.push(`- Constraints: ${(block.sessionHandoff.constraints ?? []).join(', ')}`);
-    }
-    if (block.sessionHandoff.evidence) {
-      lines.push(`- Evidence: ${formatHandoffEvidenceLine(block.sessionHandoff.evidence)}`);
-    }
+    lines.push(...handoffLines(block.sessionHandoff));
   }
   if (block.recentSessionEvents.length > 0) {
     lines.push('');
     lines.push('### Recent Session Trail');
-    for (const e of block.recentSessionEvents) {
-      const preview = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
-      lines.push(`- [${e.event_type}] ${preview}`);
-    }
+    lines.push(...trailLines(block.recentSessionEvents));
   }
   if (lines.length === 1) {
     lines.push('');
@@ -244,24 +238,58 @@ function memoriesHeading(count: number): string {
   return `Found ${count} memories:\n`;
 }
 
-function formatMemory(r: SearchResult): string {
+function formatMemory(r: Pick<SearchResult, 'entry'>): string {
   const conf = confidenceLabel(r.entry).text;
   const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
   return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${r.entry.content}\n`;
 }
 
-function formatMemories(results: SearchResult[]): string {
+function formatMemories(results: ReadonlyArray<Pick<SearchResult, 'entry'>>): string {
   if (results.length === 0) return NO_MEMORIES;
   return [memoriesHeading(results.length), ...results.map(formatMemory)].join('\n');
 }
 
 /** What a memory costs the budget: the text formatMemories prints for it. */
-const memoryCost = (r: SearchResult): number => printedTokens(formatMemory(r));
+const memoryCost = (r: Pick<SearchResult, 'entry'>): number => printedTokens(formatMemory(r));
 
 // The widest heading or the empty-list line, whichever costs more, so either prints inside the budget.
 function memoriesReserve(budget: number): number {
   return Math.max(printedTokens(memoriesHeading(budget)), estimateTokens(NO_MEMORIES));
 }
+
+function snapshotPiece(s: TaskSnapshot): string {
+  return [
+    '## Active Task Snapshot',
+    `- Task: ${s.task}`,
+    `- Status: ${s.status}`,
+    `- Updated: ${s.updated_at}`,
+    '',
+    '### Summary',
+    s.summary,
+    '',
+    '### Next step',
+    s.next_step,
+    '',
+    '',
+  ].join('\n');
+}
+
+function handoffPiece(h: SessionHandoff): string {
+  return ['## Session Handoff', ...handoffLines(h), '', ''].join('\n');
+}
+
+function trailPiece(events: readonly SessionEvent[]): string {
+  return ['## Recent Session Trail', ...trailLines(events), '', ''].join('\n');
+}
+
+// Sections print ahead of the memories in hippo_context, so getContext pays for each as printed before any memory.
+const contextCost: ContextCost = {
+  entry: memoryCost,
+  fixed: (budget) => memoriesReserve(budget),
+  snapshot: (s) => estimateTokens(snapshotPiece(s)),
+  handoff: (h) => estimateTokens(handoffPiece(h)),
+  trail: (events) => estimateTokens(trailPiece(events)),
+};
 
 // Rows the ranked list already shows drop out of this section, so pricing every row bounds what it prints.
 function tailSection(rows: RecallResultItem[]): string {
@@ -433,14 +461,14 @@ const TOOLS = [
   {
     name: 'hippo_context',
     description:
-      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot. Use at the start of any session. Memories and snapshot are scope-filtered: a no-scope caller does NOT see ANY <source>:private:* (slack, github, ...) or legacy-quarantine rows.',
+      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot, session handoff and recent session trail (the same bundle as GET /v1/context). Use at the start of any session. Memories and those sections are scope-filtered: a no-scope caller does NOT see ANY <source>:private:* (slack, github, ...) or legacy-quarantine rows.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         budget: { type: 'number', minimum: 0, description: 'Max tokens (default: config.defaultContextBudget, 3000)' },
         scope: {
           type: 'string',
-          description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
+          description: 'Restrict memories, snapshot, handoff and trail to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
       },
     },
@@ -1049,91 +1077,27 @@ async function executeTool(
         : Number(args.budget);
       if (!Number.isFinite(budget) || budget < 0) return 'budget must be a non-negative number.';
       if (budget === 0) return '';
-      const explicitScope = isJsonString(args.scope) && args.scope.length > 0
+      if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
+      const exactScope = isJsonString(args.scope) && args.scope.length > 0
         ? args.scope
         : undefined;
-      // Auto-detect query from git
-      let query = '';
-      try {
-        const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
-        const diff = execSync('git diff --cached --stat 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
-        const log = execSync('git log -1 --pretty=format:"%s" 2>/dev/null', { encoding: 'utf-8', windowsHide: true }).trim();
-        query = [branch, log, diff].filter(Boolean).join(' ');
-      } catch { /* not a git repo */ }
-
-      if (!query) query = 'project context general';
-
-      // v1.2 codex audit: same scope filter as hippo_recall on BOTH the memory
-      // results and the snapshot. Pre-v1.2 this surface returned all memories
-      // and the snapshot unfiltered, which would have leaked private-channel
-      // content to no-scope MCP callers once scope writers shipped.
-      assertScopeRequestAllowed(mcpActor(ctx), explicitScope);
-      const allEntries = loadAllEntries(hippoRoot, tenantId);
-      // v39 memory scope isolation: this surface reads the LOCAL store only,
-      // but synced-down or legacy rows can still carry another project's
-      // origin, and secrets must never ambient-inject outside their owner.
-      // Same policy as api.getContext; the scope filter above keeps this
-      // surface's own explicit-scope exact-match semantics.
-      //
-      // Identity resolution handles both transports (codex rounds 4+5):
-      // - The SERVED store is authoritative when it is a project store -
-      //   an HTTP /mcp daemon launched from anywhere still isolates the
-      //   project it serves.
-      // - When the served store is the global root (stdio in a git repo
-      //   with no local .hippo falls back to it), dirname(store) is home
-      //   ('' would admit everything), so fall back to the launch cwd -
-      //   stdio servers launch in the project they serve.
-      const mcpStoreIdentity = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
-      const mcpProjectName = mcpStoreIdentity.name !== ''
-        ? mcpStoreIdentity.name
-        : resolveProjectIdentity(process.cwd()).name;
-      const isolationOff = config.contextProjectIsolation === false;
-      const entries = allEntries.filter((e) => {
-        if (!passesScopeFilterForRecall(e.scope ?? null, explicitScope)) return false;
-        if (!ambientSecretAdmit(e, mcpProjectName)) return false;
-        if (isolationOff) return true;
-        return classifyOriginProject(e.origin_project, mcpProjectName) !== 'cross-project';
-      });
-
-      // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): bounded
-      // read, no session id available on this surface (freshness bound
-      // only) — an orphaned snapshot must age out here too, not just on the
-      // UserPromptSubmit path.
-      const rawSnapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId);
-      const snapshot = rawSnapshot && passesScopeFilterForRecall(rawSnapshot.scope, explicitScope)
-        ? rawSnapshot
-        : null;
-      const snapshotText = snapshot
-        ? [
-            '## Active Task Snapshot',
-            `- Task: ${snapshot.task}`,
-            `- Status: ${snapshot.status}`,
-            `- Updated: ${snapshot.updated_at}`,
-            '',
-            '### Summary',
-            snapshot.summary,
-            '',
-            '### Next step',
-            snapshot.next_step,
-            '',
-          ].join('\n')
-        : '';
-
-      // The snapshot prints first, so it is paid first after the heading; context keeps no hit past the budget, even the top one.
-      let left = budget - memoriesReserve(budget);
-      if (left < 0) return ''; // not even the heading fits, so nothing prints, as at budget 0
-      const snapshotPiece = snapshotText ? `${snapshotText}\n` : '';
-      const showSnapshot = snapshotPiece !== '' && estimateTokens(snapshotPiece) <= left;
-      if (showSnapshot) left -= estimateTokens(snapshotPiece);
-      const usePhysicsCtx = config.physics?.enabled !== false;
-      const fit = { budget: left, minResults: 0, cost: memoryCost, hippoRoot };
-      const results = dropHeldCopies(usePhysicsCtx
-        ? await physicsSearch(query, entries, { ...fit, physicsConfig: config.physics })
-        : await hybridSearch(query, entries, fit), (r) => r.entry);
-      const retrievedIds = results.map((r) => r.entry.id);
-      strengthenRetrieved(hippoRoot, retrievedIds);
-      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
-      return (showSnapshot ? snapshotPiece : '') + formatMemories(results);
+      // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
+      const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot))).name;
+      const result = await apiGetContext(
+        { hippoRoot, tenantId, actor: mcpActor(ctx) },
+        {
+          q: autoDetectContext(),
+          budget,
+          exactScope,
+          currentProject: storeProject !== '' ? storeProject : resolveProjectIdentity(process.cwd()).name,
+          cost: contextCost,
+        },
+      );
+      lastRecalledIds.set(resolveClientKey(ctx), result.entries.map((r) => r.entry.id));
+      return (result.activeSnapshot ? snapshotPiece(result.activeSnapshot) : '')
+        + (result.sessionHandoff ? handoffPiece(result.sessionHandoff) : '')
+        + (result.recentEvents ? trailPiece(result.recentEvents) : '')
+        + formatMemories(result.entries);
     }
 
     case 'hippo_status': {

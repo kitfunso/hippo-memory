@@ -238,7 +238,7 @@ export { classifyOriginProject } from './project-identity.js';
  *   injects inside its owning project; flagged rows with no project origin
  *   (''/null) never ambient-inject at all. Explicit recall is unaffected -
  *   recalling a secret is a deliberate act.
- * - S2 envelope parity: private scopes + quarantine buckets never inject.
+ * - S2 envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
  * - S3 origin partition: other-project rows are excluded unless
  *   `includeCrossProject`.
  */
@@ -246,17 +246,17 @@ function ambientAdmitEntry(
   e: MemoryEntry,
   currentProjectName: string,
   includeCrossProject: boolean,
+  exactScope?: string,
 ): boolean {
   if (!ambientSecretAdmit(e, currentProjectName)) return false;
-  if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
+  if (!passesScopeFilterForRecall(e.scope ?? null, exactScope)) return false;
   if (includeCrossProject) return true;
   return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
 }
 
 /**
- * v39 S4: the secret half of the ambient policy on its own, for surfaces
- * with their own scope semantics (MCP hippo_context's explicit-scope
- * exact-match). A flagged row is only admitted inside its owning project;
+ * v39 S4: the secret half of the ambient policy on its own, for callers
+ * that apply their own scope rule. A flagged row is only admitted inside its owning project;
  * flagged rows with no project origin never ambient-inject.
  */
 export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
@@ -2532,6 +2532,8 @@ export interface ContextOpts {
   limit?: number;
   pinnedOnly?: boolean;
   scope?: string;
+  /** Envelope scope to match exactly, as in `recall`: admits that scope even when private, after the actor's scope check. */
+  exactScope?: string;
   /** With `pinnedOnly`, also inject the N most recent writes that pass the
    *  quality floor (`isContentWorthStoring`, DF3). Filtering happens BEFORE
    *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
@@ -2635,6 +2637,8 @@ export async function getContext(
   const limit = opts.limit ?? Number.POSITIVE_INFINITY;
   const includeRecent = opts.includeRecent ?? 0;
   const activeScope = opts.scope ?? '';
+  assertScopeRequestAllowed(ctx.actor, opts.exactScope);
+  const exactScope = opts.exactScope || undefined;
 
   if (budget <= 0) {
     return { entries: [], tokens: 0 };
@@ -2651,10 +2655,7 @@ export async function getContext(
   const hasLocalTaskState = hasLocal && !primaryIsGlobal;
 
   // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
-  // S2: envelope-filter parity with api.recall for AMBIENT context - private
-  // scopes and quarantine buckets never inject. `requested` is deliberately
-  // undefined: opts.scope is the scope-TAG boost input here, not an
-  // envelope-scope request (api.recall's exact-match semantics don't apply).
+  // S2: envelope-filter parity with api.recall; opts.scope is only the tag boost, opts.exactScope the envelope request.
   // S3: origin partition - other-project memories are excluded unless the
   // caller explicitly asks for them (crossProject) or isolation is disabled.
   const config = loadConfig(ctx.hippoRoot);
@@ -2704,10 +2705,9 @@ export async function getContext(
         sessionId: opts.currentSessionId,
       })
     : null;
-  // W1: pre-existing leak; same `requested: undefined` ambientAdmitEntry
-  // already uses when it scope-filters memory rows above.
+  // W1: the same envelope rule ambientAdmitEntry applies to memory rows.
   const activeSnapshot =
-    rawActiveSnapshot && passesScopeFilterForRecall(rowScope(rawActiveSnapshot), undefined)
+    rawActiveSnapshot && passesScopeFilterForRecall(rowScope(rawActiveSnapshot), exactScope)
       ? rawActiveSnapshot
       : null;
   // Key on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
@@ -2722,7 +2722,7 @@ export async function getContext(
           scopeFilter: 'default-deny',
         });
   const sessionHandoff =
-    rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), undefined)
+    rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), exactScope)
       ? rawSessionHandoff
       : null;
   // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
@@ -2730,7 +2730,7 @@ export async function getContext(
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
         session_id: rawActiveSnapshot.session_id,
         limit: 5,
-      }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
+      }).filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope))
     : [];
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
@@ -2748,7 +2748,7 @@ export async function getContext(
       digestHiddenForHandoff = true;
       return false;
     }
-    return ambientAdmitEntry(e, currentProjectName, includeCrossProject);
+    return ambientAdmitEntry(e, currentProjectName, includeCrossProject, exactScope);
   };
   const ownSessionId = opts.currentSessionId || '';
   // Inside admit, not after the load, so the loader's window widens past a session's own items.

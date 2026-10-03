@@ -181,6 +181,7 @@ import { detailLines, emptyReport, mergeReports, summaryLine, type ImportReport 
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
 import { deriveOriginProject, isGlobalStoreRoot, resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
+import { autoDetectContext } from './context-auto.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
   getGlobalRoot,
@@ -7208,42 +7209,6 @@ export function printContextMarkdown(
   const showStrength = opts.showStrength !== false;
   console.log(contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens));
   for (const item of items) console.log(contextLine(item, framing, showStrength, now));
-}
-
-function autoDetectContext(): string {
-  // Try git diff --name-only for changed files
-  try {
-    const diff = execSync('git diff --name-only HEAD 2>&1', {
-      encoding: 'utf8',
-      timeout: 3000,
-      windowsHide: true,
-    }).trim();
-
-    if (diff) {
-      // Extract meaningful terms from file paths
-      const terms = diff
-        .split('\n')
-        .flatMap((f: string) => f.replace(/[\/\\\.]/g, ' ').split(/\s+/))
-        .filter((t: string) => t.length > 2 && !['src', 'dist', 'test', 'tests', 'node_modules', 'index'].includes(t))
-        .slice(0, 10);
-      if (terms.length > 0) return terms.join(' ');
-    }
-
-    // Try branch name
-    const branch = execSync('git branch --show-current 2>&1', {
-      encoding: 'utf8',
-      timeout: 3000,
-      windowsHide: true,
-    }).trim();
-
-    if (branch && branch !== 'main' && branch !== 'master') {
-      return branch.replace(/[-_\/]/g, ' ');
-    }
-  } catch {
-    // Not a git repo or git not available, fall through
-  }
-
-  return '';
 }
 
 // ---------------------------------------------------------------------------
