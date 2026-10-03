@@ -144,6 +144,7 @@ import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
+import { ensurePilotArm, hashArm, readPilotArm } from './pilot-arm.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS, isSqliteBusy, noteStoreBusy } from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
@@ -2219,6 +2220,11 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
           payloadSessionId = payload.session_id;
         }
       }
+    }
+
+    // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
+    if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, resolveTenantId({}), payloadSessionId, false)) {
+      suppressOutput = true;
     }
 
     if (!suppressOutput) {
@@ -5772,6 +5778,21 @@ function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typ
   }
 }
 
+/**
+ * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
+ * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
+ */
+function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
+  if (sessionId === undefined) return false;
+  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
+  if (root === null) return false;
+  const rate = loadConfig(root).pilot.holdoutRateBp;
+  if (rate <= 0) return false;
+  const arm = withLedgerDb(hippoRoot, (db) =>
+    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
+  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
+}
+
 async function renderContext(
   hippoRoot: string,
   args: string[],
@@ -5787,34 +5808,6 @@ async function renderContext(
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
-
-  const budget = parseBudgetFlag(flags['budget'], 1500);
-  if (budget <= 0) {
-    rec?.disabled();
-    return;
-  }
-
-  // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
-  // fall through to api.getContext's '*' fallback. api.getContext is host-
-  // agnostic so the auto-detect (which shells out to git) stays CLI-side.
-  let query = args.join(' ').trim();
-  if (!query && flags['auto']) {
-    query = autoDetectContext();
-  }
-
-  // Scope detection (CLI-side: uses cwd). api.getContext takes the resolved
-  // scope via opts.scope to stay host-agnostic.
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const ctxActiveScope = ctxExplicitScope || detectScope();
-
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
-  // v39 memory scope isolation: --cross-project re-includes other-project
-  // memories (rendered under a demarcated section below).
-  const crossProject = flags['cross-project'] === true;
 
   // DF1 T2: resolve the calling session's id for the bounded active-task-
   // snapshot read (api.getContext -> loadFreshActiveTaskSnapshot). Stdin
@@ -5839,6 +5832,41 @@ async function renderContext(
   const subagent = isSubagentPayload(stdinText);
   const ledgerSessionId = subagent ? undefined : currentSessionId;
   if (subagent) payloadSessionId = undefined;
+
+  // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
+  const resolvedTenant = resolveTenantId({});
+  if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, payloadSessionId !== undefined)) {
+    rec?.disabled();
+    return;
+  }
+
+  const budget = parseBudgetFlag(flags['budget'], 1500);
+  if (budget <= 0) {
+    rec?.disabled();
+    return;
+  }
+
+  // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
+  // fall through to api.getContext's '*' fallback. api.getContext is host-
+  // agnostic so the auto-detect (which shells out to git) stays CLI-side.
+  let query = args.join(' ').trim();
+  if (!query && flags['auto']) {
+    query = autoDetectContext();
+  }
+
+  // Scope detection (CLI-side: uses cwd). api.getContext takes the resolved
+  // scope via opts.scope to stay host-agnostic.
+  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxActiveScope = ctxExplicitScope || detectScope();
+
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolvedTenant,
+    actor: api.adminActor('cli'),
+  };
+  // v39 memory scope isolation: --cross-project re-includes other-project
+  // memories (rendered under a demarcated section below).
+  const crossProject = flags['cross-project'] === true;
 
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');

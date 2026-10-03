@@ -2675,7 +2675,7 @@ export function isSqliteBusy(error: unknown): boolean {
 // busy_timeout covers neither of this file's two contended statements: SQLite
 // skips the busy handler for `PRAGMA journal_mode` and for a write that upgrades
 // a deferred read snapshot. Both need an explicit wait instead.
-function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000): void {
+export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000): void {
   const deadline = Date.now() + timeoutMs;
   const idle = new Int32Array(new SharedArrayBuffer(4));
   for (;;) {

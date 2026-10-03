@@ -1638,6 +1638,8 @@ A monthly report per company: memories used, repeated errors avoided, tokens hip
 #### CD11. Shadow holdout [commercial repo] [planned, next after TE5's pilot run; design in `docs/plans/2026-09-24-buyer-kpis.md`]
 A setting, `holdout.rate`, makes a deterministic share of sessions (or of developers) skip memory injection while capture continues. Each holdout is logged, so a pilot measures hippo against a live control group on the same days, models and people.
 
+**Status (core arm rows, Oct-3):** the core half is built on `feat/pilot-arm`. Config `pilot.holdoutRateBp` (default 0) assigns each session an arm by hash; the first hook call writes one `token_ledger` row (`surface='pilot'`, `event='arm'`); a holdout session gets no pushed memories. Contract and known leaks: `docs/decisions/2026-10-03-pilot-arm.md`. The pilot report reader is in the commercial repo.
+
 **Workflow adoption [planned].** Use CAE5 to `build-eval` development fixtures for control assignment, capture/injection separation and leakage checks. This is eval design and correctness work; live controls, randomisation and shadow-holdout outcomes remain outside `hillclimb`.
 
 #### CD12. Agent telemetry join and pilot report [planned, with CD11] [commercial repo]

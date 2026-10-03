@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store.js';
+import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { isEmbeddingAvailable } from './embeddings.js';
@@ -241,6 +242,11 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
     } finally {
       if (db !== null) closeHippoDb(db);
     }
+  }
+
+  const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
+  if (holdoutRateBp > 0) {
+    checks.push({ id: 'pilot', status: 'info', detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo (pilot.holdoutRateBp=${holdoutRateBp})` });
   }
 
   const claudeDir = path.join(home, '.claude');

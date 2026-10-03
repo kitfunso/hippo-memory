@@ -559,6 +559,15 @@ are not recorded yet. It holds ids, hashes, counts and reasons only, never promp
 text; the prompt hash is unsalted, so a very short prompt can be guessed. A ledger failure prints one stderr line and never changes what the hook prints. Rows
 older than 90 days are pruned; at a heavy 300 prompts a day that is about 190 MB per store.
 
+**Run a pilot with a holdout group.** Set `{"pilot":{"holdoutRateBp":2000}}` in `.hippo/config.json`
+to hold back memories from about 20% of sessions. The rate is in basis points, 0 to 10000, and 0
+is off (the default). The setting is read from the store the token ledger writes to. A session
+lands in its arm by a hash of its id, and the first hook call writes one row to the token ledger.
+A holdout session gets no memories from the per-prompt hook, `hippo context` or compact-resume.
+Capture still runs. Pulls such as `hippo recall` and the MCP tools stay open and are not recorded
+as arm rows. Set the rate to 0 only after the pilot window closes, because 0 ends every holdout at once.
+`hippo doctor` shows the pilot when it is on.
+
 ---
 
 ### Outcome feedback

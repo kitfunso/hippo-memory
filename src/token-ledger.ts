@@ -36,6 +36,7 @@ import type { JsonObject, JsonValue } from './working-memory.js';
  * - `context`, `recall`: the CLI commands.
  * - `mcp_recall`, `mcp_context`: the MCP tools.
  * - `http_recall`, `http_context`, `http_assemble`: the HTTP API.
+ * - `pilot`: the session's pilot arm row (src/pilot-arm.ts); not a send, so it is in no surface list.
  */
 export type TokenSurface =
   | 'hook'
@@ -47,7 +48,8 @@ export type TokenSurface =
   | 'mcp_context'
   | 'http_recall'
   | 'http_context'
-  | 'http_assemble';
+  | 'http_assemble'
+  | 'pilot';
 
 /** All surfaces, in report order. */
 export const TOKEN_SURFACES: readonly TokenSurface[] = [
@@ -64,8 +66,9 @@ export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 
  * - `skip`: identical to the session's last injected block, so not sent again.
  * - `reset`: the host compacted its context, so the next block must be sent.
  * - `reread`: tokens later calls read again, booked at session end as one row per session, hook surface and UTC day of the calls.
+ * - `arm`: the pilot assignment; `block_hash` is `hippo` or `holdout`, `items` the holdout rate in basis points.
  */
-export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread';
+export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread' | 'arm';
 
 /** Rows older than this are pruned on write. */
 export const TOKEN_LEDGER_RETENTION_DAYS = 90;
@@ -246,7 +249,7 @@ export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceI
             COUNT(DISTINCT CASE WHEN event = 'reread' THEN session_id END) AS reread_sessions,
             SUM(CASE WHEN event = 'inject' THEN tokens ELSE 0 END) AS tokens
      FROM token_ledger
-     WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL`,
+     WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL AND event <> 'arm'`,
   ).get(...REREAD_SURFACES, tenantId, sinceIso) as {
     sessions: number; hook_sessions: number; reread_sessions: number; tokens: number | null;
   } | undefined;
@@ -342,7 +345,7 @@ export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso
             SUM(CASE WHEN event = 'skip' THEN tokens ELSE 0 END) AS skipped,
             SUM(CASE WHEN event = 'inject' THEN 1 ELSE 0 END) AS injections
      FROM token_ledger
-     WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL
+     WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL AND event <> 'arm'
      GROUP BY session_id`,
   ).all(tenantId, sinceIso) as Array<{ session_id: string; sent: number; skipped: number; injections: number }>;
   return rows.map((r) => ({

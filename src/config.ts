@@ -151,6 +151,11 @@ export interface HippoConfig {
   deliveryLedger: {
     enabled: boolean;
   };
+  /** Pilot holdout (src/pilot-arm.ts): share of sessions, in basis points 0-10000, that get no memories pushed.
+   *  Default 0 = off. Read from the store the token ledger writes to. */
+  pilot: {
+    holdoutRateBp: number;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -236,6 +241,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   deliveryLedger: {
     enabled: false,
   },
+  pilot: {
+    holdoutRateBp: 0,
+  },
 };
 
 function isMemoryValueConfig(
@@ -274,6 +282,19 @@ function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined)
     `(got ${JSON.stringify(value)}) - using false.`,
   );
   return false;
+}
+
+// Only an integer 0..10000 counts; anything else warns and turns the pilot off.
+function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
+  if (value === undefined) return 0;
+  const rate = value?.holdoutRateBp;
+  if (rate === undefined && value !== null && value.constructor === Object) return 0;
+  if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
+  console.error(
+    `Warning: config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
+    `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
+  );
+  return 0;
 }
 
 function agentMemoryTools(value: string[] | null | undefined): string[] | null {
@@ -404,6 +425,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       },
       agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
       deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
+      pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
