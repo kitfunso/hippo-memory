@@ -10,6 +10,7 @@ import * as records from '../scripts/token-eval/records.mjs';
 import { teachMessage, drawOrder } from '../scripts/token-eval/lessons.mjs';
 import { stateCommit, holdPre, dropPre } from '../scripts/token-eval/checks.mjs';
 import { stubBaseCommit, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
+import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
@@ -393,4 +394,47 @@ describe('drawn order in the plan', () => {
     for (const seed of [1, 2]) expect(res.stdout).toContain(`order seqA seed${seed}: ${drawOrder(s.sequences[0], s.families, seed).join(' ')}`);
     expect(res.stdout).toMatch(/seqA tasksSinceTeach over 10 applies: min \d+, median \d+(\.\d+)?, max \d+/);
   });
+});
+
+describe('family screen', () => {
+  it('keeps, drops and leaves undecided from the first checks; A0 and A4 only, no resume', async () => {
+    const { out, log } = isolate('screen');
+    const r = makeRepo();
+    const screened = (id: string, prompt: string, args: string[] = []): FamilyDef => ({
+      ...family(id, [lesson(`${id}-l1`, `Write the ${id} file`, { check: { script: 'lesson.mjs', args } })]),
+      screen: { id: `${id}-screen`, baseRef: r.base, fixRef: r.fix, prompt, test: 'node test.js', testFiles: ['test.js'] },
+    });
+    const ids = ['fK', 'fD', 'fU'];
+    const s = spec(r, [screened('fK', 'LESSON_TOLD SEED2_OK'), screened('fD', 'LESSON_TOLD SEED2_BAD'), screened('fU', 'LESSON_TOLD', ['exit=5'])], [
+      ...ids.map((f) => teach(r, `t${f}`, `${f}-l1`, 'LESSON_BAD')), plain(r, 'n1'), plain(r, 'n2'),
+      ...ids.map((f) => apply(r, `a${f}1`, `${f}-l1`, 'look around only')), ...ids.map((f) => apply(r, `a${f}2`, `${f}-l1`, 'look around only')),
+    ]);
+    const v = await runScreen({ spec: s, outDir: out, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {} });
+    expect(v.kept).toEqual(['fK']);
+    expect(v.families.find((f: { familyId: string }) => f.familyId === 'fK')).toMatchObject({ a0Breaks: 3, a0Of: 4, a4Follows: 2, a4Of: 2 });
+    expect(v.dropped).toEqual([{ familyId: 'fD', a0Breaks: 4, a0Of: 4, a4Follows: 1, a4Of: 2, verdict: 'dropped' }]);
+    expect(v.undecided).toEqual([expect.objectContaining({ familyId: 'fU', verdict: 'undecided', reason: expect.stringMatching(/invalid checker$/) })]);
+    expect(JSON.parse(readFileSync(join(out, 'screen.json'), 'utf8'))).toEqual(v);
+    const recs: Z0Record[] = readFileSync(join(out, 'screen.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(recs).toHaveLength(18);
+    expect([...new Set(recs.map((x) => x.arm))].sort()).toEqual(['A0', 'A4']);
+    for (const x of recs) expect(x).toMatchObject({ kind: 'screen', screen: true, resumeSessionId: null });
+    expect(recs.filter((x) => x.arm === 'A0').map((x) => x.taskId)).toEqual(expect.arrayContaining(['tfK', 'fK-screen']));
+    expect(logLines(log).filter((l) => l.startsWith('resume-msg'))).toEqual([]);
+    expect(existsSync(join(out, 'runs.jsonl'))).toBe(false);
+  }, 300_000);
+
+  it('a screen task with a symlinked instruction file stops the screen before any session', async () => {
+    const { out, log } = isolate('screen-link');
+    const r = makeRepo();
+    const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: 'policy.md', encoding: 'utf8' }).trim();
+    g('update-index', '--add', '--cacheinfo', `120000,${blob},docs/AGENTS.md`);
+    g('commit', '-qm', 'link');
+    const fam = { ...family('fL', [lesson('fL-l1', 'Write the fL file')]), screen: { id: 'fL-screen', baseRef: g('rev-parse', 'HEAD'), fixRef: r.fix, prompt: 'x', test: 'node test.js', testFiles: ['test.js'] } };
+    const s = spec(r, [fam], [teach(r, 'tL', 'fL-l1', 'LESSON_BAD'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'aL1', 'fL-l1', 'x'), apply(r, 'aL2', 'fL-l1', 'x')]);
+    await expect(runScreen({ spec: s, outDir: out, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {} }))
+      .rejects.toThrow('Z0 task seqF/fL-screen: instruction file docs/AGENTS.md is a symlink in the task repo');
+    expect(logLines(log)).toEqual([]);
+  }, 60_000);
 });

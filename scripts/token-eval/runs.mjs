@@ -1,9 +1,11 @@
-// One (sequence, arm, seed) run: its dirs, env, settings and hippo store, plus the record writer every task shares.
+// One (sequence, arm, seed) run: its dirs, env, settings and hippo store, plus the shared context and record writer.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HIPPO_JS, sh } from './exec.mjs';
-import { HIPPO_ARMS, armSettings, armEnv, childEnv, writeHippoShim } from './arms.mjs';
+import { HIPPO_JS, sh, git } from './exec.mjs';
+import { HIPPO_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs } from './homes.mjs';
+import { stubBaseCommit, assertNoInstructionLinks } from './workspace.mjs';
+import { lessonIndex } from './lessons.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -55,18 +57,58 @@ export function hippoSentFor(hippoRoot, sessionId) {
   }
 }
 
-/** A run's first step: fresh dirs, its env, settings and shim; checkoutBase makes the work repo. */
-export function startRun(ctx, s, arm, seed) {
-  const dirs = runDirs(ctx.outDir, s.id, arm, seed);
+/** Clone each sequence's repo into the cache, then refuse any task to be run (a screen's screen tasks too) whose stub tree checkoutBase would refuse. */
+export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
+  // Finding a symlinked instruction file here saves abandoning a lockstep run midway.
+  for (const s of spec.sequences) {
+    const cached = path.join(cacheDir, s.id);
+    if (!fs.existsSync(cached)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      git(['clone', '--quiet', s.repo, cached]);
+    }
+    const screens = screen ? (spec.families ?? []).filter((f) => f.sequence === s.id && f.screen).map((f) => f.screen) : [];
+    for (const t of [...s.tasks, ...screens]) assertNoInstructionLinks(cached, s.id, t, stubBaseCommit(cached, t.baseRef));
+  }
+}
+
+/** The shared context of a run or a screen: tools, limits, the lesson index, the cached repos, the Claude version, one warm-up call. */
+export async function openContext(opts) {
+  await loadHippo();
+  const { spec, outDir, claudeBin = 'claude', warmup = true, passEnv = [] } = opts;
+  const { claude } = startupTools(claudeBin, process.env);
+  fs.mkdirSync(outDir, { recursive: true });
+  // outDir as HOME: hippo's store walk stops at HOME, so it must be an ancestor of every workspace.
+  const ctx = {
+    outDir, passEnv, claude, records: [], fakeHome: outDir, hookHome: path.join(outDir, 'hook-home'), cacheDir: path.join(outDir, 'repo-cache'),
+    model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
+    limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
+    lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
+  };
+  cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
+  const warmDir = path.join(outDir, 'warmup');
+  const warmEnv = armEnv('A0', { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
+  ctx.claudeVersion = sh(`${claude} --version`, outDir, warmEnv).stdout.trim() || null;
+  if (warmup) {
+    // One unrecorded call, so the first recorded run does not alone pay the cold prompt-cache write.
+    fs.mkdirSync(warmEnv.CLAUDE_CONFIG_DIR, { recursive: true });
+    const warmArgs = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...(ctx.model ? ['--model', ctx.model] : [])];
+    sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
+  }
+  return ctx;
+}
+
+/** A run's first step: fresh dirs under `name` (the sequence id unless a screen names its own), env, settings, shim; checkoutBase makes the work repo. */
+export function startRun(ctx, s, arm, seed, name = s.id) {
+  const dirs = runDirs(ctx.outDir, name, arm, seed);
   freshRunDirs(dirs);
   const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv });
   if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, arm === 'A5' ? 'sham' : 'real');
-  const settingsFile = path.join(ctx.outDir, 'settings', `${s.id}-${arm}-seed${seed}.json`);
+  const settingsFile = path.join(ctx.outDir, 'settings', `${name}-${arm}-seed${seed}.json`);
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
   return {
     s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [],
-    rawDir: path.join(ctx.outDir, 'raw', s.id, arm, `seed${seed}`),
+    rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`),
   };
 }
 
@@ -85,7 +127,7 @@ const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already 
 
 export function writeRecord(ctx, record) {
   ctx.records.push(record);
-  fs.appendFileSync(path.join(ctx.outDir, 'runs.jsonl'), `${JSON.stringify(record)}\n`);
+  fs.appendFileSync(path.join(ctx.outDir, ctx.recordsFile),`${JSON.stringify(record)}\n`);
   const outcome = SKIPPED[record.invalid] ?? (record.resolved ? 'resolved' : 'not resolved');
   ctx.log(`${record.sequence} ${record.taskId} ${record.arm} seed${record.seed}: ${outcome}${record.costUsd ? `, $${record.costUsd.toFixed(4)}` : ''}${record.invalid ? ` (invalid: ${record.invalid})` : ''}`);
 }

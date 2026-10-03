@@ -6,7 +6,7 @@ import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import { findTranscript, transcriptWork, commandLog, usageFromResult, invalidRecord, validRecord } from './records.mjs';
-import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle } from './runs.mjs';
+import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { runSession, resumeSession } from './turns.mjs';
 import { runCheck, stateCommit, holdPre, dropPre, CheckerError } from './checks.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
@@ -26,6 +26,7 @@ function baseFields(ctx, run, step) {
     applyIndex: role.applyIndex, afterReversal: role.afterReversal, tasksSinceTeach: role.tasksSinceTeach,
   };
   if (role.kind !== 'no-lesson') base.lessonId = role.lessonId;
+  if (role.kind === 'screen') base.screen = true;
   if (role.kind === 'apply') base.wordOverlap = wordOverlap(t.prompt, ctx.lessons.get(role.lessonId).lesson.rule);
   return base;
 }
@@ -104,8 +105,8 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const staleFollow = old ? c.check(old) === 'pass' : null;
   const teach = role.kind === 'teach';
   const form = teach ? (first === 'fail' ? 'correction' : 'confirmation') : 'correction';
-  // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail.
-  if (!teach && (first !== 'fail' || c.error)) return { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
+  // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session never (reading 4).
+  if (role.kind === 'screen' || (!teach && (first !== 'fail' || c.error))) return { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
   // The resume would load a file session 1 left above work/, so the cell is void already and the resume never spends plan usage.
   if (ancestorHits(ctx, run, t)) {
     stage.ancestors = true;
@@ -182,8 +183,24 @@ async function runTurns(ctx, run, step, stage, base) {
   return sessionRecord(ctx, run, step, { base, session, turns, sessionIds, acceptancePassed: test.status === 0, wallMs, stage });
 }
 
+/** Every step in order; a step's run is keyed by its dir name, arm and seed, and a screen step may preset what A4 was taught. */
+export async function runSteps(ctx, steps) {
+  const runs = new Map();
+  for (const [order, step] of steps.entries()) {
+    // Every session is synchronous; yielding once a step keeps the host's event loop (signals, a test worker's RPC) alive.
+    await new Promise((resolve) => setImmediate(resolve));
+    const { seed, arm, sequence: s } = step;
+    const name = step.runName ?? s.id;
+    const key = `${name}|${arm}|${seed}`;
+    if (!runs.has(key)) runs.set(key, { ...startRun(ctx, s, arm, seed, name), taught: step.taught ?? [] });
+    await runTask(ctx, runs.get(key), { ...step, order });
+    ctx.progress.last = `step ${order}: ${name} ${step.taskId} ${arm} seed${seed}`;
+  }
+  return ctx.records;
+}
+
 /** One step: prepare the checkout, skip the session if the step is void before it starts, else run, check, resume and record it. */
-export async function runTask(ctx, run, step) {
+async function runTask(ctx, run, step) {
   const { t } = step;
   const base = baseFields(ctx, run, step);
   const meta = { envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv };
