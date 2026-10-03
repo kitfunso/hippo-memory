@@ -45,14 +45,14 @@ describe('pilot config', () => {
   });
 
   it.each([-1, 10001, 2.5, '2000', {}, null])('warns and turns the pilot off for %j', (bad) => {
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     writeConfig({ holdoutRateBp: bad });
     expect(loadConfig(root).pilot.holdoutRateBp).toBe(0);
     expect(warn.mock.calls.some((c) => String(c[0]).includes('"pilot"'))).toBe(true);
   });
 
   it('warns for a pilot value that is not an object', () => {
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     writeConfig(2000);
     expect(loadConfig(root).pilot.holdoutRateBp).toBe(0);
     expect(warn).toHaveBeenCalledOnce();

@@ -291,8 +291,8 @@ function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
   const rate = value?.holdoutRateBp;
   if (rate === undefined && value !== null && value.constructor === Object) return 0;
   if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
-  console.error(
-    `Warning: config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
+  log.warn(
+    `config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
     `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
   );
   return 0;
