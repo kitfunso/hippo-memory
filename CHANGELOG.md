@@ -44,6 +44,11 @@
 
 - **Test suite hygiene.** Schema-version assertions read the version from `src/db.ts` through one shared helper, the type-only API contract test and a stale skipped test are replaced or removed, the envelope migration test is renamed for what it checks, and `hippo eval --suite`, the postinstall script and an upgrade from a v1 store gain behaviour tests. No product change.
 
+### Upgrade note
+- **`hippo serve` behind a proxy needs an API key.** A keyless deployment behind nginx, Caddy, cloudflared or a dev tunnel gets 401 after the upgrade. Run `hippo auth create` and send `Authorization: Bearer hk_...`.
+- **Memories saved in a git worktree before 1.58.0 leave that worktree's automatic context.** They keep the worktree's folder name as their project, and the worktree now uses its repo's name, so `hippo context` treats them as another project's. Pass `--cross-project`, or set `contextProjectIsolation: false` in `config.json`, to include them.
+- **Unrecognised server errors are now 500, not 400.** A client that read any 400 as "my input was bad" can now get a 500 with a `requestId` to quote in the server log.
+
 ## 1.57.0 - 2026-10-03
 
 ### Added
