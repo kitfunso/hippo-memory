@@ -7,7 +7,6 @@
  * in exactly one place.
  */
 
-import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
@@ -80,6 +79,7 @@ import {
 } from './memory.js';
 import {
   appendAuditEvent,
+  auditQueryFields,
   queryAuditEvents,
   auditMemories,
   isContentWorthStoring,
@@ -1134,8 +1134,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
     actor: ctx.actor.subject,
     op: 'recall',
     metadata: {
-      query_hash: createHash('sha256').update(opts.query).digest('hex').slice(0, 16),
-      query_length: opts.query.length,
+      ...auditQueryFields(opts.query),
       results: rankedOut.length,
     },
   });
@@ -3034,7 +3033,7 @@ export async function getContext(
     // 'recall' op emitted by api.recall for parity). pinnedOnly + '*' fallback
     // never hit the search engines, so they don't emit (matches cmdContext).
     const ctxRecallMetadata = {
-      query: query.slice(0, 200),
+      ...auditQueryFields(query),
       results: selectedItems.length,
       mode: 'context',
     };

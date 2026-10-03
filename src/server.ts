@@ -15,7 +15,7 @@ import {
   hashQueryText,
   RingBuffer,
 } from './recall-history.js';
-import { appendAuditEvent, AUDIT_OPS } from './audit.js';
+import { appendAuditEvent, auditQueryFields, AUDIT_OPS } from './audit.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
 // for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
@@ -883,10 +883,7 @@ async function handleRequest(
             actor: ctx.actor.subject,
             op: 'recall_anchor_skipped_no_session',
             targetId: undefined,
-            metadata: {
-              query_hash: createHash('sha256').update(q).digest('hex').slice(0, 16),
-              query_length: q.length,
-            },
+            metadata: auditQueryFields(q),
           });
         } finally {
           closeHippoDb(dbForAudit);

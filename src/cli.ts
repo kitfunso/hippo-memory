@@ -217,6 +217,7 @@ import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
   appendAuditEvent,
+  auditQueryFields,
   queryAuditEvents,
   AUDIT_OPS,
   type AuditEvent,
@@ -2062,10 +2063,7 @@ async function cmdRecall(
     appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
   } else if (process.env.HIPPO_ANCHORING !== 'off') {
     // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
-    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
-      query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
-      query_length: query.length,
-    });
+    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query));
   }
   if (cmdAnchoringHint?.reason === 'memory_dominance') {
     emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
@@ -2087,7 +2085,7 @@ async function cmdRecall(
 
   // A5 audit: one 'recall' event per query, before the early-empty return, in every participating store.
   const recallMetadata: Record<string, unknown> = {
-    query: query.slice(0, 200),
+    ...auditQueryFields(query),
     results: results.length,
   };
   emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);

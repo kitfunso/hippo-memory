@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject, JsonValue } from './working-memory.js';
@@ -288,6 +289,18 @@ function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
 
 function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValueWithBigInt {
   return isBigIntValue(value) ? value.toString() : value;
+}
+
+export type AuditQueryFields = {
+  query_hash: string;
+  query_length: number;
+};
+
+export function auditQueryFields(query: string): AuditQueryFields {
+  return {
+    query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
+    query_length: query.length,
+  };
 }
 
 export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
