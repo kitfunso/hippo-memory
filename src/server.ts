@@ -313,8 +313,27 @@ export interface ServerHandle {
   server?: import('node:http').Server;
 }
 
+/** Identity an {@link AuthResolver} vouches for. The core sanitises it before use. */
+export interface ResolvedBearer {
+  tenantId: string;
+  subject: string;
+  /** Anything other than exactly 'admin' is treated as 'member'. */
+  role: 'admin' | 'member';
+  scopes?: readonly string[];
+}
+
+/**
+ * Vouches for a bearer token that is not an API key. Return null for any
+ * token you do not recognise and never throw on a foreign token: a throw is
+ * a 401 and is not retried against API keys. It runs on every authenticated
+ * request and every SSE heartbeat, so keep it cache-backed.
+ */
+export type AuthResolver = (token: string) => ResolvedBearer | null | Promise<ResolvedBearer | null>;
+
 export interface ServeOpts {
   hippoRoot: string;
+  /** Asked first for every Bearer token; null falls through to API-key validation. */
+  authResolver?: AuthResolver;
   port?: number;
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM. Only `hippo serve` owns the process, so only it sets this. */
@@ -560,13 +579,81 @@ export function clientIpForRateLimit(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? 'unknown';
 }
 
+type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver'>;
+
+// Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
+const RESERVED_ACTOR_NAMES = [
+  'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories',
+] as const;
+
+function hasControlChar(s: string): boolean {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return true;
+  }
+  return false;
+}
+
+/** Core owns the checks so a resolver cannot mint an actor that collides with a built-in one. */
+function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
+  // Each field is read once: a getter on plugin code could answer differently the second time.
+  const { tenantId, subject, role, scopes } = r;
+  // A resolver is plugin code, so the runtime checks hold even though the static types say string.
+  if (!isJsonString(tenantId) || tenantId.trim().length === 0) return null;
+  // Core reserves `__`-prefixed tenants (`__host__`, `__unroutable__`).
+  const tenant = tenantId.trim();
+  if (tenant.startsWith('__') || tenant.length > 256 || hasControlChar(tenant)) return null;
+  if (!isJsonString(subject) || subject.length < 1 || subject.length > 256) return null;
+  if (hasControlChar(subject)) return null;
+  const lower = subject.toLowerCase();
+  if (RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`))) return null;
+  const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
+  if (Array.isArray(scopes)) clean.scopes = scopes.filter((s) => isJsonString(s));
+  return clean;
+}
+
+/** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
+async function resolveBearer(token: string, opts: AuthOpts): Promise<ResolvedBearer> {
+  if (opts.authResolver) {
+    let clean: ResolvedBearer | null;
+    try {
+      const resolved = await opts.authResolver(token);
+      clean = resolved ? sanitiseResolved(resolved) : null;
+      if (resolved && !clean) throw new HttpError(401, 'invalid api key');
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      // The plugin's message is logged, but never the token, even if the plugin echoed it.
+      const raw = err instanceof Error ? err.message : 'unknown error';
+      const msg = raw.split(token).join('[token]').replace(/[\r\n]/g, ' ');
+      process.stderr.write(`[hippo] auth resolver threw: ${msg}\n`);
+      throw new HttpError(401, 'invalid api key');
+    }
+    if (clean) return clean;
+  }
+  const db = openHippoDb(opts.hippoRoot);
+  try {
+    const result = validateApiKey(db, token);
+    if (!result.valid || !result.tenantId || !result.keyId || !result.role) {
+      throw new HttpError(401, 'invalid api key');
+    }
+    return {
+      tenantId: result.tenantId,
+      subject: `api_key:${result.keyId}`,
+      role: result.role,
+      scopes: result.scopes,
+    };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /**
  * Build a per-request Context from the Authorization header and remote
  * address. Throws HttpError(401) for invalid / missing credentials. Opens
- * the DB only when a Bearer token is present so loopback no-auth requests
- * stay cheap.
+ * the DB only when a Bearer token is present and the auth resolver (if any)
+ * did not claim it, so loopback no-auth requests stay cheap.
  */
-function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context {
+async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
   const auth = readAuthHeader(req);
 
   if (auth.kind === 'malformed') {
@@ -574,24 +661,12 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
   }
 
   if (auth.kind === 'bearer') {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const result = validateApiKey(db, auth.token);
-      if (!result.valid || !result.tenantId || !result.keyId || !result.role) {
-        throw new HttpError(401, 'invalid api key');
-      }
-      return {
-        hippoRoot,
-        tenantId: result.tenantId,
-        actor: {
-          subject: `api_key:${result.keyId}`,
-          role: result.role,
-          scopes: result.scopes,
-        },
-      };
-    } finally {
-      closeHippoDb(db);
-    }
+    const id = await resolveBearer(auth.token, opts);
+    return {
+      hippoRoot: opts.hippoRoot,
+      tenantId: id.tenantId,
+      actor: { subject: id.subject, role: id.role, scopes: id.scopes },
+    };
   }
 
   // No Authorization header. Loopback-only fallback, unless explicitly
@@ -604,7 +679,7 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
 
   // v1.12.0: loopback fallback is process-local, treat as admin.
   return {
-    hippoRoot,
+    hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
     actor: { subject: 'localhost:cli', role: 'admin' },
   };
@@ -616,21 +691,13 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
  * 401 the same way buildContextWithAuth does, but skips building the Context
  * envelope. Loopback no-auth still passes.
  */
-function requireAuth(req: IncomingMessage, hippoRoot: string): void {
+async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
   const auth = readAuthHeader(req);
   if (auth.kind === 'malformed') {
     throw new HttpError(401, 'invalid api key');
   }
   if (auth.kind === 'bearer') {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const result = validateApiKey(db, auth.token);
-      if (!result.valid) {
-        throw new HttpError(401, 'invalid api key');
-      }
-    } finally {
-      closeHippoDb(db);
-    }
+    await resolveBearer(auth.token, opts);
     return;
   }
   if (process.env.HIPPO_REQUIRE_AUTH === '1') {
@@ -748,7 +815,7 @@ async function handleRequest(
     if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
       throw new HttpError(400, `invalid kind: ${kindRaw}`);
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = remember(ctx, {
       content,
       kind: kindRaw,
@@ -770,7 +837,7 @@ async function handleRequest(
       throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
     }
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
       entity: entityRaw ?? undefined,
       limit,
@@ -844,7 +911,7 @@ async function handleRequest(
     // serialized RecallResult. Mirrors the include_continuity convention.
     const explainRaw = query.get('explain');
     const explain = explainRaw === '1' || explainRaw === 'true';
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
 
     // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
     // ring snapshot via opts.recallHistory so api.recall's own
@@ -969,7 +1036,7 @@ async function handleRequest(
       : (sumOlderRaw === '1' || sumOlderRaw === 'true');
     const scopeQ = query.get('scope');
     const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const assembleExtra: Pick<AssembleOpts, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
     if (budget !== undefined) assembleExtra.budget = budget;
     if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
@@ -1011,7 +1078,7 @@ async function handleRequest(
       }
       depth = parsed;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const drillExtra: Pick<DrillDownOpts, 'limit' | 'budget' | 'depth'> = {};
     if (limit !== undefined) drillExtra.limit = limit;
     if (budget !== undefined) drillExtra.budget = budget;
@@ -1038,7 +1105,7 @@ async function handleRequest(
     if (!reason) {
       throw new HttpError(400, 'reason is required');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = archiveRaw(ctx, archiveMatch.id!, reason);
     sendJson(res, 200, result);
     return;
@@ -1052,7 +1119,7 @@ async function handleRequest(
     if (!content) {
       throw new HttpError(400, 'content is required');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = supersede(ctx, supersedeMatch.id!, content);
     sendJson(res, 200, result);
     return;
@@ -1061,7 +1128,7 @@ async function handleRequest(
   const promoteMatch = matchPath('/v1/memories/:id/promote', path);
   if (method === 'POST' && promoteMatch) {
     validateIdSegment(promoteMatch.id!, 'memory id');
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = promote(ctx, promoteMatch.id!);
     sendJson(res, 200, result);
     return;
@@ -1070,7 +1137,7 @@ async function handleRequest(
   const idMatch = matchPath('/v1/memories/:id', path);
   if (method === 'DELETE' && idMatch) {
     validateIdSegment(idMatch.id!, 'memory id');
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = forget(ctx, idMatch.id!);
     sendJson(res, 200, result);
     return;
@@ -1107,7 +1174,7 @@ async function handleRequest(
       }
       ids = idsRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     if (ids !== undefined) {
       const { applied } = outcome(ctx, ids, good);
       sendJson(res, 200, { applied });
@@ -1169,7 +1236,7 @@ async function handleRequest(
     // the project it serves.
     const crossProjectRaw = query.get('cross_project');
     const crossProject = crossProjectRaw === '1' || crossProjectRaw === 'true';
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = await getContext(ctx, {
       q,
       budget,
@@ -1210,7 +1277,7 @@ async function handleRequest(
     // any Bearer-authed caller now carries an explicit role from the api_keys
     // row). When non-loopback serving lands, this gate is the actual auth
     // boundary on host-wide sleep.
-    const sleepCtx = buildContextWithAuth(req, opts.hippoRoot);
+    const sleepCtx = await buildContextWithAuth(req, opts);
     if (sleepCtx.actor.role !== 'admin') {
       throw new HttpError(403, '/v1/sleep requires admin role');
     }
@@ -1256,7 +1323,7 @@ async function handleRequest(
     // bound to the caller's authenticated tenant (ctx.tenantId, resolved
     // from the Bearer token). Forwarding body.tenantId here would let
     // tenant A mint a key for tenant B — see authCreate doc comment.
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = authCreate(ctx, {
       label: labelRaw,
       role,
@@ -1276,7 +1343,7 @@ async function handleRequest(
       else if (activeRaw === 'false') active = false;
       else throw new HttpError(400, "active must be 'true' or 'false'");
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = authList(ctx, { active });
     sendJson(res, 200, result);
     return;
@@ -1288,7 +1355,7 @@ async function handleRequest(
   const keyMatch = matchPath('/v1/auth/keys/:keyId', path);
   if (method === 'DELETE' && keyMatch) {
     validateIdSegment(keyMatch.keyId!, 'key id');
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const result = authRevoke(ctx, keyMatch.keyId!);
     sendJson(res, 200, result);
     return;
@@ -1296,7 +1363,7 @@ async function handleRequest(
 
   // GET /v1/quarantine?status=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
   if (method === 'GET' && path === '/v1/quarantine') {
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     if (ctx.actor.role !== 'admin') {
       throw new HttpError(403, '/v1/quarantine requires admin role');
     }
@@ -1316,7 +1383,7 @@ async function handleRequest(
   const quarantineApproveMatch = matchPath('/v1/quarantine/:id/approve', path);
   if (method === 'POST' && quarantineApproveMatch) {
     validateIdSegment(quarantineApproveMatch.id!, 'memory id');
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       quarantineApprove(ctx, quarantineApproveMatch.id!);
       sendJson(res, 200, { approved: quarantineApproveMatch.id });
@@ -1333,7 +1400,7 @@ async function handleRequest(
   const quarantineRejectMatch = matchPath('/v1/quarantine/:id/reject', path);
   if (method === 'POST' && quarantineRejectMatch) {
     validateIdSegment(quarantineRejectMatch.id!, 'memory id');
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       quarantineReject(ctx, quarantineRejectMatch.id!);
       sendJson(res, 200, { rejected: quarantineRejectMatch.id });
@@ -1376,7 +1443,7 @@ async function handleRequest(
       }
       limit = parsed;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
     const tenantOverride = query.get('tenant');
     const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
@@ -1435,7 +1502,7 @@ async function handleRequest(
       }
       targetDateValue = targetDate;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const prediction = savePrediction(opts.hippoRoot, ctx.tenantId, {
       classTag,
       claimText: claim,
@@ -1451,7 +1518,7 @@ async function handleRequest(
     const classTag = query.get('class') ?? undefined;
     const status = query.get('status') ?? 'all';
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     let predictions;
     if (status === 'all') {
       if (classTag) {
@@ -1492,7 +1559,7 @@ async function handleRequest(
     if (classTag.length > 256) {
       throw new HttpError(400, 'class exceeds 256-character cap');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const baserate = computePredictionBaserate(opts.hippoRoot, ctx.tenantId, classTag, ctx.actor.subject);
     sendJson(res, 200, { baserate });
     return;
@@ -1501,7 +1568,7 @@ async function handleRequest(
   const predictionByIdMatch = path.match(/^\/v1\/predictions\/(\d+)$/);
   if (method === 'GET' && predictionByIdMatch) {
     const id = parseInt(predictionByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const prediction = loadPredictionById(opts.hippoRoot, ctx.tenantId, id);
     if (!prediction) {
       throw new HttpError(404, `prediction ${id} not found`);
@@ -1537,7 +1604,7 @@ async function handleRequest(
       }
       closureNote = note;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
         closureState: state,
@@ -1593,7 +1660,7 @@ async function handleRequest(
       }
       supersedesDecisionId = supRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
         decisionText: text,
@@ -1614,7 +1681,7 @@ async function handleRequest(
   if (method === 'GET' && path === '/v1/decisions') {
     const status = query.get('status') ?? 'all';
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     let decisions;
     if (status === 'all') {
       decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit });
@@ -1653,7 +1720,7 @@ async function handleRequest(
       }
       context = contextRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
         decisionText: text,
@@ -1677,7 +1744,7 @@ async function handleRequest(
   const decisionCloseMatch = path.match(/^\/v1\/decisions\/(\d+)\/close$/);
   if (method === 'POST' && decisionCloseMatch) {
     const id = parseInt(decisionCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { decision });
@@ -1697,7 +1764,7 @@ async function handleRequest(
   const decisionByIdMatch = path.match(/^\/v1\/decisions\/(\d+)$/);
   if (method === 'GET' && decisionByIdMatch) {
     const id = parseInt(decisionByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const decision = loadDecisionById(opts.hippoRoot, ctx.tenantId, id);
     if (!decision) {
       throw new HttpError(404, `decision ${id} not found`);
@@ -1753,7 +1820,7 @@ async function handleRequest(
       }
       linkedMemoryIds = linkedRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const incident = saveIncident(opts.hippoRoot, ctx.tenantId, {
         incidentText: text,
@@ -1774,7 +1841,7 @@ async function handleRequest(
   if (method === 'GET' && path === '/v1/incidents') {
     const status = query.get('status') ?? 'all';
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     let incidents;
     if (status === 'all') {
       incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit });
@@ -1802,7 +1869,7 @@ async function handleRequest(
     if (resolutionText.length > 4096) {
       throw new HttpError(400, 'resolutionText exceeds 4096-character cap');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
       sendJson(res, 200, { incident });
@@ -1822,7 +1889,7 @@ async function handleRequest(
   const incidentCloseMatch = path.match(/^\/v1\/incidents\/(\d+)\/close$/);
   if (method === 'POST' && incidentCloseMatch) {
     const id = parseInt(incidentCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { incident });
@@ -1842,7 +1909,7 @@ async function handleRequest(
   const incidentByIdMatch = path.match(/^\/v1\/incidents\/(\d+)$/);
   if (method === 'GET' && incidentByIdMatch) {
     const id = parseInt(incidentByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const incident = loadIncidentById(opts.hippoRoot, ctx.tenantId, id);
     if (!incident) {
       throw new HttpError(404, `incident ${id} not found`);
@@ -1883,7 +1950,7 @@ async function handleRequest(
       }
       description = descriptionRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
       processName,
       steps,
@@ -1896,7 +1963,7 @@ async function handleRequest(
   if (method === 'GET' && path === '/v1/processes') {
     const status = query.get('status') ?? 'all';
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     let processes;
     if (status === 'all') {
       processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit });
@@ -1943,7 +2010,7 @@ async function handleRequest(
       }
       description = descRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     // A supersession is a new version of the SAME process: reuse the
     // predecessor's name. 404 if the target does not exist; saveProcess's
     // in-SAVEPOINT preflight is the authoritative active-state check (409).
@@ -1976,7 +2043,7 @@ async function handleRequest(
   const processCloseMatch = path.match(/^\/v1\/processes\/(\d+)\/close$/);
   if (method === 'POST' && processCloseMatch) {
     const id = parseInt(processCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { process });
@@ -1996,7 +2063,7 @@ async function handleRequest(
   const processByIdMatch = path.match(/^\/v1\/processes\/(\d+)$/);
   if (method === 'GET' && processByIdMatch) {
     const id = parseInt(processByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const process = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
     if (!process) {
       throw new HttpError(404, `process ${id} not found`);
@@ -2032,7 +2099,7 @@ async function handleRequest(
     }
     const validFrom = optionalDateField(body['validFrom'], 'validFrom');
     const validTo = optionalDateField(body['validTo'], 'validTo');
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
         policyName,
@@ -2051,7 +2118,7 @@ async function handleRequest(
   if (method === 'GET' && path === '/v1/policies') {
     const status = query.get('status') ?? 'all';
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     let policies;
     if (status === 'all') {
       policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit });
@@ -2076,7 +2143,7 @@ async function handleRequest(
       throw new HttpError(400, 'date is required (ISO-8601 valid-time)');
     }
     const name = query.get('name') ?? undefined;
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
       sendJson(res, 200, { policies });
@@ -2110,7 +2177,7 @@ async function handleRequest(
       }
       changeSummary = changeRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const existing = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
     if (!existing) {
       throw new HttpError(404, `policy ${id} not found`);
@@ -2142,7 +2209,7 @@ async function handleRequest(
   const policyCloseMatch = path.match(/^\/v1\/policies\/(\d+)\/close$/);
   if (method === 'POST' && policyCloseMatch) {
     const id = parseInt(policyCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { policy });
@@ -2162,7 +2229,7 @@ async function handleRequest(
   const policyByIdMatch = path.match(/^\/v1\/policies\/(\d+)$/);
   if (method === 'GET' && policyByIdMatch) {
     const id = parseInt(policyByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const policy = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
     if (!policy) {
       throw new HttpError(404, `policy ${id} not found`);
@@ -2210,7 +2277,7 @@ async function handleRequest(
       }
       trigger = triggerRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
         skillName,
@@ -2228,7 +2295,7 @@ async function handleRequest(
   if (method === 'GET' && path === '/v1/skills') {
     const status = query.get('status') ?? 'all';
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     let skills;
     if (status === 'all') {
       skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit });
@@ -2248,7 +2315,7 @@ async function handleRequest(
   // The export renderer: must precede the /:id GET (literal 'export' is
   // non-numeric so the /(\d+)/ route would not match it, but order it first).
   if (method === 'GET' && path === '/v1/skills/export') {
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const markdown = exportSkills(opts.hippoRoot, ctx.tenantId);
     sendJson(res, 200, { markdown });
     return;
@@ -2287,7 +2354,7 @@ async function handleRequest(
       }
       changeSummary = changeRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const existing = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
     if (!existing) {
       throw new HttpError(404, `skill ${id} not found`);
@@ -2317,7 +2384,7 @@ async function handleRequest(
   const skillCloseMatch = path.match(/^\/v1\/skills\/(\d+)\/close$/);
   if (method === 'POST' && skillCloseMatch) {
     const id = parseInt(skillCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { skill });
@@ -2337,7 +2404,7 @@ async function handleRequest(
   const skillByIdMatch = path.match(/^\/v1\/skills\/(\d+)$/);
   if (method === 'GET' && skillByIdMatch) {
     const id = parseInt(skillByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const skill = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
     if (!skill) {
       throw new HttpError(404, `skill ${id} not found`);
@@ -2380,7 +2447,7 @@ async function handleRequest(
     if (summary.length > 8192) {
       throw new HttpError(400, 'summary exceeds 8192-character cap');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
         repo,
@@ -2398,7 +2465,7 @@ async function handleRequest(
     const status = query.get('status') ?? 'all';
     const repoFilter = query.get('repo');
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const listOpts: ProjectBriefListOpts = { limit };
     if (repoFilter !== null && repoFilter.trim().length > 0) {
       listOpts.repo = repoFilter.trim();
@@ -2426,7 +2493,7 @@ async function handleRequest(
       throw new HttpError(400, 'repo exceeds 256-character cap');
     }
     const dryRun = body['dryRun'] === true;
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       if (dryRun) {
         const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
@@ -2474,7 +2541,7 @@ async function handleRequest(
       }
       changeSummary = changeRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const existing = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
     if (!existing) {
       throw new HttpError(404, `project brief ${id} not found`);
@@ -2503,7 +2570,7 @@ async function handleRequest(
   const briefCloseMatch = path.match(/^\/v1\/project-briefs\/(\d+)\/close$/);
   if (method === 'POST' && briefCloseMatch) {
     const id = parseInt(briefCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { brief });
@@ -2523,7 +2590,7 @@ async function handleRequest(
   const briefByIdMatch = path.match(/^\/v1\/project-briefs\/(\d+)$/);
   if (method === 'GET' && briefByIdMatch) {
     const id = parseInt(briefByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const brief = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
     if (!brief) {
       throw new HttpError(404, `project brief ${id} not found`);
@@ -2556,7 +2623,7 @@ async function handleRequest(
     if (note.length > 8192) {
       throw new HttpError(400, 'note exceeds 8192-character cap');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
         customer,
@@ -2583,7 +2650,7 @@ async function handleRequest(
     const status = query.get('status') ?? 'all';
     const customerFilter = query.get('customer');
     const limit = parseListLimit(query.get('limit'));
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const listOpts: CustomerNoteListOpts = { limit };
     if (customerFilter !== null && customerFilter.trim().length > 0) {
       listOpts.customer = customerFilter.trim();
@@ -2621,7 +2688,7 @@ async function handleRequest(
       }
       changeSummary = changeRaw;
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const existing = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
     if (!existing) {
       throw new HttpError(404, `customer note ${id} not found`);
@@ -2650,7 +2717,7 @@ async function handleRequest(
   const noteCloseMatch = path.match(/^\/v1\/customer-notes\/(\d+)\/close$/);
   if (method === 'POST' && noteCloseMatch) {
     const id = parseInt(noteCloseMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     try {
       const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { note: customerNote });
@@ -2670,7 +2737,7 @@ async function handleRequest(
   const noteByIdMatch = path.match(/^\/v1\/customer-notes\/(\d+)$/);
   if (method === 'GET' && noteByIdMatch) {
     const id = parseInt(noteByIdMatch[1], 10);
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const customerNote = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
     if (!customerNote) {
       throw new HttpError(404, `customer note ${id} not found`);
@@ -3221,7 +3288,7 @@ async function handleRequest(
     // Without this, executeTool would walk from cwd via findHippoRoot() and
     // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
     // back to whatever the env says.
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const ctx = await buildContextWithAuth(req, opts);
     const raw = await readBody(req);
     let mcpReq: JsonValue;
     try {
@@ -3266,7 +3333,9 @@ async function handleRequest(
   }
 
   if (method === 'GET' && path === '/mcp/stream') {
-    requireAuth(req, opts.hippoRoot);
+    await requireAuth(req, opts);
+    // An async resolver can outlive the client; 'close' has already fired, so no timer may start.
+    if (req.destroyed || res.destroyed || req.socket.destroyed) return;
     res.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
@@ -3289,6 +3358,7 @@ async function handleRequest(
       (parseInt(process.env.MCP_SSE_MAX_AGE_SEC ?? '3600', 10) || 3600) * 1000;
     const startedAt = Date.now();
     let closed = false;
+    let checking = false;
     const closeWith = (reason: string): void => {
       if (closed) return;
       closed = true;
@@ -3307,23 +3377,33 @@ async function handleRequest(
         clearInterval(ping);
         return;
       }
-      try {
-        requireAuth(req, opts.hippoRoot);
-      } catch {
-        closeWith('auth_revoked');
-        clearInterval(ping);
-        return;
-      }
-      try {
-        res.write(': ping\n\n');
-      } catch {
-        clearInterval(ping);
-      }
+      if (checking) return;
+      checking = true;
+      requireAuth(req, opts).then(
+        () => {
+          checking = false;
+          if (closed) return;
+          try {
+            res.write(': ping\n\n');
+          } catch {
+            clearInterval(ping);
+          }
+        },
+        () => {
+          checking = false;
+          closeWith('auth_revoked');
+          clearInterval(ping);
+        },
+      );
     }, heartbeatMs);
     // Don't keep the event loop alive just for this timer — the server's
     // listener already does that, and tests want the process to exit cleanly.
     if (ping.unref instanceof Function) ping.unref();
-    req.on('close', () => clearInterval(ping));
+    // res 'close' covers an early socket drop that req 'close' can miss.
+    res.on('close', () => {
+      closed = true;
+      clearInterval(ping);
+    });
     return;
   }
 

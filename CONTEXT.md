@@ -93,6 +93,13 @@ Permission for one member API key to read one restricted scope. Admin keys, the 
 stdio MCP need none.
 _Avoid_: ACL entry, share, permission
 
+**Auth resolver**:
+A function the server asks to vouch for a bearer token that is not an API key. Returns a tenant,
+subject, role and scope grants, or nothing. It returns nothing for tokens it does not recognise
+and never throws on a foreign token; it runs on every authenticated request and every stream
+heartbeat, so it must be cache-backed.
+_Avoid_: auth plugin, identity provider
+
 **Derived memory**:
 A memory built from other memories' content: a consolidation merge, a DAG summary or profile, an
 extracted fact. It carries the restricted scope of its sources and is never built from sources in
