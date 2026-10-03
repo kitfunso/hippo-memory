@@ -50,8 +50,12 @@ const CASES: Case[] = [
   { name: 'sleep on an uninitialised store', args: ['sleep'], uninitialised: true },
 ];
 
+// Whether Node prints the SQLite warning depends on its version, so it stays out of the snapshot.
+const SQLITE_WARNING = /\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature[^\n]*\r?\n\(Use `node --trace-warnings[^\n]*(?:\r?\n)?/g;
+
 function normalise(text: string, home: string): string {
   return text
+    .replace(SQLITE_WARNING, '')
     .split(home).join('<home>')
     .split(home.replace(/\\/g, '/')).join('<home>')
     .replace(/<home>\\/g, '<home>/')
