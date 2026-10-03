@@ -30,7 +30,7 @@ Primary integrity metric: correctness against a timestamped oracle for current a
 - Distinguish when a fact applied from when it was recorded or corrected; test late/backdated facts.
 - Include chains, gaps, reversals, duplicate events, conditional branch facts and separate scopes.
 - Closure and successor writes are atomic and reversible; legacy CLI/API meanings and evidence links survive.
-- No age-only archival or loss of protected compaction items in this experiment.
+- No age-only archival or loss of memories that back an object in this experiment. (Compaction items were protected when this draft was written; since 1.53.1 they fade like any memory.)
 
 ## Required decisions before registration
 

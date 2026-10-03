@@ -117,7 +117,7 @@ describe('replay of records a killed hook left', () => {
     run(s.hippoRoot, `UPDATE compactions SET status = 'summarised', summarised_at = ?`, ago(20));
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
-    expect(logs.join('\n')).toContain('skipped 2 item(s) an earlier compaction already saved');
+    expect(logs.join('\n')).toContain('skipped 2 item(s) the store already holds');
   });
 
   it('never turns an item the record had redacted into a row', () => {

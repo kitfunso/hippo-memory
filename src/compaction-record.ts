@@ -8,9 +8,8 @@ import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from '
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
-import { duplicateKey } from './same-text.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
-import { updateStats, writeEntryMirrors } from './store.js';
+import { strengthenRetrievedOn, updateStats, writeEntryMirrors } from './store.js';
 import { resolveTenantId } from './tenant.js';
 
 /** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */
@@ -231,13 +230,42 @@ export interface ItemContext {
   items: string[];
 }
 
-/** Content of live compaction rows in one tenant and origin, by SQL: a compaction repeats what an earlier one listed. */
-function liveItemKeys(db: DatabaseSyncLike, tenantId: string, originProject: string): Set<string> {
-  // SAFETY: the SELECT names the single `content` column.
+/** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
+const PROTECTED_WORDS = new Set(['not', 'no', 'never', 'none', 'nor', 'without', 'cannot', 't', 'only', 'except', 'unless', 'until']);
+/** Below this share of the held text's words, an item is a fragment of something longer, not a restatement. */
+const RESTATE_MIN_SHARE = 0.5;
+
+function words(text: string): string[] {
+  return text.normalize('NFC').toLowerCase().split(/[^\p{L}\p{M}\p{N}_]+/u).filter(Boolean);
+}
+
+/** True when `item` is `held` with words left out, in the same order, keeping every number and protected word. Spacing, case and punctuation may differ. */
+function restates(item: readonly string[], held: readonly string[]): boolean {
+  if (item.length === 0 || item.length < RESTATE_MIN_SHARE * held.length) return false;
+  const kept = new Set(item);
+  let next = 0;
+  for (const w of held) {
+    if (next < item.length && w === item[next]) next++;
+    else if (!kept.has(w) && (PROTECTED_WORDS.has(w) || /\p{N}/u.test(w))) return false;
+  }
+  return next === item.length;
+}
+
+interface Held {
+  /** null for a row this batch wrote, which needs no strengthening. */
+  id: string | null;
+  sessionId: string | null;
+  words: string[];
+}
+
+/** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
+function heldRows(db: DatabaseSyncLike, tenantId: string, originProject: string): Held[] {
+  // SAFETY: the SELECT names the id, source_session_id and content columns.
   const rows = db.prepare(
-    `SELECT content FROM memories WHERE tenant_id = ? AND origin_project = ? AND superseded_by IS NULL AND instr(tags_json, ?) > 0`,
-  ).all(tenantId, originProject, `"${COMPACTION_MEMORY_TAG}"`) as Array<{ content: string }>;
-  return new Set(rows.map((r) => duplicateKey(r.content)));
+    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND origin_project = ? AND superseded_by IS NULL AND kind != 'raw'
+       AND (scope IS NULL OR (scope != 'unknown:legacy' AND scope NOT LIKE '%:private:%'))`,
+  ).all(tenantId, originProject) as Array<{ id: string; source_session_id: string | null; content: string }>;
+  return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
 }
 
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
@@ -264,11 +292,14 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
         return current?.items_written ?? 0;
       }
     }
-    const seen = liveItemKeys(db, ctx.tenantId, ctx.originProject);
+    const held = heldRows(db, ctx.tenantId, ctx.originProject);
+    const restated = new Set<string>();
     for (const text of rows) {
-      const key = duplicateKey(text);
-      if (seen.has(key)) {
+      const itemWords = words(text);
+      const match = held.find((h) => restates(itemWords, h.words));
+      if (match) {
         repeats++;
+        if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
         continue;
       }
       // createMemory throws below 3 chars, which would sink the whole transaction.
@@ -291,11 +322,13 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
       };
       if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
         written.push(entry);
-        seen.add(key);
+        held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
       } else {
         refused++;
       }
     }
+    // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
+    strengthenRetrievedOn(db, [...restated], ctx.tenantId);
     if (ctx.recordId !== null) {
       db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.length, ctx.tenantId, ctx.recordId);
     }
@@ -304,7 +337,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
     try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     throw err;
   }
-  if (repeats > 0) log(`skipped ${repeats} item(s) an earlier compaction already saved`);
+  if (repeats > 0) log(`skipped ${repeats} item(s) the store already holds`);
   if (refused > 0) log(`skipped ${refused} item(s) the write gate refused`);
   for (const entry of written) writeEntryMirrors(hippoRoot, entry);
   if (written.length > 0) {

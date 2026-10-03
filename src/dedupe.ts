@@ -22,7 +22,7 @@
  */
 
 import { textOverlap } from './search.js';
-import { loadAllEntries, deleteEntry } from './store.js';
+import { loadAllEntries, deleteEntry, memoriesBackingObjects } from './store.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
@@ -124,6 +124,7 @@ export function deduplicateStore(
   // primary-key id alone.
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
+  const backing = memoriesBackingObjects(hippoRoot);
 
   for (const tenantEntries of entriesByTenant.values()) {
     // The v1.26.3 survivor total order (see the file-level docstring:
@@ -142,7 +143,7 @@ export function deduplicateStore(
     for (let i = 0; i < tenantEntries.length; i++) {
       if (removed.has(tenantEntries[i].id)) continue;
       for (let j = i + 1; j < tenantEntries.length; j++) {
-        if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j])) continue;
+        if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j]) || backing.has(tenantEntries[j].id)) continue;
         if (texts[j] !== texts[i]) continue;
 
         const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);

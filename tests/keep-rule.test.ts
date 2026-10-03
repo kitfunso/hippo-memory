@@ -1,9 +1,10 @@
-// A row tagged with the compaction tag whose source starts with the compaction prefix is kept for good: never auto-deleted,
+// An imported agent memory (a tool's tag and a source starting with that tool's prefix) is kept for good: never auto-deleted,
 // decayed away or made dormant. The tag alone is not enough, since merge copies source tags onto rows sourced 'consolidation'.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/agent-memories/tools.js';
 import {
   AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, createMemory, type MemoryEntry,
 } from '../src/memory.js';
@@ -21,8 +22,8 @@ import { forget, listDormant, sleep, supersede, type Context } from '../src/api.
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 const DAY = 86_400_000;
-const TAG = COMPACTION_MEMORY_TAG;
-const PREFIX = COMPACTION_SOURCE_PREFIX;
+const TAG = AGENT_MEMORY_TOOLS[0].tag;
+const PREFIX = toolSourcePrefix(AGENT_MEMORY_TOOLS[0].id);
 const KEPT_SOURCE = `${PREFIX}session-one`;
 const RAW_FIELDS = { artifact_ref: 'slack://T1/C1/1.0', owner: 'user:U1' };
 const FAKE_KEY = 'sk-ant-' + 'a'.repeat(40);
@@ -58,7 +59,7 @@ const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string;
   { label: 'tag ending a longer name', tags: [`not-${TAG}`], source: KEPT_SOURCE, kept: false },
   { label: 'tag in another case', tags: [TAG.toUpperCase()], source: KEPT_SOURCE, kept: false },
   { label: 'tag after a quote inside another tag', tags: [`x"${TAG}`], source: KEPT_SOURCE, kept: false },
-  { label: 'prefix with a capital first letter', tags: [TAG], source: `C${PREFIX.slice(1)}session-one`, kept: false },
+  { label: 'prefix with a capital first letter', tags: [TAG], source: `${PREFIX[0].toUpperCase()}${PREFIX.slice(1)}session-one`, kept: false },
   { label: 'prefix in upper case', tags: [TAG], source: `${PREFIX.toUpperCase()}session-one`, kept: false },
   { label: 'prefix not at the start', tags: [TAG], source: `x-${KEPT_SOURCE}`, kept: false },
   { label: 'prefix without its colon', tags: [TAG], source: `${PREFIX.slice(0, -1)}-session-one`, kept: false },
@@ -90,13 +91,13 @@ function sqlDeletableIds(root: string): string[] {
   }
 }
 
-describe('the keep pair', () => {
-  it('lists the compaction tag with the compaction source prefix', () => {
-    expect(KEEP_PAIRS).toContainEqual({ tag: COMPACTION_MEMORY_TAG, sourcePrefix: COMPACTION_SOURCE_PREFIX });
+describe('the keep pairs', () => {
+  it('are exactly one per agent-memory tool, so a compaction row is not among them', () => {
+    expect(KEEP_PAIRS).toEqual(AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) })));
   });
 
-  it('the compaction tag is a no-merge tag', () => {
-    expect(NO_MERGE_TAGS.has(COMPACTION_MEMORY_TAG)).toBe(true);
+  it('each kept tag, and the compaction tag, is a no-merge tag', () => {
+    for (const tag of [...KEEP_PAIRS.map((p) => p.tag), COMPACTION_MEMORY_TAG]) expect(NO_MERGE_TAGS.has(tag), tag).toBe(true);
   });
 
   it('the SQL matches the prefix by length and never with LIKE, which ignores case', () => {
@@ -227,6 +228,32 @@ describe('sleep with decay forced', () => {
     await consolidate(root, { now: new Date(Date.now() + 400 * DAY) });
 
     expect(readEntry(root, kept.id)).not.toBeNull();
+  });
+});
+
+describe('a memory saved from a compaction fades like any other', () => {
+  const compactionRow = (content: string): MemoryEntry => createMemory7(content, { tags: [COMPACTION_MEMORY_TAG], source: `${COMPACTION_SOURCE_PREFIX}session-one` });
+
+  it('is auto-deletable in both the function and the SQL', () => {
+    const root = newRoot();
+    const row = compactionRow('the release train leaves on thursdays');
+    writeEntry(root, row);
+
+    expect(canAutoDelete(readEntry(root, row.id)!)).toBe(true);
+    expect(sqlDeletableIds(root)).toEqual([row.id]);
+  });
+
+  it('sleep retires it once it has faded, and keeps it while it is still strong', async () => {
+    const root = newRoot(JSON.stringify({ replay: { count: 0 } }));
+    const faded = compactionRow('the release train leaves on thursdays');
+    writeEntry(root, faded);
+
+    await consolidate(root, { now: new Date() });
+    expect(readEntry(root, faded.id)).not.toBeNull();
+
+    await consolidate(root, { now: sixtyDaysOn() });
+    expect(readEntry(root, faded.id)).toBeNull();
+    expect(listDormant(ctxFor(root)).map((m) => m.id)).toEqual([faded.id]);
   });
 });
 

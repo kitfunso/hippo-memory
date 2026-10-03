@@ -1,5 +1,9 @@
 # Plan: hippo saves memories at every Claude Code compaction
 
+> **Partly superseded 2026-10-03 (1.53.1).** Item memories are no longer kept for good: they fade like any
+> memory, and a restated item is skipped in place of the exact-text repeat check below; a restatement by another
+> session strengthens the row it repeats. The keep rule now covers imported agent memories only. The rest of this plan is the build record.
+
 Rev 3, after /plan-eng-review and /codex. Status: not started. It waits on a yes for two new tables (below) and on
 the session-digest PR (#335) merging.
 

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { classifyOriginProject } from '../src/project-identity.js';
 import { syncGlobalToLocal } from '../src/shared.js';
 import { initStore } from '../src/store.js';
@@ -155,27 +156,102 @@ describe('hippo post-compact on real PostCompact payloads', () => {
   });
 });
 
+function retrievalCount(content: string): number {
+  const db = openHippoDb(s.hippoRoot);
+  try {
+    // SAFETY: row's shape matches the single retrieval_count column named in the SELECT.
+    return (db.prepare(`SELECT retrieval_count FROM memories WHERE content = ?`).get(content) as { retrieval_count: number }).retrieval_count;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 describe('repeated items across compactions', () => {
   const first = 'The billing service uses pnpm, so npm install is never run there.';
+  const NOTHING_NEW = "Hippo kept this compaction's summary; it listed no new memories.";
 
-  it('skips an item an earlier compaction saved, and says so', () => {
+  it('skips an item an earlier compaction of the same session saved, and does not count it as a recall', () => {
     initProject(s);
     expect(postCompact(postCompactPayload('s1', s.proj, summaryWith([first]))).status).toBe(0);
     const second = postCompact(postCompactPayload('s1', s.proj, summaryWith([first, 'The search service cache must be flushed after every deploy.'])));
     expect(oneLine(second.stdout)).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
-    expect(log()).toContain('skipped 1 item(s) an earlier compaction already saved');
+    expect(log()).toContain('skipped 1 item(s) the store already holds');
     expect(compactionRows(s.hippoRoot).map((r) => r.items_written)).toEqual([1, 1]);
+    expect(retrievalCount(first)).toBe(0);
   });
 
-  it('counts a spacing-only change as a repeat, and a case change as new text', () => {
+  it('counts spacing, case and punctuation changes as a repeat', () => {
     initProject(s);
     expect(postCompact(postCompactPayload('s1', s.proj, summaryWith([first]))).status).toBe(0);
-    const spaced = postCompact(postCompactPayload('s2', s.proj, summaryWith([first.replace('pnpm, so', 'pnpm,   so')])));
-    expect(oneLine(spaced.stdout)).toBe("Hippo kept this compaction's summary; it listed no new memories.");
-    const cased = postCompact(postCompactPayload('s3', s.proj, summaryWith([first.replace('billing', 'Billing')])));
-    expect(oneLine(cased.stdout)).toBe('Hippo saved 1 memory from this compaction.');
+    for (const [session, text] of [['s2', first.replace('pnpm, so', 'pnpm,   so')], ['s3', first.replace('billing', 'Billing')], ['s4', first.replace(', so', '; so')]]) {
+      expect(oneLine(postCompact(postCompactPayload(session, s.proj, summaryWith([text]))).stdout)).toBe(NOTHING_NEW);
+    }
+    expect(compactionMemories(s.hippoRoot)).toHaveLength(1);
+    expect(retrievalCount(first)).toBe(3);
+  });
+
+  it('counts a rewording that only drops words as a repeat (two real summaries did this)', () => {
+    initProject(s);
+    const saved = [
+      'Recurring Windows scheduled tasks that run console programs are wrapped as `conhost.exe --headless <cmd>`; this was verified against a window watcher.',
+      'A Windows child process of a detached Node process needs `windowsHide: true`, or it opens a visible terminal. `tests/child-process-window-hide.test.ts` guards this.',
+    ];
+    expect(postCompact(postCompactPayload('s1', s.proj, summaryWith(saved))).status).toBe(0);
+    const reworded = [
+      'Recurring Windows scheduled tasks that run console programs are wrapped as `conhost.exe --headless <cmd>`, verified against a window watcher.',
+      'A Windows child process of a detached Node process needs `windowsHide: true`, or it opens a visible terminal.',
+    ];
+    expect(oneLine(postCompact(postCompactPayload('s1', s.proj, summaryWith(reworded))).stdout)).toBe(NOTHING_NEW);
+    expect(compactionMemories(s.hippoRoot).map((r) => r.content)).toEqual([...saved].sort());
+  });
+
+  it.each([
+    ['a changed number', 'The staging API listens on port 8080.', 'The staging API listens on port 9090.'],
+    ['a changed one-digit number', 'The deploy job retries 3 times before paging.', 'The deploy job retries 5 times before paging.'],
+    ['a changed word', 'Releases go out on Thursdays after the staging soak.', 'Releases go out on Tuesdays after the staging soak.'],
+    ['a dropped negation', 'Releases do not go out on Thursdays after the staging soak.', 'Releases go out on Thursdays after the staging soak.'],
+    ['a dropped number', 'The deploy job retries 3 times before paging the on-call.', 'The deploy job retries before paging the on-call.'],
+    ['an added detail', 'Never push private data to the public hippo repo.', 'Never push private data to the public hippo repo; scan for secrets first.'],
+    ['a short item inside a long memory', 'The billing service uses pnpm, the search service uses npm, the auth service uses yarn and the web app uses bun.', 'The billing service uses pnpm.'],
+    ['a correction built from the held words', 'The billing service uses pnpm; the search service uses npm.', 'The search service uses pnpm.'],
+    ['two swapped words', 'Use pnpm, not npm, in the billing service.', 'Use npm, not pnpm, in the billing service.'],
+    ['two swapped numbers', 'Staging listens on port 8080 and prod on 9090.', 'Staging listens on port 9090 and prod on 8080.'],
+    ['a dropped contraction', "Don't deploy the billing service on Fridays.", 'Deploy the billing service on Fridays.'],
+    ['a dropped "only"', 'Only run the migrations after the nightly backup finishes.', 'Run the migrations after the nightly backup finishes.'],
+  ])('saves %s as a new memory', (_label, earlier, later) => {
+    initProject(s);
+    expect(postCompact(postCompactPayload('s1', s.proj, summaryWith([earlier]))).status).toBe(0);
+    expect(oneLine(postCompact(postCompactPayload('s2', s.proj, summaryWith([later]))).stdout)).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
+  });
+
+  it('skips an item that restates a memory saved by hand, and strengthens that memory', () => {
+    initProject(s);
+    expect(runHippo(['remember', first], s.proj, s.env).status).toBe(0);
+    expect(oneLine(postCompact(postCompactPayload('s1', s.proj, summaryWith([first.replace(', so', '; so')]))).stdout)).toBe(NOTHING_NEW);
+    expect(compactionMemories(s.hippoRoot)).toEqual([]);
+    expect(retrievalCount(first)).toBe(1);
+  });
+
+  it('a private memory recall hides does not absorb an item', () => {
+    initProject(s);
+    expect(runHippo(['remember', first], s.proj, s.env).status).toBe(0);
+    const db = openHippoDb(s.hippoRoot);
+    try {
+      db.prepare(`UPDATE memories SET scope = 'slack:private:C1' WHERE content = ?`).run(first);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(oneLine(postCompact(postCompactPayload('s1', s.proj, summaryWith([first]))).stdout)).toBe('Hippo saved 1 memory from this compaction.');
+    expect(compactionMemories(s.hippoRoot)).toHaveLength(1);
+  });
+
+  it('two restatements in one summary write one row', () => {
+    initProject(s);
+    expect(oneLine(postCompact(postCompactPayload('s1', s.proj, summaryWith([first, first.replace('billing', 'Billing')]))).stdout))
+      .toBe('Hippo saved 1 memory from this compaction.');
+    expect(compactionMemories(s.hippoRoot)).toHaveLength(1);
   });
 });
 

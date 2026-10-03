@@ -125,11 +125,11 @@ function hasNoSpecificity(text: string): boolean {
   return words.length < 8 && VAGUE_ONLY.test(text);
 }
 
-export function auditMemory(entry: MemoryEntry): AuditIssue | null {
+export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
   const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned, raw or kept-for-good row is never auto-removed, so it can only warn.
-  if (issue?.severity === 'error' && !canAutoDelete(entry)) {
-    const why = entry.pinned ? 'pinned' : entry.kind === 'raw' ? 'raw' : 'keep rule';
+  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never auto-removed, so it can only warn.
+  if (issue?.severity === 'error' && (!canAutoDelete(entry) || backsObject)) {
+    const why = entry.pinned ? 'pinned' : entry.kind === 'raw' ? 'raw' : backsObject ? 'backs an object' : 'keep rule';
     return { ...issue, severity: 'warning', reason: `${issue.reason} (${why}, kept)` };
   }
   return issue;
@@ -166,10 +166,11 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
   return null;
 }
 
-export function auditMemories(entries: MemoryEntry[]): AuditResult {
+/** `backing`: ids of memories that back an object (store.memoriesBackingObjects). */
+export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<string>): AuditResult {
   const issues: AuditIssue[] = [];
   for (const entry of entries) {
-    const issue = auditMemory(entry);
+    const issue = auditMemory(entry, backing.has(entry.id));
     if (issue) issues.push(issue);
   }
   return {

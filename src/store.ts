@@ -1778,21 +1778,7 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], t
   try {
     db = openHippoDb(hippoRoot);
     db.exec('BEGIN IMMEDIATE');
-    const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
-    const select = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenantClause}`);
-    const live: MemoryEntry[] = [];
-    for (const id of ids) {
-      // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-      const row = (tenantId !== undefined ? select.get(id, tenantId) : select.get(id)) as MemoryRow | undefined;
-      if (row) live.push(rowToEntry(row));
-    }
-    const update = db.prepare(
-      'UPDATE memories SET retrieval_count = ?, last_retrieved = ?, half_life_days = ?, strength = ? WHERE id = ?',
-    );
-    for (const e of markRetrieved(live)) {
-      update.run(e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength, e.id);
-      found.add(e.id);
-    }
+    for (const id of strengthenRetrievedOn(db, ids, tenantId)) found.add(id);
     db.exec('COMMIT');
   } catch (error) {
     try { db?.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
@@ -1800,6 +1786,28 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], t
     found.clear();
   } finally {
     if (db) closeHippoDb(db);
+  }
+  return found;
+}
+
+/** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */
+export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string[], tenantId?: string): Set<string> {
+  const found = new Set<string>();
+  if (ids.length === 0 || isRecallBoostAblated()) return found;
+  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const select = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenantClause}`);
+  const live: MemoryEntry[] = [];
+  for (const id of ids) {
+    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const row = (tenantId !== undefined ? select.get(id, tenantId) : select.get(id)) as MemoryRow | undefined;
+    if (row) live.push(rowToEntry(row));
+  }
+  const update = db.prepare(
+    'UPDATE memories SET retrieval_count = ?, last_retrieved = ?, half_life_days = ?, strength = ? WHERE id = ?',
+  );
+  for (const e of markRetrieved(live)) {
+    update.run(e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength, e.id);
+    found.add(e.id);
   }
   return found;
 }
@@ -1982,6 +1990,33 @@ export function loadChildrenOf(
   }
 }
 
+/** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
+export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
+
+/** Deleting a memory that backs an object nulls the object's link, and no restore can repair it, so no automatic pass may. */
+const AUTOMATIC_DELETE_SQL = `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map((t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`).join('')}`;
+
+/** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing from an older schema is skipped. */
+export function memoriesBackingObjects(hippoRoot: string): Set<string> {
+  const ids = new Set<string>();
+  const db = openHippoDb(hippoRoot);
+  try {
+    for (const table of MEMORY_BACKED_TABLES) {
+      try {
+        // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
+        const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
+        for (const r of rows) ids.add(r.memory_id);
+      } catch (err) {
+        // A missing table is an older schema; any other error could hide a backing memory, so the caller stops.
+        if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
+      }
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+  return ids;
+}
+
 /**
  * AT1 (plan §4, round-2 fix, designed from source): db-scoped delete core.
  * `deleteEntry` used to open+close its OWN connection, which meant it could
@@ -1999,7 +2034,7 @@ export function loadChildrenOf(
  * Default keeps `deleteEntry` byte-identical to its pre-split behavior.
  *
  * Returns `{tenantId, dagParentId}` for the removed row, or `null` if no row with `id`
- * existed or `automatic` refused it (pinned, raw or kept for good at DELETE time, so a late pin wins).
+ * existed or `automatic` refused it (pinned, raw, kept for good or backing an object at DELETE time, so a late pin wins).
  */
 export function deleteEntryCore(
   db: ReturnType<typeof openHippoDb>,
@@ -2012,7 +2047,7 @@ export function deleteEntryCore(
     .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
   if (!row?.id) return null;
 
-  const guard = opts?.automatic ? ` AND ${AUTO_DELETABLE_SQL}` : '';
+  const guard = opts?.automatic ? ` AND ${AUTOMATIC_DELETE_SQL}` : '';
   if (Number(db.prepare(`DELETE FROM memories WHERE id = ?${guard}`).run(id).changes ?? 0) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
@@ -2075,7 +2110,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
  *  `dormant` (src/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
  *  leaves exactly like a delete (FTS row, DAG parent dirty-mark, mirrors), in the same transaction, so a memory
  *  is never in both places or in neither. Deletes and moves both skip rows that are no longer auto-deletable
- *  (pinned, raw or kept for good since the caller decided). Returns the ids that left `memories`, deleted or moved. */
+ *  (pinned, raw, kept for good or backing an object since the caller decided). Returns the ids that left `memories`, deleted or moved. */
 export function batchWriteAndDelete(
   hippoRoot: string,
   toWrite: MemoryEntry[],
@@ -2109,7 +2144,7 @@ export function batchWriteAndDelete(
       // A row pinned after the caller decided to delete it survives.
       // SAFETY: rows' shape matches the three columns named in the SELECT.
       const rows = db.prepare(
-        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTO_DELETABLE_SQL}`,
+        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTOMATIC_DELETE_SQL}`,
       ).all(...toDeleteIds) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
       for (const row of rows) {
         deletableIds.push(row.id);
@@ -2203,7 +2238,7 @@ export function batchWriteAndDelete(
       const placeholders = dormantMoves.map(() => '?').join(',');
       // SAFETY: rows' shape matches the three columns named in the SELECT.
       const rows = db.prepare(
-        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTO_DELETABLE_SQL}`,
+        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTOMATIC_DELETE_SQL}`,
       ).all(...byId.keys()) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
       for (const row of rows) {
         movable.push(byId.get(row.id)!);

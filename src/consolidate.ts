@@ -21,6 +21,7 @@ import {
   findPromotableSessions,
   traceExistsForSession,
   listSessionEvents,
+  memoriesBackingObjects,
 } from './store.js';
 import { textOverlap, markRetrieved, tokenize } from './search.js';
 import { compareEntryIdentity } from './compare.js';
@@ -133,37 +134,6 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 
 function isJsonString(value: JsonValue): value is string {
   return typeof value === 'string';
-}
-
-/** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
-export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
-
-/**
- * Ids of memories that back a first-class object (a decision, incident, prediction,
- * process, policy, skill, project brief or customer note). Sleep never
- * retires these: deleting or moving one to dormant storage fires the
- * object's ON DELETE SET NULL and a restore cannot repair the link. Their
- * lifecycle belongs to the object. A table missing from an older schema is
- * skipped.
- */
-function memoriesBackingObjects(hippoRoot: string): Set<string> {
-  const ids = new Set<string>();
-  const db = openHippoDb(hippoRoot);
-  try {
-    for (const table of MEMORY_BACKED_TABLES) {
-      try {
-        // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
-        const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
-        for (const r of rows) ids.add(r.memory_id);
-      } catch (err) {
-        // A missing table is an older schema; any other error could hide a backing memory, so sleep stops.
-        if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
-      }
-    }
-  } finally {
-    closeHippoDb(db);
-  }
-  return ids;
 }
 
 /**

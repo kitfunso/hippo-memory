@@ -494,15 +494,12 @@ export const DEFAULT_HALF_LIFE_DAYS = 365;
 export const COMPACTION_MEMORY_TAG = 'compaction-memory';
 export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 
-/** A row with `tag` and a source starting `sourcePrefix` is kept for good. Both, since merge copies source tags onto rows whose source is 'consolidation'. */
+/** An imported agent memory (its tool's tag, and a source starting that tool's prefix) is kept for good: the agent's note file is its record. Both, since merge copies source tags onto rows whose source is 'consolidation'. */
 export interface KeepPair {
   readonly tag: string;
   readonly sourcePrefix: string;
 }
-export const KEEP_PAIRS: readonly KeepPair[] = [
-  { tag: COMPACTION_MEMORY_TAG, sourcePrefix: COMPACTION_SOURCE_PREFIX },
-  ...AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) })),
-];
+export const KEEP_PAIRS: readonly KeepPair[] = AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) }));
 
 const sqlText = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.

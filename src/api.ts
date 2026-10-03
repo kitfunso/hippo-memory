@@ -43,6 +43,7 @@ import {
   auditRejectionRefusal,
   type TaskSnapshot,
   type SessionEvent,
+  memoriesBackingObjects,
 } from './store.js';
 import { RejectedValueError, type RejectedValueRow } from './rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
@@ -3571,7 +3572,7 @@ export interface SleepResult {
  * api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
  *
  * Dedup and audit deletes each log a `forget` row with the ctx actor and a
- * `metadata.reason`. Pinned, raw and kept compaction-memory rows are never auto-deleted (canAutoDelete).
+ * `metadata.reason`. Pinned, raw, kept and object-backing rows are never auto-deleted (AUTOMATIC_DELETE_SQL).
  * dryRun previews consolidate, dedup and audit, then returns before share/ambient.
  */
 /**
@@ -3704,7 +3705,7 @@ export async function sleep(
     // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
     const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
     const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
-    const auditOut = phases.auditMemories(allEntries);
+    const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
     if (auditOut.issues.length > 0) {
       const errors = auditOut.issues.filter((i) => i.severity === 'error');
       const warnings = auditOut.issues.filter((i) => i.severity === 'warning');

@@ -29,7 +29,7 @@ Primary integrity metric: preserved complete-evidence coverage after the pass. P
 
 - Equivalence includes scope, applicability, exception and assertion; shorter text alone is insufficient.
 - Keep all provenance and reversible merge history. Do not concatenate episodes or drop orphan receipts.
-- Keep raw retention/privacy rules, protected compaction-memory tag/source pairs and separate compaction records.
+- Keep raw retention/privacy rules, the agent-memory keep pairs, the guard that no automatic pass deletes a memory backing an object, and separate compaction records. (Compaction-item memories lost their keep pair in 1.53.1 and fade like any memory.)
 - Freeze extraction configuration across arms; an LLM arm needs separate opt-in and registration. No new default or paid provider implied.
 
 ## Required decisions before registration

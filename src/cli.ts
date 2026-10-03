@@ -118,6 +118,7 @@ import {
   completeCard,
   reclaimExpiredCards,
   addCardComment,
+  memoriesBackingObjects,
 } from './store.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
@@ -8288,27 +8289,6 @@ function cmdDailyRunner(): void {
   console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ${failed} command failure${failed === 1 ? '' : 's'}.`);
 }
 
-// JSON-hook install/uninstall lives in ./hooks.ts so tests can import it
-// without running the CLI main(). Backwards-compatible wrappers below keep
-// older call sites working.
-
-function installClaudeCodeSessionEndHook(): { installed: boolean; migratedFromStop: boolean } {
-  const result = installJsonHooks('claude-code');
-  return {
-    installed:
-      result.installedSessionEnd ||
-      result.installedSessionStart ||
-      result.installedUserPromptSubmit ||
-      result.installedPreCompact ||
-      result.installedCompactResume,
-    migratedFromStop: result.migratedFromStop,
-  };
-}
-
-function uninstallClaudeCodeSessionEndHook(): boolean {
-  return uninstallJsonHooks('claude-code');
-}
-
 // ---------------------------------------------------------------------------
 // Working Memory
 // ---------------------------------------------------------------------------
@@ -10322,7 +10302,7 @@ async function main(
       }
       requireInit(hippoRoot);
       const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
-      const result = auditMemories(entries);
+      const result = auditMemories(entries, memoriesBackingObjects(hippoRoot));
       const shouldFix = Boolean(flags['fix']);
 
       if (result.issues.length === 0) {

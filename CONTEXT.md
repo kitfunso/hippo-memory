@@ -36,13 +36,14 @@ _Avoid_: raw memory, transcript
 **Compaction memory**:
 A memory `hippo post-compact` saves from one item of the summariser's "Memories for hippo" list:
 tagged `compaction-memory`, source `compaction:<session id>`, kind distilled, confidence observed.
-A keep rule protects it, so sleep never deletes it or moves it to dormant. The session that
+It fades like any other memory. An item that restates a memory the project already holds is not
+saved again; when another session restates it, that memory is strengthened as a recall would. The session that
 compacted is not shown it again in its own prompts.
 _Avoid_: summary memory (the summary lives in the compaction record), snapshot (the task snapshot is a different thing)
 
 **Keep rule**:
-A tag and a source prefix that together keep a memory out of automatic deletion; today
-`compaction-memory` with `compaction:`. Both must match, because a merge copies a source's tags onto
+A tag and a source prefix that together keep a memory out of automatic deletion; today one pair
+per imported agent memory tool. Both must match, because a merge copies a source's tags onto
 a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/memory.ts`
 apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
 _Avoid_: pin (a person sets that), retention policy, allowlist
