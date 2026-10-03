@@ -1,0 +1,3 @@
+### Changed
+
+- **The per-prompt hook now injects memories that match your prompt, not the five newest.** `pinnedInject.promptRecall` defaults to true. Each prompt gets your pinned memories plus up to 5 that share words with it, and only the pinned ones when nothing matches. In the Z1 eval this cut the median block from 847 to 533 tokens with per-prompt overlap with the work tied (`docs/evals/2026-09-26-z1-prompt-recall-result.md`). A lesson saved earlier in the session no longer rides along on every prompt; it appears when a prompt touches it. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the old newest-5 behaviour.

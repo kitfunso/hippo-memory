@@ -2409,7 +2409,7 @@ Freeze denominators, clustering and acceptance bounds before scoring. Publish de
 
 ### Z11. Preserve defaults while experiments run
 
-`hippo init` retains the current pinned + newest 5 hook, `promptRecall` off, no batch auto `--bad`, and no required embedder. This roadmap change does not change extraction settings, live-store half-lives, installed hooks or compaction capture. Existing compaction-item writes remain (they fade like any memory since 1.53.1); their presence is not a claim of task benefit. A ranker-only win cannot promote a hook default.
+`hippo init` retains the current pinned hook, no batch auto `--bad`, and no required embedder. Exception, Keith 2026-10-03: `promptRecall` defaults on from 1.55.0, replacing the newest-5 backfill, on Z1's token result (median 847 to 533 at tied primary overlap) and the low-touch goal. It claims no task benefit. Z0 freezes hippo at a tag only after its calibration stage, so its hippo arms test this default. This roadmap change does not change extraction settings, live-store half-lives, installed hooks or compaction capture. Existing compaction-item writes remain (they fade like any memory since 1.53.1); their presence is not a claim of task benefit. A ranker-only win cannot promote a hook default.
 
 ### Z12. Human supervision and memory growth [evaluation draft; after Z10]
 

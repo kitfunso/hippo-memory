@@ -137,6 +137,7 @@ describe('getContext prompt recall (api-level)', () => {
   });
 
   it('flag off with a prompt present is byte-identical to recent-5', async () => {
+    enablePromptRecall(local, { promptRecall: false });
     const rows = Array.from({ length: 5 }, (_, i) =>
       seed(local, `recent row ${i} with enough words to clear the quality floor`, {
         created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),

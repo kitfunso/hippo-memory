@@ -77,8 +77,8 @@ export interface HippoConfig {
      *  never resends an unchanged block. */
     refreshTurns: number;
     /** Z1: gate the hook's backfill on the prompt's own content instead of
-     *  the five newest memories. Default false: the eval failed its overlap gate
-     *  (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+     *  the five newest memories. Default true since 1.55.0: overlap tied but median
+     *  tokens fell 847 to 533 (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
     promptRecall: boolean;
     /** Z1: overlap metric for the prompt-recall gate. Default 'jaccard' (tuned, docs/evals/2026-09-26-z1-prompt-recall-result.md). */
     promptRecallMetric: PromptRecallMetric;
@@ -190,7 +190,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     budget: 1500,
     skipUnchanged: true,
     refreshTurns: 10,
-    promptRecall: false,
+    promptRecall: true,
     promptRecallMetric: 'jaccard',
     promptRecallThreshold: 0.04,
     promptRecallMinShared: 2,
