@@ -61,6 +61,32 @@ function makeRepo(): FixtureRepo {
   return { repo, base, fix: git('rev-parse', 'HEAD') };
 }
 
+const PAD = 'pad one\npad two\npad three\npad four\n';
+const STUB = '# Instructions for coding agents working in this repository.\n';
+
+/** Two bases whose native AGENTS.md and docs/AGENTS.md differ, on an eol-filtered repo, then the fix. */
+function makeCarryRepo(): FixtureRepo & { base2: string } {
+  const r = makeRepo();
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
+  git('checkout', '-q', '-b', 'carry', r.base);
+  mkdirSync(join(r.repo, 'docs'));
+  const commit = (top: string, docs: string, msg: string) => {
+    writeFileSync(join(r.repo, 'AGENTS.md'), `${top}\n${PAD}`);
+    writeFileSync(join(r.repo, 'docs', 'AGENTS.md'), docs);
+    writeFileSync(join(r.repo, 'CLAUDE.md'), 'native claude file\n');
+    writeFileSync(join(r.repo, '.gitattributes'), '* text=auto\n');
+    writeFileSync(join(r.repo, '.gitignore'), 'CLAUDE.local.md\n.scratch/\n');
+    git('add', '.');
+    git('commit', '-qm', msg);
+    return git('rev-parse', 'HEAD');
+  };
+  const base = commit('native v1 top', 'docs v1\n', 'base one');
+  const base2 = commit('native v2 top', 'docs v2\n', 'base two');
+  git('cherry-pick', '-n', r.fix);
+  git('commit', '-qm', 'fix');
+  return { repo: r.repo, base, base2, fix: git('rev-parse', 'HEAD') };
+}
+
 const task = (r: FixtureRepo, id: string, prompt: string, extra: Record<string, string> = {}) => ({ id, baseRef: r.base, fixRef: r.fix, prompt, testFiles: ['test.js'], test: 'node test.js', ...extra });
 const readRecords = (out: string) => readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const rawResult = (out: string, seq: string, arm: string, id: string) => JSON.parse(readFileSync(join(out, 'raw', seq, arm, 'seed1', `${id}.json`), 'utf8'));
@@ -226,6 +252,36 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(result.comparisons.map((c: { arm: string }) => c.arm).sort()).toEqual(['A1', 'A2', 'A5']);
   }, 240_000);
 
+  it('carries instruction files the agent wrote to the next task, merged onto the new base', async () => {
+    isolate();
+    const r = makeCarryRepo();
+    const out = tmp('ab-run-carry-');
+    const setup = `node -e "require('fs').writeFileSync('CLAUDE.local.md','from setup')"`;
+    const spec = validateTasks({ sequences: [{ id: 'seqC', cluster: 'c', repo: r.repo, tasks: [
+      task(r, 'c1', 'FIX CARRY', { setup }), task(r, 'c2', 'DELETE', { baseRef: r.base2 }), task(r, 'c3', 'look around only', { baseRef: r.base2 }),
+    ] }] });
+    await run(spec, ['A0', 'A1', 'A2', 'A5'], out);
+    const records = readRecords(out);
+    const seen = (arm: string, id: string): Record<string, string> => rawResult(out, 'seqC', arm, id).files;
+    for (const id of ['c1', 'c2', 'c3']) expect(new Set(records.filter((x) => x.taskId === id).map((x) => x.baseCommit)).size).toBe(1);
+    expect(seen('A0', 'c1')['CLAUDE.local.md']).toBe('from setup');
+    expect(seen('A0', 'c2')).toEqual({ 'CLAUDE.md': STUB, 'AGENTS.md': `native v2 top\n${PAD}`, 'docs/AGENTS.md': 'docs v2\n' });
+    for (const arm of ['A0', 'A1', 'A2', 'A5']) {
+      const c2 = seen(arm, 'c2');
+      expect(c2['docs/AGENTS.md'], arm).toBe('docs v2\n');
+      for (const gone of ['CLAUDE.local.md', '.scratch/note.md', '.claude/agents/x.md']) expect(c2, `${arm} ${gone}`).not.toHaveProperty(gone);
+      expect('AGENTS.md' in seen(arm, 'c3'), arm).toBe(arm === 'A0');
+      if (arm === 'A0') continue;
+      expect(c2).toMatchObject({ '.claude/rules/r.md': 'carried rule\n', 'sub/CLAUDE.md': 'carried sub\n' });
+      expect(c2['CLAUDE.md']).toMatch(/^# Instructions for coding agents[^]*carried claude line/);
+      expect(c2['AGENTS.md']).toMatch(/^native v2 top\n[^]*carried agents note\n/);
+      expect(records.find((x) => x.arm === arm && x.taskId === 'c2').carryMerges).toBeGreaterThanOrEqual(1);
+      if (arm === 'A1') continue;
+      expect(c2['CLAUDE.md']).toContain('hippo:start');
+      expect(c2['AGENTS.md']).toContain('hippo:start');
+    }
+  }, 240_000);
+
   it('a task with a failing setup is skipped, not graded as unresolved', async () => {
     isolate();
     const r = makeRepo();
@@ -242,7 +298,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     isolate();
     const r = makeRepo();
     const out = tmp('ab-run-limit-');
-    const spec = validateTasks({ sequences: [{ id: 'seqL', cluster: 'repoL', repo: r.repo, tasks: [task(r, 'l1', 'FIX add in lib.js'), task(r, 'l2', 'look around only')] }] });
+    const spec = validateTasks({ sequences: [{ id: 'seqL', cluster: 'repoL', repo: r.repo, tasks: [task(r, 'l1', 'LIMIT FIX add in lib.js'), task(r, 'l2', 'look around only')] }] });
     process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
     await run(spec, ['A0'], out, { limitWaitMs: 0 });
     const records = readRecords(out);
@@ -252,6 +308,27 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(existsSync(join(raw, 'l1.limit1.txt'))).toBe(true);
     expect(JSON.parse(readFileSync(join(raw, 'l1.json'), 'utf8')).strayFile).toBe(false);
   }, 60_000);
+
+  it('a limit retry restores the pre-session instruction files: carried edits in A1, init block in A2 at position 0', async () => {
+    isolate();
+    const r = makeCarryRepo();
+    const carried = tmp('ab-run-limit-carry-');
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(carried, 'limit-hit');
+    const spec = (first: string, second: string) => validateTasks({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', first), task(r, 'l2', second, { baseRef: r.base2 })] }] });
+    await run(spec('CARRY', 'LIMIT look around'), ['A1'], carried, { limitWaitMs: 0 });
+    expect(readRecords(carried)[1]).toMatchObject({ taskId: 'l2', limitRetries: 1 });
+    const agents = rawResult(carried, 'seqL', 'A1', 'l2').files['AGENTS.md'];
+    expect(agents).toContain('carried agents note');
+    expect(agents).not.toContain('limited edit');
+
+    const first = tmp('ab-run-limit-init-');
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(first, 'limit-hit');
+    await run(spec('LIMIT FIX', 'look around only'), ['A2'], first, { limitWaitMs: 0 });
+    expect(readRecords(first)[0]).toMatchObject({ taskId: 'l1', limitRetries: 1 });
+    const seen = rawResult(first, 'seqL', 'A2', 'l1').files;
+    expect(seen['CLAUDE.md']).toContain('hippo:start');
+    expect(seen['AGENTS.md']).not.toContain('limited edit');
+  }, 120_000);
 
   it('hippo init and hooks never touch the operator home (settings, MEMORY.md import)', async () => {
     const realHome = isolate();

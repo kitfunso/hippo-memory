@@ -16,11 +16,12 @@ const prompt = fs.readFileSync(0, 'utf8');
 const SEEN_FILES = ['CLAUDE.md', 'AGENTS.md', 'CLAUDE.local.md', 'docs/AGENTS.md', 'sub/CLAUDE.md', '.claude/rules/r.md', '.claude/agents/x.md', '.scratch/note.md'];
 const files = Object.fromEntries(SEEN_FILES.filter((f) => fs.existsSync(f)).map((f) => [f, fs.readFileSync(f, 'utf8')]));
 
-// FAKE_CLAUDE_LIMIT_ONCE=<marker file>: the first call leaves stray edits and hits the plan limit.
+// FAKE_CLAUDE_LIMIT_ONCE=<marker file>: the first LIMIT prompt leaves stray edits and hits the plan limit.
 const limitMarker = process.env.FAKE_CLAUDE_LIMIT_ONCE;
-if (limitMarker && !fs.existsSync(limitMarker)) {
+if (limitMarker && prompt.includes('LIMIT') && !fs.existsSync(limitMarker)) {
   fs.writeFileSync(limitMarker, '');
   fs.writeFileSync('stray.txt', 'half-done edit\n');
+  if (fs.existsSync('AGENTS.md')) fs.appendFileSync('AGENTS.md', 'limited edit\n');
   console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1790000000' }));
   process.exit(1);
 }
@@ -47,6 +48,20 @@ if (prompt.includes('FIX')) {
     execSync('hippo remember "add() in lib.js had its operator flipped; check operators first"', { stdio: ['ignore', 'ignore', 'inherit'] });
   }
 }
+
+const write = (f, text) => {
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, text);
+};
+if (prompt.includes('CARRY')) {
+  fs.appendFileSync('AGENTS.md', 'carried agents note\n');
+  fs.appendFileSync('CLAUDE.md', 'carried claude line\n');
+  write('.claude/rules/r.md', 'carried rule\n');
+  write('sub/CLAUDE.md', 'carried sub\n');
+  write('.scratch/note.md', 'ignored note\n');
+  write('.claude/agents/x.md', 'not an instruction file\n');
+}
+if (prompt.includes('DELETE')) fs.rmSync('AGENTS.md', { force: true });
 
 const folder = process.cwd().replace(/[^a-zA-Z0-9]/g, '-');
 const dir = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder);

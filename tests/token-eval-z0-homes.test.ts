@@ -1,10 +1,12 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, delimiter } from 'node:path';
+import { join, dirname, delimiter } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, ARMS } from '../scripts/token-eval/arms.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty } from '../scripts/token-eval/homes.mjs';
+import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -137,6 +139,103 @@ describe('armSettings', () => {
     expect(armSettings('A2', hippo)).toEqual(hippo);
     expect(Object.keys(armSettings('A5', hippo).hooks).sort()).toEqual(['SessionStart', 'UserPromptSubmit']);
     expect(() => armSettings('A9', hippo)).toThrow(/unknown arm/);
+  });
+});
+
+describe('stub base commit', () => {
+  it('is deterministic, replaces the root CLAUDE.md and keeps the rest of the base tree', () => {
+    const repo = tmp('z0-stub-');
+    const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+    g('init', '-q');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 'T');
+    writeFileSync(join(repo, 'CLAUDE.md'), 'native\n');
+    mkdirSync(join(repo, 'src'));
+    writeFileSync(join(repo, 'src', 'a.js'), 'a\n');
+    g('add', '.');
+    g('commit', '-qm', 'base');
+    const base = g('rev-parse', 'HEAD');
+    const sha = stubBaseCommit(repo, base);
+    expect(stubBaseCommit(repo, base)).toBe(sha);
+    expect(g('show', `${sha}:CLAUDE.md`)).toBe(STUB_CLAUDE_MD.trim());
+    expect(g('rev-parse', `${sha}^`)).toBe(base);
+    expect(g('ls-tree', '-r', sha).replace(/^.*CLAUDE\.md\n?/m, '')).toBe(g('ls-tree', '-r', base).replace(/^.*CLAUDE\.md\n?/m, ''));
+  });
+});
+
+describe('instruction files', () => {
+  it('matches the prereg names at any depth and only rules under .claude/', () => {
+    const yes = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'docs/AGENTS.md', 'a/b/CLAUDE.local.md', '.claude/rules/r.md', '.claude/rules/x/y.md'];
+    const no = ['README.md', '.claude/CLAUDE.md', '.claude/agents/x.md', '.claude/settings.json', 'node_modules/p/CLAUDE.md', '.hippo/AGENTS.md', '.git/CLAUDE.md', 'sub/.claude/rules/r.md', 'claude.md.bak'];
+    for (const p of yes) expect(isInstructionPath(p), p).toBe(true);
+    for (const p of no) expect(isInstructionPath(p), p).toBe(false);
+  });
+
+  it('snapshots from disk, and the delta holds only paths whose bytes changed', () => {
+    const work = tmp('z0-snap-');
+    mkdirSync(join(work, 'node_modules', 'p'), { recursive: true });
+    writeFileSync(join(work, 'node_modules', 'p', 'CLAUDE.md'), 'dep');
+    writeFileSync(join(work, 'AGENTS.md'), 'a');
+    writeFileSync(join(work, 'CLAUDE.md'), 'c');
+    const before = instructionSnapshot(work);
+    expect([...before.keys()].sort()).toEqual(['AGENTS.md', 'CLAUDE.md']);
+    writeFileSync(join(work, 'AGENTS.md'), 'a2');
+    rmSync(join(work, 'CLAUDE.md'));
+    mkdirSync(join(work, 'sub'));
+    writeFileSync(join(work, 'sub', 'CLAUDE.md'), 's');
+    const delta = instructionDelta(before, instructionSnapshot(work));
+    expect(Object.fromEntries([...delta].map(([p, c]) => [p, [c.before?.toString() ?? null, c.after?.toString() ?? null]]))).toEqual({
+      'AGENTS.md': ['a', 'a2'], 'CLAUDE.md': ['c', null], 'sub/CLAUDE.md': [null, 's'],
+    });
+  });
+});
+
+describe('applyInstructions', () => {
+  const B = (s: string) => Buffer.from(s);
+  const LINES = 'one\ntwo\nthree\nfour\nfive\n';
+  const apply = (files: Record<string, string>, changes: Record<string, [string | null, string | null]>) => {
+    const work = tmp('z0-apply-');
+    const scratch = tmp('z0-apply-tmp-');
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(work, p)), { recursive: true });
+      writeFileSync(join(work, p), text);
+    }
+    const baseline = instructionSnapshot(work);
+    const delta = new Map(Object.entries(changes).map(([p, [before, after]]) => [p, { before: before === null ? null : B(before), after: after === null ? null : B(after) }]));
+    const counts = applyInstructions(work, delta, baseline, scratch);
+    const now = Object.fromEntries([...instructionSnapshot(work)].map(([p, b]) => [p, b.toString()]));
+    expect(readdirSync(scratch)).toEqual([]);
+    expect(readdirSync(work).filter((f) => !['AGENTS.md', 'CLAUDE.md', 'CLAUDE.local.md', 'docs', 'new'].includes(f))).toEqual([]);
+    return { counts, now };
+  };
+
+  it('writes, deletes and merges per the carry rules', () => {
+    const r = apply(
+      { 'AGENTS.md': `NEW TOP\n${LINES.slice(4)}`, 'CLAUDE.md': 'same\n', 'CLAUDE.local.md': 'base moved\n', 'docs/AGENTS.md': 'x' },
+      {
+        'AGENTS.md': [LINES, `${LINES}appended\n`],
+        'CLAUDE.md': ['same\n', 'agent edit\n'],
+        'CLAUDE.local.md': ['old\n', null],
+        'docs/AGENTS.md': ['x', null],
+        'new/AGENTS.md': [null, 'brand new\n'],
+      },
+    );
+    expect(r.now['AGENTS.md']).toBe(`NEW TOP\n${LINES.slice(4)}appended\n`);
+    expect(r.now['CLAUDE.md']).toBe('agent edit\n');
+    expect(r.now['CLAUDE.local.md']).toBe('base moved\n');
+    expect(r.now['new/AGENTS.md']).toBe('brand new\n');
+    expect(r.now).not.toHaveProperty('docs/AGENTS.md');
+    expect(r.counts).toEqual({ carryMerges: 1, carryUnionMerges: 0, carryDeleteKept: 1 });
+  });
+
+  it('falls back to a union merge on a conflict and counts it', () => {
+    const r = apply({ 'AGENTS.md': 'theirs\n' }, { 'AGENTS.md': ['base\n', 'mine\n'] });
+    expect(r.now['AGENTS.md']).toBe('mine\ntheirs\n');
+    expect(r.counts).toEqual({ carryMerges: 0, carryUnionMerges: 1, carryDeleteKept: 0 });
+  });
+
+  it('throws on a binary file instead of carrying it silently', () => {
+    expect(() => apply({ 'AGENTS.md': 'a\0theirs' }, { 'AGENTS.md': ['a\0base', 'a\0mine'] })).toThrow(/AGENTS\.md/);
   });
 });
 

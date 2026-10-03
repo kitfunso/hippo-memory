@@ -6,8 +6,9 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { HIPPO_JS, sh, git } from './exec.mjs';
-import { ARMS, ARM_SEEDS, HIPPO_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
+import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs, homeFiles } from './homes.mjs';
+import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 
 export { prependPath } from './exec.mjs';
 
@@ -145,35 +146,6 @@ export function usageFromResult(result) {
   return usage;
 }
 
-/** Move the workspace to a task's base without its future: the workspace fetches only a ref at baseRef. */
-function checkoutBase(cacheDir, workDir, sequenceId, t) {
-  const ref = `refs/eval/${sequenceId}/${t.id}`;
-  git(['update-ref', ref, t.baseRef], cacheDir);
-  git(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
-  git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
-  git(['clean', '-fdq', '-e', '.hippo'], workDir);
-  return t.baseRef;
-}
-
-/** Write the task's hidden test files from fixRef, read from the cache clone. */
-function writeHiddenTests(cacheDir, workDir, t) {
-  for (const f of t.testFiles) {
-    const content = execFileSync('git', ['show', `${t.fixRef}:${f}`], { cwd: cacheDir, maxBuffer: 1 << 28 });
-    fs.mkdirSync(path.dirname(path.join(workDir, f)), { recursive: true });
-    fs.writeFileSync(path.join(workDir, f), content);
-  }
-}
-
-/** Added lines of a task's gold diff that are long enough to be a leak signal. */
-function goldLines(cacheDir, t) {
-  try {
-    return git(['diff', t.baseRef, t.fixRef], cacheDir).split('\n')
-      .filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter((l) => l.length >= 40);
-  } catch {
-    return [];
-  }
-}
-
 function storeLeaks(hippoRoot, lines) {
   if (!hippoLib.isInitialized(hippoRoot) || lines.length === 0) return false;
   const text = hippoLib.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
@@ -223,7 +195,7 @@ function startRun(ctx, s, arm, seed) {
   const settingsFile = path.join(ctx.outDir, 'settings', `${s.id}-${arm}-seed${seed}.json`);
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
-  return { s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), rawDir: path.join(ctx.outDir, 'raw', s.id, arm, `seed${seed}`) };
+  return { s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), rawDir: path.join(ctx.outDir, 'raw', s.id, arm, `seed${seed}`) };
 }
 
 /** hippo init on the stub base (A2/A5, position 0), through the child env, with LLM extraction off. */
@@ -283,13 +255,21 @@ function runTask(ctx, run, position, order) {
     return;
   }
   const hippoRoot = path.join(work, '.hippo');
+  // Setup's own writes are part of the baseline, so they are never counted as the agent's and never carried.
+  const baseline = instructionSnapshot(work);
   if (position === 0 && HIPPO_ARMS.has(arm)) hippoInit(run, ctx.fakeHome);
+  const carry = CARRY_ARMS.has(arm) && position > 0 ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
+  const preSession = instructionSnapshot(work);
   const leak = HIPPO_ARMS.has(arm) ? storeLeaks(hippoRoot, goldLines(run.cached, t)) : false;
   const homesAtStart = position === 0 ? homeFiles(dirs) : null;
-  const { cc, result, limitRetries } = runSession(ctx, run, t, prepare);
+  const { cc, result, limitRetries } = runSession(ctx, run, t, () => {
+    prepare();
+    restoreInstructions(work, preSession);
+  });
   fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
   // SessionEnd runs capture and sleep in a background worker; let it finish.
   if (HIPPO_ARMS.has(arm)) sleep(ctx.settleMs);
+  if (CARRY_ARMS.has(arm)) run.changes = instructionDelta(baseline, instructionSnapshot(work));
 
   writeHiddenTests(run.cached, work, t);
   const test = sh(t.test, work, childEnv(env));
@@ -305,7 +285,7 @@ function runTask(ctx, run, position, order) {
     agentError: result === null ? `claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}` : (result.is_error ? result.subtype ?? 'error' : null),
     hippo: HIPPO_ARMS.has(arm) ? hippoSentFor(hippoRoot, sessionId) : null,
     leak, invalid: result === null ? 'no-result' : (leak ? 'leak' : null),
-    limitRetries, homesAtStart, envKeys: Object.keys(env).sort(), passEnv: ctx.passEnv,
+    limitRetries, ...carry, homesAtStart, envKeys: Object.keys(env).sort(), passEnv: ctx.passEnv,
   });
 }
 
