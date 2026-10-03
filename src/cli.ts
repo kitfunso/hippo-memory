@@ -20,6 +20,7 @@
  *   hippo rejections
  *   hippo unreject <digest-prefix>
  *   hippo dormant [<query>] [--limit <n>] [--json] | restore <id> | forget <id>
+ *   hippo projects [--json] | merge <from> <into> [--apply] | repair [--apply]
  *   hippo tokens [--days <n>] [--json] [--global]
  *   hippo doctor [--json]
  *   hippo inspect <id>
@@ -341,7 +342,7 @@ import {
 // and as off under === true (`--pin=true` would not pin), so parseArgs and main() refuse one.
 // tests/cli-parse-flag-equals.test.ts fails when a switch read is missing from this set.
 export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
-  'agents', 'all', 'all-tenants', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'churn', 'continuity',
+  'agents', 'all', 'all-tenants', 'apply', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'churn', 'continuity',
   'cross-project', 'dry-run', 'equal-sources', 'error', 'evc-adaptive', 'extract',
   'filter-conflicts', 'fix', 'force', 'forget', 'git', 'global', 'good', 'graph-stream',
   'help', 'include-logs', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
@@ -371,7 +372,7 @@ export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
 
 // Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.
 const DESTRUCTIVE_COMMANDS: ReadonlySet<string> = new Set([
-  'audit', 'dedup', 'forget', 'invalidate', 'reject', 'resolve', 'sleep', 'supersede',
+  'audit', 'dedup', 'forget', 'invalidate', 'projects', 'reject', 'resolve', 'sleep', 'supersede',
 ]);
 
 // Commands that honour --dry-run. Any other command would ignore it and run for real.
@@ -8099,7 +8100,16 @@ Commands:
     --global               Operate on the global store
     dormant restore <id>   Bring a dormant memory back to active memory
     dormant forget <id>    Delete a dormant memory permanently
-  quarantine [list]        List memories a connector flagged as an instruction attempt, pending review
+  projects [list]          List the project names in a store, with a hint for old worktree names
+    --json                 Output as JSON
+    --global               Operate on the global store
+    projects merge <from> <into> [--apply]
+                           Fold one project name into another (dry run unless --apply;
+                           writes a backup and one audit event first)
+    projects repair [--apply]
+                           Re-tag merged rows older versions of sleep saved as user-global,
+                           by their parents' project (dry run unless --apply)
+  quarantine [list]       List memories a connector flagged as an instruction attempt, pending review
     --all                  Include approved and rejected rows too (default: pending only)
     --json                 Output as JSON
     --global               Operate on the global store
@@ -8986,6 +8996,10 @@ async function main(
 
     case 'dormant':
       cmdDormant(hippoRoot, args, flags);
+      break;
+
+    case 'projects':
+      (await import('./cli/projects.js')).cmdProjects(hippoRoot, args, flags);
       break;
 
     case 'quarantine':

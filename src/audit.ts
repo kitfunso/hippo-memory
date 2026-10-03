@@ -257,6 +257,8 @@ export const AUDIT_OPS = [
   'quarantine_reject', // emitted by api.quarantineReject
   'agent_memory_restore', // emitted by the agent memory sync when a deleted note comes back
   'agent_memory_set_aside', // emitted by the agent memory sync when a note is deleted or refused
+  'project_merge', // emitted by `hippo projects merge --apply` with every id it touched
+  'project_repair', // emitted by `hippo projects repair --apply` with every id it touched
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];

@@ -12,6 +12,7 @@ import { initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
 import { startCompaction } from '../src/compaction-record.js';
+import { repairUserGlobalMerges } from '../src/project-merge.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
 
 function sha256(file: string): string {
@@ -193,5 +194,26 @@ describe('hippo doctor', () => {
 
     const r = runDoctor({ cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'fail', fix: 'npm install -g hippo-memory@latest' });
+  });
+
+  it('warns about merged rows the global store tagged user-global by mistake, and passes once repaired', () => {
+    const cwd = tmp('doctor-projects-');
+    const global = join(cwd, 'global');
+    process.env.HIPPO_HOME = global;
+    initStore(global);
+    const parent = { ...createMemory('the proj-b deploy needs the staging VPN'), origin_project: 'proj-b' };
+    writeEntry(global, parent);
+    writeEntry(global, { ...createMemory('merged: the proj-b deploy needs the VPN'), source: 'consolidation', parents: [parent.id], origin_project: '' });
+
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'))
+      .toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
+
+    const db = openHippoDb(global);
+    try {
+      repairUserGlobalMerges(db, global, { tenantId: 'default', dryRun: false });
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects')!.status).toBe('pass');
   });
 });

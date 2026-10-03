@@ -535,6 +535,18 @@ removes pinned memories, raw receipts (Slack, GitHub, vault imports) or the memo
 Claude Code compaction saved either way, and duplicate removal and junk cleanup still
 delete other memories. `hippo forget` still deletes a compaction memory.
 
+**Clean up project names left by older versions.** Older versions tagged memories saved in
+a git worktree with the worktree's folder name, and older sleep saved merged memories as
+user-global, so every project could see them. Upgrading stops new damage; these commands
+repair old rows. Each is a dry run until you add `--apply`. With `--apply`, it backs up the
+database to `.hippo/backups/` first and logs every id it touched in the audit log:
+
+```bash
+hippo projects --global                        # names, counts, live worktrees of this repo
+hippo projects merge hippo-wt-fix hippo --global   # fold an old worktree name into its repo
+hippo projects repair --global                 # re-tag user-global merges by their parents
+```
+
 **See what memory costs in tokens.** Every block of memory text hippo hands an agent (the
 per-prompt hook, the block `hippo compact-resume` restores after compaction, `hippo context`,
 `hippo recall`, the MCP tools, the HTTP API) is recorded in a token ledger: counts, surface

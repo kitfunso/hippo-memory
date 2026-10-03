@@ -16,6 +16,8 @@ import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.
 import { isEmbeddingAvailable } from './embeddings.js';
 import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks.js';
 import type { JsonValue } from './working-memory.js';
+import { planUserGlobalRepair } from './project-merge.js';
+import { resolveTenantId } from './tenant.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -164,6 +166,23 @@ function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
+/** Merged rows older sleep saved as user-global, counted by the repair's own dry run so a truly user-global merge never warns. */
+function projectsCheck(globalRoot: string): DoctorCheck {
+  let db: DatabaseSyncLike | null = null;
+  try {
+    db = openHippoDbReadOnly(globalRoot);
+    const r = planUserGlobalRepair(db, resolveTenantId({}));
+    const n = r.toProject.length + r.setAside.length;
+    return n === 0
+      ? { id: 'projects', status: 'pass', detail: 'no merged memories in the global store are tagged user-global by mistake' }
+      : { id: 'projects', status: 'warn', detail: `${n} merged memories in the global store are tagged user-global, so every project's context can show them`, fix: 'hippo projects repair --global   (dry run; add --apply to write)' };
+  } catch (err) {
+    return { id: 'projects', status: 'info', detail: `project tags not checked (${err instanceof Error ? err.message : String(err)})` };
+  } finally {
+    if (db !== null) closeHippoDb(db);
+  }
+}
+
 /** Run every check. Never throws for a broken install; broken parts become failed checks. */
 export function runDoctor(opts: DoctorOpts): DoctorReport {
   const cwd = opts.cwd ?? process.cwd();
@@ -248,6 +267,7 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   if (holdoutRateBp > 0) {
     checks.push({ id: 'pilot', status: 'info', detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo (pilot.holdoutRateBp=${holdoutRateBp})` });
   }
+  if (hasGlobal) checks.push(projectsCheck(globalRoot));
 
   const claudeDir = path.join(home, '.claude');
   if (fs.existsSync(claudeDir)) {
