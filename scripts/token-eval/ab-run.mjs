@@ -8,6 +8,7 @@ import { ARMS, ARM_SEEDS, TOKEN_KEY } from './arms.mjs';
 import { assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { validateFamilies, drawOrder, taskRoles } from './lessons.mjs';
 import { openContext, cacheTaskRepos } from './runs.mjs';
+import { assertNoPhraseLeaks } from './leaks.mjs';
 import { runSteps } from './task.mjs';
 import { planScreen, screenLines, runScreen } from './screen.mjs';
 
@@ -77,10 +78,11 @@ function writePlan(outDir, steps) {
   fs.writeFileSync(path.join(outDir, 'plan.json'), `${JSON.stringify(cells, null, 2)}\n`);
 }
 
-/** The checks main runs before a run can be abandoned: the out dir's ancestors, then (real runs) the task repos. */
+/** The checks main runs before a run can be abandoned: the out dir's ancestors, the lesson key phrases, then (real runs) the task repos. */
 export function preflight(spec, out, mode, stopAt, { screen = false } = {}) {
   // The free check first, so a refused --out never gets a clone.
   assertNoAncestorInstructions(out, { stopAt });
+  assertNoPhraseLeaks(spec);
   if (mode === 'real') cacheTaskRepos(spec, path.join(out, 'repo-cache'), { screen });
 }
 

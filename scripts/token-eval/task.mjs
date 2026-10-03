@@ -8,7 +8,8 @@ import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions,
 import {
   findTranscript, sessionFiles, listTranscripts, transcriptWork, transcriptUsage, assistantTurns, commandLog, usageFromResult, invalidRecord, validRecord,
 } from './records.mjs';
-import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
+import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
+import { findLeaks } from './leaks.mjs';
 import { runSession, resumeSession } from './turns.mjs';
 import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
@@ -16,6 +17,7 @@ import { cellName, snapshotSurfaces, restoreSurfaces } from './surfaces.mjs';
 import { deliveryHits, sessionVoid } from './readcheck.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
+const NOT_STAGED = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
 // Raw session JSON is evidence and is kept whole; only plain-text logs are tail-cut.
 const writeRaw = (run, name, text) => fs.writeFileSync(path.join(run.rawDir, name), text);
@@ -298,6 +300,21 @@ async function runTurns(ctx, run, step, stage, base) {
   return sessionRecord(ctx, run, step, { base, session, turns, sessionIds, acceptancePassed: test.status === 0, wallMs, stage });
 }
 
+/** This sequence's lessons whose teach the run has not reached; none in a screen run, which teaches outside the drawn order. */
+function openLessons(ctx, run, step) {
+  if (step.role.kind === 'screen') return [];
+  return [...ctx.lessons.values()].filter(({ lesson, family }) => family.sequence === run.s.id && !run.teachSeen.has(lesson.id)).map(({ lesson }) => lesson);
+}
+
+/** G3 at pre-session: every open lesson's key phrase in a memory surface, a hippo store, the workspace or the prompt. */
+function phraseLeaks(run, step, stage, open) {
+  const work = run.dirs.work;
+  const stores = [['hippoWork', path.join(work, '.hippo')], ['hippoGlobal', run.dirs.hippoHome]].map(([surface, dir]) => ({
+    surface, path: path.relative(run.dirs.root, dir).split(path.sep).join('/'), entries: open.length ? storeEntries(dir) : [],
+  }));
+  return findLeaks(open, { t: step.t, root: run.dirs.root, work, pre: stage.pre, surfaces: stage.snap.surfaces, stores });
+}
+
 /** Every step in order; a step's run is keyed by its dir name, arm and seed, and a screen step may preset what A4 was taught. */
 export async function runSteps(ctx, steps) {
   const runs = new Map();
@@ -319,22 +336,34 @@ async function runTask(ctx, run, step) {
   const { t } = step;
   const base = baseFields(ctx, run, step);
   const meta = { envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv };
+  const open = openLessons(ctx, run, step);
+  // Closed on reaching its teach, so a teach whose setup fails cannot leave its lesson open for the rest of the run.
+  if (step.role.kind === 'teach') run.teachSeen.add(step.role.lessonId);
+  const leakKey = `${run.runName}|${run.seed}`;
+  const leakFrom = ctx.leakedRuns.get(leakKey);
+  if (leakFrom) {
+    // Every later cell of a leaked (sequence, seed) still gets a record, so the run is never read as cut off (164, 114).
+    writeRecord(ctx, invalidRecord(base, 'leak', { leak: true, leakFrom, ...NOT_STAGED, ...meta }));
+    return;
+  }
   fs.mkdirSync(run.rawDir, { recursive: true });
   const stage = stageTask(ctx, run, step);
   base.baseCommit = stage.commit;
   if (stage.failed) {
     // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved". Carry never ran, so its counts are null.
     writeLog(run, `${t.id}.setup.txt`, `${stage.setup.stdout}\n${stage.setup.stderr}`);
-    const nulls = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
-    writeRecord(ctx, invalidRecord(base, 'setup', { agentError: `setup failed (exit ${stage.setup.status})`, ...nulls, ...meta }));
+    writeRecord(ctx, invalidRecord(base, 'setup', { agentError: `setup failed (exit ${stage.setup.status})`, ...NOT_STAGED, ...meta }));
     return;
   }
   let failing = false;
   try {
-    if (HIPPO_ARMS.has(run.arm) && storeLeaks(path.join(run.dirs.work, '.hippo'), goldLines(run.cached, t))) {
+    const leakHits = phraseLeaks(run, step, stage, open);
+    if (leakHits.length || (HIPPO_ARMS.has(run.arm) && storeLeaks(path.join(run.dirs.work, '.hippo'), goldLines(run.cached, t)))) {
       // The leak is known before the session, so a session the analysis voids is never run and costs no plan usage.
       run.changes = instructionDelta(stage.baseline, instructionSnapshot(run.dirs.work));
-      writeRecord(ctx, invalidRecord(base, 'leak', { leak: true, ...stage.carry, homesAtStart: stage.homesAtStart, ...meta }));
+      ctx.leakedRuns.set(leakKey, { arm: run.arm, position: step.position, taskId: t.id });
+      const hits = leakHits.length ? { leakHits } : {};
+      writeRecord(ctx, invalidRecord(base, 'leak', { leak: true, ...hits, ...stage.carry, homesAtStart: stage.homesAtStart, ...meta }));
       return;
     }
     if (ancestorHits(ctx, run, t)) {

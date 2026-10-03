@@ -113,7 +113,8 @@ export async function run(s: ReturnType<typeof spec>, arms: string[], out: strin
 const jsonl = <T>(f: string): T[] => (existsSync(f) ? readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 export interface VoidHit { reason: string; class: string | null; tool: string | null; path: string | null; file: string | null }
 /** A record with the runner's fields beyond the z0-record/1 contract. */
-export type RunRecord = Z0Record & { voidHits?: VoidHit[]; turnsSource?: string };
+export interface LeakHit { lessonId: string | null; surface: string; path: string | null }
+export type RunRecord = Z0Record & { voidHits?: VoidHit[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string } };
 export const readRecords = (out: string): RunRecord[] => jsonl<RunRecord>(join(out, 'runs.jsonl'));
 export const readPlan = (out: string): Z0PlanCell[] => JSON.parse(readFileSync(join(out, 'plan.json'), 'utf8'));
 export interface LedgerEntry { path: string; sha256?: string; size?: number; link?: true; error?: string }

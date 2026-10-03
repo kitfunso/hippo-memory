@@ -184,6 +184,8 @@ function firstSession() {
     write(staged[1], 'v2\n');
   }
   for (const m of prompt.matchAll(/MEMWRITE:([^\n]+)/g)) memWrite(m[1].trim());
+  // Base64, so a prompt can plant a key phrase it may not hold before the teach (the order check refuses it).
+  for (const m of prompt.matchAll(/MEMWRITE_B64:(\S+)/g)) memWrite(Buffer.from(m[1], 'base64').toString('utf8'));
   if (/\bHANG(?:_STDERR)?\b/.test(prompt)) hang('s1');
   for (const m of prompt.matchAll(/^USERMEM:(.+)$/gm)) fs.appendFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'CLAUDE.md'), `${m[1]}\n`);
   if (prompt.includes('WORKTREE')) sh(`git worktree add -q --detach "${process.env.FAKE_WT_DIR}"`);

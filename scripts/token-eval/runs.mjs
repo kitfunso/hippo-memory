@@ -6,6 +6,7 @@ import { HIPPO_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools
 import { runDirs, freshRunDirs } from './homes.mjs';
 import { stubBaseCommit, assertNoInstructionLinks } from './workspace.mjs';
 import { lessonIndex } from './lessons.mjs';
+import { assertNoPhraseInStub } from './leaks.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -38,9 +39,12 @@ function hippoHookSettings(tmpHome) {
   }
 }
 
+/** A hippo store's entries; none when it was never initialised. */
+export const storeEntries = (hippoRoot) => (hippoLib.isInitialized(hippoRoot) ? hippoLib.loadAllEntries(hippoRoot) : []);
+
 export function storeLeaks(hippoRoot, lines) {
-  if (!hippoLib.isInitialized(hippoRoot) || lines.length === 0) return false;
-  const text = hippoLib.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
+  if (lines.length === 0) return false;
+  const text = storeEntries(hippoRoot).map((e) => e.content).join('\n');
   return lines.some((l) => text.includes(l));
 }
 
@@ -59,7 +63,7 @@ export function hippoSentFor(hippoRoot, sessionIds) {
   }
 }
 
-/** Clone each sequence's repo into the cache, then refuse any task to be run (a screen's screen tasks too) whose stub tree checkoutBase would refuse. */
+/** Clone each sequence's repo into the cache, then refuse any task to be run (a screen's screen tasks too) whose stub tree checkoutBase would refuse or that holds a key phrase. */
 export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
   // Finding a symlinked instruction file here saves abandoning a lockstep run midway.
   for (const s of spec.sequences) {
@@ -69,7 +73,11 @@ export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
       git(['clone', '--quiet', s.repo, cached]);
     }
     const screens = screen ? (spec.families ?? []).filter((f) => f.sequence === s.id && f.screen).map((f) => f.screen) : [];
-    for (const t of [...s.tasks, ...screens]) assertNoInstructionLinks(cached, s.id, t, stubBaseCommit(cached, t.baseRef));
+    for (const t of [...s.tasks, ...screens]) {
+      const stub = stubBaseCommit(cached, t.baseRef);
+      assertNoInstructionLinks(cached, s.id, t, stub);
+      assertNoPhraseInStub(spec, cached, s.id, t, stub);
+    }
   }
 }
 
@@ -85,7 +93,7 @@ export async function openContext(opts) {
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
-    ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [],
+    ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');
@@ -110,7 +118,7 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
   return {
-    s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [],
+    s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [], teachSeen: new Set(),
     rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`), runName: name,
   };
 }
@@ -126,7 +134,7 @@ export function hippoInit(run, fakeHome) {
   fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false } }, null, 2));
 }
 
-const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already in the store, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };
+const SKIPPED = { setup: 'setup failed, skipped', leak: 'a leak voids this sequence and seed, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };
 
 export function writeRecord(ctx, record) {
   ctx.records.push(record);
