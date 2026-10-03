@@ -20,6 +20,7 @@ import {
 } from '../src/db.js';
 import type { SessionHandoff } from '../src/handoff.js';
 import { rowToSessionHandoff } from '../src/handoff.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 let tmpDir: string;
 
@@ -36,8 +37,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
-      expect(getSchemaVersion(db)).toBe(50);
-      expect(getCurrentSchemaVersion()).toBe(50);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }

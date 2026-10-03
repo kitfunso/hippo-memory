@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../src/db.js';
+import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 describe('schema v46', () => {
   it('a v45 store gains failure_log with its columns and both indexes', () => {
@@ -18,7 +19,7 @@ describe('schema v46', () => {
       }
       db = openHippoDb(home);
       try {
-        expect(getMeta(db, 'schema_version')).toBe('50');
+        expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
         // SAFETY: PRAGMA table_info rows carry a TEXT name column.
         const columns = (db.prepare(`PRAGMA table_info(failure_log)`).all() as Array<{ name: string }>).map((c) => c.name);
         expect(columns).toEqual(['id', 'ts', 'tenant_id', 'session_id', 'tool', 'outcome', 'skip_rule', 'sig_hash', 'detail_hash']);

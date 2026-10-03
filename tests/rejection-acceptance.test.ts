@@ -35,6 +35,7 @@ import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';
 import { consolidate } from '../src/consolidate.js';
 import { importEntries } from '../src/importers.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -261,7 +262,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
 
       const db1 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db1)).toBe(50);
+        expect(getSchemaVersion(db1)).toBe(LATEST_SCHEMA_VERSION);
         insertRejectedValue(db1, {
           tenantId: 'default',
           digest,
@@ -279,7 +280,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       // skipped — a no-op that must not disturb existing data.
       const db2 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db2)).toBe(50);
+        expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
         const row = findRejectedValue(db2, 'default', digest);
         expect(row).not.toBeNull();
         expect(row!.reason).toBe('idempotence check');
@@ -299,7 +300,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       let minCompatBefore: string | undefined;
       const db1 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db1)).toBe(50);
+        expect(getSchemaVersion(db1)).toBe(LATEST_SCHEMA_VERSION);
         // SAFETY: row's shape matches the single `value` column named in
         // the SELECT above.
         minCompatBefore = (
@@ -319,7 +320,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
 
       const db2 = openHippoDb(home); // re-open re-runs runMigrations
       try {
-        expect(getSchemaVersion(db2)).toBe(50);
+        expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
         expect(() =>
           insertRejectedValue(db2, {
             tenantId: 'default',

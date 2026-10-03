@@ -5,16 +5,17 @@ import { join } from 'node:path';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { writeEntry, readEntry, initStore } from '../src/store.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
-describe('A3 envelope migration v14+v15', () => {
-  it('CURRENT_SCHEMA_VERSION is 21 (v14 + v15 hardening + v16 tenant_id + v17 slack tables + v18 B3 dlPFC depth + v19 slack_dlq columns + v20 GDPR Path A redact backfill + v21 raw_archive.mirror_cleaned_at)', () => {
-    expect(getCurrentSchemaVersion()).toBe(50);
+describe('memory envelope: kind column, delete and update guards, raw_archive, round-trip', () => {
+  it('getCurrentSchemaVersion matches the constant in src/db.ts', () => {
+    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
   });
 
-  it('fresh db migrates to v21', () => {
+  it('fresh db migrates to the latest version', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
-    expect(getSchemaVersion(db)).toBe(50);
+    expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });

@@ -18,6 +18,7 @@ import {
 } from '../src/store.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { getContext, adminActor } from '../src/api.js';
+import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 interface ColumnInfo {
   name: string;
@@ -79,9 +80,9 @@ describe('test 1: fresh store, single open', () => {
       const cols = columns(db, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_outcome');
-      expect(getMeta(db, 'schema_version')).toBe('50');
-      expect(getSchemaVersion(db)).toBe(50);
-      expect(getCurrentSchemaVersion()).toBe(50);
+      expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }
@@ -106,7 +107,7 @@ describe('test 2: v41 store upgrades to v42', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getMeta(db2, 'schema_version')).toBe('50');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
     } finally {
@@ -132,7 +133,7 @@ describe('test 2: v41 store upgrades to v42', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getMeta(db2, 'schema_version')).toBe('50');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
     } finally {
@@ -628,7 +629,7 @@ describe('fix 4: v42 migration backfills outcome from session_complete events', 
 
     const db2 = openHippoDb(root);
     try {
-      expect(getMeta(db2, 'schema_version')).toBe('50');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
     } finally {
       closeHippoDb(db2);
     }

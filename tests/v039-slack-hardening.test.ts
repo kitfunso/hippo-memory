@@ -13,6 +13,7 @@ import { archiveRawMemory } from '../src/raw-archive.js';
 import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 const SECRET = 'shhh-current';
 const PREVIOUS_SECRET = 'shhh-old';
@@ -51,10 +52,10 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
 
   // 1. Migration v19 schema additions present.
   it('migration v19: slack_dlq has team_id, bucket, retry_count, signature, slack_timestamp', () => {
-    expect(getCurrentSchemaVersion()).toBe(50);
+    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(50);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: PRAGMA table_info() always returns rows with a name column.
       const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{ name: string }>;
       const names = cols.map((c) => c.name);

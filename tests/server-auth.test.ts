@@ -221,15 +221,4 @@ describe('server auth middleware', () => {
     const body = await jsonAs<{ ok: boolean }>(res);
     expect(body.ok).toBe(true);
   });
-
-  // Integration-test of "non-loopback request without auth → 401" requires
-  // binding the server to a non-loopback interface, which is fragile across
-  // CI/dev machines (NIC presence, firewall, OS dual-stack behaviour). The
-  // unit test in `describe('isLoopback helper')` above covers the address
-  // classification side; this skipped block documents what the full
-  // round-trip would look like once we have a stable test fixture.
-  it.skip('non-loopback no-auth: 401 (skipped - requires real network interface)', async () => {
-    // Would require: serve({ hippoRoot, host: '0.0.0.0' }) plus a way to
-    // dial in from a non-loopback address. Lifted in the soak harness.
-  });
 });

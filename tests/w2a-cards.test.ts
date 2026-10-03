@@ -26,6 +26,7 @@ import {
 } from '../src/store-cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { CARD_TRANSITIONS, type CardStatus } from '../src/card.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
@@ -71,8 +72,8 @@ describe('test 1: fresh store, single open', () => {
       expect(indexNames(db, 'card_runs')).toContain('idx_card_runs_tenant_card');
       expect(indexNames(db, 'card_comments')).toContain('idx_card_comments_tenant_card');
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_card');
-      expect(getSchemaVersion(db)).toBe(50);
-      expect(getCurrentSchemaVersion()).toBe(50);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }
@@ -92,7 +93,7 @@ describe('test 2: a v42 store migrates to v43 with the four tables present, empt
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(50);
+      expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
       expect(countRows(db2, 'cards')).toBe(0);
       expect(countRows(db2, 'card_deps')).toBe(0);
       expect(countRows(db2, 'card_runs')).toBe(0);
