@@ -2,8 +2,8 @@
 
 **Date:** 2026-10-03  
 **Scope:** engineering bounds from the [Z10 draft](./2026-09-30-z10-ledger-prereg.md), "Slice 1: engineering scope (settled)". No task or efficacy claim.  
-**Verdict:** stdout, token and bytes bounds PASS in every run. On the final code the p95 bound FAILS in every run, and the p50 bound passes only in the rebased run on a quieter machine (worst +13.4 ms). Runs 1 and 2 are dominated by load on the test machine; a fully quiet re-run is still owed.  
-**Status: the overhead gate is open.** The p95 ratio bound FAILS in all four runs (1.44 to 1.75), and the `--contention` run is not reported. This gate blocks any decision to turn `deliveryLedger` on by default; it does not block merging this slice, which ships the flag off.
+**Verdict:** stdout, token and bytes bounds PASS in every run. On the final code the p95 bound FAILS in every run, and the p50 bound passes only in the rebased run on a quieter machine (worst +13.4 ms). Runs 1 and 2 are dominated by load on the test machine; the quiet re-runs are below.  
+**Status: the overhead gate is open.** The p95 ratio bound FAILS in all four runs (1.44 to 1.75). The quiet counterbalanced re-runs below pass at 30 turns and fail at 100, and an A/A run with the ledger off in both arms also breaks both latency bounds, so this runner cannot decide them. This gate blocks any decision to turn `deliveryLedger` on by default; it does not block merging this slice, which ships the flag off.
 
 ## Runner
 
@@ -63,7 +63,31 @@ Runs 1 and 2 ran while other jobs on the machine held about 20 GB of memory, and
 
 None of this is a pass. The bounds stay FAIL as measured, and the latency gate is open until a run on a quiet machine.
 
+## Quiet re-runs after 1.56.0
+
+Same runner on the 1.56.0 build (`c3dc6cc`) with the counterbalanced order, `--contention` included, about 31 GB free and 2 of 24 cores busy with other jobs. Contention cells are reported but are not in the timed bounds.
+
+| Run | promptRecall | Mode | p50 off / on | p95 off / on | p95 ratio | p50 delta | Bytes | Dropped |
+|---|---|---|---|---|---|---|---|---|
+| 30 turns | off | fresh | 235 / 222 | 408 / 419 | 1.02 | -13.6 | 496 | 0 |
+| 30 turns | off | steady | 202 / 208 | 335 / 344 | 1.03 | +6.5 | 745 | 0 |
+| 30 turns | off | contention | 247 / 216 | 484 / 501 | 1.04 | -30.9 | 496 | 0 |
+| 30 turns | on | fresh | 209 / 220 | 321 / 350 | 1.09 | +10.9 | 2607 | 0 |
+| 30 turns | on | steady | 203 / 207 | 354 / 364 | 1.03 | +3.7 | 2731 | 0 |
+| 30 turns | on | contention | 211 / 220 | 390 / 484 | 1.24 | +8.5 | 2855 | 0 |
+| 100 turns | off | fresh | 239 / 214 | 309 / 311 | 1.01 | -24.5 | 597 | 0 |
+| 100 turns | off | steady | 218 / 209 | 335 / 404 | 1.21 | -8.5 | 756 | 0 |
+| 100 turns | off | contention | 243 / 244 | 470 / 379 | 0.81 | +1.0 | 716 | 1 |
+| 100 turns | on | fresh | 261 / 255 | 438 / 414 | 0.94 | -6.1 | 2744 | 0 |
+| 100 turns | on | steady | 268 / 254 | 465 / 446 | 0.96 | -14.0 | 2943 | 0 |
+| 100 turns | on | contention | 242 / 250 | 440 / 477 | 1.08 | +7.1 | 2784 | 0 |
+
+The 30-turn run passes every bound (worst p95 ratio 1.09, worst p50 delta +10.9 ms). The 100-turn run fails the p95 bound at 1.21, while the ledger-on arm has the lower p50 in four of six cells. Stdout matched in every turn and the token delta was 0 in both runs. One contention turn in the 100-turn run dropped its event and printed the one-line ledger warning; the 50 ms lock wait expired, as designed.
+
+**A/A check.** The same 100-turn command with `deliveryLedger` off in both arms (a temporary copy of the runner, not committed) gives p95 ratios of 1.00, 1.12, 0.91 and 1.23 across the four timed cells, 0.64 to 1.23 with contention, and a p50 delta of +44.3 ms in one cell. Two identical arms break both latency bounds, so whole-process wall clock at about 200 to 900 ms per turn cannot resolve a 10% p95 ratio or a 15 ms p50 delta against a profiled ledger cost of about 1.5 ms.
+
+**Next measurement.** Time the ledger's own work inside the hook process (observer plus write, lock wait included) and bound that directly, keeping the stdout, token and bytes bounds. This changes the slice 1 latency bounds, so it needs a committed amendment to the draft before the run.
+
 ## Not done
 
-- `--contention` (a child holding `BEGIN IMMEDIATE` for 30 ms in a loop) was stopped for low memory before its promptRecall-on cells. Its one finished promptRecall-off cell is in the scratch log only, and no rows-dropped figure is reported.
-- A quiet-machine latency re-run with enough turns to pin p95; the rebased run still fails one p95 cell at 1.44.
+- The latency gate: the whole-process runner cannot decide it (A/A above). The in-process measurement is not built.
