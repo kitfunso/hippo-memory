@@ -29,6 +29,8 @@ afterEach(() => {
   }
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
+// Long sync tests starve the worker's RPC; a macrotask turn between tests lets its replies through.
+afterEach(() => new Promise((r) => setTimeout(r, 0)));
 
 const tmp = (prefix: string): string => {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -363,6 +365,45 @@ describe('an agent that breaks its workspace git', () => {
     expect(logLines(log).filter((l) => l.startsWith('resume '))).toEqual([]);
     expect(readFileSync(join(out, 'raw', 'seqF', 'A0', 'seed1', 't1.workspace.txt'), 'utf8')).toMatch(/HEAD/);
     expect(validateCorpus(recs, readPlan(out)).sort()).toEqual(['a1', 'a2']);
+  }, 300_000);
+});
+
+describe('an instruction file the agent leaves above work/', () => {
+  const resumes = (log: string) => logLines(log).filter((l) => l.startsWith('resume ') && !l.startsWith('resume-'));
+  const a4Md = (out: string) => readFileSync(join(workDir(out, 'A4'), 'CLAUDE.md'), 'utf8');
+  const fam = () => family('f1', [lesson('f1-l1', 'Write the lesson file')]);
+
+  it('voids an apply whatever its first check says', async () => {
+    for (const first of ['LESSON_OK', 'LESSON_BAD']) {
+      const { out, log } = isolate(`anc-apply-${first}`);
+      const r = makeRepo();
+      await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', `${first} ESCAPE`), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out);
+      const recs = readRecords(out);
+      expectInvalid(find(recs, 'A4', 'a1'), 'ancestor-instructions');
+      expect(resumes(log).filter((l) => l === `resume ${find(recs, 'A4', 'a1').sessionId}`), first).toEqual([]);
+      expect(find(recs, 'A4', 'a2').invalid).toBe('ancestor-instructions');
+    }
+  }, 300_000);
+
+  it('a teach that plants one takes no resume and A4 is not taught', async () => {
+    const { out, log } = isolate('anc-teach');
+    const r = makeRepo();
+    await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_OK ESCAPE'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out);
+    expect(resumes(log)).toEqual([]);
+    expect(a4Md(out)).not.toContain('Write the lesson file');
+    expectInvalid(find(readRecords(out), 'A4', 't1'), 'ancestor-instructions');
+  }, 300_000);
+
+  it('one a cut-off resume plants stops the rerun, keeps the retry count, and A4 is not taught', async () => {
+    const { out, log } = isolate('anc-cut');
+    const r = makeRepo();
+    await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_BAD CUT_ON_RESUME ANCESTOR_ON_CUT'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out, { limitWaitMs: 0 });
+    const t1 = find(readRecords(out), 'A4', 't1');
+    expectInvalid(t1, 'ancestor-instructions');
+    expect(t1.limitRetries).toBe(1);
+    expect(resumes(log)).toEqual([`resume ${t1.sessionId}`]);
+    expect(a4Md(out)).not.toContain('Write the lesson file');
+    expect(existsSync(join(out, 'raw', 'seqF', 'A4', 'seed1', 't1.ancestor.txt'))).toBe(true);
   }, 300_000);
 });
 

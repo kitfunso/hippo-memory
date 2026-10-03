@@ -19,6 +19,8 @@ afterEach(() => {
   Object.assign(process.env, savedEnv);
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
+// Long sync tests starve the worker's RPC; a macrotask turn between tests lets its replies through.
+afterEach(() => new Promise((r) => setTimeout(r, 0)));
 const tmp = (prefix: string): string => {
   const d = mkdtempSync(join(tmpdir(), prefix));
   dirs.push(d);

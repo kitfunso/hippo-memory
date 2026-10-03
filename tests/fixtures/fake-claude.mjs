@@ -142,6 +142,8 @@ function cutOff() {
   const marker = path.join(promptsDir, `${sessionId}.cut`);
   if (!prompt.includes('CUT_ON_RESUME') || fs.existsSync(marker)) return;
   fs.writeFileSync(marker, '');
+  // Named apart from ESCAPE so session 1 plants nothing and only the cut-off attempt does.
+  if (prompt.includes('ANCESTOR_ON_CUT')) fs.writeFileSync(path.join('..', 'CLAUDE.md'), 'escaped on a cut-off resume\n');
   fs.writeFileSync('cutoff.txt', 'cut-off attempt\n');
   sh('git add cutoff.txt');
   const staged = /STAGE_EDIT (\S+)/.exec(prompt);

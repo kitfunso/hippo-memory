@@ -126,15 +126,12 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
   if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
-  // The resume would load a file session 1 left above work/, so the cell is void already and the resume never spends plan usage.
-  if (ancestorHits(ctx, run, t)) {
-    stage.ancestors = true;
-    return noResume;
-  }
   await settle(ctx, run, t.id, 'pre-resume');
-  const afterReset = () => { stage.ancestors ||= ancestorHits(ctx, run, t); };
+  // A file a cut-off attempt left above work/ voids the cell, so the rerun never spends plan usage and A4 is never taught from it.
+  const afterReset = () => (stage.ancestors ||= ancestorHits(ctx, run, t));
   const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
   if (!resume) return noResume;
+  if (resume.stopped) return { ...noResume, resume };
   writeRaw(run, `${t.id}.resume.json`, resume.cc.stdout || JSON.stringify({ error: resume.cc.stderr.slice(0, 4000), status: resume.cc.status }));
   if (resume.result?.session_id && !sessionIds.includes(resume.result.session_id)) sessionIds.push(resume.result.session_id);
   const final = resume.result && !c.error ? c.check(lesson) : first;
@@ -189,13 +186,16 @@ function sessionRecord(ctx, run, step, parts) {
 async function runTurns(ctx, run, step, stage, base) {
   const { t } = step;
   const work = run.dirs.work;
-  const started = Date.now();
+  // Monotonic, so a wall-clock step (NTP, a WSL resync) cannot make wallMs negative.
+  const started = performance.now();
   const session = await runSession(ctx, run, t, () => resetTask(ctx, run, t, stage));
   run.sessionRan = true;
   writeRaw(run, `${t.id}.json`, session.cc.stdout || JSON.stringify({ error: session.cc.stderr.slice(0, 4000), status: session.cc.status }));
+  // Reading 13: every cell kind, before any check, so whether a cell is void never depends on its verdict.
+  stage.ancestors ||= ancestorHits(ctx, run, t);
   const sessionIds = session.result?.session_id ? [session.result.session_id] : [];
-  const turns = session.result && sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
-  const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
+  const turns = session.result && sessionIds.length && !stage.ancestors ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
+  const wallMs = Math.round(performance.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0));
   await settle(ctx, run, t.id, 'end');
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   // Reading 8: A4 holds a lesson only once its teach resume delivered it.
