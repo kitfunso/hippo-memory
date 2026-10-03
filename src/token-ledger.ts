@@ -305,6 +305,12 @@ export function hookPayloadSessionId(stdinText: string | undefined, requiredSour
   return sessionId;
 }
 
+/** A hook payload's string `field` as sent, or null when the payload or the field is missing or not a string. */
+export function hookPayloadString(stdinText: string | undefined, field: string): string | null {
+  const value = parseHookPayload(stdinText)?.[field];
+  return isJsonString(value) ? value : null;
+}
+
 /** Whether a hook fired inside a sub-agent, the only payload with `agent_id` (https://code.claude.com/docs/en/hooks#common-input-fields).
  *  Its `session_id` is the parent's, so a sub-agent's blocks and compactions must not count as the parent's. */
 export function isSubagentPayload(stdinText: string | undefined): boolean {
