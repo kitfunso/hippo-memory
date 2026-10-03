@@ -15,6 +15,7 @@ import { openHippoDb, closeHippoDb } from './db.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { loadConfig } from './config.js';
 import { vetSecrets } from './secret-detect.js';
+import { log } from './log.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -119,7 +120,7 @@ export function importEntries(
       const trimmed = vetSecrets(original, allTags, true).content;
       const wasRedacted = trimmed !== original;
       if (trimmed.length > 1000) {
-        console.error(`Warning: imported memory truncated from ${trimmed.length} to 1000 chars`);
+        log.warn(`imported memory truncated from ${trimmed.length} to 1000 chars`);
       }
       const chunk = trimmed.slice(0, 1000);
 
@@ -719,7 +720,8 @@ function collectMarkdownFiles(root: string, hippoRoot: string, match: RegExp = /
 function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);
-  } catch {
+  } catch (err) {
+    log.debug(`import: realpath fell back to resolve for ${p}: ${err instanceof Error ? err.message : String(err)}`);
     return path.resolve(p);
   }
 }
@@ -1042,7 +1044,8 @@ function parseJsonArrayLoose(value: string | null | undefined): string[] {
   try {
     const parsed: JsonValue = JSON.parse(value);
     return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
-  } catch {
+  } catch (err) {
+    log.debug(`import: unreadable tags_json read as no tags: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }

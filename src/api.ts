@@ -68,6 +68,7 @@ import {
   type QuarantineStatus,
 } from './quarantine.js';
 import { summarizeFailures, type FailureSummary } from './failure-log.js';
+import { log } from './log.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
 import {
   createMemory,
@@ -2205,10 +2206,7 @@ export function supersede(
     try {
       writeEntryMirrors(ctx.hippoRoot, newEntry);
     } catch (mirrorErr) {
-      console.error(
-        'supersede: mirror write failed (non-fatal, will self-heal):',
-        mirrorErr,
-      );
+      log.error(`supersede: mirror write failed (non-fatal, will self-heal): ${mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr)}`);
     }
   } finally {
     closeHippoDb(db);
@@ -2284,10 +2282,7 @@ export function archiveRaw(
       removeEntryMirrors(ctx.hippoRoot, id);
       mirrorOk = true;
     } catch (mirrorErr) {
-      console.error(
-        `archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb):`,
-        mirrorErr,
-      );
+      log.error(`archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ${mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr)}`);
     }
     if (mirrorOk) {
       // Stamp mirror_cleaned_at now so the next openHippoDb reaper SELECT
@@ -3580,7 +3575,7 @@ export function quarantineApprove(ctx: Context, id: string): void {
     const restored = readEntry(ctx.hippoRoot, id, ctx.tenantId);
     if (restored) writeEntryMirrors(ctx.hippoRoot, restored);
   } catch (err) {
-    console.error(`quarantine: mirror rewrite failed for ${id}: ${err instanceof Error ? err.message : String(err)}`);
+    log.error(`quarantine: mirror rewrite failed for ${id}: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

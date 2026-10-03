@@ -440,6 +440,7 @@ function safeJsonParse(raw: string): JsonObject {
     // `typeof v === 'object' && v !== null` check without using typeof.
     return v instanceof Object ? (v as JsonObject) : {};
   } catch {
+    // Malformed metadata reads as empty so the audit row itself stays listable.
     return {};
   }
 }

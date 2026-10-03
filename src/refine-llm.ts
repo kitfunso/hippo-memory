@@ -17,6 +17,7 @@ import { MemoryEntry, Layer } from './memory.js';
 import { loadAllEntries, readEntry, writeEntry } from './store.js';
 import { redactSecrets } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
+import { log } from './log.js';
 
 const REFINED_TAG = 'llm-refined';
 const CONSOLIDATED_MARKERS = [
@@ -99,23 +100,32 @@ ${sourceBlock}`;
         messages: [{ role: 'user', content: prompt }],
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
-  } catch {
+  } catch (err) {
+    log.warn(`refine: request failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    log.warn(`refine: API answered HTTP ${res.status}`);
+    return null;
+  }
 
+  let text: string;
   try {
     // SAFETY: data is the Anthropic Messages API response body; the
     // documented response shape is `{ content: [{ type, text, ... }] }`
     // for a text-generating request like this one.
     const data = await res.json() as { content?: Array<{ text?: string }> };
-    const text = data.content?.[0]?.text?.trim() ?? '';
-    if (text.length < 10) return null;
-    return text;
-  } catch {
+    text = data.content?.[0]?.text?.trim() ?? '';
+  } catch (err) {
+    log.warn(`refine: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
+  if (text.length < 10) {
+    log.warn('refine: response was empty or too short to use');
+    return null;
+  }
+  return text;
 }
 
 function isConsolidated(entry: MemoryEntry): boolean {

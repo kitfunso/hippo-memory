@@ -10,6 +10,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'node:crypto';
+import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../http-util.js';
+import { log } from '../log.js';
 import {
   createMemory,
   computeSchemaFit,
@@ -87,7 +90,19 @@ interface McpResponse {
   jsonrpc: '2.0';
   id: number | string;
   result?: unknown;
-  error?: { code: number; message: string };
+  error?: { code: number; message: string; data?: { requestId: string } };
+}
+
+/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered generically. */
+export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = randomUUID()): McpResponse {
+  const { status, message } = mapApiError(err);
+  if (status !== 500) return { jsonrpc: '2.0', id, error: { code: -32603, message } };
+  log.error(`mcp request failed: ${err instanceof Error ? err.message : String(err)}`, { requestId });
+  return {
+    jsonrpc: '2.0',
+    id,
+    error: { code: -32603, message: `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, data: { requestId } },
+  };
 }
 
 export type { McpRequest, McpResponse };
@@ -629,7 +644,7 @@ function resolveClientKey(ctx: { clientKey?: string; tenantId: string } | undefi
 function createGlobalStoreOnFirstRun(): string {
   initGlobal();
   const root = getGlobalRoot();
-  console.error(`hippo: no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`);
+  log.warn(`no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`);
   return root;
 }
 
@@ -999,7 +1014,7 @@ async function executeTool(
         // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
         consolidate(hippoRoot)
           .catch((err) => {
-            console.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${err instanceof Error ? err.message : err}`);
+            log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${err instanceof Error ? err.message : String(err)}`);
           })
           .finally(() => autoSleepInFlight.delete(hippoRoot));
       }
@@ -1279,15 +1294,18 @@ function dispatch(body: string): void {
     // `JSON.parse(raw) as McpRequest` boundary cast.
     req = JSON.parse(body) as McpRequest;
   } catch {
-    return; // skip malformed
+    log.debug('mcp: skipped a frame that is not valid JSON');
+    return;
   }
   if (!req.method) return;
   if (req.method.startsWith('notifications/')) {
-    handleMcpRequest(req).catch(() => {});
+    handleMcpRequest(req).catch((err) => {
+      log.error(`mcp notification ${req.method} failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
     return;
   }
   handleMcpRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
-    send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: err?.message ?? 'Internal error' } });
+    send(mcpErrorResponse(req.id, err));
   });
 }
 
@@ -1311,10 +1329,10 @@ export function startStdioLoop(): void {
   process.stdin.on('end', () => process.exit(0));
 
   process.on('uncaughtException', (err) => {
-    process.stderr.write(`hippo-mcp uncaught: ${err?.message ?? err}\n`);
+    log.error(`mcp uncaught: ${err instanceof Error ? err.message : String(err)}`);
   });
   process.on('unhandledRejection', (err) => {
-    process.stderr.write(`hippo-mcp unhandled: ${err instanceof Error ? err.message : String(err)}\n`);
+    log.error(`mcp unhandled: ${err instanceof Error ? err.message : String(err)}`);
   });
 }
 
@@ -1334,7 +1352,7 @@ const isMainModule = (() => {
     const mainUrl = `file://${argv1.replace(/\\/g, '/')}`;
     return import.meta.url === mainUrl || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`;
   } catch {
-    return false;
+    return false; // an unreadable argv means this file was imported, not run; never start the stdio loop then
   }
 })();
 

@@ -13,7 +13,12 @@ function defaultWaitMs(): number {
  * so a slow but real write is not cut off, and capped at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
-  try { stdin = process.stdin; } catch { return Promise.resolve({ timedOut: false }); }
+  try {
+    stdin = process.stdin;
+  } catch {
+    // Reading process.stdin can throw when the handle is closed; that is the same as no input.
+    return Promise.resolve({ timedOut: false });
+  }
   if (stdin.isTTY) return Promise.resolve({ timedOut: false });
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];

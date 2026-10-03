@@ -2,6 +2,7 @@ import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../search.js';
 import { redactSecrets } from '../secret-detect.js';
+import { log } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -116,9 +117,8 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
       if (!warned) {
         warned = true;
         const reason = err instanceof Error ? err.message : 'unknown error';
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[hippo] jev reranker unavailable (${reason}); falling back to the local cross-encoder. Subsequent calls will not repeat this warning.`,
+        log.warn(
+          `jev reranker unavailable (${reason}); falling back to the local cross-encoder. Subsequent calls will not repeat this warning.`,
         );
       }
       return localFallback(query, head, options);

@@ -20,6 +20,7 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { assertTenantId } from './tenant.js';
+import { log } from './log.js';
 
 /** The DB connection handle `openHippoDb` returns. Threaded (optionally) through
  *  the graph writers so `extractGraph` can run clear + all inserts in ONE
@@ -877,11 +878,8 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
   } catch (err) {
     // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
     // swallowed so the already-committed E2 write is never rolled back.
-    // SAFETY: this is a best-effort log message only; property access on any
-    // JS value is safe (undefined if absent), preserving the existing lenient
-    // formatting even when something non-Error was thrown.
-    console.warn(
-      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${(err as Error).message}`,
+    log.warn(
+      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -921,11 +919,8 @@ export function removeGraphEntitiesForObject(
       closeHippoDb(db);
     }
   } catch (err) {
-    // SAFETY: this is a best-effort log message only; property access on any
-    // JS value is safe (undefined if absent), preserving the existing lenient
-    // formatting even when something non-Error was thrown.
-    console.warn(
-      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${(err as Error).message}`,
+    log.warn(
+      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }

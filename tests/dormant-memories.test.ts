@@ -9,7 +9,7 @@
  * dormant, and a dormant memory older than `retentionDays` (default 180, 0 =
  * forever) is deleted for good. Real SQLite throughout.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -72,15 +72,13 @@ function countDormantRows(home: string): number {
 
 describe('dormant memories are on by default, with an opt-out', () => {
   function captureWarnings(fn: () => void): string[] {
-    const warnings: string[] = [];
-    const originalError = console.error;
-    console.error = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       fn();
+      return stderr.mock.calls.map(([chunk]) => String(chunk));
     } finally {
-      console.error = originalError;
+      stderr.mockRestore();
     }
-    return warnings;
   }
 
   it('with no dormant setting a faded memory goes dormant, and retention defaults to 180 days', async () => {

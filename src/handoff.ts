@@ -73,6 +73,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
       artifacts = parsed.map((item) => String(item));
     }
   } catch {
+    // A corrupt column degrades to empty instead of hiding the whole handoff.
     artifacts = [];
   }
 
@@ -83,6 +84,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
       constraints = parsed.map((item) => String(item));
     }
   } catch {
+    // Same degrade-to-empty rule as artifacts.
     constraints = [];
   }
 
@@ -91,6 +93,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
     // SAFETY: catch below falls back to null on malformed JSON, so a wrong shape never escapes.
     evidence = row.evidence_json ? (JSON.parse(row.evidence_json) as HandoffEvidence) : null;
   } catch {
+    // Same degrade rule as artifacts: bad evidence reads as none.
     evidence = null;
   }
 

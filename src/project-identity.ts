@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { log } from './log.js';
 
 /**
  * Project identity resolution for memory scope isolation (ROADMAP.md Part I
@@ -56,7 +57,8 @@ export function clearProjectIdentityCache(): void {
 export function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);
-  } catch {
+  } catch (err) {
+    log.debug(`project identity: realpath fell back to resolve for ${p}: ${err instanceof Error ? err.message : String(err)}`);
     return path.resolve(p);
   }
 }
@@ -84,7 +86,8 @@ function isUnder(child: string, parent: string): boolean {
 function isDirectoryAt(p: string): boolean {
   try {
     return fs.statSync(p).isDirectory();
-  } catch {
+  } catch (err) {
+    log.debug(`project identity: no marker at ${p}: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }

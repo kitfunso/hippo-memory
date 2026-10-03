@@ -132,7 +132,7 @@ import {
   VALID_NOTE_STATES,
   type NoteStatus,
 } from './customer-notes.js';
-import { handleMcpRequest, type McpRequest } from './mcp/server.js';
+import { handleMcpRequest, mcpErrorResponse, type McpRequest } from './mcp/server.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import {
@@ -580,8 +580,7 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
 
 function logResolverFailure(what: string, raw: string, token: string): void {
   // The plugin's message is logged, but never the token, even if the plugin echoed it.
-  const msg = raw.split(token).join('[token]').replace(/[\r\n]/g, ' ');
-  process.stderr.write(`[hippo] auth resolver ${what}: ${msg}\n`);
+  log.error(`auth resolver ${what}: ${raw.split(token).join('[token]')}`);
 }
 
 /** 503 when upstream throws or misses the deadline, so a stream heartbeat can tell an outage from a revocation. */
@@ -2678,11 +2677,7 @@ async function handleRequest(
         clientKey: buildMcpClientKey(req),
       });
     } catch (err) {
-      mcpRes = {
-        jsonrpc: '2.0' as const,
-        id: mcpReq.id,
-        error: { code: -32603, message: err instanceof Error ? err.message : 'internal error' },
-      };
+      mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
     }
     if (mcpRes === null) {
       // Notification — no body, 202 Accepted.
@@ -2752,7 +2747,7 @@ async function handleRequest(
         try {
           res.write(': ping\n\n');
         } catch {
-          clearInterval(ping);
+          clearInterval(ping); // the client hung up; stop pinging a dead socket
         }
       });
     }, heartbeatMs);
@@ -2941,11 +2936,11 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     const gracefulShutdown = async (signal: string): Promise<void> => {
       if (shuttingDown) return;
       shuttingDown = true;
-      console.error(`Received ${signal}, shutting down...`);
+      log.warn(`received ${signal}, shutting down`);
       try {
         await stop();
       } catch (err) {
-        console.error('Error during stop:', err);
+        log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         process.exit(0);
       }

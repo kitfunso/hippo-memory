@@ -12,6 +12,7 @@ import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
 import { neverAutoShareTags } from './shared.js';
+import { log } from './log.js';
 
 export interface FactCluster {
   label: string;
@@ -217,7 +218,7 @@ export async function buildDag(
       } catch (err) {
         if (err instanceof RejectedValueError) {
           result.rejected++;
-          console.error(`[buildDag] cluster "${cluster.label}" skipped: summary matches a rejected value`);
+          log.warn(`buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`);
           continue;
         }
         throw err;
@@ -363,9 +364,8 @@ export async function rebuildDirtySummaries(
       // (audit() wraps its own writes try/catch per store.ts:2566, so a
       // throw here is exotic: SQLite I/O error, prepare failure, etc).
       result.failed++;
-      // eslint-disable-next-line no-console
-      console.error(
-        `[rebuildDirtySummaries] summary ${summary.id} (tenant ${summary.tenantId}) failed: ${
+      log.error(
+        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
@@ -479,7 +479,7 @@ export async function buildEntityProfiles(
       } catch (err) {
         if (err instanceof RejectedValueError) {
           result.rejected++;
-          console.error(`[buildEntityProfiles] cluster "${cluster.label}" skipped: profile matches a rejected value`);
+          log.warn(`buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`);
           continue;
         }
         throw err;

@@ -114,6 +114,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
     }
     return entry;
   } catch {
+    // A row that will not parse is out of shape, so it is not restorable.
     return null;
   }
 }

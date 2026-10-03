@@ -47,6 +47,7 @@ import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
 import { classifyOriginProject } from './project-identity.js';
 import { isObjectLike, isStringValue, readClaudeCodePreCompact } from './capture-contract.js';
+import { log } from './log.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -623,7 +624,7 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
     try {
       entry = JSON.parse(line);
     } catch {
-      continue;
+      continue; // a torn or partial transcript line carries no turn
     }
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
@@ -760,7 +761,7 @@ export function resolveLastSessionTranscript(
       }
     }
   } catch {
-    return null;
+    return null; // an unlistable projects dir means no transcript to find; the caller prints that
   }
   return newest?.path ?? null;
 }
@@ -801,7 +802,7 @@ function beginLogTee(logFile: string): () => void {
       'utf8'
     );
   } catch (err) {
-    console.error(`[hippo] warning: could not open log file ${logFile}: ${errorMessage(err)}`);
+    log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
     return () => {};
   }
 
@@ -847,6 +848,7 @@ function beginLogTee(logFile: string): () => void {
   };
 }
 
+// Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 function cmdCaptureCore(
   hippoRoot: string,
   options: CaptureOptions
@@ -1118,7 +1120,7 @@ function lastPlainUserMessage(jsonl: string): string {
     try {
       entry = JSON.parse(lines[i]);
     } catch {
-      continue;
+      continue; // the tail read can start mid-line; skip the torn fragment
     }
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry) || entry.type !== 'user') continue;
@@ -1143,7 +1145,7 @@ function lastAssistantTextBlock(jsonl: string): string {
     try {
       entry = JSON.parse(lines[i]);
     } catch {
-      continue;
+      continue; // the tail read can start mid-line; skip the torn fragment
     }
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry) || entry.type !== 'assistant') continue;
@@ -1202,7 +1204,7 @@ function isReadableFile(filePath: string): boolean {
     fs.accessSync(filePath, fs.constants.R_OK);
     return true;
   } catch {
-    return false;
+    return false; // missing and unreadable both mean "no file" to the caller
   }
 }
 

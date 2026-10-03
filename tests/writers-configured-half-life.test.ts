@@ -165,7 +165,7 @@ describe('an invalid configured default half-life', () => {
   it.each([0, -30, 'forever'])('%s warns, and writers fall back to the built-in default', async (value) => {
     const root = store();
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }));
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const old = seed(root, 'the deploy window is Tuesday afternoon');
     const ctx: api.Context = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
     const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));

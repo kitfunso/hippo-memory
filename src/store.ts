@@ -44,6 +44,7 @@ import {
 // is the standard safe mutual-function-reference shape under NodeNext ESM.
 import { archiveRawMemory } from './raw-archive.js';
 import { insertDormantRow, type DormantMove } from './dormant.js';
+import { log } from './log.js';
 
 /** A value that round-trips through JSON.stringify/JSON.parse unchanged. */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -547,7 +548,8 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
-  } catch {
+  } catch (err) {
+    log.debug(`store: corrupt JSON array column read as empty: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }
@@ -581,7 +583,8 @@ function parseJsonObject(raw: string | null | undefined): Record<string, JsonVal
       return parsed;
     }
     return {};
-  } catch {
+  } catch (err) {
+    log.debug(`store: corrupt JSON object column read as empty: ${err instanceof Error ? err.message : String(err)}`);
     return {};
   }
 }
@@ -1056,13 +1059,13 @@ export function purgeMirrorBestEffort(
     } catch (secondErr) {
       const msg = secondErr instanceof Error ? secondErr.message : String(secondErr);
       if (isRaw) {
-        console.error(
+        log.error(
           `${logPrefix}: mirror cleanup failed for ${id} (will retry via reaper on next open): ${msg}`,
         );
       } else {
         const leftover = getExistingEntryMirrorPaths(hippoRoot, id);
         const pathsNote = leftover.length > 0 ? leftover.join(', ') : `${id}.md (path unresolved)`;
-        console.error(
+        log.error(
           `${logPrefix}: mirror cleanup failed for ${id} - no automatic retry exists for this file, ` +
           `delete it manually: ${pathsNote} (${msg})`,
         );
@@ -1119,7 +1122,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
       }
     }
     if (rejectedCount > 0) {
-      console.error(`bootstrapLegacyStore: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
+      log.warn(`bootstrapLegacyStore: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
     }
 
     const legacyIndex = loadLegacyIndexFile(hippoRoot);
@@ -1188,7 +1191,8 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
     // which always serializes a HippoIndex; a hand-edited or corrupted file
     // that violates the shape falls through to the catch block's fallback.
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
-  } catch {
+  } catch (err) {
+    log.debug(`store: unreadable index.json read as empty: ${err instanceof Error ? err.message : String(err)}`);
     return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 }
@@ -1220,7 +1224,8 @@ function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
     // guard every read with `?? 0` / `Array.isArray`, tolerating a
     // hand-edited or corrupted file even if this optimistic cast is wrong.
     return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
-  } catch {
+  } catch (err) {
+    log.debug(`store: unreadable stats.json read as zero: ${err instanceof Error ? err.message : String(err)}`);
     return {
       total_remembered: 0,
       total_recalled: 0,
@@ -1465,7 +1470,7 @@ function mirrorBestEffort(what: string, write: () => void): void {
   try {
     write();
   } catch (err) {
-    console.error(`hippo: ${what} not refreshed (${err instanceof Error ? err.message : String(err)}); the database write succeeded`);
+    log.warn(`${what} not refreshed (${err instanceof Error ? err.message : String(err)}); the database write succeeded`);
   }
 }
 
@@ -1751,7 +1756,7 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], t
     db.exec('COMMIT');
   } catch (error) {
     try { db?.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    console.error(`hippo: retrieval stats not saved (${error instanceof Error ? error.message : String(error)})`);
+    log.warn(`retrieval stats not saved (${error instanceof Error ? error.message : String(error)})`);
     found.clear();
   } finally {
     if (db) closeHippoDb(db);
@@ -2233,7 +2238,7 @@ export function batchWriteAndDelete(
     db.exec('COMMIT');
 
     if (batchRejectedSkips > 0) {
-      console.error(
+      log.warn(
         `batchWriteAndDelete: skipped ${batchRejectedSkips} write(s) whose content matches a rejected value (tombstone hit during the batch transaction)`,
       );
     }
@@ -2532,7 +2537,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
           }
         }
         if (rejectedCount > 0) {
-          console.error(`rebuildIndex: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
+          log.warn(`rebuildIndex: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
         }
         db.exec('COMMIT');
       } catch (err) {
@@ -4069,7 +4074,7 @@ export function applyRebuildResult(
           patch.actor,
           summary.tenantId,
         );
-        console.error(
+        log.warn(
           `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
             `(digest ${tombstone.digest.slice(0, 12)}...); metadata updated, content unchanged`,
         );

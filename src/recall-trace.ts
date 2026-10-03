@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import type { RerankStep } from './search.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
+import { log } from './log.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -119,8 +120,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
       throw error;
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(`[hippo] recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -156,8 +156,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
   try {
     db = openHippoDb(root);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(`[hippo] recall trace connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace connection failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
   try {
@@ -192,8 +191,8 @@ export interface RecordTraceOutcomeInput {
  * this function from caller-side state (`last_trace_id` / applied outcome
  * ids) that can go stale relative to the trace it names — a forgotten
  * memory, a tenant switch mid-session, or a race between two callers. Two
- * checks run before the insert, both skip silently (console.error one
- * line) rather than throw:
+ * checks run before the insert, both skip with one log.warn line
+ * rather than throw:
  *   1. The named trace must exist and belong to `input.tenantId` — a
  *      tenant mismatch or a dangling id (deleted trace) skips.
  *   2. `input.memoryIds` is intersected against the trace's OWN
@@ -212,8 +211,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       | { tenant_id?: string }
       | undefined;
     if (!trace || trace.tenant_id !== input.tenantId) {
-      // eslint-disable-next-line no-console
-      console.error(`[hippo] recall trace outcome skipped: trace ${input.traceId} missing or tenant mismatch`);
+      log.warn(`recall trace outcome skipped: trace ${input.traceId} missing or tenant mismatch`);
       return;
     }
 
@@ -225,8 +223,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
     const members = new Set(memberRows.map((r) => r.memory_id));
     const credited = input.memoryIds.filter((id) => members.has(id));
     if (credited.length === 0) {
-      // eslint-disable-next-line no-console
-      console.error(`[hippo] recall trace outcome skipped: no credited ids intersect trace ${input.traceId}'s results`);
+      log.warn(`recall trace outcome skipped: no credited ids intersect trace ${input.traceId}'s results`);
       return;
     }
 
@@ -235,8 +232,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       VALUES (?, ?, ?, ?, ?)
     `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(`[hippo] recall trace outcome write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace outcome write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -380,7 +376,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       throw error;
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
+    // The prompt hook's stderr shows this exact `[hippo] delivery ledger` line, so it stays off the logger's format.
     console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
@@ -392,7 +388,7 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   try {
     db = openHippoDb(root, { busyWaitMs: DELIVERY_LEDGER_WAIT_MS });
   } catch (error) {
-    // eslint-disable-next-line no-console
+    // Same hook stderr line as writeDeliveryEvent above.
     console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }

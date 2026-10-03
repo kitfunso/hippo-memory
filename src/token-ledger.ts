@@ -295,6 +295,7 @@ function parseHookPayload(stdinText: string | undefined): JsonObject | null {
     const payload = JSON.parse(stdinText.trim()) as JsonValue;
     return isJsonObject(payload) ? payload : null;
   } catch {
+    // Malformed is one of the null cases the docblock names.
     return null;
   }
 }

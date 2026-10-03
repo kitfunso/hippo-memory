@@ -12,6 +12,7 @@ import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, updateStats, writeEntryMirrors } from './store.js';
 import { resolveTenantId } from './tenant.js';
+import { log as logger } from './log.js';
 
 /** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */
 export const COMPACTION_DB_WAIT_MS = 2000;
@@ -367,7 +368,7 @@ export function parsePostCompactPayload(stdinText: string | undefined): PostComp
   try {
     raw = JSON.parse((stdinText ?? '').trim());
   } catch {
-    return null;
+    return null; // non-JSON stdin is not a PostCompact payload; the caller skips it
   }
   if (!isObjectLike(raw) || !('session_id' in raw) || !isStringValue(raw.session_id) || raw.session_id === '') return null;
   return {
@@ -422,7 +423,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
     } catch (err) {
       if (isSqliteBusy(err)) throw err;
       log(`record step failed: ${errorMessage(err)}`);
-      console.error(`hippo post-compact: record step failed: ${errorMessage(err)}`);
+      logger.error(`post-compact: record step failed: ${errorMessage(err)}`);
     }
     try {
       result.written = saveItems(db, hippoRoot, {
@@ -446,11 +447,11 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
         log(`store busy, summary spooled: ${errorMessage(err)}`);
       } catch (spoolErr) {
         log(`spool failed: ${errorMessage(spoolErr)}`);
-        console.error(`hippo post-compact: spool failed: ${errorMessage(spoolErr)}`);
+        logger.error(`post-compact: spool failed: ${errorMessage(spoolErr)}`);
       }
     } else {
       log(`items step failed: ${errorMessage(err)}`);
-      console.error(`hippo post-compact: items step failed: ${errorMessage(err)}`);
+      logger.error(`post-compact: items step failed: ${errorMessage(err)}`);
     }
   } finally {
     if (db) closeHippoDb(db);
@@ -489,7 +490,7 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
       try {
         lines.push(JSON.parse(raw));
       } catch {
-        continue;
+        continue; // the tail can start mid-line; a torn line holds no summary
       }
     }
     const stamp = (line: TranscriptLine): number => (isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN);
@@ -524,7 +525,7 @@ function readSpooled(file: string, fallbackTenantId: string): SpooledCompaction 
   try {
     raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    return null;
+    return null; // a half-written or vanished spool file is skipped; the caller treats null as unreadable
   }
   if (!isObjectLike(raw) || !('sessionId' in raw) || !isStringValue(raw.sessionId) || !('summary' in raw) || !isStringValue(raw.summary)) return null;
   if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;

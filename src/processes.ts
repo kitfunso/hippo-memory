@@ -170,6 +170,7 @@ function parseSteps(raw: string): string[] {
     }
     return [];
   } catch {
+    // Legacy garbage reads back as no steps, per the docblock.
     return [];
   }
 }

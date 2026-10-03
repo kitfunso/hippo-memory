@@ -280,6 +280,7 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
     const parsed: CodexWrapperMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
     return parsed;
   } catch {
+    // Unreadable metadata is treated like the missing-file case above.
     return null;
   }
 }
@@ -288,6 +289,7 @@ function readTextFile(filePath: string): string | null {
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch {
+    // Callers treat an unreadable file as absent.
     return null;
   }
 }
@@ -1020,6 +1022,7 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   } catch {
+    // Never rewrite a settings file we cannot parse; report nothing uninstalled.
     return false;
   }
   if (!isJsonObject(settings) || !isJsonObject(settings.hooks)) return false;

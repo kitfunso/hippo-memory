@@ -69,6 +69,7 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
   return null;
 }
 
+// Console lines below are the `hippo github` command's printed result and usage text, so they stay off the logger.
 export function printGithubBackfillUsage(): void {
   console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
   console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');

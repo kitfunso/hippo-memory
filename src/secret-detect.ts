@@ -146,6 +146,7 @@ export function redactPayload(raw: string): string {
   try {
     JSON.parse(raw);
   } catch {
+    // Not JSON, so there is no structure to keep valid; redact the raw text.
     return redactSecretsStrict(raw);
   }
   return raw.replace(JSON_STRING, (literal) => {

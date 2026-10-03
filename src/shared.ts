@@ -29,6 +29,12 @@ import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
+import { log } from './log.js';
+
+// The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
+function logEmbedAllFailure<E>(caller: string, err: E): void {
+  log.warn(`${caller}: background embed failed (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+}
 
 /**
  * Returns the path to the global Hippo store.
@@ -602,13 +608,13 @@ export function autoShare(
   }
 
   if (rejectedSkipped > 0) {
-    console.error(
+    log.warn(
       `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
     );
   }
 
   if (shared.length > 0) {
-    void embedAll(globalRoot).catch(() => {});
+    void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;
@@ -669,13 +675,13 @@ export function syncGlobalToLocal(
   }
 
   if (rejected > 0) {
-    console.error(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
+    log.warn(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
   }
 
   // Batch producer: one embedAll() on the destination rather than an
   // embedMemory() per copied row (same batching invariant as autoShare).
   if (count > 0) {
-    void embedAll(localRoot).catch(() => {});
+    void embedAll(localRoot).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 
   return count;

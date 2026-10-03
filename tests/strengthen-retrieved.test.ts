@@ -49,10 +49,10 @@ describe('strengthenRetrieved', () => {
   it('logs one line and never throws when the store cannot be opened', () => {
     const notAStore = join(newRoot(), 'not-a-store');
     writeFileSync(notAStore, 'a plain file where the store should be');
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errors = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     expect(strengthenRetrieved(notAStore, ['any-id']).size).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);
-    expect(String(errors.mock.calls[0]![0])).toMatch(/^hippo: retrieval stats not saved \(/);
+    expect(String(errors.mock.calls[0]![0])).toMatch(/^\[hippo\] warn: retrieval stats not saved \(/);
   });
 });

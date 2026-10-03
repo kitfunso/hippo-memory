@@ -63,7 +63,7 @@ describe('H3: the sleep LLM gate', () => {
   it('an LLM failure lands in the sleep details', async () => {
     const root = newRoot();
     writeEntry(root, createMemory('the release train leaves every second thursday'));
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const fetcher = llmReturning(() => new Response('error', { status: 500 }));
 
     const result = await consolidate(root, { fetcher });

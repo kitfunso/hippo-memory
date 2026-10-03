@@ -170,7 +170,7 @@ describe('dashboard entry', () => {
   });
 
   it('E5: GET // answers 500 and the server keeps serving', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     const broken = await dashboardRequest(port, '//', `127.0.0.1:${port}`);
     expect(broken.status).toBe(500);
@@ -381,7 +381,7 @@ describe('card routes', () => {
   });
 
   it('R7: a broken tenant answers 500 and the server keeps serving', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     process.env.HIPPO_TENANT = 'sess_x';
     const broken = await dashboardRequest(port, '/api/cards', host());
     expect(broken.status).toBe(500);

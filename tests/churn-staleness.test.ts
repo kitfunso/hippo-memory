@@ -1,6 +1,6 @@
 /** FE2 staleness-from-code-churn: extraction, detection, outcome-clearing, rank, config, CLI. */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -585,28 +585,24 @@ describe('config.churnStaleness', () => {
 
   it('falls back to false and warns on a non-object churnStaleness', () => {
     fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ churnStaleness: 'yes' }));
-    const errors: string[] = [];
-    const orig = console.error;
-    console.error = (msg: string) => errors.push(msg);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       expect(loadConfig(hippoRoot).churnStaleness.enabled).toBe(false);
+      expect(stderr.mock.calls.some(([e]) => String(e).includes('"churnStaleness"'))).toBe(true);
     } finally {
-      console.error = orig;
+      stderr.mockRestore();
     }
-    expect(errors.some((e) => e.includes('"churnStaleness"'))).toBe(true);
   });
 
   it('falls back to false and warns on a non-boolean enabled', () => {
     fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ churnStaleness: { enabled: 'yes' } }));
-    const errors: string[] = [];
-    const orig = console.error;
-    console.error = (msg: string) => errors.push(msg);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       expect(loadConfig(hippoRoot).churnStaleness.enabled).toBe(false);
+      expect(stderr.mock.calls.some(([e]) => String(e).includes('"churnStaleness.enabled"'))).toBe(true);
     } finally {
-      console.error = orig;
+      stderr.mockRestore();
     }
-    expect(errors.some((e) => e.includes('"churnStaleness.enabled"'))).toBe(true);
   });
 });
 

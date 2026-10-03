@@ -36,7 +36,7 @@ describe('deliveryLedger config', () => {
     ['a string flag', { deliveryLedger: { enabled: 'true' } }],
     ['an array', { deliveryLedger: [true] }],
   ])('warns and stays off for %s', (_label, body) => {
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     writeConfig(JSON.stringify(body));
     expect(loadConfig(root).deliveryLedger).toEqual({ enabled: false });
     expect(warn).toHaveBeenCalledTimes(1);

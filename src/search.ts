@@ -939,7 +939,8 @@ export async function physicsSearch(
       }
       const [vec] = await provider.embed([query], 'query');
       queryVector = vec ?? [];
-    } catch {
+    } catch (err) {
+      log.debug(`physics search: query embed failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);
       return hybridSearch(query, entries, options);
     }
     if (queryVector.length === 0) {
@@ -956,7 +957,8 @@ export async function physicsSearch(
     } finally {
       closeHippoDb(db);
     }
-  } catch {
+  } catch (err) {
+    log.debug(`physics search: state load failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);
     return hybridSearch(query, entries, options);
   }
 

@@ -108,6 +108,7 @@ function parseLinkedMemoryIds(raw: string): string[] {
     }
     return [];
   } catch {
+    // A malformed list column reads as empty instead of failing the incident read.
     return [];
   }
 }

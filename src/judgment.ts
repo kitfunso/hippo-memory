@@ -4,6 +4,7 @@
 
 import { ConfidenceLevel, EmotionalValence } from './memory.js';
 import { fetchWithRetry } from './http-retry.js';
+import { log } from './log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';
@@ -106,7 +107,8 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
         questions: QUESTIONS,
       }),
     }, { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher });
-  } catch {
+  } catch (err) {
+    log.debug(`judge: request failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
   return res.ok ? res : null;
@@ -127,7 +129,8 @@ export async function judge(content: string, opts: JudgeOptions): Promise<Judgme
     // keyed by the question names posted above; every field read below is
     // optional-chained and range-checked before use, so a lie here returns null.
     data = await res.json() as JevResponse;
-  } catch {
+  } catch (err) {
+    log.debug(`judge: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 

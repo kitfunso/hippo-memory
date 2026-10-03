@@ -13,7 +13,7 @@ beforeEach(() => {
   // A non-empty store short-circuits initStore's legacy-markdown bootstrap scan,
   // which would otherwise try to read the blocking directory below as a .md file.
   writeEntry(root, createMemory('seed row so legacy bootstrap never rescans'));
-  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
@@ -33,8 +33,8 @@ describe('mirror write failures after COMMIT', () => {
     blockMarkdownMirror(entry.id, entry.layer);
     expect(() => writeEntry(root, entry)).not.toThrow();
     expect(readEntry(root, entry.id)?.content).toBe('mirror failure keeps the row');
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('not refreshed'));
+    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
+    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('not refreshed'));
   });
 
   it('batchWriteAndDelete and deleteEntry report their committed changes as done', () => {
@@ -42,7 +42,7 @@ describe('mirror write failures after COMMIT', () => {
     blockMarkdownMirror(entry.id, entry.layer);
     expect(() => batchWriteAndDelete(root, [entry], [])).not.toThrow();
     expect(readEntry(root, entry.id)).not.toBeNull();
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
+    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
     expect(deleteEntry(root, entry.id)).toBe(true);
     expect(readEntry(root, entry.id)).toBeNull();
   });

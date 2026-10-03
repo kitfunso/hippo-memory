@@ -176,7 +176,7 @@ function resolveTransformersPackage(): string | null {
     _require.resolve('@xenova/transformers');
     return '@xenova/transformers';
   } catch {
-    return null;
+    return null; // neither optional package is installed; callers fall back to no local embeddings
   }
 }
 
@@ -205,7 +205,8 @@ async function loadPipeline(model: string): Promise<any> {
         }
       }
       pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-    } catch {
+    } catch (err) {
+      log.debug(`transformers import failed (${pkg}): ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
 
@@ -222,7 +223,8 @@ async function loadPipeline(model: string): Promise<any> {
       const instance = await pipelineFn('feature-extraction', model, { quantized });
       _pipelineInstances.set(model, instance);
       return instance;
-    } catch {
+    } catch (err) {
+      log.debug(`embedding pipeline load failed (${model}): ${err instanceof Error ? err.message : String(err)}`);
       return null;
     } finally {
       _pipelineLoading.delete(model);
@@ -256,7 +258,8 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
     } finally {
       closeHippoDb(db);
     }
-  } catch {
+  } catch (err) {
+    log.debug(`stored embedding model unreadable: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -415,7 +418,7 @@ function parseEmbeddingIndex(raw: string): Record<string, number[]> | null {
     // SAFETY: saveEmbeddingIndex is the only writer and always writes this shape; anything that is not an object is corrupt.
     return parsed instanceof Object && !Array.isArray(parsed) ? parsed as Record<string, number[]> : null;
   } catch {
-    return null;
+    return null; // the caller quarantines the corrupt file and logs it
   }
 }
 
@@ -561,7 +564,7 @@ function warnEmbedFailureOnce(source: string, rawMessage: string): void {
   _embedFailureWarned = true;
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
   const message = redactSecretsStrict(rawMessage).replace(/\s+/g, ' ').replace(/\.+$/, '');
-  console.error(`hippo: embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
+  log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
 }
 
 /**
@@ -633,7 +636,7 @@ export async function embedMemory(
       warnEmbedFailureOnce(provider.kind, err instanceof Error ? err.message : String(err));
     }
   }).catch((err) => {
-    console.error(`hippo: skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+    log.warn(`skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
   });
 }
 

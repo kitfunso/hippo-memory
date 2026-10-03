@@ -69,6 +69,7 @@ function readJson(file: string): JsonValue | null {
     // SAFETY: JSON.parse returns a JSON value by definition.
     return JSON.parse(fs.readFileSync(file, 'utf8')) as JsonValue;
   } catch {
+    // A missing or corrupt file is the finding doctor reports, so null is the answer.
     return null;
   }
 }

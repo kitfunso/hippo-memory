@@ -19,7 +19,7 @@ beforeEach(() => {
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = KEY;
-  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
@@ -56,7 +56,7 @@ describe('embedMemory provider failure', () => {
     await write('first memory written with a bad key');
     expect(warnings()).toHaveLength(1);
     const [line] = warnings();
-    expect(line).toContain('hippo: embedding failed (openai)');
+    expect(line).toContain('[hippo] warn: embedding failed (openai)');
     expect(line).toContain('401');
     expect(line).toContain('Memories are stored without embeddings until this is fixed.');
     expect(line).not.toContain(KEY);
@@ -81,6 +81,6 @@ describe('embedMemory provider failure', () => {
     await expect(fresh.embedMemory(root, entry)).resolves.toBeUndefined();
 
     expect(warnings()).toHaveLength(1);
-    expect(warnings()[0]).toContain("hippo: embedding failed (config): Unknown embeddings.provider 'opneai'");
+    expect(warnings()[0]).toContain("[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'");
   });
 });

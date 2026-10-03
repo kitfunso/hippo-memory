@@ -73,7 +73,7 @@ describe('T3: consolidateDb lazy open', () => {
         closeHippoDb(db);
       }
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const result = await consolidate(home, { dryRun: false });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),

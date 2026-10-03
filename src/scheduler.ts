@@ -63,6 +63,7 @@ export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
       workspaces,
     };
   } catch {
+    // A missing or corrupt registry starts empty; the next registration rewrites it.
     return defaultRegistry();
   }
 }

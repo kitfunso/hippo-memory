@@ -2766,7 +2766,7 @@ function openOwnHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): Data
     try {
       cleanupArchivedMirrors(hippoRoot, db);
     } catch (cleanupErr) {
-      console.error('openHippoDb: cleanupArchivedMirrors failed (non-fatal):', cleanupErr);
+      log.error(`openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
     }
     return db;
   } catch (error) {
@@ -3032,7 +3032,7 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
     backfillFtsIndex(db);
     available = true;
   } catch (err) {
-    console.error(`hippo: full-text index unavailable (${err instanceof Error ? err.message : String(err)}); search falls back to slower LIKE matching`);
+    log.warn(`full-text index unavailable (${err instanceof Error ? err.message : String(err)}); search falls back to slower LIKE matching`);
   }
 
   // Read-first: only write when the flag actually changed, so a healthy

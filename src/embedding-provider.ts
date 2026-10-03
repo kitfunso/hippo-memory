@@ -327,6 +327,7 @@ function readEmbeddingsConfig(hippoRoot: string): EmbeddingsConfigValues {
   try {
     return loadConfig(hippoRoot).embeddings;
   } catch {
+    // An unreadable config falls back to provider defaults; loadConfig warns on a bad parse.
     return {};
   }
 }

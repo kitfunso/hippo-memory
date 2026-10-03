@@ -4,7 +4,6 @@ import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
-
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
 export type DeliverySurface = 'hook' | 'context';
@@ -348,6 +347,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (flushed) return;
       flushed = true;
       if (broken !== null) {
+        // Same pinned `[hippo] delivery ledger` hook stderr line as recall-trace.ts's write failure.
         console.error(`[hippo] delivery ledger skipped: recorder failed: ${broken}`);
         return;
       }

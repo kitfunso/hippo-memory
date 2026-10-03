@@ -5,6 +5,7 @@ import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
+import { log } from './log.js';
 
 export interface ExtractedFact {
   content: string;
@@ -163,7 +164,7 @@ export function storeExtractedFacts(
   }
 
   if (rejected > 0) {
-    console.error(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
+    log.warn(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
   }
 
   return entries;

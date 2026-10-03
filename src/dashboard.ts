@@ -19,6 +19,7 @@ import { loadEmbeddingIndex } from './embeddings.js';
 import { resolveTenantId } from './tenant.js';
 import { loadCardDetail } from './card-detail.js';
 import { isCrossSite, LOOPBACK_HOST_HEADER } from './server.js';
+import { log } from './log.js';
 
 interface DashboardData {
   memories: Array<{
@@ -216,7 +217,7 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
     res.end(content);
     return true;
   } catch {
-    return false;
+    return false; // an unreadable asset falls through to the next route, which answers 404 or the fallback page
   }
 }
 
@@ -317,13 +318,14 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): http.Ser
     try {
       handleRequest(req, res);
     } catch (err) {
-      console.error('Dashboard request failed:', err);
+      log.error(`dashboard request failed: ${err instanceof Error ? err.message : String(err)}`);
       if (res.headersSent) res.end();
       else jsonResponse(res, { error: 'Internal error' }, 500);
     }
   });
 
   server.listen(port, '127.0.0.1', () => {
+    // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
     console.log(`Hippo Dashboard running at http://localhost:${port}`);
     if (hasDistUi) console.log(`Serving React UI from ${distUiDir}`);
     console.log('Press Ctrl+C to stop.');

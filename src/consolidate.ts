@@ -45,6 +45,7 @@ import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migr
 import { derivationScope, commonDerivationScope, derivationPartitionKey } from './recall-scope.js';
 import { isQuarantineScope } from './quarantine.js';
 import { NO_MERGE_TAGS } from './shared.js';
+import { log } from './log.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -524,7 +525,7 @@ export async function consolidate(
       );
     }
     if (tracesSkippedRejected > 0) {
-      console.error(
+      log.warn(
         `consolidate: skipped ${tracesSkippedRejected} auto-promoted trace(s) whose content matches a rejected value`,
       );
     }
@@ -588,7 +589,7 @@ export async function consolidate(
     if (llmErrorsSeen.has(line)) return;
     llmErrorsSeen.add(line);
     result.details.push(line);
-    console.error(`consolidate ${phase}: ${msg}`);
+    log.warn(`consolidate ${phase}: ${msg}`);
   };
   const llmOpts = { apiKey, model: config.extraction.model, fetcher: options.fetcher };
   if (apiKey && extractionCandidates.length > 0 && !dryRun) {
@@ -938,7 +939,7 @@ export async function consolidate(
   }
 
   if (mergesSkippedRejected > 0) {
-    console.error(
+    log.warn(
       `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
     );
   }
