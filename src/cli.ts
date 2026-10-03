@@ -86,7 +86,6 @@ import {
   deleteEntry,
   loadAllEntries,
   loadSearchEntries,
-  loadRecallSearchEntries,
   loadIndex,
   saveIndex,
   loadStats,
@@ -127,16 +126,13 @@ import { readSessionScan, recordSessionDigest } from './session-digest.js';
 import { type Card, isCardStatus } from './card.js';
 import { loadCardDetail, type CardDetail } from './card-detail.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
-import { search, estimateTokens, fitBudget, hybridSearch, physicsSearch, explainMatch, textOverlap, type RerankStep, type SearchResult } from './search.js';
-import { tokenize as tokenizeQuery } from './tokenize.js';
-import { compareEntryIdentity } from './compare.js';
+import { search, estimateTokens, fitBudget, explainMatch, type SearchResult } from './search.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle, writeRecallTraceAtRoot } from './recall-trace.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from './delivery-recorder.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
 import {
-  isEmbeddingAvailable,
   embedAll,
   embedMemory,
   loadEmbeddingIndex,
@@ -146,7 +142,7 @@ import {
 import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
-import { loadConfig } from './config.js';
+import { loadConfig, type HippoConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
@@ -158,7 +154,7 @@ import {
   type TokenSurface, type TranscriptCalls,
 } from './token-ledger.js';
 import { FAILURE_LOG_RETENTION_DAYS } from './failure-log.js';
-import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, applyGoalStackBoost } from './goals.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, writeGoalRecallLog } from './goals.js';
 import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
 import { rowToGoal } from './goals.js';
 import {
@@ -193,7 +189,6 @@ import {
   autoShare,
   transferScore,
   searchBoth,
-  searchBothHybrid,
   syncGlobalToLocal,
 } from './shared.js';
 import {
@@ -285,10 +280,10 @@ import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSum
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
-import { multihopSearch } from './multihop.js';
-import { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
-import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
+import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
 import { getReranker } from './rerankers/index.js';
+import type { RerankerFn } from './rerankers/types.js';
+import { rankRecall, type RankStage, type RecallGraphHops, type RecallGraphStream, type RecallReranker, type RecallSearchOpts } from './recall-pipeline.js';
 import { JEV_DEFAULT_TOP_K } from './rerankers/jev.js';
 import { computeSalience } from './salience.js';
 import { renderAmbientSummary } from './ambient.js';
@@ -1259,10 +1254,154 @@ function cmdSupersede(
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
 }
 
+type CliFlags = Record<string, string | boolean | string[]>;
+
+/** A flag value, or the deferred error that rejects it. */
+interface ParsedFlag<T> { value?: T; fail?: () => never }
+
+/** A flag the ranking stages read, rejected where the old mid-pipeline check printed its error. */
+interface LateFlagError { stage: RankStage; fail: () => never }
+
+interface RecallLateFlags {
+  graphHops?: RecallGraphHops;
+  reranker?: RecallReranker;
+  salienceThreshold?: number;
+  outcome?: string;
+  layer?: string;
+  error?: LateFlagError;
+}
+
+type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
+
+function failWith(message: string): () => never {
+  return () => {
+    console.error(message);
+    process.exit(1);
+  };
+}
+
+function parseAsOfFlag(flags: CliFlags): string | undefined {
+  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
+  if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
+    console.error(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    process.exit(1);
+  }
+  return asOf;
+}
+
+/** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns it off. */
+function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
+  return {
+    usePhysics: Boolean(flags['physics']) || (!flags['classic'] && config.physics.enabled !== false),
+    physicsConfig: config.physics,
+    mmr: !flags['no-mmr'] && config.mmr.enabled,
+    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : config.mmr.lambda,
+    localBump: flags['equal-sources']
+      ? 1.0
+      : flags['local-bump'] !== undefined ? parseFloat(String(flags['local-bump'])) : config.search.localBump,
+  };
+}
+
+/** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local store only. */
+function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
+  let hops: number | undefined;
+  if (flags['graph-hops'] !== undefined) {
+    if (typeof flags['graph-hops'] === 'boolean') failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
+    const h = Number(flags['graph-hops']);
+    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
+      failWith(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`)();
+    }
+    hops = h;
+  }
+  let seeds: number | undefined;
+  if (flags['graph-seeds'] !== undefined) {
+    if (typeof flags['graph-seeds'] === 'boolean') failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
+    const s = Number(flags['graph-seeds']);
+    if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`)();
+    seeds = s;
+  }
+  return { hops, seeds };
+}
+
+function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
+  if (flags['hops'] === undefined) return {};
+  // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
+  if (typeof flags['hops'] === 'boolean') return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
+  const hops = Number(flags['hops']);
+  if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
+    return { fail: failWith(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`) };
+  }
+  const raw = flags['max-neighbors'];
+  if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
+  if (typeof raw === 'boolean') return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
+  const maxNeighbors = Number(raw);
+  if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
+    return { fail: failWith(`Invalid --max-neighbors: "${String(raw)}". Must be an integer 1..200.`) };
+  }
+  return { value: { hops, maxNeighbors } };
+}
+
+function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
+  const name = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
+  let fn: RerankerFn | null;
+  try {
+    fn = getReranker(name);
+  } catch (err) {
+    // An unknown name throws to the top-level handler, as it did when the lookup sat mid-pipeline.
+    return { fail: () => { throw err; } };
+  }
+  if (!fn) return {};
+  const topK = flags['reranker-top-k'] !== undefined
+    ? parseInt(String(flags['reranker-top-k']), 10)
+    : name === 'jev' ? JEV_DEFAULT_TOP_K : 50;
+  return { value: { fn, topK } };
+}
+
+function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
+  const raw = flags['salience-threshold'];
+  if (raw === undefined) return {};
+  const threshold = Number(raw);
+  if (!Number.isFinite(threshold) || threshold <= 0) {
+    return { fail: failWith(`Invalid --salience-threshold: "${String(raw)}". Must be a positive number.`) };
+  }
+  return { value: threshold };
+}
+
+function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
+  const value = flags[name] !== undefined ? String(flags[name]).trim() : '';
+  if (!value) return {};
+  if (!valid.includes(value)) return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
+  return { value };
+}
+
+/** Parses every flag a ranking stage reads; the first invalid one in pipeline order becomes `error`. */
+function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
+  const graphHops = parseHopsFlags(flags);
+  const reranker = parseRerankerFlag(flags);
+  const salience = parseSalienceFlag(flags);
+  const outcome = parseChoiceFlag(flags, 'outcome', ['success', 'failure', 'partial']);
+  const layer = parseChoiceFlag(flags, 'layer', Object.values(Layer));
+  const staged: ReadonlyArray<readonly [RankStage, (() => never) | undefined]> = [
+    ['expand', graphHops.fail], ['rerank', reranker.fail], ['salience', salience.fail], ['outcome', outcome.fail], ['layer', layer.fail],
+  ];
+  let error: LateFlagError | undefined;
+  for (const [stage, fail] of staged) {
+    if (fail) { error = { stage, fail }; break; }
+  }
+  return {
+    graphHops: graphHops.value,
+    reranker: reranker.value,
+    salienceThreshold: salience.value,
+    outcome: outcome.value,
+    layer: layer.value,
+    error,
+  };
+}
+
 async function cmdRecall(
   hippoRoot: string,
   query: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
 
@@ -1270,168 +1409,27 @@ async function cmdRecall(
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
   const showWhy = Boolean(flags['why']);
-  const forcePhysics = Boolean(flags['physics']);
-  const forceClassic = Boolean(flags['classic']);
   const includeSuperseded = Boolean(flags['include-superseded']);
-  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
-  if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
-    console.error(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
-  }
+  const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
   const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
-
-  // A5 stub auth: resolve the active tenant once and thread it through every
-  // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
+  // Cross-tenant rows must never surface, so the tenant is resolved once and threaded through every load.
   const tenantId = resolveTenantId({});
-
-  // v1.25.0 (v39 follow-up #1): the direct CLI recall path applies the recall
-  // scope rule. SQL half via loadRecallSearchEntries in 'additive' mode —
-  // default-deny (`unknown:legacy` quarantine) always, and an explicit
-  // `--scope X` UNLOCKS envelope scope X on top of the default-admitted set
-  // (the CLI flag is historically a tag-boost hint over scope-NULL rows, so
-  // api.recall's narrowing exact-match would empty every tag-scoped recall —
-  // see passesCliRecallScopeFilter in recall-scope.ts). The regex-only
-  // `<source>:private:*` half is the JS post-filter below. Hoisted here
-  // (it previously lived with the boost flags): recallExplicitScope is the
-  // FILTER input; recallActiveScope (which falls back to detectScope()) stays
-  // boost-only — auto-detection must never become a filter input or
-  // detected-project recalls would change shape.
+  // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
   const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const requestedScopeForFilter = recallExplicitScope || undefined;
-
-  const loadSuperseded = includeSuperseded || Boolean(asOf);
-  let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded);
-  let globalEntries = globalRoot !== hippoRoot && isInitialized(globalRoot)
-    ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded)
-    : [];
-
-  // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
-  // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
-  // filter drops (pre-rank AND post-rank); its meaning is unchanged by C5.
-  //
-  // C5 (2026-08-24): search-engine internal drops (scored-to-zero rows that
-  // hybridSearch/physicsSearch returns fewer of than they were given) now
-  // count toward droppedByBudget, not "not counted at all" as the old v1
-  // convention had it. That old convention is exactly why the `Cutoff:` line
-  // never printed: cmdRecall measured droppedByBudget from `results.length -
-  // limit` (cli.ts ~1547) AFTER the search call, but `results` had already
-  // been ranked and truncated by the search engine to a handful of rows, so
-  // `limit < results.length` was almost always false and the counter stayed
-  // 0 while hundreds of candidates silently vanished (see the plan's measured
-  // table: 397 of 400 candidates gone, every counter reading 0). droppedByBudget
-  // is now derived as "everything not attributed to a named pre-rank filter",
-  // computed after the final `--limit` slice — see the definition near
-  // line ~1545 for the exact formula and the double-count argument.
-  // totalCandidates = post-SQL-predicate count (api.recall parity: measured
-  // after loadRecallSearchEntries, before the JS scope filter). NOTE the
-  // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
-  // v1.25.0 pre-window ':private:' exclusion) are pre-candidate and are NOT
-  // counted as drops; the JS half below normally drops 0 and exists as
-  // defense-in-depth (LIKE/regex divergence, exact-mode mismatch).
-  const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
-  let droppedPreRankCountCmd = 0;
-  // Graph expansion adds candidates AFTER totalCandidatesCountCmd is taken,
-  // so they are folded back in before the budget residual is derived.
-  let graphAddedCountCmd = 0;
-
-  // v1.25.0: JS half of the recall scope rule (private-scope regex deny with
-  // explicit-request unlock), via the canonical helper — do not inline a
-  // fourth copy of this predicate.
-  const passesRecallScope = (e: MemoryEntry) =>
-    api.passesCliRecallScopeFilter(e.scope ?? null, requestedScopeForFilter);
-  const beforeScopeFilterCmd = localEntries.length + globalEntries.length;
-  localEntries = localEntries.filter(passesRecallScope);
-  globalEntries = globalEntries.filter(passesRecallScope);
-  droppedPreRankCountCmd += beforeScopeFilterCmd - (localEntries.length + globalEntries.length);
-
-  // Bi-temporal filtering for physics path (hybridSearch handles it internally)
-  if (asOf) {
-    const filterAsOf = (entries: MemoryEntry[]) => {
-      const asOfDate = new Date(asOf);
-      const successorValidFrom = new Map<string, string>();
-      for (const e of entries) {
-        if (e.superseded_by) {
-          const successor = entries.find(s => s.id === e.superseded_by);
-          if (successor) successorValidFrom.set(e.id, successor.valid_from);
-        }
-      }
-      return entries.filter(e => {
-        if (new Date(e.valid_from) > asOfDate) return false;
-        if (!e.superseded_by) return true;
-        const succVf = successorValidFrom.get(e.id);
-        return succVf ? new Date(succVf) > asOfDate : true;
-      });
-    };
-    const beforeAsOf = localEntries.length + globalEntries.length;
-    localEntries = filterAsOf(localEntries);
-    globalEntries = filterAsOf(globalEntries);
-    droppedPreRankCountCmd += beforeAsOf - (localEntries.length + globalEntries.length);
-  } else if (!includeSuperseded) {
-    const beforeSupersededDrop = localEntries.length + globalEntries.length;
-    localEntries = localEntries.filter(e => !e.superseded_by);
-    globalEntries = globalEntries.filter(e => !e.superseded_by);
-    droppedPreRankCountCmd += beforeSupersededDrop - (localEntries.length + globalEntries.length);
-  }
-
-  const hasGlobal = globalEntries.length > 0;
-
-  // Determine search mode: --physics forces physics, --classic forces BM25+cosine,
-  // default uses physics if config.physics.enabled is not false
   const config = loadConfig(hippoRoot);
-  const usePhysics = forcePhysics
-    || (!forceClassic && config.physics.enabled !== false);
-
-  const noMmr = Boolean(flags['no-mmr']);
-  const mmrLambda = flags['mmr-lambda'] !== undefined
-    ? parseFloat(String(flags['mmr-lambda']))
-    : config.mmr.lambda;
-  const mmrEnabled = !noMmr && config.mmr.enabled;
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : config.search.localBump;
   const minResults = flags['min-results'] !== undefined
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
-  // recallExplicitScope hoisted above the candidate loads (v1.25.0) — see the
-  // scope-filter block near the top of cmdRecall.
   const recallActiveScope = recallExplicitScope || detectScope();
-
-  const useMultihop = flags['multihop'] === true || config.multihop.enabled;
-
-  // L1 — graph-retrieval stream. `--graph-stream` forces rrf fusion + the graph stream
-  // (see src/graph-stream.ts). NOTE: it implies `scoring:'rrf'` (production default is
-  // 'blend'), so the flag bundles two behaviours by design. CLI surface is local-store
-  // only for now; the library API supports a globalRoot for callers who need it.
-  const useGraphStream = flags['graph-stream'] === true;
-  let graphStreamHops: number | undefined;
-  if (useGraphStream && flags['graph-hops'] !== undefined) {
-    if (typeof flags['graph-hops'] === 'boolean') {
-      console.error(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`);
-      process.exit(1);
-    }
-    const h = Number(flags['graph-hops']);
-    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
-      console.error(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`);
-      process.exit(1);
-    }
-    graphStreamHops = h;
-  }
-  let graphStreamSeeds: number | undefined;
-  if (useGraphStream && flags['graph-seeds'] !== undefined) {
-    if (typeof flags['graph-seeds'] === 'boolean') {
-      console.error('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).');
-      process.exit(1);
-    }
-    const s = Number(flags['graph-seeds']);
-    if (!Number.isInteger(s) || s < 1) {
-      console.error(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`);
-      process.exit(1);
-    }
-    graphStreamSeeds = s;
-  }
+  const graphStream = flags['graph-stream'] === true ? parseGraphStreamFlags(flags) : undefined;
+  const late = parseRecallLateFlags(flags);
+  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
 
   // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
   const localIndex = loadIndex(hippoRoot);
@@ -1440,505 +1438,43 @@ async function cmdRecall(
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
-  let results;
-  if (useGraphStream) {
-    if (!isEmbeddingAvailable()) {
-      // The graph stream fuses inside the rrf path, which only runs with embeddings; without
-      // them hybridSearch falls back to BM25-only and the stream is inert. Say so plainly
-      // rather than silently no-op.
-      console.error('[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run `hippo embed` first.');
-    }
-    if (hasGlobal) {
-      console.error('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
-    }
-    // The stream anchors on the top-`seedCount` lexical hits and re-ranks the rank>seedCount
-    // tail; on a pool with <= seedCount candidates EVERY candidate is a seed and the stream
-    // is inert (it degrades to the 2-list fusion). Tune the anchor count with --graph-seeds.
-    results = await hybridSearch(query, localEntries, {
-      budget: entryBudget, cost: printCost, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
-      includeSuperseded, asOf,
-      scoring: 'rrf',
-      graphStream: { weight: DEFAULT_GRAPH_STREAM_WEIGHT, tenantId, hops: graphStreamHops, seedCount: graphStreamSeeds },
-    });
-  } else if (useMultihop) {
-    // Unlike searchBothHybrid below, multihop ranks one pooled list, so a shared memory's two copies both compete.
-    const allEntries = api.oneCopyPerMemory(localEntries, globalEntries, evalNow()).flat();
-    results = multihopSearch(query, allEntries, {
-      budget: entryBudget,
-      cost: printCost,
-      hippoRoot,
-      minResults,
-      includeSuperseded,
-      asOf,
-    });
-  } else if (usePhysics && !hasGlobal) {
-    results = await physicsSearch(query, localEntries, {
-      budget: entryBudget,
-      cost: printCost,
-      hippoRoot,
-      physicsConfig: config.physics,
-      minResults,
-      scope: recallActiveScope,
-      includeSuperseded,
-      asOf,
-    });
-  } else if (hasGlobal) {
-    // Use searchBothHybrid for merged results with embedding support.
-    // recallScope (v1.25.0): searchBothHybrid re-loads candidates internally,
-    // so the scope rule must be plumbed in — the filtered localEntries /
-    // globalEntries above are NOT what this path ranks.
-    results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget: entryBudget, cost: printCost, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
-      includeSuperseded, asOf,
-      recallScope: recallExplicitScope
-        ? { requested: recallExplicitScope, additive: true }
-        : {},
-    });
-  } else {
-    results = await hybridSearch(query, localEntries, {
-      budget: entryBudget, cost: printCost, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
-      includeSuperseded, asOf,
-    });
-  }
-
-  // E3.2 multi-hop graph recall. After the base branch produces `results`, optionally
-  // augment with memories reached by walking the entities/relations graph `--hops N` out
-  // from the lexical seeds. Runs BEFORE the opt-in re-rankers below so graph-reached
-  // results are first-class candidates in any downstream re-ranking / --why. Default OFF
-  // (absent or 0 = no-op). Reached memories are loaded directly by id (NOT via the
-  // lexical candidate set, which would exclude the orthogonal neighbours graph recall
-  // exists to surface); the engine re-applies the same superseded/asOf hard filters.
-  if (flags['hops'] !== undefined) {
-    // Reject a value-less `--hops` (parseArgs stores boolean true): Number(true) === 1
-    // would otherwise silently run a 1-hop expansion when the user fat-fingered the value.
-    if (typeof flags['hops'] === 'boolean') {
-      console.error(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`);
-      process.exit(1);
-    }
-    const hops = Number(flags['hops']);
-    if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
-      console.error(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`);
-      process.exit(1);
-    }
-    let maxNeighbors = DEFAULT_MAX_NEIGHBORS;
-    if (flags['max-neighbors'] !== undefined) {
-      if (typeof flags['max-neighbors'] === 'boolean') {
-        console.error(`--max-neighbors requires an integer value 1..200.`);
-        process.exit(1);
-      }
-      maxNeighbors = Number(flags['max-neighbors']);
-      if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
-        console.error(`Invalid --max-neighbors: "${String(flags['max-neighbors'])}". Must be an integer 1..200.`);
-        process.exit(1);
-      }
-    }
-    if (hops > 0) {
-      // graphExpandRecall can SURFACE rows that were never in the lexical
-      // candidate pool (a graph neighbour reached by entity edge, not by
-      // query match), and totalCandidatesCountCmd was snapshotted before the
-      // search. Without this the derived budget count goes negative, clamps
-      // to 0, and the accounting silently breaks: 1 candidate, 2 returned,
-      // 0 drops. Found independently by two reviewers. Count the additions
-      // so the invariant holds on graph-expanded recalls too.
-      // GROSS, not net. graphExpandRecall both adds neighbours AND evicts weak
-      // base rows in one call (graph-recall.ts:285), so a net delta of 0 hides
-      // 3 added + 3 evicted: the additions escape the candidate total and the
-      // evictions escape the drop count, and the Cutoff line goes silent again.
-      // Compare ID sets so both directions are counted.
-      const beforeGraphIds = new Set(results.map((r) => r.entry.id));
-      results = graphExpandRecall(results, {
-        hops,
-        maxNeighbors,
-        hippoRoot,
-        globalRoot: isInitialized(globalRoot) && globalRoot !== hippoRoot ? globalRoot : undefined,
-        tenantId,
-        includeSuperseded,
-        asOf,
-        budget: entryBudget,
-        cost: printCost,
-        minResults: minResults ?? 1,
-        recallScope: recallExplicitScope
-          ? { requested: recallExplicitScope, additive: true }
-          : {},
-      });
-      // Rows the graph surfaced that the lexical pool never held.
-      for (const r of results) {
-        if (!beforeGraphIds.has(r.entry.id)) graphAddedCountCmd++;
-      }
-    }
-  }
-
-  // ACC EVC-adaptive recall (RESEARCH.md §PFC.ACC). When the initial top-K is
-  // dominated by lexically similar but distinct memories (high pairwise token
-  // overlap = same topic, different facts = conflict), allocate extra retrieval
-  // effort: take a wider candidate pool, drop low-relevance distractors, and
-  // re-rank by recency to surface the most up-to-date item from the cluster.
-  // Default off; opt-in via --evc-adaptive.
-  if (flags['evc-adaptive'] && results.length >= 2) {
-    const sliceSize = Math.min(3, results.length);
-    const slice = results.slice(0, sliceSize);
-    let pairs = 0;
-    let overlapSum = 0;
-    for (let i = 0; i < slice.length; i++) {
-      for (let j = i + 1; j < slice.length; j++) {
-        overlapSum += textOverlap(slice[i].entry.content, slice[j].entry.content);
-        pairs++;
-      }
-    }
-    const avgOverlap = pairs > 0 ? overlapSum / pairs : 0;
-    if (avgOverlap >= 0.4) {
-      const poolSize = Math.min(results.length, Math.max(sliceSize * 3, 9));
-      const pool = results.slice(0, poolSize);
-      const tail = results.slice(poolSize);
-      const maxScore = pool.reduce((m, r) => Math.max(m, r.score), 0);
-      const scoreFloor = maxScore * 0.5;
-      // On-topic test: score floor OR query coverage. The score floor alone
-      // proxied topicality via ranking score, but the disambiguating update
-      // this mechanic exists to surface is BY NATURE phrased differently
-      // (weaker lexical/embedding overlap), so under the #t2 embed-text
-      // format (docs/plans/2026-07-09-recall-determinism.md T1, which
-      // de-compressed similarity gaps) it fell below any sane floor
-      // (measured 0.33x max on the acc-evc micro fixture). Query coverage —
-      // the fraction of query tokens present in the candidate — is the
-      // mechanic's own definition of "same topic, different fact" applied
-      // to the query, and is score-scale-independent. Principled EVC
-      // calibration remains roadmapped as B1 depth.
-      const queryTokens = new Set(tokenizeQuery(query));
-      const onTopic: typeof pool = [];
-      const offTopic: typeof pool = [];
-      for (const r of pool) {
-        let hits = 0;
-        if (queryTokens.size > 0) {
-          const candTokens = new Set(tokenizeQuery(r.entry.content));
-          for (const t of queryTokens) if (candTokens.has(t)) hits++;
-        }
-        const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;
-        (r.score >= scoreFloor || queryCoverage >= 0.6 ? onTopic : offTopic).push(r);
-      }
-      // Recency is the true primary key (unchanged) — that's the whole
-      // point of --evc-adaptive. compareEntryIdentity is only a TAIL for
-      // entries created at the exact same timestamp, which previously fell
-      // to array/scan order (T2, deterministic tie keys).
-      onTopic.sort((a, b) => {
-        const ta = new Date(a.entry.created).getTime();
-        const tb = new Date(b.entry.created).getTime();
-        return tb !== ta ? tb - ta : compareEntryIdentity(a.entry, b.entry);
-      });
-      results = [...onTopic, ...offTopic, ...tail];
-    }
-  }
-
-  // vlPFC interference filter (RESEARCH.md §PFC.vlPFC). Suppress task-irrelevant
-  // memories using *recorded* supersession + conflict structure only. Default
-  // off; opt-in via --filter-conflicts. Two effects, both surgical:
-  //   1. Drop entries with `superseded_by` set. (No-op under default recall,
-  //      which already filters them; matters when `--include-superseded` was
-  //      passed. The flag re-asserts the gate.)
-  //   2. Apply a 0.3x score multiplier to entries whose `conflicts_with` list
-  //      references another entry that ALSO appears in the result set. The
-  //      multiplier is conservative — we never delete on conflict, only
-  //      down-rank, so the user can still surface the loser via --include-*.
-  // We never infer conflicts from lexical overlap. The v1 salience gate did
-  // that and destroyed LoCoMo (0.28 → 0.02). Recorded structure only.
-  if (flags['filter-conflicts']) {
-    const beforeFilterConflicts = results.length;
-    results = results.filter((r) => !r.entry.superseded_by);
-    droppedPreRankCountCmd += beforeFilterConflicts - results.length;
-    const presentIds = new Set(results.map((r) => r.entry.id));
-    results = results.map((r) => {
-      const peers = r.entry.conflicts_with || [];
-      const hasPeerInResults = peers.some((peerId) => presentIds.has(peerId));
-      if (!hasPeerInResults) return r;
-      const next = { ...r, score: r.score * 0.3 };
-      // A7 recall-trace: interference (vlPFC) down-rank. Only when --why.
-      if (showWhy) {
-        next.rerankTrace = [
-          ...(r.rerankTrace ?? []),
-          { stage: 'interference', multiplier: 0.3, scoreBefore: r.score, scoreAfter: next.score },
-        ];
-      }
-      return next;
-    });
-    // T2 note: PLAIN stable score sort on purpose (here and in the rerank
-    // blocks below) -- these are RE-SORTS of an already deterministically-
-    // ordered ranking, so sort stability inherits the upstream content-tail
-    // determinism, and ties preserve the prior rank rather than reordering
-    // by content (a no-signal boost must not shuffle its input).
-    results.sort((a, b) => b.score - a.score);
-  }
-
-  // vmPFC continuous value attribution (RESEARCH.md §PFC.vmPFC). Continuous
-  // value scoring per memory based on cumulative outcome attribution. Memories
-  // with positive cumulative outcomes are boosted; those with negative outcomes
-  // are demoted. The multiplier is a tanh-shaped function clamped to [0.7, 1.3]
-  // — wider than the always-on outcomeBoost (which clamps [0.85, 1.15]) so this
-  // flag has additional decisive effect when value attribution should drive
-  // ranking. Default off; opt-in via --value-aware. Reuses outcome_positive /
-  // outcome_negative columns; no schema change.
-  if (flags['value-aware'] && results.length >= 1) {
-    results = results.map((r) => {
-      const pos = r.entry.outcome_positive ?? 0;
-      const neg = r.entry.outcome_negative ?? 0;
-      if (pos === 0 && neg === 0) return r;
-      const raw = 1 + 0.3 * Math.tanh(pos - neg);
-      const valueMult = Math.max(0.7, Math.min(1.3, raw));
-      const next = { ...r, score: r.score * valueMult };
-      // A7 recall-trace: vmPFC continuous value attribution. Only when --why.
-      if (showWhy) {
-        next.rerankTrace = [
-          ...(r.rerankTrace ?? []),
-          { stage: 'value', multiplier: valueMult, scoreBefore: r.score, scoreAfter: next.score },
-        ];
-      }
-      return next;
-    });
-    results.sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // OFC option-value re-ranker MVP (RESEARCH.md §PFC.OFC). Combine relevance,
-  // strength, and integration cost into a single utility score and re-sort.
-  // OFC neurons encode a "common currency" across heterogeneous attributes
-  // (Rangel et al., 2008); this is the simplest demonstration of that mechanism.
-  // Default off; opt-in via --rerank-utility.
-  //
-  //   utility = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
-  //   cost_factor = min(0.3, tokens / 10000)
-  //
-  // The full OFC spec (option_valuation table in RESEARCH.md) decomposes value
-  // into reward / cost / risk / confidence components. The MVP collapses these
-  // to: score (relevance proxy), strength (persistence proxy), tokens (cost).
-  // CAVEAT: cost penalty is monotone with token count; LoCoMo's harder QAs
-  // often live in long evidence-rich memories. Default off — needs LoCoMo
-  // eval before enabling broadly.
-  if (flags['rerank-utility']) {
-    results = results
-      .map((r) => {
-        const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
-        const costFactor = Math.min(0.3, (r.tokens || 0) / 10000);
-        const utilityMult = (0.5 + 0.5 * strength) * (1 - costFactor);
-        const utility = r.score * utilityMult;
-        const next = { ...r, score: utility };
-        // A7 recall-trace: OFC option-value re-rank. Only when --why.
-        if (showWhy) {
-          next.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility },
-          ];
-        }
-        return next;
-      })
-      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // F6 reranker pass (docs/plans/2026-05-10-f6-reranker-hardening.md). When
-  // --reranker <name> is set, look up the reranker fn from the registry
-  // (src/rerankers/index.ts) and apply it to the top-K candidates. The
-  // reranker reorders (and may rescale) results; the post-budget set is
-  // returned. Default off; opt-in via --reranker <cross-encoder|jev|llm>. The
-  // structurally similar --rerank-utility block above is the OFC MVP and is
-  // independent — both can run in the same recall, with --rerank-utility
-  // applied first. Available rerankers: cross-encoder, jev, llm (see
-  // src/rerankers/index.ts). The Track 1 `features` reranker was removed in
-  // v1.9.1 per the F10 HARD RETRACTION; it is no longer a valid value.
-  const rerankerName = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
-  if (rerankerName) {
-    const rerankerFn = getReranker(rerankerName);
-    if (rerankerFn) {
-      const topK = flags['reranker-top-k'] !== undefined
-        ? parseInt(String(flags['reranker-top-k']), 10)
-        : rerankerName === 'jev' ? JEV_DEFAULT_TOP_K : 50;
-      const head = results.slice(0, topK);
-      const tail = results.slice(topK);
-      const rerankInput = head.map((r, i) => ({ ...r, preRerankRank: i + 1 }));
-      const reranked = await rerankerFn(query, rerankInput, { topK });
-      // Copy rerankScore into score so downstream blocks (--goal, goal-stack,
-      // salience) that sort by `r.score` honor the reranker's order rather
-      // than unwinding it. Original score is preserved on rerankScore's
-      // input, but downstream sorters key on `score`.
-      const withPostRank = reranked.map((r, i) => {
-        const next = {
-          ...r,
-          score: r.rerankScore,
-          postRerankRank: i + 1,
-        };
-        // A7 recall-trace: F6 reranker pass (reorder + rescale; not a scalar
-        // multiply, so no multiplier field). Only when --why.
-        if (showWhy) {
-          next.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
-          ];
-        }
-        return next;
-      });
-      results = [...withPostRank, ...tail];
-    }
-  }
-
-  // dlPFC goal-conditioned recall MVP (RESEARCH.md §PFC.dlPFC). When --goal
-  // <tag> is set, memories whose `tags` array contains the goal tag receive
-  // a 1.5x score boost and results are re-sorted. The full dlPFC spec
-  // (goal_stack + retrieval_policy tables) maintains a hierarchical task
-  // stack with weighted retrieval policies; this MVP collapses that to a
-  // single-tag boost — the smallest demonstrable goal-conditioning signal.
-  // Default off; opt-in via --goal <tag>. No schema change.
-  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
-  if (goalTag) {
-    results = results
-      .map((r) => {
-        if (!r.entry.tags?.includes(goalTag)) return r;
-        const boosted = { ...r, score: r.score * 1.5 };
-        // A7 recall-trace: the explicit `--goal <tag>` boost is a public CLI
-        // re-ranker (score *= 1.5) and is mutually exclusive with the session
-        // goal-stack boost below, so it must record its OWN step or `--why
-        // --goal` produces no ranking line (codex review). Stage `goal`
-        // (explicit flag) is distinct from `goal-boost` (session stack).
-        if (showWhy) {
-          boosted.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'goal', multiplier: 1.5, scoreBefore: r.score, scoreAfter: r.score * 1.5, note: `--goal ${goalTag}` },
-          ];
-        }
-        return boosted;
-      })
-      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // dlPFC depth (B3, v0.38; lifted v1.7.4 into applyGoalStackBoost). When
-  // HIPPO_SESSION_ID is set (env or --session-id flag) and the
-  // (tenant, session) has active goals, the helper boosts memories whose tags
-  // overlap any active goal's name and logs (memory, goal) pairs into
-  // goal_recall_log. Runs AFTER the explicit `--goal <tag>` block so an
-  // explicit flag always wins (gated on `goalTag === ''`).
-  const sessionId = (
-    flags['session-id'] !== undefined
-      ? String(flags['session-id'])
-      : process.env.HIPPO_SESSION_ID ?? ''
-  ).trim();
-  if (sessionId && goalTag === '') {
+  const rank = await rankRecall(
+    { hippoRoot, globalRoot: globalRoot !== hippoRoot && globalOn ? globalRoot : undefined, tenantId, note: (line) => console.error(line) },
+    {
+      query, budget: entryBudget, cost: printCost, limit, why: showWhy, includeSuperseded, asOf,
+      explicitScope: recallExplicitScope, activeScope: recallActiveScope,
+      search: { ...engineFlags(flags, config), multihop: flags['multihop'] === true || config.multihop.enabled, graphStream, minResults, explain: false },
+      graphHops: late.graphHops,
+      evcAdaptive: Boolean(flags['evc-adaptive']),
+      filterConflicts: Boolean(flags['filter-conflicts']),
+      valueAware: Boolean(flags['value-aware']),
+      rerankUtility: Boolean(flags['rerank-utility']),
+      reranker: late.reranker,
+      goalTag,
+      sessionId,
+      salienceThreshold: late.salienceThreshold,
+      outcome: late.outcome,
+      layer: late.layer,
+      haltBefore: late.error?.stage,
+    },
+  );
+  if (rank.goalRecallLog.length > 0) {
     const dbForGoals = openHippoDb(hippoRoot);
-    // A7 recall-trace: goal-boost is the shared helper, not an inline map. It
-    // writes its steps into this SEPARATE accumulator (keyed by entry id), NOT
-    // onto the row (the helper strips internal markers on re-spread). Only
-    // allocated under --why.
-    const goalBoostTrace = showWhy ? new Map<string, RerankStep>() : undefined;
     try {
-      results = applyGoalStackBoost(dbForGoals, results, {
-        sessionId,
-        tenantId,
-        limit,
-        ...(goalBoostTrace ? { trace: goalBoostTrace } : {}),
-      });
+      writeGoalRecallLog(dbForGoals, rank.goalRecallLog);
     } finally {
       closeHippoDb(dbForGoals);
     }
-    // Merge the accumulated goal-boost steps onto the matching SearchResult.
-    if (goalBoostTrace && goalBoostTrace.size > 0) {
-      results = results.map((r) => {
-        const step = goalBoostTrace.get(r.entry.id);
-        if (!step) return r;
-        return { ...r, rerankTrace: [...(r.rerankTrace ?? []), step] };
-      });
-    }
   }
-
-  // Pineal salience MVP (RESEARCH.md §"AI Pineal Gland — Intuition and Awareness
-  // Module"). When --salience-threshold T is set (T > 0), memories whose
-  // retrieval_count is below T are downweighted: score *= max(0.5, count / T).
-  // At or above T, no change. This makes salience emerge from USE — high-recall
-  // memories earn full ranking weight, low-recall memories are softly demoted.
-  //
-  // CRITICAL HISTORY: The v1 salience gate (60% lexical-overlap gate at memory
-  // CREATION time) destroyed LoCoMo recall (0.28 -> 0.02) by dropping same-
-  // session relevant turns at intake. See MEMORY.md "Hippo salience gate
-  // destroys benchmark recall". This v2 is the inverse:
-  //   - retrieval-side only (no creation-time gating)
-  //   - retrieval_count signal only (no lexical overlap, no novelty heuristic)
-  //   - default OFF, opt-in via the flag (no behaviour change without it)
-  //   - 0.5 floor so non-salient entries stay reachable, never dropped
-  // Reuses the existing retrieval_count column; no schema change.
-  const salienceThresholdRaw = flags['salience-threshold'];
-  if (salienceThresholdRaw !== undefined) {
-    const T = Number(salienceThresholdRaw);
-    if (!Number.isFinite(T) || T <= 0) {
-      console.error(
-        `Invalid --salience-threshold: "${salienceThresholdRaw}". Must be a positive number.`,
-      );
-      process.exit(1);
-    }
-    results = results
-      .map((r) => {
-        const count = r.entry.retrieval_count ?? 0;
-        if (count >= T) return r;
-        const mult = Math.max(0.5, count / T);
-        const next = { ...r, score: r.score * mult };
-        // A7 recall-trace: pineal salience (retrieval_count) down-weight. The
-        // stage names the ACTUAL transform (retrieval_count, not goal-stack).
-        // Only when --why.
-        if (showWhy) {
-          next.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'retrieval-count-downweight', multiplier: mult, scoreBefore: r.score, scoreAfter: next.score },
-          ];
-        }
-        return next;
-      })
-      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // --outcome filter: drop trace entries whose trace_outcome !== target.
-  // Non-trace entries pass through unaffected (traces are the only layer with
-  // a meaningful outcome; filtering non-traces by outcome would be incoherent).
-  const outcomeFilter = flags['outcome'] !== undefined ? String(flags['outcome']).trim() : '';
-  if (outcomeFilter) {
-    const validOutcomes = ['success', 'failure', 'partial'];
-    if (!validOutcomes.includes(outcomeFilter)) {
-      console.error(`Invalid --outcome: "${outcomeFilter}". Must be one of: ${validOutcomes.join(', ')}.`);
-      process.exit(1);
-    }
-    const beforeOutcomeFilter = results.length;
-    results = results.filter((r) => {
-      if (r.entry.layer !== Layer.Trace) return true;
-      return r.entry.trace_outcome === outcomeFilter;
-    });
-    droppedPreRankCountCmd += beforeOutcomeFilter - results.length;
-  }
-
-  // --layer filter: strict, drops entries whose layer does not match.
-  const layerFilter = flags['layer'] !== undefined ? String(flags['layer']).trim() : '';
-  if (layerFilter) {
-    const validLayers = Object.values(Layer) as string[];
-    if (!validLayers.includes(layerFilter)) {
-      console.error(`Invalid --layer: "${layerFilter}". Must be one of: ${validLayers.join(', ')}.`);
-      process.exit(1);
-    }
-    const beforeLayerFilter = results.length;
-    results = results.filter((r) => r.entry.layer === layerFilter);
-    droppedPreRankCountCmd += beforeLayerFilter - results.length;
-  }
-
-  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter. Apply the final
-  // `--limit` slice first, then derive the count ARITHMETICALLY as
-  // "everything lost that droppedPreRank did not already claim":
-  //
-  //   droppedByBudget = totalCandidates - droppedPreRank - returned
-  //
-  // This is the invariant the plan requires (totalCandidates == droppedPreRank
-  // + droppedByBudget + returned) restated as an assignment, so it holds by
-  // construction rather than by two counters happening to agree. It also
-  // cannot double-count the post-search droppedPreRank sites (--filter-
-  // conflicts, --outcome, --layer, ~1270/1528/1541): those are subtracted
-  // once here, not re-counted, because this line does not re-walk any filter
-  // — it only compares the two totals already tracked above. Everything left
-  // over — search-engine internal rank-step drops AND the `--limit` slice
-  // itself — lands in droppedByBudget, per the C5 accounting change in the
-  // comment near line ~976. Clamped at 0 as a defensive floor: if a future
-  // pipeline change ever returns MORE rows than totalCandidates minus
-  // droppedPreRank (should not happen), report "nothing dropped" rather than
-  // a negative count.
-  if (limit < results.length) {
-    results = results.slice(0, limit);
-  }
+  late.error?.fail();
+  const {
+    localEntries,
+    globalEntries,
+    totalCandidates: totalCandidatesCountCmd,
+    droppedPreRank: droppedPreRankCountCmd,
+    graphAdded: graphAddedCountCmd,
+  } = rank;
+  let results = rank.results;
 
   // Continuity assembly (--continuity). Lives BEFORE the zero-result branch
   // so a no-match query with active continuity state still returns a useful
@@ -2260,140 +1796,62 @@ async function cmdRecall(
   emit(recallText);
 }
 
+/** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
+function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
+  const probe = [
+    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
+    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
+  ];
+  // Window-capped, so the count is a floor on large stores; fine for a "why is my row missing" hint.
+  const hidden = probe.filter((e) => !api.passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
+  if (hidden > 0) {
+    console.error(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
+  }
+}
+
 async function cmdExplain(
   hippoRoot: string,
   query: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
 
   const budget = parseBudgetFlag(flags['budget'], 4000);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
-  const forcePhysics = Boolean(flags['physics']);
-  const forceClassic = Boolean(flags['classic']);
-  const explainIncludeSuperseded = Boolean(flags['include-superseded']);
-  const explainAsOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
-  if (explainAsOf !== undefined && Number.isNaN(new Date(explainAsOf).getTime())) {
-    console.error(`Error: --as-of value "${explainAsOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
-  }
+  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
-
-  // A5: scope explain results to the active tenant.
   const tenantId = resolveTenantId({});
+  // Explain shows what recall would see, so it applies the same scope rule.
+  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
+  const explainGlobalOn = isInitialized(globalRoot);
+  noteScopeHidden(hippoRoot, explainGlobalOn ? globalRoot : undefined, query, tenantId, explicitScope || undefined);
 
-  // v1.25.0 (v39 follow-up #1): cmdExplain shares cmdRecall's leak class —
-  // same unscoped loads, same fix, same semantics (explain explains what
-  // recall would see). Flag hoisted above the loads; the note below keeps the
-  // command honest for an operator debugging a hidden row.
-  const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const explainRequestedScope = explainExplicitScope || undefined;
-  const explainLoadSuperseded = explainIncludeSuperseded || Boolean(explainAsOf);
-  let explainLocalEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, explainRequestedScope, 'additive', explainLoadSuperseded);
-  let explainGlobalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, explainRequestedScope, 'additive', explainLoadSuperseded) : [];
-  const passesExplainScope = (e: MemoryEntry) =>
-    api.passesCliRecallScopeFilter(e.scope ?? null, explainRequestedScope);
-  explainLocalEntries = explainLocalEntries.filter(passesExplainScope);
-  explainGlobalEntries = explainGlobalEntries.filter(passesExplainScope);
-  // Honesty note (grill finding #2): the SQL predicate excludes denied rows
-  // BEFORE the candidate window (codex P2 fix), so the pipeline never sees
-  // them. For the diagnostic note only, probe the unscoped window and count
-  // what the scope policy hides — window-capped, so the count is a floor on
-  // large stores, which is fine for a "why is my row missing" hint.
-  const explainUnscopedProbe = [
-    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
-    ...(isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
-  ];
-  const explainScopeDropped = explainUnscopedProbe.filter((e) => !passesExplainScope(e)).length;
-  if (explainScopeDropped > 0) {
-    console.error(`[note] ${explainScopeDropped} candidate${explainScopeDropped === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
-  }
-
-  // Bi-temporal filtering
-  if (explainAsOf) {
-    const filterAsOfExplain = (entries: MemoryEntry[]) => {
-      const asOfDate = new Date(explainAsOf);
-      const successorValidFrom = new Map<string, string>();
-      for (const e of entries) {
-        if (e.superseded_by) {
-          const successor = entries.find(s => s.id === e.superseded_by);
-          if (successor) successorValidFrom.set(e.id, successor.valid_from);
-        }
-      }
-      return entries.filter(e => {
-        if (new Date(e.valid_from) > asOfDate) return false;
-        if (!e.superseded_by) return true;
-        const succVf = successorValidFrom.get(e.id);
-        return succVf ? new Date(succVf) > asOfDate : true;
-      });
-    };
-    explainLocalEntries = filterAsOfExplain(explainLocalEntries);
-    explainGlobalEntries = filterAsOfExplain(explainGlobalEntries);
-  } else if (!explainIncludeSuperseded) {
-    explainLocalEntries = explainLocalEntries.filter(e => !e.superseded_by);
-    explainGlobalEntries = explainGlobalEntries.filter(e => !e.superseded_by);
-  }
-
-  const hasGlobal = explainGlobalEntries.length > 0;
   const config = loadConfig(hippoRoot);
-  const usePhysics = forcePhysics
-    || (!forceClassic && config.physics.enabled !== false);
-
-  const noMmr = Boolean(flags['no-mmr']);
-  const mmrLambda = flags['mmr-lambda'] !== undefined
-    ? parseFloat(String(flags['mmr-lambda']))
-    : config.mmr.lambda;
-  const mmrEnabled = !noMmr && config.mmr.enabled;
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : config.search.localBump;
-  // explainExplicitScope hoisted above the candidate loads (v1.25.0).
-  const explainActiveScope = explainExplicitScope || detectScope();
+  const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const explainIndex = loadIndex(hippoRoot);
-  const explainGlobalOn = isInitialized(globalRoot);
   const cost = (r: SearchResult): number =>
     printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
-  let results;
-  let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
-  if (usePhysics && !hasGlobal) {
-    results = await physicsSearch(query, explainLocalEntries, {
-      budget: entryBudget,
-      cost,
-      hippoRoot,
-      physicsConfig: config.physics,
-      explain: true,
-      scope: explainActiveScope,
-    });
-    modeUsed = 'physics';
-  } else if (hasGlobal) {
-    results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget: entryBudget, cost, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
-      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf, tenantId,
-      recallScope: explainExplicitScope
-        ? { requested: explainExplicitScope, additive: true }
-        : {},
-    });
-    modeUsed = 'searchBothHybrid';
-  } else {
-    results = await hybridSearch(query, explainLocalEntries, {
-      budget: entryBudget, cost, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda, scope: explainActiveScope,
-      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
-    });
-    modeUsed = 'hybrid';
-  }
+  const rank = await rankRecall(
+    { hippoRoot, globalRoot: explainGlobalOn ? globalRoot : undefined, tenantId },
+    {
+      query, budget: entryBudget, cost, limit, includeSuperseded, asOf,
+      explicitScope, activeScope: explicitScope || detectScope(),
+      search: { ...engine, multihop: false, explain: true },
+    },
+  );
+  const hasGlobal = rank.globalEntries.length > 0;
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
+    ? 'physics'
+    : hasGlobal ? 'searchBothHybrid' : 'hybrid';
+  const results = dropHeldCopies(rank.results, (r) => r.entry);
 
-  if (limit < results.length) {
-    results = results.slice(0, limit);
-  }
-  results = dropHeldCopies(results, (r) => r.entry);
-
-  const candidates = explainLocalEntries.length + explainGlobalEntries.length;
+  const candidates = rank.localEntries.length + rank.globalEntries.length;
 
   if (asJson) {
     const output = results.map((r, rank) => ({

@@ -234,12 +234,39 @@ export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsO
   return rows.map(rowToGoal);
 }
 
+/** One `goal_recall_log` row: a boosted local memory recalled while its goal was active. */
+export interface GoalRecallLogRow {
+  goalId: string;
+  memoryId: string;
+  tenantId: string;
+  sessionId: string;
+  recalledAt: string;
+  score: number;
+}
+
+/** Options shared by {@link computeGoalStackBoost} and {@link applyGoalStackBoost}. */
+export interface GoalStackBoostOpts {
+  sessionId: string;
+  tenantId: string;
+  limit: number;
+  /**
+   * Optional side-channel: one goal-boost `RerankStep` per boosted row, keyed by
+   * `entry.id`. A map rather than a row field because the helper re-spreads rows.
+   * Only populated when passed, so the default path allocates nothing.
+   */
+  trace?: Map<string, RerankStep>;
+}
+
+/** The boosted, re-sorted rows and the `goal_recall_log` rows they earn. */
+export interface GoalStackBoost<R> {
+  results: R[];
+  log: GoalRecallLogRow[];
+}
+
 /**
- * v1.7.4 -- dlPFC goal-stack boost helper. Applies the multi-goal boost to a
- * list of entry-backed scored rows when (tenant, session) has active goals.
- * Pre-v1.7.4 this logic lived inline in cmdRecall (src/cli.ts:988-1140);
- * lifting here lets api.recall (primary band only) AND MCP physics/hybrid
- * call it.
+ * dlPFC goal-stack boost. Applies the multi-goal boost to entry-backed scored
+ * rows when (tenant, session) has active goals and returns the log rows to
+ * write, without writing them; {@link writeGoalRecallLog} persists them.
  *
  * Caller responsibilities:
  *   - Do NOT call when an explicit `goalTag` is set (caller's gate)
@@ -249,35 +276,20 @@ export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsO
  *   - Recompute `tokens` after if returned rows are projected to a budgeted
  *     shape
  *
- * Side effects:
- *   - INSERT OR IGNORE into `goal_recall_log` for each (boosted, goal) pair
- *   - Local memory id filter applied before INSERT (skips global-only ids
- *     to preserve FK invariant on goal_recall_log.memory_id)
+ * Log rows cover the top `limit` boosted rows that live in this store's
+ * `memories` table (global-only ids are skipped to keep the FK on
+ * goal_recall_log.memory_id valid).
  *
- * @internal v1.7.4 -- internal recall ranking helper. Subject to change.
+ * @internal Recall ranking helper. Subject to change.
  */
-export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
+export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
   db: DatabaseSyncLike,
   results: R[],
-  opts: {
-    sessionId: string;
-    tenantId: string;
-    limit: number;
-    /**
-     * A7 recall-trace (optional side-channel). When supplied, the helper
-     * records one goal-boost `RerankStep` per ACTUALLY-boosted row, keyed by
-     * `entry.id`. This is a SEPARATE accumulator, NOT a field on the result
-     * row — the helper re-spreads rows and strips internal markers
-     * (`_goalMatches` below), so a row field would be dropped. The score-mul
-     * + re-sort math is untouched; the trace is only populated when this map
-     * is passed (default path never allocates → byte-identical).
-     */
-    trace?: Map<string, RerankStep>;
-  },
-): R[] {
+  opts: GoalStackBoostOpts,
+): GoalStackBoost<R> {
   const { sessionId, tenantId, limit, trace } = opts;
   const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
-  if (active.length === 0) return results;
+  if (active.length === 0) return { results, log: [] };
 
   const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
 
@@ -393,15 +405,8 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     for (const row of localRows) localIds.add(row.id);
   }
 
-  // Log top-K boosted recalls. INSERT OR IGNORE because
-  // UNIQUE(memory_id, goal_id) means a re-recall during the same goal life
-  // is a no-op for outcome attribution.
   const recalledAt = new Date().toISOString();
-  const insertLog = db.prepare(`
-    INSERT OR IGNORE INTO goal_recall_log
-      (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  const log: GoalRecallLogRow[] = [];
   for (const r of boosted.slice(0, limit)) {
     if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
     const matches = matchesByEntryId.get(r.entry.id);
@@ -409,18 +414,43 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     for (const tag of matches) {
       const goal = goalsByTag.get(tag);
       if (!goal) continue;
-      insertLog.run(
-        goal.id,
-        r.entry.id,
-        tenantId,
-        sessionId,
-        recalledAt,
-        r.score,
-      );
+      log.push({ goalId: goal.id, memoryId: r.entry.id, tenantId, sessionId, recalledAt, score: r.score });
     }
   }
 
-  return boosted;
+  return { results: boosted, log };
+}
+
+/**
+ * Writes goal-boost log rows. INSERT OR IGNORE because UNIQUE(memory_id, goal_id)
+ * makes a re-recall during the same goal life a no-op for outcome attribution.
+ */
+export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): void {
+  if (rows.length === 0) return;
+  const insertLog = db.prepare(`
+    INSERT OR IGNORE INTO goal_recall_log
+      (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  for (const row of rows) {
+    insertLog.run(row.goalId, row.memoryId, row.tenantId, row.sessionId, row.recalledAt, row.score);
+  }
+}
+
+/**
+ * {@link computeGoalStackBoost} plus {@link writeGoalRecallLog} in one call, for
+ * pipelines that boost and log on the same handle.
+ *
+ * @internal Recall ranking helper. Subject to change.
+ */
+export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
+  db: DatabaseSyncLike,
+  results: R[],
+  opts: GoalStackBoostOpts,
+): R[] {
+  const boost = computeGoalStackBoost(db, results, opts);
+  writeGoalRecallLog(db, boost.log);
+  return boost.results;
 }
 
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
