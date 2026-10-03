@@ -9,7 +9,10 @@ import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { serve, type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts } from '../src/server.js';
+import {
+  serve, authRevoke, ForbiddenError, isReservedActor,
+  type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
+} from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db.js';
 import { listAuditEventsAfter } from '../src/audit.js';
@@ -392,6 +395,50 @@ describe('auth resolver and key routes', () => {
   });
 });
 
+describe('exported authRevoke for add-ons', () => {
+  const ctx = (tenantId: string): Context => ({
+    hippoRoot: home,
+    tenantId,
+    actor: { subject: 'system:addon:u1', role: 'admin', viaAuthResolver: true },
+  });
+
+  function mint(tenantId: string, role: 'admin' | 'member'): CreatedApiKey {
+    const db = openHippoDb(home);
+    try {
+      return createApiKey(db, { tenantId, label: `addon-${role}`, role });
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  it('revokes a member key and audits it under the add-on actor', () => {
+    const member = mint('ext-tenant', 'member');
+    expect(authRevoke(ctx('ext-tenant'), member.keyId).ok).toBe(true);
+    const row = auditRows('ext-tenant').find((r) => r.op === 'auth_revoke');
+    expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
+  });
+
+  it('refuses an admin key for a resolver admin ctx', () => {
+    const admin = mint('ext-tenant', 'admin');
+    expect(() => authRevoke(ctx('ext-tenant'), admin.keyId)).toThrow(ForbiddenError);
+  });
+
+  it('treats a key in another tenant as unknown', () => {
+    const other = mint('other-tenant', 'member');
+    expect(() => authRevoke(ctx('ext-tenant'), other.keyId)).toThrow(/Unknown key_id/);
+  });
+});
+
+describe('isReservedActor', () => {
+  it.each(['cli', 'CLI:x', 'api_key:k1', 'system:addon:u1', 'localhost:cli'])('is true for %s', (s) => {
+    expect(isReservedActor(s)).toBe(true);
+  });
+
+  it.each(['clinton@corp', 'alice@corp', 'systems-team'])('is false for %s', (s) => {
+    expect(isReservedActor(s)).toBe(false);
+  });
+});
+
 describe('auth resolver stream', () => {
   it('opens /mcp/stream for a resolver token without opening the database', async () => {
     const fresh = mkdtempSync(join(tmpdir(), 'hippo-auth-resolver-fresh-'));
@@ -561,7 +608,7 @@ describe('package surface', () => {
       "const srv = await import('hippo-memory/server');",
       "const idx = await import('hippo-memory');",
       "const names = ['appendAuditEvent','queryAuditEvents','listAuditEventsAfter','AUDIT_OPS','openHippoDb','closeHippoDb'];",
-      'console.log(JSON.stringify({ url, serve: typeof srv.serve, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
+      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
     ].join('\n');
     // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
@@ -572,7 +619,12 @@ describe('package surface', () => {
     if (child.status !== 0) throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-    const out = JSON.parse(lines[lines.length - 1]!) as { url: string; serve: string; missing: string[]; indexServe: boolean };
+    const out = JSON.parse(lines[lines.length - 1]!) as {
+      url: string; serve: string; authRevoke: string; isReservedActor: string; forbidden: string; missing: string[]; indexServe: boolean;
+    };
+    expect(out.authRevoke).toBe('function');
+    expect(out.isReservedActor).toBe('function');
+    expect(out.forbidden).toBe('function');
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(join(root, 'dist', 'server.js')));
     expect(out.serve).toBe('function');
     expect(out.missing).toEqual([]);

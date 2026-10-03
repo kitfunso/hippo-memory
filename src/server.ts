@@ -152,6 +152,9 @@ import { writeToDlq as writeToGitHubDlq } from './connectors/github/dlq.js';
 import { resolveTenantForGitHub } from './connectors/github/tenant-routing.js';
 import { computeIdempotencyKey as computeGitHubIdempotencyKey, computeDeletionKey as computeGitHubDeletionKey } from './connectors/github/signature.js';
 
+// Add-on packages revoke keys through these without importing the whole api surface.
+export { authRevoke, ForbiddenError, type Context, type Actor };
+
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
 // tests/server-bearer-lockdown.test.ts. Do not gate auth elsewhere by
@@ -318,7 +321,7 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys) that outlive IdP deprovisioning. */
+  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on revokes them through the exported authRevoke when the IdP deprovisions the minter. */
   role: 'admin' | 'member';
   scopes?: readonly string[];
 }
@@ -584,6 +587,12 @@ const RESERVED_ACTOR_NAMES = [
   'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories',
 ] as const;
 
+/** Add-ons call this to refuse a subject that would collide with a built-in actor. */
+export function isReservedActor(subject: string): boolean {
+  const lower = subject.toLowerCase();
+  return RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`));
+}
+
 function hasControlChar(s: string): boolean {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
@@ -604,8 +613,7 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   if (!isJsonString(subject) || subject.length < 1 || subject.length > 256) return null;
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
-  const lower = subject.toLowerCase();
-  if (RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`))) return null;
+  if (isReservedActor(subject)) return null;
   const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
   if (Array.isArray(scopes)) clean.scopes = scopes.filter((s) => isJsonString(s));
   return clean;
