@@ -66,9 +66,6 @@ import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
 import { buildGraphModel } from './graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from './graph.js';
-
-// Add-on packages revoke keys through these without importing the whole api surface.
-export { authRevoke, ForbiddenError, type Context, type Actor };
 import {
   savePrediction,
   closePrediction,
@@ -154,6 +151,9 @@ import { handleCommentDeleted as handleGitHubCommentDeleted } from './connectors
 import { writeToDlq as writeToGitHubDlq } from './connectors/github/dlq.js';
 import { resolveTenantForGitHub } from './connectors/github/tenant-routing.js';
 import { computeIdempotencyKey as computeGitHubIdempotencyKey, computeDeletionKey as computeGitHubDeletionKey } from './connectors/github/signature.js';
+
+// Add-on packages revoke keys through these without importing the whole api surface.
+export { authRevoke, ForbiddenError, type Context, type Actor };
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
