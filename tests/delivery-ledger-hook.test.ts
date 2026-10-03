@@ -305,6 +305,17 @@ describe('what one hook call records', () => {
     expect([rows[0].write_store, rows[0].store_hash]).toEqual(['global', blockHash(path.resolve(globalRoot))]);
   });
 
+  it.each([
+    ['json', ['context', '--pinned-only', '--include-recent', '5', '--format', 'json']],
+    ['markdown', ['context', '--pinned-only', '--include-recent', '5']],
+  ])('%s: emitted_hash and injected_tokens describe every stdout byte, trailing newline included', (format, args) => {
+    seed('PINNED: always check the rollback plan before deploy', { pinned: true });
+    const r = run(proj, claude(`bytes-${format}`), { args });
+    expect(r.stdout.endsWith('\n')).toBe(true);
+    const [e] = eventsN(proj, `bytes-${format}`, 1);
+    expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
+  });
+
   it('records disabled for a zero budget, with the session and prompt hash, and when pinned injection is off', () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     expect(run(proj, claude('zero'), { args: [...HOOK_ARGS, '--budget', '0'] }).stdout).toBe('');

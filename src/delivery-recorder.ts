@@ -97,6 +97,8 @@ export interface DeliveryObserver {
   sections(shown: number, dropped: number): void;
   /** Returns `admit`'s own answer unchanged and lets its throws through. */
   watchAdmit(admit: (e: MemoryEntry) => boolean): (e: MemoryEntry) => boolean;
+  /** The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it instead. */
+  qualityDropped(entry: MemoryEntry, isGlobal: boolean): void;
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
   offer(entries: readonly MemoryEntry[], isGlobal: boolean, pool?: DeliveryPool): void;
@@ -116,7 +118,7 @@ export interface DeliveryOutcomeInput {
   state: DeliveryBlockState;
   staticHash?: string | null;
   recallHash?: string | null;
-  /** The exact text written to stdout (the hook's additionalContext, or the printed block). */
+  /** The exact text the agent receives: the hook's additionalContext, or every stdout byte, newline included. */
   emittedText?: string | null;
   /** The static block was skipped as unchanged, so its entries are reused, not sent. */
   staticReused?: boolean;
@@ -296,6 +298,15 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (!ok) guard(() => { filtered.add(e.id); });
       return ok;
     },
+    qualityDropped: (e, isGlobal) => guard(() => {
+      filtered.add(e.id);
+      if (!candidates.has(e.id)) {
+        candidates.set(e.id, {
+          id: e.id, sourceStore: storeOf(isGlobal), pool: 'recent', stage: null, reason: null, score: null, tokens: null,
+        });
+      }
+      rejectId(e.id, 'load', 'quality', null, null);
+    }),
     disabled: () => guard(() => { disabledSeen = true; }),
     offer: (entries, isGlobal, pool) => guard(() => {
       for (const e of entries) {

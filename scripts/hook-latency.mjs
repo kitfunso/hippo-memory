@@ -172,7 +172,8 @@ function turnInput(mode, i) {
   return JSON.stringify({ session_id: session, prompt: `${SHORT_PROMPT} ${letters(i)}`, hook_event_name: 'UserPromptSubmit' });
 }
 
-// ABAB: each turn runs ledger off then on with the same payload; warm-ups count for stdout and bytes, not latency.
+// Each turn runs both arms on the same payload, off first on even turns and on first on odd ones, so order effects cancel.
+// Warm-ups count for stdout and bytes, not latency.
 function measurePair(pair, mode, estimateTokens) {
   const before = [storeState(pair.off), storeState(pair.on)];
   const contenders = mode === 'contention'
@@ -187,8 +188,10 @@ function measurePair(pair, mode, estimateTokens) {
   try {
     for (let i = 0; i < turns; i++) {
       const input = turnInput(mode, i);
-      const off = runHook(pair.off, input);
-      const on = runHook(pair.on, input);
+      const offFirst = i % 2 === 0;
+      const first = runHook(offFirst ? pair.off : pair.on, input);
+      const second = runHook(offFirst ? pair.on : pair.off, input);
+      const [off, on] = offFirst ? [first, second] : [second, first];
       if (i >= WARMUPS) { samples.off.push(off.ms); samples.on.push(on.ms); }
       if (sha(off.stdout) === sha(on.stdout)) matches++;
       tokenDelta += estimateTokens(on.stdout) - estimateTokens(off.stdout);

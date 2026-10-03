@@ -34,7 +34,7 @@ This section settles the engineering part of the per-prompt hook path only. The 
 - **Trace completeness.** 100% of fixture events reconstructed with the correct store, session, turn, ids and stage.
 - **Overhead bounds.** Stdout identical in 100% of turns and injected-token delta exactly 0; `p95_on/p95_off <= 1.10` in every arm and mode (H4's ratio borrowed as a latency proxy, not H4 itself); `p50_on - p50_off <= 15 ms`; mean bytes per turn <= 7168.
 - **Arms.** The same binary with `deliveryLedger.enabled` off vs on, each crossed with `pinnedInject.promptRecall` off and on.
-- **Runner.** `npm run build && npx vitest run tests/delivery-ledger-*.test.ts && node scripts/hook-latency.mjs --ledger-compare --memories 2000 --runs 30`. Result in the PR body plus `docs/evals/2026-10-03-z10-ledger-slice1-result.md`.
+- **Runner.** `npm run build && npm run test:delivery-ledger && node scripts/hook-latency.mjs --ledger-compare --memories 2000 --runs 30`. Result in the PR body plus `docs/evals/2026-10-03-z10-ledger-slice1-result.md`.
 - **Open.** Z0/H4 sample, corpus snapshot, unit of analysis and power, margins and multiplicity, readiness and stopping, the transcript join, application labels, compaction, resume, session-end and tool-failure events, and Z12 links.
 
 ## Controls and failure cases

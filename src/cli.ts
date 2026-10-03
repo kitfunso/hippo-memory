@@ -6975,7 +6975,7 @@ async function renderContext(
       tokens: result.tokens,
     });
     console.log(jsonText);
-    rec?.delivered({ state: 'sent', emittedText: jsonText });
+    rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
     withLedgerDb(hippoRoot, (db) => {
       recordTokenUse(db, {
         tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
@@ -7104,7 +7104,7 @@ async function renderContext(
       }
     }));
     if (text.length > 0) console.log(text);
-    rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: text } : { state: 'empty' });
+    rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
     withLedgerDb(hippoRoot, (db) => {
       recordTokenUse(db, {
         tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',

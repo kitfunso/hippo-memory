@@ -9,10 +9,11 @@
 
 ```
 npm run build
+npm run test:delivery-ledger
 node scripts/hook-latency.mjs --ledger-compare --memories 2000 --runs 30
 ```
 
-The store is the `mulberry32(0xa1)` 2000-memory store plus 5 pins, built once per promptRecall setting and copied for the ledger off and on arms, so both arms hold identical rows. Each turn runs the per-prompt hook command (`hippo context --pinned-only --include-recent 5 --format additional-context`) with the payload on stdin, ledger off then on (ABAB). There are 3 warm-up turns and 30 timed turns per mode. `fresh` uses a new session each turn; `steady` uses one session, so the static block is reused after the first turn. Wall clock includes Node start-up.
+The store is the `mulberry32(0xa1)` 2000-memory store plus 5 pins, built once per promptRecall setting and copied for the ledger off and on arms, so both arms hold identical rows. Each turn runs the per-prompt hook command (`hippo context --pinned-only --include-recent 5 --format additional-context`) with the payload on stdin, ledger off then on (ABAB). The recorded runs used this fixed off-then-on order, so the p95 gate stays open, and the next measurement uses the runner's counterbalanced order (off first on even turns, on first on odd turns). There are 3 warm-up turns and 30 timed turns per mode. `fresh` uses a new session each turn; `steady` uses one session, so the static block is reused after the first turn. Wall clock includes Node start-up.
 
 ## Results
 

@@ -194,6 +194,16 @@ describe('rejection reasons', () => {
     expect([rows.get(junk.id)?.stage, rows.get(junk.id)?.reason]).toEqual(['eligible', 'quality']);
   });
 
+  it('quality at load for a low-quality recent row the loader skipped, with prompt recall off', async () => {
+    configure({ promptRecall: false });
+    seed(local, 'office note 1: the coffee machine schedule changes for team lunch on friday', { created: '2026-06-01T00:00:00.000Z' });
+    const junk = seed(local, 'postgres', { created: '2026-06-02T00:00:00.000Z' });
+    const event = await observed();
+    const row = rowsOf(event).find((c) => c.memoryId === junk.id);
+    expect([row?.stage, row?.reason, row?.pool, row?.sourceStore]).toEqual(['load', 'quality', 'recent', 'local']);
+    expect([event.filteredCount, event.selectedCount]).toEqual([1, 1]);
+  });
+
   it('duplicate for an unpinned copy of a pin, and limit past the caller cap', async () => {
     configure({ promptRecall: false });
     const text = 'pinned rule: always run the postgres migration tests before merging';

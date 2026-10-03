@@ -274,12 +274,17 @@ function loadAmbientEntries(
   includeRecent: number,
   admit: (e: MemoryEntry) => boolean,
   recall?: AmbientRecallRequest,
+  onQualityDrop?: (e: MemoryEntry) => void,
 ): AmbientLoadResult {
   if (!pinnedOnly) return { entries: loadAllEntries(hippoRoot, tenantId).filter(admit) };
   // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
   // counts by it too, or it stops short of a store whose newest rows are junk.
-  const admitAmbient = (e: MemoryEntry): boolean =>
-    admit(e) && (e.pinned || isContentWorthStoring(e.content));
+  const admitAmbient = (e: MemoryEntry): boolean => {
+    if (!admit(e)) return false;
+    if (e.pinned || isContentWorthStoring(e.content)) return true;
+    onQualityDrop?.(e);
+    return false;
+  };
   return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient, recall);
 }
 
@@ -2754,13 +2759,15 @@ export async function getContext(
   // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
   const loadAdmit = obs ? obs.watchAdmit(admit) : admit;
+  const qualityDrop = (isGlobal: boolean): ((e: MemoryEntry) => void) | undefined =>
+    obs && !promptRecallPending ? (e) => obs.qualityDropped(e, isGlobal) : undefined;
 
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest)
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(primaryIsGlobal))
     : { entries: [] };
   const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest)
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(true))
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;
