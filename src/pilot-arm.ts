@@ -1,5 +1,5 @@
-// Pilot arm (ROADMAP CD11): one token_ledger row per session names its arm, `hippo` or `holdout`.
-// `items` holds the holdout rate in basis points. Contract: docs/decisions/2026-10-03-pilot-arm.md.
+// Pilot arm: one token_ledger row per session names its arm, `hippo` or `holdout`, so a pilot can compare them.
+// `items` holds the holdout rate in basis points; the pilot report reads these rows, so their shape is fixed.
 import { createHash } from 'node:crypto';
 import { execWithBusyRetry, type DatabaseSyncLike } from './db.js';
 import { recordTokenUse } from './token-ledger.js';
