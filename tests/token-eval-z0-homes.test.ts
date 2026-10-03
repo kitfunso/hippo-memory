@@ -1,13 +1,13 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, symlinkSync, lstatSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS } from '../scripts/token-eval/exec.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
-import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, checkoutBase, goldLines } from '../scripts/token-eval/workspace.mjs';
+import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
 const savedEnv = { ...process.env };
@@ -24,20 +24,6 @@ const tmp = (prefix: string): string => {
 const win = process.platform === 'win32';
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Whether this machine lets an unprivileged process create a file symlink (Windows needs developer mode). */
-function canSymlink(): boolean {
-  const d = mkdtempSync(join(tmpdir(), 'z0-link-probe-'));
-  try {
-    symlinkSync('target', join(d, 'link'));
-    return true;
-  } catch (err) {
-    if (err instanceof Error && 'code' in err && err.code === 'EPERM') return false;
-    throw err;
-  } finally {
-    rmSync(d, { recursive: true, force: true });
-  }
-}
-
 interface GitRepo {
   repo: string;
   base: string;
@@ -50,7 +36,7 @@ function gitRepo(files: Record<string, string>): GitRepo {
   const repo = tmp('z0-repo-');
   const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
   g('init', '-q');
-  for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false'], ['core.symlinks', 'true']]) g('config', k, v);
+  for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false']]) g('config', k, v);
   for (const [p, text] of Object.entries(files)) writeFileSync(join(repo, p), text);
   writeFileSync(join(repo, 'lib.js'), 'a - b\n');
   g('add', '.');
@@ -65,7 +51,7 @@ function gitRepo(files: Record<string, string>): GitRepo {
 function workRepo(): string {
   const work = tmp('z0-work-');
   execFileSync('git', ['init', '-q'], { cwd: work });
-  for (const [k, v] of [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.symlinks', 'true']]) execFileSync('git', ['config', k, v], { cwd: work });
+  for (const [k, v] of [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf']]) execFileSync('git', ['config', k, v], { cwd: work });
   return work;
 }
 
@@ -297,32 +283,33 @@ describe('applyInstructions', () => {
 });
 
 describe('workspace checkout', () => {
-  it('leaves an earlier task base unreachable once a later task checks out an older base', () => {
+  it('leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs', () => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
+    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
     checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix });
+    writeFileSync(join(work, 'lib.js'), 'agent edit\n');
+    wg('stash');
+    wg('branch', 'agent-work');
+    wg('tag', 'agent-tag');
     checkoutBase(repo, work, 'seqP', { id: 'p2', baseRef: base });
     expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
-    const history = execFileSync('git', ['log', '--all', '--reflog', '--format=%H %P'], { cwd: work, encoding: 'utf8' });
+    const history = wg('log', '--all', '--reflog', '--format=%H %P');
     expect(history).toContain(base);
     expect(history).not.toContain(fix);
+    expect(wg('log', '--all', '--reflog', '-p')).not.toContain('the fix that a later task must never see');
+    expect(wg('for-each-ref', '--format=%(refname)')).toBe('refs/remotes/eval/base');
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it.skipIf(!canSymlink())('checks out a tracked instruction symlink without aborting, and a restore keeps it a symlink', () => {
-    const { repo, g } = gitRepo({ 'CLAUDE.md': 'native\n' });
-    symlinkSync('CLAUDE.md', join(repo, 'AGENTS.md'));
-    g('add', 'AGENTS.md');
+  it('refuses a task whose repo tree holds an instruction file as a symlink, before touching the workspace', () => {
+    const { repo, g } = gitRepo({});
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: 'docs/policy.md', encoding: 'utf8' }).trim();
+    g('update-index', '--add', '--cacheinfo', `120000,${blob},CLAUDE.md`);
     g('commit', '-qm', 'link');
     const work = workRepo();
-    checkoutBase(repo, work, 'seqY', { id: 'y1', baseRef: g('rev-parse', 'HEAD') });
-    expect(lstatSync(join(work, 'AGENTS.md')).isSymbolicLink()).toBe(true);
-    const snap = instructionSnapshot(work);
-    expect(snap.get('AGENTS.md')?.toString()).toBe('CLAUDE.md');
-    writeFileSync(join(work, 'CLAUDE.md'), 'agent edit\n');
-    restoreInstructions(work, snap);
-    expect(lstatSync(join(work, 'AGENTS.md')).isSymbolicLink()).toBe(true);
-    expect(readFileSync(join(work, 'CLAUDE.md'), 'utf8')).toBe(STUB_CLAUDE_MD);
+    expect(() => checkoutBase(repo, work, 'seqY', { id: 'y1', baseRef: g('rev-parse', 'HEAD') })).toThrow('Z0 task seqY/y1: instruction file CLAUDE.md is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task');
+    expect(spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: work }).status).not.toBe(0);
   });
 
   it('goldLines surfaces a git error instead of turning the leak check off', () => {

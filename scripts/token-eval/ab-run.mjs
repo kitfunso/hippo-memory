@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { HIPPO_JS, sh, git } from './exec.mjs';
 import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
-import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
+import { checkoutBase, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import { isUsageLimit, findTranscript, transcriptWork, usageFromResult, skippedRecord } from './records.mjs';
 
 export { prependPath } from './exec.mjs';
@@ -250,6 +250,15 @@ export async function runAll(opts) {
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
   };
+  // checkoutBase refuses a symlinked instruction file; finding it here saves abandoning a lockstep run midway.
+  for (const s of spec.sequences) {
+    const cached = path.join(ctx.cacheDir, s.id);
+    if (!fs.existsSync(cached)) {
+      fs.mkdirSync(ctx.cacheDir, { recursive: true });
+      execFileSync('git', ['clone', '--quiet', s.repo, cached], { stdio: 'ignore' });
+    }
+    for (const t of s.tasks) assertNoInstructionLinks(cached, s.id, t);
+  }
   const warmDir = path.join(outDir, 'warmup');
   const warmEnv = armEnv('A0', { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
   ctx.claudeVersion = sh(`${claude} --version`, outDir, warmEnv).stdout.trim() || null;
@@ -264,11 +273,6 @@ export async function runAll(opts) {
   const state = new Map();
   for (const [order, step] of steps.entries()) {
     const { seed, position, arm, sequence: s } = step;
-    const cached = path.join(ctx.cacheDir, s.id);
-    if (!fs.existsSync(cached)) {
-      fs.mkdirSync(ctx.cacheDir, { recursive: true });
-      execFileSync('git', ['clone', '--quiet', s.repo, cached], { stdio: 'ignore' });
-    }
     const key = `${s.id}|${arm}|${seed}`;
     if (!state.has(key)) state.set(key, startRun(ctx, s, arm, seed));
     runTask(ctx, state.get(key), position, order);
@@ -300,6 +304,8 @@ async function main() {
   const steps = planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]);
   const out = path.resolve(outDir);
   const mode = argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real');
+  // A run appends to runs.jsonl and both modes rewrite plan.json, so an earlier run's records would end up unplanned.
+  if (mode !== 'check' && fs.existsSync(path.join(out, 'runs.jsonl'))) throw new Error(`${out} already holds runs.jsonl from an earlier run; this run would append to it and rewrite plan.json. Pick a new --out.`);
   const stopAt = process.env.Z0_ANCESTOR_STOP || null;
   // The stop is for tests under a temp dir; a stray export must never disable a real run's check.
   if (mode === 'real' && stopAt) throw new Error('Z0_ANCESTOR_STOP is set; it is only honoured for --dry-run and --check-homes. Unset it for a real run.');
@@ -332,7 +338,7 @@ async function main() {
     throw err;
   }
   // ab-analyze averages unequal seed counts unpaired, so Z0 records go to the Z0 analyzer, which pairs shared seeds.
-  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds), never ab-analyze.mjs.`);
+  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds; it lands with PR #357), never ab-analyze.mjs.`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

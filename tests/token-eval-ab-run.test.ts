@@ -314,6 +314,19 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(existsSync(join(out, 'raw', 'seqE', 'A1', 'seed1', 'e2.setup.txt'))).toBe(true);
   }, 60_000);
 
+  it('a later task with a symlinked instruction file stops the run before any session or plan', async () => {
+    isolate();
+    const r = makeRepo();
+    const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: 'policy.md', encoding: 'utf8' }).trim();
+    g('update-index', '--add', '--cacheinfo', `120000,${blob},docs/AGENTS.md`);
+    g('commit', '-qm', 'link');
+    const out = tmp('ab-run-link-');
+    const spec = validateTasks({ sequences: [{ id: 'seqL', cluster: 'repoL', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: g('rev-parse', 'HEAD') })] }] });
+    await expect(run(spec, ['A0'], out)).rejects.toThrow('Z0 task seqL/l2: instruction file docs/AGENTS.md is a symlink in the task repo');
+    expect(readdirSync(out).sort()).toEqual(['repo-cache']);
+  }, 60_000);
+
   it('a crash with no result is recorded with every session metric null, never left out', async () => {
     isolate();
     const r = makeRepo();
@@ -487,5 +500,22 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const ok = cli('--seeds', '2', '--arms', 'A0,A1');
     expect(ok.status, ok.stderr).toBe(0);
     expect(ok.stdout).toContain('seeds A0:2 A1:2');
+  });
+
+  it('a real run refuses an --out that already holds runs.jsonl and leaves it untouched', () => {
+    const scratch = tmp('ab-run-reuse-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] }));
+    const out = join(scratch, 'out');
+    mkdirSync(out);
+    writeFileSync(join(out, 'runs.jsonl'), '{"earlier":true}\n');
+    const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
+    delete env.Z0_ANCESTOR_STOP;
+    const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
+    expect(real.status).not.toBe(0);
+    expect(real.stderr).toContain(`${out} already holds runs.jsonl from an earlier run`);
+    expect(readFileSync(join(out, 'runs.jsonl'), 'utf8')).toBe('{"earlier":true}\n');
+    expect(readdirSync(out)).toEqual(['runs.jsonl']);
   });
 });

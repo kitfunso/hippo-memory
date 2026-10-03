@@ -41,8 +41,6 @@ export function isInstructionPath(rel) {
 }
 
 const isLink = (file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
-// A symlink reads as its target path, as git stores it, so an edit made through it shows up on the target file alone.
-const readEntry = (file) => (isLink(file) ? Buffer.from(fs.readlinkSync(file)) : fs.readFileSync(file));
 
 /** Every instruction file on disk as `{path: bytes}`, forward-slash paths; read from disk so git filters never enter. */
 export function instructionSnapshot(workDir) {
@@ -52,19 +50,31 @@ export function instructionSnapshot(workDir) {
       const child = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) walk(child);
-      } else if ((e.isFile() || e.isSymbolicLink()) && isInstructionPath(child)) snap.set(child, readEntry(path.join(workDir, child)));
+      } else if (e.isFile() && isInstructionPath(child)) snap.set(child, fs.readFileSync(path.join(workDir, child)));
     }
   };
   walk('');
   return snap;
 }
 
-/** Instruction paths in a commit's tree (gitlinks dropped). */
-export function baseInstructionSet(workDir, commit) {
+/** Instruction entries in a commit's tree as `[mode, path]` (gitlinks dropped). */
+function treeInstructions(workDir, commit) {
   return git(['ls-tree', '-r', '-z', '--full-tree', commit], workDir).split('\0').filter(Boolean)
     .map((line) => line.split('\t'))
-    .filter(([meta]) => meta.split(' ')[1] === 'blob')
-    .map(([, rel]) => rel).filter(isInstructionPath);
+    .filter(([meta, rel]) => meta.split(' ')[1] === 'blob' && isInstructionPath(rel))
+    .map(([meta, rel]) => [meta.split(' ')[0], rel]);
+}
+
+/** Instruction paths in a commit's tree (gitlinks dropped). */
+export function baseInstructionSet(workDir, commit) {
+  return treeInstructions(workDir, commit).map(([, rel]) => rel);
+}
+
+/** Throws when a task's base tree holds an instruction file as a symlink. */
+export function assertNoInstructionLinks(cacheDir, sequenceId, t) {
+  // A link's bytes are its target path and an edit through it lands on a non-instruction file, so neither carry nor restore can keep it.
+  const link = treeInstructions(cacheDir, t.baseRef).find(([mode]) => mode === '120000');
+  if (link) throw new Error(`Z0 task ${sequenceId}/${t.id}: instruction file ${link[1]} is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task`);
 }
 
 function assertInstructionSet(workDir, commit) {
@@ -78,6 +88,7 @@ function assertInstructionSet(workDir, commit) {
 
 /** Move the workspace to a task's stub base without its future: the workspace fetches only a ref at that commit. */
 export function checkoutBase(cacheDir, workDir, sequenceId, t) {
+  assertNoInstructionLinks(cacheDir, sequenceId, t);
   const stub = stubBaseCommit(cacheDir, t.baseRef);
   const ref = `refs/eval/${sequenceId}/${t.id}`;
   git(['update-ref', ref, stub], cacheDir);
@@ -85,6 +96,9 @@ export function checkoutBase(cacheDir, workDir, sequenceId, t) {
   git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
   // -x also removes gitignored leftovers such as agent notes, so A0 is a true floor.
   git(['clean', '-fdqx', '-e', '.hippo', '-e', 'node_modules'], workDir);
+  // An agent's stash, branch, tag or note keeps an earlier base reachable, and is a memory channel even in A0.
+  const stale = git(['for-each-ref', '--format=%(refname)'], workDir).split('\n').filter((r) => r && r !== 'refs/remotes/eval/base');
+  for (const r of stale) git(['update-ref', '-d', r], workDir);
   // Sequence order comes from the seed, so an earlier base can hold a later task's fix: drop every commit the base cannot reach.
   git(['reflog', 'expire', '--expire=now', '--expire-unreachable=now', '--all'], workDir);
   git(['gc', '--quiet', '--prune=now'], workDir);
@@ -108,7 +122,7 @@ const same = (a, b) => (a === null || b === null ? a === b : a.equals(b));
 function writeFile(workDir, rel, bytes) {
   const file = path.join(workDir, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  // Never write through a symlink into the file it points at.
+  // An agent can turn an instruction file into a link to a file outside the workspace; never write through it.
   if (isLink(file)) fs.rmSync(file);
   fs.writeFileSync(file, bytes);
 }
@@ -157,10 +171,8 @@ export function applyInstructions(workDir, changes, baseline, tmpRoot) {
 
 /** Put the instruction files back exactly as a snapshot holds them, deleting any it lacks. */
 export function restoreInstructions(workDir, snap) {
-  const now = instructionSnapshot(workDir);
-  for (const rel of now.keys()) if (!snap.has(rel)) fs.rmSync(path.join(workDir, rel));
-  // Entries that already match are left alone, so a checked-out symlink stays a symlink.
-  for (const [rel, bytes] of snap) if (!same(now.get(rel) ?? null, bytes)) writeFile(workDir, rel, bytes);
+  for (const rel of instructionSnapshot(workDir).keys()) if (!snap.has(rel)) fs.rmSync(path.join(workDir, rel));
+  for (const [rel, bytes] of snap) writeFile(workDir, rel, bytes);
 }
 
 /** Write the task's hidden test files from fixRef, read from the cache clone. */
