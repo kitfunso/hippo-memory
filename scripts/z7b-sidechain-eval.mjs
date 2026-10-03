@@ -62,6 +62,9 @@ function devSetup(a, withRound = true) {
   needDev(a, withRound);
   const ar = E.openArchive(a.archive);
   const draw = readDrawZ7b(ar);
+  const { z7Fresh, fresh } = z7Draws(ar);
+  const why = Z.checkDevDrawZ7b({ z7Fresh, z7Stored: readJson(ar.work, 'draw.json'), fresh, stored: draw });
+  if (why) throw new Error(`draw refused: ${why}`);
   const scored = new Set(draw.scored);
   if (draw.dev.some((id) => scored.has(id))) throw new Error('dev list overlaps the scored list');
   return { ar, draw, dir: path.join(z7bDir(ar), 'dev'), ids: draw.dev };
@@ -337,7 +340,7 @@ function finishScored(ctx, items, round, run) {
     unfiltered: { both: iv(unfBothCi), union: iv(unfUnionCi) }, beforeRecheck: fUnf.pBefore, overturnedByRecheck: fUnf.overturned,
     consensusUnfiltered: fUnf.consensus, unionUnfiltered: fUnf.union, consensus: fFil.consensus, unionFiltered: fFil.union, perJudge: fFil.perJudge,
     kappaBeforeRecheck: fUnf.kappa, lessonsPerItem: fFil.lessonsPerItem, kindMix: fFil.kindMix, byClass: fFil.byClass, bearingWithLessonInReport: fFil.inReport, cutShare: fFil.cutShare,
-    gates: g, gatesUntested: Object.entries(g).filter(([, v]) => v === null).map(([k]) => k), decoy: { unplanted: fUnf.unplanted, planted: fUnf.planted, skipped: fUnf.decoySkipped },
+    gates: g, gatesUntested: Z.untestedGates(g), decoy: { unplanted: fUnf.unplanted, planted: fUnf.planted, skipped: fUnf.decoySkipped },
     plantedDecoyCount: fUnf.planted[1], control: run.control, filter: st, calibration: run.calibration, valid, resumes: countResumes(run.lock), verdict, auditRequired: verdict === 'PENDING_AUDIT',
   };
   E.writeOut(ctx.dir, 'result.json', result, true);

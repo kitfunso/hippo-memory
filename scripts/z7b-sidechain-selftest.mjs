@@ -46,6 +46,15 @@ function selftestDraw(t) {
   t('checkDrawZ7b: a null scored-list pin refuses', /pin mismatch: scoredList/.test(run({}, { ...pins, scoredList: null })));
   t('checkDrawZ7b: a null or wrong manifest pin refuses', /pin mismatch: manifest/.test(run({}, { ...pins, manifest: null })) && /pin mismatch: manifest/.test(run({ manifestSha: hex('0') })));
   t('checkDrawZ7b: a changed Z7 dev list refuses, and so does a stored Z7b draw that differs', /Z7 dev set/.test(run({ z7Stored: { ...inp.z7Stored, dev: inp.z7Stored.dev.slice(1) } })) && /scored list/.test(run({ stored: swapped })));
+
+  const runDev = (over) => Z.checkDevDrawZ7b({ ...inp, ...over }, z7.itemListSha256);
+  const moved = copy();
+  moved.dev.push(moved.scored.shift());
+  t('checkDevDrawZ7b: a matching draw passes without pins', runDev({}) === null);
+  t('checkDevDrawZ7b: an id moved from scored to dev refuses', /dev list|scored list/.test(runDev({ stored: moved })));
+  t('checkDevDrawZ7b: a changed Z7 stored draw refuses', /Z7 dev set/.test(runDev({ z7Stored: { ...inp.z7Stored, dev: inp.z7Stored.dev.slice(1) } })));
+  t('untestedGates: top-level and nested nulls are listed, dotted', JSON.stringify(Z.untestedGates({ G1: true, G4: null, G2: { sonnet: 1, recheck: null }, G3: { opus: null, filter: 2 } })) === JSON.stringify(['G4', 'G2.recheck', 'G3.opus']));
+  t('untestedGates: nothing null gives an empty list', Z.untestedGates({ G1: true, G2: { a: 0, b: false } }).length === 0);
 }
 
 function selftestPrompts(t) {

@@ -62,6 +62,19 @@ export function checkDrawZ7b(inp, pins, z7Pin = Z7_SCORED_SHA) {
   return drawMismatchZ7b(inp.fresh, inp.stored, pins.scoredList);
 }
 
+// Dev commands have no prereg pins yet, so the stored draw must equal the fresh rebuild.
+export function checkDevDrawZ7b(inp, z7Pin = Z7_SCORED_SHA) {
+  const z7 = L.drawMismatch(inp.z7Fresh, inp.z7Stored, z7Pin);
+  if (z7) return `Z7 dev set: ${z7}`;
+  return L.drawMismatch(inp.fresh, inp.stored, inp.fresh.itemListSha256);
+}
+
+// Gate names whose value is null, nested ones dotted (G2.recheck).
+export function untestedGates(g) {
+  return Object.entries(g).flatMap(([k, v]) => (v === null ? [k]
+    : v && typeof v === 'object' ? Object.entries(v).filter(([, x]) => x === null).map(([s]) => `${k}.${s}`) : []));
+}
+
 // --- prompt hashes ---
 
 export function promptShaAgree(sidecars, current, names) {
