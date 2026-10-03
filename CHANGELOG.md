@@ -1,15 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- **`hippo-memory/server` now exports `authRevoke`, `ForbiddenError`, `isReservedActor` and the `Context` and `Actor` types**, so add-on packages can revoke keys on deprovisioning.
-
-### Changed
-
-- **`scim` is now a reserved actor name**, so a resolver subject `scim` or `scim:...` is rejected.
-
 ## 1.54.0 - 2026-10-03
 
 ### Added
