@@ -295,6 +295,8 @@ import {
   removeWorkspace as removeSlackWorkspace,
 } from './connectors/slack/workspaces.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
+import { log } from './log.js';
+import { printError } from './cli/output.js';
 import {
   parseLimitFlag,
   parseCountFlag,
@@ -842,17 +844,17 @@ async function cmdRemember(
   // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
   const userVisibleKinds = ['distilled', 'superseded'] as const;
   if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
-    console.error(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
-    console.error(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
+    printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
+    printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
     process.exit(1);
   }
   const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
   const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
-    console.error(ownerCheck.message);
+    printError(ownerCheck.message);
     process.exit(1);
   }
-  if (ownerCheck.message) console.error(ownerCheck.message);
+  if (ownerCheck.message) printError(ownerCheck.message);
   const ownerFlag = ownerCheck.value ?? null;
   const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
   const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
@@ -904,7 +906,7 @@ async function cmdRemember(
   console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | Confidence: ${entry.confidence}`);
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
-  for (const w of vetSecrets(entry.content, entry.tags, false).warnings) console.error(`Warning: ${w}`);
+  for (const w of vetSecrets(entry.content, entry.tags, false).warnings) printError(`Warning: ${w}`);
 
   void embedMemory(targetRoot, entry);
 
@@ -918,18 +920,18 @@ async function cmdRemember(
       const facts = await extractFacts(entry.content, {
         apiKey,
         model: config.extraction.model,
-        onError: (msg) => console.error(`  (extraction failed: ${msg})`),
+        onError: (msg) => printError(`  (extraction failed: ${msg})`),
       });
       if (facts.length > 0) {
         storeExtractedFacts(targetRoot, entry, facts);
-        console.error(`  extracted ${facts.length} fact(s)`);
+        printError(`  extracted ${facts.length} fact(s)`);
       }
     } catch (err) {
       // Extraction is best-effort: report it, never block remember.
-      console.error(`  (extraction failed: ${err instanceof Error ? err.message : String(err)})`);
+      printError(`  (extraction failed: ${err instanceof Error ? err.message : String(err)})`);
     }
   } else if (shouldExtract && !apiKey) {
-    console.error('  (extraction skipped: ANTHROPIC_API_KEY not set)');
+    printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
   }
 }
 
@@ -943,11 +945,11 @@ function cmdSupersede(
 
   const old = readEntry(hippoRoot, oldId, resolveTenantId({}));
   if (!old) {
-    console.error(`Error: memory ${oldId} not found.`);
+    printError(`Error: memory ${oldId} not found.`);
     process.exit(1);
   }
   if (old.superseded_by) {
-    console.error(`Error: memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`);
+    printError(`Error: memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`);
     process.exit(1);
   }
 
@@ -981,7 +983,7 @@ function cmdSupersede(
     writeEntry(hippoRoot, newEntry);
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      console.error(`Error: ${err.message}`);
+      printError(`Error: ${err.message}`);
       process.exit(1);
     }
     throw err;
@@ -1010,7 +1012,7 @@ interface RecallLateFlags {
 
 function failWith(message: string): () => never {
   return () => {
-    console.error(message);
+    printError(message);
     process.exit(1);
   };
 }
@@ -1152,7 +1154,7 @@ async function cmdRecall(
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const rank = await rankRecall(
-    { hippoRoot, globalRoot: globalRoot !== hippoRoot && globalOn ? globalRoot : undefined, tenantId, note: (line) => console.error(line) },
+    { hippoRoot, globalRoot: globalRoot !== hippoRoot && globalOn ? globalRoot : undefined, tenantId, note: (line) => printError(line) },
     {
       query, budget: entryBudget, cost: printCost, limit, why: showWhy, includeSuperseded, asOf,
       explicitScope: recallExplicitScope, activeScope: recallActiveScope,
@@ -1518,7 +1520,7 @@ function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, quer
   // Window-capped, so the count is a floor on large stores; fine for a "why is my row missing" hint.
   const hidden = probe.filter((e) => !api.passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
   if (hidden > 0) {
-    console.error(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
+    printError(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
   }
 }
 
@@ -1696,7 +1698,7 @@ async function cmdEval(
     let baseline: EvalBaseline | undefined;
     if (fs.existsSync(baselinePath)) {
       try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {
-        console.error(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
+        printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
       }
     }
 
@@ -1726,12 +1728,12 @@ async function cmdEval(
   }
 
   if (!corpusPath) {
-    console.error('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
+    printError('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
     process.exit(1);
   }
 
   if (!fs.existsSync(corpusPath)) {
-    console.error(`Corpus file not found: ${corpusPath}`);
+    printError(`Corpus file not found: ${corpusPath}`);
     process.exit(1);
   }
 
@@ -1741,7 +1743,7 @@ async function cmdEval(
     cases = Array.isArray(raw) ? raw : raw.cases;
     if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
   } catch (err) {
-    console.error(`Failed to read corpus: ${err instanceof Error ? err.message : err}`);
+    printError(`Failed to read corpus: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
 
@@ -1803,20 +1805,20 @@ async function cmdEval(
   }
 
   if (minMrr !== null && summary.meanMrr < minMrr) {
-    console.error(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
+    printError(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
     process.exit(1);
   }
 
   if (comparePath) {
     if (!fs.existsSync(comparePath)) {
-      console.error(`Baseline file not found: ${comparePath}`);
+      printError(`Baseline file not found: ${comparePath}`);
       process.exit(1);
     }
     let baseline: EvalSummary;
     try {
       baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
     } catch (err) {
-      console.error(`Failed to parse baseline: ${err instanceof Error ? err.message : err}`);
+      printError(`Failed to parse baseline: ${err instanceof Error ? err.message : err}`);
       process.exit(1);
     }
     const cmp = compareSummaries(baseline, summary);
@@ -1824,7 +1826,7 @@ async function cmdEval(
     if (asJson) {
       // The main JSON output already emitted; append comparison to stderr so
       // both can be captured independently.
-      console.error(JSON.stringify({ compare: cmp }, null, 2));
+      printError(JSON.stringify({ compare: cmp }, null, 2));
     } else {
       console.log();
       console.log('Compare vs baseline:');
@@ -1865,11 +1867,11 @@ function cmdTraceRecord(
   const validOutcomes = ['success', 'failure', 'partial'];
 
   if (!task || !stepsJson || !outcome) {
-    console.error('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
+    printError('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
     process.exit(1);
   }
   if (!validOutcomes.includes(outcome)) {
-    console.error(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
+    printError(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
     process.exit(1);
   }
 
@@ -1877,7 +1879,7 @@ function cmdTraceRecord(
   try {
     steps = parseSteps(stepsJson);
   } catch (err) {
-    console.error(String(err instanceof Error ? err.message : err));
+    printError(String(err instanceof Error ? err.message : err));
     process.exit(1);
   }
 
@@ -1928,7 +1930,7 @@ function cmdTrace(
     sourceLabel = 'global';
   }
   if (!entry) {
-    console.error(`Memory not found: ${id}`);
+    printError(`Memory not found: ${id}`);
     process.exit(1);
   }
 
@@ -2035,7 +2037,7 @@ async function cmdRefine(
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error('hippo refine needs ANTHROPIC_API_KEY in the environment.');
+    printError('hippo refine needs ANTHROPIC_API_KEY in the environment.');
     process.exit(1);
   }
 
@@ -2079,7 +2081,7 @@ function cmdDedup(
 
   const dryRun = Boolean(flags['dry-run']);
   if (flags['threshold'] !== undefined) {
-    console.error('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
+    printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
   const entries = loadAllEntries(hippoRoot);
@@ -2138,14 +2140,15 @@ function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void 
   try {
     content = fs.readFileSync(logPath, 'utf8');
   } catch {
+    // Removed or locked since the exists check: there is nothing to show this session.
     return;
   }
 
   if (content.trim().length > 0) {
-    console.error('=== Previous session hippo consolidation ===');
+    printError('=== Previous session hippo consolidation ===');
     process.stderr.write(content);
-    if (!content.endsWith('\n')) console.error();
-    console.error('===========================================');
+    if (!content.endsWith('\n')) printError();
+    printError('===========================================');
   }
 
   if (!flags['keep']) {
@@ -2198,6 +2201,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
       try {
         payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
       } catch {
+        // Malformed JSON is handled as a null payload by the fail-closed check below.
         payload = null;
       }
       if (!payload || typeof payload !== 'object') {
@@ -2250,7 +2254,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
             }));
           }
         } catch (err) {
-          console.error(`hippo compact-resume: trail skipped: ${err instanceof Error ? err.message : String(err)}`);
+          log.warn(`hippo compact-resume: trail skipped: ${err instanceof Error ? err.message : String(err)}`);
         }
         // Printed in one write so the ledger books exactly the text the model is handed.
         const text = captureConsole(() => {
@@ -2273,7 +2277,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
     }
   } catch (err) {
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
-    console.error(`hippo compact-resume: skipped: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`hippo compact-resume: skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
   process.exit(0);
 }
@@ -2533,7 +2537,7 @@ function cmdCodexRun(
 
   const child = spawnRealCodex(metadata.realCodexPath, args, process.cwd());
   child.on('error', (err) => {
-    console.error(`Failed to launch Codex: ${err.message}`);
+    printError(`Failed to launch Codex: ${err.message}`);
     process.exit(1);
   });
 
@@ -2580,6 +2584,7 @@ function cmdCodexRun(
       try {
         process.kill(process.pid, signal);
       } catch {
+        // Cannot re-raise the child's signal on this platform; a non-zero exit still reports the failure.
         process.exit(1);
       }
       return;
@@ -2757,6 +2762,7 @@ function cmdStatus(hippoRoot: string): void {
     try {
       return resolveEmbeddingProvider(hippoRoot);
     } catch {
+      // Status reports a bad provider config as "misconfigured" below instead of failing.
       return null;
     }
   })();
@@ -2831,7 +2837,7 @@ function cmdOutcome(
   const bad = Boolean(flags['bad']);
 
   if (!good && !bad) {
-    console.error('Specify --good or --bad');
+    printError('Specify --good or --bad');
     process.exit(1);
   }
 
@@ -2885,14 +2891,14 @@ function cmdForget(
   if (flags['archive'] === true) {
     const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
     if (!reason) {
-      console.error(ARCHIVE_REASON_REQUIRED);
+      printError(ARCHIVE_REASON_REQUIRED);
       process.exit(1);
     }
     try {
       api.archiveRaw(ctx, id, reason);
       console.log(`Archived ${id}`);
     } catch (err) {
-      console.error(`Could not archive ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      printError(`Could not archive ${id}: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
     return;
@@ -2906,16 +2912,16 @@ function cmdForget(
     if (/append-only/i.test(msg)) {
       // The delete was refused by the append-only trigger — this is a raw
       // memory, not a missing one. Point the user at the archive path.
-      console.error(rawForgetRefusal(id));
+      printError(rawForgetRefusal(id));
     } else if (api.isDormant(ctx, id)) {
       // Sleep moved it to the dormant store: it is not in active memory, so
       // point at the command that owns it.
-      console.error(
+      printError(
         `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
         `(or bring it back: hippo dormant restore ${id})`,
       );
     } else {
-      console.error(`Memory not found: ${id}`);
+      printError(`Memory not found: ${id}`);
     }
     process.exit(1);
   }
@@ -2930,15 +2936,15 @@ function previewForget(hippoRoot: string, id: string, archive: boolean): void {
   requireInit(hippoRoot);
   const entry = readEntry(hippoRoot, id, resolveTenantId({}));
   if (!entry) {
-    console.error(`Memory not found: ${id}`);
+    printError(`Memory not found: ${id}`);
     process.exit(1);
   }
   if (!archive && entry.kind === 'raw') {
-    console.error(rawForgetRefusal(id));
+    printError(rawForgetRefusal(id));
     process.exit(1);
   }
   if (archive && entry.kind !== 'raw') {
-    console.error(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
+    printError(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
     process.exit(1);
   }
   const snippet = entry.content.length > 80 ? `${entry.content.slice(0, 80)}...` : entry.content;
@@ -2950,7 +2956,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
 
   const entry = readEntry(hippoRoot, id, resolveTenantId({}));
   if (!entry) {
-    console.error(`Memory not found: ${id}`);
+    printError(`Memory not found: ${id}`);
     process.exit(1);
   }
 
@@ -3029,7 +3035,7 @@ function cmdResolve(
   // Accept "42" or "conflict_42"
   const conflictId = parseInt(rawId.replace(/^conflict_/, ''), 10);
   if (isNaN(conflictId)) {
-    console.error('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
+    printError('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
     process.exit(1);
   }
 
@@ -3040,7 +3046,7 @@ function cmdResolve(
     const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
     const conflict = conflicts.find((c) => c.id === conflictId);
     if (!conflict) {
-      console.error(`Conflict ${conflictId} not found or already resolved.`);
+      printError(`Conflict ${conflictId} not found or already resolved.`);
       process.exit(1);
     }
 
@@ -3078,7 +3084,7 @@ function cmdResolve(
   });
 
   if (!result) {
-    console.error(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
+    printError(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
     process.exit(1);
   }
 
@@ -3109,7 +3115,7 @@ function cmdReject(
   // content, so reason is its only human-readable identity.
   const reason = typeof flags['reason'] === 'string' ? (flags['reason'] as string).trim() : '';
   if (!reason) {
-    console.error('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
+    printError('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
     process.exit(1);
   }
 
@@ -3117,14 +3123,14 @@ function cmdReject(
   const memoryId = args[0];
 
   if (!memoryId && valueFlag === undefined) {
-    console.error('Usage: hippo reject <memory-id> --reason "<why>"');
-    console.error('   or: hippo reject --value "<text>" --reason "<why>"');
+    printError('Usage: hippo reject <memory-id> --reason "<why>"');
+    printError('   or: hippo reject --value "<text>" --reason "<why>"');
     process.exit(1);
   }
   if (memoryId && valueFlag !== undefined) {
     // Ambiguous ask: silently preferring one form would ignore the other
     // without feedback (code-review round-1 low).
-    console.error('hippo reject takes EITHER a memory id OR --value, not both.');
+    printError('hippo reject takes EITHER a memory id OR --value, not both.');
     process.exit(1);
   }
 
@@ -3153,7 +3159,7 @@ function cmdReject(
       console.log('  No live rows matched (pre-emptive tombstone).');
     }
   } catch (err) {
-    console.error(`Could not reject: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Could not reject: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 }
@@ -3197,19 +3203,19 @@ function cmdUnreject(
   const tenantId = resolveTenantId({});
   const digestOrPrefix = (args[0] ?? '').trim();
   if (!digestOrPrefix) {
-    console.error('Usage: hippo unreject <digest-or-prefix>');
+    printError('Usage: hippo unreject <digest-or-prefix>');
     process.exit(1);
   }
 
   const outcome = unrejectValue(root, tenantId, digestOrPrefix, 'cli');
   if (outcome.status === 'not_found') {
-    console.error(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
+    printError(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
     process.exit(1);
   }
   if (outcome.status === 'ambiguous') {
-    console.error(`"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones. Use a longer prefix:`);
+    printError(`"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones. Use a longer prefix:`);
     for (const c of outcome.candidates) {
-      console.error(`  ${c.digest.slice(0, 16)}...  ${c.reason ?? 'none given'}`);
+      printError(`  ${c.digest.slice(0, 16)}...  ${c.reason ?? 'none given'}`);
     }
     process.exit(1);
   }
@@ -3239,7 +3245,7 @@ function cmdDormant(
   if (sub === 'restore' || sub === 'forget') {
     const id = (args[1] ?? '').trim();
     if (!id) {
-      console.error(`Usage: hippo dormant ${sub} <id>`);
+      printError(`Usage: hippo dormant ${sub} <id>`);
       process.exit(1);
     }
     try {
@@ -3252,9 +3258,9 @@ function cmdDormant(
       }
     } catch (err) {
       if (err instanceof RejectedValueError) {
-        console.error(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
+        printError(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
       } else {
-        console.error(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+        printError(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
       }
       process.exit(1);
     }
@@ -3308,7 +3314,7 @@ function cmdQuarantine(
   if (sub === 'approve' || sub === 'reject') {
     const id = (args[1] ?? '').trim();
     if (!id) {
-      console.error(`Usage: hippo quarantine ${sub} <id>`);
+      printError(`Usage: hippo quarantine ${sub} <id>`);
       process.exit(1);
     }
     try {
@@ -3320,7 +3326,7 @@ function cmdQuarantine(
         console.log(`Rejected ${id}: stays quarantined.`);
       }
     } catch (err) {
-      console.error(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      printError(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
     return;
@@ -3462,7 +3468,7 @@ function cmdSnapshot(
     const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim();
 
     if (!task || !summary || !nextStep) {
-      console.error('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
+      printError('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
       process.exit(1);
     }
 
@@ -3513,7 +3519,7 @@ function cmdSnapshot(
     return;
   }
 
-  console.error('Usage: hippo snapshot <save|show|clear>');
+  printError('Usage: hippo snapshot <save|show|clear>');
   process.exit(1);
 }
 
@@ -3534,7 +3540,7 @@ function cmdSession(
     const content = String(flags['content'] ?? '').trim();
 
     if (!sessionId || !content) {
-      console.error('Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] [--source <source>]');
+      printError('Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] [--source <source>]');
       process.exit(1);
     }
 
@@ -3595,11 +3601,11 @@ function cmdSession(
     const summary = String(flags['summary'] ?? '').trim();
 
     if (!sessionId) {
-      console.error('Usage: hippo session complete --session <session-id> --outcome <success|failure|partial> [--summary "..."]');
+      printError('Usage: hippo session complete --session <session-id> --outcome <success|failure|partial> [--summary "..."]');
       process.exit(1);
     }
     if (!isHandoffOutcome(outcomeRaw)) {
-      console.error(`Invalid outcome: "${outcomeRaw}". Must be one of: success, failure, partial.`);
+      printError(`Invalid outcome: "${outcomeRaw}". Must be one of: success, failure, partial.`);
       process.exit(1);
     }
     const outcome: HandoffOutcome = outcomeRaw;
@@ -3667,7 +3673,7 @@ function cmdSession(
     return;
   }
 
-  console.error('Usage: hippo session <log|show|latest|resume|complete>');
+  printError('Usage: hippo session <log|show|latest|resume|complete>');
   process.exit(1);
 }
 
@@ -3683,13 +3689,13 @@ function cmdHandoff(
   if (subcommand === 'create') {
     const summary = String(flags['summary'] ?? '').trim();
     if (!summary) {
-      console.error('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] [--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] [--tests <pass|fail|unknown>]');
+      printError('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] [--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] [--tests <pass|fail|unknown>]');
       process.exit(1);
     }
 
     const outcomeRaw = flags['outcome'];
     if (outcomeRaw !== undefined && !isHandoffOutcome(outcomeRaw)) {
-      console.error(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
+      printError(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
       process.exit(1);
     }
 
@@ -3708,7 +3714,7 @@ function cmdHandoff(
     for (const name of ['target-runtime', 'card-id'] as const) {
       // parseArgs turns a value-less flag into `true`; refuse rather than store "true".
       if (flags[name] === true) {
-        console.error(`--${name} needs a value`);
+        printError(`--${name} needs a value`);
         process.exit(1);
       }
     }
@@ -3777,13 +3783,13 @@ function cmdHandoff(
   if (subcommand === 'show') {
     const idArg = args[1];
     if (!idArg) {
-      console.error('Usage: hippo handoff show <id> [--json]');
+      printError('Usage: hippo handoff show <id> [--json]');
       process.exit(1);
     }
 
     const handoffId = parseInt(idArg, 10);
     if (!Number.isFinite(handoffId) || handoffId <= 0) {
-      console.error(`Invalid handoff ID: ${idArg}`);
+      printError(`Invalid handoff ID: ${idArg}`);
       process.exit(1);
     }
 
@@ -3807,7 +3813,7 @@ function cmdHandoff(
     return;
   }
 
-  console.error('Usage: hippo handoff <create|latest|show>');
+  printError('Usage: hippo handoff <create|latest|show>');
   process.exit(1);
 }
 
@@ -3858,7 +3864,7 @@ function cardRunFlag(flags: Record<string, string | boolean | string[]>): number
   if (raw === undefined) return undefined;
   const n = Number(raw);
   if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n <= 0) {
-    console.error(`Invalid --run: "${raw}" (expected a positive integer).`);
+    printError(`Invalid --run: "${raw}" (expected a positive integer).`);
     process.exit(1);
   }
   return n;
@@ -3902,7 +3908,7 @@ function cmdCard(
     for (const key of Object.keys(flags)) {
       if (!allowedFlags.includes(key)) {
         const valid = allowedFlags.length > 0 ? allowedFlags.map((f) => `--${f}`).join(', ') : '(none)';
-        console.error(`Unknown flag --${key} for hippo card ${subcommand}. Valid flags: ${valid}`);
+        printError(`Unknown flag --${key} for hippo card ${subcommand}. Valid flags: ${valid}`);
         process.exit(1);
       }
     }
@@ -3911,7 +3917,7 @@ function cmdCard(
   if (subcommand === 'create') {
     const title = cardStringFlag(flags, 'title') ?? '';
     if (!title) {
-      console.error('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
+      printError('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
       process.exit(1);
     }
     const repo = cardStringFlag(flags, 'repo') || undefined;
@@ -3920,14 +3926,14 @@ function cmdCard(
     let budget: number | undefined;
     if (budgetRaw !== undefined) {
       if (!/^\d+$/.test(budgetRaw)) {
-        console.error(`Invalid budget: "${budgetRaw}" (expected a positive integer)`);
+        printError(`Invalid budget: "${budgetRaw}" (expected a positive integer)`);
         process.exit(1);
       }
       budget = Number(budgetRaw);
     }
     const dependsOnFlag = flags['depends-on'];
     if (dependsOnFlag === true) {
-      console.error('--depends-on requires a value');
+      printError('--depends-on requires a value');
       process.exit(1);
     }
     const dependsOn: string[] = Array.isArray(dependsOnFlag) ? dependsOnFlag : [];
@@ -3936,7 +3942,7 @@ function cmdCard(
     try {
       card = createCard(hippoRoot, tenantId, { title, repo, contract, budget, dependsOn });
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     console.log(`Created card ${card.id} (status: ${card.status})`);
@@ -3946,12 +3952,12 @@ function cmdCard(
   if (subcommand === 'show') {
     const id = args[1];
     if (!id) {
-      console.error('Usage: hippo card show <id> [--json]');
+      printError('Usage: hippo card show <id> [--json]');
       process.exit(1);
     }
     const detail = loadCardDetail(hippoRoot, tenantId, id);
     if (!detail) {
-      console.error(`No card found with id ${id}.`);
+      printError(`No card found with id ${id}.`);
       process.exit(1);
     }
     if (flags['json']) {
@@ -3965,7 +3971,7 @@ function cmdCard(
   if (subcommand === 'list') {
     const status = cardStringFlag(flags, 'status');
     if (status !== undefined && !isCardStatus(status)) {
-      console.error(`Invalid status: "${status}".`);
+      printError(`Invalid status: "${status}".`);
       process.exit(1);
     }
     const cards = listCards(hippoRoot, tenantId, { status });
@@ -3987,7 +3993,7 @@ function cmdCard(
     const id = args[1];
     const runtime = cardStringFlag(flags, 'runtime') ?? '';
     if (!id || !runtime) {
-      console.error('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
+      printError('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
       process.exit(1);
     }
     const sessionId = cardStringFlag(flags, 'session') || undefined;
@@ -3995,11 +4001,11 @@ function cmdCard(
     try {
       card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!card) {
-      console.error(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
+      printError(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
       process.exit(1);
     }
     console.log(`Claimed card ${card.id} for ${runtime} (run ${card.runId}, lease until ${card.leaseUntil})`);
@@ -4010,18 +4016,18 @@ function cmdCard(
     const id = args[1];
     const runId = cardRunFlag(flags);
     if (!id || runId === undefined) {
-      console.error('Usage: hippo card heartbeat <id> --run <n>');
+      printError('Usage: hippo card heartbeat <id> --run <n>');
       process.exit(1);
     }
     let card: Card | null;
     try {
       card = heartbeatCard(hippoRoot, tenantId, id, runId);
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!card) {
-      console.error(`Could not heartbeat card ${id} (${cardRefusal(hippoRoot, tenantId, id)}).`);
+      printError(`Could not heartbeat card ${id} (${cardRefusal(hippoRoot, tenantId, id)}).`);
       process.exit(1);
     }
     console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
@@ -4032,7 +4038,7 @@ function cmdCard(
     const id = args[1];
     const reason = cardStringFlag(flags, 'reason') ?? '';
     if (!id || !reason) {
-      console.error(CARD_BLOCK_REASON_REQUIRED);
+      printError(CARD_BLOCK_REASON_REQUIRED);
       process.exit(1);
     }
     const runId = cardRunFlag(flags);
@@ -4040,12 +4046,12 @@ function cmdCard(
     try {
       card = blockCard(hippoRoot, tenantId, id, reason, runId);
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!card) {
       const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
-      console.error(`Could not block card ${id} (${why}).`);
+      printError(`Could not block card ${id} (${why}).`);
       process.exit(1);
     }
     console.log(`Blocked card ${card.id}`);
@@ -4055,7 +4061,7 @@ function cmdCard(
   if (subcommand === 'review') {
     const id = args[1];
     if (!id) {
-      console.error('Usage: hippo card review <id> [--run <n>]');
+      printError('Usage: hippo card review <id> [--run <n>]');
       process.exit(1);
     }
     const runId = cardRunFlag(flags);
@@ -4063,12 +4069,12 @@ function cmdCard(
     try {
       card = reviewCard(hippoRoot, tenantId, id, runId);
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!card) {
       const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
-      console.error(`Could not move card ${id} to review (${why}).`);
+      printError(`Could not move card ${id} to review (${why}).`);
       process.exit(1);
     }
     console.log(`Card ${card.id} moved to review`);
@@ -4079,7 +4085,7 @@ function cmdCard(
     const id = args[1];
     const outcomeRaw = flags['outcome'];
     if (!id || !isHandoffOutcome(outcomeRaw)) {
-      console.error('Usage: hippo card complete <id> --outcome <success|failure|partial> [--run <n>]');
+      printError('Usage: hippo card complete <id> --outcome <success|failure|partial> [--run <n>]');
       process.exit(1);
     }
     const runId = cardRunFlag(flags);
@@ -4087,12 +4093,12 @@ function cmdCard(
     try {
       result = completeCard(hippoRoot, tenantId, id, outcomeRaw, runId);
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!result) {
       const why = runId === undefined ? 'not in review' : cardRefusal(hippoRoot, tenantId, id);
-      console.error(`Could not complete card ${id} (${why}).`);
+      printError(`Could not complete card ${id} (${why}).`);
       process.exit(1);
     }
     console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);
@@ -4104,7 +4110,7 @@ function cmdCard(
 
   if (subcommand === 'reclaim') {
     if (args.length > 1) {
-      console.error('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
+      printError('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
       process.exit(1);
     }
     const ids = reclaimExpiredCards(hippoRoot, tenantId);
@@ -4121,18 +4127,18 @@ function cmdCard(
   if (subcommand === 'comment') {
     const id = args[1];
     if (!id) {
-      console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
+      printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
       process.exit(1);
     }
     // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store instead.
     const card = loadCard(hippoRoot, tenantId, id);
     if (!card) {
-      console.error(`No card found with id ${id}.`);
+      printError(`No card found with id ${id}.`);
       process.exit(1);
     }
     const body = cardStringFlag(flags, 'body') ?? '';
     if (!body) {
-      console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
+      printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
       process.exit(1);
     }
     const author = cardStringFlag(flags, 'author') || 'cli';
@@ -4141,7 +4147,7 @@ function cmdCard(
     return;
   }
 
-  console.error('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
+  printError('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
   process.exit(1);
 }
 
@@ -4162,23 +4168,23 @@ function cmdPredict(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
+      printError('Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
       process.exit(1);
     }
     const id = parseInt(String(idRaw), 10);
     if (!Number.isFinite(id) || id <= 0) {
-      console.error(`Invalid prediction id: "${idRaw}"`);
+      printError(`Invalid prediction id: "${idRaw}"`);
       process.exit(1);
     }
     const stateRaw = typeof flags['state'] === 'string' ? flags['state'].trim() : '';
     if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
-      console.error(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
+      printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
       process.exit(1);
     }
     const actualRaw = flags['actual'];
     const actualValue = actualRaw !== undefined ? Number(actualRaw) : undefined;
     if (actualRaw !== undefined && !Number.isFinite(actualValue)) {
-      console.error(`Invalid --actual: "${actualRaw}". Must be a number.`);
+      printError(`Invalid --actual: "${actualRaw}". Must be a number.`);
       process.exit(1);
     }
     const noteRaw = flags['note'];
@@ -4201,7 +4207,7 @@ function cmdPredict(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
 
@@ -4223,7 +4229,7 @@ function cmdPredict(
       }
     } else {
       if (!predictionsModule.VALID_CLOSURE_STATES.has(status as predictionsModule.ClosureState)) {
-        console.error(`Invalid --status: "${status}". Must be one of: open | closed | closed-unknown | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: open | closed | closed-unknown | all.`);
         process.exit(1);
       }
       if (classTag) {
@@ -4233,7 +4239,7 @@ function cmdPredict(
         });
       } else {
         // status filter without class — scan all classes is more complex; v1 requires --class for non-default status
-        console.error('--status filter (non-open) requires --class to be set.');
+        printError('--status filter (non-open) requires --class to be set.');
         process.exit(1);
       }
     }
@@ -4257,17 +4263,17 @@ function cmdPredict(
   if (subcommand === 'show') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo predict show <id>');
+      printError('Usage: hippo predict show <id>');
       process.exit(1);
     }
     const id = parseInt(String(idRaw), 10);
     if (!Number.isFinite(id) || id <= 0) {
-      console.error(`Invalid prediction id: "${idRaw}"`);
+      printError(`Invalid prediction id: "${idRaw}"`);
       process.exit(1);
     }
     const pred = predictionsModule.loadPredictionById(hippoRoot, tenantId, id);
     if (!pred) {
-      console.error(`Prediction ${id} not found.`);
+      printError(`Prediction ${id} not found.`);
       process.exit(1);
     }
     console.log(`Prediction #${pred.id}`);
@@ -4288,7 +4294,7 @@ function cmdPredict(
     // J3 reference-class / planning-fallacy detector
     const classTagRaw = flags['class'];
     if (typeof classTagRaw !== 'string' || !classTagRaw.trim()) {
-      console.error('Usage: hippo predict baserate --class <c>');
+      printError('Usage: hippo predict baserate --class <c>');
       process.exit(1);
     }
     const baserate = predictionsModule.computePredictionBaserate(
@@ -4316,22 +4322,22 @@ function cmdPredict(
   // Default subcommand: create. args[0] is the claim text.
   const claimText = subcommand;
   if (!claimText) {
-    console.error('Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]');
-    console.error('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
-    console.error('       hippo predict list [--class X] [--status open|closed|closed-unknown|all] [--limit N]');
-    console.error('       hippo predict show <id>');
+    printError('Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]');
+    printError('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
+    printError('       hippo predict list [--class X] [--status open|closed|closed-unknown|all] [--limit N]');
+    printError('       hippo predict show <id>');
     process.exit(1);
   }
   const classTagRaw = flags['class'];
   if (typeof classTagRaw !== 'string' || !classTagRaw.trim()) {
-    console.error('--class is required for prediction creation.');
+    printError('--class is required for prediction creation.');
     process.exit(1);
   }
   const classTag = classTagRaw.trim();
   const estimateRaw = flags['estimate'];
   const estimateValue = estimateRaw !== undefined ? Number(estimateRaw) : undefined;
   if (estimateRaw !== undefined && !Number.isFinite(estimateValue)) {
-    console.error(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
+    printError(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
     process.exit(1);
   }
   const unitRaw = flags['unit'];
@@ -4365,7 +4371,7 @@ function cmdDecide(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     let results;
@@ -4373,7 +4379,7 @@ function cmdDecide(
       results = decisionsModule.loadDecisions(hippoRoot, tenantId, { limit });
     } else {
       if (!decisionsModule.VALID_DECISION_STATES.has(status as decisionsModule.DecisionStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
         process.exit(1);
       }
       results = decisionsModule.loadDecisions(hippoRoot, tenantId, {
@@ -4398,17 +4404,17 @@ function cmdDecide(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo decide get <id>');
+      printError('Usage: hippo decide get <id>');
       process.exit(1);
     }
     const id = parseInt(String(idRaw), 10);
     if (!Number.isFinite(id) || id <= 0) {
-      console.error(`Invalid decision id: "${idRaw}"`);
+      printError(`Invalid decision id: "${idRaw}"`);
       process.exit(1);
     }
     const decision = decisionsModule.loadDecisionById(hippoRoot, tenantId, id);
     if (!decision) {
-      console.error(`Decision ${id} not found.`);
+      printError(`Decision ${id} not found.`);
       process.exit(1);
     }
     console.log(`Decision #${decision.id}`);
@@ -4426,12 +4432,12 @@ function cmdDecide(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo decide close <id>');
+      printError('Usage: hippo decide close <id>');
       process.exit(1);
     }
     const id = parseInt(String(idRaw), 10);
     if (!Number.isFinite(id) || id <= 0) {
-      console.error(`Invalid decision id: "${idRaw}"`);
+      printError(`Invalid decision id: "${idRaw}"`);
       process.exit(1);
     }
     const closed = decisionsModule.closeDecision(hippoRoot, tenantId, id);
@@ -4442,10 +4448,10 @@ function cmdDecide(
   // Default subcommand: create. args[0] is the decision text.
   const decisionText = subcommand;
   if (!decisionText) {
-    console.error('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
-    console.error('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
-    console.error('       hippo decide get <id>');
-    console.error('       hippo decide close <id>');
+    printError('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
+    printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
+    printError('       hippo decide get <id>');
+    printError('       hippo decide close <id>');
     process.exit(1);
   }
   const contextRaw = flags['context'];
@@ -4454,7 +4460,7 @@ function cmdDecide(
   // request: the user asked to supersede but gave no memory id. Reject it rather
   // than silently creating a non-superseding decision (codex review 2026-05-28).
   if (flags['supersedes'] === true) {
-    console.error('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
+    printError('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
     process.exit(1);
   }
   const supersedesMemId = typeof flags['supersedes'] === 'string' ? flags['supersedes'] : null;
@@ -4469,7 +4475,7 @@ function cmdDecide(
   if (supersedesMemId) {
     oldEntry = readEntry(hippoRoot, supersedesMemId, tenantId) ?? null;
     if (!oldEntry) {
-      console.error(`Memory ${supersedesMemId} not found.`);
+      printError(`Memory ${supersedesMemId} not found.`);
       process.exit(1);
     }
     supersedesDecisionId =
@@ -4499,7 +4505,7 @@ function cmdDecide(
       if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
       writeEntry(hippoRoot, oldEntry);
     } catch (e) {
-      console.error(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${(e as Error).message}`);
+      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${(e as Error).message}`);
     }
   }
 
@@ -4522,7 +4528,7 @@ function parsePositiveIncidentId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0) {
-    console.error(`Invalid incident id: "${idRaw}" (expected a positive integer).`);
+    printError(`Invalid incident id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }
   return id;
@@ -4543,7 +4549,7 @@ function cmdIncident(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     let results;
@@ -4551,7 +4557,7 @@ function cmdIncident(
       results = incidentsModule.loadIncidents(hippoRoot, tenantId, { limit });
     } else {
       if (!incidentsModule.VALID_INCIDENT_STATES.has(status as incidentsModule.IncidentStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: open | resolved | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: open | resolved | closed | all.`);
         process.exit(1);
       }
       results = incidentsModule.loadIncidents(hippoRoot, tenantId, {
@@ -4576,13 +4582,13 @@ function cmdIncident(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo incident get <id>');
+      printError('Usage: hippo incident get <id>');
       process.exit(1);
     }
     const id = parsePositiveIncidentId(idRaw);
     const incident = incidentsModule.loadIncidentById(hippoRoot, tenantId, id);
     if (!incident) {
-      console.error(`Incident ${id} not found.`);
+      printError(`Incident ${id} not found.`);
       process.exit(1);
     }
     console.log(`Incident #${incident.id}`);
@@ -4603,13 +4609,13 @@ function cmdIncident(
   if (subcommand === 'resolve') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo incident resolve <id> --resolution "<text>"');
+      printError('Usage: hippo incident resolve <id> --resolution "<text>"');
       process.exit(1);
     }
     const id = parsePositiveIncidentId(idRaw);
     const resolutionRaw = flags['resolution'];
     if (typeof resolutionRaw !== 'string' || !resolutionRaw.trim()) {
-      console.error('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
+      printError('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
       process.exit(1);
     }
     const resolved = incidentsModule.resolveIncident(hippoRoot, tenantId, id, resolutionRaw);
@@ -4620,7 +4626,7 @@ function cmdIncident(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo incident close <id>');
+      printError('Usage: hippo incident close <id>');
       process.exit(1);
     }
     const id = parsePositiveIncidentId(idRaw);
@@ -4634,11 +4640,11 @@ function cmdIncident(
   // `open` keyword the text is args[1], otherwise args[0] IS the text.
   const incidentText = subcommand === 'open' ? (args[1] ?? '') : subcommand;
   if (!incidentText) {
-    console.error('Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...');
-    console.error('       hippo incident list [--status open|resolved|closed|all] [--limit N]');
-    console.error('       hippo incident get <id>');
-    console.error('       hippo incident resolve <id> --resolution "<text>"');
-    console.error('       hippo incident close <id>');
+    printError('Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...');
+    printError('       hippo incident list [--status open|resolved|closed|all] [--limit N]');
+    printError('       hippo incident get <id>');
+    printError('       hippo incident resolve <id> --resolution "<text>"');
+    printError('       hippo incident close <id>');
     process.exit(1);
   }
   const contextRaw = flags['context'];
@@ -4652,7 +4658,7 @@ function cmdIncident(
   } else if (typeof linkRaw === 'string') {
     linkedMemoryIds = [linkRaw];
   } else if (linkRaw === true) {
-    console.error('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
+    printError('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
     process.exit(1);
   }
 
@@ -4680,7 +4686,7 @@ function parsePositiveProcessId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0) {
-    console.error(`Invalid process id: "${idRaw}" (expected a positive integer).`);
+    printError(`Invalid process id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }
   return id;
@@ -4692,7 +4698,7 @@ function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): 
   if (Array.isArray(stepRaw)) return stepRaw;
   if (typeof stepRaw === 'string') return [stepRaw];
   if (stepRaw === true) {
-    console.error('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
+    printError('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
     process.exit(1);
   }
   return [];
@@ -4713,7 +4719,7 @@ function cmdProcess(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     let results;
@@ -4721,7 +4727,7 @@ function cmdProcess(
       results = processesModule.loadProcesses(hippoRoot, tenantId, { limit });
     } else {
       if (!processesModule.VALID_PROCESS_STATES.has(status as processesModule.ProcessStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
         process.exit(1);
       }
       results = processesModule.loadProcesses(hippoRoot, tenantId, {
@@ -4745,13 +4751,13 @@ function cmdProcess(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo process get <id>');
+      printError('Usage: hippo process get <id>');
       process.exit(1);
     }
     const id = parsePositiveProcessId(idRaw);
     const proc = processesModule.loadProcessById(hippoRoot, tenantId, id);
     if (!proc) {
-      console.error(`Process ${id} not found.`);
+      printError(`Process ${id} not found.`);
       process.exit(1);
     }
     console.log(`Process #${proc.id}`);
@@ -4775,13 +4781,13 @@ function cmdProcess(
   if (subcommand === 'supersede') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]');
+      printError('Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]');
       process.exit(1);
     }
     const id = parsePositiveProcessId(idRaw);
     const steps = collectProcessSteps(flags['step']);
     if (steps.length === 0) {
-      console.error('hippo process supersede requires at least one --step "<text>" for the new version.');
+      printError('hippo process supersede requires at least one --step "<text>" for the new version.');
       process.exit(1);
     }
     // A supersession is a new version of the SAME process, so the new row reuses
@@ -4790,7 +4796,7 @@ function cmdProcess(
     // preflight is the authoritative active-state check.
     const existing = processesModule.loadProcessById(hippoRoot, tenantId, id);
     if (!existing) {
-      console.error(`Process ${id} not found.`);
+      printError(`Process ${id} not found.`);
       process.exit(1);
     }
     const changeRaw = flags['change'];
@@ -4814,7 +4820,7 @@ function cmdProcess(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo process close <id>');
+      printError('Usage: hippo process close <id>');
       process.exit(1);
     }
     const id = parsePositiveProcessId(idRaw);
@@ -4828,11 +4834,11 @@ function cmdProcess(
   // `new` keyword the name is args[1], otherwise args[0] IS the name.
   const processName = subcommand === 'new' ? (args[1] ?? '') : subcommand;
   if (!processName) {
-    console.error('Usage: hippo process new "<name>" --step "<text>" [--step ...] [--description "<text>"]');
-    console.error('       hippo process list [--status active|superseded|closed|all] [--limit N]');
-    console.error('       hippo process get <id>');
-    console.error('       hippo process supersede <id> --step "<text>" [--change "<summary>"]');
-    console.error('       hippo process close <id>');
+    printError('Usage: hippo process new "<name>" --step "<text>" [--step ...] [--description "<text>"]');
+    printError('       hippo process list [--status active|superseded|closed|all] [--limit N]');
+    printError('       hippo process get <id>');
+    printError('       hippo process supersede <id> --step "<text>" [--change "<summary>"]');
+    printError('       hippo process close <id>');
     process.exit(1);
   }
   const steps = collectProcessSteps(flags['step']);
@@ -4855,7 +4861,7 @@ function parsePositivePolicyId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0) {
-    console.error(`Invalid policy id: "${idRaw}" (expected a positive integer).`);
+    printError(`Invalid policy id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }
   return id;
@@ -4883,7 +4889,7 @@ function cmdPolicy(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     let results;
@@ -4891,7 +4897,7 @@ function cmdPolicy(
       results = policiesModule.loadPolicies(hippoRoot, tenantId, { limit });
     } else {
       if (!policiesModule.VALID_POLICY_STATES.has(status as policiesModule.PolicyStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
         process.exit(1);
       }
       results = policiesModule.loadPolicies(hippoRoot, tenantId, {
@@ -4911,7 +4917,7 @@ function cmdPolicy(
   if (subcommand === 'asof') {
     const dateRaw = args[1];
     if (!dateRaw) {
-      console.error('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
+      printError('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
       process.exit(1);
     }
     const nameRaw = flags['name'];
@@ -4920,7 +4926,7 @@ function cmdPolicy(
     try {
       results = policiesModule.loadPoliciesAsOf(hippoRoot, tenantId, dateRaw, { name });
     } catch (e) {
-      console.error((e as Error).message);
+      printError((e as Error).message);
       process.exit(1);
     }
     if (results.length === 0) {
@@ -4935,13 +4941,13 @@ function cmdPolicy(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo policy get <id>');
+      printError('Usage: hippo policy get <id>');
       process.exit(1);
     }
     const id = parsePositivePolicyId(idRaw);
     const p = policiesModule.loadPolicyById(hippoRoot, tenantId, id);
     if (!p) {
-      console.error(`Policy ${id} not found.`);
+      printError(`Policy ${id} not found.`);
       process.exit(1);
     }
     console.log(`Policy #${p.id}`);
@@ -4963,18 +4969,18 @@ function cmdPolicy(
   if (subcommand === 'supersede') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]');
+      printError('Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]');
       process.exit(1);
     }
     const id = parsePositivePolicyId(idRaw);
     const textRaw = flags['text'];
     if (typeof textRaw !== 'string' || !textRaw.trim()) {
-      console.error('hippo policy supersede requires --text "<rule>" for the new version.');
+      printError('hippo policy supersede requires --text "<rule>" for the new version.');
       process.exit(1);
     }
     const existing = policiesModule.loadPolicyById(hippoRoot, tenantId, id);
     if (!existing) {
-      console.error(`Policy ${id} not found.`);
+      printError(`Policy ${id} not found.`);
       process.exit(1);
     }
     const fromRaw = flags['from'];
@@ -4993,7 +4999,7 @@ function cmdPolicy(
       console.log(`Policy #${created.id} recorded (v${created.version}), superseding #${id}.`);
       if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
     } catch (e) {
-      console.error((e as Error).message);
+      printError((e as Error).message);
       process.exit(1);
     }
     return;
@@ -5002,7 +5008,7 @@ function cmdPolicy(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo policy close <id>');
+      printError('Usage: hippo policy close <id>');
       process.exit(1);
     }
     const id = parsePositivePolicyId(idRaw);
@@ -5016,12 +5022,12 @@ function cmdPolicy(
   const policyName = subcommand === 'new' ? (args[1] ?? '') : subcommand;
   const textRaw = flags['text'];
   if (!policyName || typeof textRaw !== 'string' || !textRaw.trim()) {
-    console.error('Usage: hippo policy new "<name>" --text "<rule>" [--from <iso>] [--to <iso>]');
-    console.error('       hippo policy list [--status active|superseded|closed|all] [--limit N]');
-    console.error('       hippo policy get <id>');
-    console.error('       hippo policy asof <iso-date> [--name "<policy>"]');
-    console.error('       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]');
-    console.error('       hippo policy close <id>');
+    printError('Usage: hippo policy new "<name>" --text "<rule>" [--from <iso>] [--to <iso>]');
+    printError('       hippo policy list [--status active|superseded|closed|all] [--limit N]');
+    printError('       hippo policy get <id>');
+    printError('       hippo policy asof <iso-date> [--name "<policy>"]');
+    printError('       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]');
+    printError('       hippo policy close <id>');
     process.exit(1);
   }
   const fromRaw = flags['from'];
@@ -5038,7 +5044,7 @@ function cmdPolicy(
     console.log(`Policy recorded: #${created.id} (v${created.version}, effective ${range})`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    console.error((e as Error).message);
+    printError((e as Error).message);
     process.exit(1);
   }
 }
@@ -5049,7 +5055,7 @@ function parsePositiveSkillId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0) {
-    console.error(`Invalid skill id: "${idRaw}" (expected a positive integer).`);
+    printError(`Invalid skill id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }
   return id;
@@ -5077,7 +5083,7 @@ function cmdSkill(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     let results;
@@ -5085,7 +5091,7 @@ function cmdSkill(
       results = skillsModule.loadSkills(hippoRoot, tenantId, { limit });
     } else {
       if (!skillsModule.VALID_SKILL_STATES.has(status as skillsModule.SkillStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
         process.exit(1);
       }
       results = skillsModule.loadSkills(hippoRoot, tenantId, {
@@ -5115,13 +5121,13 @@ function cmdSkill(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo skill get <id>');
+      printError('Usage: hippo skill get <id>');
       process.exit(1);
     }
     const id = parsePositiveSkillId(idRaw);
     const s = skillsModule.loadSkillById(hippoRoot, tenantId, id);
     if (!s) {
-      console.error(`Skill ${id} not found.`);
+      printError(`Skill ${id} not found.`);
       process.exit(1);
     }
     console.log(`Skill #${s.id}`);
@@ -5142,18 +5148,18 @@ function cmdSkill(
   if (subcommand === 'supersede') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]');
+      printError('Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]');
       process.exit(1);
     }
     const id = parsePositiveSkillId(idRaw);
     const instrRaw = flags['instructions'];
     if (typeof instrRaw !== 'string' || !instrRaw.trim()) {
-      console.error('hippo skill supersede requires --instructions "<text>" for the new version.');
+      printError('hippo skill supersede requires --instructions "<text>" for the new version.');
       process.exit(1);
     }
     const existing = skillsModule.loadSkillById(hippoRoot, tenantId, id);
     if (!existing) {
-      console.error(`Skill ${id} not found.`);
+      printError(`Skill ${id} not found.`);
       process.exit(1);
     }
     const trigRaw = flags['trigger'];
@@ -5170,7 +5176,7 @@ function cmdSkill(
       console.log(`Skill #${created.id} recorded (v${created.version}), superseding #${id}.`);
       if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
     } catch (e) {
-      console.error((e as Error).message);
+      printError((e as Error).message);
       process.exit(1);
     }
     return;
@@ -5179,7 +5185,7 @@ function cmdSkill(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo skill close <id>');
+      printError('Usage: hippo skill close <id>');
       process.exit(1);
     }
     const id = parsePositiveSkillId(idRaw);
@@ -5193,12 +5199,12 @@ function cmdSkill(
   const skillName = subcommand === 'new' ? (args[1] ?? '') : subcommand;
   const instrRaw = flags['instructions'];
   if (!skillName || typeof instrRaw !== 'string' || !instrRaw.trim()) {
-    console.error('Usage: hippo skill new "<name>" --instructions "<text>" [--trigger "<when>"]');
-    console.error('       hippo skill list [--status active|superseded|closed|all] [--limit N]');
-    console.error('       hippo skill get <id>');
-    console.error('       hippo skill export   (render active skills as an AGENTS.md/CLAUDE.md block)');
-    console.error('       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]');
-    console.error('       hippo skill close <id>');
+    printError('Usage: hippo skill new "<name>" --instructions "<text>" [--trigger "<when>"]');
+    printError('       hippo skill list [--status active|superseded|closed|all] [--limit N]');
+    printError('       hippo skill get <id>');
+    printError('       hippo skill export   (render active skills as an AGENTS.md/CLAUDE.md block)');
+    printError('       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]');
+    printError('       hippo skill close <id>');
     process.exit(1);
   }
   const trigRaw = flags['trigger'];
@@ -5212,7 +5218,7 @@ function cmdSkill(
     console.log(`Skill recorded: #${created.id} (v${created.version})`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    console.error((e as Error).message);
+    printError((e as Error).message);
     process.exit(1);
   }
 }
@@ -5221,7 +5227,7 @@ function parsePositiveBriefId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0) {
-    console.error(`Invalid brief id: "${idRaw}" (expected a positive integer).`);
+    printError(`Invalid brief id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }
   return id;
@@ -5233,12 +5239,12 @@ function printBriefRow(b: briefsModule.ProjectBrief): void {
 }
 
 function briefUsage(): void {
-  console.error('Usage: hippo brief new "<repo>" --summary "<text>"');
-  console.error('       hippo brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]');
-  console.error('       hippo brief get <id>');
-  console.error('       hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
-  console.error('       hippo brief close <id>');
-  console.error('       hippo brief refresh "<repo>" [--dry-run]   (auto-assemble the brief from the repo\'s receipts)');
+  printError('Usage: hippo brief new "<repo>" --summary "<text>"');
+  printError('       hippo brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]');
+  printError('       hippo brief get <id>');
+  printError('       hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
+  printError('       hippo brief close <id>');
+  printError('       hippo brief refresh "<repo>" [--dry-run]   (auto-assemble the brief from the repo\'s receipts)');
 }
 
 function cmdProjectBrief(
@@ -5258,13 +5264,13 @@ function cmdProjectBrief(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     const opts: briefsModule.ListProjectBriefsOpts = { limit, repo };
     if (status !== 'all') {
       if (!briefsModule.VALID_BRIEF_STATES.has(status as briefsModule.BriefStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
         process.exit(1);
       }
       opts.status = status as briefsModule.BriefStatus;
@@ -5282,14 +5288,14 @@ function cmdProjectBrief(
   if (subcommand === 'refresh') {
     const repoRaw = args[1];
     if (!repoRaw) {
-      console.error('Usage: hippo brief refresh "<repo>" [--dry-run]');
+      printError('Usage: hippo brief refresh "<repo>" [--dry-run]');
       process.exit(1);
     }
     const dryRun = Boolean(flags['dry-run']);
     try {
       if (dryRun) {
         const { markdown, receiptCount } = briefsModule.assembleBriefFromReceipts(hippoRoot, tenantId, repoRaw);
-        console.error(`(dry-run: assembled from ${receiptCount} receipt(s); brief NOT written)`);
+        printError(`(dry-run: assembled from ${receiptCount} receipt(s); brief NOT written)`);
         console.log(markdown);
         return;
       }
@@ -5298,7 +5304,7 @@ function cmdProjectBrief(
       if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
       if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
     } catch (e) {
-      console.error((e as Error).message);
+      printError((e as Error).message);
       process.exit(1);
     }
     return;
@@ -5307,13 +5313,13 @@ function cmdProjectBrief(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo brief get <id>');
+      printError('Usage: hippo brief get <id>');
       process.exit(1);
     }
     const id = parsePositiveBriefId(idRaw);
     const b = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
     if (!b) {
-      console.error(`Project brief ${id} not found.`);
+      printError(`Project brief ${id} not found.`);
       process.exit(1);
     }
     console.log(`Project brief #${b.id}`);
@@ -5333,18 +5339,18 @@ function cmdProjectBrief(
   if (subcommand === 'supersede') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
+      printError('Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
       process.exit(1);
     }
     const id = parsePositiveBriefId(idRaw);
     const summaryRaw = flags['summary'];
     if (typeof summaryRaw !== 'string' || !summaryRaw.trim()) {
-      console.error('hippo brief supersede requires --summary "<text>" for the new version.');
+      printError('hippo brief supersede requires --summary "<text>" for the new version.');
       process.exit(1);
     }
     const existing = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
     if (!existing) {
-      console.error(`Project brief ${id} not found.`);
+      printError(`Project brief ${id} not found.`);
       process.exit(1);
     }
     const changeRaw = flags['change'];
@@ -5359,7 +5365,7 @@ function cmdProjectBrief(
       console.log(`Project brief #${created.id} recorded (v${created.version}), superseding #${id}.`);
       if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
     } catch (e) {
-      console.error((e as Error).message);
+      printError((e as Error).message);
       process.exit(1);
     }
     return;
@@ -5368,7 +5374,7 @@ function cmdProjectBrief(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo brief close <id>');
+      printError('Usage: hippo brief close <id>');
       process.exit(1);
     }
     const id = parsePositiveBriefId(idRaw);
@@ -5394,7 +5400,7 @@ function cmdProjectBrief(
     console.log(`Project brief recorded: #${created.id} (v${created.version}) for repo "${created.repo}"`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    console.error((e as Error).message);
+    printError((e as Error).message);
     process.exit(1);
   }
 }
@@ -5403,7 +5409,7 @@ function parsePositiveNoteId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0) {
-    console.error(`Invalid note id: "${idRaw}" (expected a positive integer).`);
+    printError(`Invalid note id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }
   return id;
@@ -5415,11 +5421,11 @@ function printNoteRow(n: customerNotesModule.CustomerNote): void {
 }
 
 function noteUsage(): void {
-  console.error('Usage: hippo note new "<customer>" --text "<note>"');
-  console.error('       hippo note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]');
-  console.error('       hippo note get <id>');
-  console.error('       hippo note supersede <id> --text "<note>" [--change "<summary>"]');
-  console.error('       hippo note close <id>');
+  printError('Usage: hippo note new "<customer>" --text "<note>"');
+  printError('       hippo note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]');
+  printError('       hippo note get <id>');
+  printError('       hippo note supersede <id> --text "<note>" [--change "<summary>"]');
+  printError('       hippo note close <id>');
 }
 
 function cmdGraph(
@@ -5439,7 +5445,7 @@ function cmdGraph(
     const supersedes = result.relations - result.references;
     console.log(`Graph extracted: ${result.entities} entities (${byType}) + ${result.relations} relations (${supersedes} supersedes, ${result.references} references).`);
     if (result.truncated.length > 0) {
-      console.error(`WARNING: under-extracted (hit the per-type cap): ${result.truncated.join(', ')}. The graph is incomplete for those types.`);
+      printError(`WARNING: under-extracted (hit the per-type cap): ${result.truncated.join(', ')}. The graph is incomplete for those types.`);
     }
     return;
   }
@@ -5480,7 +5486,7 @@ function cmdGraph(
   if (subcommand === 'view') {
     const format = typeof flags['format'] === 'string' ? (flags['format'] as string) : 'html';
     if (format !== 'html' && format !== 'canvas') {
-      console.error("graph view: --format must be 'html' or 'canvas'");
+      printError("graph view: --format must be 'html' or 'canvas'");
       process.exit(1);
     }
     const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
@@ -5511,7 +5517,7 @@ function cmdGraph(
     return;
   }
 
-  console.error(
+  printError(
     'Usage:\n' +
       '  hippo graph extract                     Rebuild the entity/relation graph from consolidated objects\n' +
       '  hippo graph show [--entity NAME] [--json]   Inspect entities + their edges (text or JSON)\n' +
@@ -5537,13 +5543,13 @@ function cmdCustomerNote(
     const limitRaw = flags['limit'];
     const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
     if (!Number.isFinite(limit) || limit <= 0) {
-      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
       process.exit(1);
     }
     const opts: customerNotesModule.ListCustomerNotesOpts = { limit, customer };
     if (status !== 'all') {
       if (!customerNotesModule.VALID_NOTE_STATES.has(status as customerNotesModule.NoteStatus)) {
-        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
         process.exit(1);
       }
       opts.status = status as customerNotesModule.NoteStatus;
@@ -5561,13 +5567,13 @@ function cmdCustomerNote(
   if (subcommand === 'get') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo note get <id>');
+      printError('Usage: hippo note get <id>');
       process.exit(1);
     }
     const id = parsePositiveNoteId(idRaw);
     const n = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
     if (!n) {
-      console.error(`Customer note ${id} not found.`);
+      printError(`Customer note ${id} not found.`);
       process.exit(1);
     }
     console.log(`Customer note #${n.id}`);
@@ -5587,18 +5593,18 @@ function cmdCustomerNote(
   if (subcommand === 'supersede') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]');
+      printError('Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]');
       process.exit(1);
     }
     const id = parsePositiveNoteId(idRaw);
     const textRaw = flags['text'];
     if (typeof textRaw !== 'string' || !textRaw.trim()) {
-      console.error('hippo note supersede requires --text "<note>" for the new version.');
+      printError('hippo note supersede requires --text "<note>" for the new version.');
       process.exit(1);
     }
     const existing = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
     if (!existing) {
-      console.error(`Customer note ${id} not found.`);
+      printError(`Customer note ${id} not found.`);
       process.exit(1);
     }
     const changeRaw = flags['change'];
@@ -5613,7 +5619,7 @@ function cmdCustomerNote(
       console.log(`Customer note #${created.id} recorded (v${created.version}), superseding #${id}.`);
       if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
     } catch (e) {
-      console.error((e as Error).message);
+      printError((e as Error).message);
       process.exit(1);
     }
     return;
@@ -5622,7 +5628,7 @@ function cmdCustomerNote(
   if (subcommand === 'close') {
     const idRaw = args[1];
     if (!idRaw) {
-      console.error('Usage: hippo note close <id>');
+      printError('Usage: hippo note close <id>');
       process.exit(1);
     }
     const id = parsePositiveNoteId(idRaw);
@@ -5648,7 +5654,7 @@ function cmdCustomerNote(
     console.log(`Customer note recorded: #${created.id} (v${created.version}) for customer "${created.customer}"`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    console.error((e as Error).message);
+    printError((e as Error).message);
     process.exit(1);
   }
 }
@@ -5716,7 +5722,7 @@ function cmdCurrent(
     return;
   }
 
-  console.error('Usage: hippo current <show>');
+  printError('Usage: hippo current <show>');
   process.exit(1);
 }
 
@@ -5763,7 +5769,8 @@ function startDeliveryRecorder(
       envSessionId: hostSessionId(),
     });
   } catch (error) {
-    console.error(`[hippo] delivery ledger skipped: ${error instanceof Error ? error.message : String(error)}`);
+    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
+    printError(`[hippo] delivery ledger skipped:${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -5774,7 +5781,8 @@ function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typ
   try {
     rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
-    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    // Pinned stderr text, as in the recorder build above.
+    printError(`[hippo] delivery ledger write failed:${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -6030,6 +6038,7 @@ async function renderContext(
               tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface, event: 'inject',
               items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
             });
+          // Best-effort row: only a busy store is actionable, and a ledger failure must not break the hook.
           } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
         }
         if (recallBlock) {
@@ -6038,6 +6047,7 @@ async function renderContext(
               tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: 'hook_recall', event: 'inject',
               items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
             });
+          // Same best-effort rule as the inject row above.
           } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
         }
         flushDeliveryRecorder(rec, db);
@@ -6148,7 +6158,7 @@ async function cmdEmbed(
     try {
       return resolveEmbeddingProvider(root);
     } catch (err) {
-      console.error(err instanceof Error ? err.message : String(err));
+      printError(err instanceof Error ? err.message : String(err));
       return null;
     }
   })();
@@ -6165,10 +6175,10 @@ async function cmdEmbed(
       console.log('Embeddings not available. Install @huggingface/transformers to enable:');
       console.log('  npm install @huggingface/transformers');
     } else {
-      console.error(
+      printError(
         `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
       );
-      console.error(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
+      printError(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
       process.exitCode = 1;
     }
     return;
@@ -6179,9 +6189,9 @@ async function cmdEmbed(
   try {
     count = await embedAll(root, resolveEmbeddingModel(root));
   } catch (err) {
-    console.error(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
     const partial = loadEmbeddingIndex(root);
-    console.error(
+    printError(
       `Partial progress saved: ${Object.keys(partial).length} embeddings on disk. Re-run \`hippo embed\` to resume.`,
     );
     process.exitCode = 1;
@@ -6198,7 +6208,7 @@ async function cmdEmbed(
 
 async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   if (!command) {
-    console.error('Usage: hippo watch "<command>"');
+    printError('Usage: hippo watch "<command>"');
     process.exit(1);
   }
 
@@ -6211,7 +6221,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
 
   // Only create memory if hippo is initialized
   if (!isInitialized(hippoRoot)) {
-    console.error('Command failed but .hippo not initialized. Run `hippo init` to enable auto-learn.');
+    printError('Command failed but .hippo not initialized. Run `hippo init` to enable auto-learn.');
     process.exit(exitCode);
   }
 
@@ -6232,10 +6242,10 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
     void embedMemory(hippoRoot, entry);
 
     const preview = stderr.trim().slice(0, 80);
-    console.error(`\nHippo learned from failure: "${preview}"`);
+    printError(`\nHippo learned from failure: "${preview}"`);
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      console.error(`\nHippo: this failure matches a rejected value (${err.reason ?? 'no reason given'}); not stored.`);
+      printError(`\nHippo: this failure matches a rejected value (${err.reason ?? 'no reason given'}); not stored.`);
     } else {
       throw err;
     }
@@ -6255,7 +6265,7 @@ function cmdLearn(
   requireInit(hippoRoot);
 
   if (!flags['git']) {
-    console.error('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
+    printError('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
     process.exit(1);
   }
 
@@ -6288,7 +6298,7 @@ function cmdLearn(
 // ---------------------------------------------------------------------------
 
 function warnRedacted(count: number | undefined): void {
-  if (count) console.error(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
+  if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
 }
 
 function cmdImport(
@@ -6313,7 +6323,7 @@ function cmdImport(
       ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
       : importAtSessionEnd(process.cwd(), undefined, opts);
     for (const line of detailLines(report, dryRun)) console.log(line);
-    for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
+    for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
     return;
   }
 
@@ -6339,11 +6349,11 @@ function cmdImport(
   if (flags['vault']) {
     const folderPath = String(flags['vault']);
     if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
-      console.error(`Vault folder not found (or not a directory): ${folderPath}`);
+      printError(`Vault folder not found (or not a directory): ${folderPath}`);
       process.exit(1);
     }
     if (useGlobal) {
-      console.error('hippo import --vault does not support --global (raw rows are tenant-local).');
+      printError('hippo import --vault does not support --global (raw rows are tenant-local).');
       process.exit(1);
     }
     if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
@@ -6352,14 +6362,14 @@ function cmdImport(
       // clobber each other (codex R10 P2). A valueless `--name` parses as boolean
       // true, and String(true) === "true" would silently import under vault:true:*
       // - reject a non-string so it fails fast instead (codex R11 P2).
-      console.error('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
+      printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
       process.exit(1);
     }
     if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
       // Same valueless-flag trap: a bare `--scope` must not become scope "true".
       // Example uses the source-prefixed private form, since a bare `private` scope
       // is NOT treated as private by recall and importVault rejects it (R13 P2).
-      console.error('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
+      printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
       process.exit(1);
     }
     const tenantId = resolveTenantId({});
@@ -6422,12 +6432,12 @@ function cmdImport(
   }
 
   if (!filePath || !importer) {
-    console.error('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
+    printError('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
     process.exit(1);
   }
 
   if (!fs.existsSync(filePath)) {
-    console.error(`File not found: ${filePath}`);
+    printError(`File not found: ${filePath}`);
     process.exit(1);
   }
 
@@ -6477,7 +6487,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
   requireInit(hippoRoot);
 
   if (!id) {
-    console.error('Usage: hippo promote <id>');
+    printError('Usage: hippo promote <id>');
     process.exit(1);
   }
 
@@ -6491,7 +6501,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
-    console.error(`Failed to promote: ${(err as Error).message}`);
+    printError(`Failed to promote: ${(err as Error).message}`);
     process.exit(1);
   }
 }
@@ -6540,8 +6550,8 @@ function cmdHook(
 
   if (subcommand === 'install') {
     if (!target || !HOOKS[target]) {
-      console.error(`Unknown hook target: ${target ?? '(none)'}`);
-      console.error(`   Available: ${Object.keys(HOOKS).join(', ')}`);
+      printError(`Unknown hook target: ${target ?? '(none)'}`);
+      printError(`   Available: ${Object.keys(HOOKS).join(', ')}`);
       process.exit(1);
     }
 
@@ -6645,7 +6655,7 @@ function cmdHook(
 
   if (subcommand === 'uninstall') {
     if (!target || !HOOKS[target]) {
-      console.error(`Unknown hook target: ${target ?? '(none)'}`);
+      printError(`Unknown hook target: ${target ?? '(none)'}`);
       process.exit(1);
     }
 
@@ -6702,7 +6712,7 @@ function cmdHook(
     return;
   }
 
-  console.error('Usage: hippo hook <install|uninstall|list> [target]');
+  printError('Usage: hippo hook <install|uninstall|list> [target]');
   process.exit(1);
 }
 
@@ -6848,7 +6858,7 @@ function cmdDailyRunner(): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
-    const finished = replayCompactionsAt(globalRoot, (message) => console.error(`compaction replay: ${message}`));
+    const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
   }
   printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
@@ -6874,7 +6884,7 @@ function cmdDailyRunner(): void {
     } catch (err) {
       failed++;
       const action = args.join(' ');
-      console.error(`[hippo] daily-runner failed in ${cwd} during \`${action}\`: ${(err as Error).message}`);
+      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${(err as Error).message}`);
     }
   });
 
@@ -6902,7 +6912,7 @@ function cmdWm(
     const taskId = flags['task'] ? String(flags['task']).trim() : undefined;
 
     if (!content) {
-      console.error('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
+      printError('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
       process.exit(1);
     }
 
@@ -6965,7 +6975,7 @@ function cmdWm(
     return;
   }
 
-  console.error('Usage: hippo wm <push|read|clear|flush>');
+  printError('Usage: hippo wm <push|read|clear|flush>');
   process.exit(1);
 }
 
@@ -7087,7 +7097,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   let depth: number | undefined;
   if (rawDepth !== undefined) {
     if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
-      console.error(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
+      printError(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
       process.exit(2);
     }
     depth = rawDepth;
@@ -7108,9 +7118,9 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
     // intentionally collapses cross-tenant + scope-blocked + missing
     // (codex round 3 P1: distinguishing scope_blocked leaked existence).
     if (r.failure === 'not_drillable') {
-      console.error(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
+      printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
     } else {
-      console.error(`No drillable summary at id=${summaryId}.`);
+      printError(`No drillable summary at id=${summaryId}.`);
     }
     process.exit(1);
   }
@@ -7143,7 +7153,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   let role: 'admin' | 'member' = 'admin';
   if (roleFlag !== undefined) {
     if (roleFlag !== 'admin' && roleFlag !== 'member') {
-      console.error(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
+      printError(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
       process.exit(1);
     }
     role = roleFlag;
@@ -7230,7 +7240,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
     closeHippoDb(db);
   }
   if (keyTenant === undefined) {
-    console.error(`Unknown key_id: ${keyId}`);
+    printError(`Unknown key_id: ${keyId}`);
     process.exit(1);
   }
   const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
@@ -7238,7 +7248,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
   try {
     revokedAt = api.authRevoke(ctx, keyId).revokedAt;
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
   if (flags['json']) {
@@ -7262,7 +7272,7 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
     closeHippoDb(db);
   }
   if (keyTenant === undefined) {
-    console.error(`Unknown key_id: ${keyId}`);
+    printError(`Unknown key_id: ${keyId}`);
     process.exit(1);
   }
   const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
@@ -7270,7 +7280,7 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
     if (grant) api.authGrant(ctx, keyId, scope);
     else api.authUngrant(ctx, keyId, scope);
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
   if (flags['json']) {
@@ -7302,14 +7312,14 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
     // Regenerate from Set to prevent future drift (v1.11.5: pre-v1.11.5 message
     // was hand-maintained and had drifted — missed 'auth_revoke' and 'outcome').
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
-    console.error(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
+    printError(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
     process.exit(1);
   }
   const op = opFlag as AuditOp | undefined;
 
   const since = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
   if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
-    console.error(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    printError(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
   }
 
@@ -7318,13 +7328,13 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
   if (limitRaw !== undefined && typeof limitRaw !== 'boolean') {
     const parsed = parseInt(String(limitRaw), 10);
     if (!Number.isFinite(parsed)) {
-      console.error(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);
+      printError(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);
       process.exit(1);
     }
     limit = parsed;
   }
   if (limit < 1 || limit > 10000) {
-    console.error(`--limit must be between 1 and 10000 (got ${limit}).`);
+    printError(`--limit must be between 1 and 10000 (got ${limit}).`);
     process.exit(1);
   }
 
@@ -7358,14 +7368,14 @@ function printAuditPruneUsage(): void {
 function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
   const olderThanRaw = typeof flags['older-than'] === 'string' ? (flags['older-than'] as string) : '';
   if (!olderThanRaw) {
-    console.error('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
+    printError('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
     process.exit(1);
   }
   let olderThanDays: number;
   try {
     olderThanDays = parseOlderThanFlag(olderThanRaw);
   } catch (e) {
-    console.error((e as Error).message);
+    printError((e as Error).message);
     process.exit(1);
   }
   const tenantId = typeof flags['tenant'] === 'string'
@@ -7403,7 +7413,7 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
     cmdAuditPrune(hippoRoot, flags);
     return;
   }
-  console.error(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
+  printError(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
   process.exit(1);
 }
 
@@ -7430,7 +7440,7 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
       : process.env.HIPPO_SESSION_ID ?? ''
   ).trim();
   if (!sessionId) {
-    console.error('session id required (set HIPPO_SESSION_ID or pass --session-id)');
+    printError('session id required (set HIPPO_SESSION_ID or pass --session-id)');
     process.exit(1);
   }
   const tenantId = (
@@ -7444,25 +7454,25 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
 function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const rawName = args.join(' ').trim();
   if (!rawName) {
-    console.error('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
+    printError('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
     process.exit(1);
   }
   // Sanitize at WRITE time so corrupt names never enter the DB.
   const name = sanitizeGoalName(rawName);
   if (name !== rawName) {
-    console.error('note: stripped control characters from goal name');
+    printError('note: stripped control characters from goal name');
   }
   const { sessionId, tenantId } = resolveGoalSession(flags);
 
   let policy: { policyType: PolicyType } | undefined;
   const policyRaw = flags['policy'];
   if (policyRaw === true) {
-    console.error('--policy requires a value (e.g., --policy error-prioritized)');
+    printError('--policy requires a value (e.g., --policy error-prioritized)');
     process.exit(1);
   }
   if (typeof policyRaw === 'string') {
     if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
-      console.error(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
+      printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
       process.exit(1);
     }
     policy = { policyType: policyRaw as PolicyType };
@@ -7470,7 +7480,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
 
   const successRaw = flags['success'];
   if (successRaw === true) {
-    console.error('--success requires a value (e.g., --success "<condition>")');
+    printError('--success requires a value (e.g., --success "<condition>")');
     process.exit(1);
   }
   const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
@@ -7478,13 +7488,13 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
   const levelRaw = flags['level'];
   let level: number | undefined;
   if (levelRaw === true) {
-    console.error('--level requires a value (e.g., --level 1)');
+    printError('--level requires a value (e.g., --level 1)');
     process.exit(1);
   }
   if (levelRaw !== undefined) {
     const parsed = Number(levelRaw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
-      console.error('--level must be an integer in [0, 2]');
+      printError('--level must be an integer in [0, 2]');
       process.exit(1);
     }
     level = parsed;
@@ -7492,7 +7502,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
 
   const parentRaw = flags['parent'];
   if (parentRaw === true) {
-    console.error('--parent requires a value (e.g., --parent <goalId>)');
+    printError('--parent requires a value (e.g., --parent <goalId>)');
     process.exit(1);
   }
   const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
@@ -7563,19 +7573,19 @@ function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean |
 function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const id = args[0];
   if (!id) {
-    console.error('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
+    printError('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
     process.exit(1);
   }
   let outcomeScore: number | undefined;
   const outcomeRaw = flags['outcome'];
   if (outcomeRaw === true) {
-    console.error('--outcome requires a value (e.g., --outcome 0.9)');
+    printError('--outcome requires a value (e.g., --outcome 0.9)');
     process.exit(1);
   }
   if (outcomeRaw !== undefined) {
     const parsed = Number(outcomeRaw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-      console.error('--outcome must be a number in [0, 1]');
+      printError('--outcome must be a number in [0, 1]');
       process.exit(1);
     }
     outcomeScore = parsed;
@@ -7588,7 +7598,7 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string
 function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
   const id = args[0];
   if (!id) {
-    console.error('Usage: hippo goal suspend <id>');
+    printError('Usage: hippo goal suspend <id>');
     process.exit(1);
   }
   suspendGoal(hippoRoot, id);
@@ -7598,7 +7608,7 @@ function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
 function cmdGoalResume(hippoRoot: string, args: string[]): void {
   const id = args[0];
   if (!id) {
-    console.error('Usage: hippo goal resume <id>');
+    printError('Usage: hippo goal resume <id>');
     process.exit(1);
   }
   resumeGoal(hippoRoot, id);
@@ -7608,7 +7618,7 @@ function cmdGoalResume(hippoRoot: string, args: string[]): void {
 function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (!sub) {
-    console.error('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
+    printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
     process.exit(1);
   }
   const subArgs = args.slice(1);
@@ -7629,7 +7639,7 @@ function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string
       cmdGoalResume(hippoRoot, subArgs);
       return;
     default:
-      console.error(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);
+      printError(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);
       process.exit(1);
   }
 }
@@ -7637,7 +7647,7 @@ function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string
 function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (!sub) {
-    console.error('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
+    printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
     process.exit(1);
   }
   const subArgs = args.slice(1);
@@ -7651,7 +7661,7 @@ function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string
     case 'revoke': {
       const keyId = subArgs[0];
       if (!keyId) {
-        console.error('Usage: hippo auth revoke <key_id>');
+        printError('Usage: hippo auth revoke <key_id>');
         process.exit(1);
       }
       cmdAuthRevoke(hippoRoot, keyId, flags);
@@ -7661,14 +7671,14 @@ function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string
     case 'ungrant': {
       const [keyId, scope] = subArgs;
       if (!keyId || !scope) {
-        console.error(`Usage: hippo auth ${sub} <key_id> <scope>`);
+        printError(`Usage: hippo auth ${sub} <key_id> <scope>`);
         process.exit(1);
       }
       cmdAuthScopeGrant(hippoRoot, keyId, scope, sub === 'grant', flags);
       return;
     }
     default:
-      console.error(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
+      printError(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
       process.exit(1);
   }
 }
@@ -7692,7 +7702,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
   // Real fetcher requires SLACK_BOT_TOKEN with channels:history scope.
   const token = process.env.SLACK_BOT_TOKEN;
   if (!token) {
-    console.error('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
+    printError('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
     process.exit(2);
   }
   // --since is advisory in V1: the slack_cursors row drives resume, so the
@@ -7715,7 +7725,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
       console.log(`backfill ${channel}: ${r.ingested} new messages across ${r.pages} pages`);
     })
     .catch((e: Error) => {
-      console.error('backfill failed:', e.message);
+      printError('backfill failed:', e.message);
       process.exit(3);
     });
 }
@@ -7740,12 +7750,12 @@ function cmdSlackDlqReplay(
 ): void {
   const idArg = args[2];
   if (!idArg) {
-    console.error('Usage: hippo slack dlq replay <id> [--force]');
+    printError('Usage: hippo slack dlq replay <id> [--force]');
     process.exit(1);
   }
   const id = Number(idArg);
   if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
-    console.error(`replay: invalid id ${idArg}`);
+    printError(`replay: invalid id ${idArg}`);
     process.exit(1);
   }
   const force = flags.force === true;
@@ -7758,7 +7768,7 @@ function cmdSlackDlqReplay(
     },
   );
   if (!result.ok) {
-    console.error(
+    printError(
       `replay failed: status=${result.status} retry_count=${result.retryCount}${result.reason ? ` reason=${result.reason}` : ''}`,
     );
     process.exit(1);
@@ -7782,7 +7792,7 @@ function cmdSlackWorkspacesAdd(
   const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
   const tenantId = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string).trim() : '';
   if (!teamId || !tenantId) {
-    console.error('Usage: hippo slack workspaces add --team <T> --tenant <t>');
+    printError('Usage: hippo slack workspaces add --team <T> --tenant <t>');
     process.exit(1);
   }
   const db = openHippoDb(hippoRoot);
@@ -7816,14 +7826,14 @@ function cmdSlackWorkspacesRemove(
 ): void {
   const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
   if (!teamId) {
-    console.error('Usage: hippo slack workspaces remove --team <T>');
+    printError('Usage: hippo slack workspaces remove --team <T>');
     process.exit(1);
   }
   const db = openHippoDb(hippoRoot);
   try {
     const removed = removeSlackWorkspace(db, teamId);
     if (!removed) {
-      console.error(`no workspace registered for team ${teamId}`);
+      printError(`no workspace registered for team ${teamId}`);
       process.exit(1);
     }
     console.log(`removed: ${teamId}`);
@@ -7863,7 +7873,7 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
     printSlackWorkspacesUsage();
     process.exit(1);
   }
-  console.error(
+  printError(
     'Usage: hippo slack <backfill|dlq list|dlq replay <id> [--force]|workspaces add|workspaces list|workspaces remove> [...]',
   );
   process.exit(1);
@@ -8568,7 +8578,7 @@ async function main(
    *  --hops value-less guard, so every current and future command - including the
    *  thin-client dispatch relays - sees --scope only as a non-empty string. */
   if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
-    console.error('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
+    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
     process.exit(1);
   }
   // parseArgs stores a value-less flag as boolean true, and NaN then survives every
@@ -8581,7 +8591,7 @@ async function main(
     const raw = flags[key];
     if (raw === undefined) continue;
     if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
-      console.error(`--${key} requires a numeric value.`);
+      printError(`--${key} requires a numeric value.`);
       process.exit(1);
     }
   }
@@ -8589,7 +8599,7 @@ async function main(
   // so no single coercion of an inline value would be correct for every one of them.
   for (const key of BOOLEAN_FLAGS) {
     if (Object.hasOwn(flags, key) && typeof flags[key] !== 'boolean') {
-      console.error(`--${key} takes no value`);
+      printError(`--${key} takes no value`);
       process.exit(1);
     }
   }
@@ -8598,14 +8608,14 @@ async function main(
   if (unknownFlags.length > 0) {
     const names = unknownFlags.map((key) => `--${key}`).join(', ');
     if (DESTRUCTIVE_COMMANDS.has(command)) {
-      console.error(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
+      printError(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
       process.exit(2);
     }
-    console.error(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
+    printError(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
   }
   const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, args, flags) : null;
   if (refusal) {
-    console.error(refusal);
+    printError(refusal);
     process.exit(2);
   }
   switch (command) {
@@ -8621,7 +8631,7 @@ async function main(
         text = args.join(' ').trim();
       }
       if (!text || text.length < 3) {
-        console.error('Memory content too short (minimum 3 characters).');
+        printError('Memory content too short (minimum 3 characters).');
         process.exit(1);
       }
       // Thin-client routing. When a server is up, simple `remember` calls go
@@ -8646,10 +8656,10 @@ async function main(
           const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
           const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
           if (!thinOwnerCheck.ok) {
-            console.error(thinOwnerCheck.message);
+            printError(thinOwnerCheck.message);
             process.exit(1);
           }
-          if (thinOwnerCheck.message) console.error(thinOwnerCheck.message);
+          if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
           const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
             const result = await client.remember(info.url, apiKey, {
               content: text,
@@ -8661,7 +8671,7 @@ async function main(
             });
             console.log(`Remembered [${result.id}] (via ${info.url})`);
             console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
-            for (const w of result.warnings ?? []) console.error(`Warning: ${w}`);
+            for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
           });
           if (remembered) break;
         }
@@ -8673,7 +8683,7 @@ async function main(
     case 'recall': {
       const query = args.join(' ').trim();
       if (!query) {
-        console.error('Please provide a search query.');
+        printError('Please provide a search query.');
         process.exit(1);
       }
       await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
@@ -8683,7 +8693,7 @@ async function main(
     case 'drill': {
       const summaryId = args[0];
       if (!summaryId) {
-        console.error('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
+        printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
         process.exit(1);
       }
       cmdDrillDown(hippoRoot, summaryId, flags);
@@ -8693,7 +8703,7 @@ async function main(
     case 'assemble': {
       const sessionId = typeof flags['session'] === 'string' ? (flags['session'] as string) : args[0];
       if (!sessionId) {
-        console.error('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
+        printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
         process.exit(1);
       }
       cmdAssemble(hippoRoot, sessionId, flags);
@@ -8704,7 +8714,7 @@ async function main(
       const oldId = args[0];
       const newContent = args.slice(1).join(' ').trim();
       if (!oldId || !newContent) {
-        console.error('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
+        printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
         process.exit(1);
       }
       cmdSupersede(hippoRoot, oldId, newContent, flags);
@@ -8714,7 +8724,7 @@ async function main(
     case 'explain': {
       const query = args.join(' ').trim();
       if (!query) {
-        console.error('Please provide a search query.');
+        printError('Please provide a search query.');
         process.exit(1);
       }
       await cmdExplain(hippoRoot, query, flags);
@@ -8734,7 +8744,7 @@ async function main(
         break;
       }
       if (!sub) {
-        console.error('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
+        printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
         process.exit(1);
       }
       cmdTrace(hippoRoot, sub, flags);
@@ -9002,7 +9012,7 @@ async function main(
     case 'support-bundle': {
       const outFlag = cardStringFlag(flags, 'out');
       if (outFlag === '') {
-        console.error('--out requires a file path.');
+        printError('--out requires a file path.');
         process.exit(1);
       }
       const includeLogs = flags['include-logs'] === true;
@@ -9016,9 +9026,9 @@ async function main(
         fs.writeFileSync(file, `${json}\n`, { flag: 'wx', mode: 0o600 });
       } catch (err) {
         if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
-          console.error(`${file} already exists; pass --out to choose another file. Nothing was written.`);
+          printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
         } else {
-          console.error(err instanceof Error ? err.message : String(err));
+          printError(err instanceof Error ? err.message : String(err));
         }
         process.exit(1);
       }
@@ -9057,7 +9067,7 @@ async function main(
     case 'forget': {
       const id = args[0];
       if (!id) {
-        console.error('Please provide a memory ID.');
+        printError('Please provide a memory ID.');
         process.exit(1);
       }
       // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
@@ -9065,7 +9075,7 @@ async function main(
       const archive = flags['archive'] === true;
       const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
       if (archive && !reason) {
-        console.error(ARCHIVE_REASON_REQUIRED);
+        printError(ARCHIVE_REASON_REQUIRED);
         process.exit(1);
       }
       if (flags['dry-run'] === true) {
@@ -9086,7 +9096,7 @@ async function main(
           // fallback to handle, not an error to report to the user.
           if (client.classifyTransportFailure(err) !== 'none') throw err;
           const msg = err instanceof Error ? err.message : String(err);
-          console.error(archive ? `Could not archive ${id}: ${msg}` : msg);
+          printError(archive ? `Could not archive ${id}: ${msg}` : msg);
           process.exit(1);
         }
       });
@@ -9098,7 +9108,7 @@ async function main(
     case 'inspect': {
       const id = args[0];
       if (!id) {
-        console.error('Please provide a memory ID.');
+        printError('Please provide a memory ID.');
         process.exit(1);
       }
       cmdInspect(hippoRoot, id);
@@ -9142,7 +9152,7 @@ async function main(
     case 'promote': {
       const id = args[0];
       if (!id) {
-        console.error('Please provide a memory ID.');
+        printError('Please provide a memory ID.');
         process.exit(1);
       }
       const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
@@ -9150,7 +9160,7 @@ async function main(
           const result = await client.promote(info.url, apiKey, id);
           console.log(`Promoted ${id} to global store as ${result.globalId}`);
         } catch (err) {
-          console.error(`Failed to promote: ${(err as Error).message}`);
+          printError(`Failed to promote: ${(err as Error).message}`);
           process.exit(1);
         }
       });
@@ -9200,12 +9210,12 @@ async function main(
             console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
             console.log('Use --force to share anyway.');
           } else {
-            console.error(`Memory not found: ${shareId}`);
+            printError(`Memory not found: ${shareId}`);
             process.exit(1);
           }
         }
       } else {
-        console.error('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
+        printError('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
         process.exit(1);
       }
       break;
@@ -9281,7 +9291,7 @@ async function main(
       }
 
       if (!captureSource) {
-        console.error('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
+        printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
         process.exit(1);
       }
 
@@ -9335,7 +9345,7 @@ async function main(
       const portRaw = flags['port'] ?? process.env['HIPPO_PORT'] ?? '6789';
       const port = Number(portRaw);
       if (!Number.isFinite(port) || port < 0) {
-        console.error(`Invalid --port: ${String(portRaw)}`);
+        printError(`Invalid --port: ${String(portRaw)}`);
         process.exit(1);
       }
       const host = typeof flags['host'] === 'string' ? (flags['host'] as string) : '127.0.0.1';
@@ -9353,19 +9363,19 @@ async function main(
       requireInit(hippoRoot);
       if (flags['churn'] === true) {
         if (args[0] || flags['id'] !== undefined) {
-          console.error('Usage: hippo invalidate --churn [--dry-run]');
-          console.error('--churn takes no pattern or --id.');
+          printError('Usage: hippo invalidate --churn [--dry-run]');
+          printError('--churn takes no pattern or --id.');
           process.exit(1);
         }
         if (!isGitRepo(process.cwd())) {
-          console.error('hippo invalidate --churn must run inside a git repository.');
+          printError('hippo invalidate --churn must run inside a git repository.');
           process.exit(1);
         }
         const churnDryRun = flags['dry-run'] === true;
         let churnFailed = false;
         for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
           if (result.error) {
-            console.error(`Churn-staleness check failed for ${root}: ${result.error}`);
+            printError(`Churn-staleness check failed for ${root}: ${result.error}`);
             churnFailed = true;
             continue;
           }
@@ -9388,21 +9398,21 @@ async function main(
       if (flags['id'] === true) {
         // Value-less --id must never silently fall through to pattern mode
         // (pattern mode writes broadly; an ignored --id reverses user intent).
-        console.error('--id requires a memory id');
+        printError('--id requires a memory id');
         process.exit(1);
       }
       const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
       if (typeof flags['dry-run'] === 'string') {
         // Dead: the earlier global BOOLEAN_FLAGS guard now exits first on any --dry-run=<v>.
         // Kept as defence in depth on a destructive command.
-        console.error('--dry-run takes no value');
+        printError('--dry-run takes no value');
         process.exit(1);
       }
       const dryRun = flags['dry-run'] === true;
       if ((target && onlyId) || (!target && !onlyId)) {
-        console.error('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
-        console.error('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
-        console.error('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
+        printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
+        printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
+        printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
         process.exit(1);
       }
       const reason = flags['reason'] as string || null;
@@ -9467,7 +9477,7 @@ async function main(
       break;
 
     default:
-      console.error(`Unknown command: ${command}`);
+      printError(`Unknown command: ${command}`);
       printUsage();
       process.exit(1);
   }
@@ -9478,7 +9488,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
-    console.error('Error:', err instanceof Error ? err.message : err);
+    printError('Error:', err instanceof Error ? err.message : err);
     process.exit(1);
   }
 }

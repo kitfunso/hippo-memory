@@ -405,6 +405,18 @@ describe('compact-resume books the block it prints', () => {
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('hippo compact-resume: skipped:');
   });
+
+  it('reports the skip reason through the logger, so HIPPO_LOG=error silences it', () => {
+    const store = join(proj, '.hippo');
+    initStore(store);
+    writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
+    for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
+    const loud = hippo(['compact-resume'], proj, env, payload);
+    expect(loud.stderr).toContain('[hippo] warn: hippo compact-resume: skipped:');
+    const quiet = hippo(['compact-resume'], proj, { ...env, HIPPO_LOG: 'error' }, payload);
+    expect([quiet.status, quiet.stdout]).toEqual([0, '']);
+    expect(quiet.stderr).not.toContain('compact-resume');
+  });
 });
 
 describe("a sub-agent's hooks", () => {

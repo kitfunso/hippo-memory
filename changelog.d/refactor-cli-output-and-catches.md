@@ -1,0 +1,3 @@
+### Changed
+
+- **CLI diagnostics now follow `HIPPO_LOG`; user messages print as before.** Usage errors, not-found notices and other messages a user acts on go through one helper (`src/cli/output.ts`) and print byte for byte as they did. Five internal notes now go through the leveled logger and read `[hippo] <level>: ...`: the `compact-resume` skip reasons, compaction-replay failures, a stale server pidfile, a `sleep --log-file` that cannot be opened, and a failed daily-runner command. `HIPPO_LOG=error` hides all of them except the daily-runner failure. Every `catch` in the CLI that ignores an error now says why.

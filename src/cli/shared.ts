@@ -31,6 +31,8 @@ import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-d
 import { resolveTenantId } from '../tenant.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
+import { log } from '../log.js';
+import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
   if (!value) return Infinity;
@@ -48,13 +50,13 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
   if (value === undefined) return fallback;
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (typeof value !== 'string') {
-    console.error('--budget requires an integer value (e.g. --budget 1500).');
+    printError('--budget requires an integer value (e.g. --budget 1500).');
     process.exit(1);
   }
   // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
-    console.error(`Invalid --budget: "${value}". Must be a non-negative integer.`);
+    printError(`Invalid --budget: "${value}". Must be a non-negative integer.`);
     process.exit(1);
   }
   return parsed;
@@ -92,7 +94,7 @@ export function emitCliAudit(
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
-    console.error(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
+    printError(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
     process.exit(1);
   }
 }
@@ -163,7 +165,7 @@ export async function runViaServerIfAvailable(
     const failure = client.classifyTransportFailure(err);
     if (failure === 'never-sent') {
       failIfServerRequired('the server pidfile was stale (connection refused)');
-      console.error('hippo: stale server pidfile detected, falling back to direct mode');
+      log.warn('stale server pidfile detected, falling back to direct mode');
       // Clear the pidfile only if it still names the dead server we just
       // probed — a newer server may have rewritten it (removePidfileIfOwned).
       removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });
@@ -173,7 +175,7 @@ export async function runViaServerIfAvailable(
       // Every caller of this helper is a non-idempotent write, so replaying on
       // the direct path would store a row the server may already have committed.
       // Leave the pidfile alone: the next command's connect-phase failure heals it.
-      console.error(
+      printError(
         `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
       );
       process.exit(1);
@@ -230,7 +232,7 @@ export function recallHeading(entries: number, tokens: number, query: string): s
 export function printAgentImport(report: ImportReport, indent = '   '): void {
   const line = summaryLine(report);
   if (line !== null) console.log(`${indent}${line}`);
-  for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
+  for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
 /** The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is undefined for an edited block. */
@@ -316,6 +318,7 @@ export function setupDailySchedule(globalRoot: string): void {
       execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
     } catch {
+      // No crontab or no permission: print the line for the user to add by hand.
       const cronLine = `15 6 * * * ${cmd}`;
       console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
       console.log(`   ${cronLine}`);
@@ -330,7 +333,7 @@ export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
-    console.error(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
   }
   return asOf;
@@ -363,6 +366,7 @@ export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence[
       cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     }).trim() || null;
   } catch {
+    // No git, not a repo, or timed out: evidence is optional, so the field stays null.
     gitRef = null;
   }
   let dirtyTree: boolean | null = null;
@@ -372,6 +376,7 @@ export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence[
     });
     dirtyTree = status.trim().length > 0;
   } catch {
+    // Same as gitRef: unknown tree state is reported as null, never as an error.
     dirtyTree = null;
   }
   return { gitRef, dirtyTree, testStatus };
@@ -427,7 +432,7 @@ export function printHandoff(handoff: SessionHandoff): void {
 export function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
-  if (v === true || v === false || Array.isArray(v)) { console.error(`--${key} requires a value`); process.exit(1); }
+  if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }
   return v.trim();
 }
 
@@ -493,6 +498,7 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
     if (isInitialized(hippoRoot)) root = hippoRoot;
     else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
   } catch {
+    // An unreadable store root means no ledger write; the ledger must never break context or recall.
     return undefined;
   }
   if (root === null) return undefined;
