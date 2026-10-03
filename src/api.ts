@@ -2848,8 +2848,13 @@ export async function getContext(
         // Candidates came off the ambient load's own connection (recallRequest above), not a fresh open.
         // A candidate carrying a pin's text would inject that memory a second time.
         const pinnedText = new Set(rankedPinned.map((r) => r.entry.content));
-        const eligible = (e: MemoryEntry): boolean =>
-          admit(e) && !e.pinned && isContentWorthStoring(e.content) && !pinnedText.has(e.content);
+        const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
+          !admit(e) ? 'scope'
+            : e.pinned ? 'pinned'
+              : !isContentWorthStoring(e.content) ? 'quality'
+                : pinnedText.has(e.content) ? 'duplicate'
+                  : null;
+        const eligible = (e: MemoryEntry): boolean => ineligibleReason(e) === null;
         const [localCandidates, globalCandidates] = oneCopyPerMemory(
           (localLoad.recall ?? []).filter(eligible),
           (globalLoad.recall ?? []).filter(eligible),
