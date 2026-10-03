@@ -401,7 +401,7 @@ describe('DF4 write-path gate: MCP hippo_learn tool', () => {
 // ---------------------------------------------------------------------------
 
 describe('HOOKS config', () => {
-  const cliSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'cli.ts'), 'utf8');
+  const cliSource = ['cli.ts', path.join('cli', 'shared.ts')].map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
 
   it('openclaw hook targets AGENTS.md', () => {
     // The openclaw entry in HOOKS should use AGENTS.md, not a skill file

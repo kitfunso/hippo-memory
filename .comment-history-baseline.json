@@ -10,7 +10,7 @@
   "src/capture.ts": 41,
   "src/card.ts": 1,
   "src/churn-git.ts": 1,
-  "src/cli.ts": 103,
+  "src/cli.ts": 90,
   "src/compare.ts": 6,
   "src/config.ts": 16,
   "src/connectors/github/backfill.ts": 9,
