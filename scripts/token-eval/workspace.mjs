@@ -47,7 +47,8 @@ const isLink = (file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbol
 export function instructionSnapshot(workDir) {
   const snap = new Map();
   const walk = (rel) => {
-    for (const e of fs.readdirSync(path.join(workDir, rel), { withFileTypes: true })) {
+    // On POSIX an agent can delete its own work dir; a missing dir holds no instruction files, so the carry reads every one as deleted.
+    for (const e of list(path.join(workDir, rel))) {
       const child = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) walk(child);
@@ -159,10 +160,10 @@ function dropRepos(dir, top) {
 
 /** Empty the workspace but for the arm's own store, so nothing an agent wrote survives except what E3's surface check reads. */
 function emptyWorkspace(workDir, arm) {
-  // Emptying a work dir the agent swapped for a link would delete the link target's files.
-  if (fs.lstatSync(workDir).isSymbolicLink()) {
+  // Emptying a work dir the agent swapped for a link would delete the link target's files, and one it deleted must not abandon the run.
+  if (!fs.lstatSync(workDir, { throwIfNoEntry: false })?.isDirectory()) {
     rm(workDir);
-    fs.mkdirSync(workDir);
+    fs.mkdirSync(workDir, { recursive: true });
   }
   const keep = HIPPO_ARMS.has(arm) ? new Set(['.hippo']) : new Set();
   // Git's own rules (excludes, gitlinks, -ff) are what let agent clones and submodule dirs outlive a clean, so the runner names what stays.
@@ -204,10 +205,14 @@ export function instructionDelta(baseline, end) {
 const same = (a, b) => (a === null || b === null ? a === b : a.equals(b));
 
 function writeFile(workDir, rel, bytes) {
+  // writeHiddenTests runs with no checkout after the session, so an agent's link at the path or any parent would send the write outside the workspace.
+  const parts = rel.split(/[\\/]/);
+  for (let i = 0; i <= parts.length; i++) {
+    const p = path.join(workDir, ...parts.slice(0, i));
+    if (isLink(p)) rm(p);
+  }
   const file = path.join(workDir, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  // writeHiddenTests runs with no checkout after the session, so an agent's link at a test path would send the write outside the workspace.
-  if (isLink(file)) fs.rmSync(file);
   fs.writeFileSync(file, bytes);
 }
 

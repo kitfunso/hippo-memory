@@ -542,6 +542,18 @@ describe('workspace checkout', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  it('runs no core.fsmonitor command the agent put in the task repo cache config', () => {
+    const { repo, base, fix, g } = gitRepo({});
+    const marker = join(tmp('z0-fsmon-mark-'), 'ran');
+    const script = join(tmp('z0-fsmon-'), 'fsmon.sh');
+    writeFileSync(script, `#!/bin/sh\necho ran >> "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
+    g('config', 'core.fsmonitor', script.replace(/\\/g, '/'));
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqF', { id: 'f1', baseRef: fix }, 'A0');
+    checkoutBase(repo, work, 'seqF', { id: 'f2', baseRef: base }, 'A0');
+    expect(existsSync(marker)).toBe(false);
+  });
+
   it('neither runs a hook nor stops when the agent plants one wherever the runner points core.hooksPath', () => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
@@ -692,6 +704,34 @@ describe('workspace checkout', () => {
     expect(lstatSync(work).isSymbolicLink()).toBe(false);
     expect(readdirSync(outside)).toEqual(['marker.txt']);
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it('recreates a workspace the agent deleted, and reads it as holding no instruction files', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = join(tmp('z0-wparent-'), 'work');
+    mkdirSync(work);
+    checkoutBase(repo, work, 'seqM', { id: 'm1', baseRef: fix }, 'A1');
+    rmSync(work, { recursive: true, force: true });
+    expect(instructionSnapshot(work).size).toBe(0);
+    checkoutBase(repo, work, 'seqM', { id: 'm2', baseRef: base }, 'A1');
+    expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it('writes a hidden test inside the workspace when the agent replaced a parent dir with a link', () => {
+    const r = gitRepo({});
+    mkdirSync(join(r.repo, 'tests'));
+    writeFileSync(join(r.repo, 'tests', 't.js'), 'hidden test\n');
+    r.g('add', '.');
+    r.g('commit', '-qm', 'hidden test');
+    const t = { baseRef: r.base, fixRef: r.g('rev-parse', 'HEAD'), testFiles: ['tests/t.js'] };
+    const work = workRepo();
+    const outside = tmp('z0-outside-');
+    writeFileSync(join(outside, 'marker.txt'), 'outside\n');
+    symlinkSync(outside, join(work, 'tests'), 'junction');
+    writeHiddenTests(r.repo, work, t);
+    expect(readdirSync(outside)).toEqual(['marker.txt']);
+    expect(lstatSync(join(work, 'tests')).isSymbolicLink()).toBe(false);
+    expect(readFileSync(join(work, 'tests', 't.js'), 'utf8')).toBe('hidden test\n');
   });
 });
 

@@ -15,13 +15,6 @@ export function pathKey(env) {
   return Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
 }
 
-/** Prepend a dir to PATH under the key the env already uses, never a second one. */
-export function prependPath(env, dir) {
-  const key = pathKey(env);
-  env[key] = `${dir}${path.delimiter}${env[key] ?? ''}`;
-  return env;
-}
-
 export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
   const r = spawnSync(cmd, { cwd, env, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28, input });
   return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
@@ -30,12 +23,13 @@ export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
 // Git for Windows opens /dev/null as the null device but joins hook names onto it as <drive>:\dev\null, which any user can create; Win32 refuses '|' in a name.
 const NO_HOOKS = process.platform === 'win32' ? '/|no-hooks|' : '/dev/null';
 
-/** Args and env for a git that reads no system or global config, no global attributes and runs no hooks. */
+/** Args and env for a git that reads no system or global config, no global attributes and runs no hooks or fsmonitor. */
 function runnerGit(args, extraEnv) {
   // The agent shares the operator's HOME, so anything git reads from there (config, ~/.config/git/attributes) is agent-writable.
   // Git for Windows reads /dev/null as the null device; os.devNull (\\.\nul) it refuses.
   const env = { ...process.env, ...extraEnv, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
-  return [['-c', `core.hooksPath=${NO_HOOKS}`, '-c', 'core.attributesFile=/dev/null', '-c', 'core.longpaths=true', ...args], env];
+  // The cache repo's local config is still read, and core.fsmonitor there names a program git runs on checkout and update-index.
+  return [['-c', `core.hooksPath=${NO_HOOKS}`, '-c', 'core.attributesFile=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', ...args], env];
 }
 
 /** Every runner git call goes through here or gitSpawn; extraEnv adds keys but can never undo the isolation. */

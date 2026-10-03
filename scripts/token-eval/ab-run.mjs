@@ -6,11 +6,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HIPPO_JS, sh, git } from './exec.mjs';
 import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
-import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
+import { runDirs, freshRunDirs, homeFiles, ancestorInstructionFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { checkoutBase, stubBaseCommit, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import { isUsageLimit, findTranscript, transcriptWork, usageFromResult, skippedRecord } from './records.mjs';
-
-export { prependPath } from './exec.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -121,7 +119,15 @@ function hippoInit(run, fakeHome) {
   fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false } }, null, 2));
 }
 
-const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already in the store, skipped' };
+const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already in the store, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };
+
+/** Instruction files in the agent-writable dirs between work/ and the out dir, written to the raw dir when there are any. */
+function ancestorHits(ctx, run, t) {
+  // Claude Code loads every ancestor's CLAUDE.md, and preflight checked only the out dir, before any agent ran.
+  const hits = ancestorInstructionFiles(path.dirname(run.dirs.work), { stopAt: ctx.outDir });
+  if (hits.length) fs.writeFileSync(path.join(run.rawDir, `${t.id}.ancestor.txt`), `${hits.join('\n')}\n`);
+  return hits;
+}
 
 function writeRecord(ctx, record) {
   ctx.records.push(record);
@@ -189,20 +195,28 @@ async function runTask(ctx, run, position, order) {
     writeRecord(ctx, skippedRecord(base, { agentError: null, leak: true, invalid: 'leak', ...carry, homesAtStart, ...meta }));
     return;
   }
+  if (ancestorHits(ctx, run, t).length) {
+    // Like a leak, the void is known before the session, so the session never runs; later cells of this run stay void while the file stays.
+    run.changes = instructionDelta(baseline, instructionSnapshot(work));
+    writeRecord(ctx, skippedRecord(base, { agentError: null, leak: false, invalid: 'ancestor-instructions', ...carry, homesAtStart, ...meta }));
+    return;
+  }
   const preSession = instructionSnapshot(work);
+  let rerunAncestors = false;
   const session = await runSession(ctx, run, t, () => {
-    // SHORTCUT: restores instruction files only; store and auto memory wait for the E3 surface restore, so the analyzer voids limitRetries > 0 in A1/A2/A5
+    // SHORTCUT: restores instruction files only; store and auto memory wait for the E3 surface restore, so the analyzer voids that position and the rest of its (sequence, seed) in A1/A2/A5
     const again = prepare().setup;
     if (again && again.status !== 0) throw new Error(`${s.id} ${t.id} ${arm} seed${seed}: setup failed on the usage-limit rerun (exit ${again.status})`);
     restoreInstructions(work, preSession);
+    rerunAncestors ||= ancestorHits(ctx, run, t).length > 0;
   });
   run.sessionRan = true;
-  const graded = await gradeSession(ctx, run, t, baseline, session);
+  const graded = await gradeSession(ctx, run, t, baseline, { ...session, rerunAncestors });
   writeRecord(ctx, { ...base, ...graded, ...carry, homesAtStart, ...meta });
 }
 
 /** After a session: let hippo's capture settle, take the carry delta, run the hidden tests and read the result into record fields. */
-async function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries }) {
+async function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries, rerunAncestors }) {
   const { arm, dirs, env, rawDir } = run;
   const work = dirs.work;
   fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
@@ -215,12 +229,12 @@ async function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries })
   const sessionId = result?.session_id ?? null;
   const transcript = findTranscript(path.join(dirs.claudeConfig, 'projects'), sessionId);
   // A valid record always has integer work counts, so a session without its transcript is void like one without a result.
-  const invalid = result === null ? 'no-result' : (transcript === null ? 'no-transcript' : null);
+  const invalid = rerunAncestors ? 'ancestor-instructions' : (result === null ? 'no-result' : (transcript === null ? 'no-transcript' : null));
   const counted = invalid === null;
   return {
     resolved: counted && test.status === 0,
     usage: counted ? usageFromResult(result) : null, costUsd: counted ? result.total_cost_usd ?? null : null, turns: counted ? result.num_turns ?? null : null,
-    ...transcriptWork(transcript, run.seenErrors),
+    ...transcriptWork(counted ? transcript : null, run.seenErrors),
     sessionId, transcriptFound: transcript !== null,
     agentError: result === null ? `claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}` : (result.is_error ? result.subtype ?? 'error' : null),
     hippo: HIPPO_ARMS.has(arm) ? hippoSentFor(path.join(work, '.hippo'), sessionId) : null,

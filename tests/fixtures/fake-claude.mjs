@@ -21,6 +21,9 @@ if (prompt.includes('CRASH')) {
   process.exit(3);
 }
 
+// ESCAPE writes CLAUDE.md one dir above the workspace, where Claude Code would load it as an ancestor next session.
+if (prompt.includes('ESCAPE')) fs.writeFileSync(path.join('..', 'CLAUDE.md'), 'escaped instructions\n');
+
 // FAKE_CLAUDE_LIMIT_ONCE=<marker file>: the first LIMIT prompt leaves stray edits and hits the plan limit.
 // FAKE_CLAUDE_LIMIT_ALWAYS=1: every LIMIT prompt hits it.
 const limitMarker = process.env.FAKE_CLAUDE_LIMIT_ONCE;
@@ -98,3 +101,5 @@ console.log(JSON.stringify({
   usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 },
   modelUsage: { 'fake-model': { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 10000, cacheCreationInputTokens: 2000 + extra, costUSD: 0.01 } },
 }));
+// RMWORK deletes the workspace last; only POSIX lets a process delete its own cwd.
+if (prompt.includes('RMWORK')) fs.rmSync(process.cwd(), { recursive: true, force: true });

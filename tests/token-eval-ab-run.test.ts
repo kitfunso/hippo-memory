@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { runAll, planRuns, validateTasks, prependPath, preflight, cacheTaskRepos } from '../scripts/token-eval/ab-run.mjs';
+import { runAll, planRuns, validateTasks, preflight, cacheTaskRepos } from '../scripts/token-eval/ab-run.mjs';
 import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-eval/records.mjs';
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
@@ -163,14 +163,6 @@ describe('Z0 runner plan and reads', () => {
     const work = transcriptWork(file, new Set());
     const shells = cases.filter(([n, , counted]) => counted && n !== 'Read' && n !== 'Grep').length;
     expect(work).toMatchObject({ toolCalls: cases.length, fileReads: cases.filter(([, , c]) => c).length, shellReads: shells });
-  });
-
-  it('prepends to PATH under the key the env already uses, never a second one', () => {
-    const win = prependPath({ Path: 'C:\\Windows' }, 'bin');
-    expect(Object.keys(win)).toEqual(['Path']);
-    expect(win.Path).toBe(`bin${delimiter}C:\\Windows`);
-    expect(prependPath({ PATH: '/usr/bin' }, 'bin')).toEqual({ PATH: `bin${delimiter}/usr/bin` });
-    expect(prependPath({}, 'bin')).toEqual({ PATH: `bin${delimiter}` });
   });
 
   it('treats a usage limit or overload as a rerun, never a budget cap or a normal result', () => {
@@ -383,6 +375,43 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(k1).toMatchObject({ taskId: 'k1', invalid: null, leak: false });
     expect(k2).toMatchObject({ ...NO_SESSION, taskId: 'k2', invalid: 'leak', leak: true, agentError: null, carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0, homesAtStart: null });
     for (const f of ['k2.json', 'k2.test.txt']) expect(existsSync(join(out, 'raw', 'seqK', 'A2', 'seed1', f)), f).toBe(false);
+  }, 60_000);
+
+  it('an instruction file the agent wrote above work/ voids the next session without running it, and the run goes on', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-ancestor-');
+    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, tasks: [task(r, 'a1', 'ESCAPE look around'), task(r, 'a2', 'FIX add in lib.js'), task(r, 'a3', 'look around only')] }] });
+    await run(spec, ['A1'], out);
+    const [a1, a2, a3] = readRecords(out);
+    expect(a1).toMatchObject({ taskId: 'a1', invalid: null });
+    for (const x of [a2, a3]) expect(x).toMatchObject({ ...NO_SESSION, invalid: 'ancestor-instructions', leak: false, agentError: null });
+    const raw = join(out, 'raw', 'seqA', 'A1', 'seed1');
+    expect(existsSync(join(raw, 'a2.json'))).toBe(false);
+    expect(readFileSync(join(raw, 'a2.ancestor.txt'), 'utf8')).toContain(join('seed1', 'CLAUDE.md'));
+  }, 60_000);
+
+  it('an instruction file a limited attempt wrote above work/ voids the rerun', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-ancestor-limit-');
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    const spec = validateTasks({ sequences: [{ id: 'seqB', cluster: 'c', repo: r.repo, tasks: [task(r, 'b1', 'look around only'), task(r, 'b2', 'LIMIT ESCAPE FIX add in lib.js')] }] });
+    await run(spec, ['A0'], out, { limitWaitMs: 0 });
+    const [b1, b2] = readRecords(out);
+    expect(b1).toMatchObject({ invalid: null });
+    expect(b2).toMatchObject({ taskId: 'b2', invalid: 'ancestor-instructions', limitRetries: 1, resolved: false, usage: null, toolCalls: null });
+  }, 60_000);
+
+  it.skipIf(process.platform === 'win32')('an agent that deletes its own work dir is graded, not abandoned, and the run goes on', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-rmwork-');
+    const spec = validateTasks({ sequences: [{ id: 'seqW', cluster: 'c', repo: r.repo, tasks: [task(r, 'w1', 'FIX RMWORK'), task(r, 'w2', 'FIX add in lib.js')] }] });
+    await run(spec, ['A1'], out);
+    const [w1, w2] = readRecords(out);
+    expect(w1).toMatchObject({ taskId: 'w1', invalid: null, resolved: false });
+    expect(w2).toMatchObject({ taskId: 'w2', invalid: null, resolved: true });
   }, 60_000);
 
   it('A2 is initialised at the first task that runs when the first task\'s setup fails', async () => {
