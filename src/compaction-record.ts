@@ -18,7 +18,7 @@ export const COMPACTION_DB_WAIT_MS = 2000;
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
-  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo'. Write '- none' if nothing new remains.";
+  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' if nothing new remains.";
 
 const SUMMARY_MAX_CHARS = 256 * 1024;
 /** Long enough that a live hook has finished with its own record. */
