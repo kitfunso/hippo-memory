@@ -26,7 +26,12 @@ interface Seeded {
   contentByLabel: Map<string, string>;
 }
 
-function makeHome(config?: object): string {
+interface StoreConfig {
+  embeddings?: { provider: string; model: string };
+  physics?: { enabled: boolean };
+}
+
+function makeHome(config?: StoreConfig): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-ranking-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
   if (config) writeFileSync(join(home, 'config.json'), JSON.stringify(config), 'utf8');
@@ -44,7 +49,7 @@ function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemo
 }
 
 /** Lexical hits of differing strength, a semantic-only row, scoped, private, legacy, pinned and churn-stale rows, and noise. */
-function seed(config?: object): Seeded {
+function seed(config?: StoreConfig): Seeded {
   const s: Seeded = { home: makeHome(config), labelById: new Map(), idByLabel: new Map(), contentByLabel: new Map() };
   add(s, 'L1', 'deploy pipeline uses blue green rollout');
   add(s, 'L2', 'deploy checklist says run migrations before every deploy');
@@ -101,14 +106,13 @@ function observe(s: Seeded, text: string): Observed {
   return { ranked, tail, cutoff };
 }
 
-function retrievalCounts(s: Seeded): Record<string, number> {
+/** Label to retrieval_count for every row retrieved at least once. */
+function retrievalCounts(s: Seeded): Map<string, number> {
   const db = openHippoDb(s.home);
   try {
     // SAFETY: the SELECT names exactly the two columns read below.
     const rows = db.prepare('SELECT id, retrieval_count FROM memories').all() as Array<{ id: string; retrieval_count: number }>;
-    const out: Record<string, number> = {};
-    for (const r of rows) if (r.retrieval_count > 0) out[s.labelById.get(r.id) ?? r.id] = r.retrieval_count;
-    return out;
+    return new Map(rows.filter((r) => r.retrieval_count > 0).map((r) => [s.labelById.get(r.id) ?? r.id, r.retrieval_count]));
   } finally {
     closeHippoDb(db);
   }
@@ -202,7 +206,7 @@ describe('MCP hippo_recall ranking', () => {
     for (const n of ['one', 'two', 'three']) add(s, `T-${n}`, `standup chatter ${n}`, { layer: Layer.Buffer, kind: 'raw' });
     const seen = observe(s, textOf(await call(s.home, { query: QUERY, scorer_window: 2, fresh_tail_count: 3 })));
     expect(seen).toEqual(EXPECTED.freshTail);
-    expect(retrievalCounts(s)).toEqual(Object.fromEntries(seen.ranked.map((l) => [l, 1])));
+    expect(retrievalCounts(s)).toEqual(new Map(seen.ranked.map((l) => [l, 1])));
   });
 
   it('a strong match outside the 200-row lexical window still ranks', async () => {
@@ -220,6 +224,23 @@ describe('MCP hippo_recall ranking', () => {
     expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);
   });
 
+  it('strengthens each shown row once and traces the shown list as pipeline mcp', async () => {
+    const s = track(seed());
+    const seen = observe(s, textOf(await call(s.home, { query: QUERY, session_id: 'sess-trace' })));
+    expect(retrievalCounts(s)).toEqual(new Map(seen.ranked.map((l) => [l, 1])));
+    const db = openHippoDb(s.home);
+    try {
+      // SAFETY: each SELECT names exactly the columns read below.
+      const traces = db.prepare('SELECT id, pipeline, session_id, result_count FROM recall_traces').all() as Array<{ id: number; pipeline: string; session_id: string; result_count: number }>;
+      expect(traces).toEqual([{ id: traces[0]?.id, pipeline: 'mcp', session_id: 'sess-trace', result_count: seen.ranked.length }]);
+      // SAFETY: the SELECT names the one column read below.
+      const rows = db.prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank').all(traces[0]?.id) as Array<{ memory_id: string }>;
+      expect(rows.map((r) => s.labelById.get(r.memory_id))).toEqual(seen.ranked);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
   it('scorer_window=0 is still a RecallContractError', async () => {
     const s = track(seed());
     const res = call(s.home, { query: QUERY, scorer_window: 0 });
@@ -229,7 +250,7 @@ describe('MCP hippo_recall ranking', () => {
 });
 
 // Recorded on the pre-refactor handler (own loadAllEntries + physicsSearch/hybridSearch pipeline).
-const EXPECTED: Record<string, Observed> = {
+const EXPECTED = {
   defaultHybrid: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
@@ -285,4 +306,4 @@ const EXPECTED: Record<string, Observed> = {
     tail: ['SUM'],
     cutoff: 'Showing 13 of 90 candidates; 75 dropped to fit limit; 2 filtered pre-rank; 1 summary substitutions added.',
   },
-};
+} satisfies Record<string, Observed>;

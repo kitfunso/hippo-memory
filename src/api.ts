@@ -519,16 +519,23 @@ export interface RecallOpts {
    * Mirrors `suppressAvailabilityHint`'s pattern: callers that run their OWN
    * tracing over a DIFFERENT result set must suppress api.recall's copy so
    * the training corpus doesn't get a trace mislabeled as 'api' pipeline
-   * when the caller's actual user-visible results came from elsewhere. The
-   * MCP handler sets this — its primary ranked band comes from a separate
-   * physics/hybrid scorer, not this api.recall call's BM25 band (real MCP
-   * tracing is the reserved 'mcp' pipeline, a follow-up). HTTP / direct SDK
-   * callers leave this unset and get the trace.
+   * when the caller's actual user-visible results came from elsewhere. Under
+   * `showRanked` it also drops the 'mcp' trace of the shown list. HTTP /
+   * direct SDK callers leave this unset and get the trace.
    */
   suppressRecallTrace?: boolean;
   /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
    *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
   keepHeldCopies?: boolean;
+  /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
+  showRanked?: (ranking: StoreRanking, result: RecallResult) => readonly string[];
+}
+
+/** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope filter. */
+export interface StoreRanking {
+  ranked: SearchResult[];
+  pool: MemoryEntry[];
+  droppedByScope: number;
 }
 
 export interface ContinuityBlock {
@@ -810,6 +817,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
+  if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked);
   let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false);
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null };
@@ -821,6 +829,45 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   }
   const result = recallFrom(ctx, opts, windowSize, candidates);
   strengthenRetrieved(ctx.hippoRoot, result.results.map((r) => r.id), ctx.tenantId);
+  return result;
+}
+
+/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid otherwise, over every admitted row. */
+async function retrieveFromStore(
+  ctx: Context,
+  opts: RecallOpts,
+  windowSize: number,
+  show: NonNullable<RecallOpts['showRanked']>,
+): Promise<RecallResult> {
+  const store = loadAllEntries(ctx.hippoRoot, ctx.tenantId);
+  const pool = store.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope));
+  // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
+  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot };
+  let ranked = opts.mode === 'physics'
+    ? await physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
+    : await hybridSearch(opts.query, pool, searchOpts);
+  if (opts.sessionId && !opts.goalTag) {
+    const db = openHippoDb(ctx.hippoRoot);
+    try {
+      ranked = applyGoalStackBoost(db, ranked, { sessionId: opts.sessionId, tenantId: ctx.tenantId, limit: ranked.length });
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+  const window = ranked.slice(0, windowSize).map((r) => r.entry);
+  const result = recallFrom(ctx, { ...opts, suppressRecallTrace: true }, windowSize, window);
+  const shown = show({ ranked, pool, droppedByScope: store.length - pool.length }, result);
+  strengthenRetrieved(ctx.hippoRoot, shown, ctx.tenantId);
+  if (!opts.suppressRecallTrace) {
+    const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
+    writeRecallTraceAtRoot(ctx.hippoRoot, {
+      tenantId: ctx.tenantId,
+      sessionId: opts.sessionId ?? null,
+      pipeline: 'mcp',
+      query: opts.query,
+      results: shown.map((id) => ({ memoryId: id, score: scores.get(id) ?? 0 })),
+    });
+  }
   return result;
 }
 
@@ -1154,9 +1201,9 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // handle. v1.11.5 contract lock holds — api.recall does NOT write
   // last_trace_id (tests/api-recall-no-side-effects.test.ts); a trace INSERT
   // is the same observability class as the audit row it sits beside, not
-  // retrieval state. F2 fix: suppressed when the caller (currently only the
-  // MCP handler) traces its own, different result set — see
-  // opts.suppressRecallTrace JSDoc. Fail-soft internally; never throws.
+  // retrieval state. F2 fix: suppressed when the caller traces its own,
+  // different result set (retrieve under showRanked traces the shown list as
+  // 'mcp'). Fail-soft internally; never throws.
   if (!opts.suppressRecallTrace) {
     writeRecallTrace(db, {
       tenantId: ctx.tenantId,
