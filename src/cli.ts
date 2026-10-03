@@ -225,7 +225,7 @@ import {
   type AuditOp,
   type AuditResult,
 } from './audit.js';
-import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
+import { createApiKey, listApiKeys, type ApiKeyListItem } from './auth.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
@@ -8719,56 +8719,29 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
 
 function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const asJson = Boolean(flags['json']);
-
+  // The local CLI owns every tenant, so the revoke runs in the key's own tenant.
   const db = openHippoDb(root);
-  let exists = false;
-  let alreadyRevoked = false;
-  let revokedAt: string | null = null;
-  let keyTenantId: string | null = null;
+  let keyTenant: string | undefined;
   try {
-    const row = db.prepare(`SELECT key_id, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
-      | { key_id: string; tenant_id: string; revoked_at: string | null }
-      | undefined;
-    if (!row) {
-      // Let the finally{} block close the db. M4: avoid manual close before
-      // process.exit() — the finally already handles it on every path.
-      console.error(`Unknown key_id: ${keyId}`);
-      process.exit(1);
-    }
-    exists = true;
-    keyTenantId = row.tenant_id;
-    if (row.revoked_at) {
-      alreadyRevoked = true;
-      revokedAt = row.revoked_at;
-    } else {
-      revokeApiKey(db, keyId);
-      const updated = db.prepare(`SELECT revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
-        | { revoked_at: string | null }
-        | undefined;
-      revokedAt = updated?.revoked_at ?? null;
-    }
-    // M1: emit auth_revoke audit event. Skip on no-op revoke (already revoked)
-    // so re-running the command doesn't pad the audit log with duplicates.
-    if (!alreadyRevoked && keyTenantId) {
-      try {
-        appendAuditEvent(db, {
-          tenantId: keyTenantId,
-          actor: 'cli',
-          op: 'auth_revoke',
-          targetId: keyId,
-        });
-      } catch {
-        // Audit must not crash a successful revoke.
-      }
-    }
+    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
+    const row = db.prepare(`SELECT tenant_id FROM api_keys WHERE key_id = ?`).get(keyId) as { tenant_id: string } | undefined;
+    keyTenant = row?.tenant_id;
   } finally {
     closeHippoDb(db);
   }
-
-  if (!exists) return;
-
-  if (asJson) {
+  if (keyTenant === undefined) {
+    console.error(`Unknown key_id: ${keyId}`);
+    process.exit(1);
+  }
+  const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
+  let revokedAt: string;
+  try {
+    revokedAt = api.authRevoke(ctx, keyId).revokedAt;
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  if (flags['json']) {
     console.log(JSON.stringify({ keyId, revokedAt }));
     return;
   }
