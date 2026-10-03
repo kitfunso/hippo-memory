@@ -15,6 +15,7 @@ let stderrSpy: ReturnType<typeof vi.spyOn>;
 // One vector per input, derived from the text so each memory gets a distinct one.
 function fakeEmbeddings(): ReturnType<typeof vi.fn> {
   return vi.fn(async (_url: string, init: { body: string }) => {
+    // SAFETY: the OpenAI provider's buildBody always sends `{ model, input: texts }`.
     const { input } = JSON.parse(init.body) as { input: string[] };
     const data = input.map((t) => ({ embedding: [t.length, 1] }));
     return new Response(JSON.stringify({ data }));
