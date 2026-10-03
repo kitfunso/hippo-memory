@@ -27,9 +27,14 @@ export function unplannedDesign(filtered) {
   return [...arms, ...sets];
 }
 
+const noRefuse = () => {
+  throw new Error('analyzeZ0: unblind needs a refuse callback that runs the commit and G5 checks (z0-blind.mjs unblindRefusal)');
+};
+
 /** Validation, filters and gates; the hypothesis and reported blocks only when unblinding is allowed and every gate passes.
  * An abandoned run is never analysed (114): no gates, no hypotheses, and its codes stay closed. */
 export function analyzeZ0(records, opts) {
+  const refuse = opts.refuse ?? noRefuse;
   const { unchecked } = validateCorpus(records, opts.planCells);
   const filtered = filterRecords(records, opts.planCells, { grading: opts.grading ?? null, dropList: opts.dropList ?? null });
   const unplanned = unplannedDesign(filtered);
@@ -39,7 +44,7 @@ export function analyzeZ0(records, opts) {
   }
   const stat = { iterations: opts.iterations ?? ITERATIONS, seed: opts.seed ?? SEED };
   const gates = computeGates(records, filtered, opts.grading ?? null, stat);
-  const refusal = opts.unblind ? (opts.refuse?.(gates) ?? null) : null;
+  const refusal = opts.unblind ? refuse(gates) : null;
   const open = opts.unblind === true && refusal === null && gates.pass;
   return {
     status: gates.pass ? 'valid' : 'invalid', unchecked, filtered, unplanned, gates, refusal,
@@ -88,6 +93,9 @@ const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) 
 
 /** Reads every input file and rejects a malformed one by name; records keep their file and line. */
 export function loadInputs(args, cwd) {
+  // Checked before the blind key is written, so a bad --out leaves nothing behind.
+  const outDir = args.out === null ? null : path.dirname(path.resolve(cwd, args.out));
+  if (outDir !== null && !fs.existsSync(outDir)) throw new Error(`--out ${args.out}: folder ${outDir} does not exist`);
   const records = [];
   const warnings = [];
   for (const f of args.runs) {
@@ -233,7 +241,11 @@ export function runCli(argv, cwd = process.cwd()) {
     return fail(1, e.message);
   }
   const report = buildReport(analysis, inputs, args, codes, inputHashes(args, cwd));
-  if (args.out !== null) fs.writeFileSync(path.resolve(cwd, args.out), `${JSON.stringify(report, null, 2)}\n`);
+  try {
+    if (args.out !== null) fs.writeFileSync(path.resolve(cwd, args.out), `${JSON.stringify(report, null, 2)}\n`);
+  } catch (e) {
+    return fail(1, `--out ${args.out}: ${e.message}`);
+  }
   return { code: 0, stdout: renderText(report), stderr: '' };
 }
 

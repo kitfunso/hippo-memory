@@ -4,7 +4,6 @@
 
 import { TWO_SEED_ARMS, armRunKey, cellKey, isInvalid, isLeak, positionKey, resolvedOf, runKey, untaughtApplies } from './z0-records.mjs';
 
-export const RETRY_VOID = 'retry-unrestored';
 // Their only carried surface is the instruction files E1 restores before a retry.
 const RESTORED_ARMS = new Set(['A0', 'A4']);
 
@@ -73,22 +72,21 @@ export function retryVoids(records) {
 const canonical = (a, b) => a.sequence.localeCompare(b.sequence) || a.seed - b.seed || a.position - b.position || a.arm.localeCompare(b.arm);
 
 /** Filters 0-6 in the plan's order: the step-0 counts, the lists the report prints, and `scored`, the
- * records every statistic reads, in canonical order so argv order cannot move a resample. */
+ * records every statistic reads, in canonical order so argv order cannot move a resample.
+ * Abandoned runs are listed, not removed: analyzeZ0 stops on any abandoned run before gates or statistics (114). */
 export function filterRecords(records, planCells, { grading = null, dropList = null } = {}) {
   const tail = abandonedTail(records, planCells);
   const { arms, counts } = countCells(records, planCells, tail);
   const plannedRuns = new Set(planCells.map((c) => runKey(c.sequence, c.seed)));
   const abandoned = abandonedRuns(records, planCells, tail);
-  const live = records.filter((r) => !abandoned.has(runKey(r.sequence, r.seed)));
-  const retryFrom = retryVoids(live);
-  const voided = new Set(live.filter((r) => r.void !== null).map(positionKey));
-  const untaught = new Set(untaughtApplies(live, planCells).map(positionKey));
+  const retryFrom = retryVoids(records);
+  const voided = new Set(records.filter((r) => r.void !== null).map(positionKey));
+  const untaught = new Set(untaughtApplies(records, planCells).map(positionKey));
   const retried = (r) => r.position >= (retryFrom.get(runKey(r.sequence, r.seed)) ?? Infinity);
   const leaked = new Map(records.filter(isLeak).map((r) => [runKey(r.sequence, r.seed), label(r.sequence, r.seed)]));
-  const liveCells = planCells.filter((c) => !abandoned.has(runKey(c.sequence, c.seed)));
-  const livePositions = new Set(liveCells.map(positionKey));
-  const retryVoided = new Set(liveCells.filter(retried).map(positionKey)).size;
-  const scored = applyDrops(live, grading, dropList).filter((r) => {
+  const plannedPositions = new Set(planCells.map(positionKey));
+  const retryVoided = new Set(planCells.filter(retried).map(positionKey)).size;
+  const scored = applyDrops(records, grading, dropList).filter((r) => {
     const run = runKey(r.sequence, r.seed);
     return !leaked.has(run) && !voided.has(positionKey(r)) && !retried(r) && !untaught.has(positionKey(r)) && !isInvalid(r) && !isLeak(r);
   });
@@ -101,7 +99,7 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
     plannedRuns: plannedRuns.size,
     abandoned: [...abandoned.values()].sort(),
     leaked: [...leaked.values()].sort(),
-    retryVoided: { positions: retryVoided, share: livePositions.size === 0 ? 0 : retryVoided / livePositions.size },
+    retryVoided: { positions: retryVoided, share: plannedPositions.size === 0 ? 0 : retryVoided / plannedPositions.size },
     untaughtApplyDrops: untaught.size,
     carryUnion,
     scored: scored.sort(canonical),

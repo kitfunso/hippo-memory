@@ -17,7 +17,7 @@ const runOf = (rs: readonly { sequence: string; seed: number }[], sequence: stri
 const STAT = { iterations: 2000, seed: 1 };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
 const analyze = (g: Generated, extra = {}) =>
-  analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, ...STAT, ...extra });
+  analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, ...STAT, ...extra });
 const hyp = (opts: GenOpts) => analyze(generate(opts)).hypotheses;
 const gatesOf = (g: Generated) => analyze(g, { unblind: false }).gates;
 const te = (estimate: number, p: number, low: number, high: number, nullValue = 0) => ({ estimate, low, high, p, iterations: 2000, dropped: 0, nullValue });
@@ -105,7 +105,7 @@ describe('Z0 records contract', () => {
     type CellEdit = Partial<Record<'set' | 'kind' | 'familyId' | 'arm', string | null | undefined>>;
     const edited = (i: number, edit: CellEdit) => plan.map((c, j) => (j === i ? { ...c, ...edit } : c));
     const cases: [number, CellEdit, RegExp][] = [
-      [teach, { set: undefined }, /set must be R, N or X/],
+      [teach, { set: 'Q' }, /set must be R, N or X/],
       [teach, { kind: 'lesson' }, /kind must be teach, apply or no-lesson/],
       [teach, { familyId: null }, /familyId is a string for teach and apply/],
       [teach, { arm: 'X1' }, /arm X1 is not an arm of set R/],
@@ -118,6 +118,15 @@ describe('Z0 records contract', () => {
     for (const [f, v] of [['set', 'N'], ['kind', 'apply'], ['familyId', 'rn-repo1-f1']]) {
       expect(() => corpus(records, edited(teach, { [f!]: v }))).toThrow(new RegExp(`runs\\.jsonl line ${teach + 1}: ${f} \\S+ but the plan has ${v} at cell`));
     }
+  });
+
+  it('37: a plan written before the lesson-families fields names the cause, not a field rule', () => {
+    const { plan } = fresh();
+    const cause = 'write the plan with a runner that includes the lesson-families fields';
+    const old = plan.map(({ set: _s, kind: _k, familyId: _f, ...rest }) => rest);
+    expect(() => parsePlan(JSON.stringify(old), 'plan.json')).toThrow(new RegExp(`^plan\\.json cell 1 has no set/kind/familyId: ${cause}$`));
+    const noFamily = plan.map((c, j) => (j === 2 ? { ...c, familyId: undefined } : c));
+    expect(() => parsePlan(JSON.stringify(noFamily), 'plan.json')).toThrow(new RegExp(`^plan\\.json cell 3 has no familyId: ${cause}$`));
   });
 });
 
@@ -161,7 +170,7 @@ describe('Z0 filters', () => {
     expect([h1.units, h1.droppedUnits, h1.dropped]).toEqual([71, ['rn-repo1-f0 seed 1'], 0]);
   });
 
-  it('11, 13, 15, 24 (filters): voids, leaks, drops and abandoned runs leave every arm', () => {
+  it('11, 13, 15, 24 (filters): voids, leaks and drops leave every arm; abandoned runs are listed', () => {
     const { records, plan } = fresh();
     records[at(records, 'A1', 'rn-repo2', 2, 6)]!.void = 'read-past-transcript';
     records[at(records, 'A2', 'rn-repo4', 1, 2)]!.leak = true;
@@ -260,6 +269,10 @@ describe('Z0 hypotheses', () => {
     expect([cost.H4.gate.costOk, cost.H4.gate.pass, cost.order[0]]).toEqual([false, false, 'H4']);
     const resolve = hyp({ knobs: { A1: { resolve: 1 }, A2: { resolve: 0.9 } } });
     expect([resolve.H4.gate.resolveOk, resolve.H4.gate.pass]).toEqual([false, false]);
+    // Reading 20: H1 to H3 losses lead, then a failed H4, then the rest.
+    const both = hyp({ knobs: { A1: { resolve: 1 }, A2: { resolve: 1, fail: 0.9, cost: (s) => (s.set === 'N' ? 1.2 : 0.96) } } });
+    const losses = ['H1', 'H2', 'H3'].filter((h) => both.verdicts[h].final.verdict === 'loss');
+    expect([both.H4.gate.pass, losses[0], both.order.indexOf('H4')]).toEqual([false, 'H1', losses.length]);
   });
 
   it('29: H4 is not run without set N in the plan, and fails when filters leave set N empty', () => {
@@ -387,5 +400,12 @@ describe('Z0 gates', () => {
     const noA5 = fresh();
     const b = analyze({ records: noA5.records.filter((r) => r.arm !== 'A5'), plan: noA5.plan }, { unblind: false });
     expect([b.status, b.gates, b.filtered.counts.A5.abandoned]).toEqual(['abandoned', null, 324]);
+  });
+
+  it('38: an exported unblind with no refuse callback throws, so the commit check cannot be skipped', () => {
+    const g = fresh();
+    const opts = { planCells: g.plan, prices: PRICES, grading: GRADING, ...STAT };
+    expect(() => analyzeZ0(parse(g.records), { ...opts, unblind: true })).toThrow(/^analyzeZ0: unblind needs a refuse callback/);
+    expect(analyzeZ0(parse(g.records), { ...opts, unblind: false }).status).toBe('valid');
   });
 });

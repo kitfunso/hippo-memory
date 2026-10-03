@@ -32,7 +32,7 @@ export function g2(filtered, opts) {
   return { pass: claudeCode.pass && codex.pass, claudeCode, codex };
 }
 
-/** G3: leaked (sequence, seed)s, counted before abandonment removal, at most 5% of those planned. */
+/** G3: leaked (sequence, seed)s at most 5% of those planned. */
 export function g3(leaked, plannedRuns) {
   return { pass: leaked * 20 <= plannedRuns, leaked, plannedRuns, share: plannedRuns === 0 ? 0 : leaked / plannedRuns };
 }

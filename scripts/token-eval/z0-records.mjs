@@ -171,6 +171,8 @@ export function parsePlan(text, file = 'plan') {
   if (cells.length === 0) throw new Error(`${file}: the plan has no cells`);
   return cells.map((c, i) => {
     const where = `${file} entry ${i + 1}`;
+    const absent = isPlainObject(c) ? ['set', 'kind', 'familyId'].filter((f) => c[f] === undefined) : [];
+    if (absent.length > 0) throw new Error(`${file} cell ${i + 1} has no ${absent.join('/')}: write the plan with a runner that includes the lesson-families fields`);
     try {
       check(isPlainObject(c) && isName(c.sequence) && isCount(c.position), 'a cell needs a sequence and a non-negative integer position');
       checkSlot(c);

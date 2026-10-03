@@ -136,10 +136,17 @@ describe('Z0 CLI and blind mode', () => {
     expect(report('b.jsonl', 'a.jsonl')).toEqual(report('a.jsonl', 'b.jsonl'));
     const open = (first: Generated['records'], second: Generated['records']) => {
       const records = [...parseZ0Records(jsonl(first), 'x').records, ...parseZ0Records(jsonl(second), 'y').records];
-      const a = analyzeZ0(records, { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, iterations: 300, seed: 1 });
+      const a = analyzeZ0(records, { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, iterations: 300, seed: 1 });
       return [a.hypotheses, a.reported];
     };
     expect(open(half(false), half(true))).toEqual(open(half(true), half(false)));
+  });
+
+  it('39: --out in a missing folder exits 1 with a plain message before the key is written', () => {
+    const dir = workspace(fresh());
+    const out = runCli([...ARGS, '--iterations', '300', '--out', 'nope/o.json'], dir);
+    expect(out).toEqual({ code: 1, stdout: '', stderr: `--out nope/o.json: folder ${path.join(dir, 'nope')} does not exist\n` });
+    expect(fs.existsSync(path.join(dir, 'z0-blind-key.json'))).toBe(false);
   });
 
   it('--help prints the usage and exits 0', () => {
