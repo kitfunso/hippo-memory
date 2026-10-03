@@ -72,9 +72,16 @@ node scripts/token-eval/budget-curve.mjs --data benchmarks/longmemeval/data/long
 - **Tests:** `tests/token-eval-budget-curve.test.ts` checks the scoring on a haystack built so that recency and relevance disagree.
 - **Deferred:** an LLMLingua-2 compression arm.
 
-## A/B on your machine (TE5)
+## Z0 built-in memory A/B (Claude Code arms)
 
-This is the only harness that can support a savings claim. It runs real Claude Code sessions, with your subscription or API key, on the same coding tasks with and without hippo.
+This is the only harness that can support a savings claim. It runs real Claude Code sessions, signed in with your subscription, on the same coding tasks in four arms. Protocol: `docs/evals/2026-09-29-z0-built-in-memory-prereg.md`.
+
+- **A0:** no memory. Claude Code's auto memory is off (`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, `autoMemoryEnabled: false`).
+- **A1:** Claude Code's built-in auto memory, nothing else.
+- **A2:** A1 plus hippo's Claude Code hooks and a `hippo` on PATH that runs this checkout.
+- **A5:** sham hippo. Like A2, but the capture hooks (`SessionEnd`, `PreCompact`, `PostCompact`, `PostToolUseFailure`) are dropped and the `hippo` shim turns `remember`, `capture`, `learn` and `outcome` into silent no-ops.
+
+Default seeds are A0 2 and the others 3; `--seeds N` sets every arm to N (smoke and calibration runs).
 
 **1. Draft tasks from a repository's history** (small bug-fix commits with tests make the best tasks):
 
@@ -87,35 +94,36 @@ node scripts/token-eval/make-tasks.mjs --repo ../some-repo --cluster some-repo \
 - **The scope gate skips bundled commits before they cost a test run.** A candidate is skipped when it touches more than `--max-test-files` runnable test files (default 4) or changes more than `--max-code-lines` lines outside tests (default 400); each skip is printed with its reason. Pass `0` to either flag to disable it.
 - **`--run-exclude REGEX`** (default matches `fixtures?/`, `__fixtures__/`, `__snapshots__/`, `conftest.py`) marks hidden test files that are support files, not files the agent must produce: they are still written from the fix commit for the hidden test run, but never appear in the test command or count toward the scope gate. An `e2e/` spec is excluded from both tests and code entirely; it needs a running app, so it is never run as a hidden test.
 - **Then edit every prompt.** A drafted prompt is the commit message, which usually describes the fix. Rewrite each one as the problem a user would report, then delete `needsReview`. The runner refuses tasks that still have it.
-- Use at least two repositories: the stale-memory arm borrows another repository's store.
+The tasks file is `{ "sequences": [ { "id", "cluster", "repo", "tasks": [ { "id", "baseRef", "fixRef", "prompt", "testFiles": [...], "test", "setup"? } ] } ] }`, where `repo` is a URL or a local path. The first task of each sequence is run but not scored (nothing to recall yet).
 
 **2. Check the plan, then run:**
 
 ```bash
-node scripts/token-eval/ab-run.mjs --tasks tasks.json --out eval-runs --model <model id> --seeds 3 --dry-run
-node scripts/token-eval/ab-run.mjs --tasks tasks.json --out eval-runs --model <model id> --seeds 3 --max-budget-usd 3
+node scripts/token-eval/ab-run.mjs --tasks tasks.json --out C:/z0-runs/r1 --model <model id> --dry-run
+node scripts/token-eval/ab-run.mjs --tasks tasks.json --out C:/z0-runs/r1 --model <model id> --max-budget-usd 3
 ```
 
-`--dry-run` only validates the tasks file and prints the plan: it needs no `npm run build` and no `dist/`. A real run needs `dist/` (`npm run build` first) and fails fast with a clear message if it is missing.
+`--dry-run` only validates the tasks file and prints the plan: it needs no `npm run build` and no `dist/`. A real run needs `dist/` (`npm run build` first) and fails fast with a clear message if it is missing. `--arms` takes a subset of `A0,A1,A2,A5`.
 
-**One cluster, still want stale-memory?** `--donor-runs DIR` points at another `ab-run.mjs --out` directory. The stale-memory arm first looks for a hippo store finished earlier in this same run (another cluster with `hippo` in `--arms`); failing that, it reads `DIR/runs.jsonl` for a `hippo` arm record from a different cluster and copies its `.hippo` directory. Missing either source throws before the first Claude Code session, not partway through the run.
-
-**3. Analyze:**
+**3. Analyze** with A0 as the control (ab-analyze defaults to `no-memory`, which Z0 records never use):
 
 ```bash
-node scripts/token-eval/ab-analyze.mjs --runs eval-runs/runs.jsonl --prices prices.json
+node scripts/token-eval/ab-analyze.mjs --runs C:/z0-runs/r1/runs.jsonl --control A0 --prices prices.json
 ```
 
 What the runner does to keep the comparison fair:
 - **No future history.** Each workspace contains the repository's history only up to the task's base commit, so neither the agent nor hippo's git learning can read the fix from `git log`. Hidden tests are written in after the agent finishes.
-- **Your own setup is excluded.** Runs use `--setting-sources project` and `--strict-mcp-config`, so your `~/.claude` hooks, hippo's included, and your MCP servers do not load. Each arm gets only its own hooks.
-- **Hippo is isolated and fully counted.** Each run has its own `HIPPO_HOME`, and `hippo` on PATH is this checkout. Hippo's optional LLM extraction is off, so hippo spends nothing outside Claude Code's recorded usage.
-- **Every cost comes from Claude Code's own JSON result.** It uses `modelUsage` for the four token buckets and `total_cost_usd` at list price. Work metrics (tool calls, file reads, repeated errors) are read from the session transcript.
-- **Cache effects are balanced.** One warm-up call happens before the first recorded run, and hippo and no-memory swap order between seeds.
-- **Failures are recorded, not hidden.** A run with no result is recorded as invalid and excluded, never zero-filled. A task whose setup fails is recorded `invalid: 'setup'` and skipped entirely: no Claude Code session, no hidden-test run, never graded as a genuine "not resolved". The first task of each sequence is run but not scored.
+- **Every surface that can hold memory is per run.** Each (sequence, arm, seed) gets `<out>/runs/<seq>/<arm>/seed<n>/` holding `work/`, `claude-config/` (`CLAUDE_CONFIG_DIR`), `codex-home/` (`CODEX_HOME`), `hippo-home/` (`HIPPO_HOME`) and `bin/`. The homes are created empty and checked empty before `hippo init`; each record's `homesAtStart` lists what they held when the first session started.
+- **Your own environment is stripped.** Every key starting `ANTHROPIC_`, `CLAUDE_`, `AWS_`, `CODEX_` or `HIPPO_`, plus `CLAUDECODE`, is removed, in any case. The only key added back is `CLAUDE_CODE_OAUTH_TOKEN`, which reaches `claude` and never setup, tests or `hippo init`. Each record lists the surviving key names, never values. `--pass-env NAME` (repeatable) copies one more key, for example a logging proxy's `ANTHROPIC_BASE_URL`; on a Windows host where Claude Code cannot find Git Bash by itself, pass `--pass-env CLAUDE_CODE_GIT_BASH_PATH`.
+- **PATH hides every installed hippo.** Every PATH dir holding a `hippo` launcher is removed for every arm, so A0 and A1 get the shell's own "command not found" and A2/A5 only their run's `bin/`. Everything else in those dirs is hidden from every arm alike: for a global npm install that includes CLIs such as `bun`, `bunx` and `codex`. The runner refuses to start when `node`, `npm`, `npx`, `git` or `claude` stops resolving; install hippo in its own prefix or uninstall the global copy. `claude` is resolved once, from your full PATH, and spawned by absolute path. The mixed-case PATH test runs on Windows only.
+- **Your own setup is excluded.** Runs use `--setting-sources project` and `--strict-mcp-config`, so your `~/.claude` hooks, hippo's included, and your MCP servers do not load. hippo itself runs with HOME set to the output dir, init runs with `--no-schedule`, and hippo's optional LLM extraction is off, so hippo spends nothing outside Claude Code's recorded usage.
+- **Every cost comes from Claude Code's own JSON result.** It uses `modelUsage` for the four token buckets and `total_cost_usd` at list price. Work metrics (tool calls, file reads, repeated errors) are read from the session transcript. `fileReads` counts Read and Grep plus shell calls with a read command (`cat`, `head`, `tail`, `less`, `more`, `sed -n`, `grep`, `rg`, and in PowerShell also `Get-Content`, `Select-String`, `type`, `gc`); `shellReads` is the shell share.
+- **Lockstep order.** Sessions run seed by seed and position by position, with the arm order rotated each position, so the arms share time-of-day and plan-limit conditions. First-slot counts are exactly balanced only within a seed whose position count is a multiple of the active-arm count; each record's `order` is the step index, and the analysis should take it as a covariate. One unrecorded warm-up call runs first, in a stripped A0 env.
+- **Failures are recorded, not hidden.** A run with no result is recorded as invalid and excluded, never zero-filled. A task whose setup fails is recorded `invalid: 'setup'` and skipped entirely: no Claude Code session, no hidden-test run, never graded as a genuine "not resolved".
+- **Plan limits are retried, then voided.** A session that hits a usage limit waits and reruns on a reset checkout; the record counts `limitRetries`. The store and auto memory a limited attempt wrote are not restored, so the analysis voids A1/A2/A5 sessions with `limitRetries > 0`.
 - **Permissions.** Runs use `--permission-mode bypassPermissions` inside throwaway clones. Claude Code refuses that as root; there, use `--permission-mode acceptEdits`, which allows edits but not shell commands.
 
-**Checked so far.** The runner was exercised end to end with a stand-in for Claude Code in `tests/token-eval-ab-run.test.ts`. It was also run once with real Claude Code (Haiku) on a two-task toy repository, in the no-memory and hippo arms: four real sessions, about $0.08, with usage, cost, turns, tool calls and file reads recorded from the real output and transcripts. That run tests the plumbing and says nothing about hippo: one scored task, one seed, and a repository with no history for hippo to learn from.
+**Checked so far.** The runner is exercised end to end with a stand-in for Claude Code in `tests/token-eval-ab-run.test.ts` and `tests/token-eval-z0-homes.test.ts`. No real Claude Code session has run under the Z0 arms yet: the stage 1 smoke report settles that auto memory saves in a per-run config dir, that A0 gets none, and that the OAuth token signs in with an empty config dir.
 
 ## A/B analysis (TE5)
 
