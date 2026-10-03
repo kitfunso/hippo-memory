@@ -2,14 +2,13 @@
  * Order is the plan's: counts are taken before any removal, so a void or leak cannot hide a crash cluster.
  * Every removal is paired: a cell or (sequence, seed) leaves every arm at once. */
 
-import { TWO_SEED_ARMS, cellKey, isInvalid, isLeak, positionKey, resolvedOf, runKey, untaughtApplies } from './z0-records.mjs';
+import { TWO_SEED_ARMS, armRunKey, cellKey, isInvalid, isLeak, positionKey, resolvedOf, runKey, untaughtApplies } from './z0-records.mjs';
 
 export const RETRY_VOID = 'retry-unrestored';
 // Their only carried surface is the instruction files E1 restores before a retry.
 const RESTORED_ARMS = new Set(['A0', 'A4']);
 
 const label = (sequence, seed) => `${sequence} seed ${seed}`;
-const armRunKey = (c) => `${runKey(c.sequence, c.seed)}/${c.arm}`;
 
 /** Per (sequence, seed, arm), the planned cells after its last record: what a run that stops partway leaves (114). */
 export function abandonedTail(records, planCells) {
@@ -96,7 +95,8 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
   const carryUnion = new Set(records.filter((r) => r.carryUnionMerges > 0).map((r) => runKey(r.sequence, r.seed)));
   return {
     arms,
-    sets: [...new Set(records.map((r) => r.set))].sort(),
+    // From the plan: a planned set with no records is missing or abandoned data, never "not planned".
+    sets: [...new Set(planCells.map((c) => c.set))].sort(),
     counts,
     plannedRuns: plannedRuns.size,
     abandoned: [...abandoned.values()].sort(),

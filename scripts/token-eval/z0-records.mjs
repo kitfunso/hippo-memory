@@ -36,6 +36,7 @@ export const locationOf = (r) => r[LOCATION];
 export const runKey = (sequence, seed) => `${sequence}#${seed}`;
 export const positionKey = (r) => `${runKey(r.sequence, r.seed)}@${r.position}`;
 export const cellKey = (r) => `${positionKey(r)}/${r.arm}`;
+export const armRunKey = (c) => `${runKey(c.sequence, c.seed)}/${c.arm}`;
 
 /** Reading 7: acceptance passed, every remaining lesson's final check is `pass`, and no timeout; an invalid record never resolves. */
 export function resolvedOf(r) {
@@ -63,10 +64,19 @@ function checkLessons(r, crashed) {
   }
 }
 
+/** Set, arm, seed, kind and family rules, shared by records and plan cells. */
+function checkSlot(x) {
+  check(SETS.has(x.set), 'set must be R, N or X');
+  check(Number.isInteger(x.seed) && x.seed >= 1 && x.seed <= 3, 'seed must be an integer from 1 to 3');
+  check((x.set === 'X' ? X_ARMS : RN_ARMS).includes(x.arm), `arm ${x.arm} is not an arm of set ${x.set}`);
+  check(!(x.seed === 3 && TWO_SEED_ARMS.has(x.arm)), `seed 3 is not run for ${x.arm} (prereg 124)`);
+  check(KINDS.has(x.kind), 'kind must be teach, apply or no-lesson');
+  check(x.kind !== 'no-lesson' || x.set === 'N', 'kind no-lesson appears only in set N');
+  check(x.kind === 'no-lesson' ? x.familyId === null : isName(x.familyId), 'familyId is a string for teach and apply, null for no-lesson');
+}
+
 function checkKind(r, warnings) {
   const lessonTask = r.kind !== 'no-lesson';
-  check(r.kind !== 'no-lesson' || r.set === 'N', 'kind no-lesson appears only in set N');
-  check(lessonTask ? isName(r.familyId) : r.familyId === null, 'familyId is a string for teach and apply, null for no-lesson');
   check(lessonTask ? SOURCES.has(r.lessonSource) : r.lessonSource === null, 'lessonSource is maintainer or template for teach and apply, null for no-lesson');
   const apply = r.kind === 'apply';
   check(apply ? Number.isInteger(r.applyIndex) && r.applyIndex >= 1 : r.applyIndex === null, 'applyIndex is an integer >= 1 on apply records, null otherwise');
@@ -81,14 +91,10 @@ function checkKind(r, warnings) {
 
 function checkIdentity(r) {
   check(r.schema === SCHEMA, `schema must be "${SCHEMA}"`);
-  check(SETS.has(r.set), 'set must be R, N or X');
   check(r.tool === 'claude-code' || r.tool === 'codex', 'tool must be claude-code or codex');
   check(isName(r.repo) && isName(r.sequence) && isName(r.taskId), 'repo, sequence and taskId must be non-empty strings');
-  check(Number.isInteger(r.seed) && r.seed >= 1 && r.seed <= 3, 'seed must be an integer from 1 to 3');
-  check((r.set === 'X' ? X_ARMS : RN_ARMS).includes(r.arm), `arm ${r.arm} is not an arm of set ${r.set}`);
-  check(!(r.seed === 3 && TWO_SEED_ARMS.has(r.arm)), `seed 3 is not run for ${r.arm} (prereg 124)`);
   check(isCount(r.position) && isCount(r.order), 'position and order must be non-negative integers');
-  check(KINDS.has(r.kind), 'kind must be teach, apply or no-lesson');
+  checkSlot(r);
   if (r.set === 'X') {
     const tool = r.kind === 'teach' ? 'claude-code' : 'codex';
     check(r.tool === tool, `set X ${r.kind} records run in ${tool}`);
@@ -152,7 +158,8 @@ export function parseZ0Records(text, file = 'runs') {
   return { records, warnings };
 }
 
-/** Parse the runner's plan.json: the expected cells, G4's denominator. E1 also writes taskId and repo; both are kept when present. */
+/** Parse the runner's plan.json: the expected cells, G4's denominator and the planned design. Each cell carries
+ * set, kind and familyId under the record rules; taskId and repo are kept when present. */
 export function parsePlan(text, file = 'plan') {
   let cells;
   try {
@@ -164,11 +171,14 @@ export function parsePlan(text, file = 'plan') {
   if (cells.length === 0) throw new Error(`${file}: the plan has no cells`);
   return cells.map((c, i) => {
     const where = `${file} entry ${i + 1}`;
-    const ok = isPlainObject(c) && isName(c.sequence) && Number.isInteger(c.seed) && c.seed >= 1 && c.seed <= 3
-      && isCount(c.position) && ALL_ARMS.includes(c.arm) && !(c.seed === 3 && TWO_SEED_ARMS.has(c.arm))
-      && (c.taskId === undefined || isName(c.taskId)) && (c.repo === undefined || isName(c.repo));
-    if (!ok) throw new Error(`${where}: a cell needs sequence, seed 1-3 (1-2 for A0, A4, X4), position and a known arm; taskId and repo are optional strings`);
-    const cell = { sequence: c.sequence, seed: c.seed, position: c.position, arm: c.arm };
+    try {
+      check(isPlainObject(c) && isName(c.sequence) && isCount(c.position), 'a cell needs a sequence and a non-negative integer position');
+      checkSlot(c);
+      check((c.taskId === undefined || isName(c.taskId)) && (c.repo === undefined || isName(c.repo)), 'taskId and repo are optional non-empty strings');
+    } catch (e) {
+      throw new Error(`${where}: ${e.message}`);
+    }
+    const cell = { sequence: c.sequence, seed: c.seed, position: c.position, arm: c.arm, set: c.set, kind: c.kind, familyId: c.familyId };
     for (const f of ['taskId', 'repo']) if (c[f] !== undefined) cell[f] = c[f];
     cell[LOCATION] = where;
     return cell;
@@ -184,25 +194,6 @@ function rejectDuplicates(items, what) {
   }
 }
 
-/** Valid teach records of the apply record's family before it, or null when a planned teach cell of the
- * family is missing or invalid: the runner writes no verdicts for an invalid session (orchestrator, 2026-10-03). */
-function priorTeach(a, byCell, taskAt, plannedPositions) {
-  const teach = [];
-  for (const q of plannedPositions) {
-    if (q >= a.position) continue;
-    const rec = byCell.get(cellKey({ ...a, position: q }));
-    if (rec === undefined) {
-      // Another arm's record names the task at a missing cell; with none, it may be this family's teach.
-      const task = taskAt.get(positionKey({ ...a, position: q }));
-      if (task === undefined || (task.kind === 'teach' && task.familyId === a.familyId)) return null;
-    } else if (rec.kind === 'teach' && rec.familyId === a.familyId) {
-      if (!isNullish(rec.invalid)) return null;
-      teach.push(rec);
-    }
-  }
-  return teach;
-}
-
 function checkApply(a, teach) {
   const where = locationOf(a);
   check(teach.length > 0, `${where}: apply record has no teach record of family ${a.familyId} before it`);
@@ -213,23 +204,28 @@ function checkApply(a, teach) {
   for (const l of a.lessons) check(taught.has(l.lessonId), `${where}: lesson ${l.lessonId} is in no teach record of family ${a.familyId}`);
 }
 
-/** For each apply record, its family's valid teach records before it, or null when one is missing or invalid. */
+/** Per apply record, over its arm's planned teach cells of its family before it: valid records, all valid (`complete`), latest
+ * valid (`taught`). An invalid teach counts as missing, since the runner writes no verdicts for it (orchestrator, 2026-10-03). */
 function teachIndex(records, planCells) {
-  const taskAt = new Map();
-  for (const r of records) if (!taskAt.has(positionKey(r))) taskAt.set(positionKey(r), r);
-  const positions = new Map();
+  const planned = new Map();
   for (const c of planCells) {
-    const k = `${runKey(c.sequence, c.seed)}/${c.arm}`;
-    positions.set(k, [...(positions.get(k) ?? []), c.position]);
+    if (c.kind !== 'teach') continue;
+    const k = `${armRunKey(c)}/${c.familyId}`;
+    planned.set(k, [...(planned.get(k) ?? []), c.position]);
   }
   const byCell = new Map(records.map((r) => [cellKey(r), r]));
-  return (a) => priorTeach(a, byCell, taskAt, positions.get(`${runKey(a.sequence, a.seed)}/${a.arm}`));
+  const valid = (r) => r !== undefined && isNullish(r.invalid);
+  return (a) => {
+    const cells = (planned.get(`${armRunKey(a)}/${a.familyId}`) ?? []).filter((q) => q < a.position).sort((x, y) => x - y);
+    const recs = cells.map((q) => byCell.get(cellKey({ ...a, position: q })));
+    return { teach: recs.filter(valid), complete: recs.every(valid), taught: recs.length > 0 && valid(recs.at(-1)) };
+  };
 }
 
-/** Apply records whose own arm was never taught their family before them (reading 19). */
+/** Apply records whose own arm's latest planned teach of their family before them is missing or invalid (reading 18). */
 export function untaughtApplies(records, planCells) {
   const teachOf = teachIndex(records, planCells);
-  return records.filter((a) => a.kind === 'apply' && teachOf(a) === null);
+  return records.filter((a) => a.kind === 'apply' && !teachOf(a).taught);
 }
 
 /** Each sequence names one repo, each familyId one repo, and every arm runs the same task at a position (prereg 117). */
@@ -242,6 +238,7 @@ function checkIdentities(records, planned) {
     const cell = planned.get(cellKey(r));
     check(cell !== undefined, `${where}: cell ${cellKey(r)} is not in any plan file`);
     check(cell.taskId === undefined || cell.taskId === r.taskId, `${where}: taskId ${r.taskId} but the plan has ${cell.taskId} at cell ${cellKey(r)}`);
+    for (const f of ['set', 'kind', 'familyId']) check(cell[f] === r[f], `${where}: ${f} ${r[f]} but the plan has ${cell[f]} at cell ${cellKey(r)}`);
     const repo = repoOf.get(r.sequence) ?? r.repo;
     check(repo === r.repo, `${where}: sequence ${r.sequence} maps to repos ${repo} and ${r.repo}`);
     repoOf.set(r.sequence, repo);
@@ -266,9 +263,9 @@ export function validateCorpus(records, planCells) {
   const unchecked = [];
   for (const a of records) {
     if (a.kind !== 'apply') continue;
-    const teach = teachOf(a);
-    if (teach === null) unchecked.push(locationOf(a));
-    else checkApply(a, teach);
+    const { teach, complete } = teachOf(a);
+    if (complete) checkApply(a, teach);
+    else unchecked.push(locationOf(a));
   }
   return { unchecked };
 }

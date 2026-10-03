@@ -32,7 +32,9 @@ export interface Z0Record {
   limitRetries: number; carryUnionMerges: number; surfaceRestored?: boolean; chain?: Chain; wordOverlap?: number;
 }
 
-export interface PlanCell { sequence: string; seed: number; position: number; arm: string; taskId?: string; repo?: string }
+export interface PlanCell {
+  sequence: string; seed: number; position: number; arm: string; set: string; kind: Kind; familyId: string | null; taskId?: string; repo?: string;
+}
 export interface Generated { records: Z0Record[]; plan: PlanCell[] }
 
 export interface Knobs {
@@ -145,9 +147,10 @@ export function generate(opts: GenOpts = {}): Generated {
   return { records, plan: planOf(records) };
 }
 
-/** The plan E1's writePlan would write for these records, taskId and repo included. */
-export const planOf = (records: readonly Z0Record[]): PlanCell[] =>
-  records.map((r) => ({ sequence: r.sequence, seed: r.seed, position: r.position, arm: r.arm, taskId: r.taskId, repo: r.repo }));
+/** The plan the runner writes for these records: set, kind and familyId per cell, taskId and repo included. */
+export const planOf = (records: readonly Z0Record[]): PlanCell[] => records.map((r) => ({
+  sequence: r.sequence, seed: r.seed, position: r.position, arm: r.arm, set: r.set, kind: r.kind, familyId: r.familyId, taskId: r.taskId, repo: r.repo,
+}));
 
 export const jsonl = (records: readonly Z0Record[]): string => records.map((r) => JSON.stringify(r)).join('\n');
 

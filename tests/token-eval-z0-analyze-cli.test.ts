@@ -86,7 +86,7 @@ describe('Z0 CLI and blind mode', () => {
     const open = unblind(['--out', 'open.json']);
     expect(open.code).toBe(0);
     expect(open.stdout).toMatch(/^H1 \w+/m);
-    expect(open.stdout).toMatch(/^ {2}tasksSinceTeach 2-4: A2 - A1 .*; rates \(violation\/excluded\) A0 /m);
+    expect(open.stdout).toMatch(/^ {2}tasksSinceTeach 2-4: A2 - A1 .*; rates \(violation\/excluded\) A0 [\d.]+\/[\d.]+ \(seeds 1,2\), A1 [\d.]+\/[\d.]+ \(seeds 1,2,3\), /m);
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'open.json'), 'utf8')).hypotheses.verdicts.H1.final.verdict).toBeTruthy();
     const bad = generate({ repos: 3 });
     bad.records[0]!.void = 'operator-canary';
@@ -97,7 +97,7 @@ describe('Z0 CLI and blind mode', () => {
     expect(shut.stdout).toMatch(/^status: invalid$/m);
   });
 
-  it('24, 30: an abandoned run prints its status and cell counts and no gate; an unplanned set is named', () => {
+  it('24, 30: an abandoned run prints its status and cell counts and no gate; an unplanned set is named under the status line', () => {
     const cut = fresh();
     cut.records = cut.records.filter((r) => !(r.sequence === 'rn-repo5' && r.seed === 2 && r.position >= 8));
     const dir = workspace(cut);
@@ -110,7 +110,15 @@ describe('Z0 CLI and blind mode', () => {
     expect(out.stdout).toContain('not analysed: the run is abandoned (prereg 114)');
     expect(runCli([...ARGS, '--drop-list', 'drop.json', '--unblind'], dir)).toMatchObject({ code: 2, stderr: expect.stringMatching(/abandoned/) });
     const rn = runCli([...ARGS, '--iterations', '300'], workspace(generate({ arms: RN_ARMS, repos: 2 })));
-    expect(rn.stdout).toMatch(/^valid: every gate passes\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
+    expect(rn.stdout).toMatch(/^status: valid\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
+  });
+
+  it('36: a planned set with no records is abandoned data, never "not planned"', () => {
+    const noX = fresh();
+    noX.records = noX.records.filter((r) => r.set !== 'X');
+    const lost = runCli([...ARGS, '--iterations', '300'], workspace(noX));
+    expect(lost.stdout).toMatch(/^status: abandoned$/m);
+    expect(lost.stdout).not.toContain('not planned');
   });
 
   it('32: the same --runs files in either order give the same report', () => {

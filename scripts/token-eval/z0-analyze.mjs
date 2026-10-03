@@ -20,7 +20,7 @@ const USAGE = 'usage: z0-analyze.mjs --runs FILE [--runs FILE ...] --plan FILE [
 const SINGLE = new Map([['--prices', 'prices'], ['--grading', 'grading'], ['--drop-list', 'dropList'], ['--key', 'key'], ['--out', 'out'], ['--seed', 'seed'], ['--iterations', 'iterations']]);
 const PRICE_FIELDS = ['inputPerMTok', 'cacheWritePerMTok', 'cacheReadPerMTok', 'outputPerMTok'];
 
-/** Registered arms and sets the plan left out (reading 11); "not run" in a hypothesis must not read as the registered design. */
+/** Registered arms and sets the plan left out (reading 11), both read from the plan; "not run" must not read as the registered design. */
 export function unplannedDesign(filtered) {
   const arms = ALL_ARMS.filter((a) => !filtered.arms.includes(a));
   const sets = ['R', 'N', 'X'].filter((s) => !filtered.sets.includes(s)).map((s) => `set ${s}`);
@@ -157,7 +157,7 @@ function hypothesisLines(h) {
       else lines.push(`H4 ${g.gate.pass ? 'pass' : 'FAIL'}: ${g.reason ?? `set N cost ratio ${est(g.costRatio)}, resolve difference ${est(g.resolveDiff)}`}`);
     } else if (name === 'attribution') {
       const a = h.attribution;
-      lines.push(isString(a) ? `attribution ${a}` : `attribution: ${a.sentence ?? a.reason}; A2 vs A5 ${pairText(a)}`);
+      lines.push(isString(a) ? `attribution ${a}` : `attribution: ${a.sentence ?? a.reason}; A2 vs A5 ${a.violation === undefined ? NOT_RUN : pairText(a)}`);
     } else {
       const v = h.verdicts[name];
       const small = v.final.verdict === 'win' && !v.final.reachesMinimum ? ' (small win)' : '';
@@ -179,7 +179,8 @@ function reportedLines(rep) {
   lines.push(`  first apply only: H1 ${pairText(rep.firstApply.H1)}`);
   const rate = (e) => (isString(e) ? e : f3(e.estimate));
   for (const [bucket, p] of Object.entries(rep.bySinceTeach)) {
-    const rates = Object.entries(rep.ratesBySinceTeach[bucket]).map(([arm, r]) => `${arm} ${rate(r.violation)}/${rate(r.excluded)}`);
+    const seeds = (r) => (r.seeds.length === 0 ? '' : ` (seeds ${r.seeds.join(',')})`);
+    const rates = Object.entries(rep.ratesBySinceTeach[bucket]).map(([arm, r]) => `${arm} ${rate(r.violation)}/${rate(r.excluded)}${seeds(r)}`);
     lines.push(`  tasksSinceTeach ${bucket}: A2 - A1 ${pairText(p)}; rates (violation/excluded) ${rates.join(', ')}`);
   }
   const wo = rep.wordOverlap;
@@ -192,6 +193,7 @@ function reportedLines(rep) {
 
 export function renderText(r) {
   const lines = [`Z0 analysis, ${r.mode}${r.ofRecord ? '' : ` (not of record: ${r.iterations} resamples, seed ${r.seed})`}`, `status: ${r.status}`];
+  if (r.designNotRun.length > 0) lines.push(`design not fully run: ${r.designNotRun.join(', ')} not planned`);
   lines.push(`abandoned: ${r.abandoned.length === 0 ? 'none' : r.abandoned.join(', ')}`);
   const first3 = (xs) => `${xs.slice(0, 3).join(', ')}${xs.length > 3 ? ', ...' : ''}`;
   lines.push(`unchecked apply records (teach cell missing or invalid): ${r.unchecked.length === 0 ? 'none' : `${r.unchecked.length} (${first3(r.unchecked)})`}`);
@@ -207,7 +209,6 @@ export function renderText(r) {
   }
   lines.push(`void reasons: ${JSON.stringify(r.voids)}`);
   if (r.gates !== null) lines.push(...gateLines(r), r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);
-  if (r.designNotRun.length > 0) lines.push(`design not fully run: ${r.designNotRun.join(', ')} not planned`);
   if (isString(r.hypotheses)) lines.push(r.hypotheses);
   else lines.push(...hypothesisLines(r.hypotheses), ...reportedLines(r.reported));
   lines.push('sha256:', ...r.hashes.map((h) => `  ${h.sha256}  ${h.role} ${h.file}`));

@@ -14,6 +14,7 @@ export const SPECS = { H1: REPEAT_SPEC, H2: REPEAT_SPEC, H3: { helpful: 'lower',
 export const LESSONS_SENTENCE = "hippo's lessons cut repeat mistakes";
 export const BEHAVIOUR_SENTENCE = 'installing hippo changed behaviour, and this run cannot say its lessons did';
 export const NO_N_DATA = 'no set N data';
+export const A5_NOT_RUN = 'A5 not run';
 
 export const sum = (xs) => xs.reduce((s, x) => s + x, 0);
 export const mean = (xs) => sum(xs) / xs.length;
@@ -121,9 +122,11 @@ function reportOrder(verdicts, h4) {
   return [...order, 'attribution'];
 }
 
-/** Prereg 148 words a winning H1 two ways, so a tie, loss or inconclusive H1 gets neither sentence (reading 2). */
+/** Prereg 148 words a winning H1 two ways, so a tie, loss or inconclusive H1 gets neither sentence (reading 2).
+ * With A5 not planned (`est` null), A2 cannot have beaten it, so a win takes 148's "Otherwise" sentence. */
 function attributionOf(h1Verdict, est) {
   if (h1Verdict !== 'win') return { ...est, sentence: null, reason: `not applicable, H1 is ${h1Verdict}` };
+  if (est === null) return { sentence: BEHAVIOUR_SENTENCE, reason: A5_NOT_RUN };
   return { ...est, sentence: CODINGS.every((c) => est[c].high < 0) ? LESSONS_SENTENCE : BEHAVIOUR_SENTENCE };
 }
 
@@ -152,7 +155,7 @@ export function computeHypotheses(filtered, prices, opts) {
   const h3 = units && ratioBootstrap(units, 'cost', opts);
   const h4 = harmGateOf(units, filtered.sets.includes('N'), opts);
   const verdicts = holmVerdicts(byCoding((c) => ({ H1: h1?.[c] ?? null, H2: h2?.[c] ?? null, H3: h3 })));
-  const attribution = h1 && runs('A5') ? attributionOf(verdicts.H1.final.verdict, bothCodings(s, 'A2', 'A5', opts, inSets('R'))) : NOT_RUN;
+  const attribution = h1 ? attributionOf(verdicts.H1.final.verdict, runs('A5') ? bothCodings(s, 'A2', 'A5', opts, inSets('R')) : null) : NOT_RUN;
   const h3Block = h3 && {
     ...h3,
     firstSession: ratioBootstrap(units, 'first', opts),
@@ -283,12 +286,17 @@ export function armRate(s, arm, coding, keep, opts) {
   return units.length === 0 ? NA : { ...meanBootstrap(units, opts), units: units.length };
 }
 
-/** Prereg 198 asks for the rate itself by tasks since teach; the A2-minus-A1 difference sits beside it in `bySinceTeach`. */
+/** Prereg 198 asks for the rate itself by tasks since teach; the A2-minus-A1 difference sits beside it in `bySinceTeach`.
+ * Two-seed arms rate fewer seeds (124), so each rate carries the seeds it read. */
 function ratesBySinceTeach(s, arms, opts) {
   const rn = arms.filter((a) => a.startsWith('A'));
-  return Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, Object.fromEntries(rn.map((arm) => [
-    arm, byCoding((c) => armRate(s, arm, c, (r) => r.set === 'R' && inBucket(r), opts)),
-  ]))]));
+  return Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => {
+    const keep = (r) => r.set === 'R' && inBucket(r);
+    return [name, Object.fromEntries(rn.map((arm) => {
+      const seeds = [...new Set(s.filter((r) => r.arm === arm && r.kind === 'apply' && keep(r)).map((r) => r.seed))].sort((a, b) => a - b);
+      return [arm, { ...byCoding((c) => armRate(s, arm, c, keep, opts)), seeds }];
+    }))];
+  }));
 }
 
 /** Estimates outside the family (190-199), each with a CI and no verdict; `records` are the raw ones, for rotation slots. */
