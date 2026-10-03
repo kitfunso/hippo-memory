@@ -35,11 +35,12 @@ function checkRepoState(cfg) {
   return lockCommit;
 }
 
-// Nothing the run executes may differ from the lock commit, and every input the prereg pins must match its pin.
+// The prereg, the scripts and the prompts may not differ from the lock commit, and every input the prereg pins must match its pin.
 function checkFrozen(cfg, lockCommit) {
-  if (git(cfg.repo, ['diff', '--quiet', lockCommit, 'HEAD', '--', ...cfg.scriptFiles, cfg.promptDir]).status !== 0) {
-    throw new Error('a script or prompt changed after the lock commit');
-  }
+  const diff = git(cfg.repo, ['diff', '--name-only', lockCommit, 'HEAD', '--', cfg.prereg, ...cfg.scriptFiles, cfg.promptDir]);
+  if (diff.status !== 0) throw new Error('git diff against the lock commit failed');
+  const changed = diff.stdout.split('\n').filter(Boolean).map((p) => path.basename(p));
+  if (changed.length) throw new Error('changed after the lock commit: ' + changed.join(', '));
   const pins = L.parsePins(fs.readFileSync(cfg.prereg, 'utf8'));
   const bad = L.checkPins(pins, { dist: pinHashes(cfg.distDir, L.PIN_DIST), prompts: pinHashes(cfg.promptDir, L.PIN_PROMPTS), claude: cfg.claudeVersion() });
   if (bad.length) throw new Error(`pin mismatch: ${bad.join(', ')}`);
