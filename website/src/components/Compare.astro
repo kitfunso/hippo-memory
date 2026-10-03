@@ -49,7 +49,7 @@ const rows = homeFeatures.map((f) => {
 
     <!-- trimmed matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
     <div class="relative mt-10">
-      <div class="overflow-x-auto rounded-2xl glass">
+      <div class="overflow-x-auto rounded-2xl glass" data-scroll-x>
         <table class="w-full min-w-[560px] border-collapse text-left text-sm">
           <thead>
             <tr class="border-b border-white/10">
@@ -97,11 +97,6 @@ const rows = homeFeatures.map((f) => {
           </tbody>
         </table>
       </div>
-      <!-- mobile scroll cue: right-edge fade over the scroll container -->
-      <div
-        class="pointer-events-none absolute inset-y-0 right-0 w-14 rounded-r-2xl bg-gradient-to-l from-zinc-950/90 to-transparent sm:hidden"
-        aria-hidden="true"
-      ></div>
     </div>
     <p class="mt-2 font-mono text-xs text-zinc-400 sm:hidden">{compare.scrollCue} →</p>
 

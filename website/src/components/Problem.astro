@@ -21,14 +21,14 @@ import { problem } from '../content/site';
           {[1, 2, 3].map((n) => (
             <div class="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.015] px-4 py-3 text-zinc-400">
               <span class="text-rose-400/60">✗</span>
-              <span class="min-w-0 flex-1 truncate">deploy failed: forgot migrations</span>
-              <span class="text-zinc-400">run #{n}</span>
+              <span class="min-w-0 flex-1">deploy failed: forgot migrations</span>
+              <span class="shrink-0 text-zinc-400">run #{n}</span>
             </div>
           ))}
           <div class="ring-grad flex items-center gap-3 rounded-lg bg-white/[0.03] px-4 py-3 text-zinc-200">
             <span class="text-emerald-400">+</span>
-            <span class="min-w-0 flex-1 truncate">stored once as an error memory</span>
-            <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">[observed]</span>
+            <span class="min-w-0 flex-1">stored once as an error memory</span>
+            <span class="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">[observed]</span>
           </div>
         </div>
       </div>

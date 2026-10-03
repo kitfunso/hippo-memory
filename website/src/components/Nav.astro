@@ -31,6 +31,8 @@ const pageChips = [
   { label: 'Benchmarks', href: '/benchmarks/' },
   { label: 'FAQ', href: '/faq/' },
   { label: 'Teams', href: '/teams/' },
+  { label: 'Compare', href: '/#compare' },
+  { label: 'Docs', href: site.links.docs },
 ];
 const mobileNav = isHome ? sectionChips : pageChips;
 ---
@@ -80,7 +82,7 @@ const mobileNav = isHome ? sectionChips : pageChips;
 
 <!-- mobile nav, < md only: outside the sticky header so it scrolls away and the bar stays one row. -->
 <nav aria-label={isHome ? 'Page sections' : 'Pages'} class="border-b border-white/5 md:hidden">
-  <ul class="flex gap-2 overflow-x-auto px-5 py-2 text-xs text-zinc-400 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+  <ul class="flex gap-2 overflow-x-auto px-5 py-2 text-xs text-zinc-400 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-scroll-x>
     {mobileNav.map((item) => (
       <li class="shrink-0">
         <a

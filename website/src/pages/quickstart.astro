@@ -6,7 +6,7 @@ import { getStarted, site } from '../content/site';
 
 const title = 'hippo quickstart: memory for Claude Code, Cursor and MCP';
 const description =
-  'Install hippo and initialise one project, then complete your agent’s setup and required trust. Automatic capture and compaction coverage depend on the integration.';
+  'Install hippo and initialize one project, then complete your agent’s setup and required trust. Automatic capture and compaction coverage depend on the integration.';
 
 // What hippo init patches per agent: README "Framework Integrations".
 const integrations = [
@@ -23,7 +23,7 @@ const integrations = [
 const heroSteps = [
   { n: '01', label: 'Install', cmd: site.installCmd, prompt: true },
   { n: '02', label: 'Initialize', cmd: 'hippo init', prompt: true },
-  { n: '03', label: 'Use the loop', cmd: 'remember · recall · outcome · sleep', prompt: false },
+  { n: '03', label: 'Use the loop', cmd: 'remember, recall, outcome, sleep', prompt: false },
 ];
 
 const loop = [
@@ -61,14 +61,14 @@ const howTo = {
           <p class="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-400">{getStarted.notice} <a class="link" href="/faq/#does-installation-automatically-save-before-compaction">Automatic-save coverage</a></p>
         </div>
         <!-- Setup-at-a-glance card fills the hero's right side on wide viewports. -->
-        <aside class="hidden w-[19rem] shrink-0 rounded-2xl border border-white/8 bg-term-bg p-5 lg:block" aria-label="Setup at a glance: install, initialise and try the memory loop">
-          <p class="border-b border-white/5 pb-3 font-mono text-xs uppercase tracking-wider text-acc-cyan">Install &middot; initialise &middot; try the loop</p>
+        <aside class="hidden w-[19rem] shrink-0 rounded-2xl border border-white/8 bg-term-bg p-5 lg:block" aria-label="Setup at a glance: install, initialize and try the memory loop">
+          <p class="border-b border-white/5 pb-3 font-mono text-xs uppercase tracking-wider text-acc-cyan">Setup at a glance</p>
           <ol class="mt-4 space-y-3.5">
             {heroSteps.map((step) => (
               <li class="grid grid-cols-[1.5rem_1fr] gap-x-2">
                 <span class="font-mono text-xs leading-6 text-acc-cyan" aria-hidden="true">{step.n}</span>
                 <span class="text-sm font-medium text-zinc-200">{step.label}</span>
-                <code class="col-start-2 mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-zinc-400">{step.prompt ? <><span class="text-term-prompt">$</span> {step.cmd}</> : step.cmd}</code>
+                <code class="col-start-2 mt-0.5 font-mono text-xs leading-relaxed text-zinc-400">{step.prompt ? <><span class="text-term-prompt">$</span> {step.cmd}</> : step.cmd}</code>
               </li>
             ))}
           </ol>
@@ -98,8 +98,8 @@ const howTo = {
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-3xl leading-tight sm:text-4xl">Works with your agents</h2>
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {integrations.map((i) => (
-            <div class="glass rounded-2xl p-5">
+          {integrations.map((i, n) => (
+            <div class:list={['glass rounded-2xl p-5', n === integrations.length - 1 && 'sm:col-span-2 lg:col-span-3']}>
               {i.href
                 ? <a href={i.href} class="link text-sm font-medium">{i.name}</a>
                 : <span class="text-sm font-medium text-zinc-200">{i.name}</span>}

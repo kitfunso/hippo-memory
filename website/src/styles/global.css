@@ -136,6 +136,11 @@ header.glass {
   padding: 0.1em 0.35em;
   overflow-wrap: anywhere;
 }
+
+/* wide tables on phones: fade the right edge while more columns sit off-screen (flag set in Base.astro) */
+[data-scroll-x][data-more] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
+}
 .copy pre code {
   font-size: inherit;
   color: inherit;

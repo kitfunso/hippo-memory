@@ -69,7 +69,7 @@ const heroChips = [
   <main id="main">
     <!-- Header -->
     <section class="relative scroll-mt-20">
-      <div class="mx-auto flex max-w-6xl items-end justify-between gap-10 px-5 pb-12 pt-28 sm:pt-32">
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-10 px-5 pb-12 pt-28 sm:pt-32">
         <div>
           <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Benchmarks</p>
           <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.03] tracking-tight sm:text-5xl">
@@ -99,8 +99,8 @@ const heroChips = [
           Each question ships its own haystack of about 48 conversation sessions, and the job is to retrieve the session that holds the answer. This is the standard LongMemEval-S setup, the same one published systems report. Recall at 5, on the <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">_s</code> split, counting a hit when any answer session is in the top 5, over all 500 questions.
         </p>
         <h3 class="mt-10 text-lg font-medium text-zinc-100">hippo recall, as installed</h3>
-        <div class="mt-4 overflow-x-auto rounded-2xl border border-white/8">
-          <table class="w-full min-w-[30rem] text-left text-sm">
+        <div class="mt-4 overflow-x-auto rounded-2xl border border-white/8" data-scroll-x>
+          <table class="w-full text-left text-sm">
             <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
               <tr>
                 <th scope="col" class="px-5 py-3 font-medium">Run</th>
@@ -185,7 +185,7 @@ const heroChips = [
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
           <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">hippo recall "&lt;query&gt;" --reranker jev</code> sends the top 40 candidates to the hosted <a class="link" href="https://typesafe.ai" target="_blank" rel="noopener noreferrer">TypeSafe Jev<span class="sr-only"> (opens in new tab)</span></a> API and reorders them. It is off by default and the default recall path makes no network call. Ranking on a private 300-query developer store, so unlike the two benchmarks above this one is not redistributable and you cannot rerun it. All figures aggregated over 2,000-draw paired bootstrap runs, with 98.75% intervals:
         </p>
-        <div class="mt-8 overflow-x-auto rounded-2xl border border-white/8">
+        <div class="mt-8 overflow-x-auto rounded-2xl border border-white/8" data-scroll-x>
           <table class="w-full min-w-[34rem] text-left text-sm">
             <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
               <tr>
@@ -270,7 +270,7 @@ const heroChips = [
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">LoCoMo: conversational evidence&nbsp;recall</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
-          <a class="link" href="https://arxiv.org/abs/2402.17753" target="_blank" rel="noopener noreferrer">LoCoMo<span class="sr-only"> (opens in new tab)</span></a> is 10 long multi-session conversations, 5,882 turns and 1,986 questions. hippo scores it deterministically: did the gold evidence turn land in the top 5 recalled memories? No LLM judge. Measured once on v1.25.0 (2026-07-05) with MiniLM-L6, the default embedder then and an optional install since 1.28.0:
+          <a class="link" href="https://arxiv.org/abs/2402.17753" target="_blank" rel="noopener noreferrer">LoCoMo<span class="sr-only"> (opens in new tab)</span></a> is 10 long multi-session conversations, 5,882 turns and 1,986 questions, of which 1,982 have gold evidence and are scored. hippo scores it deterministically: did the gold evidence turn land in the top 5 recalled memories? No LLM judge. Measured once on v1.25.0 (2026-07-05) with MiniLM-L6, the default embedder then and an optional install since 1.28.0:
         </p>
         <div class="mt-8 overflow-hidden rounded-2xl border border-white/8">
           <table class="w-full text-left text-sm">
