@@ -1,3 +1,0 @@
-### Fixed
-
-- **A git worktree with no store of its own now belongs to its repo's project.** It used to get its own folder name as its project. Memories saved there were hidden from the main checkout, and the Claude Code memory-folder import stored a fresh copy of every note for each worktree. One real global store held 1,985 such extra copies. hippo now follows the worktree's `.git` file to the repo and uses the repo's name; a bare repo `tool.git` is named `tool`. A worktree that has its own `.hippo` store keeps its own name, because its rows already carry it. A submodule also keeps its own name. Rows saved before this change keep the name they were saved with: on that store, 548 memories still sit under worktree names.

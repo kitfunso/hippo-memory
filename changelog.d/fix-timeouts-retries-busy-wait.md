@@ -1,8 +1,0 @@
-### Fixed
-
-- **Every outbound HTTP call now has a timeout.** A stalled peer used to hang `hippo sleep`, a connector backfill or a thin-client write with no end. LLM calls (refine, DAG summaries, fact extraction) stop after 60 s, overridable with `HIPPO_LLM_TIMEOUT_MS`; GitHub, Slack and embedding calls after 30 s; Jev judging after 15 s; thin-client writes to `hippo serve` after 30 s.
-- **Rate limits and server errors are retried with backoff.** One shared helper retries 429 and 5xx up to three attempts in total, with jitter, and waits for `Retry-After` when the server sends it. Other 4xx responses are never retried. A `Retry-After` longer than 8 s goes back to the caller, so the GitHub backfill keeps its own longer pause.
-- **A thin-client write that times out is not replayed locally.** The server may already have stored it, so the CLI reports it the same way as a dropped connection.
-- **Audit rows that fail to write are logged and counted.** Each failure prints one `error` line with the op and target id, and the loopback `/health` body reports the running total as `audit_write_failures`. The mutation itself still stands.
-- **`hippo embed` names each memory it could not embed.** A row the provider skipped used to vanish silently until the next run; it now logs one warning with the memory id.
-- **Hooks no longer stall while `hippo sleep` holds the store.** Hook commands wait at most 1 s for the write lock. When the store stays busy they print one warning and finish with exit 0; memories are still injected and only the token-ledger rows are skipped. Other commands keep the 5 s wait.
