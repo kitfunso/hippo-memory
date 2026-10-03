@@ -542,7 +542,7 @@ type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTime
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
-  'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories', 'scim',
+  'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories',
 ] as const;
 
 /** Add-ons call this to refuse a subject that would collide with a built-in actor. */

@@ -305,7 +305,7 @@ describe('auth resolver sanitising', () => {
 
   it.each([
     'api_key:x', 'API_KEY:x', 'localhost:cli', 'cli', 'CLI', 'cli:drill', 'system', 'mcp', 'mcp:bridge', 'connector:slack',
-    'sleep', 'sleep:x', 'post-compact', 'recall', 'agent-memories', 'scim', 'scim:u1',
+    'sleep', 'sleep:x', 'post-compact', 'recall', 'agent-memories',
   ])('rejects reserved subject %s', async (subject) => {
     await start(tokenResolver({ subject }));
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
@@ -399,13 +399,13 @@ describe('exported authRevoke for add-ons', () => {
   const ctx = (tenantId: string): Context => ({
     hippoRoot: home,
     tenantId,
-    actor: { subject: 'scim:u1', role: 'admin', viaAuthResolver: true },
+    actor: { subject: 'system:addon:u1', role: 'admin', viaAuthResolver: true },
   });
 
   function mint(tenantId: string, role: 'admin' | 'member'): CreatedApiKey {
     const db = openHippoDb(home);
     try {
-      return createApiKey(db, { tenantId, label: `scim-${role}`, role });
+      return createApiKey(db, { tenantId, label: `addon-${role}`, role });
     } finally {
       closeHippoDb(db);
     }
@@ -415,7 +415,7 @@ describe('exported authRevoke for add-ons', () => {
     const member = mint('ext-tenant', 'member');
     expect(authRevoke(ctx('ext-tenant'), member.keyId).ok).toBe(true);
     const row = auditRows('ext-tenant').find((r) => r.op === 'auth_revoke');
-    expect(row).toMatchObject({ actor: 'scim:u1', targetId: member.keyId });
+    expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
   });
 
   it('refuses an admin key for a resolver admin ctx', () => {
@@ -430,11 +430,11 @@ describe('exported authRevoke for add-ons', () => {
 });
 
 describe('isReservedActor', () => {
-  it.each(['cli', 'CLI:x', 'api_key:k1', 'scim', 'scim:u1', 'localhost:cli'])('is true for %s', (s) => {
+  it.each(['cli', 'CLI:x', 'api_key:k1', 'system:addon:u1', 'localhost:cli'])('is true for %s', (s) => {
     expect(isReservedActor(s)).toBe(true);
   });
 
-  it.each(['clinton@corp', 'alice@corp', 'scimitar'])('is false for %s', (s) => {
+  it.each(['clinton@corp', 'alice@corp', 'systems-team'])('is false for %s', (s) => {
     expect(isReservedActor(s)).toBe(false);
   });
 });
