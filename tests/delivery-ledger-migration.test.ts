@@ -105,12 +105,14 @@ describe('delivery ledger schema v50', () => {
 
   it('a v49 store re-migrates to v50 and min_compatible_binary is unchanged', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-delivery-mig-'));
+    // A value no migration writes, below the running binary, so any v50 write to it shows.
+    const minBefore = '1.30.7';
     let db = openHippoDb(home);
-    const minBefore = meta(db, 'min_compatible_binary');
     try {
       db.exec('DROP TABLE IF EXISTS delivery_candidates');
       db.exec('DROP TABLE IF EXISTS delivery_events');
       db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '49')`).run();
+      db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('min_compatible_binary', ?)`).run(minBefore);
     } finally {
       closeHippoDb(db);
     }

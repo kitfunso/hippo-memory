@@ -240,7 +240,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
   }
 }
 
-/** Delivery events older than this are pruned on write, as the token ledger is. */
+/** Pruned on write, counted back from the event's ts capped at the real clock, so a far-future fake time spares real rows. */
 export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
@@ -336,12 +336,13 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
 function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
   // SAFETY: a single MAX aggregate aliased `m`, NULL when the session has no turns yet.
   const row = db.prepare(`
-    SELECT MAX(turn_seq) AS m FROM delivery_events WHERE tenant_id = ? AND session_id = ? AND event_type = ?
+    SELECT MAX(turn_seq) AS m FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
   `).get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
   return (row.m ?? 0) + 1;
 }
 
-/** One event plus its candidates in one write transaction, then prune; fail-soft, a busy lock or any error returns null. */
+/** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a transaction on `db`. */
 export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   try {
     db.exec('BEGIN IMMEDIATE');
@@ -369,12 +370,13 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       for (const c of input.candidates) {
         insertCandidate.run(eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score, c.tokens);
       }
-      const cutoff = new Date(Date.parse(input.ts) - DELIVERY_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+      const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
+      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
       db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
       db.exec('COMMIT');
       return eventId;
     } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* no open transaction when BEGIN itself failed; keep the original error */ }
+      try { db.exec('ROLLBACK'); } catch { /* SQLite may already have rolled back (SQLITE_FULL, IOERR); keep the original error */ }
       throw error;
     }
   } catch (error) {
@@ -401,13 +403,14 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   }
 }
 
-/** On a caller's open handle, which saves a second open and close per turn; lock waits stay at the ledger's own short wait. */
+/** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back after. */
 export function writeDeliveryEventOnHandle(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  const prior = Math.trunc(Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout));
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
   try {
     return writeDeliveryEvent(db, input);
   } finally {
-    db.exec('PRAGMA busy_timeout = 5000');
+    db.exec(`PRAGMA busy_timeout = ${prior}`);
   }
 }
 

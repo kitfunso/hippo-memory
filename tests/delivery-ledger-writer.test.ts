@@ -152,6 +152,13 @@ describe('writeDeliveryEvent', () => {
     expect(count('delivery_candidates')).toBe(1);
   });
 
+  it('a write under a far-future fake time prunes no real rows', () => {
+    const real = writeDeliveryEvent(db, event({ ts: new Date().toISOString(), promptHash: 'real' }));
+    const fake = writeDeliveryEvent(db, event({ ts: '2099-01-01T00:00:00.000Z', promptHash: 'fake' }));
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.id)).toEqual([real, fake]);
+    expect(count('delivery_candidates')).toBe(2);
+  });
+
   it('rolls back and returns null with one stderr line when a write fails', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     db.exec('DROP TABLE delivery_candidates');
@@ -204,13 +211,23 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout).toBe(5000);
     expect(writeDeliveryEventOnHandle(db, event())).not.toBeNull();
   });
+
+  it("restores the handle's own lock wait, not a fixed default", () => {
+    const own = openHippoDb(root, { busyWaitMs: 1234 });
+    try {
+      expect(writeDeliveryEventOnHandle(own, event())).not.toBeNull();
+      expect(own.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout).toBe(1234);
+    } finally {
+      closeHippoDb(own);
+    }
+  });
 });
 
 describe('createDeliveryRecorder row building', () => {
   const mem = (n: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`memory number ${n}`), id: `m${String(n).padStart(3, '0')}`, ...extra });
-  const recorder = () => createDeliveryRecorder({
+  const recorder = (payload: Record<string, string> = {}) => createDeliveryRecorder({
     root, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
-    stdinText: JSON.stringify({ session_id: 's', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit' }),
+    stdinText: JSON.stringify({ session_id: 's', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit', ...payload }),
   });
   const built = (rec: ReturnType<typeof recorder>): DeliveryEventInput => {
     let input: DeliveryEventInput | null = null;
@@ -265,6 +282,20 @@ describe('createDeliveryRecorder row building', () => {
     expect(input.emittedHash).toMatch(/^[0-9a-f]{16}$/);
     expect([input.promptLength, input.injectedTokens, input.runtime, input.eventType]).toEqual([19, 3, 'claude-code', 'prompt-submit']);
     expect(JSON.stringify(input)).not.toContain('raw prompt');
+  });
+
+  it.each([[''], ['   ']])('treats a blank turn id %j as no turn id', (turnId) => {
+    const input = built(recorder({ turn_id: turnId }));
+    expect([input.hostTurnId, input.runtime]).toEqual([null, 'claude-code']);
+  });
+
+  it('a selected row names the store of the copy that was kept, not the one first offered', () => {
+    const rec = recorder();
+    const synced = mem(1);
+    rec.offer([synced], false);
+    rec.offer([synced], true);
+    rec.selected([{ entry: synced, score: 1, tokens: 3, isGlobal: true }]);
+    expect(built(rec).candidates.map((c) => [c.memoryId, c.sourceStore])).toEqual([['m001', 'global']]);
   });
 
   it('disabled beats the renderer reporting an empty block', () => {

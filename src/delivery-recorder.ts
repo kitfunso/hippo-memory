@@ -181,7 +181,8 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const subagent = isSubagentPayload(init.stdinText);
   const envSession = init.envSessionId !== undefined && init.envSessionId !== '' ? init.envSessionId : null;
   const prompt = hookPayloadString(init.stdinText, 'prompt');
-  const hostTurnId = hookPayloadString(init.stdinText, 'turn_id');
+  const rawTurnId = hookPayloadString(init.stdinText, 'turn_id');
+  const hostTurnId = rawTurnId !== null && rawTurnId.trim() !== '' ? rawTurnId : null;
   const hookEvent = hookPayloadString(init.stdinText, 'hook_event_name');
   const sessionState: DeliverySessionState = subagent
     ? 'subagent'
@@ -223,7 +224,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       const held = candidates.get(p.entry.id);
       rows.push({
         memoryId: p.entry.id,
-        sourceStore: held?.sourceStore ?? p.sourceStore,
+        sourceStore: p.sourceStore,
         pool: p.promptRecall ? 'prompt-recall' : held?.pool === 'pin' || p.entry.pinned ? 'pin' : 'recent',
         stage: 'final',
         outcome: staticReused && !p.promptRecall ? 'reused' : 'emitted',

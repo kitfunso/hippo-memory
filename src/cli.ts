@@ -6820,7 +6820,7 @@ function startDeliveryRecorder(
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       root,
-      storeHash: blockHash(path.resolve(hippoRoot)),
+      storeHash: blockHash(path.resolve(root)),
       writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
       tenantId: resolveTenantId({}),
       stdinText,
