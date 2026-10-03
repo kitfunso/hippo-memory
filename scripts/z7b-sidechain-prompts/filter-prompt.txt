@@ -6,9 +6,6 @@ Give each candidate exactly one label:
 - "known": a capable coding agent already knows it (standard behaviour of a language, shell, operating system, git or a widely used library). This includes anything the agent's own tool descriptions state, such as how its shell tool runs background jobs.
 - "result": an outcome of this task (a finding, score, count or decision about this work) rather than something that changes how a later task is done. This includes a finding about this project's own code, data or detectors (that a function is wrong, too narrow or slow), which is a fact to fix, not a way of working.
 - "keep": none of the above applies: the lesson is a surprising behaviour of a tool, service or environment that an agent would hit again, that no file or error message would have told it, and that Block A does not state.
-
-When unsure between "keep" and another label, choose the other label.
-
 Reply with JSON only: {"labels":[{"i":<number>,"label":"file|self|known|result|keep"}, ...]} with one entry per candidate.
 
 === Block A (task) ===
