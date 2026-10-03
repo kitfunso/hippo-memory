@@ -277,3 +277,163 @@ export function passHatK(runsByTask: boolean[][], k: number): number {
   if (eligible.length === 0) return Number.NaN;
   return eligible.filter((r) => r.slice(0, k).every(Boolean)).length / eligible.length;
 }
+
+/** All units of one family (tasks by seeds), resampled as one block so seeds stay together. */
+export type Family<T> = readonly T[];
+
+/** One repository's families; a task with no lesson is a family of one. */
+export type Repository<T> = readonly Family<T>[];
+
+/** An {@link Estimate} with a two-sided p-value from the same resamples. */
+export interface TestedEstimate extends Estimate {
+  /** 2 x min(share <= null, share >= null), capped at 1; NaN under two repositories, never 0. */
+  p: number;
+  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. */
+  dropped: number;
+}
+
+/** Options for {@link twoLevelBootstrap}. */
+export interface TwoLevelOpts extends BootstrapOpts {
+  /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
+  nullValue?: number;
+}
+
+const NOT_A_NUMBER: TestedEstimate = {
+  estimate: Number.NaN, low: Number.NaN, high: Number.NaN, p: Number.NaN, iterations: 0, dropped: 0,
+};
+
+function resampleUnits<T>(repos: readonly Repository<T>[], rand: () => number): T[] {
+  const units: T[] = [];
+  for (let i = 0; i < repos.length; i++) {
+    const repo = repos[Math.floor(rand() * repos.length)]!;
+    for (let j = 0; j < repo.length; j++) {
+      for (const unit of repo[Math.floor(rand() * repo.length)]!) units.push(unit);
+    }
+  }
+  return units;
+}
+
+// A resample on the null counts on both sides, so a statistic that only reaches it through float noise no longer ties.
+function twoSidedP(samples: readonly number[], nullValue: number): number {
+  let below = 0;
+  let above = 0;
+  for (const s of samples) {
+    if (s <= nullValue) below++;
+    if (s >= nullValue) above++;
+  }
+  return Math.min(1, (2 * Math.min(below, above)) / samples.length);
+}
+
+/** Resamples repositories, then families inside each; only the repository draw carries a shared-store fault.
+ * Callbacks: mistakes = mean of family-seed differences; tokens = mean(treatment) / mean(control), nullValue 1.
+ * The statistic never uses the PRNG, so a second call on one seed (harm gate) draws the same resamples. */
+export function twoLevelBootstrap<T>(
+  repos: readonly Repository<T>[],
+  statistic: (units: readonly T[]) => number,
+  opts: TwoLevelOpts = {},
+): TestedEstimate {
+  const requested = opts.iterations ?? 10_000;
+  if (!Number.isInteger(requested) || requested <= 0) {
+    throw new RangeError(`iterations must be a positive integer, got ${requested}`);
+  }
+  const kept = repos.map((r) => r.filter((f) => f.length > 0)).filter((r) => r.length > 0);
+  if (kept.length === 0) return { ...NOT_A_NUMBER };
+  const rand = seededRandom(opts.seed ?? 1);
+  const samples: number[] = [];
+  for (let b = 0; b < requested; b++) {
+    const value = statistic(resampleUnits(kept, rand));
+    if (Number.isFinite(value)) samples.push(value);
+  }
+  const dropped = requested - samples.length;
+  if (samples.length === 0) return { ...NOT_A_NUMBER, dropped };
+  const estimate = statistic(kept.flatMap((r) => r.flat()));
+  const p = kept.length < 2 ? Number.NaN : twoSidedP(samples, opts.nullValue ?? 0);
+  return { estimate, ...percentileInterval(samples, opts.alpha ?? 0.05), p, iterations: samples.length, dropped };
+}
+
+/** Holm step-down in input order; the family size is `ps.length`, as preregistered.
+ * A NaN stays NaN but ranks as 1, so it never loosens the others; a finite p outside [0, 1] throws. */
+export function holmAdjust(ps: readonly number[]): number[] {
+  for (const p of ps) {
+    if (!Number.isNaN(p) && !(p >= 0 && p <= 1)) throw new RangeError(`p-value out of range: ${p}`);
+  }
+  const ranked = ps
+    .map((p, index) => ({ index, key: Number.isNaN(p) ? 1 : p }))
+    .sort((a, b) => a.key - b.key || a.index - b.index);
+  const adjusted = Array.from({ length: ps.length }, () => Number.NaN);
+  let running = 0;
+  ranked.forEach(({ index, key }, rank) => {
+    running = Math.max(running, (ps.length - rank) * key);
+    if (!Number.isNaN(ps[index]!)) adjusted[index] = Math.min(1, running);
+  });
+  return adjusted;
+}
+
+/** One of the four mutually exclusive outcomes the preregistration allows per hypothesis. */
+export type Verdict = 'loss' | 'win' | 'tie' | 'inconclusive';
+
+/** What a hypothesis needs to be read; see {@link verdict}. */
+export interface VerdictSpec {
+  /** Direction that favours the treatment arm. */
+  helpful: 'lower' | 'higher';
+  /** Default 0; 1 for ratios. */
+  nullValue?: number;
+  /** Inclusive band the interval must sit inside for a tie. */
+  tieBand: readonly [number, number];
+  /** An estimate on this value or beyond it, on the helpful side, reaches the minimum effect. */
+  minimumEffectAt: number;
+  /** Default 0.05. */
+  alpha?: number;
+}
+
+/** A verdict, plus whether a win reaches the minimum effect (a win below it is a small win). */
+export interface VerdictResult {
+  verdict: Verdict;
+  reachesMinimum: boolean;
+}
+
+/** Checks in the preregistered order. A CI inside the tie band that excludes the null is a win or loss only
+ * while `adjustedP` is below alpha, else a tie; a NaN p or bound is inconclusive, since a win cannot be ruled out. */
+export function verdict(e: Estimate, adjustedP: number, spec: VerdictSpec): VerdictResult {
+  const inconclusive: VerdictResult = { verdict: 'inconclusive', reachesMinimum: false };
+  if (Number.isNaN(adjustedP) || Number.isNaN(e.low) || Number.isNaN(e.high)) return inconclusive;
+  const nullValue = spec.nullValue ?? 0;
+  const lowerIsHelpful = spec.helpful === 'lower';
+  if (adjustedP < (spec.alpha ?? 0.05)) {
+    const helpfulSide = lowerIsHelpful ? e.estimate < nullValue : e.estimate > nullValue;
+    const harmfulSide = lowerIsHelpful ? e.estimate > nullValue : e.estimate < nullValue;
+    if (harmfulSide) return { verdict: 'loss', reachesMinimum: false };
+    if (helpfulSide) {
+      const reaches = lowerIsHelpful ? e.estimate <= spec.minimumEffectAt : e.estimate >= spec.minimumEffectAt;
+      return { verdict: 'win', reachesMinimum: reaches };
+    }
+  }
+  const insideBand = e.low >= spec.tieBand[0] && e.high <= spec.tieBand[1];
+  return insideBand ? { verdict: 'tie', reachesMinimum: false } : inconclusive;
+}
+
+/** A win must hold under both codings of not-applicable; a loss under either is reported. Call pattern: Holm once
+ * per coding (that coding's p for the first hypothesis), verdict each, combine; the other two take the larger adjusted p. */
+export function combineCodings(a: VerdictResult, b: VerdictResult): VerdictResult {
+  if (a.verdict === 'loss' || b.verdict === 'loss') return { verdict: 'loss', reachesMinimum: false };
+  if (a.verdict === 'win' && b.verdict === 'win') {
+    return { verdict: 'win', reachesMinimum: a.reachesMinimum && b.reachesMinimum };
+  }
+  if (a.verdict === 'tie' && b.verdict === 'tie') return { verdict: 'tie', reachesMinimum: false };
+  return { verdict: 'inconclusive', reachesMinimum: false };
+}
+
+/** Outcome of the harm gate; see {@link harmGate}. */
+export interface HarmGate {
+  pass: boolean;
+  costOk: boolean;
+  resolveOk: boolean;
+}
+
+/** Cost ratio's upper bound below 1.10 and resolve difference's lower bound above -0.05 (a fraction).
+ * Build both estimates at alpha 0.05, the conservative reading of "upper 95% bound"; a NaN bound fails. */
+export function harmGate(costRatio: Estimate, resolveDiff: Estimate): HarmGate {
+  const costOk = costRatio.high < 1.1;
+  const resolveOk = resolveDiff.low > -0.05;
+  return { pass: costOk && resolveOk, costOk, resolveOk };
+}
