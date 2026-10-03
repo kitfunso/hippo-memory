@@ -563,9 +563,9 @@ older than 90 days are pruned; at a heavy 300 prompts a day that is about 190 MB
 to hold back memories from about 20% of sessions. The rate is in basis points, 0 to 10000, and 0
 is off (the default). The setting is read from the store the token ledger writes to. A session
 lands in its arm by a hash of its id, and the first hook call writes one row to the token ledger.
-A holdout session gets no memories from the per-prompt hook, `hippo context` or compact-resume.
-Capture still runs. Pulls such as `hippo recall` and the MCP tools stay open and are not recorded
-as arm rows. Set the rate to 0 only after the pilot window closes, because 0 ends every holdout at once.
+A holdout session gets no memories from the per-prompt hook, the SessionStart hook or compact-resume.
+The agent's own `hippo context` pull is gated in Claude Code only. Capture still runs. Pulls such as
+`hippo recall` and the MCP tools stay open and are not recorded as arm rows. Set the rate to 0 only after the pilot window closes, because 0 ends every holdout at once.
 `hippo doctor` shows the pilot when it is on.
 
 ---

@@ -144,7 +144,7 @@ import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
-import { ensurePilotArm, hashArm, readPilotArm } from './pilot-arm.js';
+import { ARM_LOCK_WAIT_MS, ensurePilotArm, hashArm, readPilotArm } from './pilot-arm.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS, isSqliteBusy, noteStoreBusy } from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
@@ -2216,7 +2216,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
           suppressOutput = true;
         }
-        if (typeof payload.session_id === 'string') {
+        if (typeof payload.session_id === 'string' && payload.session_id.trim() !== '') {
           payloadSessionId = payload.session_id;
         }
       }
@@ -5789,7 +5789,7 @@ function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string |
   const rate = loadConfig(root).pilot.holdoutRateBp;
   if (rate <= 0) return false;
   const arm = withLedgerDb(hippoRoot, (db) =>
-    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
+    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate), ARM_LOCK_WAIT_MS);
   return (arm ?? hashArm(sessionId, rate)) === 'holdout';
 }
 

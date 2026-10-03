@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store.js';
 import { loadConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
+import { ARM_LOCK_WAIT_MS, ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/working-memory.js';
@@ -97,6 +97,39 @@ describe('pilot arm helpers', () => {
     vi.spyOn(db, 'exec').mockImplementation(() => { throw new Error('locked'); });
     expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
     expect(ensurePilotArm(db, 'default', 's1', 0)).toBe('hippo');
+  });
+
+  it('a held write lock yields the hash arm, no row, and a bounded wait', () => {
+    const holder = openHippoDb(root);
+    try {
+      holder.exec('BEGIN IMMEDIATE');
+      const reader = openHippoDb(root, { busyWaitMs: ARM_LOCK_WAIT_MS });
+      try {
+        const started = Date.now();
+        expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
+        expect(Date.now() - started).toBeLessThan(1500);
+      } finally {
+        closeHippoDb(reader);
+      }
+    } finally {
+      holder.exec('ROLLBACK');
+      closeHippoDb(holder);
+    }
+    expect(armCount()).toBe(0);
+  });
+
+  it('a stored arm is read without the write lock', () => {
+    ensurePilotArm(db, 'default', 'kept', 10000);
+    const holder = openHippoDb(root);
+    try {
+      holder.exec('BEGIN IMMEDIATE');
+      const started = Date.now();
+      expect(ensurePilotArm(db, 'default', 'kept', 1)).toBe('holdout');
+      expect(Date.now() - started).toBeLessThan(500);
+    } finally {
+      holder.exec('ROLLBACK');
+      closeHippoDb(holder);
+    }
   });
 
   it('rolls back and returns the hash arm when the insert fails', () => {

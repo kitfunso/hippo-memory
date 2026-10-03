@@ -487,7 +487,11 @@ export function hookStoreRoot(hippoRoot: string): string {
  * without a local store). Best-effort: returns undefined and never throws,
  * because a ledger failure must not break context or recall.
  */
-export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T | undefined {
+export function withLedgerDb<T>(
+  hippoRoot: string,
+  fn: (db: ReturnType<typeof openHippoDb>) => T,
+  busyWaitMs?: number,
+): T | undefined {
   let root: string | null = null;
   try {
     if (isInitialized(hippoRoot)) root = hippoRoot;
@@ -498,7 +502,7 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
   if (root === null) return undefined;
   let db: ReturnType<typeof openHippoDb> | undefined;
   try {
-    db = openHippoDb(root);
+    db = openHippoDb(root, { busyWaitMs });
     return fn(db);
   } catch (error) {
     // Best effort, but a busy store is the one failure an operator can act on, so it warns once.

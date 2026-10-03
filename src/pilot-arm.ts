@@ -7,7 +7,7 @@ import { recordTokenUse } from './token-ledger.js';
 export type PilotArm = 'hippo' | 'holdout';
 
 // The hook runs on every prompt, so a locked store may cost it about a second, not the default five.
-const ARM_LOCK_WAIT_MS = 1000;
+export const ARM_LOCK_WAIT_MS = 1000;
 
 /** Deterministic split: the same session and rate always land in the same arm. */
 export function hashArm(sessionId: string, rateBp: number): PilotArm {
@@ -31,7 +31,9 @@ export function ensurePilotArm(
   const hashed = hashArm(sessionId, rateBp);
   let began = false;
   try {
-    db.exec(`PRAGMA busy_timeout = ${ARM_LOCK_WAIT_MS}`);
+    // A stored row is the common case after the first prompt, so it must not take the write lock.
+    const existing = readPilotArm(db, sessionId);
+    if (existing !== null) return existing;
     execWithBusyRetry(db, 'BEGIN IMMEDIATE', ARM_LOCK_WAIT_MS);
     began = true;
     const stored = readPilotArm(db, sessionId);

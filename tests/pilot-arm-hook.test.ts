@@ -42,6 +42,10 @@ function run(args: string[], payload: Payload | null, dir = proj, extra: NodeJS.
   });
 }
 
+function snapshotFor(sessionId: string): void {
+  saveActiveTaskSnapshot(store(proj), 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: sessionId });
+}
+
 const prompt = (sessionId: string, extra: Partial<Payload> = {}): Payload => ({ session_id: sessionId, prompt: 'hi', hook_event_name: 'UserPromptSubmit', ...extra });
 
 function ledger<T>(root: string, sql: string): T[] {
@@ -166,6 +170,27 @@ describe('the per-prompt hook', () => {
     setRate(10000);
     expect(run(HOOK_ARGS, prompt('keep')).stdout).toBe('');
     expect(arms()).toHaveLength(1);
+  });
+
+  it('the stored arm wins end to end after the rate drops', () => {
+    let id = '';
+    for (let i = 0; id === ''; i++) if (hashArm(`w-${i}`, 1) === 'hippo') id = `w-${i}`;
+    snapshotFor(id);
+    run(HOOK_ARGS, prompt(id));
+    expect(arms().map((a) => a.block_hash)).toEqual(['holdout']);
+    setRate(1);
+    expect(run(HOOK_ARGS, prompt(id)).stdout).toBe('');
+    expect(run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: id }).stdout).toBe('');
+    expect(run(HOOK_ARGS, prompt(id, { agent_id: 'a1' })).stdout).toBe('');
+    expect(run(['compact-resume'], { session_id: id, source: 'compact' }).stdout).toBe('');
+    expect(arms()).toHaveLength(1);
+  });
+
+  it('a blank payload session id is treated as absent by compact-resume', () => {
+    snapshotFor('');
+    const r = run(['compact-resume'], { session_id: '  ', source: 'compact' });
+    expect(r.status).toBe(0);
+    expect(arms()).toHaveLength(0);
   });
 
   it('two concurrent processes on a fresh session: one row, both print nothing', async () => {
