@@ -15,7 +15,7 @@ const SCRIPTS = path.join(REPO, 'scripts');
 const PROMPT_DIR = path.join(SCRIPTS, 'z7-sidechain-prompts');
 const PREREG = path.join(REPO, 'docs', 'evals', '2026-10-03-z7-sidechain-gap-prereg.md');
 const SCRIPT_FILES = ['z7-sidechain-lib.mjs', 'z7-sidechain-eval.mjs', 'z7-sidechain-selftest.mjs', 'z7-sidechain-guard.mjs'].map((f) => path.join(SCRIPTS, f));
-const DEFAULT_ARCHIVE = 'C:/Users/skf_s/hippo-archive/z7-sidechain-2026-10-03';
+const DEFAULT_ARCHIVE = path.join(os.homedir(), 'hippo-archive', 'z7-sidechain-2026-10-03');
 const MANIFEST_SHA = '84028a76df0a4c9b16ea4aaffcaed3284f26ef37985c4cd0a7837765496966e0';
 const CONCURRENCY = 3;
 const QUOTA_RE = /usage limit|rate limit|quota|overloaded|try again later/i;
