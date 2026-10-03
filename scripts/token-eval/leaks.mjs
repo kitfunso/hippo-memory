@@ -4,12 +4,12 @@ import * as path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { gitSpawn } from './exec.mjs';
 import { agentGit } from './checks.mjs';
-import { RESTORABLE } from './surfaces.mjs';
+import { RESTORABLE, isImported, collapse } from './surfaces.mjs';
 import { ownsPhrase } from './lessons.mjs';
 
 // Bytes as latin1 with ASCII-only case folding, so a non-ASCII phrase matches its exact UTF-8 bytes.
 const fold = (data) => Buffer.from(data).toString('latin1').replace(/[A-Z]+/g, (m) => m.toLowerCase());
-const holds = (text, phrase) => fold(text).includes(fold(phrase));
+export const holds = (text, phrase) => fold(text).includes(fold(phrase));
 
 // zip (three headers), 7z, xz, zstd, rar; bzip2 is 'BZh' plus a block-size digit.
 const MAGIC = [[0x50, 0x4b, 3, 4], [0x50, 0x4b, 5, 6], [0x50, 0x4b, 7, 8], [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c], [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0], [0x28, 0xb5, 0x2f, 0xfd], [0x52, 0x61, 0x72, 0x21, 0x1a, 0x07]];
@@ -52,30 +52,66 @@ function workspaceFiles(work, pre, phrase) {
   }).split('\0').filter(Boolean).map((p) => p.slice(pre.length + 1));
 }
 
-/** Every place an open lesson's key phrase sits before the session, as `{lessonId, surface, path}`; an archive hit names no lesson. */
-export function findLeaks(open, { t, root, work, pre, surfaces, stores }) {
-  if (!open.length) return [];
-  const phrases = open.map((l) => ({ id: l.id, raw: l.keyPhrase, folded: fold(l.keyPhrase) }));
+/** Each surface entry's bytes as `{key, e, bytes}`, skipping entries the snapshot could not read and files gone since. */
+function* surfaceBytes(root, surfaces, keys) {
+  for (const key of keys) {
+    for (const e of surfaces[key] ?? []) {
+      const bytes = e.error ? null : readOrNull(path.join(root, e.path));
+      if (bytes) yield { key, e, bytes };
+    }
+  }
+}
+
+/** Each lesson's key phrase in the memory surface files and the hippo store entries; an archive hit names no lesson. */
+function surfaceLeaks(lessons, { root, surfaces, stores }) {
+  const phrases = lessons.map((l) => ({ id: l.id, folded: fold(l.keyPhrase) }));
   const hits = [];
   const scan = (text, surface, at) => {
     for (const p of phrases) if (text.includes(p.folded)) hits.push({ lessonId: p.id, surface, path: at });
   };
-  for (const key of [...RESTORABLE, 'instructions']) {
-    for (const e of surfaces[key] ?? []) {
-      const bytes = e.error ? null : readOrNull(path.join(root, e.path));
-      if (!bytes) continue;
-      const text = searchable(bytes);
-      if (text === null) hits.push({ lessonId: null, surface: `${key}-archive`, path: e.path });
-      else scan(text, key, e.path);
-    }
+  for (const { key, e, bytes } of surfaceBytes(root, surfaces, [...RESTORABLE, 'instructions'])) {
+    const text = searchable(bytes);
+    if (text === null) hits.push({ lessonId: null, surface: `${key}-archive`, path: e.path });
+    else scan(text, key, e.path);
   }
   for (const s of stores) for (const e of s.entries) scan(fold(e.content), s.surface, `${s.path}#${e.id}`);
-  for (const p of phrases) for (const rel of workspaceFiles(work, pre, p.raw)) hits.push({ lessonId: p.id, surface: 'workspace', path: `work/${rel}` });
+  return hits;
+}
+
+/** Every place an open lesson's key phrase sits before the session, as `{lessonId, surface, path}`; an archive hit names no lesson. */
+export function findLeaks(open, { t, root, work, pre, surfaces, stores }) {
+  if (!open.length) return [];
+  const hits = surfaceLeaks(open, { root, surfaces, stores });
+  for (const l of open) for (const rel of workspaceFiles(work, pre, l.keyPhrase)) hits.push({ lessonId: l.id, surface: 'workspace', path: `work/${rel}` });
   for (const l of open) if (!ownsPhrase(t, l) && holds(t.prompt, l.keyPhrase)) hits.push({ lessonId: l.id, surface: 'prompt', path: null });
   return hits;
 }
 
-const sequenceLessons = (spec, sequenceId) => (spec.families ?? []).filter((f) => f.sequence === sequenceId).flatMap((f) => f.lessons ?? []);
+/** Chain `stored` (prereg 179): the lesson's key phrase in any memory surface or hippo store at the apply's pre-session. */
+export const storedAt = (lesson, at) => surfaceLeaks([lesson], at).some((h) => h.lessonId === lesson.id);
+
+const MEMORY_INDEX = /(?:^|\/)projects\/[^/]+\/memory\/MEMORY\.md$/;
+// Claude Code loads only the first 200 lines or 25 KB of MEMORY.md at start; topic files are read on demand.
+const loadedIndex = (bytes) => fold(bytes.subarray(0, 25 * 1024)).split('\n').slice(0, 200).join('\n');
+
+/** Chain `shown` before the session (prereg 180): the phrase in an instruction file or the loaded part of a MEMORY.md. */
+export function shownAtStart(lesson, { root, surfaces }) {
+  const phrase = fold(lesson.keyPhrase);
+  for (const { key, e, bytes } of surfaceBytes(root, surfaces, ['instructions', 'userInstructions', 'autoMemory'])) {
+    if (key === 'autoMemory' && !MEMORY_INDEX.test(e.path)) continue;
+    if ((key === 'autoMemory' ? loadedIndex(bytes) : fold(bytes)).includes(phrase)) return true;
+  }
+  return false;
+}
+
+/** Chain `captured` (prereg 182): a store entry holding the phrase or the rule; `captured` leaves out imported agent notes. */
+export function capturedBy(lesson, stores) {
+  const hit = (e) => holds(e.content, lesson.keyPhrase) || holds(collapse(e.content), collapse(lesson.rule));
+  const entries = stores.flatMap((s) => s.entries).filter(hit);
+  return { captured: entries.some((e) => !isImported(e)), capturedAny: entries.length > 0 };
+}
+
+const sequenceLessons =(spec, sequenceId) => (spec.families ?? []).filter((f) => f.sequence === sequenceId).flatMap((f) => f.lessons ?? []);
 
 /** Preflight: refuse a lesson text or a flagged prompt that would leak another lesson's key phrase in any order. */
 export function assertNoPhraseLeaks(spec) {

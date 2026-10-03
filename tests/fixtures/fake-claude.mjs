@@ -115,6 +115,8 @@ const lessonState = () => {
 const OUT = path.resolve(process.env.CLAUDE_CONFIG_DIR, '..', '..', '..', '..', '..');
 const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.dirname(process.env.CLAUDE_CONFIG_DIR))
   .replaceAll('{WT}', process.env.FAKE_WT_DIR ?? '').replaceAll('{HOME}', process.env.HOME ?? '');
+// What the hooks added, as the attachment line Claude Code writes after the prompt (z1-replay.mjs reads the same shape).
+const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'hook_additional_context', content: [injected], hookEvent: 'UserPromptSubmit' } }] : []);
 const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
 
 /** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT. */
@@ -186,12 +188,16 @@ function firstSession() {
   for (const m of prompt.matchAll(/MEMWRITE:([^\n]+)/g)) memWrite(m[1].trim());
   // Base64, so a prompt can plant a key phrase it may not hold before the teach (the order check refuses it).
   for (const m of prompt.matchAll(/MEMWRITE_B64:(\S+)/g)) memWrite(Buffer.from(m[1], 'base64').toString('utf8'));
+  // NOTE:<text> is a frontmatter note beside MEMORY.md, the only kind hippo's importer reads.
+  for (const [i, m] of [...prompt.matchAll(/^NOTE:(.+)$/gm)].entries()) write(path.join(path.dirname(memoryFile), `note-${i}.md`), `---\nname: note ${i}\n---\n${m[1].trim()}\n`);
+  if (/^IMPORT$/m.test(prompt)) sh('hippo import --agents');
   if (/\bHANG(?:_STDERR)?\b/.test(prompt)) hang('s1');
   for (const m of prompt.matchAll(/^USERMEM:(.+)$/gm)) fs.appendFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'CLAUDE.md'), `${m[1]}\n`);
   if (prompt.includes('WORKTREE')) sh(`git worktree add -q --detach "${process.env.FAKE_WT_DIR}"`);
   const commands = [...prompt.matchAll(/^RUN_CMD (.+)$/gm)].map((m) => m[1]);
   appendTurn([
     { type: 'user', message: { role: 'user', content: input } },
+    ...hookLine(),
     toolUse('Read', {}),
     { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-1`, is_error: true, content: 'Error: file 12 not found' }] } },
     toolUse('Edit', {}),
@@ -247,7 +253,9 @@ function resumeTurn() {
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
   if (line) fs.appendFileSync('CLAUDE.md', `${line[1]}\n`);
   if (lessonState() && input.startsWith('No:')) fs.writeFileSync('lesson.txt', 'ok\n');
-  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` })]);
+  // CAPTURE_TEACH: the agent saves the teach message to hippo itself.
+  if (prompt.includes('CAPTURE_TEACH')) sh(`hippo remember "${input.replaceAll('"', '')}"`);
+  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` })]);
 }
 
 log(`${resumeId ? 'resume' : 'session'} ${sessionId}`);

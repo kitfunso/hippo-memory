@@ -110,6 +110,56 @@ export function snapshotSurfaces(ctx, run, when, step) {
   return { when, surfaces, copyDir, copied, restorable, line: ledgerLine(ctx, run, step, when, { restorable, copyErrors, surfaces }) };
 }
 
+const IMPORTED = 'agent-memory:';
+/** A row hippo imported from a coding agent's own notes (src/agent-memories/tools.ts). */
+export const isImported = (e) => String(e.source ?? '').startsWith(IMPORTED);
+// The tool stays in an imported row's prefix (agent-memory:claude-code); other sources keep their first part.
+const prefixOf = (e) => String(e.source ?? '').split(':').slice(0, isImported(e) ? 2 : 1).join(':');
+export const collapse = (s) => s.replace(/\s+/g, ' ').trim();
+// One context-render.ts contextLine bullet, as scripts/z1-replay.mjs parses it.
+const BULLET = /^- \*\*\[[^\]]+\](?: ⚠️)? (?:Previously observed \(\d{4}-\d{2}-\d{2}\): |Consider checking: )?(?:\[global\] )?([\s\S]*)\*\*(?: \[[^\]]*\])?(?: \(\d+%\))?$/;
+
+/** Store entries whose content a bullet printed; a `[truncated]` bullet matches by prefix (z1-replay.mjs). */
+function bulletEntries(byContent, bullet) {
+  const m = BULLET.exec(bullet);
+  if (!m) return [];
+  const text = collapse(m[1]);
+  if (byContent.has(text) || !text.endsWith(' [truncated]')) return byContent.get(text) ?? [];
+  const head = text.slice(0, -' [truncated]'.length);
+  return [...byContent].filter(([k]) => k.startsWith(head)).flatMap(([, es]) => es);
+}
+
+/** Hippo rows in hook-added texts, matched by content to `entries` (each with `global`); every repeat counts, as it is paid again (prereg 93). */
+export function injectedRows(texts, entries) {
+  const byContent = new Map();
+  for (const e of entries) byContent.set(collapse(e.content), [...(byContent.get(collapse(e.content)) ?? []), e]);
+  const counts = { rows: 0, importedRows: 0, chars: 0, importedChars: 0, unmatched: 0, ambiguous: 0 };
+  const rows = [];
+  for (const part of texts.flatMap((t) => t.split(/\n(?=- \*\*\[)/))) {
+    if (!part.startsWith('- **[')) continue;
+    const bullet = part.split('\n\n')[0].trim();
+    counts.rows++;
+    counts.chars += bullet.length;
+    const hits = bulletEntries(byContent, bullet);
+    const imported = hits.filter(isImported).length;
+    if (!hits.length) counts.unmatched++;
+    else if (imported && imported < hits.length) counts.ambiguous++;
+    else rows.push({ prefix: prefixOf(hits[0]), global: Boolean(hits[0].global), chars: bullet.length });
+    if (hits.length && imported === hits.length) {
+      counts.importedRows++;
+      counts.importedChars += bullet.length;
+    }
+  }
+  return { counts, rows };
+}
+
+/** The injected rows' counts for the record, with each matched row's source prefix written to the ledger. */
+export function recordInjected(ctx, run, step, texts, entries) {
+  const { counts, rows } = injectedRows(texts, entries);
+  ledgerLine(ctx, run, step, 'injected', { rows });
+  return counts;
+}
+
 const sameFiles = (a = [], b = []) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Put every surface that copied back as the snapshot holds it, then re-hash; true only if the snapshot was whole and every hash matches. */

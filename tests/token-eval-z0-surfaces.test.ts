@@ -41,7 +41,9 @@ describe('the surface ledger (prereg 104)', () => {
     await run(spec(r, [], [task(r, 'n1', 'MEMWRITE:a remembered line'), plain(r, 'n2')]), ['A1', 'A2'], out);
     const lines = readLedger(out);
     for (const arm of ['A1', 'A2']) {
-      for (const id of ['n1', 'n2']) expect(lines.filter((l) => l.arm === arm && l.taskId === id).map((l) => l.when), `${arm} ${id}`).toEqual(['pre-session', 'end']);
+      // A hippo arm also logs the rows its hook injected (prereg 93).
+      const whens = arm === 'A2' ? ['pre-session', 'end', 'injected'] : ['pre-session', 'end'];
+      for (const id of ['n1', 'n2']) expect(lines.filter((l) => l.arm === arm && l.taskId === id).map((l) => l.when), `${arm} ${id}`).toEqual(whens);
       const pre = lineOf(lines, arm, 'n2', 'pre-session');
       expect(pre).toMatchObject({ schema: 'z0-ledger/1', runName: 'seqF', sequence: 'seqF', seed: 1, position: 1, restorable: true, verified: null, copyErrors: [] });
       expect(Object.keys(pre.surfaces).sort()).toEqual(SURFACE_KEYS);

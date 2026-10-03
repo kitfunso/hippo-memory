@@ -114,7 +114,11 @@ const jsonl = <T>(f: string): T[] => (existsSync(f) ? readFileSync(f, 'utf8').tr
 export interface VoidHit { reason: string; class: string | null; tool: string | null; path: string | null; file: string | null }
 /** A record with the runner's fields beyond the z0-record/1 contract. */
 export interface LeakHit { lessonId: string | null; surface: string; path: string | null }
-export type RunRecord = Z0Record & { voidHits?: VoidHit[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string } };
+export interface InjectedRows { rows: number; importedRows: number; chars: number; importedChars: number; unmatched: number; ambiguous: number }
+export type RunRecord = Z0Record & {
+  voidHits?: VoidHit[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string };
+  chain?: { capturedAny: boolean | null }; injectedRows?: InjectedRows;
+};
 export const readRecords = (out: string): RunRecord[] => jsonl<RunRecord>(join(out, 'runs.jsonl'));
 export const readPlan = (out: string): Z0PlanCell[] => JSON.parse(readFileSync(join(out, 'plan.json'), 'utf8'));
 export interface LedgerEntry { path: string; sha256?: string; size?: number; link?: true; error?: string }

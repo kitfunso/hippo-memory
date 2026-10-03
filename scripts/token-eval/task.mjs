@@ -7,13 +7,14 @@ import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
   findTranscript, sessionFiles, listTranscripts, transcriptWork, transcriptUsage, assistantTurns, commandLog, usageFromResult, invalidRecord, validRecord,
+  hookContexts, toolResultTexts,
 } from './records.mjs';
 import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
-import { findLeaks } from './leaks.mjs';
+import { findLeaks, storedAt, shownAtStart, capturedBy, holds } from './leaks.mjs';
 import { runSession, resumeSession } from './turns.mjs';
 import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
-import { cellName, snapshotSurfaces, restoreSurfaces } from './surfaces.mjs';
+import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
 import { deliveryHits, sessionVoid } from './readcheck.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
@@ -238,7 +239,7 @@ function sessionRecord(ctx, run, step, parts) {
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
-    surfaceRestored: stage.restores.every(Boolean),
+    surfaceRestored: stage.restores.every(Boolean), injectedRows: stage.injected,
   };
   const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
@@ -248,6 +249,7 @@ function sessionRecord(ctx, run, step, parts) {
     ...transcriptWork(transcriptsOf(run, sessionIds), run.seenErrors), transcriptFound: true, wallMs,
     teachTurns: step.role.kind === 'teach' ? 1 : 0, correctionTurns: step.role.kind === 'apply' && resume ? 1 : 0, teachForm: turns?.form ?? null,
     hippo: HIPPO_ARMS.has(run.arm) ? hippoSentFor(path.join(run.dirs.work, '.hippo'), sessionIds) : null, ...shared,
+    chain: chainOf(run, step, stage, turns),
   });
 }
 
@@ -282,11 +284,14 @@ async function runTurns(ctx, run, step, stage, base) {
   run.sessionRan = true;
   writeRaw(run, `${t.id}.json`, session.cc.stdout || JSON.stringify({ error: session.cc.stderr.slice(0, 4000), status: session.cc.status }));
   const sessionIds = firstSessionIds(ctx, run, t, session, stage);
+  // Before the resume, so its transcript lines are not yet there.
+  if (stage.chainPre) stage.chainPre.shown ||= shownInSession(run, stage.chainPre.lesson, sessionIds);
   // A timed-out session is still checked and resumed (prereg 109, 165).
   const turns = sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
   const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
   await settle(ctx, run, t.id, 'end');
   snapshotSurfaces(ctx, run, 'end', step);
+  if (HIPPO_ARMS.has(run.arm)) stage.injected = hippoEnd(ctx, run, step, stage, sessionIds);
   guarded(run, t, stage, () => noteWorktrees(ctx, run, step));
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   // Reading 8: A4 holds a lesson only once its teach resume delivered it.
@@ -306,13 +311,50 @@ function openLessons(ctx, run, step) {
   return [...ctx.lessons.values()].filter(({ lesson, family }) => family.sequence === run.s.id && !run.teachSeen.has(lesson.id)).map(({ lesson }) => lesson);
 }
 
+/** Both hippo stores' entries now, each with its surface key and its path under the run root; none in an arm without hippo. */
+function hippoStores(run) {
+  return [['hippoWork', path.join(run.dirs.work, '.hippo')], ['hippoGlobal', run.dirs.hippoHome]].map(([surface, dir]) => ({
+    surface, path: path.relative(run.dirs.root, dir).split(path.sep).join('/'), entries: storeEntries(dir),
+  }));
+}
+
 /** G3 at pre-session: every open lesson's key phrase in a memory surface, a hippo store, the workspace or the prompt. */
 function phraseLeaks(run, step, stage, open) {
-  const work = run.dirs.work;
-  const stores = [['hippoWork', path.join(work, '.hippo')], ['hippoGlobal', run.dirs.hippoHome]].map(([surface, dir]) => ({
-    surface, path: path.relative(run.dirs.root, dir).split(path.sep).join('/'), entries: open.length ? storeEntries(dir) : [],
-  }));
-  return findLeaks(open, { t: step.t, root: run.dirs.root, work, pre: stage.pre, surfaces: stage.snap.surfaces, stores });
+  return findLeaks(open, { t: step.t, root: run.dirs.root, work: run.dirs.work, pre: stage.pre, surfaces: stage.snap.surfaces, stores: stage.stores });
+}
+
+/** An apply's chain parts that only the pre-session state shows (prereg 179-180). */
+function chainAtStart(ctx, run, step, stage) {
+  const { lesson } = ctx.lessons.get(step.role.lessonId);
+  const at = { root: run.dirs.root, surfaces: stage.snap.surfaces, stores: stage.stores };
+  return { lesson, stored: storedAt(lesson, at), shown: shownAtStart(lesson, at) };
+}
+
+/** Session 1's share of `shown` (decision 23): the key phrase in a hook's added context or a tool result, main or subagent. */
+const shownInSession = (run, lesson, sessionIds) => {
+  const files = transcriptsOf(run, sessionIds);
+  return [...hookContexts(files), ...toolResultTexts(files)].some(({ text }) => holds(text, lesson.keyPhrase));
+};
+
+const FOLLOWED = { pass: true, fail: false };
+
+/** A valid apply's failure chain (prereg 179-182); `captured` is A2's alone, copied from its teach cell. */
+function chainOf(run, step, stage, turns) {
+  if (step.role.kind !== 'apply') return undefined;
+  const { stored, shown } = stage.chainPre;
+  const none = { captured: null, capturedAny: null };
+  const capture = run.arm === 'A2' ? run.captured.get(step.role.lessonId) ?? { captured: false, capturedAny: false } : none;
+  return { stored, shown, followed: shown ? FOLLOWED[turns?.first] ?? null : null, ...capture };
+}
+
+/** End of a hippo cell: the injected rows (prereg 93) over both loads of the stores, and an A2 teach's capture (182). */
+function hippoEnd(ctx, run, step, stage, sessionIds) {
+  const end = hippoStores(run);
+  if (run.arm === 'A2' && step.role.kind === 'teach') run.captured.set(step.role.lessonId, capturedBy(ctx.lessons.get(step.role.lessonId).lesson, end));
+  // Both loads, so a row sleep removed during the session still matches.
+  const byId = new Map([...stage.stores, ...end].flatMap((s) => s.entries.map((e) => [e.id, { ...e, global: s.surface === 'hippoGlobal' }])));
+  const texts = hookContexts(transcriptsOf(run, sessionIds)).map(({ text }) => text);
+  return recordInjected(ctx, run, step, texts, [...byId.values()]);
 }
 
 /** Every step in order; a step's run is keyed by its dir name, arm and seed, and a screen step may preset what A4 was taught. */
@@ -357,6 +399,7 @@ async function runTask(ctx, run, step) {
   }
   let failing = false;
   try {
+    stage.stores = hippoStores(run);
     const leakHits = phraseLeaks(run, step, stage, open);
     if (leakHits.length || (HIPPO_ARMS.has(run.arm) && storeLeaks(path.join(run.dirs.work, '.hippo'), goldLines(run.cached, t)))) {
       // The leak is known before the session, so a session the analysis voids is never run and costs no plan usage.
@@ -372,6 +415,7 @@ async function runTask(ctx, run, step) {
       writeRecord(ctx, invalidRecord(base, 'ancestor-instructions', { ...stage.carry, homesAtStart: stage.homesAtStart, ...meta }));
       return;
     }
+    if (step.role.kind === 'apply') stage.chainPre = chainAtStart(ctx, run, step, stage);
     writeRecord(ctx, await runTurns(ctx, run, step, stage, base));
   } catch (err) {
     failing = true;
