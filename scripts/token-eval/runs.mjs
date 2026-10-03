@@ -85,6 +85,7 @@ export async function openContext(opts) {
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
+    ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'),
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');
@@ -110,7 +111,7 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
   return {
     s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [],
-    rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`),
+    rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`), runName: name,
   };
 }
 

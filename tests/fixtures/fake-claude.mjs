@@ -32,6 +32,26 @@ const napFor = (marker) => {
   if (ms) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(ms[1]));
 };
 
+// The session's auto-memory file and what it held at start, so a test can see what a retry put back.
+const folder = process.cwd().replace(/[^a-zA-Z0-9]/g, '-');
+const memoryFile = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, 'memory', 'MEMORY.md');
+const startSeen = {
+  memory: fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, 'utf8') : null,
+  hippoLimit: fs.existsSync(path.join('.hippo', 'limit.txt')),
+  homeLimit: Boolean(process.env.HIPPO_HOME) && fs.existsSync(path.join(process.env.HIPPO_HOME, 'limit.txt')),
+};
+const memWrite = (text) => {
+  fs.mkdirSync(path.dirname(memoryFile), { recursive: true });
+  fs.appendFileSync(memoryFile, `${text}\n`);
+};
+// LIMIT_SURFACES: a cut-off attempt writes every memory surface a retry must put back.
+const limitSurfaces = () => {
+  if (!prompt.includes('LIMIT_SURFACES')) return;
+  memWrite('cutoff');
+  write(path.join('.hippo', 'limit.txt'), 'cut-off attempt\n');
+  if (process.env.HIPPO_HOME) write(path.join(process.env.HIPPO_HOME, 'limit.txt'), 'cut-off attempt\n');
+};
+
 if (prompt.includes('CRASH') && !resumeId) {
   console.error('fake crash before any result');
   process.exit(3);
@@ -50,6 +70,7 @@ if (!resumeId && prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs
   if (fs.existsSync('AGENTS.md')) fs.appendFileSync('AGENTS.md', 'limited edit\n');
   // A limited attempt can break the repo too, so the runner's cleanup git fails while the limit error is in flight.
   if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
+  limitSurfaces();
   log('session-limit');
   console.log(LIMIT_TEXT);
   process.exit(1);
@@ -72,7 +93,6 @@ const hippoDir = process.env[pathKey].split(path.delimiter).find((d) => d && ['h
 
 let toolN = 0;
 const toolUse = (name, toolInput) => ({ type: 'assistant', message: { id: `m-${process.pid}-${toolN}`, usage: {}, content: [{ type: 'tool_use', id: `tu-${process.pid}-${++toolN}`, name, input: toolInput }] } });
-const folder = process.cwd().replace(/[^a-zA-Z0-9]/g, '-');
 const transcript = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${sessionId}.jsonl`);
 const appendTurn = (lines) => {
   if (prompt.includes('NOTRANSCRIPT')) return;
@@ -123,6 +143,7 @@ function firstSession() {
     sh(`git add -- "${staged[1]}"`);
     write(staged[1], 'v2\n');
   }
+  for (const m of prompt.matchAll(/MEMWRITE:([^\n]+)/g)) memWrite(m[1].trim());
   const commands = [...prompt.matchAll(/^RUN_CMD (.+)$/gm)].map((m) => m[1]);
   appendTurn([
     { type: 'user', message: { role: 'user', content: input } },
@@ -142,6 +163,7 @@ function cutOff() {
   const marker = path.join(promptsDir, `${sessionId}.cut`);
   if (!prompt.includes('CUT_ON_RESUME') || fs.existsSync(marker)) return;
   fs.writeFileSync(marker, '');
+  limitSurfaces();
   fs.writeFileSync('cutoff.txt', 'cut-off attempt\n');
   sh('git add cutoff.txt');
   const staged = /STAGE_EDIT (\S+)/.exec(prompt);
@@ -171,6 +193,7 @@ function resumeTurn() {
   }
   log(`transcript-bytes ${fs.existsSync(transcript) ? fs.statSync(transcript).size : 0}`);
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
+  for (const m of prompt.matchAll(/MEMWRITE_ON_RESUME:([^\n]+)/g)) memWrite(m[1].trim());
   cutOff();
   if (prompt.includes('NO_RESULT_ON_RESUME')) process.exit(0);
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
@@ -188,7 +211,7 @@ const extra = Math.ceil(injected.length / 4);
 console.log(JSON.stringify({
   type: 'result', subtype: 'success', is_error: false, session_id: prompt.includes('NO_SESSION_ID') ? undefined : sessionId, num_turns: resumeId ? 1 : 3, total_cost_usd: 0.01,
   pad: prompt.includes('BIG_RESULT') ? 'x'.repeat(30_000) : undefined,
-  strayFile: fs.existsSync('stray.txt'), argv, files,
+  strayFile: fs.existsSync('stray.txt'), argv, files, ...startSeen,
   envKeys: Object.keys(process.env).sort(),
   env: { ...Object.fromEntries(PLAIN.map((k) => [k, process.env[k] ?? null])), PATH: process.env[pathKey] },
   hasToken: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN),

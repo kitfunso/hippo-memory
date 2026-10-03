@@ -10,10 +10,10 @@ import { hippoInit, storeLeaks, hippoSentFor, writeRecord, settle, startRun } fr
 import { runSession, resumeSession } from './turns.mjs';
 import { runCheck, stateCommit, holdPre, dropPre, CheckerError, WorkspaceGitError } from './checks.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
+import { cellName, snapshotSurfaces, restoreSurfaces } from './surfaces.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
-const cellName = (run, t) => `${run.s.id} ${t.id} ${run.arm} seed${run.seed}`;
 // Raw session JSON is evidence and is kept whole; only plain-text logs are tail-cut.
 const writeRaw = (run, name, text) => fs.writeFileSync(path.join(run.rawDir, name), text);
 const writeLog = (run, name, text) => writeRaw(run, name, text.slice(-20000));
@@ -55,8 +55,9 @@ function ancestorHits(ctx, run, t) {
   return hits.length > 0;
 }
 
-/** Every runner write before the session, then Z0_PRE_COMMIT over all of it; `failed` when setup failed. */
-function stageTask(ctx, run, t) {
+/** Every runner write before the session, then Z0_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
+function stageTask(ctx, run, step) {
+  const { t } = step;
   const work = run.dirs.work;
   const prepare = () => ({ commit: checkoutBase(run.cached, work, run.s.id, t, run.arm), setup: t.setup ? sh(t.setup, work, childEnv(run.env)) : null });
   const { commit, setup } = prepare();
@@ -73,15 +74,18 @@ function stageTask(ctx, run, t) {
   const stage = { commit, prepare, baseline, carry, homesAtStart: run.sessionRan ? null : homeFiles(run.dirs), preSession: instructionSnapshot(work) };
   stage.pre = stateCommit(work, commit);
   holdPre(work, stage.pre);
+  stage.step = step;
+  stage.restores = [];
+  stage.snap = snapshotSurfaces(ctx, run, 'pre-session', step);
   return stage;
 }
 
-/** The session-1 usage-limit reset: the checkout and every runner write back, without rerunning init, and a fresh Z0_PRE_COMMIT. */
+/** The session-1 usage-limit reset: the checkout, every memory surface and every runner write back, without rerunning init, and a fresh Z0_PRE_COMMIT. */
 function resetTask(ctx, run, t, stage) {
   const work = run.dirs.work;
-  // SHORTCUT: restores instruction files only; store and auto memory wait for the E3 surface restore, so the analyzer voids that position and the rest of its (sequence, seed) in A1/A2/A5
   const again = stage.prepare().setup;
   if (again && again.status !== 0) throw new Error(`${cellName(run, t)}: setup failed on the usage-limit rerun (exit ${again.status})`);
+  stage.restores.push(restoreSurfaces(ctx, run, stage.snap, 'retry-restore', stage.step));
   restoreInstructions(work, stage.preSession);
   stage.pre = stateCommit(work, stage.commit);
   holdPre(work, stage.pre);
@@ -132,7 +136,11 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
     return noResume;
   }
   await settle(ctx, run, t.id, 'pre-resume');
-  const afterReset = () => { stage.ancestors ||= ancestorHits(ctx, run, t); };
+  const preResume = snapshotSurfaces(ctx, run, 'pre-resume', step);
+  const afterReset = () => {
+    stage.restores.push(restoreSurfaces(ctx, run, preResume, 'resume-restore', step));
+    stage.ancestors ||= ancestorHits(ctx, run, t);
+  };
   const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
   if (!resume) return noResume;
   writeRaw(run, `${t.id}.resume.json`, resume.cc.stdout || JSON.stringify({ error: resume.cc.stderr.slice(0, 4000), status: resume.cc.status }));
@@ -171,6 +179,7 @@ function sessionRecord(ctx, run, step, parts) {
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? null, resumeSessionId: resume?.result?.session_id ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
+    surfaceRestored: stage.restores.every(Boolean),
   };
   const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
@@ -197,6 +206,7 @@ async function runTurns(ctx, run, step, stage, base) {
   const turns = session.result && sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
   const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
   await settle(ctx, run, t.id, 'end');
+  snapshotSurfaces(ctx, run, 'end', step);
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
   // Reading 8: A4 holds a lesson only once its teach resume delivered it.
   if (step.role.kind === 'teach' && turns?.resume?.result) run.taught = withTaught(run.taught, turns.lesson);
@@ -231,7 +241,7 @@ async function runTask(ctx, run, step) {
   const base = baseFields(ctx, run, step);
   const meta = { envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv };
   fs.mkdirSync(run.rawDir, { recursive: true });
-  const stage = stageTask(ctx, run, t);
+  const stage = stageTask(ctx, run, step);
   base.baseCommit = stage.commit;
   if (stage.failed) {
     // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved". Carry never ran, so its counts are null.
