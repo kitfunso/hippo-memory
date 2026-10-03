@@ -1,7 +1,7 @@
 // Files named by a Codex apply_patch call, read the way openai/codex codex-rs/apply-patch reads them
 // (parser.rs for the body, invocation.rs for the shell forms it runs as apply_patch).
 import * as path from 'path';
-import { isStringValue } from './capture.js';
+import { isStringValue } from './capture-contract.js';
 
 /** Codex prints this line only when a patch applied (apply-patch lib.rs). */
 export const PATCH_SUCCESS_LINE = 'Success. Updated the following files:';

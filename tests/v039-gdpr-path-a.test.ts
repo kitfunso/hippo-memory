@@ -10,6 +10,7 @@ import {
   type DatabaseSyncLike,
 } from '../src/db.js';
 import { remember, archiveRaw, recall } from '../src/api.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 interface RedactedArchivePayload {
   redacted: boolean;
@@ -84,10 +85,10 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('1. schema v20: getCurrentSchemaVersion() returns 20', () => {
-    expect(getCurrentSchemaVersion()).toBe(50);
+    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(50);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }
@@ -155,7 +156,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(50);
+      expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
       const payloadJson = fetchPayloadJson(db2, 'm-legacy-1');
       const payload = parseJson<RedactedArchivePayload>(payloadJson!);
       expect(payload.redacted).toBe(true);
@@ -196,7 +197,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(50);
+      expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
       const payloadJson = fetchPayloadJson(db2, 'm-malformed-1');
       const payload = parseJson<RedactedArchivePayload>(payloadJson!);
       expect(payload.redacted).toBe(true);

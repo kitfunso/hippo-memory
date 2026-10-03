@@ -23,8 +23,8 @@ import {
   listSessionEvents,
   memoriesBackingObjects,
 } from './store.js';
-import { textOverlap } from './search.js';
 import { tokenize } from './tokenize.js';
+import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from './compare.js';
 import { duplicateKey, mergedText } from './same-text.js';
 import { successorAfterRetirement } from './merged-row.js';
@@ -810,17 +810,14 @@ export async function consolidate(
   for (const [, tenantCandidates] of mergeCandidatesByTenant) {
     const mergeTenant = tenantCandidates[0].tenantId;
     const mergeScope = derivationScope(tenantCandidates[0].scope);
+    const partnersOf = mergePartners(tenantCandidates.map((e) => e.content));
     for (let i = 0; i < tenantCandidates.length; i++) {
       if (used.has(tenantCandidates[i].id) || tenantCandidates[i].content.length > MERGE_MAX_CHARS) continue;
 
       const related: MemoryEntry[] = [tenantCandidates[i]];
 
-      for (let j = i + 1; j < tenantCandidates.length; j++) {
-        if (used.has(tenantCandidates[j].id)) continue;
-        const overlap = textOverlap(tenantCandidates[i].content, tenantCandidates[j].content);
-        if (overlap >= MERGE_OVERLAP_THRESHOLD) {
-          related.push(tenantCandidates[j]);
-        }
+      for (const j of partnersOf(i)) {
+        if (!used.has(tenantCandidates[j].id)) related.push(tenantCandidates[j]);
       }
 
       const cluster: MemoryEntry[] = [];
@@ -1082,7 +1079,15 @@ function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotional_va
   return 'neutral';
 }
 
-function detectConflicts(
+/** Maps i to each j > i, ascending, whose text overlap with i reaches the merge threshold; every text needs at least one token. */
+export function mergePartners(contents: readonly string[]): (i: number) => number[] {
+  const sets = contents.map((text) => new Set(tokenize(text)));
+  const candidatesOf = overlapPartners(sets, jaccardMinShared(MERGE_OVERLAP_THRESHOLD));
+  return (i) => candidatesOf(i).filter((j) => jaccardSets(sets[i], sets[j]) >= MERGE_OVERLAP_THRESHOLD);
+}
+
+/** Pairs of live non-semantic memories that contradict each other, in survivor order. */
+export function detectConflicts(
   entries: MemoryEntry[],
   now: Date,
   decayOpts: DecayOptions = {},
@@ -1102,16 +1107,21 @@ function detectConflicts(
       && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
   );
   const detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> = [];
+  const profiles = survivors.map((entry) => conflictProfile(entry.content));
+  const partnersOf = overlapPartners(
+    profiles.map((p) => p.distinct),
+    jaccardMinShared(CONFLICT_OVERLAP_THRESHOLD, CONFLICT_MIN_RARE_SHARED),
+  );
 
   for (let i = 0; i < survivors.length; i++) {
-    for (let j = i + 1; j < survivors.length; j++) {
+    for (const j of partnersOf(i)) {
       // Traces are variants of each other, not contradictions. Two
       // strategies for the same task can both be valid; conflict detection
       // exists for stated-rule disagreement, not strategy diversity.
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
       if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) continue;
-      const reasonAndScore = describeConflict(survivors[i], survivors[j]);
+      const reasonAndScore = describeConflict(profiles[i], profiles[j]);
       if (!reasonAndScore) continue;
       detected.push({
         memory_a_id: survivors[i].id,
@@ -1125,25 +1135,35 @@ function detectConflicts(
   return detected;
 }
 
-function describeConflict(a: MemoryEntry, b: MemoryEntry): { reason: string; score: number } | null {
-  const aDistinct = distinctiveTokens(a.content);
-  const bDistinct = distinctiveTokens(b.content);
+type ConflictPolarity = 'positive' | 'negative' | 'neutral';
 
+interface ConflictProfile {
+  readonly distinct: Set<string>;
+  readonly polarity: ConflictPolarity;
+  /** Lowercased opening window padded with spaces, as classifyConflictType matches it. */
+  readonly window: string;
+}
+
+function conflictProfile(text: string): ConflictProfile {
+  const opening = openingWindow(text);
+  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray
+  // negation deep in a prose memory doesn't flip the intent.
+  // Pad with spaces so space-delimited patterns match words at the start/end.
+  return { distinct: distinctiveTokens(text), polarity: inferConflictPolarity(opening), window: ' ' + opening.toLowerCase() + ' ' };
+}
+
+function describeConflict(a: ConflictProfile, b: ConflictProfile): { reason: string; score: number } | null {
   // Jaccard on stopword-stripped tokens. Defer the threshold check until we
   // know whether an explicit polarity pair is present (lower bar for those).
-  const overlapScore = jaccardSets(aDistinct, bDistinct);
+  const overlapScore = jaccardSets(a.distinct, b.distinct);
 
   // Require at least N shared distinctive tokens so two short memories sharing
   // only "the project name" don't register.
   let shared = 0;
-  for (const t of aDistinct) if (bDistinct.has(t)) shared++;
+  for (const t of a.distinct) if (b.distinct.has(t)) shared++;
   if (shared < CONFLICT_MIN_RARE_SHARED) return null;
 
-  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray
-  // negation deep in a prose memory doesn't flip the intent.
-  const polarityA = inferConflictPolarity(openingWindow(a.content));
-  const polarityB = inferConflictPolarity(openingWindow(b.content));
-  const conflictType = classifyConflictType(a.content, b.content, polarityA, polarityB);
+  const conflictType = classifyConflictType(a.window, b.window, a.polarity, b.polarity);
   if (!conflictType) return null;
 
   if (overlapScore < CONFLICT_OVERLAP_THRESHOLD) return null;
@@ -1177,20 +1197,13 @@ function openingWindow(text: string): string {
   return text.split(/\s+/).slice(0, POLARITY_WINDOW_WORDS).join(' ');
 }
 
+// Takes opening windows only, so " on " and " off " as prepositions deep in long prose don't read as enabled/disabled.
 function classifyConflictType(
-  aText: string,
-  bText: string,
-  aPolarity: 'positive' | 'negative' | 'neutral',
-  bPolarity: 'positive' | 'negative' | 'neutral',
+  a: string,
+  b: string,
+  aPolarity: ConflictPolarity,
+  bPolarity: ConflictPolarity,
 ): string | null {
-  // Classifier scans only the opening window of each memory so " on " and
-  // " off " used as English prepositions deep in a long prose memory don't
-  // trigger an enabled/disabled flag. The opening window is where a rule or
-  // declaration is typically stated.
-  // Pad with spaces so space-delimited patterns match words at the start/end.
-  const a = ' ' + openingWindow(aText).toLowerCase() + ' ';
-  const b = ' ' + openingWindow(bText).toLowerCase() + ' ';
-
   // Tightened tokens: require whole-word boundaries so " on " alone doesn't
   // match "on/off". Pair only `enabled` ↔ `disabled` and explicit on/off in
   // imperative context.
@@ -1214,7 +1227,7 @@ function classifyConflictType(
   return null;
 }
 
-function inferConflictPolarity(text: string): 'positive' | 'negative' | 'neutral' {
+function inferConflictPolarity(text: string): ConflictPolarity {
   const lowered = ` ${text.toLowerCase()} `;
   const negativePatterns = [
     ' not ', ' never ', ' no ', " don't ", ' do not ', " doesn't ", ' does not ',

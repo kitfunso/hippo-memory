@@ -1,0 +1,16 @@
+{
+  "stdin": "{\"session_id\":\"sess-1\",\"transcript_path\":\"C:/Users/u/.claude/projects/p/SESS.JSONL\",\"cwd\":\"/work/repo\",\"hook_event_name\":\"PreCompact\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "claude-code",
+      "event": "pre-compact",
+      "manual": false,
+      "sessionId": "sess-1",
+      "cwd": "/work/repo",
+      "transcriptPath": "C:/Users/u/.claude/projects/p/SESS.JSONL",
+      "trigger": null
+    }
+  }
+}

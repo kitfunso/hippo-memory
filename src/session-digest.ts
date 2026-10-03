@@ -5,13 +5,12 @@ import * as path from 'path';
 import {
   collectSessionTurns,
   errorMessage,
-  isObjectLike,
-  isStringValue,
   readTranscriptTail,
   splitSentences,
   type SessionTurn,
   type TranscriptRecord,
 } from './capture.js';
+import { isObjectLike, isStringValue } from './capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';

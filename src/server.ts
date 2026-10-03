@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from './project-identity.js';
 import { assembleCost, contextCost, drillCost } from './context-render.js';
@@ -31,6 +31,7 @@ export function __resetSessionRecallHistoryHttp(): void {
   sessionRecallHistoryHttp.clear();
 }
 import { PACKAGE_VERSION } from './version.js';
+import { log } from './log.js';
 import { API_KEY_PREFIX, validateApiKey } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
@@ -312,6 +313,24 @@ export interface ServeOpts {
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
+// The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
+function resolveRequestId(header: string | string[] | undefined): string {
+  const value = Array.isArray(header) ? undefined : header;
+  return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
+}
+
+/** One line per failed request; 4xx is the caller's mistake, so it stays below the default level. */
+function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
+  const status = err instanceof HttpError ? err.status : undefined;
+  const message = err instanceof Error ? err.message : String(err);
+  const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
+  if (status !== undefined && status >= 500) log.error(line, { requestId, status });
+  else log.info(line, { requestId, status });
+}
+
 function sendError(res: ServerResponse, status: number, message: string): void {
   sendJson(res, status, { error: message });
 }
@@ -424,9 +443,26 @@ export function isCrossSite(req: IncomingMessage): boolean {
   return origin !== undefined && origin !== `http://${req.headers.host}`;
 }
 
+// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.
+const PROXY_HEADERS = [
+  'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'cf-connecting-ip', 'true-client-ip',
+] as const;
+
+// The auth helpers only see the request, so its id rides here for their log lines.
+const requestIds = new WeakMap<IncomingMessage, string>();
+
 // A browser on this machine is loopback too, so the no-key fallback also needs a local Host and a same-site caller.
 function assertLocalCaller(req: IncomingMessage): void {
   if (!isLoopback(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
+  const proxyHeader = PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
+  if (proxyHeader !== undefined) {
+    log.warn(
+      `proxied loopback request refused: it carries ${proxyHeader}, so the no-key local fallback does not apply. ` +
+        'Send an API key (hippo auth create, then Authorization: Bearer hk_...).',
+      { requestId: requestIds.get(req) },
+    );
+    throw new HttpError(401, 'auth required');
+  }
   const host = req.headers.host;
   if ((host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req)) {
     throw new HttpError(403, 'cross-site or non-local request refused; send an API key');
@@ -629,9 +665,8 @@ async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promi
     return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor };
   }
 
-  // No Authorization header. Loopback-only fallback, unless explicitly
-  // disabled via HIPPO_REQUIRE_AUTH=1 (used by the bearer-lockdown test
-  // and by deployments that want to forbid the local-CLI escape hatch).
+  // No Authorization header. Loopback-only fallback for a direct local caller (no proxy headers),
+  // unless HIPPO_REQUIRE_AUTH=1 forbids the local-CLI escape hatch.
   if (process.env.HIPPO_REQUIRE_AUTH === '1') {
     throw new HttpError(401, 'auth required');
   }
@@ -2968,7 +3003,9 @@ async function handleRequest(
  * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
  * secrets and 404 when those secrets are unset. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
- * requests from a loopback remote address, so binding to a non-loopback host
+ * requests from a loopback remote address (unless they carry Forwarded,
+ * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip or True-Client-Ip, which mark a same-host proxy and get
+ * a 401 like any keyless remote request), so binding to a non-loopback host
  * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
  * which forces every request (loopback or not) through Bearer-token
  * validation. Without that env var set, a non-loopback bind would expose the
@@ -3017,7 +3054,11 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       : undefined;
 
   const server: Server = createServer((req, res) => {
+    const requestId = resolveRequestId(req.headers['x-request-id']);
+    requestIds.set(req, requestId);
+    res.setHeader('X-Request-Id', requestId);
     handleRequest(req, res, opts, startedAt, limiter).catch(<E>(err: E) => {
+      logRequestFailure(req, err, requestId);
       if (res.headersSent) {
         try { res.end(); } catch { /* socket already gone */ }
         return;

@@ -1,0 +1,16 @@
+{
+  "stdin": null,
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "claude-code",
+      "event": "pre-compact",
+      "manual": true,
+      "sessionId": null,
+      "cwd": null,
+      "transcriptPath": null,
+      "trigger": null
+    }
+  }
+}

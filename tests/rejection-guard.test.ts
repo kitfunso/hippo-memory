@@ -12,6 +12,7 @@ import {
   normalizeValueForRejection,
   RejectedValueError,
 } from '../src/rejection.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(): string {
   return mkdtempSync(join(tmpdir(), 'hippo-rejection-'));
@@ -42,7 +43,7 @@ describe('AT1 rejection guard', () => {
       initStore(home);
       const db = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db)).toBe(50);
+        expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       } finally {
         closeHippoDb(db);
       }

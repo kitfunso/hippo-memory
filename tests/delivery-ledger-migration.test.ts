@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 const EVENT_COLUMNS = [
   'id', 'ts', 'ledger_version', 'tenant_id', 'runtime', 'event_type', 'surface', 'store_hash', 'write_store',
@@ -57,8 +58,8 @@ function withStore(fn: (db: DatabaseSyncLike, home: string) => void): void {
 describe('delivery ledger schema v50', () => {
   it('a fresh store lands at v50 with both tables and their columns', () => {
     withStore((db) => {
-      expect(getSchemaVersion(db)).toBe(50);
-      expect(getCurrentSchemaVersion()).toBe(50);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
       const tables = names(db, `SELECT name FROM sqlite_master WHERE type='table'`);
       expect(tables).toContain('delivery_events');
       expect(tables).toContain('delivery_candidates');
@@ -118,7 +119,7 @@ describe('delivery ledger schema v50', () => {
     }
     db = openHippoDb(home);
     try {
-      expect(meta(db, 'schema_version')).toBe('50');
+      expect(meta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const tables = names(db, `SELECT name FROM sqlite_master WHERE type='table'`);
       expect(tables).toContain('delivery_events');
       expect(tables).toContain('delivery_candidates');
