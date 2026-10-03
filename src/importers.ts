@@ -14,6 +14,7 @@ import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { loadConfig } from './config.js';
+import { vetSecrets } from './secret-detect.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +37,8 @@ export interface ImportResult {
   /** K1 vault import: rows archived this run (changed + source-deleted). In a
    *  dryRun this is the would-be count (a true deletion-sync preview). */
   archived?: number;
+  /** Entries stored with secret-shaped text redacted; optional for the same published-surface reason as `rejected`. */
+  redacted?: number;
   entries: MemoryEntry[];
 }
 
@@ -101,6 +104,7 @@ export function importEntries(
   let imported = 0;
   let skipped = 0;
   let rejected = 0;
+  let redacted = 0;
   const entries: MemoryEntry[] = [];
 
   // AT1 P2 fix: a dry-run preview never called writeEntry, so it never
@@ -111,7 +115,9 @@ export function importEntries(
   const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
   try {
     for (const raw of chunks) {
-      const trimmed = raw.trim();
+      const original = raw.trim();
+      const trimmed = vetSecrets(original, allTags, true).content;
+      const wasRedacted = trimmed !== original;
       if (trimmed.length > 1000) {
         console.error(`Warning: imported memory truncated from ${trimmed.length} to 1000 chars`);
       }
@@ -181,9 +187,10 @@ export function importEntries(
 
       entries.push(entry);
       imported++;
+      if (wasRedacted) redacted++;
     }
 
-    return { total, imported, skipped, rejected, entries };
+    return { total, imported, skipped, rejected, redacted, entries };
   } finally {
     if (dryRunDb) closeHippoDb(dryRunDb);
   }
@@ -558,6 +565,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
       // AT1 P2 fix: `rejected` is now optional on ImportResult (compat) — tolerate
       // undefined on either side of the accumulation.
       rejected: (totalResult.rejected ?? 0) + (result.rejected ?? 0),
+      redacted: (totalResult.redacted ?? 0) + (result.redacted ?? 0),
       entries: [...totalResult.entries, ...result.entries],
     };
   }
@@ -845,6 +853,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   let skipped = 0;
   let rejected = 0;
   let archived = 0;
+  let redacted = 0;
   const entries: MemoryEntry[] = [];
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
@@ -954,7 +963,8 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       // remember() owns the actual write. We build an `echo` of the SAME content +
       // tags via createMemory purely for the ImportResult, then reconcile its id to
       // remember()'s real row id so entries[] reflects the row that landed.
-      const echo = createMemory(body, {
+      const content = vetSecrets(body, tags, true).content;
+      const echo = createMemory(content, {
         kind: 'raw',
         tags,
         scope,
@@ -973,7 +983,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
         // loud each time via the rejected count.
         try {
           const result = remember(ctx, {
-            content: body,
+            content,
             kind: 'raw',
             artifactRef,
             owner: 'agent:vault-import',
@@ -1003,6 +1013,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       }
       entries.push(echo);
       imported++;
+      if (content !== body) redacted++;
     }
   } finally {
     if (dryRunDb) closeHippoDb(dryRunDb);
@@ -1020,7 +1031,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     }
   }
 
-  return { total, imported, skipped, rejected, archived, entries };
+  return { total, imported, skipped, rejected, archived, redacted, entries };
 }
 
 /** Local tolerant JSON-array parse for the loader's `tags_json` column. The

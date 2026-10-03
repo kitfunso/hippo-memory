@@ -8,6 +8,7 @@ import { closeHippoDb, openHippoDb } from './db.js';
 import { recordFailure, type FailureOutcome } from './failure-log.js';
 import { blockHash } from './token-ledger.js';
 import type { JsonValue } from './working-memory.js';
+import { redactSecretsStrict } from './secret-detect.js';
 
 /** Why a failure was not stored, or `stored`. */
 export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
@@ -73,7 +74,7 @@ export function lessonFromFailure(payload: JsonValue): FailureReading {
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
   if (!isString(p.error) || p.error.trim().length < 12) return { skip: 'skipped-invalid', text: null, detail: null };
   const tool = isString(p.tool_name) ? p.tool_name : 'tool';
-  const error = p.error.replace(/\s+/g, ' ').trim();
+  const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
   const text = `${tool}: ${error}`.slice(0, MAX_LEN);
   const command = isObject(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
   const head = command.trim().split(/\s+/).slice(0, 2).join(' ');

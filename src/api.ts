@@ -116,7 +116,7 @@ import {
   type PromptRecallMetric,
   type PromptRecallGate,
 } from './prompt-recall.js';
-import { detectSecret } from './secret-detect.js';
+import { detectSecret, vetSecrets } from './secret-detect.js';
 import { isSessionDigestRow } from './session-digest.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
@@ -339,12 +339,15 @@ export interface RememberResult {
   tenantId: string;
   /** Set only when untrusted content was flagged and quarantined instead of stored under its requested scope. */
   quarantined?: { reason: string };
+  /** Set only when the content held secret material: untrusted text had it redacted, typed text was stored as sent. */
+  warnings?: string[];
 }
 
 export function remember(ctx: Context, opts: RememberOpts): RememberResult {
-  const detection = opts.untrusted ? detectInstruction(opts.content) : { flagged: false, reason: null };
+  const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
+  const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
   const requestedScope = opts.scope ?? null;
-  const entry = createMemory(opts.content, {
+  const entry = createMemory(vetted.content, {
     kind: opts.kind ?? 'distilled',
     scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
     owner: opts.owner ?? null,
@@ -371,6 +374,7 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
 
   const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
   if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
+  if (vetted.warnings.length > 0) result.warnings = vetted.warnings;
   return result;
 }
 

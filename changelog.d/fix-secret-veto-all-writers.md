@@ -1,0 +1,4 @@
+### Fixed
+
+- **Text no person typed into hippo loses its secret shapes before it is stored.** Slack and GitHub events, every `hippo import` source (ChatGPT, Claude, Cursor, file, markdown, vault), tool-failure capture, `hippo watch` and git-learn lessons now get the strict redaction capture already used: a token in the text becomes `[REDACTED]` and the rest of the message is kept. `hippo import` prints how many entries were redacted to stderr, and `ImportResult` gains an optional `redacted` count.
+- **`remember` tells its caller about secret material.** The result gains an optional `warnings` array on the library, HTTP `POST /v1/memories` and the MCP `hippo_remember` text; the CLI prints each warning to stderr. Typed text is still stored as sent, so the warning is the only change for it; existing fields and status codes are unchanged.

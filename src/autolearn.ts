@@ -8,6 +8,7 @@ import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from './memo
 import { loadAllEntries } from './store.js';
 import { textOverlap } from './search.js';
 import { isContentWorthStoring } from './audit.js';
+import { redactSecretsStrict } from './secret-detect.js';
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
 export function captureError(
@@ -17,11 +18,12 @@ export function captureError(
   tenantId?: string,
 ): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
-  const wasTruncated = stderr.length > 500;
-  const truncated = stderr.slice(0, 500).trim();
+  const clean = redactSecretsStrict(stderr);
+  const wasTruncated = clean.length > 500;
+  const truncated = clean.slice(0, 500).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
   // Strip leading env var assignments (KEY=val or key=val) before the actual command name
-  const safeCmd = command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim() || '(redacted)';
+  const safeCmd = redactSecretsStrict(command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim()) || '(redacted)';
   const content = `Command '${safeCmd}' failed (exit ${exitCode}): ${truncated}${suffix}`;
 
   // Derive a sanitized tag from the command name (first word, strip path)
@@ -93,12 +95,12 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
  * steps: this function is the write-path gate, called by each caller that
  * actually stores a lesson, not by the parser itself.
  *
- * Order is preserved in both output arrays.
+ * Order is preserved in both output arrays; both hold lessons with secret shapes redacted.
  */
 export function partitionLessons(lessons: string[]): { kept: string[]; dropped: string[] } {
   const kept: string[] = [];
   const dropped: string[] = [];
-  for (const lesson of lessons) {
+  for (const lesson of lessons.map((l) => redactSecretsStrict(l))) {
     if (isContentWorthStoring(lesson)) {
       kept.push(lesson);
     } else {

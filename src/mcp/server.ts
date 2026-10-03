@@ -1006,7 +1006,8 @@ async function executeTool(
 
       const halfLife = entry?.half_life_days ?? config.defaultHalfLifeDays;
       const tagStr = entry?.tags.join(', ') || tags.join(', ') || 'none';
-      return `Remembered [${result.id}] (half-life: ${halfLife}d, tags: ${tagStr})`;
+      const warnings = (result.warnings ?? []).map((w) => `\nWarning: ${w}`).join('');
+      return `Remembered [${result.id}] (half-life: ${halfLife}d, tags: ${tagStr})${warnings}`;
     }
 
     case 'hippo_outcome': {

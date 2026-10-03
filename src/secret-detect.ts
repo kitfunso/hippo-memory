@@ -12,7 +12,8 @@
  *    a deliberate act.
  *
  * This is deliberately a thin slice of the A4 lifecycle-compliance item
- * (no write-time scrubbing, no PII detection).
+ * (no PII detection). Write-time scrubbing covers only text no person
+ * typed into hippo; see `vetSecrets`.
  *
  * Leaf module: keep free of imports from store/api/shared so all of them
  * can import it without cycles.
@@ -112,6 +113,27 @@ export function maskEmails(text: string): string {
 /** Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and JWTs. */
 export function redactSecretsStrict(text: string): string {
   return redactText(text, true);
+}
+
+/** The text a write keeps, plus what to tell its caller about secret material in it. */
+export interface SecretVet {
+  content: string;
+  warnings: string[];
+}
+
+/** Write-time veto: `scrub` text no person typed gets capture's strict redaction; typed text is a person's own call, so it is kept and flagged. */
+export function vetSecrets(content: string, tags: readonly string[], scrub: boolean): SecretVet {
+  const kept = scrub ? redactSecretsStrict(content) : content;
+  const warnings: string[] = [];
+  if (kept !== content) {
+    const found = detectSecret({ content, tags: [] }).reason;
+    warnings.push(`secret-shaped text was redacted before storing${found ? ` (${found})` : ''}`);
+  }
+  const left = detectSecret({ content: kept, tags: [...tags] });
+  if (left.flagged) {
+    warnings.push(`content looks like a secret (${left.reason}) and was stored as sent; forget it if it should not be kept`);
+  }
+  return { content: kept, warnings };
 }
 
 function redactText(text: string, strict: boolean): string {

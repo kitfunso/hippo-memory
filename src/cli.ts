@@ -219,6 +219,7 @@ import { createApiKey, listApiKeys, type ApiKeyListItem } from './auth.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
+import { vetSecrets } from './secret-detect.js';
 import * as predictionsModule from './predictions.js';
 import { computePlanningFallacyOutput, type PlanningFallacyOutput } from './predictions.js';
 import * as decisionsModule from './decisions.js';
@@ -902,6 +903,7 @@ async function cmdRemember(
   console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | Confidence: ${entry.confidence}`);
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
+  for (const w of vetSecrets(entry.content, entry.tags, false).warnings) console.error(`Warning: ${w}`);
 
   void embedMemory(targetRoot, entry);
 
@@ -6257,6 +6259,10 @@ function cmdLearn(
 // Import command
 // ---------------------------------------------------------------------------
 
+function warnRedacted(count: number | undefined): void {
+  if (count) console.error(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
+}
+
 function cmdImport(
   hippoRoot: string,
   args: string[],
@@ -6343,6 +6349,7 @@ function cmdImport(
     if ((vaultResult.rejected ?? 0) > 0) {
       console.log(`  Rejected (tombstoned): ${vaultResult.rejected}`);
     }
+    warnRedacted(vaultResult.redacted);
     console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
     console.log(`  Store:                 ${hippoRoot}`);
     // Batch producer, same contract as the single-file import below: vault rows
@@ -6417,6 +6424,7 @@ function cmdImport(
   if ((result.rejected ?? 0) > 0) {
     console.log(`  Rejected (tombstoned): ${result.rejected}`);
   }
+  warnRedacted(result.redacted);
   if (dryRun) {
     console.log('\n  (dry run - nothing written)');
     if (result.entries.length > 0) {
@@ -8625,6 +8633,7 @@ async function main(
             });
             console.log(`Remembered [${result.id}] (via ${info.url})`);
             console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
+            for (const w of result.warnings ?? []) console.error(`Warning: ${w}`);
           });
           if (remembered) break;
         }
