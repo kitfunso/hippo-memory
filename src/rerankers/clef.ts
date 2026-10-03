@@ -191,7 +191,7 @@ export function createClefReranker(model: ClefModel): RerankerFn {
   };
 }
 
-/** Opt-in CLEF-flash reranker (Cloudflare Workers AI or HIPPO_CLEF_ENDPOINT). Docs: docs/evals/2026-09-19-jev-reranker.md. */
+/** Opt-in CLEF-flash reranker (Cloudflare Workers AI or HIPPO_CLEF_ENDPOINT); off unless named, so defaults stay native. */
 export const clefFlashReranker: RerankerFn = createClefReranker('clef-flash');
 
 /** Opt-in CLEF reranker, the larger model. Same transport and fallback as clef-flash. */
