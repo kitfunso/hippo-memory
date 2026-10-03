@@ -191,9 +191,9 @@ function collect(projectsDir, outDir) {
         }
       }
       if (hasEvalRuns) { excluded.evalRuns++; continue; }
-      if (isHeadless) { excluded.headless++; continue; }
       if (hasScratch) { excluded.scratch++; continue; }
       if (!hasRecent) { excluded.stale++; continue; }
+      if (isHeadless) { excluded.headless++; continue; }
       const destDir = path.join(outDir, 'corpus', pd.name);
       fs.mkdirSync(destDir, { recursive: true });
       fs.copyFileSync(filePath, path.join(destDir, f.name));
@@ -457,6 +457,20 @@ function selftest() {
   assert.equal(echoed.get(1), 'HELPS');
   assert.equal(echoed.get(2), 'HELPS');
   assert.equal(echoed.get(3), 'NO');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'z1c-selftest-'));
+  try {
+    const proj = path.join(tmp, 'projects', 'p');
+    fs.mkdirSync(proj, { recursive: true });
+    const line = (entrypoint) => JSON.stringify({ type: 'user', timestamp: '2026-09-28T10:00:00Z', cwd: '/w/repo', entrypoint });
+    fs.writeFileSync(path.join(proj, 'human.jsonl'), line('cli') + '\n');
+    fs.writeFileSync(path.join(proj, 'scripted.jsonl'), line('sdk-cli') + '\n');
+    const got = collect(path.join(tmp, 'projects'), path.join(tmp, 'out'));
+    assert.equal(got.excluded.headless, 1);
+    assert.deepEqual(got.kept.map((k) => k.file), ['human.jsonl']);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 
   console.log('selftest ok');
 }

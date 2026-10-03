@@ -189,6 +189,7 @@ function exclusion(text, entries, sinceMs, outDir, frozenMsgs) {
     // Extractor dev sessions on the extractor branches, even when they never type a module name.
     if (e?.gitBranch && /capture-extractor/i.test(String(e.gitBranch))) return 'ownWork';
     // Amendment 1: `claude -p` runs are scripted wherever they ran; a path rule missed the TE5 pilot.
+    // Decided per entry, so the reason counter depends on entry order; eligibility does not.
     if (e?.entrypoint === 'sdk-cli') return 'headless';
     if (!e?.cwd) continue;
     if (String(e.cwd).split(/[\\/]/).includes('eval-runs')) return 'evalRuns';

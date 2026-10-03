@@ -79,8 +79,8 @@ Found by the count-only dry run; no gate, threshold, prompt or window changed.
 
 Found by a count-only dry run (`--dry-run 3`); no gate, threshold, prompt, judge or window start changed.
 
-- **Headless sessions excluded.** The `eval-runs` path rule missed the 2026-09-28 TE5 pilot, which ran under `hippo-archive/te5-pilot/runs/...`: 80 of the 111 kept files were its scripted `claude -p` sessions, and 20 more were other `claude -p` test runs. Any transcript with an entry whose `entrypoint` is `sdk-cli` (a `claude -p` or SDK run) is now excluded, wherever it ran, and counted as `headless`. The `eval-runs` rule stays.
-- **Counts after the change** (window 2026-09-26T23:00Z to 2026-10-03, 154 hours): 10 files kept, 115 headless, 5 non-routine Bash failures, 15 hook prompts, 0 eligible events. Before it: 111 kept, 21 failures, 0 eligible.
+- **Headless sessions excluded.** The `eval-runs` path rule missed the 2026-09-28 TE5 pilot, which ran under `hippo-archive/te5-pilot/runs/...`: 80 of the 111 kept files were its scripted `claude -p` sessions, and 21 more held `claude -p` entries (scripted runs, and copies of interactive sessions later resumed headless). Any transcript with an entry whose `entrypoint` is `sdk-cli` is now excluded, wherever it ran, and counted as `headless`, after the staleness check so the count is the window's. Only `cli` and `sdk-cli` appear in the local transcripts. The `eval-runs` rule stays.
+- **Counts after the change** (window 2026-09-26T23:00Z to 2026-10-03, 154 hours): 10 files kept, 101 headless, 5 non-routine Bash failures, 15 hook prompts, 0 eligible events. Before it: 111 kept, 21 failures, 0 eligible.
 - **Expected date withdrawn.** The 2.7 a day rate came from a corpus that had not been checked for headless runs. At 0 eligible in 6.4 days the window will not reach 30 on organic use; it is checked by counts only, and scored only if it does.
 
 ## NOT DONE
