@@ -34,6 +34,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:delivery-ledger": "vitest run tests/delivery-ledger",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
@@ -90,9 +91,11 @@
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
     "@types/node": "^22.16.0",
+    "@vitest/coverage-v8": "^5.0.3",
     "oxlint": "^1.78.0",
     "typescript": "^5.4.0",
-    "vitest": "^3.2.6"
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
   },
   "peerDependenciesMeta": {
     "@xenova/transformers": {

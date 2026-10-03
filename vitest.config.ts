@@ -48,10 +48,17 @@ export default defineConfig({
     globalSetup: ['tests/_real-store-guard.ts'],
     // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
     // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.
-    poolOptions: { forks: { maxForks: 6 } },
+    maxWorkers: 6,
     // Real-SQLite tests that take ~2s alone blow the 5s default under that
     // contention, and setup hooks fork more children still, so both get 30s.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    coverage: {
+      provider: 'v8',
+      // Without include, vitest reports only files some test loads, so untested src files would not count.
+      include: ['src/**/*.ts'],
+      reporter: ['text-summary', 'json-summary'],
+      thresholds: { lines: 67, branches: 60, functions: 80, statements: 67 },
+    },
   },
 });
