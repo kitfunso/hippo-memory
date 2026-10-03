@@ -10,7 +10,9 @@ The four rejections fall into two classes:
 - The lesson can be read back from the file it concerns: what a script imports, its default pattern, how a config file is written. That gives 2 rejections.
 - The tool's own error states the fix, or any capable agent already knows it. That gives 2 rejections.
 
-The same two classes produced the one rejection at dev calibration (4 of 5). The judge prompt applies tests 2 and 3 more loosely than the calibration rule does.
+The one rejection at dev calibration (4 of 5) was of the second class. The judge prompt applies tests 2 and 3 more loosely than the calibration rule does.
+
+I checked absence in the audit by grepping each parent side for the lesson's key terms, not by reading it for paraphrase. A paraphrase in the parent would turn a confirm into a reject, so this can only overstate precision. With a sample of 10, the 0.60 is itself wide.
 
 ## Pins
 
@@ -21,14 +23,15 @@ The same two classes produced the one rejection at dev calibration (4 of 5). The
 
 ## Verdict and validity
 
-- Every gate passed. G1 isolation passed for both judges, and G2 parse passed for Sonnet, Opus and the recheck. G3 evidence passed for both judges. G4 control: 30 of 30 control items parsed by both judges, at or below the hit-share bar. G5: unplanted decoys kept 0 of 29. G6: planted decoys kept 16 of 16.
+- Every gate passed. G1 isolation passed for both judges, and G2 parse passed for Sonnet, Opus and the recheck. G3 evidence passed for both judges. G4 control: 30 of 30 control items parsed by both judges, 1 of 30 hits (bar 0.10). G5: unplanted decoys kept 0 of 29. G6: planted decoys kept 16 of 16.
+- G6 limits, as the prereg says: the planted line is the lesson's own wording, so G6 tests reading, not paraphrase matching. The recheck cuts the parent side into 150,000-character chunks at fixed points (`scripts/z7-sidechain-lib.mjs:354`), and a planted line is always whole. So G6 cannot catch a parent statement split across two chunks. That gap leans toward BUILD.
 - Primary: `p` 0.344 (0.221 to 0.475), interval width 0.254. Union (either judge): 0.467 (0.341 to 0.588).
 - Preliminary verdict BUILD. Precision audit: 6 of 10 confirmed (0.60), against a bar of 0.75. Final verdict INCONCLUSIVE. Flipping the closest rejected call gives 7 of 10, still below the bar.
 - Before the recheck, both judges marked 36 of 90 lesson-bearing. The recheck overturned 28 lessons, and 31 sub-agents stayed lesson-bearing. With the session's other sub-agent reports added to the parent side, `p` is 0.322.
 
 ## Where the lessons sit
 
-21 of the 31 lesson-bearing sub-agents have at least one surviving lesson whose evidence lies inside a report. A build that read reports alone would reach about two thirds of them. The rest are found only in the work.
+21 of the 31 lesson-bearing sub-agents have at least one surviving lesson whose evidence lies inside a report. A build that read reports alone would still reach about two thirds of the lesson-bearing sub-agents. That count is per sub-agent, not per lesson. In the other 10, every surviving lesson lies only in the work.
 
 ## Secondary rows
 
@@ -44,6 +47,6 @@ Today's extractor, run on each sub-agent transcript, produced 57 items from 39 o
 
 ## What would decide it
 
-Precision is the bottleneck. One more judge round on these items cannot fix it, because the prompts are frozen at the lock. A new pre-registration can. Its judge prompt should name the two rejection classes as exclusions, it should calibrate on a fresh dev split until precision is at least 0.75, and it should score a fresh draw. On these numbers, a judge at 0.75 or better precision would need about 0.27 measured before a precision-corrected share holds 0.20. The audited figure here is 0.344 × 0.60, or about 0.21. That figure is illustration only and was not pre-registered.
+Precision is the bottleneck. One more judge round on these items cannot fix it, because the prompts are frozen at the lock. A new pre-registration can. Its judge prompt should name the two rejection classes as exclusions, it should calibrate on a fresh dev split until precision is at least 0.75, and it should score a fresh draw under the same verdict rules. As illustration only, not pre-registered: 0.344 × 0.60 is about 0.21, a point estimate. It cannot be compared with the BUILD bar, which applies to an interval's lower bound.
 
 No private transcript content appears in this file. Item ids, marks and lesson texts are kept in the local archive (`work/scored/audit.md`, `audit-marks.md`).
