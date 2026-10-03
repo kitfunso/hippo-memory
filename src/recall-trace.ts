@@ -401,6 +401,16 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   }
 }
 
+/** On a caller's open handle, which saves a second open and close per turn; lock waits stay at the ledger's own short wait. */
+export function writeDeliveryEventOnHandle(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
+  try {
+    return writeDeliveryEvent(db, input);
+  } finally {
+    db.exec('PRAGMA busy_timeout = 5000');
+  }
+}
+
 /** A session's delivery events in write order, each with its candidate rows; `sessionId` null reads session-less events. */
 export function readDeliveryEvents(db: DatabaseSyncLike, tenantId: string, sessionId: string | null): DeliveryEventRow[] {
   // SAFETY: SELECT * over delivery_events returns exactly the columns DeliveryEventRow names, less `candidates`.

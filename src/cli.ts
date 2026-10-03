@@ -130,7 +130,7 @@ import { passesScopeFilterForRecall } from './recall-scope.js';
 import { search, estimateTokens, fitBudget, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
-import { writeDeliveryEventAtRoot, writeRecallTraceAtRoot } from './recall-trace.js';
+import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle, writeRecallTraceAtRoot } from './recall-trace.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from './delivery-recorder.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
@@ -6832,10 +6832,11 @@ function startDeliveryRecorder(
   }
 }
 
-function flushDeliveryRecorder(rec: DeliveryRecorder | null): void {
+/** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
+function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
   if (rec === null) return;
   try {
-    rec.flush((input) => writeDeliveryEventAtRoot(rec.root, input));
+    rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
     console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -6975,10 +6976,13 @@ async function renderContext(
     });
     console.log(jsonText);
     rec?.delivered({ state: 'sent', emittedText: jsonText });
-    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
-    }));
+    withLedgerDb(hippoRoot, (db) => {
+      recordTokenUse(db, {
+        tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
+        event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
+      });
+      flushDeliveryRecorder(rec, db);
+    });
   } else if (format === 'additional-context') {
     // Z1: split into a static block (snapshot/handoff/events/pins/recent-N,
     // TE2-skippable) and a prompt-recall block (never skipped, own heading).
@@ -7021,10 +7025,15 @@ async function renderContext(
         const last = withLedgerDb(hippoRoot, (db) =>
           lastSentState(db, ctx.tenantId, payloadSessionId, surface));
         if (shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) {
-          withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-            tenantId: ctx.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-            items: staticItems.length, tokens: estimateTokens(staticBlock), hash: staticHash,
-          }));
+          withLedgerDb(hippoRoot, (db) => {
+            recordTokenUse(db, {
+              tenantId: ctx.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
+              items: staticItems.length, tokens: estimateTokens(staticBlock), hash: staticHash,
+            });
+            if (recallBlock.trim()) return;
+            rec?.delivered({ state: 'reused', staticHash, staticReused: true });
+            flushDeliveryRecorder(rec, db);
+          });
           sendStatic = false;
         }
       }
@@ -7073,6 +7082,7 @@ async function renderContext(
             });
           } catch { /* best effort; see withLedgerDb doc comment */ }
         }
+        flushDeliveryRecorder(rec, db);
       });
     }
   } else {
@@ -7095,10 +7105,13 @@ async function renderContext(
     }));
     if (text.length > 0) console.log(text);
     rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: text } : { state: 'empty' });
-    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
-    }));
+    withLedgerDb(hippoRoot, (db) => {
+      recordTokenUse(db, {
+        tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
+        event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
+      });
+      flushDeliveryRecorder(rec, db);
+    });
   }
 }
 

@@ -8,6 +8,7 @@ import {
   readDeliveryEvents,
   writeDeliveryEvent,
   writeDeliveryEventAtRoot,
+  writeDeliveryEventOnHandle,
   DELIVERY_LEDGER_RETENTION_DAYS,
 } from '../src/recall-trace.js';
 import {
@@ -183,6 +184,26 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     expect(next).not.toBeNull();
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.turn_seq)).toEqual([1, 2]);
   });
+
+  it("on a caller's handle, waits only the ledger's short wait, then gives the handle its 5 s wait back", () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const holder = openHippoDb(root);
+    holder.exec('BEGIN IMMEDIATE');
+    const started = Date.now();
+    let dropped: number | null;
+    try {
+      dropped = writeDeliveryEventOnHandle(db, event());
+    } finally {
+      holder.exec('COMMIT');
+      closeHippoDb(holder);
+    }
+    expect(dropped).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(err).toHaveBeenCalledTimes(1);
+    // SAFETY: PRAGMA busy_timeout returns one row with one `timeout` column.
+    expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout).toBe(5000);
+    expect(writeDeliveryEventOnHandle(db, event())).not.toBeNull();
+  });
 });
 
 describe('createDeliveryRecorder row building', () => {
@@ -251,5 +272,13 @@ describe('createDeliveryRecorder row building', () => {
     rec.disabled();
     rec.delivered({ state: 'empty' });
     expect(built(rec).blockState).toBe('disabled');
+  });
+
+  it('writes once per call, so the fallback flush after a shared-handle flush writes nothing', () => {
+    const rec = recorder();
+    const write = vi.fn(() => 1);
+    rec.flush(write);
+    rec.flush(write);
+    expect(write).toHaveBeenCalledTimes(1);
   });
 });

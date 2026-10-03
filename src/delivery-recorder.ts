@@ -125,7 +125,7 @@ export interface DeliveryOutcomeInput {
 export interface DeliveryRecorder extends DeliveryObserver {
   readonly root: string;
   delivered(outcome: DeliveryOutcomeInput): void;
-  /** Builds the event and hands it to `write`; throws on an injected fault, and writes nothing once broken. */
+  /** Builds the event and hands it to `write` once per call; throws on an injected fault, and writes nothing once broken. */
   flush(write: (input: DeliveryEventInput) => number | null): void;
 }
 
@@ -196,6 +196,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   let disabledSeen = false;
   let outcome: DeliveryOutcomeInput = { state: 'empty' };
   let broken: string | null = null;
+  let flushed = false;
 
   const guard = (fn: () => void): void => {
     if (broken !== null) return;
@@ -332,6 +333,8 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     }),
     delivered: (o) => guard(() => { outcome = { ...o }; }),
     flush: (write) => {
+      if (flushed) return;
+      flushed = true;
       if (broken !== null) {
         console.error(`[hippo] delivery ledger skipped: recorder failed: ${broken}`);
         return;
