@@ -24,7 +24,7 @@ import * as path from 'path';
 export interface ProjectIdentity {
   /** Realpath-resolved root directory of the project (the start dir when not in a project). */
   root: string;
-  /** Lowercased basename of the project root; empty string when not in a project. */
+  /** Lowercased basename of the project root, or of its repo for a linked worktree with no `.hippo` (a store keeps the name its rows carry); '' outside a project. */
   name: string;
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
@@ -113,7 +113,8 @@ export function resolveProjectIdentity(
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
-    identity = { root, name: path.basename(root).toLowerCase(), isHome: false };
+    const name = (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
+    identity = { root, name, isHome: false };
   } else if (reachedHome || isUnder(start, home)) {
     identity = { root: home, name: '', isHome: true };
   } else {
@@ -124,6 +125,25 @@ export function resolveProjectIdentity(
 
   if (cacheable) identityCache.set(startInput, identity);
   return identity;
+}
+
+/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for a bare repo), so one repo is one project; null for any other checkout. */
+function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
+  const marker = path.join(gitRoot, '.git');
+  if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
+  try {
+    const gitDir = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(marker, 'utf8'))?.[1]?.trim();
+    if (!gitDir) return null;
+    const linkDir = path.resolve(gitRoot, gitDir);
+    const commondir = path.join(linkDir, 'commondir');
+    if (!fs.existsSync(commondir)) return null; // a submodule's or a separate git dir's own checkout
+    const common = realpathOrResolve(path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()));
+    const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
+    if (samePath(repo, home)) return null; // a dotfiles repo at home must not make its worktrees user-global
+    return path.basename(repo).replace(/\.git$/i, '').toLowerCase() || null;
+  } catch {
+    return null; // an unreadable link is still a checkout, named after its own folder
+  }
 }
 
 interface MarkerWalk {

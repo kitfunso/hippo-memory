@@ -71,6 +71,41 @@ describe('resolveProjectIdentity', () => {
     expect(id.name).toBe('wt');
   });
 
+  it('names a linked worktree after its main checkout, so worktrees share one project', () => {
+    const main = mkdirs('home', 'repo');
+    const link = mkdirs('home', 'repo', '.git', 'worktrees', 'repo-wt');
+    fs.writeFileSync(path.join(link, 'commondir'), '../..\n');
+    const wt = mkdirs('home', 'repo-wt');
+    fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${link}\n`);
+    const id = resolveProjectIdentity(mkdirs('home', 'repo-wt', 'src'), { homeDir: home });
+    expect(id).toEqual({ root: fs.realpathSync.native(wt), name: 'repo', isHome: false });
+    expect(resolveProjectIdentity(main, { homeDir: home }).name).toBe('repo');
+  });
+
+  it('follows a relative gitdir, and names a bare repo worktree after the repo without .git', () => {
+    const link = mkdirs('home', 'tool.git', 'worktrees', 'main');
+    fs.writeFileSync(path.join(link, 'commondir'), '../..\n');
+    const wt = mkdirs('home', 'tool-main');
+    fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${path.relative(wt, link)}\n`);
+    expect(resolveProjectIdentity(wt, { homeDir: home }).name).toBe('tool');
+  });
+
+  it('keeps the name of a worktree that has its own .hippo store, since its rows carry that name', () => {
+    const link = mkdirs('home', 'repo', '.git', 'worktrees', 'repo-wt');
+    fs.writeFileSync(path.join(link, 'commondir'), '../..\n');
+    const wt = mkdirs('home', 'repo-wt');
+    fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${link}\n`);
+    fs.mkdirSync(path.join(wt, '.hippo'));
+    expect(resolveProjectIdentity(wt, { homeDir: home }).name).toBe('repo-wt');
+  });
+
+  it('keeps a submodule, whose git dir has no commondir, as its own project', () => {
+    const modDir = mkdirs('home', 'parent', '.git', 'modules', 'sub');
+    const sub = mkdirs('home', 'parent', 'sub');
+    fs.writeFileSync(path.join(sub, '.git'), `gitdir: ${path.relative(sub, modDir)}\n`);
+    expect(resolveProjectIdentity(sub, { homeDir: home }).name).toBe('sub');
+  });
+
   it('home itself is never a project despite containing .hippo (the global store)', () => {
     const id = resolveProjectIdentity(home, { homeDir: home });
     expect(id.isHome).toBe(true);
