@@ -26,7 +26,8 @@ export function agentGit(work, fn) {
   // GIT_DIR pinned: with .git deleted, git would otherwise walk up to whatever repo holds the workspace.
   const gitDir = { GIT_DIR: path.join(work, '.git'), GIT_WORK_TREE: work };
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));
-  const rgit = (args, cwd, extra = {}) => git(args, cwd, { ...gitDir, ...extra });
+  // A sparse checkout the agent turned on would make `add -A` skip tracked edits outside the cone.
+  const rgit = (args, cwd, extra = {}) => git(['-c', 'core.sparseCheckout=false', '-c', 'index.sparse=false', ...args], cwd, { ...gitDir, ...extra });
   try {
     return fn(rgit, scratch);
   } catch (err) {
@@ -50,10 +51,12 @@ export function runCheck(lesson, { work, env, preCommit, postCommit, commands, s
   fs.mkdirSync(scratch, { recursive: true });
   const commandsFile = path.join(scratch, 'z0-commands.json');
   fs.writeFileSync(commandsFile, JSON.stringify(commands));
+  // Appended last so it wins: core.fsmonitor in the agent's .git/config names a program a checker's `git status` would run.
+  const configParams = [env.GIT_CONFIG_PARAMETERS, "'core.fsmonitor=false'"].filter(Boolean).join(' ');
   const r = spawnSync(process.execPath, [lesson.checkPath, ...(lesson.check.args ?? [])], {
     cwd: work, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 26,
     // A checker's git reads the workspace config alone, never the operator's global hooks or diff drivers.
-    env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', Z0_PRE_COMMIT: preCommit, Z0_POST_COMMIT: postCommit, Z0_COMMANDS: commandsFile, Z0_LESSON_ID: lesson.id },
+    env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_PARAMETERS: configParams, Z0_PRE_COMMIT: preCommit, Z0_POST_COMMIT: postCommit, Z0_COMMANDS: commandsFile, Z0_LESSON_ID: lesson.id },
   });
   const stderr = r.stderr ?? '';
   if (r.error?.code === 'ETIMEDOUT') throw new CheckerError(`checker for lesson ${lesson.id} timed out after ${timeoutMs} ms`, stderr);

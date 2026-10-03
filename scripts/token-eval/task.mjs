@@ -240,6 +240,7 @@ async function runTask(ctx, run, step) {
     writeRecord(ctx, invalidRecord(base, 'setup', { agentError: `setup failed (exit ${stage.setup.status})`, ...nulls, ...meta }));
     return;
   }
+  let failing = false;
   try {
     if (HIPPO_ARMS.has(run.arm) && storeLeaks(path.join(run.dirs.work, '.hippo'), goldLines(run.cached, t))) {
       // The leak is known before the session, so a session the analysis voids is never run and costs no plan usage.
@@ -254,8 +255,21 @@ async function runTask(ctx, run, step) {
       return;
     }
     writeRecord(ctx, await runTurns(ctx, run, step, stage, base));
+  } catch (err) {
+    failing = true;
+    throw err;
   } finally {
     // The runner's ref never outlives its task, an abandoned run's included.
-    if (!stage.dropped) dropPre(run.dirs.work);
+    if (!stage.dropped) dropAfter(ctx, run, t, failing);
+  }
+}
+
+function dropAfter(ctx, run, t, failing) {
+  try {
+    dropPre(run.dirs.work);
+  } catch (err) {
+    // A broken .git must not hide why the run stopped, such as the plan limit, so the error in flight stands.
+    if (!failing || !(err instanceof WorkspaceGitError)) throw err;
+    ctx.log(`${cellName(run, t)}: ${err.message}; the run's own error stands`);
   }
 }

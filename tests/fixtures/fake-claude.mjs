@@ -48,6 +48,8 @@ if (!resumeId && prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs
   if (limitMarker) fs.writeFileSync(limitMarker, '');
   fs.writeFileSync('stray.txt', 'half-done edit\n');
   if (fs.existsSync('AGENTS.md')) fs.appendFileSync('AGENTS.md', 'limited edit\n');
+  // A limited attempt can break the repo too, so the runner's cleanup git fails while the limit error is in flight.
+  if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
   log('session-limit');
   console.log(LIMIT_TEXT);
   process.exit(1);

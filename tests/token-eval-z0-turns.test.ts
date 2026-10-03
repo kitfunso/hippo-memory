@@ -1,14 +1,14 @@
 // Z0 lesson tasks end to end with the fake Claude Code: checks, teach and correction resumes, A4, the resume-limit
 // restore and every record shape against the z0-record/1 contract. Costs nothing; the fake's token numbers are made up.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { runAll, planRuns, validateTasks } from '../scripts/token-eval/ab-run.mjs';
 import * as records from '../scripts/token-eval/records.mjs';
 import { teachMessage, drawOrder } from '../scripts/token-eval/lessons.mjs';
-import { stateCommit, holdPre, dropPre } from '../scripts/token-eval/checks.mjs';
+import { stateCommit, holdPre, dropPre, runCheck } from '../scripts/token-eval/checks.mjs';
 import { stubBaseCommit, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
 import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
@@ -132,6 +132,42 @@ describe('runner git', () => {
     const sha = stateCommit(r.repo, r.base);
     expect(existsSync(marker)).toBe(false);
     expect(execFileSync('git', ['cat-file', '-p', sha], { cwd: r.repo, encoding: 'utf8' })).not.toMatch(/^encoding /m);
+  });
+
+  it('stateCommit keeps a tracked edit outside a sparse-checkout cone the agent turned on', () => {
+    isolate('sparse');
+    const r = makeRepo();
+    execFileSync('git', ['config', 'core.sparseCheckout', 'true'], { cwd: r.repo });
+    mkdirSync(join(r.repo, '.git', 'info'), { recursive: true });
+    writeFileSync(join(r.repo, '.git', 'info', 'sparse-checkout'), '/elsewhere/\n');
+    writeFileSync(join(r.repo, 'lib.js'), 'edited outside the cone\n');
+    const sha = stateCommit(r.repo, r.base);
+    expect(execFileSync('git', ['show', `${sha}:lib.js`], { cwd: r.repo, encoding: 'utf8' })).toBe('edited outside the cone\n');
+  });
+
+  it("a checker's own git status runs no core.fsmonitor program from the workspace config", () => {
+    isolate('fsmon');
+    const r = makeRepo();
+    const d = tmp('z0-turns-fsmon-');
+    const marker = join(d, 'ran').replace(/\\/g, '/');
+    const script = join(d, 'fsmon.sh');
+    writeFileSync(script, `#!/bin/sh\necho ran >> "${marker}"\n`, { mode: 0o755 });
+    execFileSync('git', ['config', 'core.fsmonitor', script.replace(/\\/g, '/')], { cwd: r.repo });
+    // The control: plain git status in the workspace does run it.
+    execFileSync('git', ['status', '--porcelain'], { cwd: r.repo });
+    expect(existsSync(marker)).toBe(true);
+    rmSync(marker);
+    const check = join(d, 'status.mjs');
+    // Exit 2 (a broken checker) if the runner clobbered the caller's own GIT_CONFIG_PARAMETERS.
+    writeFileSync(check, [
+      "import { spawnSync } from 'node:child_process';",
+      "if (!(process.env.GIT_CONFIG_PARAMETERS ?? '').includes('color.ui=never')) process.exit(2);",
+      "process.exit(spawnSync('git', ['status', '--porcelain']).status === 0 ? 0 : 2);",
+    ].join('\n'));
+    const l = { id: 'x-l1', checkPath: check, check: { script: 'status.mjs', args: [] } };
+    const env = { ...process.env, GIT_CONFIG_PARAMETERS: "'color.ui=never'" };
+    expect(runCheck(l, { work: r.repo, env, preCommit: r.base, postCommit: r.fix, commands: [], scratch: join(d, 'scratch') })).toBe('pass');
+    expect(existsSync(marker)).toBe(false);
   });
 });
 
@@ -450,6 +486,16 @@ describe('usage limits around resumes', () => {
     await expect(run(limitSpec(r, ''), ['A0'], out, { limitWaitMs: 0, limitMaxWaits: 0 })).rejects.toThrow(/seqF t1 A0 seed1: still at the plan limit after 0 waits/);
     const refs = execFileSync('git', ['for-each-ref', '--format=%(refname)', 'refs/z0'], { cwd: workDir(out, 'A0'), encoding: 'utf8' });
     expect(refs.trim()).toBe('');
+  }, 120_000);
+
+  it('a plan limit that outlasts every wait still names the limit when the limited attempt also deleted .git', async () => {
+    const { out } = isolate('limit-rmgit');
+    const r = makeRepo();
+    process.env.FAKE_CLAUDE_LIMIT_ALWAYS = '1';
+    const logs: string[] = [];
+    const s = spec(r, [], [task(r, 't1', 'LIMIT RM_GIT look around'), plain(r, 'n1')]);
+    await expect(run(s, ['A0'], out, { limitWaitMs: 0, limitMaxWaits: 0, log: (m) => logs.push(m) })).rejects.toThrow(/seqF t1 A0 seed1: still at the plan limit after 0 waits/);
+    expect(logs.some((m) => /runner git on the agent's workspace failed/.test(m))).toBe(true);
   }, 120_000);
 
   it('a session-1 retry rebuilds Z0_PRE_COMMIT, and the held ref keeps nothing reachable after the task', async () => {
