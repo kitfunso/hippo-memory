@@ -2,10 +2,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync, lstatSync, symlinkSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, delimiter } from 'node:path';
+import { join, dirname, delimiter, resolve } from 'node:path';
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
-import { HIPPO_JS } from '../scripts/token-eval/exec.mjs';
+import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
@@ -238,9 +239,8 @@ describe('instruction files', () => {
 describe('applyInstructions', () => {
   const B = (s: string) => Buffer.from(s);
   const LINES = 'one\ntwo\nthree\nfour\nfive\n';
-  const apply = (files: Record<string, string>, changes: Record<string, [string | null, string | null]>) => {
+  const apply = (files: Record<string, string>, changes: Record<string, [string | null, string | null]>, scratch = tmp('z0-apply-tmp-')) => {
     const work = tmp('z0-apply-');
-    const scratch = tmp('z0-apply-tmp-');
     for (const [p, text] of Object.entries(files)) {
       mkdirSync(dirname(join(work, p)), { recursive: true });
       writeFileSync(join(work, p), text);
@@ -282,6 +282,21 @@ describe('applyInstructions', () => {
   it('throws on a binary file instead of carrying it silently', () => {
     expect(() => apply({ 'AGENTS.md': 'a\0theirs' }, { 'AGENTS.md': ['a\0base', 'a\0mine'] })).toThrow(/AGENTS\.md/);
   });
+
+  it('merges the same under a global git config the agent shares, whether it sets diff3 or is broken', () => {
+    const outDir = tmp('z0-outdir-');
+    execFileSync('git', ['init', '-q'], { cwd: outDir });
+    const home = tmp('z0-agent-home-');
+    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
+    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    // Inside a repo, diff3 turns off git's zealous trim, so a union merge read with it repeats the shared line.
+    for (const [name, cfg] of [['diff3', '[merge]\n\tconflictStyle = diff3\n'], ['broken', '[core\n']]) {
+      writeFileSync(join(home, '.gitconfig'), cfg);
+      const r = apply({ 'AGENTS.md': 'common\ntheirs\n' }, { 'AGENTS.md': ['base\n', 'common\nmine\n'] }, join(outDir, name));
+      expect(r.now['AGENTS.md'], name).toBe('common\nmine\ntheirs\n');
+      expect(r.counts, name).toEqual({ carryMerges: 0, carryUnionMerges: 1, carryDeleteKept: 0 });
+    }
+  });
 });
 
 /** Every dir under root holding a .git entry, an object store or a worktree admin file, root-relative ('' for root). */
@@ -290,6 +305,33 @@ function repoDirs(root: string, rel = ''): string[] {
   const names = entries.map((e) => e.name);
   const here = ['.git', 'objects', 'commondir', 'gitdir'].some((n) => names.includes(n)) ? [rel] : [];
   return [...here, ...entries.filter((e) => e.isDirectory() && e.name !== '.git').flatMap((e) => repoDirs(root, rel ? `${rel}/${e.name}` : e.name))];
+}
+
+const nodeFs: typeof import('node:fs') = createRequire(import.meta.url)('node:fs');
+
+interface FsHooks {
+  before?: (p: string) => void;
+  after?: (p: string) => void;
+}
+
+/** Run fn with one node:fs function wrapped in every module that imported it, then put it back. */
+function withFs<K extends 'readdirSync' | 'openSync'>(name: K, hooks: FsHooks, fn: () => void): void {
+  const real = nodeFs[name];
+  nodeFs[name] = new Proxy(real, {
+    apply: (target, self, args) => {
+      hooks.before?.(String(args[0]));
+      const out = target.apply(self, args);
+      hooks.after?.(String(args[0]));
+      return out;
+    },
+  });
+  syncBuiltinESMExports();
+  try {
+    fn();
+  } finally {
+    nodeFs[name] = real;
+    syncBuiltinESMExports();
+  }
 }
 
 const filesText = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? filesText(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
@@ -500,6 +542,34 @@ describe('workspace checkout', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  it('neither runs a hook nor stops when the agent plants one wherever the runner points core.hooksPath', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqJ', { id: 'j1', baseRef: fix }, 'A0');
+    const hooks = resolve(work, git(['config', 'core.hooksPath'], work).trim());
+    const marker = join(tmp('z0-hook-mark-'), 'ran');
+    let top = hooks;
+    while (!existsSync(dirname(top))) top = dirname(top);
+    const made = existsSync(top) ? null : top;
+    let refused: string | null = null;
+    try {
+      mkdirSync(hooks, { recursive: true });
+      for (const hook of ['post-checkout', 'reference-transaction']) writeFileSync(join(hooks, hook), `#!/bin/sh\necho ran >> "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
+    } catch (e) {
+      refused = String(e);
+    }
+    try {
+      checkoutBase(repo, work, 'seqJ', { id: 'j2', baseRef: base }, 'A0');
+      expect(existsSync(marker), `plant refused: ${refused}`).toBe(false);
+      expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+    } finally {
+      if (refused === null) {
+        if (made) rmSync(made, { recursive: true, force: true });
+        else for (const hook of ['post-checkout', 'reference-transaction']) rmSync(join(hooks, hook), { force: true });
+      }
+    }
+  });
+
   it('A2: drops every repo piece, bundle and link a kept .hippo holds, and keeps the hippo store', () => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
@@ -537,6 +607,62 @@ describe('workspace checkout', () => {
     expect(readdirSync(join(hippo, 'episodic'))).toEqual(['b.md']);
     for (const rel of store) expect(readFileSync(join(hippo, rel), 'utf8'), rel).toBe('store\n');
     expect(existsSync(join(outside, 'clone', 'lib.js'))).toBe(true);
+  });
+
+  it.runIf(win)('A2 on win32: drops repo pieces whatever the case of their names, as NTFS and Git for Windows read them', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    checkoutBase(repo, work, 'seqN', { id: 'n1', baseRef: fix }, 'A2');
+    const hippo = join(work, '.hippo');
+    mkdirSync(hippo);
+    writeFileSync(join(hippo, 'hippo.db'), 'store\n');
+    wg('branch', 'keep');
+    wg('clone', '-q', '.', join(hippo, 'sub'));
+    renameSync(join(hippo, 'sub', '.git'), join(hippo, 'sub', '.GIT'));
+    wg('clone', '-q', '--bare', '.', join(hippo, 'b'));
+    renameSync(join(hippo, 'b', 'objects'), join(hippo, 'b', 'OBJECTS'));
+    mkdirSync(join(hippo, 'wt'));
+    writeFileSync(join(hippo, 'wt', 'HEAD'), 'ref: refs/heads/keep\n');
+    writeFileSync(join(hippo, 'wt', 'CommonDir'), '../b\n');
+    const moved = join(tmp('z0-bare-'), 'b.git');
+    wg('clone', '-q', '--bare', '.', moved);
+    for (const [from, to] of [['objects', 'Objects'], ['refs', 'Refs'], ['packed-refs', 'Packed-Refs'], ['HEAD', 'Head']]) renameSync(join(moved, from), join(hippo, to));
+    checkoutBase(repo, work, 'seqN', { id: 'n2', baseRef: base }, 'A2');
+    expect(readdirSync(hippo)).toEqual(['hippo.db']);
+  });
+
+  it('A2: takes a store file or dir that vanishes after the purge lists it as gone, as SQLite drops -wal and -shm on close', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqV', { id: 'v1', baseRef: fix }, 'A2');
+    const hippo = join(work, '.hippo');
+    for (const rel of ['hippo.db', 'hippo.db-wal', 'hippo.db-shm', 'episodic/b.md']) {
+      mkdirSync(dirname(join(hippo, rel)), { recursive: true });
+      writeFileSync(join(hippo, rel), 'store\n');
+    }
+    let vanished = false;
+    const vanish = (p: string): void => {
+      if (vanished || resolve(p) !== resolve(hippo)) return;
+      vanished = true;
+      for (const gone of ['hippo.db-wal', 'hippo.db-shm', 'episodic']) rmSync(join(hippo, gone), { recursive: true });
+    };
+    withFs('readdirSync', { after: vanish }, () => checkoutBase(repo, work, 'seqV', { id: 'v2', baseRef: base }, 'A2'));
+    expect(vanished).toBe(true);
+    expect(readdirSync(hippo)).toEqual(['hippo.db']);
+    expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it('A2: still throws on any other error opening a store file', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqE', { id: 'e1', baseRef: fix }, 'A2');
+    mkdirSync(join(work, '.hippo'));
+    writeFileSync(join(work, '.hippo', 'hippo.db'), 'store\n');
+    const deny = (p: string): void => {
+      if (p.endsWith('hippo.db')) throw Object.assign(new Error(`EACCES: permission denied, open '${p}'`), { code: 'EACCES' });
+    };
+    withFs('openSync', { before: deny }, () => expect(() => checkoutBase(repo, work, 'seqE', { id: 'e2', baseRef: base }, 'A2')).toThrow(/EACCES/));
   });
 
   it('waits out a process from the last session that holds a workspace dir for a second, then clears it', () => {

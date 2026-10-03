@@ -91,6 +91,18 @@ function assertInstructionSet(workDir, commit) {
 const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.longpaths', 'true']];
 const SLEEP = new Int32Array(new SharedArrayBuffer(4));
 const LOCKED = new Set(['EPERM', 'EBUSY', 'ENOTEMPTY']);
+const GONE = new Set(['ENOENT', 'ENOTDIR']);
+
+/** fn's result, or `absent` when the path vanished after the purge listed it. */
+function unlessGone(fn, absent) {
+  // A detached hippo SessionEnd worker can still be closing SQLite, which deletes hippo.db-wal and hippo.db-shm.
+  try {
+    return fn();
+  } catch (e) {
+    if (GONE.has(e.code)) return absent;
+    throw e;
+  }
+}
 
 /** rmSync, retried for about 11 seconds while a file stays locked, then a throw naming the locked path. */
 function rm(p) {
@@ -99,21 +111,27 @@ function rm(p) {
     try {
       return fs.rmSync(p, { recursive: true, force: true });
     } catch (e) {
-      if (attempt > 10 || !LOCKED.has(e.code)) throw new Error(`Z0 workspace: cannot remove ${e.path ?? p} (${e.code ?? e.message}); a process left running from the last session may still hold it`, { cause: e });
+      // A path that vanished is removed; one whose child vanished mid-removal is retried.
+      if (GONE.has(e.code) && unlessGone(() => fs.lstatSync(p), null) === null) return;
+      if (attempt > 10 || !(LOCKED.has(e.code) || GONE.has(e.code))) throw new Error(`Z0 workspace: cannot remove ${e.path ?? p} (${e.code ?? e.message}); a process left running from the last session may still hold it`, { cause: e });
       Atomics.wait(SLEEP, 0, 0, attempt * 200);
     }
   }
 }
 
+// NTFS and Git for Windows match names in any case, so OBJECTS or .GIT is a repo piece there too.
+const fold = (name) => (win ? name.toLowerCase() : name);
 // Hippo's store never uses these names (src/store.ts), so in a kept .hippo each marks a repo or a piece of one.
-const GIT_NAMES = ['.git', 'objects', 'refs', 'packed-refs', 'HEAD', 'commondir', 'gitdir'];
-const holdsRepo = (names) => ['.git', 'objects', 'commondir', 'gitdir'].some((n) => names.has(n));
+const GIT_NAMES = new Set(['.git', 'objects', 'refs', 'packed-refs', 'HEAD', 'commondir', 'gitdir'].map(fold));
+const holdsRepo = (entries) => entries.some((e) => ['.git', 'objects', 'commondir', 'gitdir'].includes(fold(e.name)));
 const GIT_MAGIC = ['# v2 git bundle', '# v3 git bundle', 'PACK\0\0\0\x02', 'PACK\0\0\0\x03'].map((s) => Buffer.from(s, 'latin1'));
+const list = (dir) => unlessGone(() => fs.readdirSync(dir, { withFileTypes: true }), []);
 
 /** True for a git bundle or pack file, which clones or unpacks back to the history under any name. */
 function isGitArchive(file) {
   const head = Buffer.alloc(16);
-  const fd = fs.openSync(file, 'r');
+  const fd = unlessGone(() => fs.openSync(file, 'r'), null);
+  if (fd === null) return false;
   try {
     const n = fs.readSync(fd, head, 0, head.length, 0);
     return GIT_MAGIC.some((m) => n >= m.length && head.subarray(0, m.length).equals(m));
@@ -124,11 +142,11 @@ function isGitArchive(file) {
 
 /** Delete every git repo, bundle, pack and link under a kept dir: below the top a repo's whole dir, at the top only its git entries. */
 function dropRepos(dir, top) {
-  let entries = fs.readdirSync(dir, { withFileTypes: true });
-  if (holdsRepo(new Set(entries.map((e) => e.name)))) {
+  let entries = list(dir);
+  if (holdsRepo(entries)) {
     if (!top) return rm(dir);
-    for (const name of GIT_NAMES) rm(path.join(dir, name));
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) if (GIT_NAMES.has(fold(e.name))) rm(path.join(dir, e.name));
+    entries = list(dir);
   }
   for (const e of entries) {
     const p = path.join(dir, e.name);
