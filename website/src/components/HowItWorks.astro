@@ -3,8 +3,11 @@ import { mechanics } from '../content/site';
 import { mdInline } from '../content/readme';
 import DecayCurve from './DecayCurve.tsx';
 
-// The /how-it-works/ page already shows this eyebrow in its PageIntro.
-const { eyebrow = true } = Astro.props as { eyebrow?: boolean };
+interface Props {
+  // The /how-it-works/ page already shows this eyebrow in its PageIntro.
+  eyebrow?: boolean;
+}
+const { eyebrow = true } = Astro.props;
 ---
 
 <section id="how" class="relative scroll-mt-20 border-t border-white/5">
