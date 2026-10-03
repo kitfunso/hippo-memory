@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.53.1 - 2026-10-03
+
+### Changed
+
+- **Memories saved at a compaction now fade like any other memory.** 1.53.0 kept them for good, so a long session that compacted many times built up rows that sleep could never retire. They now decay, go dormant and get deduped like the rest of the store. Imported agent memories are still kept, because the agent's own note file is their record.
+- **A compaction item that restates a memory the project already holds is skipped.** When another session restates it, that memory is strengthened as if it were recalled. The old repeat check matched exact text only, so a reworded lesson was saved again each time. An item counts as a restatement when it is the held memory with words left out, in the same order, keeping every number and every "not", "never", "only", "unless" and the like, and is at least half its length. A changed or swapped number or word, or a dropped "not" or "only", is saved as new. Private and quarantined memories that recall hides never absorb an item. The log now reads `skipped N item(s) the store already holds`.
+
+### Fixed
+
+- **Sleep, dedupe and `hippo audit --fix` no longer delete a memory that backs a decision, incident, prediction, process, policy, skill, project brief or customer note.** Deleting one cleared the object's link, and no restore could repair it. The audit now reports such a row as a warning ("backs an object") instead of an error. `hippo forget` still deletes it when you ask.
+
+### Documentation
+
+- Add Z12's unregistered evaluation draft for correction burden, task quality and reliability as unrelated memory history grows; preserve the locked Z0 protocol and default gates.
+- Extend the delivery/trigger drafts with observable trajectory evidence, wrong-memory use and abstention controls, and record the event research plus complete cache/cost measurement requirements. No runtime changes or new evaluation results.
+- Add AZ3's sourced packaging plan and unregistered connector draft for ChatGPT, Claude and Grok/Grok Bot, with common-core reuse, mode-specific automation limits and demand-gated adapter order.
+- **Give the roadmap one current execution index with explicit dependencies and evidence states.** Preserve all-agent automatic preservation, low-touch core/enterprise requirements, CLEF scope and locked evaluation gates; make the AZ6 foundation precede adapter work and keep Computer optional for enterprise outcomes.
+- **Disambiguate Kubernetes initiative IDs as K8.1-K8.8.** Preserve the legacy heading anchors and historical research, and check duplicate IDs, typed dependencies and local links in CI.
+- **Align source wording on setup and commercial availability.** Add the initial product-fact/publication ledger, qualify installation and compaction automation, and label the enterprise edition and pilot reporting as planned. Website deployment and npm publication remain separate release steps.
+- Extend the roadmap with separate retrieval/task gates, delivery tracing, compact-memory/ranking experiments, reversible corrections and runtime adapters; preserve existing Z0-Z9 and defaults.
+- Add eight unregistered evaluation drafts and a primary-source architecture research note. Define zero-touch acceptance, durable capture/recovery, conversational retrieval, real-write controls, exact ranking ablations and development work alongside Z0 preparation. No new evaluation results or runtime changes.
+
 ## 1.53.0 - 2026-09-30
 
 ### Added
