@@ -83,7 +83,8 @@ const lines = [
   { type: 'assistant', message: { id: 'm2', usage: {}, content: [{ type: 'tool_use', id: 'tu2', name: 'Edit', input: {} }] } },
   { type: 'assistant', message: { id: 'm3', usage: {}, content: [{ type: 'tool_use', id: 'tu3', name: 'Bash', input: { command: 'git status && cat lib.js' } }] } },
 ];
-fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n'));
+// NOTRANSCRIPT stands in for a session whose transcript Claude Code never wrote.
+if (!prompt.includes('NOTRANSCRIPT')) fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n'));
 
 const PLAIN = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', 'ANTHROPIC_BASE_URL'];
 const extra = Math.ceil(injected.length / 4);

@@ -217,14 +217,17 @@ function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries }) {
   fs.writeFileSync(path.join(rawDir, `${t.id}.test.txt`), `${test.stdout}\n${test.stderr}`.slice(-20000));
   const sessionId = result?.session_id ?? null;
   const transcript = findTranscript(path.join(dirs.claudeConfig, 'projects'), sessionId);
+  // A valid record always has integer work counts, so a session without its transcript is void like one without a result.
+  const invalid = result === null ? 'no-result' : (transcript === null ? 'no-transcript' : null);
+  const counted = invalid === null;
   return {
-    resolved: result !== null && test.status === 0,
-    usage: result ? usageFromResult(result) : null, costUsd: result?.total_cost_usd ?? null, turns: result?.num_turns ?? null,
+    resolved: counted && test.status === 0,
+    usage: counted ? usageFromResult(result) : null, costUsd: counted ? result.total_cost_usd ?? null : null, turns: counted ? result.num_turns ?? null : null,
     ...transcriptWork(transcript, run.seenErrors),
     sessionId, transcriptFound: transcript !== null,
     agentError: result === null ? `claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}` : (result.is_error ? result.subtype ?? 'error' : null),
     hippo: HIPPO_ARMS.has(arm) ? hippoSentFor(path.join(work, '.hippo'), sessionId) : null,
-    leak: false, invalid: result === null ? 'no-result' : null, limitRetries,
+    leak: false, invalid, limitRetries,
   };
 }
 

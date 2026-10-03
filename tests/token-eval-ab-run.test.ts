@@ -324,6 +324,17 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(r2.agentError).toMatch(/claude exited 3/);
   }, 60_000);
 
+  it('a result with no transcript is void, so a valid record always has integer work counts', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-notranscript-');
+    await run(validateTasks({ sequences: [{ id: 'seqT', cluster: 'c', repo: r.repo, tasks: [task(r, 't1', 'look around only'), task(r, 't2', 'FIX NOTRANSCRIPT')] }] }), ['A0'], out);
+    const [t1, t2] = ['t1', 't2'].map((id) => readRecords(out).find((x) => x.taskId === id));
+    expect(t2).toMatchObject({ ...NO_SESSION, sessionId: expect.any(String), invalid: 'no-transcript', leak: false });
+    expect(t1.invalid).toBe(null);
+    for (const k of ['turns', 'toolCalls', 'fileReads', 'shellReads', 'repeatedErrors']) expect(Number.isInteger(t1[k]), k).toBe(true);
+  }, 60_000);
+
   it('a gold line already in the store skips the session and writes a void leak record', async () => {
     isolate();
     const gold = '// add must return the sum of both of its arguments';
