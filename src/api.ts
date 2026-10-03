@@ -2287,16 +2287,19 @@ export interface AuthCreateResult {
  * `src/server.ts` POST /v1/auth/keys mirrors this: it ignores any body
  * `tenantId` and uses the resolved Bearer's tenant exclusively.
  *
- * Only an admin actor can mint (ForbiddenError otherwise), so a member key
- * can never create a key, least of all an admin one.
+ * Only an admin actor can mint (ForbiddenError otherwise), and a key never
+ * outranks its minter: a resolver admin is tenant-only, so it mints members.
  */
 export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can create API keys');
   }
+  if (ctx.actor.viaAuthResolver && opts.role === 'admin') {
+    throw new ForbiddenError('A key minted through the auth resolver can only be a member key');
+  }
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    const role = opts.role ?? 'admin';
+    const role = opts.role ?? (ctx.actor.viaAuthResolver ? 'member' : 'admin');
     const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label, role });
     // v1.12.4: audit emit (closes the gap v1.12.3 CHANGELOG flagged as deferred).
     // Mirrors the auth_revoke pattern at authRevoke — same try/catch so audit

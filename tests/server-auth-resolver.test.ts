@@ -361,6 +361,19 @@ describe('auth resolver and key routes', () => {
     const body = (await created.json()) as { keyId: string };
     expect((await del(`/v1/auth/keys/${body.keyId}`, EXT)).status).toBe(200);
   });
+
+  it('mints only member keys for a resolver admin, so a minted key cannot reach another tenant', async () => {
+    await start(tokenResolver({ role: 'admin' }));
+    expect((await post('/v1/auth/keys', EXT, { role: 'admin' })).status).toBe(403);
+    const created = await post('/v1/auth/keys', EXT, {});
+    expect(created.status).toBe(200);
+    // SAFETY: a 200 from POST /v1/auth/keys returns the created key record, asserted above.
+    const minted = (await created.json()) as { plaintext: string; role: string; tenantId: string };
+    expect(minted).toMatchObject({ role: 'member', tenantId: 'ext-tenant' });
+    expect((await get('/v1/audit?tenant=default', minted.plaintext)).status).toBe(403);
+    expect((await post('/v1/sleep', minted.plaintext, {})).status).toBe(403);
+    expect((await post('/v1/auth/keys', minted.plaintext, {})).status).toBe(403);
+  });
 });
 
 describe('auth resolver stream', () => {

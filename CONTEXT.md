@@ -100,7 +100,7 @@ Returns a tenant, subject, role and scope grants, or nothing (a 401). It throws 
 upstream is down; a throw or a missed deadline is a 503, which a stream heartbeat skips rather than
 treating as revocation. It runs on every authenticated request and every stream heartbeat, so it
 must be cache-backed. Its admin role is tenant admin: no other tenant's audit log, no host-wide
-sleep, but it can mint API keys, and those outlive the user's removal from the identity provider.
+sleep. It can mint member API keys only, and those outlive the user's removal from the identity provider.
 _Avoid_: auth plugin, identity provider
 
 **Audit cursor**:

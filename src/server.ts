@@ -318,7 +318,7 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint API keys (POST /v1/auth/keys) that outlive IdP deprovisioning. */
+  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys) that outlive IdP deprovisioning. */
   role: 'admin' | 'member';
   scopes?: readonly string[];
 }
