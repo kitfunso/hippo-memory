@@ -86,27 +86,23 @@ function assertInstructionSet(workDir, commit) {
   if (extra.length || missing.length) throw new Error(`instruction files in ${workDir} differ from base ${commit}: extra [${extra.join(', ')}], missing [${missing.join(', ')}]`);
 }
 
-/** Move the workspace to a task's stub base without its future: the workspace fetches only a ref at that commit. */
+const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf']];
+
+/** Move the workspace to a task's stub base without its future, in a new .git that fetches only that commit's history. */
 export function checkoutBase(cacheDir, workDir, sequenceId, t) {
   const stub = stubBaseCommit(cacheDir, t.baseRef);
   assertNoInstructionLinks(cacheDir, sequenceId, t, stub);
-  // A linked worktree's HEAD is a gc root that for-each-ref never lists; the first entry is always this workspace.
-  const worktrees = git(['worktree', 'list', '--porcelain'], workDir).split('\n').filter((l) => l.startsWith('worktree ')).slice(1);
-  for (const l of worktrees) git(['worktree', 'remove', '--force', '--force', l.slice('worktree '.length)], workDir);
-  git(['worktree', 'prune'], workDir);
+  // Sequence order comes from the seed, so an earlier base can hold a later task's fix; every ref, reflog, worktree, config or object an agent leaves lives in .git.
+  fs.rmSync(path.join(workDir, '.git'), { recursive: true, force: true, maxRetries: 3 });
+  git(['init', '--quiet'], workDir);
+  for (const [k, v] of WORK_CONFIG) git(['config', k, v], workDir);
+  fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
   const ref = `refs/eval/${sequenceId}/${t.id}`;
   git(['update-ref', ref, stub], cacheDir);
   git(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
   git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
-  // -x also removes gitignored leftovers such as agent notes, so A0 is a true floor.
-  git(['clean', '-fdqx', '-e', '.hippo', '-e', 'node_modules'], workDir);
-  // An agent's stash, branch, tag or note keeps an earlier base reachable, and is a memory channel even in A0.
-  const stale = git(['for-each-ref', '--format=%(refname)'], workDir).split('\n').filter((r) => r && r !== 'refs/remotes/eval/base');
-  // --no-deref: deleting an agent's symref must not delete the ref it points at.
-  for (const r of stale) git(['update-ref', '--no-deref', '-d', r], workDir);
-  // Sequence order comes from the seed, so an earlier base can hold a later task's fix: drop every commit the base cannot reach.
-  git(['reflog', 'expire', '--expire=now', '--expire-unreachable=now', '--all'], workDir);
-  git(['gc', '--quiet', '--prune=now'], workDir);
+  // -ff also removes nested repos such as an agent's clone of the workspace; -x drops gitignored notes, so A0 is a true floor.
+  git(['clean', '-ffdqx', '-e', '.hippo', '-e', 'node_modules'], workDir);
   assertInstructionSet(workDir, stub);
   return stub;
 }

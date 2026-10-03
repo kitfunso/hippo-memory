@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { runAll, planRuns, validateTasks, prependPath } from '../scripts/token-eval/ab-run.mjs';
+import { runAll, planRuns, validateTasks, prependPath, preflight, cacheTaskRepos } from '../scripts/token-eval/ab-run.mjs';
 import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-eval/records.mjs';
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
@@ -539,21 +539,68 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(existsSync(join(out, 'plan.json'))).toBe(false);
   }, 60_000);
 
-  it('a real run refuses a symlinked instruction file before the run starts, so it writes no ABANDONED', () => {
+  it('a real run refuses before the run starts, so it writes no ABANDONED: the ancestor check first, then a symlinked instruction file', () => {
     const scratch = tmp('ab-run-link-cli-');
-    const r = makeRepo();
-    const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
-    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: 'policy.md', encoding: 'utf8' }).trim();
-    g('update-index', '--add', '--cacheinfo', `120000,${blob},docs/AGENTS.md`);
-    g('commit', '-qm', 'link');
+    const r = linkRepo({ 'docs/AGENTS.md': 'policy.md' });
     const tasksFile = join(scratch, 'tasks.json');
-    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: g('rev-parse', 'HEAD') })] }] }));
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: r.linked })] }] }));
     const out = join(scratch, 'out');
     const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
     delete env.Z0_ANCESTOR_STOP;
     const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
     expect(real.status).not.toBe(0);
-    expect(real.stderr).toContain('Z0 task seqL/l2: instruction file docs/AGENTS.md is a symlink in the task repo');
-    expect(readdirSync(out)).toEqual(['repo-cache']);
+    // A box with a CLAUDE.md above tmp never reaches the clone; the preflight tests below cover the link refusal there.
+    if (ancestorInstructionFiles(out).length) {
+      expect(real.stderr).toContain('Claude Code would load these instruction files above');
+      expect(existsSync(out)).toBe(false);
+    } else {
+      expect(real.stderr).toContain('Z0 task seqL/l2: instruction file docs/AGENTS.md is a symlink in the task repo');
+      expect(readdirSync(out)).toEqual(['repo-cache']);
+    }
   }, 60_000);
+});
+
+/** makeRepo plus one commit adding `links` as 120000 entries and `files` as regular files; `linked` is that commit. */
+function linkRepo(links: Record<string, string>, files: Record<string, string> = {}): FixtureRepo & { linked: string } {
+  const r = makeRepo();
+  const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
+  for (const [rel, text] of Object.entries(files)) writeFileSync(join(r.repo, rel), text);
+  if (Object.keys(files).length) g('add', ...Object.keys(files));
+  for (const [rel, target] of Object.entries(links)) {
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: target, encoding: 'utf8' }).trim();
+    g('update-index', '--add', '--cacheinfo', `120000,${blob},${rel}`);
+  }
+  g('commit', '-qm', 'link');
+  return { ...r, linked: g('rev-parse', 'HEAD') };
+}
+
+describe('Z0 preflight (before the try that writes ABANDONED)', () => {
+  it('refuses an out dir under an instruction file before cloning any task repo', () => {
+    const scratch = tmp('ab-run-pre-ancestor-');
+    writeFileSync(join(scratch, 'CLAUDE.md'), 'operator rules\n');
+    const r = makeRepo();
+    const out = join(scratch, 'out');
+    const spec = validateTasks({ sequences: [{ id: 'seqP', cluster: 'c', repo: r.repo, tasks: [task(r, 'p1', 'x'), task(r, 'p2', 'y')] }] });
+    expect(() => preflight(spec, out, 'real', scratch)).toThrow('Claude Code would load these instruction files above');
+    expect(existsSync(join(out, 'repo-cache'))).toBe(false);
+  });
+
+  it('a real run clones and refuses a symlinked instruction file, writing nothing but the cache', () => {
+    const scratch = tmp('ab-run-pre-link-');
+    const r = linkRepo({ 'docs/AGENTS.md': 'policy.md' });
+    const out = join(scratch, 'out');
+    const spec = validateTasks({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: r.linked })] }] });
+    expect(() => preflight(spec, out, 'dry', scratch)).not.toThrow();
+    expect(existsSync(out)).toBe(false);
+    expect(() => preflight(spec, out, 'real', scratch)).toThrow('Z0 task seqL/l2: instruction file docs/AGENTS.md is a symlink in the task repo');
+    expect(readdirSync(out)).toEqual(['repo-cache']);
+  });
+
+  it('cacheTaskRepos checks the stub tree, so a root CLAUDE.md linking to AGENTS.md passes', () => {
+    const r = linkRepo({ 'CLAUDE.md': 'AGENTS.md' }, { 'AGENTS.md': 'native rules\n' });
+    const cache = join(tmp('ab-run-pre-stub-'), 'repo-cache');
+    const spec = validateTasks({ sequences: [{ id: 'seqC', cluster: 'c', repo: r.repo, tasks: [task(r, 'c1', 'x', { baseRef: r.linked }), task(r, 'c2', 'y', { baseRef: r.linked })] }] });
+    expect(() => cacheTaskRepos(spec, cache)).not.toThrow();
+    expect(existsSync(join(cache, 'seqC', '.git'))).toBe(true);
+  });
 });

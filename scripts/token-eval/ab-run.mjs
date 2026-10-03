@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { HIPPO_JS, sh, git } from './exec.mjs';
+import { HIPPO_JS, sh } from './exec.mjs';
 import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { checkoutBase, stubBaseCommit, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
@@ -99,13 +99,10 @@ export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
   return steps;
 }
 
-/** A run's first step: fresh dirs, an empty work repo, its env, settings and shim. */
+/** A run's first step: fresh dirs, its env, settings and shim; checkoutBase makes the work repo. */
 function startRun(ctx, s, arm, seed) {
   const dirs = runDirs(ctx.outDir, s.id, arm, seed);
   freshRunDirs(dirs);
-  git(['init', '--quiet'], dirs.work);
-  for (const [k, v] of [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf']]) git(['config', k, v], dirs.work);
-  fs.appendFileSync(path.join(dirs.work, '.git', 'info', 'exclude'), '\n.hippo/\n');
   const env = armEnv(arm, dirs, process.env, { passEnv: ctx.passEnv });
   if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, ctx.fakeHome, arm === 'A5' ? 'sham' : 'real');
   const settingsFile = path.join(ctx.outDir, 'settings', `${s.id}-${arm}-seed${seed}.json`);
@@ -134,10 +131,11 @@ function writeRecord(ctx, record) {
   ctx.log(`${record.sequence} ${record.taskId} ${record.arm} seed${record.seed}: ${outcome}${record.costUsd ? `, $${record.costUsd.toFixed(4)}` : ''}${record.invalid ? ` (invalid: ${record.invalid})` : ''}`);
 }
 
-const sleep = (ms) => ms > 0 && Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// Async, so a run inside a test worker never blocks the worker's RPC with its parent.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 /** Run claude, rerunning after a plan limit once `reset` has put the checkout back. */
-function runSession(ctx, run, t, reset) {
+async function runSession(ctx, run, t, reset) {
   const args = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', JSON.stringify(run.settingsFile), '--strict-mcp-config', '--permission-mode', ctx.permissionMode];
   if (ctx.model) args.push('--model', ctx.model);
   if (ctx.maxBudgetUsd) args.push('--max-budget-usd', String(ctx.maxBudgetUsd));
@@ -155,13 +153,13 @@ function runSession(ctx, run, t, reset) {
     // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
-    sleep(ctx.limitWaitMs);
+    await sleep(ctx.limitWaitMs);
     reset();
   }
 }
 
 /** One step: prepare the checkout, skip the session if the step is void before it starts, else run, grade and record it. */
-function runTask(ctx, run, position, order) {
+async function runTask(ctx, run, position, order) {
   const { s, arm, seed, dirs, env, rawDir } = run;
   const t = s.tasks[position];
   const work = dirs.work;
@@ -193,24 +191,24 @@ function runTask(ctx, run, position, order) {
     return;
   }
   const preSession = instructionSnapshot(work);
-  const session = runSession(ctx, run, t, () => {
+  const session = await runSession(ctx, run, t, () => {
     // SHORTCUT: restores instruction files only; store and auto memory wait for the E3 surface restore, so the analyzer voids limitRetries > 0 in A1/A2/A5
     const again = prepare().setup;
     if (again && again.status !== 0) throw new Error(`${s.id} ${t.id} ${arm} seed${seed}: setup failed on the usage-limit rerun (exit ${again.status})`);
     restoreInstructions(work, preSession);
   });
   run.sessionRan = true;
-  const graded = gradeSession(ctx, run, t, baseline, session);
+  const graded = await gradeSession(ctx, run, t, baseline, session);
   writeRecord(ctx, { ...base, ...graded, ...carry, homesAtStart, ...meta });
 }
 
 /** After a session: let hippo's capture settle, take the carry delta, run the hidden tests and read the result into record fields. */
-function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries }) {
+async function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries }) {
   const { arm, dirs, env, rawDir } = run;
   const work = dirs.work;
   fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
   // SessionEnd runs capture and sleep in a background worker; let it finish.
-  if (HIPPO_ARMS.has(arm)) sleep(ctx.settleMs);
+  if (HIPPO_ARMS.has(arm)) await sleep(ctx.settleMs);
   if (CARRY_ARMS.has(arm)) run.changes = instructionDelta(baseline, instructionSnapshot(work));
   writeHiddenTests(run.cached, work, t);
   const test = sh(t.test, work, childEnv(env));
@@ -251,6 +249,13 @@ export function cacheTaskRepos(spec, cacheDir) {
   }
 }
 
+/** The checks main runs before a run can be abandoned: the out dir's ancestors, then (real runs) the task repos. */
+export function preflight(spec, out, mode, stopAt) {
+  // The free check first, so a refused --out never gets a clone.
+  assertNoAncestorInstructions(out, { stopAt });
+  if (mode === 'real') cacheTaskRepos(spec, path.join(out, 'repo-cache'));
+}
+
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
 export async function runAll(opts) {
   await loadHippo();
@@ -280,7 +285,9 @@ export async function runAll(opts) {
     const { seed, position, arm, sequence: s } = step;
     const key = `${s.id}|${arm}|${seed}`;
     if (!state.has(key)) state.set(key, startRun(ctx, s, arm, seed));
-    runTask(ctx, state.get(key), position, order);
+    await runTask(ctx, state.get(key), position, order);
+    // Every step is spawnSync, so yield once per step to let a host event loop (a test worker's RPC) run.
+    await new Promise(setImmediate);
     progress.last = `step ${order}: ${s.id} ${s.tasks[position].id} ${arm} seed${seed}`;
   }
   return ctx.records;
@@ -316,8 +323,7 @@ async function main() {
   if (mode === 'real' && stopAt) throw new Error('Z0_ANCESTOR_STOP is set; it is only honoured for --dry-run and --check-homes. Unset it for a real run.');
   if (mode === 'real' && !process.env[TOKEN_KEY]) throw new Error('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
   // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
-  if (mode === 'real') cacheTaskRepos(spec, path.join(out, 'repo-cache'));
-  assertNoAncestorInstructions(out, { stopAt });
+  preflight(spec, out, mode, stopAt);
   console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seeds ?? ARM_SEEDS[a]}`).join(' ')}.`);
   if (mode === 'dry') {
     writePlan(out, steps);

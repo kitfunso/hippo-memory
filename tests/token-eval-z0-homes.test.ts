@@ -1,6 +1,6 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -283,7 +283,7 @@ describe('applyInstructions', () => {
 });
 
 describe('workspace checkout', () => {
-  it('leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs and worktrees', () => {
+  it('leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs, worktrees and nested repos', () => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
@@ -298,6 +298,15 @@ describe('workspace checkout', () => {
     wg('worktree', 'add', '-q', '--detach', join(wtRoot, 'gone'), 'HEAD');
     wg('worktree', 'lock', join(wtRoot, 'gone'));
     rmSync(join(wtRoot, 'gone'), { recursive: true, force: true });
+    wg('worktree', 'add', '-q', '--detach', join(wtRoot, 'nogit'), 'HEAD');
+    rmSync(join(wtRoot, 'nogit', '.git'));
+    wg('clone', '-q', '--no-checkout', '.', 'backup');
+    mkdirSync(join(work, 'scratch'));
+    const sg = (...args: string[]): string => execFileSync('git', ['-c', 'user.email=a@b', '-c', 'user.name=a', ...args], { cwd: join(work, 'scratch'), encoding: 'utf8' });
+    sg('init', '-q');
+    writeFileSync(join(work, 'scratch', 'notes.md'), 'the fix that a later task must never see\n');
+    sg('add', '.');
+    sg('commit', '-qm', 'notes');
     checkoutBase(repo, work, 'seqP', { id: 'p2', baseRef: base });
     expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
     const history = wg('log', '--all', '--reflog', '--format=%H %P');
@@ -306,8 +315,29 @@ describe('workspace checkout', () => {
     expect(wg('log', '--all', '--reflog', '-p')).not.toContain('the fix that a later task must never see');
     expect(wg('for-each-ref', '--format=%(refname)')).toBe('refs/remotes/eval/base');
     expect(wg('worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree '))).toHaveLength(1);
-    expect(existsSync(join(wtRoot, 'wt'))).toBe(false);
+    expect(existsSync(join(work, 'backup'))).toBe(false);
+    expect(existsSync(join(work, 'scratch'))).toBe(false);
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it('rebuilds a .git the agent replaced with a gitfile, keeping the runner config and a clean detached HEAD', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    checkoutBase(repo, work, 'seqG', { id: 'g1', baseRef: fix });
+    const moved = join(tmp('z0-moved-'), 'git');
+    renameSync(join(work, '.git'), moved);
+    writeFileSync(join(work, '.git'), `gitdir: ${moved}\n`);
+    const stub = checkoutBase(repo, work, 'seqG', { id: 'g2', baseRef: base });
+    expect(statSync(join(work, '.git')).isDirectory()).toBe(true);
+    expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
+    expect(wg('rev-parse', 'HEAD')).toBe(stub);
+    expect(spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: work }).status).not.toBe(0);
+    mkdirSync(join(work, '.hippo'));
+    writeFileSync(join(work, '.hippo', 'store.db'), 'x');
+    expect(wg('status', '--porcelain')).toBe('');
+    expect(wg('config', 'core.autocrlf')).toBe('false');
+    expect(wg('config', 'user.email')).toBe('eval@localhost');
   });
 
   /** gitRepo plus one commit adding `links` as 120000 entries; returns that commit. */
