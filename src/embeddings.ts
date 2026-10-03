@@ -15,6 +15,7 @@ import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysics
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
 import { redactSecretsStrict } from './secret-detect.js';
+import { log } from './log.js';
 
 // Use createRequire for synchronous module resolution check in ESM
 const _require = createRequire(import.meta.url);
@@ -391,22 +392,62 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 const EMBEDDINGS_FILE = 'embeddings.json';
+// Never equal to a real index identity, so the next embed run treats it as a model change and rebuilds every vector.
+const QUARANTINED_INDEX_IDENTITY = 'quarantined-corrupt-index';
+
+function isErrnoCode<E>(err: E, code: string): boolean {
+  return err instanceof Error && 'code' in err && err.code === code;
+}
+
+function parseEmbeddingIndex(raw: string): Record<string, number[]> | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    // SAFETY: saveEmbeddingIndex is the only writer and always writes this shape; anything that is not an object is corrupt.
+    return parsed instanceof Object && !Array.isArray(parsed) ? parsed as Record<string, number[]> : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Move a corrupt index aside and flag a full rebuild, so no later save can write over the only copy of those bytes. */
+function quarantineCorruptIndex(hippoRoot: string, fp: string): void {
+  const aside = `${fp}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`;
+  try {
+    fs.renameSync(fp, aside);
+  } catch (err) {
+    if (isErrnoCode(err, 'ENOENT')) return;
+    // A rename blocked by an open handle (Windows) still gets a copy kept; if the copy fails too, the throw stops the save.
+    fs.copyFileSync(fp, aside, fs.constants.COPYFILE_EXCL);
+  }
+  log.error(`${EMBEDDINGS_FILE} could not be parsed; kept it as ${path.basename(aside)} and the next embed rebuilds the index`, { hippoRoot });
+  try {
+    const db = openHippoDb(hippoRoot);
+    try {
+      setMeta(db, EMBEDDING_MODEL_META_KEY, QUARANTINED_INDEX_IDENTITY);
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch (err) {
+    log.warn(`could not flag the embedding index for rebuild; run 'hippo embed' to restore vectors (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
+  }
+}
 
 /**
- * Load the cached embedding index from disk.
- * Returns an empty object if the file doesn't exist or is corrupt.
+ * Load the cached embedding index; `{}` when the file is missing. A corrupt file is moved aside and rebuilt on the next embed; any other read error throws, so nothing saves over an index it could not read.
  */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
   const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  if (!fs.existsSync(fp)) return {};
+  let raw: string;
   try {
-    // SAFETY: embeddings.json is written exclusively by saveEmbeddingIndex with
-    // this exact shape; a corrupt or foreign file is caught by the try/catch
-    // below and treated as an empty index.
-    return JSON.parse(fs.readFileSync(fp, 'utf8')) as Record<string, number[]>;
-  } catch {
-    return {};
+    raw = fs.readFileSync(fp, 'utf8');
+  } catch (err) {
+    if (isErrnoCode(err, 'ENOENT')) return {};
+    throw err;
   }
+  const index = parseEmbeddingIndex(raw);
+  if (index) return index;
+  quarantineCorruptIndex(hippoRoot, fp);
+  return {};
 }
 
 /**

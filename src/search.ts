@@ -24,7 +24,14 @@ import { openHippoDb, closeHippoDb } from './db.js';
 import { rrfFuse } from './rrf.js';
 import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from './graph-stream.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
+import { log } from './log.js';
+import { redactSecretsStrict } from './secret-detect.js';
 export const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; FE3 measures before any default.
+
+// Search runs on every hook prompt, so one line per reason per process says why vectors went unused without flooding stderr.
+function warnBm25Fallback(reason: string, detail: string): void {
+  log.once(`search.bm25-fallback.${reason}`, 'warn', `hybrid search fell back to BM25 only: ${redactSecretsStrict(detail)}`);
+}
 
 export function churnStaleFactor(entry: MemoryEntry): number {
   return entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
@@ -494,11 +501,15 @@ export async function hybridSearch(
           if (queryVector.length > 0) {
             embeddingIndex = idx;
             useEmbeddings = true;
+          } else {
+            warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
           }
         }
+      } else if (provider.isAvailable()) {
+        warnBm25Fallback('reindex', "the embedding index was built by another model or is being rebuilt; run 'hippo embed'");
       }
-    } catch {
-      // Fall through to BM25-only
+    } catch (err) {
+      warnBm25Fallback('error', err instanceof Error ? err.message : String(err));
     }
   }
 

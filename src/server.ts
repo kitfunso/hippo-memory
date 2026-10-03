@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from './project-identity.js';
 import { assembleCost, contextCost, drillCost } from './context-render.js';
@@ -31,6 +31,7 @@ export function __resetSessionRecallHistoryHttp(): void {
   sessionRecallHistoryHttp.clear();
 }
 import { PACKAGE_VERSION } from './version.js';
+import { log } from './log.js';
 import { API_KEY_PREFIX, validateApiKey } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
@@ -311,6 +312,24 @@ export interface ServeOpts {
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+
+// The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
+function resolveRequestId(header: string | string[] | undefined): string {
+  const value = Array.isArray(header) ? undefined : header;
+  return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
+}
+
+/** One line per failed request; 4xx is the caller's mistake, so it stays below the default level. */
+function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
+  const status = err instanceof HttpError ? err.status : undefined;
+  const message = err instanceof Error ? err.message : String(err);
+  const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
+  if (status !== undefined && status >= 500) log.error(line, { requestId, status });
+  else log.info(line, { requestId, status });
+}
 
 function sendError(res: ServerResponse, status: number, message: string): void {
   sendJson(res, status, { error: message });
@@ -3017,7 +3036,10 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       : undefined;
 
   const server: Server = createServer((req, res) => {
+    const requestId = resolveRequestId(req.headers['x-request-id']);
+    res.setHeader('X-Request-Id', requestId);
     handleRequest(req, res, opts, startedAt, limiter).catch(<E>(err: E) => {
+      logRequestFailure(req, err, requestId);
       if (res.headersSent) {
         try { res.end(); } catch { /* socket already gone */ }
         return;
