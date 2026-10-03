@@ -30,7 +30,7 @@ export function __resetSessionRecallHistoryHttp(): void {
   sessionRecallHistoryHttp.clear();
 }
 import { PACKAGE_VERSION } from './version.js';
-import { validateApiKey } from './auth.js';
+import { API_KEY_PREFIX, validateApiKey } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
   remember,
@@ -56,6 +56,7 @@ import {
   quarantineList,
   quarantineApprove,
   quarantineReject,
+  type Actor,
   type Context,
   type RecallOpts,
   type AssembleOpts,
@@ -317,23 +318,20 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Anything other than exactly 'admin' is treated as 'member'. */
+  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint API keys (POST /v1/auth/keys) that outlive IdP deprovisioning. */
   role: 'admin' | 'member';
   scopes?: readonly string[];
 }
 
-/**
- * Vouches for a bearer token that is not an API key. Return null for any
- * token you do not recognise and never throw on a foreign token: a throw is
- * a 401 and is not retried against API keys. It runs on every authenticated
- * request and every SSE heartbeat, so keep it cache-backed.
- */
+/** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so throw only when upstream is down. */
 export type AuthResolver = (token: string) => ResolvedBearer | null | Promise<ResolvedBearer | null>;
 
 export interface ServeOpts {
   hippoRoot: string;
-  /** Asked first for every Bearer token; null falls through to API-key validation. */
+  /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
   authResolver?: AuthResolver;
+  /** Deadline for one authResolver call; defaults to 5000 ms. */
+  authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM. Only `hippo serve` owns the process, so only it sets this. */
@@ -579,7 +577,7 @@ export function clientIpForRateLimit(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? 'unknown';
 }
 
-type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver'>;
+type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs'>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -604,7 +602,8 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   const tenant = tenantId.trim();
   if (tenant.startsWith('__') || tenant.length > 256 || hasControlChar(tenant)) return null;
   if (!isJsonString(subject) || subject.length < 1 || subject.length > 256) return null;
-  if (hasControlChar(subject)) return null;
+  // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
+  if (hasControlChar(subject) || subject !== subject.trim()) return null;
   const lower = subject.toLowerCase();
   if (RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`))) return null;
   const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
@@ -612,23 +611,52 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   return clean;
 }
 
+function logResolverFailure(what: string, raw: string, token: string): void {
+  // The plugin's message is logged, but never the token, even if the plugin echoed it.
+  const msg = raw.split(token).join('[token]').replace(/[\r\n]/g, ' ');
+  process.stderr.write(`[hippo] auth resolver ${what}: ${msg}\n`);
+}
+
+/** 503 when upstream throws or misses the deadline, so a stream heartbeat can tell an outage from a revocation. */
+async function askResolver(resolver: AuthResolver, token: string, deadlineMs: number): Promise<ResolvedBearer> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`no answer within ${deadlineMs} ms`)), deadlineMs);
+  });
+  let resolved: ResolvedBearer | null;
+  try {
+    resolved = await Promise.race([(async () => resolver(token))(), deadline]);
+  } catch (err) {
+    logResolverFailure('threw', err instanceof Error ? err.message : 'unknown error', token);
+    throw new HttpError(503, 'auth provider unavailable');
+  } finally {
+    clearTimeout(timer);
+  }
+  let clean: ResolvedBearer | null = null;
+  try {
+    clean = resolved ? sanitiseResolved(resolved) : null;
+  } catch (err) {
+    // A throwing getter is a resolver bug, not an outage, so it is a 401 like any malformed answer.
+    logResolverFailure('threw', err instanceof Error ? err.message : 'unknown error', token);
+  }
+  if (!clean) throw new HttpError(401, 'invalid api key');
+  return clean;
+}
+
+/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the tag. */
+interface BearerIdentity extends ResolvedBearer {
+  viaAuthResolver?: true;
+}
+
+const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
+
 /** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
-async function resolveBearer(token: string, opts: AuthOpts): Promise<ResolvedBearer> {
-  if (opts.authResolver) {
-    let clean: ResolvedBearer | null;
-    try {
-      const resolved = await opts.authResolver(token);
-      clean = resolved ? sanitiseResolved(resolved) : null;
-      if (resolved && !clean) throw new HttpError(401, 'invalid api key');
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      // The plugin's message is logged, but never the token, even if the plugin echoed it.
-      const raw = err instanceof Error ? err.message : 'unknown error';
-      const msg = raw.split(token).join('[token]').replace(/[\r\n]/g, ' ');
-      process.stderr.write(`[hippo] auth resolver threw: ${msg}\n`);
-      throw new HttpError(401, 'invalid api key');
-    }
-    if (clean) return clean;
+async function resolveBearer(token: string, opts: AuthOpts): Promise<BearerIdentity> {
+  // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's identity.
+  if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
+    const t = opts.authResolverTimeoutMs;
+    const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
+    return { ...(await askResolver(opts.authResolver, token, deadlineMs)), viaAuthResolver: true };
   }
   const db = openHippoDb(opts.hippoRoot);
   try {
@@ -650,8 +678,8 @@ async function resolveBearer(token: string, opts: AuthOpts): Promise<ResolvedBea
 /**
  * Build a per-request Context from the Authorization header and remote
  * address. Throws HttpError(401) for invalid / missing credentials. Opens
- * the DB only when a Bearer token is present and the auth resolver (if any)
- * did not claim it, so loopback no-auth requests stay cheap.
+ * the DB only for an API-key-shaped Bearer token (or any Bearer token when no
+ * auth resolver is registered), so loopback no-auth requests stay cheap.
  */
 async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
   const auth = readAuthHeader(req);
@@ -662,11 +690,9 @@ async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promi
 
   if (auth.kind === 'bearer') {
     const id = await resolveBearer(auth.token, opts);
-    return {
-      hippoRoot: opts.hippoRoot,
-      tenantId: id.tenantId,
-      actor: { subject: id.subject, role: id.role, scopes: id.scopes },
-    };
+    const actor: Actor = { subject: id.subject, role: id.role, scopes: id.scopes };
+    if (id.viaAuthResolver) actor.viaAuthResolver = true;
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor };
   }
 
   // No Authorization header. Loopback-only fallback, unless explicitly
@@ -704,6 +730,22 @@ async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> 
     throw new HttpError(401, 'auth required');
   }
   assertLocalCaller(req);
+}
+
+/** Never rejects: an outage (5xx) skips one heartbeat tick, only a definite 4xx denial closes the stream. */
+async function heartbeatVerdict(req: IncomingMessage, opts: AuthOpts): Promise<'ok' | 'revoked' | 'unavailable'> {
+  try {
+    await requireAuth(req, opts);
+    return 'ok';
+  } catch (err) {
+    return err instanceof HttpError && err.status < 500 ? 'revoked' : 'unavailable';
+  }
+}
+
+/** Gate for any action beyond the caller's own tenant: a resolver admin is a customer's tenant admin, never a host admin. */
+function assertCrossTenantAdmin(ctx: Context, what: string): void {
+  if (ctx.actor.role !== 'admin') throw new HttpError(403, `${what} requires admin role`);
+  if (ctx.actor.viaAuthResolver) throw new HttpError(403, `${what} requires an API-key admin`);
 }
 
 function getString(obj: Record<string, JsonValue>, key: string): string | undefined {
@@ -788,8 +830,8 @@ async function handleRequest(
     return;
   }
 
-  // E3: per-IP rate limit on /v1/* to bound api-key-id enumeration. /health
-  // (a liveness probe) and non-/v1 paths are never throttled. A 429 thrown
+  // E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
+  // (a liveness probe) and other paths are never throttled. A 429 thrown
   // here lands in the createServer catch like any other HttpError.
   //
   // Keyed on the socket's remote address by default. Behind a TLS-terminating
@@ -797,7 +839,7 @@ async function handleRequest(
   // buckets into one global bucket that pre-auth traffic can drain; set
   // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
   // (see clientIpForRateLimit).
-  if (limiter && path.startsWith('/v1/')) {
+  if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     const ip = clientIpForRateLimit(req);
     if (!limiter.check(ip)) {
       throw new HttpError(429, 'rate limit exceeded');
@@ -1278,9 +1320,8 @@ async function handleRequest(
     // row). When non-loopback serving lands, this gate is the actual auth
     // boundary on host-wide sleep.
     const sleepCtx = await buildContextWithAuth(req, opts);
-    if (sleepCtx.actor.role !== 'admin') {
-      throw new HttpError(403, '/v1/sleep requires admin role');
-    }
+    // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
+    assertCrossTenantAdmin(sleepCtx, '/v1/sleep');
     const body = await parseJsonBody(req);
     const dryRunRaw = body['dry_run'];
     if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
@@ -1447,9 +1488,7 @@ async function handleRequest(
     // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
     const tenantOverride = query.get('tenant');
     const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
-    if (crossTenant && ctx.actor.role !== 'admin') {
-      throw new HttpError(403, '/v1/audit?tenant= for another tenant requires admin role');
-    }
+    if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
     const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
     const result = auditList(effectiveCtx, { op, since, limit });
     sendJson(res, 200, result);
@@ -3379,22 +3418,20 @@ async function handleRequest(
       }
       if (checking) return;
       checking = true;
-      requireAuth(req, opts).then(
-        () => {
-          checking = false;
-          if (closed) return;
-          try {
-            res.write(': ping\n\n');
-          } catch {
-            clearInterval(ping);
-          }
-        },
-        () => {
-          checking = false;
+      void heartbeatVerdict(req, opts).then((verdict) => {
+        checking = false;
+        if (closed || verdict === 'unavailable') return;
+        if (verdict === 'revoked') {
           closeWith('auth_revoked');
           clearInterval(ping);
-        },
-      );
+          return;
+        }
+        try {
+          res.write(': ping\n\n');
+        } catch {
+          clearInterval(ping);
+        }
+      });
     }, heartbeatMs);
     // Don't keep the event loop alive just for this timer — the server's
     // listener already does that, and tests want the process to exit cleanly.
@@ -3459,7 +3496,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // can match the two and prove a pid-reusing impostor is not the real server.
   const startedAt = new Date().toISOString();
 
-  // E3: per-IP rate limiter for /v1/*. Built here (not at module scope) so
+  // E3: per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
   // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
   // set the rate before serve(). A non-positive or non-finite value disables
   // limiting (the opt-out knob).

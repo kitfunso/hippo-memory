@@ -94,11 +94,20 @@ stdio MCP need none.
 _Avoid_: ACL entry, share, permission
 
 **Auth resolver**:
-A function the server asks to vouch for a bearer token that is not an API key. Returns a tenant,
-subject, role and scope grants, or nothing. It returns nothing for tokens it does not recognise
-and never throws on a foreign token; it runs on every authenticated request and every stream
-heartbeat, so it must be cache-backed.
+A function the server asks to vouch for a bearer token that is not an API key. Tokens are routed
+by shape: an `hk_` token goes only to API-key validation, any other token only to the resolver.
+Returns a tenant, subject, role and scope grants, or nothing (a 401). It throws only when its
+upstream is down; a throw or a missed deadline is a 503, which a stream heartbeat skips rather than
+treating as revocation. It runs on every authenticated request and every stream heartbeat, so it
+must be cache-backed. Its admin role is tenant admin: no other tenant's audit log, no host-wide
+sleep, but it can mint API keys, and those outlive the user's removal from the identity provider.
 _Avoid_: auth plugin, identity provider
+
+**Audit cursor**:
+The last audit event id an exporter has read; `listAuditEventsAfter` returns the events after it.
+Retention prune deletes events whether or not they were exported, so an exporter must keep up with
+the prune window; gaps in ids are normal.
+_Avoid_: offset, page token
 
 **Derived memory**:
 A memory built from other memories' content: a consolidation merge, a DAG summary or profile, an

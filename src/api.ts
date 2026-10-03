@@ -147,6 +147,8 @@ export interface Actor {
   role: 'admin' | 'member';
   /** EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors. */
   scopes?: readonly string[];
+  /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
+  viaAuthResolver?: true;
 }
 
 export interface Context {

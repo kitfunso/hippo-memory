@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { serve, type ServerHandle, type AuthResolver, type ResolvedBearer } from '../src/server.js';
+import { serve, type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db.js';
 import { listAuditEventsAfter } from '../src/audit.js';
@@ -23,9 +23,48 @@ let handle: ServerHandle | undefined;
 let apiKey: CreatedApiKey;
 const savedEnv = { req: process.env.HIPPO_REQUIRE_AUTH, hb: process.env.MCP_SSE_HEARTBEAT_MS };
 
-async function start(authResolver?: AuthResolver, hippoRoot = home): Promise<ServerHandle> {
-  handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, authResolver });
+async function start(authResolver?: AuthResolver, hippoRoot = home, extra: Partial<ServeOpts> = {}): Promise<ServerHandle> {
+  handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, authResolver, ...extra });
   return handle;
+}
+
+function auditRows(tenantId: string): ReturnType<typeof listAuditEventsAfter> {
+  const db = openHippoDb(home);
+  try {
+    return listAuditEventsAfter(db, { afterId: 0, tenantId });
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function openStream(token: string, signal: AbortSignal): Promise<Response> {
+  return fetch(`${handle!.url}/mcp/stream`, {
+    headers: { accept: 'text/event-stream', authorization: `Bearer ${token}` },
+    signal,
+  });
+}
+
+function collect(res: Response): () => string {
+  let buf = '';
+  const decoder = new TextDecoder();
+  const reader = res.body!.getReader();
+  void (async () => {
+    try {
+      for (;;) {
+        const r = await reader.read();
+        if (r.done) return;
+        buf += decoder.decode(r.value);
+      }
+    } catch (err) {
+      if (!(err instanceof Error && err.name === 'AbortError')) throw err;
+    }
+  })();
+  return () => buf;
+}
+
+async function waitFor(check: () => boolean, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!check() && Date.now() < deadline) await new Promise((ok) => setTimeout(ok, 20));
 }
 
 type Loose = Partial<Record<keyof ResolvedBearer, string | Array<string | number | null>>>;
@@ -85,7 +124,7 @@ describe('auth resolver acceptance', () => {
     }
   });
 
-  it('falls through to API keys when the resolver returns null, and 401s unknown tokens', async () => {
+  it('keeps API keys working and 401s a token the resolver does not know', async () => {
     await start(tokenResolver());
     expect((await get('/v1/memories?q=x', apiKey.plaintext)).status).toBe(200);
     expect((await get('/v1/memories?q=x', 'nobody.knows')).status).toBe(401);
@@ -103,14 +142,74 @@ describe('auth resolver acceptance', () => {
   });
 });
 
+describe('auth resolver routing by token shape', () => {
+  it('never hands an hk_ token to the resolver', async () => {
+    const resolver = vi.fn<AuthResolver>(() => null);
+    await start(resolver);
+    expect((await get('/v1/memories?q=x', apiKey.plaintext)).status).toBe(200);
+    expect((await get('/v1/memories?q=x', 'hk_forged.secret')).status).toBe(401);
+    expect(resolver).not.toHaveBeenCalled();
+    expect((await get('/v1/memories?q=x', 'ext.other')).status).toBe(401);
+    expect(resolver).toHaveBeenCalledWith('ext.other');
+  });
+
+  it('lets no resolver answer override an API key identity', async () => {
+    const evil: ResolvedBearer = { tenantId: 'evil', subject: 'mallory', role: 'admin' };
+    await start(() => evil);
+    expect((await post('/v1/memories', apiKey.plaintext, { content: 'key wrote this' })).status).toBe(200);
+    expect(auditRows('default').some((r) => r.op === 'remember' && r.actor === `api_key:${apiKey.keyId}`)).toBe(true);
+    expect(auditRows('evil')).toHaveLength(0);
+    expect((await get('/v1/memories?q=x', 'hk_forged.secret')).status).toBe(401);
+  });
+
+  it('answers 401 for a null non-hk_ answer without opening the database', async () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'hippo-auth-resolver-null-'));
+    try {
+      await start(() => null, fresh);
+      expect((await get('/v1/memories?q=x', 'ext.unknown')).status).toBe(401);
+      expect(existsSync(getHippoDbPath(fresh))).toBe(false);
+    } finally {
+      await handle?.stop();
+      handle = undefined;
+      rmSync(fresh, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('auth resolver tenant boundary', () => {
+  it('refuses a resolver admin another tenant audit log but serves its own', async () => {
+    await start(tokenResolver({ role: 'admin' }));
+    expect((await get('/v1/audit?tenant=default', EXT)).status).toBe(403);
+    expect((await get('/v1/audit', EXT)).status).toBe(200);
+    expect((await get('/v1/audit?tenant=ext-tenant', EXT)).status).toBe(200);
+  });
+
+  it('still lets an API-key admin read another tenant audit log', async () => {
+    await start(tokenResolver({ role: 'admin' }));
+    expect((await get('/v1/audit?tenant=ext-tenant', apiKey.plaintext)).status).toBe(200);
+  });
+
+  it('refuses host-wide sleep to a resolver admin but not to an API-key admin', async () => {
+    await start(tokenResolver({ role: 'admin' }));
+    expect((await post('/v1/sleep', EXT, {})).status).toBe(403);
+    const ok = await fetch(`${handle!.url}/v1/sleep`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ dry_run: true }),
+    });
+    expect(ok.status).toBe(200);
+  });
+});
+
 describe('auth resolver failure', () => {
-  it('answers 401 and logs one stderr line without the token when the resolver throws', async () => {
+  it('answers 503 and logs one stderr line without the token when the resolver throws', async () => {
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     await start((t) => {
       throw new Error(`upstream unavailable for ${t}`);
     });
     const res = await get('/v1/memories?q=x', 'secret-token-value');
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'auth provider unavailable' });
     const all = write.mock.calls.map((c) => String(c[0]));
     const lines = all.filter((l) => l.includes('auth resolver'));
     expect(lines).toHaveLength(1);
@@ -123,20 +222,29 @@ describe('auth resolver failure', () => {
     await start(() => {
       throw new Error('first\r\n[hippo] forged line');
     });
-    expect((await get('/v1/memories?q=x', 'tok')).status).toBe(401);
+    expect((await get('/v1/memories?q=x', 'tok')).status).toBe(503);
     const chunks = write.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('auth resolver'));
     expect(chunks).toHaveLength(1);
     expect(chunks[0]!.replace(/\n$/, '')).not.toMatch(/[\r\n]/);
   });
 
-  it('keeps API keys working when the resolver throws only on ext. tokens', async () => {
+  it('keeps API keys working while the resolver throws on every token', async () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    await start((t) => {
-      if (t.startsWith('ext.')) throw new Error('bad ext token');
-      return null;
+    await start(() => {
+      throw new Error('upstream down');
     });
     expect((await get('/v1/memories?q=x', apiKey.plaintext)).status).toBe(200);
-    expect((await get('/v1/memories?q=x', 'ext.anything')).status).toBe(401);
+    expect((await get('/v1/memories?q=x', 'ext.anything')).status).toBe(503);
+  });
+
+  it('answers 503 when the resolver misses its deadline', async () => {
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await start(() => new Promise<null>(() => undefined), home, { authResolverTimeoutMs: 100 });
+    const res = await get('/v1/memories?q=x', 'ext.slow');
+    expect(res.status).toBe(503);
+    const lines = write.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('auth resolver'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('no answer within 100 ms');
   });
 });
 
@@ -214,6 +322,9 @@ describe('auth resolver sanitising', () => {
     ['newline', 'bad\nsubject'],
     ['tab', 'tab\tsubject'],
     ['delete char', 'del\u007f'],
+    ['trailing-space reserved', 'system '],
+    ['leading-space reserved', ' cli'],
+    ['padded', ' user-1 '],
   ])('rejects a %s subject', async (_name, subject) => {
     await start(tokenResolver({ subject }));
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
@@ -299,6 +410,41 @@ describe('auth resolver stream', () => {
     ac.abort();
     expect(buf).toContain('auth_revoked');
   }, 10_000);
+
+  it.each(['throws', 'hangs'] as const)(
+    'keeps the stream open while the resolver %s, then closes it on a later revocation',
+    async (failure) => {
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      process.env.MCP_SSE_HEARTBEAT_MS = '50';
+      let state: 'ok' | 'down' | 'revoked' = 'ok';
+      let downCalls = 0;
+      await start(
+        (t) => {
+          if (t !== EXT || state === 'revoked') return null;
+          if (state === 'ok') return GOOD;
+          downCalls++;
+          if (failure === 'throws') throw new Error('upstream down');
+          return new Promise<null>(() => undefined);
+        },
+        home,
+        { authResolverTimeoutMs: 60 },
+      );
+      const ac = new AbortController();
+      const res = await openStream(EXT, ac.signal);
+      expect(res.status).toBe(200);
+      const text = collect(res);
+      state = 'down';
+      // Two outage checks prove `checking` resets after a 503, so later ticks still run.
+      await waitFor(() => downCalls >= 2, 3000);
+      expect(downCalls).toBeGreaterThanOrEqual(2);
+      expect(text()).not.toContain('event: closed');
+      state = 'revoked';
+      await waitFor(() => text().includes('auth_revoked'), 3000);
+      ac.abort();
+      expect(text()).toContain('auth_revoked');
+    },
+    10_000,
+  );
 
   it('skips a heartbeat tick while a check is still in flight', async () => {
     process.env.MCP_SSE_HEARTBEAT_MS = '50';
