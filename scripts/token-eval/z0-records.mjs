@@ -118,13 +118,14 @@ function checkOutcome(r, crashed) {
   check(r.chain.captured === null || r.arm === 'A2' || r.arm === 'X2', 'chain.captured is set only for A2 and X2');
 }
 
-/** Per-record contract; returns warnings. A crash may null its usage, work counts and acceptance (E1 `writeRecord`). */
+/** Per-record contract; returns warnings. Any invalid record, a leak included, may null its usage, work counts
+ * and acceptance and carry no lessons, as E1's `skippedRecord` and E2's runner write them. */
 export function validateRecord(r) {
   check(isPlainObject(r), 'a record must be a JSON object');
   const warnings = [];
   checkIdentity(r);
   checkKind(r, warnings);
-  const crashed = isInvalid(r);
+  const crashed = !isNullish(r.invalid);
   checkLessons(r, crashed);
   checkOutcome(r, crashed);
   return warnings;
@@ -178,7 +179,8 @@ function rejectDuplicates(items, what) {
   }
 }
 
-/** Teach records of the apply record's family before it, or null when a planned teach cell may be missing. */
+/** Valid teach records of the apply record's family before it, or null when a planned teach cell of the
+ * family is missing or invalid: the runner writes no verdicts for an invalid session (orchestrator, 2026-10-03). */
 function priorTeach(a, byCell, taskAt, plannedPositions) {
   const teach = [];
   for (const q of plannedPositions) {
@@ -188,7 +190,10 @@ function priorTeach(a, byCell, taskAt, plannedPositions) {
       // Another arm's record names the task at a missing cell; with none, it may be this family's teach.
       const task = taskAt.get(positionKey({ ...a, position: q }));
       if (task === undefined || (task.kind === 'teach' && task.familyId === a.familyId)) return null;
-    } else if (rec.kind === 'teach' && rec.familyId === a.familyId) teach.push(rec);
+    } else if (rec.kind === 'teach' && rec.familyId === a.familyId) {
+      if (!isNullish(rec.invalid)) return null;
+      teach.push(rec);
+    }
   }
   return teach;
 }
@@ -199,14 +204,12 @@ function checkApply(a, teach) {
   const latest = Math.max(...teach.map((t) => t.position));
   const between = a.position - latest - 1;
   check(a.tasksSinceTeach === between, `${where}: tasksSinceTeach ${a.tasksSinceTeach} but ${between} positions lie after the teach at ${latest}`);
-  if (teach.some((t) => isInvalid(t) && t.lessons.length === 0)) return false;
   const taught = new Set(teach.flatMap((t) => t.lessons.map((l) => l.lessonId)));
   for (const l of a.lessons) check(taught.has(l.lessonId), `${where}: lesson ${l.lessonId} is in no teach record of family ${a.familyId}`);
-  return true;
 }
 
-/** Cross-record checks against the merged plan. Returns `unchecked`: apply records whose family teach
- * cell is missing, or crashed with no lessons, so their lessonIds could not be checked. */
+/** Cross-record checks against the merged plan. Returns `unchecked`: apply records with a missing or invalid
+ * teach cell of their family before them, so neither tasksSinceTeach nor their lessonIds could be checked. */
 export function validateCorpus(records, planCells) {
   rejectDuplicates(planCells, 'planned cell');
   rejectDuplicates(records, 'record for cell');
@@ -230,7 +233,8 @@ export function validateCorpus(records, planCells) {
   for (const a of records) {
     if (a.kind !== 'apply') continue;
     const teach = priorTeach(a, byCell, taskAt, positions.get(`${runKey(a.sequence, a.seed)}/${a.arm}`));
-    if (teach === null || !checkApply(a, teach)) unchecked.push(locationOf(a));
+    if (teach === null) unchecked.push(locationOf(a));
+    else checkApply(a, teach);
   }
   return { unchecked };
 }
