@@ -19,7 +19,7 @@ I checked absence in the audit by grepping each parent side for the lesson's key
 - Lock commit `06589ab`; scored item list SHA-256 `cb58dd16d537be7ec882c2faa18d82687bf9af3fac917be644592bd5f9c808ac`. The `dist/` files, prompts, manifest and `claude` version are as listed under Pins in the pre-registration. The guard checked all of them before the marker was written.
 - Code measured: master `c2b3840` (v1.53.2), unchanged through the run. The pinned `dist/` sources are unchanged from the script base `28ca777`.
 - Selftest: 76 cases pass at the lock commit.
-- After the run, one commit changed only path strings in the prereg and `scripts/z7-sidechain-eval.mjs`, so they no longer carry the machine user name, as in #302. The archive default is now derived from the home folder at run time. The lock commit `06589ab` (reachable as `refs/pull/358/head`) holds the files as scored, and the guard would now refuse a new scored run, as intended.
+- After the run, one commit changed only path strings in the prereg and `scripts/z7-sidechain-eval.mjs`, so they no longer carry the machine user name, as in #302. The archive default is now derived from the home folder at run time. The lock commit `06589ab` holds the files as scored. The PR branch was rebased onto 1.54.0, so the original history is kept on the branch `eval/z7-sidechain-gap-locked`, and the guard would now refuse a new scored run, as intended.
 - 442 judge, control, recheck and rule-arm calls, all on plan quota; 0 exhausted failures; 0 resumes.
 
 ## Verdict and validity
