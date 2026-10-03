@@ -106,7 +106,7 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
   it('case 14d: a flag read only as on/off is in BOOLEAN_FLAGS, so no value can switch it on', () => {
     const onOff = new Set<string>();
     const asValue = new Set<string>();
-    for (const file of ['cli.ts', join('cli', 'shared.ts'), join('cli', 'sleep.ts'), join('connectors', 'github', 'cli-impl.ts')]) {
+    for (const file of ['cli.ts', join('cli', 'shared.ts'), join('cli', 'sleep.ts'), join('cli', 'projects.ts'), join('connectors', 'github', 'cli-impl.ts')]) {
       const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
       for (const m of src.matchAll(/flags\[['"]([a-z0-9-]+)['"]\]/g)) {
         const at = m.index ?? 0;
@@ -122,7 +122,7 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
   it('case 14e: KNOWN_FLAGS is exactly the set of flags the CLI reads, so no typo hides in it', () => {
     const reads = new Set<string>();
     const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
-    for (const file of ['cli.ts', join('cli', 'shared.ts'), join('cli', 'sleep.ts'), join('connectors', 'github', 'cli-impl.ts')]) {
+    for (const file of ['cli.ts', join('cli', 'shared.ts'), join('cli', 'sleep.ts'), join('cli', 'projects.ts'), join('connectors', 'github', 'cli-impl.ts')]) {
       const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
       for (const m of src.matchAll(READ)) reads.add(m[1] ?? m[2] ?? m[3]);
     }
