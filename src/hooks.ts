@@ -64,7 +64,6 @@ export interface CodexWrapperPaths {
   runsDir: string;
   codexHome: string;
   historyPath: string;
-  sessionsDir: string;
 }
 
 export interface CodexWrapperInstallResult {
@@ -264,7 +263,6 @@ export function resolveCodexWrapperPaths(): CodexWrapperPaths {
     runsDir: path.join(home, '.hippo', 'runs', 'codex'),
     codexHome,
     historyPath: path.join(codexHome, 'history.jsonl'),
-    sessionsDir: path.join(codexHome, 'sessions'),
   };
 }
 

@@ -277,7 +277,6 @@ describe('resolveCodexWrapperPaths and CODEX_HOME', () => {
 
     expect(paths.codexHome).toBe(codexHome);
     expect(paths.historyPath).toBe(path.join(codexHome, 'history.jsonl'));
-    expect(paths.sessionsDir).toBe(path.join(codexHome, 'sessions'));
     expect(paths.metadataPath).toBe(path.join(env.home, '.hippo', 'integrations', 'codex.json'));
     expect(paths.logFile).toBe(path.join(env.home, '.hippo', 'logs', 'codex-sleep.log'));
     expect(paths.runsDir).toBe(path.join(env.home, '.hippo', 'runs', 'codex'));
@@ -289,7 +288,6 @@ describe('resolveCodexWrapperPaths and CODEX_HOME', () => {
       const paths = resolveCodexWrapperPaths();
       expect(paths.codexHome).toBe(path.join(env.home, '.codex'));
       expect(paths.historyPath).toBe(path.join(env.home, '.codex', 'history.jsonl'));
-      expect(paths.sessionsDir).toBe(path.join(env.home, '.codex', 'sessions'));
     }
   });
 });
