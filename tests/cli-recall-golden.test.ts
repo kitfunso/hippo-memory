@@ -20,7 +20,8 @@ let template: string;
 let goalId = '';
 
 function seeded(content: string, id: string, created: string, extra: Partial<MemoryEntry> = {}, opts: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
-  return { ...createMemory(content, opts), id, created, last_retrieved: created, valid_from: created, ...extra };
+  // createMemory decays strength over the real milliseconds it runs, so a fixed value keeps snapshots stable.
+  return { ...createMemory(content, opts), id, created, last_retrieved: created, valid_from: created, strength: 1, ...extra };
 }
 
 function seedLocal(hippoRoot: string): void {
