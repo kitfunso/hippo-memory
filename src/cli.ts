@@ -38,7 +38,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { execFileSync, execSync, spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import {
   installJsonHooks,
   uninstallJsonHooks,
@@ -208,7 +208,6 @@ import { COMPACTION_DB_WAIT_MS, replayCompactionsAt } from './compaction-record.
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
-  appendAuditEvent,
   auditQueryFields,
   queryAuditEvents,
   AUDIT_OPS,
