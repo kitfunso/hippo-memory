@@ -259,12 +259,15 @@ function selftestGuard(t) {
     cfg.claudeVersion = () => '2.1.288 (Claude Code)';
     fs.writeFileSync(cfg.scriptFiles[0], 'export const x = 1;\n');
     commit('later change');
-    t('guard refuses a script that changed after the lock commit, even when committed', refuses(/after the lock commit/));
+    t('guard refuses a script that changed after the lock commit, even when committed', refuses(/after the lock commit: a\.mjs/));
     fs.appendFileSync(cfg.prereg, '\nA later note.\n');
     commit('prereg edit after the script change');
-    t('a later prereg edit does not move the lock commit', refuses(/after the lock commit/));
+    t('a later prereg edit does not move the lock commit', refuses(/after the lock commit: .*a\.mjs/));
     fs.writeFileSync(cfg.scriptFiles[0], 'export {};\n');
-    commit('restore');
+    commit('restore script');
+    t('guard refuses a prereg body edit that keeps Status locked, naming the prereg', refuses(/after the lock commit: prereg\.md$/));
+    fs.writeFileSync(cfg.prereg, prereg('PRE-REG-LOCKED.'));
+    commit('restore prereg');
     const lock = guardScored(cfg);
     t('resume refused without a marker', refuses(/no lock marker/, true));
     createMarker(lock, 'abc');
