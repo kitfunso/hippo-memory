@@ -15,7 +15,7 @@ import { loadAllEntries } from '../src/store.js';
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 const dirs: string[] = [];
-const envKeys = ['HOME', 'USERPROFILE', 'APPDATA', 'PATH', 'Path', 'CLAUDE_CODE_OAUTH_TOKEN', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS'];
+const envKeys = ['HOME', 'USERPROFILE', 'APPDATA', 'PATH', 'Path', 'HIPPO_HOME', 'CLAUDE_CODE_OAUTH_TOKEN', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS'];
 const savedEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 afterEach(() => {
@@ -301,6 +301,29 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
       expect(c2['AGENTS.md']).toContain('hippo:start');
     }
   }, 240_000);
+
+  it('a setup that inits a submodule passes again at the next task', async () => {
+    isolate();
+    process.env.HIPPO_HOME = tmp('ab-run-hippo-home-');
+    const sub = tmp('ab-run-sub-');
+    const sg = (...args: string[]): string => execFileSync('git', args, { cwd: sub, encoding: 'utf8' }).trim();
+    sg('init', '-q');
+    for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false']]) sg('config', k, v);
+    writeFileSync(join(sub, 'dep.js'), 'module.exports = 1;\n');
+    sg('add', '.');
+    sg('commit', '-qm', 'dep');
+    const r = makeRepo();
+    const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
+    g('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub.replace(/\\/g, '/'), 'sub');
+    g('commit', '-qm', 'add submodule');
+    const withSub = g('rev-parse', 'HEAD');
+    const setup = 'git -c protocol.file.allow=always submodule update --init';
+    const out = tmp('ab-run-submodule-');
+    const tasks = ['u1', 'u2'].map((id) => task(r, id, 'look around only', { baseRef: withSub, setup }));
+    await run(validateTasks({ sequences: [{ id: 'seqU', cluster: 'c', repo: r.repo, tasks }] }), ['A0'], out);
+    const setupLog = join(out, 'raw', 'seqU', 'A0', 'seed1', 'u2.setup.txt');
+    expect(readRecords(out).map((x) => x.invalid), existsSync(setupLog) ? readFileSync(setupLog, 'utf8') : '').toEqual([null, null]);
+  }, 60_000);
 
   it('a task with a failing setup is skipped, not graded as unresolved', async () => {
     isolate();

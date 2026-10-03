@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { git } from './exec.mjs';
+import { HIPPO_ARMS } from './arms.mjs';
 
 export const STUB_CLAUDE_MD = '# Instructions for coding agents working in this repository.\n';
 const STUB_IDENT = {
@@ -14,21 +15,35 @@ const NAMES = new Set(['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md']);
 const SKIP_DIRS = new Set(['.git', '.hippo', 'node_modules']);
 const win = process.platform === 'win32';
 
+/** Runs fn(rgit, scratch) with a git that reads no system or global config and runs no hooks. */
+function withRunnerGit(fn) {
+  // The agent shares the operator's HOME, so its global config could add hooks, an fsmonitor or a commit encoding to runner calls.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));
+  const hooks = path.join(scratch, 'hooks');
+  fs.mkdirSync(hooks);
+  // Git for Windows reads /dev/null as the null device; os.devNull (\\.\nul) it refuses.
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
+  const rgit = (args, cwd, extra = {}) => git(['-c', `core.hooksPath=${hooks}`, '-c', 'core.longpaths=true', ...args], cwd, { ...env, ...extra });
+  try {
+    return fn(rgit, scratch);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 /** The base plus a root CLAUDE.md holding only the stub; fixed identity and dates give every arm the same sha. */
 export function stubBaseCommit(cacheDir, baseRef) {
-  const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: cacheDir, input: STUB_CLAUDE_MD, encoding: 'utf8' }).trim();
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-index-'));
-  const env = { ...process.env, ...STUB_IDENT, GIT_INDEX_FILE: path.join(tmp, 'index') };
-  try {
-    const parent = git(['rev-parse', `${baseRef}^{commit}`], cacheDir).trim();
-    git(['read-tree', parent], cacheDir, env);
-    git(['update-index', '--add', '--cacheinfo', `100644,${blob},CLAUDE.md`], cacheDir, env);
-    const tree = git(['write-tree'], cacheDir, env).trim();
+  return withRunnerGit((rgit, scratch) => {
+    fs.writeFileSync(path.join(scratch, 'stub'), STUB_CLAUDE_MD);
+    const blob = rgit(['hash-object', '-w', '--no-filters', path.join(scratch, 'stub')], cacheDir).trim();
+    const env = { ...STUB_IDENT, GIT_INDEX_FILE: path.join(scratch, 'index') };
+    const parent = rgit(['rev-parse', `${baseRef}^{commit}`], cacheDir).trim();
+    rgit(['read-tree', parent], cacheDir, env);
+    rgit(['update-index', '--add', '--cacheinfo', `100644,${blob},CLAUDE.md`], cacheDir, env);
+    const tree = rgit(['write-tree'], cacheDir, env).trim();
     // --no-gpg-sign: a signing config would make the sha differ per run.
-    return git(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'z0 eval: stub CLAUDE.md'], cacheDir, env).trim();
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
+    return rgit(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'z0 eval: stub CLAUDE.md'], cacheDir, env).trim();
+  });
 }
 
 /** A CLAUDE.md, CLAUDE.local.md or AGENTS.md at any depth, or a file under the root .claude/rules/; nothing else under .claude/. */
@@ -73,8 +88,9 @@ export function baseInstructionSet(workDir, commit) {
 /** Throws when the stub tree a task checks out holds an instruction file, or .claude or anything under it, as a symlink. */
 export function assertNoInstructionLinks(cacheDir, sequenceId, t, stub) {
   // A link's bytes are its target path and an edit through it lands on a non-instruction file, so neither carry nor restore can keep it.
-  const link = treeBlobs(cacheDir, stub).find(([mode, rel]) => mode === '120000' && (isInstructionPath(rel) || rel === '.claude' || rel.startsWith('.claude/')));
-  if (link) throw new Error(`Z0 task ${sequenceId}/${t.id}: instruction file ${link[1]} is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task`);
+  const inClaude = (rel) => rel === '.claude' || rel.startsWith('.claude/');
+  const link = treeBlobs(cacheDir, stub).find(([mode, rel]) => mode === '120000' && (isInstructionPath(rel) || inClaude(rel)));
+  if (link) throw new Error(`Z0 task ${sequenceId}/${t.id}: ${inClaude(link[1]) ? '.claude entry' : 'instruction file'} ${link[1]} is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task`);
 }
 
 function assertInstructionSet(workDir, commit) {
@@ -86,23 +102,48 @@ function assertInstructionSet(workDir, commit) {
   if (extra.length || missing.length) throw new Error(`instruction files in ${workDir} differ from base ${commit}: extra [${extra.join(', ')}], missing [${missing.join(', ')}]`);
 }
 
-const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf']];
+const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.longpaths', 'true']];
+const rm = (p) => fs.rmSync(p, { recursive: true, force: true, maxRetries: 3 });
+
+const holdsRepo = (names) => names.has('.git') || (names.has('HEAD') && names.has('objects') && names.has('refs'));
+
+/** Delete every git repo under a kept dir: below the top the whole dir, at the top only its git entries. */
+function dropRepos(dir, top) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  if (holdsRepo(new Set(entries.map((e) => e.name)))) {
+    if (!top) return rm(dir);
+    for (const name of ['.git', 'objects', 'refs']) rm(path.join(dir, name));
+  }
+  // Dirent.isDirectory is false for a link or junction, so the walk never leaves the workspace.
+  for (const e of entries) if (e.isDirectory() && fs.existsSync(path.join(dir, e.name))) dropRepos(path.join(dir, e.name), false);
+}
+
+/** Empty the workspace but for the arm's own store, so nothing an agent wrote survives except what E3's surface check reads. */
+function emptyWorkspace(workDir, arm) {
+  const keep = HIPPO_ARMS.has(arm) ? new Set(['.hippo']) : new Set();
+  // Git's own rules (excludes, gitlinks, -ff) are what let agent clones and submodule dirs outlive a clean, so the runner names what stays.
+  for (const e of fs.readdirSync(workDir, { withFileTypes: true })) {
+    if (keep.has(e.name) && e.isDirectory()) dropRepos(path.join(workDir, e.name), true);
+    else rm(path.join(workDir, e.name));
+  }
+}
 
 /** Move the workspace to a task's stub base without its future, in a new .git that fetches only that commit's history. */
-export function checkoutBase(cacheDir, workDir, sequenceId, t) {
+export function checkoutBase(cacheDir, workDir, sequenceId, t, arm) {
   const stub = stubBaseCommit(cacheDir, t.baseRef);
   assertNoInstructionLinks(cacheDir, sequenceId, t, stub);
-  // Sequence order comes from the seed, so an earlier base can hold a later task's fix; every ref, reflog, worktree, config or object an agent leaves lives in .git.
-  fs.rmSync(path.join(workDir, '.git'), { recursive: true, force: true, maxRetries: 3 });
-  git(['init', '--quiet'], workDir);
-  for (const [k, v] of WORK_CONFIG) git(['config', k, v], workDir);
-  fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
-  const ref = `refs/eval/${sequenceId}/${t.id}`;
-  git(['update-ref', ref, stub], cacheDir);
-  git(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
-  git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
-  // -ff also removes nested repos such as an agent's clone of the workspace; -x drops gitignored notes, so A0 is a true floor.
-  git(['clean', '-ffdqx', '-e', '.hippo', '-e', 'node_modules'], workDir);
+  // Sequence order comes from the seed, so an earlier base can hold a later task's fix.
+  emptyWorkspace(workDir, arm);
+  withRunnerGit((rgit) => {
+    rgit(['init', '--quiet'], workDir);
+    for (const [k, v] of WORK_CONFIG) rgit(['config', k, v], workDir);
+    // Keeps a hippo arm's store out of `git status`.
+    fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
+    const ref = `refs/eval/${sequenceId}/${t.id}`;
+    rgit(['update-ref', ref, stub], cacheDir);
+    rgit(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
+    rgit(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
+  });
   assertInstructionSet(workDir, stub);
   return stub;
 }

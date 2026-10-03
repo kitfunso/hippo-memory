@@ -282,12 +282,24 @@ describe('applyInstructions', () => {
   });
 });
 
+/** Every dir under root holding a .git entry or shaped like a bare repo, root-relative ('' for root). */
+function repoDirs(root: string, rel = ''): string[] {
+  const entries = readdirSync(join(root, rel), { withFileTypes: true });
+  const names = entries.map((e) => e.name);
+  const here = names.includes('.git') || ['HEAD', 'objects', 'refs'].every((n) => names.includes(n)) ? [rel] : [];
+  return [...here, ...entries.filter((e) => e.isDirectory() && e.name !== '.git').flatMap((e) => repoDirs(root, rel ? `${rel}/${e.name}` : e.name))];
+}
+
+const filesText = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? filesText(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
+
 describe('workspace checkout', () => {
-  it('leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs, worktrees and nested repos', () => {
+  it.each(['A0', 'A2'])('%s: leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs, worktrees and nested repos', (arm) => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
-    checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix });
+    checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix }, arm);
+    mkdirSync(join(work, '.hippo'));
+    writeFileSync(join(work, '.hippo', 'store.db'), 'hippo store\n');
     writeFileSync(join(work, 'lib.js'), 'agent edit\n');
     wg('stash');
     wg('branch', 'agent-work');
@@ -307,7 +319,15 @@ describe('workspace checkout', () => {
     writeFileSync(join(work, 'scratch', 'notes.md'), 'the fix that a later task must never see\n');
     sg('add', '.');
     sg('commit', '-qm', 'notes');
-    checkoutBase(repo, work, 'seqP', { id: 'p2', baseRef: base });
+    for (const into of ['src/node_modules/backup', 'docs/.hippo/backup', '.hippo/backup']) wg('clone', '-q', '--no-checkout', '.', into);
+    writeFileSync(join(work, '.hippo', 'notes.md'), 'agent notes\n');
+    mkdirSync(join(work, 'node_modules'));
+    writeFileSync(join(work, 'node_modules', 'notes.md'), 'the fix that a later task must never see\n');
+    checkoutBase(repo, work, 'seqP', { id: 'p2', baseRef: base }, arm);
+    expect(readdirSync(work).sort()).toEqual(arm === 'A2' ? ['.git', '.hippo', 'CLAUDE.md', 'lib.js'] : ['.git', 'CLAUDE.md', 'lib.js']);
+    if (arm === 'A2') expect(readdirSync(join(work, '.hippo')).sort()).toEqual(['notes.md', 'store.db']);
+    expect(repoDirs(work)).toEqual(['']);
+    expect(filesText(work)).not.toContain('the fix that a later task must never see');
     expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
     const history = wg('log', '--all', '--reflog', '--format=%H %P');
     expect(history).toContain(base);
@@ -324,11 +344,11 @@ describe('workspace checkout', () => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
-    checkoutBase(repo, work, 'seqG', { id: 'g1', baseRef: fix });
+    checkoutBase(repo, work, 'seqG', { id: 'g1', baseRef: fix }, 'A0');
     const moved = join(tmp('z0-moved-'), 'git');
     renameSync(join(work, '.git'), moved);
     writeFileSync(join(work, '.git'), `gitdir: ${moved}\n`);
-    const stub = checkoutBase(repo, work, 'seqG', { id: 'g2', baseRef: base });
+    const stub = checkoutBase(repo, work, 'seqG', { id: 'g2', baseRef: base }, 'A0');
     expect(statSync(join(work, '.git')).isDirectory()).toBe(true);
     expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
     expect(wg('rev-parse', 'HEAD')).toBe(stub);
@@ -338,6 +358,41 @@ describe('workspace checkout', () => {
     expect(wg('status', '--porcelain')).toBe('');
     expect(wg('config', 'core.autocrlf')).toBe('false');
     expect(wg('config', 'user.email')).toBe('eval@localhost');
+  });
+
+  it('runs no hook from a hooksPath the agent put in the global git config it shares with the runner', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqK', { id: 'k1', baseRef: fix }, 'A0');
+    const home = tmp('z0-agent-home-');
+    const hooks = join(home, 'hooks');
+    const marker = join(home, 'hook-ran');
+    mkdirSync(hooks);
+    writeFileSync(join(hooks, 'post-checkout'), `#!/bin/sh\necho hooked > lib.js\necho ran > "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
+    writeFileSync(join(home, '.gitconfig'), `[core]\n\thooksPath = ${hooks.replace(/\\/g, '/')}\n`);
+    for (const k of ['GIT_CONFIG_GLOBAL', 'XDG_CONFIG_HOME']) delete process.env[k];
+    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    expect(execFileSync('git', ['config', '--global', 'core.hooksPath'], { encoding: 'utf8' }).trim()).toBe(hooks.replace(/\\/g, '/'));
+    checkoutBase(repo, work, 'seqK', { id: 'k2', baseRef: base }, 'A0');
+    expect(existsSync(marker)).toBe(false);
+    expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it.each(['A0', 'A2'])('%s: clears a path over 260 characters the agent left, without throwing', (arm) => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqL', { id: 'l1', baseRef: fix }, arm);
+    const segments = Array.from({ length: 6 }, (_, i) => String(i).repeat(50));
+    for (const top of ['deep', join('.hippo', 'deep')]) {
+      const dir = join(work, top, ...segments);
+      mkdirSync(join(dir, '.git'), { recursive: true });
+      writeFileSync(join(dir, 'notes.md'), 'x');
+      expect(join(dir, 'notes.md').length).toBeGreaterThan(260);
+    }
+    checkoutBase(repo, work, 'seqL', { id: 'l2', baseRef: base }, arm);
+    expect(existsSync(join(work, 'deep'))).toBe(false);
+    expect(existsSync(join(work, '.hippo'))).toBe(arm === 'A2');
+    if (arm === 'A2') expect(repoDirs(work)).toEqual(['']);
   });
 
   /** gitRepo plus one commit adding `links` as 120000 entries; returns that commit. */
@@ -354,7 +409,7 @@ describe('workspace checkout', () => {
     const r = gitRepo({ 'CLAUDE.md': 'native\n' });
     const head = withLinks(r, { 'AGENTS.md': 'CLAUDE.md' });
     const work = workRepo();
-    expect(() => checkoutBase(r.repo, work, 'seqY', { id: 'y1', baseRef: head })).toThrow('Z0 task seqY/y1: instruction file AGENTS.md is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task');
+    expect(() => checkoutBase(r.repo, work, 'seqY', { id: 'y1', baseRef: head }, 'A0')).toThrow('Z0 task seqY/y1: instruction file AGENTS.md is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task');
     expect(spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: work }).status).not.toBe(0);
   });
 
@@ -362,7 +417,7 @@ describe('workspace checkout', () => {
     for (const rel of ['.claude', '.claude/rules']) {
       const r = gitRepo({});
       const head = withLinks(r, { [rel]: 'config/claude' });
-      expect(() => checkoutBase(r.repo, workRepo(), 'seqD', { id: 'd1', baseRef: head }), rel).toThrow(`Z0 task seqD/d1: instruction file ${rel} is a symlink in the task repo`);
+      expect(() => checkoutBase(r.repo, workRepo(), 'seqD', { id: 'd1', baseRef: head }, 'A0'), rel).toThrow(`Z0 task seqD/d1: .claude entry ${rel} is a symlink in the task repo`);
     }
   });
 
@@ -370,7 +425,7 @@ describe('workspace checkout', () => {
     const r = gitRepo({ 'AGENTS.md': 'native rules\n' });
     const head = withLinks(r, { 'CLAUDE.md': 'AGENTS.md' });
     const work = workRepo();
-    checkoutBase(r.repo, work, 'seqC', { id: 'c1', baseRef: head });
+    checkoutBase(r.repo, work, 'seqC', { id: 'c1', baseRef: head }, 'A0');
     expect(readFileSync(join(work, 'CLAUDE.md'), 'utf8')).toBe(STUB_CLAUDE_MD);
     expect(readFileSync(join(work, 'AGENTS.md'), 'utf8')).toBe('native rules\n');
   });

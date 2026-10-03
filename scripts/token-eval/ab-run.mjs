@@ -163,7 +163,7 @@ async function runTask(ctx, run, position, order) {
   const { s, arm, seed, dirs, env, rawDir } = run;
   const t = s.tasks[position];
   const work = dirs.work;
-  const prepare = () => ({ commit: checkoutBase(run.cached, work, s.id, t), setup: t.setup ? sh(t.setup, work, childEnv(env)) : null });
+  const prepare = () => ({ commit: checkoutBase(run.cached, work, s.id, t, arm), setup: t.setup ? sh(t.setup, work, childEnv(env)) : null });
   const { commit, setup } = prepare();
   const base = { taskId: t.id, cluster: s.cluster, sequence: s.id, position, order, scored: position > 0, arm, seed, model: ctx.model, claudeVersion: ctx.claudeVersion, startedAt: new Date().toISOString(), baseCommit: commit };
   const meta = { envKeys: Object.keys(env).sort(), passEnv: ctx.passEnv };
