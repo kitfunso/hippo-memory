@@ -1,13 +1,10 @@
 // Pilot arm: one token_ledger row per session names its arm, `hippo` or `holdout`, so a pilot can compare them.
 // `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is fixed.
 import { createHash } from 'node:crypto';
-import { execWithBusyRetry, type DatabaseSyncLike } from './db.js';
+import { execWithBusyRetry, HOOK_DB_WAIT_MS, type DatabaseSyncLike } from './db.js';
 import { recordTokenUse } from './token-ledger.js';
 
 export type PilotArm = 'hippo' | 'holdout';
-
-// The hook runs on every prompt, so a locked store may cost it about a second, not the default five.
-export const ARM_LOCK_WAIT_MS = 1000;
 
 /** Deterministic split: the same session and rate always land in the same arm. */
 export function hashArm(sessionId: string, rateBp: number): PilotArm {
@@ -25,7 +22,7 @@ export function readPilotArm(db: DatabaseSyncLike, sessionId: string): PilotArm 
 }
 
 /** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
-// The 1 s bound holds only on a handle opened with `busyWaitMs: ARM_LOCK_WAIT_MS`.
+// The hook's lock-wait bound holds only on a handle opened with `busyWaitMs: HOOK_DB_WAIT_MS`, as hook commands are.
 export function ensurePilotArm(
   db: DatabaseSyncLike, tenantId: string, sessionId: string, rateBp: number, now?: string,
 ): PilotArm {
@@ -35,7 +32,7 @@ export function ensurePilotArm(
     // A stored row is the common case after the first prompt, so it must not take the write lock.
     const existing = readPilotArm(db, sessionId);
     if (existing !== null) return existing;
-    execWithBusyRetry(db, 'BEGIN IMMEDIATE', ARM_LOCK_WAIT_MS);
+    execWithBusyRetry(db, 'BEGIN IMMEDIATE', HOOK_DB_WAIT_MS);
     began = true;
     const stored = readPilotArm(db, sessionId);
     if (stored === null) {

@@ -5,8 +5,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store.js';
 import { loadConfig } from '../src/config.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { ARM_LOCK_WAIT_MS, ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
+import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
+import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/working-memory.js';
@@ -103,7 +103,7 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      const reader = openHippoDb(root, { busyWaitMs: ARM_LOCK_WAIT_MS });
+      const reader = openHippoDb(root, { busyWaitMs: HOOK_DB_WAIT_MS });
       try {
         const started = Date.now();
         expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
