@@ -38,20 +38,32 @@ function parseScores(answers: Record<string, JevAnswer> | undefined, n: number):
   return out;
 }
 
-/** One batched request for the whole candidate list. Rejects with the reason when there are no usable scores. */
-async function requestScores(query: string, head: SearchResult[]): Promise<number[]> {
-  const key = process.env.TYPESAFE_API_KEY;
-  if (!key) throw new Error('TYPESAFE_API_KEY not set');
+/** The System One `state` and one `noul` question per candidate (`c1`..`cN`). */
+export interface RelevanceRequest {
+  state: string;
+  questions: Record<string, { type: 'noul'; instructions: string }>;
+}
 
+/** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
+export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
   const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecrets(r.entry.content), TRUNCATE_CHARS)}`);
   const state = `Query: ${redactSecrets(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
-  const questions: Record<string, { type: string; instructions: string }> = {};
+  const questions: RelevanceRequest['questions'] = {};
   for (let i = 1; i <= head.length; i++) {
     questions[`c${i}`] = {
       type: 'noul',
       instructions: `Probability that candidate ${i} (numbered in the state above) helps answer the query.`,
     };
   }
+  return { state, questions };
+}
+
+/** One batched request for the whole candidate list. Rejects with the reason when there are no usable scores. */
+async function requestScores(query: string, head: SearchResult[]): Promise<number[]> {
+  const key = process.env.TYPESAFE_API_KEY;
+  if (!key) throw new Error('TYPESAFE_API_KEY not set');
+
+  const { state, questions } = buildRelevanceRequest(query, head);
 
   const parsed = Number.parseInt(process.env.HIPPO_JEV_TIMEOUT_MS ?? '', 10);
   const timeoutMs = parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;

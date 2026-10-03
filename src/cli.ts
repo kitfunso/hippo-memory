@@ -278,6 +278,7 @@ import { getReranker } from './rerankers/index.js';
 import type { RerankerFn } from './rerankers/types.js';
 import { rankRecall, type RankStage, type RecallGraphHops, type RecallGraphStream, type RecallReranker } from './recall-pipeline.js';
 import { JEV_DEFAULT_TOP_K } from './rerankers/jev.js';
+import { isClefModel } from './rerankers/clef.js';
 import { computeSalience } from './salience.js';
 import { renderAmbientSummary } from './ambient.js';
 import {
@@ -1068,7 +1069,7 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   if (!fn) return {};
   const topK = flags['reranker-top-k'] !== undefined
     ? parseInt(String(flags['reranker-top-k']), 10)
-    : name === 'jev' ? JEV_DEFAULT_TOP_K : 50;
+    : name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50;
   return { value: { fn, topK } };
 }
 
@@ -7950,17 +7951,21 @@ Commands:
                            where cost_factor = min(0.3, tokens / 10000). Re-sorts
                            results by utility. Default off. RESEARCH.md §PFC.OFC.
     --reranker <name>      Apply a reranker pass after retrieval
-                           (cross-encoder|jev|llm). Looks up the named
-                           reranker from src/rerankers/index.ts and re-orders
-                           the top-K candidates. Default unset (no reranker).
+                           (cross-encoder|jev|clef-flash|clef|llm). Looks up
+                           the named reranker from src/rerankers/index.ts and
+                           re-orders the top-K candidates. Default unset (no reranker).
                            jev calls the hosted TypeSafe Jev API: it needs
                            TYPESAFE_API_KEY, sends the query and candidate
                            text to that API, costs about 0.0004 USD a recall,
                            and falls back to cross-encoder on any failure.
+                           clef-flash and clef send the same request to
+                           Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID and
+                           CLOUDFLARE_API_TOKEN) or to HIPPO_CLEF_ENDPOINT, and
+                           keep the native order on any failure.
                            See docs/evals/2026-09-19-jev-reranker.md and
                            docs/plans/2026-05-10-f6-reranker-hardening.md.
     --reranker-top-k <n>   Cap candidates passed to the reranker (default 50;
-                           40 for jev).
+                           40 for jev, clef-flash and clef).
     --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
                            the goal tag get a 1.5x score boost and results are
                            re-sorted. Default off. RESEARCH.md §PFC.dlPFC.

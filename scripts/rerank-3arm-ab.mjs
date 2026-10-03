@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Lane 15 of docs/EXPERIMENT-PROTOCOL.md: the deciding head-to-head. One
  *  shared candidate set per query, three arms (base/cross-encoder/jev) via the
- *  real getReranker(), so the two prior single-harness deltas finally compare. */
+ *  real getReranker(), so the two prior single-harness deltas finally compare.
+ *  RERANK_ARM=clef-flash|clef swaps the third arm (CLF4 dev comparison). */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -20,14 +21,21 @@ const BUDGET = 4000;
 const MIN_RESULTS = 1;
 const ALPHA_LO = 0.00625, ALPHA_HI = 0.99375; // 98.75% CI, alpha 0.0125 (verdict)
 const DIAG_LO = 0.025, DIAG_HI = 0.975; // nominal 95%, diagnostic only
-const COST_PER_CALL_USD = 0.0004;
+const ARM = process.env.RERANK_ARM?.trim() || 'jev';
+if (!['jev', 'clef-flash', 'clef'].includes(ARM)) { console.error(`RERANK_ARM must be jev, clef-flash or clef, not ${ARM}.`); process.exit(1); }
+// A 300-query clef run is far past the Workers AI free allocation, so hosted needs an explicit opt-in.
+if (ARM !== 'jev' && !process.env.HIPPO_CLEF_ENDPOINT && process.env.RERANK_ALLOW_HOSTED !== '1') {
+  console.error('Set HIPPO_CLEF_ENDPOINT to a private CLEF server, or RERANK_ALLOW_HOSTED=1 to bill Workers AI.');
+  process.exit(1);
+}
+const COST_PER_CALL_USD = ARM === 'jev' ? 0.0004 : 0;
 const COST_CAP_USD = 1.0;
-const JEV_CONCURRENCY = 8;
-const OUTPUT_PATH = join('results', 'rerank-3arm-2026-09-18.json');
+const JEV_CONCURRENCY = Number(process.env.RERANK_CONCURRENCY) > 0 ? Number(process.env.RERANK_CONCURRENCY) : 8;
+const OUTPUT_PATH = join('results', ARM === 'jev' ? 'rerank-3arm-2026-09-18.json' : `rerank-3arm-${ARM}-2026-09-18.json`);
 const LANE12_CONTROL = { 'recall@budget': 0.6967, 'R@1': 0.2633, 'R@5': 0.4600, MRR: 0.3608 };
 
 const apiKey = process.env.TYPESAFE_API_KEY?.trim();
-if (!apiKey) { console.error('TYPESAFE_API_KEY is not set.'); process.exit(1); }
+if (ARM === 'jev' && !apiKey) { console.error('TYPESAFE_API_KEY is not set.'); process.exit(1); }
 
 let s = 4242; // same seed as crossenc-rerank-ab.mjs
 const rng = () => ((s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -36,7 +44,7 @@ const median = (xs) => { const c = [...xs].sort((a, b) => a - b); const m = Math
 const quantile = (xs, p) => { const c = [...xs].sort((a, b) => a - b); return c[Math.min(c.length - 1, Math.floor(c.length * p))]; };
 
 const hippoRoot = join(homedir(), '.hippo');
-const dir = 'evals/paraphrase';
+const dir = process.env.RERANK_QUERIES_DIR || 'evals/paraphrase';
 const queries = [];
 for (const fn of readdirSync(dir).filter((x) => /^queries\d+\.json$/.test(x)).sort()) {
   const part = JSON.parse(readFileSync(join(dir, fn), 'utf8'));
@@ -87,7 +95,7 @@ async function runPool(items, worker, concurrency) {
 }
 
 const ceReranker = getReranker('cross-encoder');
-const jevReranker = getReranker('jev');
+const jevReranker = getReranker(ARM);
 
 // crossEncoderReranker fails OPEN (identity order + a console.warn) rather than
 // throwing, so a silent fallback would look like a real result without this spy.
@@ -159,7 +167,7 @@ globalThis.fetch = async (input, init) => {
     if (expected != null) {
       try {
         const body = await res.clone().json();
-        const answered = Object.values(body?.answers ?? {}).filter((a) => Number.isFinite(a?.noul) && a.noul >= 0 && a.noul <= 1).length;
+        const answered = Object.values(body?.result?.answers ?? body?.answers ?? {}).filter((a) => Number.isFinite(a?.noul) && a.noul >= 0 && a.noul <= 1).length;
         if (answered < expected) jevStats.partial++; else jevStats.ok++;
       } catch { jevStats.partial++; }
     } else {
@@ -172,7 +180,7 @@ globalThis.fetch = async (input, init) => {
   }
 };
 
-console.error(`=== Jev arm: ${rows.length} calls, concurrency ${JEV_CONCURRENCY} ===\n`);
+console.error(`=== ${ARM} arm: ${rows.length} calls, concurrency ${JEV_CONCURRENCY} ===\n`);
 const jevOut = await runPool(rows, async (row) => {
   const t0 = Date.now();
   const jevHead = await jevReranker(row.query, row.candidates, { topK: CANDIDATE_TOPK });
@@ -254,9 +262,9 @@ function contrast(aRanks, bRanks) {
 }
 
 const contrasts = {
-  'jev-vs-base': { aLabel: 'base', bLabel: 'jev', table: contrast(baseRanks, jevRanks) },
+  'jev-vs-base': { aLabel: 'base', bLabel: ARM, table: contrast(baseRanks, jevRanks) },
   'crossenc-vs-base': { aLabel: 'base', bLabel: 'cross-enc', table: contrast(baseRanks, ceRanks) },
-  'jev-vs-crossenc': { aLabel: 'cross-enc', bLabel: 'jev', table: contrast(ceRanks, jevRanks) },
+  'jev-vs-crossenc': { aLabel: 'cross-enc', bLabel: ARM, table: contrast(ceRanks, jevRanks) },
 };
 
 function printContrast(name, { aLabel, bLabel, table }) {
@@ -337,6 +345,7 @@ const outRows = rows.map((r) => ({
 
 writeFileSync(OUTPUT_PATH, JSON.stringify({
   protocol: 'docs/EXPERIMENT-PROTOCOL.md, LANE 15 (deciding head-to-head)',
+  third_arm: ARM,
   primary_metric: PRIMARY,
   now: NOW.toISOString(),
   hippo_root: hippoRoot,

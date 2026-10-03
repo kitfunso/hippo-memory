@@ -774,7 +774,7 @@ exports[`cli recall and explain golden output > recall invalid --outcome 1`] = `
 exports[`cli recall and explain golden output > recall invalid --reranker 1`] = `
 {
   "status": 1,
-  "stderr": "Error: Unknown reranker: bogus. Available: cross-encoder, jev, llm
+  "stderr": "Error: Unknown reranker: bogus. Available: clef, clef-flash, cross-encoder, jev, llm
 ",
   "stdout": "",
 }
