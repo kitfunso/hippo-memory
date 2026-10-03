@@ -88,6 +88,7 @@ import {
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
 import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from './recall-trace.js';
+import type { DeliveryObserver } from './delivery-recorder.js';
 import { evalNow } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
@@ -2555,6 +2556,8 @@ export interface ContextOpts {
   prompt?: string;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
   cost?: ContextCost;
+  /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with or without it. */
+  deliveryObserver?: DeliveryObserver;
 }
 
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
@@ -2671,6 +2674,9 @@ export async function getContext(
     ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProjectName) })
     : estimateTokens(entry.content);
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
+  const obs = opts.deliveryObserver;
+  obs?.facts({ projectName: currentProjectName, budgetTokens: blockBudget, promptRecall: promptRecallPending });
+  if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   let left = cost
     ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
     : blockBudget;
@@ -2724,6 +2730,10 @@ export async function getContext(
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
   const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+  obs?.sections(
+    Number(shownSnapshot !== null) + Number(shownHandoff !== null) + Number(shownEvents.length > 0),
+    Number(activeSnapshot !== shownSnapshot) + Number(sessionHandoff !== shownHandoff) + Number(recentSessionEvents.length !== shownEvents.length),
+  );
 
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   let digestHiddenForHandoff = false;
@@ -2743,13 +2753,14 @@ export async function getContext(
     e.tags.includes(COMPACTION_MEMORY_TAG);
   // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
+  const loadAdmit = obs ? obs.watchAdmit(admit) : admit;
 
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest)
     : { entries: [] };
   const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest)
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;
@@ -2780,7 +2791,10 @@ export async function getContext(
     // Effective budget: explicit opts.budget wins over config, less what the sections took.
     const effBudget = left;
     const nowP = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+    obs?.offer(localEntries, primaryIsGlobal);
+    obs?.offer(globalEntries, true);
     const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP);
+    obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
     const selectedIds = new Set<string>();
     let usedP = 0;
 
@@ -2854,12 +2868,17 @@ export async function getContext(
               : !isContentWorthStoring(e.content) ? 'quality'
                 : pinnedText.has(e.content) ? 'duplicate'
                   : null;
-        const eligible = (e: MemoryEntry): boolean => ineligibleReason(e) === null;
-        const [localCandidates, globalCandidates] = oneCopyPerMemory(
-          (localLoad.recall ?? []).filter(eligible),
-          (globalLoad.recall ?? []).filter(eligible),
-          nowP,
-        );
+        const eligible = (e: MemoryEntry): boolean => {
+          const why = ineligibleReason(e);
+          if (why !== null && why !== 'pinned') obs?.reject(e, 'eligible', why);
+          return why === null;
+        };
+        obs?.offer(localLoad.recall ?? [], primaryIsGlobal, 'prompt-recall');
+        obs?.offer(globalLoad.recall ?? [], true, 'prompt-recall');
+        const localEligible = (localLoad.recall ?? []).filter(eligible);
+        const globalEligible = (globalLoad.recall ?? []).filter(eligible);
+        const [localCandidates, globalCandidates] = oneCopyPerMemory(localEligible, globalEligible, nowP);
+        obs?.dropMissing([...localEligible, ...globalEligible], [...localCandidates, ...globalCandidates], 'eligible', 'duplicate');
         const seenCandidateIds = new Set<string>();
         const candidateItems: Array<{ id: string; tokens: Set<string>; entry: MemoryEntry; isGlobal: boolean }> = [];
         // Local wins the id collision (a global row synced into the local store).
@@ -2874,10 +2893,14 @@ export async function getContext(
           candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: true });
         }
         const gated = gatePromptRecall(p, candidateItems, gate);
+        obs?.gated(p, candidateItems, gate, gated);
         for (const g of gated) {
           if (selectedIds.has(g.item.id)) continue;
           const tokens = price(g.item.entry, g.item.isGlobal, true);
-          if (usedP + tokens > recentBudget) continue;
+          if (usedP + tokens > recentBudget) {
+            obs?.reject(g.item.entry, 'budget', 'budget', g.score, tokens);
+            continue;
+          }
           selectedItems.push({ entry: g.item.entry, score: g.score, tokens, isGlobal: g.item.isGlobal, promptRecall: true });
           selectedIds.add(g.item.id);
           usedP += tokens;
@@ -2928,7 +2951,10 @@ export async function getContext(
 
       for (const r of recent) {
         if (selectedIds.has(r.entry.id)) continue;
-        if (usedP + r.tokens > recentBudget) continue;
+        if (usedP + r.tokens > recentBudget) {
+          obs?.reject(r.entry, 'budget', 'budget', r.score, r.tokens);
+          continue;
+        }
         selectedItems.push(r);
         selectedIds.add(r.entry.id);
         usedP += r.tokens;
@@ -2946,7 +2972,10 @@ export async function getContext(
 
     for (const r of rankedPinned) {
       if (selectedIds.has(r.entry.id)) continue;
-      if (usedP + r.tokens > effBudget) continue;
+      if (usedP + r.tokens > effBudget) {
+        obs?.reject(r.entry, 'budget', 'budget', r.score, r.tokens);
+        continue;
+      }
       selectedItems.push(r);
       selectedIds.add(r.entry.id);
       usedP += r.tokens;
@@ -3079,9 +3108,13 @@ export async function getContext(
   }
 
   if (limit < selectedItems.length) {
-    selectedItems = selectedItems.slice(0, limit);
+    const cut = selectedItems.slice(0, limit);
+    obs?.dropMissing(selectedItems.map((r) => r.entry), cut.map((r) => r.entry), 'limit', 'limit');
+    selectedItems = cut;
   }
-  selectedItems = dropHeldCopies(selectedItems, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  const heldDropped = dropHeldCopies(selectedItems, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  obs?.dropMissing(selectedItems.map((r) => r.entry), heldDropped.map((r) => r.entry), 'limit', 'duplicate');
+  selectedItems = heldDropped;
   totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
 
   // v39: annotate every returned entry with its origin and how it relates to
@@ -3091,6 +3124,7 @@ export async function getContext(
     origin: r.entry.origin_project ?? null,
     category: classifyOriginProject(r.entry.origin_project, currentProjectName),
   }));
+  obs?.selected(selectedItems);
 
   if (
     selectedItems.length === 0 &&
