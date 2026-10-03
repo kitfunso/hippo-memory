@@ -92,10 +92,10 @@ describe('installJsonHooks(codex)', () => {
     });
   });
 
-  it('the reminder that install and doctor print says the per-prompt hook sends the five most recent memories too', () => {
+  it('the reminder that install and doctor print says the per-prompt hook sends prompt-matched memories too', () => {
     installJsonHooks('codex');
     expect(JSON.stringify(readJson(hooksFile))).toContain('hippo context --pinned-only --include-recent 5 ');
-    expect(CODEX_TRUST_LINE).toContain('your pinned memories plus the five most recent ones');
+    expect(CODEX_TRUST_LINE).toContain('your pinned memories plus up to 5 that match the prompt');
   });
 
   it("keeps the user's description and hooks, and appends hippo's groups after them", () => {

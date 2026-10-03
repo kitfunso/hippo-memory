@@ -1,5 +1,5 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -105,6 +105,29 @@ describe('text hippo injected is not stored again', () => {
     write('s1', scan(REPLY, { edits: [] }));
     expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).reason).toBe('nothing left after the filters');
     expect(write('s1', scan(REPLY, { edits: [] })).written).toBe(true);
+  });
+
+  it('drops a restated digest older than the five newest, since prompt recall can inject it', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+      write('old', scan(REPLY, { edits: [] }));
+      const later = [
+        'Raised the health probe timeout to ninety seconds because cold starts are slow.',
+        'Moved invoice rendering into a worker because the request thread blocked.',
+        'Switched the font loader to swap because the hero text flashed.',
+        'Capped thumbnail width at 640 pixels because mobile memory ran out.',
+        'Renamed the billing cron to nightly because two jobs collided.',
+      ];
+      later.forEach((text, i) => {
+        vi.setSystemTime(new Date(Date.UTC(2026, 8, 2 + i)));
+        write(`n${i}`, scan(text, { edits: [] }));
+      });
+      expect(digests()).toHaveLength(6);
+      expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).reason).toBe('nothing left after the filters');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('drops a sentence restating the ambient handoff of another session, but not its own', () => {

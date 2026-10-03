@@ -11,7 +11,7 @@
     {
       "name": "hippo-memory",
       "source": "./extensions/claude-code-plugin",
-      "description": "Memory that learns what is wrong and ranks it down. Session-start context, per-prompt pinned memories plus the five most recent ones, compaction snapshot and resume, error capture, session-end sleep.",
+      "description": "Memory that learns what is wrong and ranks it down. Session-start context, per-prompt pinned memories plus up to 5 that match the prompt, compaction snapshot and resume, error capture, session-end sleep.",
       "version": "0.6.1",
       "homepage": "https://github.com/kitfunso/hippo-memory",
       "license": "MIT"

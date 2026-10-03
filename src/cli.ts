@@ -9456,7 +9456,7 @@ Commands:
     --budget <n>           Token budget for the whole printed block (default: 1500)
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
-    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on)
+    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
     --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)

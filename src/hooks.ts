@@ -230,7 +230,7 @@ export function isCodexPresent(home: string = homeDir()): boolean {
 }
 
 /** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says what they would trust. */
-export const CODEX_TRUST_LINE = "The per-prompt hook sends your pinned memories plus the five most recent ones. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
+export const CODEX_TRUST_LINE = "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
 
 /**
  * Default log path consumed by `hippo last-sleep`. Shared fallback when

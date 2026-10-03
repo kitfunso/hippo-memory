@@ -10,9 +10,9 @@ const description =
 
 // What hippo init patches per agent: README "Framework Integrations".
 const integrations = [
-  { name: 'Claude Code', href: '/claude-code/', note: 'A block in CLAUDE.md plus hooks: pinned memories plus the five most recent ones each turn, sleep on exit, a snapshot and the memories a compaction lists, failed tool calls stored as errors.' },
+  { name: 'Claude Code', href: '/claude-code/', note: 'A block in CLAUDE.md plus hooks: pinned memories plus up to 5 that match the prompt each turn, sleep on exit, a snapshot and the memories a compaction lists, failed tool calls stored as errors.' },
   { name: 'Cursor', href: '/cursor/', note: "A block in the project's AGENTS.md, which Cursor reads; the MCP server gives the agent the memory tools." },
-  { name: 'Codex', href: '/codex/', note: 'A block in AGENTS.md plus a hook that sends pinned memories plus the five most recent ones with each prompt, once you trust it in /hooks. hippo hook install codex wraps the Codex launcher to capture sessions.' },
+  { name: 'Codex', href: '/codex/', note: 'A block in AGENTS.md plus a hook that sends pinned memories plus up to 5 that match the prompt with each prompt, once you trust it in /hooks. hippo hook install codex wraps the Codex launcher to capture sessions.' },
   { name: 'OpenClaw', note: 'A native plugin that injects context and, with autoSleep on, runs sleep when the session ends.' },
   { name: 'OpenCode', note: 'A block in AGENTS.md plus a TypeScript plugin that runs when a session starts and goes idle.' },
   { name: 'Pi', note: 'A block in AGENTS.md; copy the Pi extension from the repo for session hooks.' },

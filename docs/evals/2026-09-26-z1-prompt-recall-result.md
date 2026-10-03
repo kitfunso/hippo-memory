@@ -4,6 +4,8 @@ Pre-registration: [2026-09-26-z1-prompt-recall-prereg.md](2026-09-26-z1-prompt-r
 
 **Verdict: FAIL on two of three gates. Z1 ships behind `pinnedInject.promptRecall`, off by default, with the tuned gate values as its defaults.** Gating the hook's backfill on the prompt did not raise the overlap between injected memory and the failures that followed, and it made the hook slower. It did cut the median injected tokens.
 
+**Addendum (2026-10-03): default on from 1.55.0.** Keith turned `promptRecall` on by default as an exception to the Sep-30 default freeze, for the token cut and the low-touch goal. The verdict above stands; the default claims no task benefit. 1.52.1 brought hook p95 to about 210 to 230 ms, under the 280 ms bar, so the latency gate's failure no longer holds. The overlap and tail-token costs below still do. ROADMAP Z11 records the exception.
+
 ## Tuning (tune split only)
 
 The 40-config grid ran on the tune split. The primary overlap was flat: every eligible config scored between 0.0545 and 0.0556, and A1 scored 0.0566 on the same 45 signal events with a context. The pick rule took jaccard, threshold 0.04, minShared 2, maxItems 5 (median 0.0556, median tokens 668 against A1's 746). No config came close to the 0.114 bar on tune, so the held-out run was a formality.
