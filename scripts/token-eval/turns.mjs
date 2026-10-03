@@ -25,13 +25,13 @@ function lastJson(stdout) {
   }
 }
 
-/** Run claude until it is not at the plan limit, calling `reset` before each rerun; `args()` is called once per attempt. */
+/** Run claude until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `args()` is called once per attempt. */
 async function untilNotLimited(ctx, run, t, { args, input, rawName, reset }) {
   // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
   for (let attempt = 1; ; attempt++) {
-    const start = Date.now();
+    const start = performance.now();
     const cc = await spawnTree(`${ctx.claude} ${args().join(' ')}`, run.dirs.work, run.env, ctx.sessionTimeoutMs, input);
     const result = lastJson(cc.stdout);
     // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
@@ -41,8 +41,9 @@ async function untilNotLimited(ctx, run, t, { args, input, rawName, reset }) {
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
     await sleep(ctx.limitWaitMs);
-    reset();
-    cutOffMs += Date.now() - start;
+    const stop = reset();
+    cutOffMs += performance.now() - start;
+    if (stop) return { cc, result: null, limitRetries: attempt, cutOffMs, stopped: true };
   }
 }
 
@@ -68,7 +69,7 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
     const snap = workSnapshot(run, sessionId, dir);
     const reset = () => {
       restoreWork(run, snap, sessionId);
-      afterReset();
+      return afterReset();
     };
     const projects = path.join(run.dirs.claudeConfig, 'projects');
     const main = findTranscript(projects, sessionId);

@@ -1,6 +1,6 @@
 import type { Card, CardComment, CardRun } from './card.js';
 import type { SessionHandoff } from './handoff.js';
-import { loadCard, loadCardComments, loadCardDeps, loadCardRuns, loadLatestHandoffForCard } from './store.js';
+import { loadCard, loadCardComments, loadCardDeps, loadCardRuns, loadLatestHandoffForCard } from './store-cards.js';
 
 /** A card plus everything `hippo card show` prints about it. */
 export interface CardDetail {

@@ -1,7 +1,7 @@
 // Z0 lesson tasks end to end with the fake Claude Code: checks, teach and correction resumes, A4, the resume-limit
 // restore and every record shape against the z0-record/1 contract. Costs nothing; the fake's token numbers are made up.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -29,6 +29,8 @@ afterEach(() => {
   }
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
+// Long sync tests starve the worker's RPC; a macrotask turn between tests lets its replies through.
+afterEach(() => new Promise((r) => setTimeout(r, 0)));
 
 const tmp = (prefix: string): string => {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -167,6 +169,32 @@ describe('runner git', () => {
     const l = { id: 'x-l1', checkPath: check, check: { script: 'status.mjs', args: [] } };
     const env = { ...process.env, GIT_CONFIG_PARAMETERS: "'color.ui=never'" };
     expect(runCheck(l, { work: r.repo, env, preCommit: r.base, postCommit: r.fix, commands: [], scratch: join(d, 'scratch') })).toBe('pass');
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("a checker's own git status runs no filter driver from the workspace config, a required one included", () => {
+    isolate('filter');
+    const r = makeRepo();
+    const d = tmp('z0-turns-filter-');
+    const marker = join(d, 'ran').replace(/\\/g, '/');
+    execFileSync('git', ['config', "filter.z0'agent.clean", `sh -c 'echo ran >> "${marker}"; cat'`], { cwd: r.repo });
+    execFileSync('git', ['config', "filter.z0'agent.required", 'true'], { cwd: r.repo });
+    writeFileSync(join(r.repo, '.gitattributes'), "* filter=z0'agent\n");
+    // Same bytes, a new mtime: status must read the file through the filter to see it is unchanged.
+    const restat = () => {
+      writeFileSync(join(r.repo, 'lib.js'), readFileSync(join(r.repo, 'lib.js')));
+      utimesSync(join(r.repo, 'lib.js'), new Date(), new Date(Date.now() + 60_000));
+    };
+    restat();
+    // The control: plain git status in the workspace does run it.
+    execFileSync('git', ['status', '--porcelain'], { cwd: r.repo });
+    expect(existsSync(marker)).toBe(true);
+    rmSync(marker);
+    restat();
+    const check = join(d, 'status.mjs');
+    writeFileSync(check, "import { spawnSync } from 'node:child_process';\nprocess.exit(spawnSync('git', ['status', '--porcelain']).status === 0 ? 0 : 2);\n");
+    const l = { id: 'x-l1', checkPath: check, check: { script: 'status.mjs', args: [] } };
+    expect(runCheck(l, { work: r.repo, env: process.env, preCommit: r.base, postCommit: r.fix, commands: [], scratch: join(d, 'scratch') })).toBe('pass');
     expect(existsSync(marker)).toBe(false);
   });
 });
@@ -366,6 +394,67 @@ describe('an agent that breaks its workspace git', () => {
   }, 300_000);
 });
 
+describe('an instruction file the agent leaves above work/', () => {
+  const resumes = (log: string) => logLines(log).filter((l) => l.startsWith('resume ') && !l.startsWith('resume-'));
+  const a4Md = (out: string) => readFileSync(join(workDir(out, 'A4'), 'CLAUDE.md'), 'utf8');
+  const fam = () => family('f1', [lesson('f1-l1', 'Write the lesson file')]);
+
+  it('voids an apply whatever its first check says', async () => {
+    for (const first of ['LESSON_OK', 'LESSON_BAD']) {
+      const { out, log } = isolate(`anc-apply-${first}`);
+      const r = makeRepo();
+      await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', `${first} ESCAPE`), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out);
+      const recs = readRecords(out);
+      expectInvalid(find(recs, 'A4', 'a1'), 'ancestor-instructions');
+      expect(resumes(log).filter((l) => l === `resume ${find(recs, 'A4', 'a1').sessionId}`), first).toEqual([]);
+      expect(find(recs, 'A4', 'a2').invalid).toBe('ancestor-instructions');
+    }
+  }, 300_000);
+
+  it('a teach that plants one takes no resume and A4 is not taught', async () => {
+    const { out, log } = isolate('anc-teach');
+    const r = makeRepo();
+    await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_OK ESCAPE'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out);
+    expect(resumes(log)).toEqual([]);
+    expect(a4Md(out)).not.toContain('Write the lesson file');
+    expectInvalid(find(readRecords(out), 'A4', 't1'), 'ancestor-instructions');
+  }, 300_000);
+
+  it('one a cut-off resume plants stops the rerun, keeps the retry count, and A4 is not taught', async () => {
+    const { out, log } = isolate('anc-cut');
+    const r = makeRepo();
+    await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_BAD CUT_ON_RESUME ANCESTOR_ON_CUT'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out, { limitWaitMs: 0 });
+    const t1 = find(readRecords(out), 'A4', 't1');
+    expectInvalid(t1, 'ancestor-instructions');
+    expect(t1.limitRetries).toBe(1);
+    expect(resumes(log)).toEqual([`resume ${t1.sessionId}`]);
+    expect(a4Md(out)).not.toContain('Write the lesson file');
+    expect(existsSync(join(out, 'raw', 'seqF', 'A4', 'seed1', 't1.ancestor.txt'))).toBe(true);
+  }, 300_000);
+
+  it('a clean filter the agent set never runs when the runner snapshots for the check, so the cell grades normally', async () => {
+    const { out, log } = isolate('anc-filter');
+    const r = makeRepo();
+    await run(spec(r, [fam()], [teach(r, 't1', 'f1-l1', 'LESSON_BAD CLEAN_FILTER_PLANT'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out);
+    expect(existsSync(join(workDir(out, 'A4'), '..', 'CLAUDE.md'))).toBe(false);
+    const recs = readRecords(out);
+    const t1 = find(recs, 'A4', 't1');
+    expect(t1).toMatchObject({ invalid: null, lessons: [{ first: 'fail', final: 'pass' }] });
+    expect(resumes(log)).toEqual([`resume ${t1.sessionId}`]);
+    expect(find(recs, 'A4', 'a1').invalid).toBeNull();
+  }, 300_000);
+
+  it('one a checker writes is caught right before the resume: no resume, and A4 is not taught', async () => {
+    const { out, log } = isolate('anc-checker');
+    const r = makeRepo();
+    const escaping = family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'lesson.mjs', args: ['escape'] } })]);
+    await run(spec(r, [escaping], [teach(r, 't1', 'f1-l1', 'LESSON_BAD'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A4'], out);
+    expectInvalid(find(readRecords(out), 'A4', 't1'), 'ancestor-instructions');
+    expect(resumes(log)).toEqual([]);
+    expect(a4Md(out)).not.toContain('Write the lesson file');
+  }, 300_000);
+});
+
 describe('session evidence', () => {
   it('Z0_COMMANDS and the work counts take in subagent transcripts', async () => {
     const { out, log } = isolate('subagent');
@@ -403,9 +492,9 @@ describe('session evidence', () => {
   it('the hippo field sums the ledger over both turns when the resume has its own session id', async () => {
     const { out } = isolate('hippo-sum');
     const r = makeRepo();
-    // n0 stores a memory first, so the hook injects on both of t1's turns.
-    const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
-      task(r, 'n0', 'FIX add in lib.js'), teach(r, 't1', 'f1-l1', 'LESSON_OK NEW_ID_ON_RESUME'),
+    // n0 stores a memory first, and both t1 prompts share its words, so prompt recall injects on both turns.
+    const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file for add in lib.js')])], [
+      task(r, 'n0', 'FIX add in lib.js'), teach(r, 't1', 'f1-l1', 'LESSON_OK NEW_ID_ON_RESUME add in lib.js'),
       plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'look around only'), apply(r, 'a2', 'f1-l1', 'look around only'),
     ]);
     await run(s, ['A2'], out);
@@ -455,6 +544,17 @@ describe('usage limits around resumes', () => {
     }, 300_000);
   }
 
+  it('restoring after a cut-off resume runs no smudge filter the agent set', async () => {
+    const { out } = isolate('cut-smudge');
+    const r = makeRepo();
+    const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
+      teach(r, 't1', 'f1-l1', 'LESSON_BAD CUT_ON_RESUME SMUDGE_FILTER'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'look around only'), apply(r, 'a2', 'f1-l1', 'look around only'),
+    ]);
+    await run(s, ['A0'], out, { limitWaitMs: 0 });
+    expect(find(readRecords(out), 'A0', 't1')).toMatchObject({ invalid: null, limitRetries: 1, lessons: [{ first: 'fail', final: 'pass' }] });
+    expect(existsSync(join(workDir(out, 'A0'), '..', 'smudge-ran.txt'))).toBe(false);
+  }, 300_000);
+
   it('wallMs leaves out a cut-off resume attempt, its wait and its reset', async () => {
     const { out } = isolate('wall');
     const r = makeRepo();
@@ -464,8 +564,12 @@ describe('usage limits around resumes', () => {
     await run(s, ['A0'], out, { limitWaitMs: 5000 });
     const t1 = find(readRecords(out), 'A0', 't1');
     expect(t1).toMatchObject({ invalid: null, limitRetries: 1, lessons: [{ first: 'fail', final: 'pass' }] });
-    // The cut-off attempt and the wait take 10 s between them; the turns that count take well under 5 s.
-    expect(t1.wallMs).toBeLessThan(5000);
+    // t1's step spans its start to n1's start and holds at least the 5 s nap and 5 s wait, which load only stretches; wallMs must leave both out.
+    const started = Object.fromEntries(readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).map((rec) => [rec.taskId, Date.parse(rec.startedAt)]));
+    const stepMs = started.n1 - started.t1;
+    const wallMs = t1.wallMs ?? -1;
+    expect(Number.isInteger(wallMs) && wallMs >= 0).toBe(true);
+    expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);
   }, 300_000);
 
   it('a resume that runs out of time marks the record timed out', async () => {

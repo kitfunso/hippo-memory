@@ -152,6 +152,11 @@ function hang(tag) {
   process.exit(0);
 }
 
+const agentFilter = (lines) => {
+  fs.appendFileSync(path.join('.git', 'config'), `[filter "z0agent"]\n\t${lines}\n`);
+  fs.appendFileSync('.gitattributes', '* filter=z0agent\n');
+};
+
 function firstSession() {
   fs.mkdirSync(promptsDir, { recursive: true });
   fs.writeFileSync(path.join(promptsDir, `${sessionId}.prompt`), prompt);
@@ -209,6 +214,9 @@ function firstSession() {
   const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
   if (delegated.length) writeSubagent('agent-a1', delegated);
   if (/\bSUBAGENT\b/.test(prompt)) write(path.join(path.dirname(transcript), sessionId, 'subagents', 'agent-probe.jsonl'), probes().map((l) => JSON.stringify(l)).join('\n'));
+  // A filter driver in the agent's own .git/config runs as whoever runs git next, from the work tree root.
+  if (prompt.includes('CLEAN_FILTER_PLANT')) agentFilter('clean = "echo escaped by a clean filter > ../CLAUDE.md; cat"\n\trequired = true');
+  if (prompt.includes('SMUDGE_FILTER')) agentFilter('smudge = "echo ran >> ../smudge-ran.txt; cat"');
   if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
 }
 
@@ -218,6 +226,8 @@ function cutOff() {
   if (!prompt.includes('CUT_ON_RESUME') || fs.existsSync(marker)) return;
   fs.writeFileSync(marker, '');
   limitSurfaces();
+  // Named apart from ESCAPE so session 1 plants nothing and only the cut-off attempt does.
+  if (prompt.includes('ANCESTOR_ON_CUT')) fs.writeFileSync(path.join('..', 'CLAUDE.md'), 'escaped on a cut-off resume\n');
   fs.writeFileSync('cutoff.txt', 'cut-off attempt\n');
   sh('git add cutoff.txt');
   const staged = /STAGE_EDIT (\S+)/.exec(prompt);

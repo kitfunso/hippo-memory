@@ -127,7 +127,7 @@ function checker(ctx, run, t, stage, sessionIds) {
     const commands = commandLog(transcriptsOf(run, sessionIds));
     state.calls.push({ lessonId: lesson.id, post: postCommit, commands });
     try {
-      return runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, scratch: path.join(run.dirs.root, 'scratch') });
+      return guarded(run, t, stage, () => runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, scratch: path.join(run.dirs.root, 'scratch') }));
     } catch (err) {
       if (!(err instanceof CheckerError)) throw err;
       writeLog(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
@@ -158,19 +158,18 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null, ...saved() };
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
   if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
-  // The resume would load a file session 1 left above work/, so the cell is void already and the resume never spends plan usage.
-  if (ancestorHits(ctx, run, t)) {
-    stage.ancestors = true;
-    return noResume;
-  }
   await settle(ctx, run, t.id, 'pre-resume');
+  // Rechecked after grading: a checker or anything else the runner ran since the first scan could have left one.
+  if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
   const preResume = snapshotSurfaces(ctx, run, 'pre-resume', step);
+  // A file a cut-off attempt left above work/ voids the cell, so the rerun never spends plan usage and A4 is never taught from it.
   const afterReset = () => {
     stage.restores.push(restoreSurfaces(ctx, run, preResume, 'resume-restore', step));
-    stage.ancestors ||= ancestorHits(ctx, run, t);
+    return (stage.ancestors ||= ancestorHits(ctx, run, t));
   };
   const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
   if (!resume) return noResume;
+  if (resume.stopped) return { ...noResume, resume };
   writeRaw(run, `${t.id}.resume.json`, resume.cc.stdout || JSON.stringify({ error: resume.cc.stderr.slice(0, 4000), status: resume.cc.status }));
   const timedOut = !resume.result && resume.cc.timedOut;
   // A resume killed before its result names no id; one that forked a new id left a new top-level file.
@@ -286,16 +285,19 @@ function noteWorktrees(ctx, run, step) {
 async function runTurns(ctx, run, step, stage, base) {
   const { t } = step;
   const work = run.dirs.work;
-  const started = Date.now();
+  // Monotonic, so a wall-clock step (NTP, a WSL resync) cannot make wallMs negative.
+  const started = performance.now();
   const session = await runSession(ctx, run, t, () => resetTask(ctx, run, t, stage));
   run.sessionRan = true;
   writeRaw(run, `${t.id}.json`, session.cc.stdout || JSON.stringify({ error: session.cc.stderr.slice(0, 4000), status: session.cc.status }));
+  // Reading 13: every cell kind, before any check, so whether a cell is void never depends on its verdict.
+  stage.ancestors ||= ancestorHits(ctx, run, t);
   const sessionIds = firstSessionIds(ctx, run, t, session, stage);
   // Before the resume, so its transcript lines are not yet there.
   if (stage.chainPre) stage.chainPre.shown ||= shownInSession(run, stage.chainPre.lesson, sessionIds);
   // A timed-out session is still checked and resumed (prereg 109, 165).
-  const turns = sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
-  const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
+  const turns = sessionIds.length && !stage.ancestors ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
+  const wallMs = Math.round(performance.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0));
   // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
   if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');

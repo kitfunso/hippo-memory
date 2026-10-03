@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { search, markRetrieved, estimateTokens, textOverlap } from '../src/search.js';
+import { search, estimateTokens, textOverlap } from '../src/search.js';
+import { markRetrieved } from '../src/memory.js';
 import { createMemory, Layer } from '../src/memory.js';
 
 function makeEntries() {

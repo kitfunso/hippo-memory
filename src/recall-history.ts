@@ -310,3 +310,13 @@ export function appendRecall(
 export function snapshotRing(ring: RingBuffer): RecallHistorySnapshot {
   return ring.snapshot();
 }
+
+/**
+ * Whether a recall bias hint is enabled. Reads the env at call time, so
+ * `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off` disables only that kind.
+ */
+export function biasHintEnabled(kind: 'anchoring' | 'availability'): boolean {
+  return kind === 'anchoring'
+    ? process.env.HIPPO_ANCHORING !== 'off'
+    : process.env.HIPPO_AVAILABILITY !== 'off';
+}

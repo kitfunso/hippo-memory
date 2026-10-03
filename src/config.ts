@@ -77,8 +77,8 @@ export interface HippoConfig {
      *  never resends an unchanged block. */
     refreshTurns: number;
     /** Z1: gate the hook's backfill on the prompt's own content instead of
-     *  the five newest memories. Default false: the eval failed its overlap gate
-     *  (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+     *  the five newest memories. Default true since 1.55.0: overlap tied but median
+     *  tokens fell 847 to 533 (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
     promptRecall: boolean;
     /** Z1: overlap metric for the prompt-recall gate. Default 'jaccard' (tuned, docs/evals/2026-09-26-z1-prompt-recall-result.md). */
     promptRecallMetric: PromptRecallMetric;
@@ -146,6 +146,11 @@ export interface HippoConfig {
   agentMemories: {
     tools: string[] | null;
   };
+  /** Per-turn delivery ledger (src/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+   *  pinned-only context call. Default off; read from the store the token ledger writes to. */
+  deliveryLedger: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -190,7 +195,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     budget: 1500,
     skipUnchanged: true,
     refreshTurns: 10,
-    promptRecall: false,
+    promptRecall: true,
     promptRecallMetric: 'jaccard',
     promptRecallThreshold: 0.04,
     promptRecallMinShared: 2,
@@ -228,6 +233,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   agentMemories: {
     tools: null,
   },
+  deliveryLedger: {
+    enabled: false,
+  },
 };
 
 function isMemoryValueConfig(
@@ -246,6 +254,26 @@ function isChurnStalenessConfig(
   value: HippoConfig['churnStaleness'] | undefined,
 ): value is HippoConfig['churnStaleness'] {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isDeliveryLedgerConfig(
+  value: HippoConfig['deliveryLedger'] | undefined,
+): value is HippoConfig['deliveryLedger'] {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Only `{"enabled": true}` turns it on; anything malformed warns and stays off.
+function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined): boolean {
+  if (value === undefined) return false;
+  const isObject = isDeliveryLedgerConfig(value);
+  const enabled = isObject ? value.enabled : undefined;
+  if (enabled === true || enabled === false) return enabled;
+  if (isObject && enabled === undefined) return false;
+  console.error(
+    `Warning: config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
+    `(got ${JSON.stringify(value)}) - using false.`,
+  );
+  return false;
 }
 
 function agentMemoryTools(value: string[] | null | undefined): string[] | null {
@@ -375,6 +403,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
         enabled: churnStalenessEnabled,
       },
       agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
+      deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

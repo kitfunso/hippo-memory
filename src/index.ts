@@ -9,7 +9,9 @@ export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, ca
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   return createStoreMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS });
 }
-export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
+export { search, hybridSearch, physicsSearch, estimateTokens, textOverlap, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
+export { tokenize } from './tokenize.js';
+export { markRetrieved } from './memory.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';
 export {
@@ -40,6 +42,8 @@ export {
   writeSessionEndHandoff,
   loadSessionDecayContext,
   SessionDecayContext,
+} from './store.js';
+export {
   createCard,
   loadCard,
   listCards,
@@ -54,7 +58,7 @@ export {
   reclaimExpiredCards,
   addCardComment,
   loadLatestHandoffForCard,
-} from './store.js';
+} from './store-cards.js';
 
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
@@ -147,3 +151,14 @@ export {
   formatAmbientVector,
   AmbientState,
 } from './ambient.js';
+export {
+  appendAuditEvent,
+  queryAuditEvents,
+  listAuditEventsAfter,
+  AUDIT_OPS,
+  type AuditEvent,
+  type AuditOp,
+  type QueryAuditOpts,
+  type ListAuditAfterOpts,
+} from './audit.js';
+export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db.js';

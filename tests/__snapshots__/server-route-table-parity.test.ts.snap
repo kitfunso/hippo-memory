@@ -1,0 +1,3113 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`HTTP route parity under the rate limiter > throttles /v1 and /mcp but never /health or other paths 1`] = `
+{
+  "encodedSlashBeforeLimiter": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "URL-encoded slash (%2F) not allowed in path segments",
+    "status": 400,
+  },
+  "first": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "health": {
+    "body": {
+      "ok": "boolean",
+      "pid": "number",
+      "started_at": "string",
+      "version": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "otherPath": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "second": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "rate limit exceeded",
+    "status": 429,
+  },
+  "throttledMcp": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "rate limit exceeded",
+    "status": 429,
+  },
+  "throttledRoute": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "rate limit exceeded",
+    "status": 429,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > DELETE /v1/auth/keys/hk_missing with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > DELETE /v1/auth/keys/hk_missing with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "Unknown key_id: hk_missing",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > DELETE /v1/memories/:m with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > DELETE /v1/memories/:m with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "memory not found: mem_parity_missing",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/audit with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/audit with no body on loopback 1`] = `
+{
+  "body": [
+    {
+      "actor": "string",
+      "id": "number",
+      "metadata": {
+        "label": "null",
+        "role": "string",
+      },
+      "op": "string",
+      "targetId": "string",
+      "tenantId": "string",
+      "ts": "string",
+    },
+  ],
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/auth/keys with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/auth/keys with no body on loopback 1`] = `
+{
+  "body": [
+    {
+      "createdAt": "string",
+      "keyId": "string",
+      "label": "null",
+      "revokedAt": "null",
+      "role": "string",
+      "scopes": [],
+      "tenantId": "string",
+    },
+  ],
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/context with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/context with no body on loopback 1`] = `
+{
+  "body": {
+    "ambientState": {
+      "avgStrength": "number",
+      "conflictIntensity": "number",
+      "consolidationRatio": "number",
+      "dagDepth": "number",
+      "emotionalSkew": "number",
+      "errorDensity": "number",
+      "extractionCoverage": "number",
+      "recencyFreshness": "number",
+      "schemaFitRatio": "number",
+      "tagEntropy": "number",
+      "totalMemories": "number",
+    },
+    "entries": [
+      {
+        "category": "string",
+        "entry": {
+          "artifact_ref": "null",
+          "confidence": "string",
+          "conflicts_with": [],
+          "content": "string",
+          "created": "string",
+          "dag_level": "number",
+          "dag_level_3_built_at": "null",
+          "dag_parent_id": "null",
+          "descendant_count": "number",
+          "earliest_at": "null",
+          "emotional_valence": "string",
+          "extracted_from": "null",
+          "half_life_days": "number",
+          "id": "string",
+          "kind": "string",
+          "last_rebuilt_at": "null",
+          "last_retrieved": "string",
+          "latest_at": "null",
+          "layer": "string",
+          "origin_project": "string",
+          "outcome_negative": "number",
+          "outcome_positive": "number",
+          "outcome_score": "null",
+          "owner": "null",
+          "parents": [],
+          "pinned": "boolean",
+          "rebuild_count": "number",
+          "retrieval_count": "number",
+          "schema_fit": "number",
+          "scope": "null",
+          "source": "string",
+          "source_session_id": "null",
+          "starred": "boolean",
+          "strength": "number",
+          "summary_dirty": "number",
+          "superseded_by": "null",
+          "tags": [],
+          "tenantId": "string",
+          "trace_outcome": "null",
+          "valid_from": "string",
+        },
+        "isGlobal": "boolean",
+        "origin": "string",
+        "score": "number",
+        "tokens": "number",
+      },
+    ],
+    "tokens": "number",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/customer-notes with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/customer-notes with no body on loopback 1`] = `
+{
+  "body": {
+    "notes": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/customer-notes/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/customer-notes/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "customer note 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/decisions with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/decisions with no body on loopback 1`] = `
+{
+  "body": {
+    "decisions": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/decisions/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/decisions/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "decision 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/graph with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/graph with no body on loopback 1`] = `
+{
+  "body": {
+    "edges": [],
+    "nodes": [],
+    "truncated": "boolean",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/incidents with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/incidents with no body on loopback 1`] = `
+{
+  "body": {
+    "incidents": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/incidents/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/incidents/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "incident 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/memories with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "q is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/memories with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "q is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies with no body on loopback 1`] = `
+{
+  "body": {
+    "policies": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "policy 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies/asof with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "date is required (ISO-8601 valid-time)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies/asof with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "date is required (ISO-8601 valid-time)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions with no body on loopback 1`] = `
+{
+  "body": {
+    "predictions": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "prediction 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions/stats with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "class param is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions/stats with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "class param is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/processes with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/processes with no body on loopback 1`] = `
+{
+  "body": {
+    "processes": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/processes/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/processes/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "process 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/project-briefs with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/project-briefs with no body on loopback 1`] = `
+{
+  "body": {
+    "briefs": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/project-briefs/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/project-briefs/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "project brief 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/quarantine with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/quarantine with no body on loopback 1`] = `
+{
+  "body": {
+    "quarantine": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/recall/drill/:m with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/recall/drill/:m with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "No drillable summary at this id",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/sessions/sess-1/assemble with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/sessions/sess-1/assemble with no body on loopback 1`] = `
+{
+  "body": {
+    "evicted": "number",
+    "items": [],
+    "sessionId": "string",
+    "summarized": "number",
+    "tokens": "number",
+    "totalRaw": "number",
+    "truncated": "boolean",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills with no body on loopback 1`] = `
+{
+  "body": {
+    "skills": [],
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills/:n with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills/:n with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "skill 999999 not found",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills/export with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills/export with no body on loopback 1`] = `
+{
+  "body": {
+    "markdown": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/auth/keys with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/auth/keys with no body on loopback 1`] = `
+{
+  "body": {
+    "keyId": "string",
+    "plaintext": "string",
+    "role": "string",
+    "tenantId": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/customer-notes with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "customer is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/customer-notes with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "customer is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/customer-notes/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/customer-notes/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closeCustomerNote: note 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/customer-notes/:n/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "note is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/customer-notes/:n/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "note is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/decisions with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "text is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/decisions with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "text is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/decisions/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/decisions/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closeDecision: decision 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/decisions/:n/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "text is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/decisions/:n/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "text is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/incidents with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "text is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/incidents with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "text is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/incidents/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/incidents/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closeIncident: incident 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/incidents/:n/resolve with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "resolutionText is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/incidents/:n/resolve with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "resolutionText is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "content is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "content is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories/:m/archive with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "reason is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories/:m/archive with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "reason is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories/:m/promote with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories/:m/promote with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "memory not found: mem_parity_missing",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories/:m/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "content is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/memories/:m/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "content is required",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/outcome with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "good is required (boolean)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/outcome with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "good is required (boolean)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/policies with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "policyName is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/policies with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "policyName is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/policies/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/policies/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closePolicy: policy 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/policies/:n/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "policyText is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/policies/:n/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "policyText is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/predictions with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "claim is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/predictions with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "claim is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/predictions/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "state is required and must be one of: closed | closed-unknown",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/predictions/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "state is required and must be one of: closed | closed-unknown",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/processes with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "processName is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/processes with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "processName is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/processes/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/processes/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closeProcess: process 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/processes/:n/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "steps is required (at least one step) for a supersession",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/processes/:n/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "steps is required (at least one step) for a supersession",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "repo is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "repo is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closeProjectBrief: brief 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs/:n/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "summary is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs/:n/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "summary is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs/refresh with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "repo is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/project-briefs/refresh with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "repo is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/quarantine/:m/approve with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/quarantine/:m/approve with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "not quarantined: mem_parity_missing",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/quarantine/:m/reject with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/quarantine/:m/reject with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "not quarantined: mem_parity_missing",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/skills with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "skillName is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/skills with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "skillName is required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/skills/:n/close with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/skills/:n/close with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "closeSkill: skill 999999 not found for tenant default",
+  "status": 404,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/skills/:n/supersede with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "instructions are required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/skills/:n/supersede with no body on loopback 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "instructions are required (non-empty string)",
+  "status": 400,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/sleep with a bad bearer and an empty body 1`] = `
+{
+  "body": {
+    "error": "string",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "error": "invalid api key",
+  "status": 401,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > POST /v1/sleep with no body on loopback 1`] = `
+{
+  "body": {
+    "active": "number",
+    "ambient": {
+      "avgStrength": "number",
+      "conflictIntensity": "number",
+      "consolidationRatio": "number",
+      "dagDepth": "number",
+      "emotionalSkew": "number",
+      "errorDensity": "number",
+      "extractionCoverage": "number",
+      "recencyFreshness": "number",
+      "schemaFitRatio": "number",
+      "tagEntropy": "number",
+      "totalMemories": "number",
+    },
+    "audit": {
+      "errorsRemoved": "number",
+      "warningCount": "number",
+    },
+    "details": [
+      "string",
+    ],
+    "dryRun": "boolean",
+    "mergedEpisodic": "number",
+    "newSemantic": "number",
+    "removed": "number",
+  },
+  "cacheControl": null,
+  "contentType": "application/json",
+  "status": 200,
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > a literal path segment wins over the parameterised route next to it 1`] = `
+{
+  "archiveNotDelete": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "asofNotById": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "date is required (ISO-8601 valid-time)",
+    "status": 400,
+  },
+  "exportNotById": {
+    "body": {
+      "markdown": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "keyIdNotList": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "refreshNotById": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "repo is required (non-empty string)",
+    "status": 400,
+  },
+  "statsNotById": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "class param is required",
+    "status": 400,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > auth, quarantine and audit routes with valid input 1`] = `
+{
+  "approve": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not quarantined: mem_<id>",
+    "status": 404,
+  },
+  "audit": {
+    "body": [
+      {
+        "actor": "string",
+        "id": "number",
+        "metadata": {},
+        "op": "string",
+        "targetId": "string",
+        "tenantId": "string",
+        "ts": "string",
+      },
+    ],
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "auditBadOp": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "invalid op: nope",
+    "status": 400,
+  },
+  "list": {
+    "body": [
+      {
+        "createdAt": "string",
+        "keyId": "string",
+        "label": "string",
+        "revokedAt": "null",
+        "role": "string",
+        "scopes": [],
+        "tenantId": "string",
+      },
+    ],
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "listBad": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "active must be 'true' or 'false'",
+    "status": 400,
+  },
+  "mint": {
+    "body": {
+      "keyId": "string",
+      "plaintext": "string",
+      "role": "string",
+      "tenantId": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "quarantine": {
+    "body": {
+      "quarantine": [],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "reject": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not quarantined: mem_<id>",
+    "status": 404,
+  },
+  "revoke": {
+    "body": {
+      "ok": "boolean",
+      "revokedAt": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > incident and process routes with valid input 1`] = `
+{
+  "closeIncident": {
+    "body": {
+      "incident": {
+        "closedAt": "string",
+        "context": "null",
+        "createdAt": "string",
+        "id": "number",
+        "incidentText": "string",
+        "linkedMemoryIds": [
+          "string",
+        ],
+        "memoryId": "string",
+        "resolutionText": "string",
+        "resolvedAt": "string",
+        "status": "string",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "closeProcess": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "closeProcess: process 1 is not active (status='superseded'); only active processes can be closed.",
+    "status": 409,
+  },
+  "incident": {
+    "body": {
+      "incident": {
+        "closedAt": "null",
+        "context": "null",
+        "createdAt": "string",
+        "id": "number",
+        "incidentText": "string",
+        "linkedMemoryIds": [
+          "string",
+        ],
+        "memoryId": "string",
+        "resolutionText": "null",
+        "resolvedAt": "null",
+        "status": "string",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "incidents": {
+    "body": {
+      "incidents": [
+        {
+          "closedAt": "null",
+          "context": "null",
+          "createdAt": "string",
+          "id": "number",
+          "incidentText": "string",
+          "linkedMemoryIds": [
+            "string",
+          ],
+          "memoryId": "string",
+          "resolutionText": "null",
+          "resolvedAt": "null",
+          "status": "string",
+          "tenantId": "string",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "open": {
+    "body": {
+      "incident": {
+        "closedAt": "null",
+        "context": "null",
+        "createdAt": "string",
+        "id": "number",
+        "incidentText": "string",
+        "linkedMemoryIds": [
+          "string",
+        ],
+        "memoryId": "string",
+        "resolutionText": "null",
+        "resolvedAt": "null",
+        "status": "string",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "process": {
+    "body": {
+      "process": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "description": "string",
+        "id": "number",
+        "memoryId": "string",
+        "processName": "string",
+        "status": "string",
+        "steps": [
+          "string",
+        ],
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "processById": {
+    "body": {
+      "process": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "description": "string",
+        "id": "number",
+        "memoryId": "string",
+        "processName": "string",
+        "status": "string",
+        "steps": [
+          "string",
+        ],
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "processes": {
+    "body": {
+      "processes": [
+        {
+          "changeSummary": "null",
+          "closedAt": "null",
+          "createdAt": "string",
+          "description": "string",
+          "id": "number",
+          "memoryId": "string",
+          "processName": "string",
+          "status": "string",
+          "steps": [
+            "string",
+          ],
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+          "version": "number",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "resolve": {
+    "body": {
+      "incident": {
+        "closedAt": "null",
+        "context": "null",
+        "createdAt": "string",
+        "id": "number",
+        "incidentText": "string",
+        "linkedMemoryIds": [
+          "string",
+        ],
+        "memoryId": "string",
+        "resolutionText": "string",
+        "resolvedAt": "string",
+        "status": "string",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersedeProcess": {
+    "body": {
+      "process": {
+        "changeSummary": "string",
+        "closedAt": "null",
+        "createdAt": "string",
+        "description": "null",
+        "id": "number",
+        "memoryId": "string",
+        "processName": "string",
+        "status": "string",
+        "steps": [
+          "string",
+        ],
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > memory routes with valid input 1`] = `
+{
+  "archive": {
+    "body": {
+      "archivedAt": "string",
+      "ok": "boolean",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "assemble": {
+    "body": {
+      "evicted": "number",
+      "items": [],
+      "sessionId": "string",
+      "summarized": "number",
+      "tokens": "number",
+      "totalRaw": "number",
+      "truncated": "boolean",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "context": {
+    "body": {
+      "ambientState": {
+        "avgStrength": "number",
+        "conflictIntensity": "number",
+        "consolidationRatio": "number",
+        "dagDepth": "number",
+        "emotionalSkew": "number",
+        "errorDensity": "number",
+        "extractionCoverage": "number",
+        "recencyFreshness": "number",
+        "schemaFitRatio": "number",
+        "tagEntropy": "number",
+        "totalMemories": "number",
+      },
+      "entries": [
+        {
+          "category": "string",
+          "entry": {
+            "artifact_ref": "null",
+            "bm25_score": "number",
+            "confidence": "string",
+            "conflicts_with": [],
+            "content": "string",
+            "created": "string",
+            "dag_level": "number",
+            "dag_level_3_built_at": "null",
+            "dag_parent_id": "null",
+            "descendant_count": "number",
+            "earliest_at": "null",
+            "emotional_valence": "string",
+            "extracted_from": "null",
+            "half_life_days": "number",
+            "id": "string",
+            "kind": "string",
+            "last_rebuilt_at": "null",
+            "last_retrieved": "string",
+            "latest_at": "null",
+            "layer": "string",
+            "origin_project": "string",
+            "outcome_negative": "number",
+            "outcome_positive": "number",
+            "outcome_score": "number",
+            "owner": "null",
+            "parents": [],
+            "pinned": "boolean",
+            "rebuild_count": "number",
+            "retrieval_count": "number",
+            "schema_fit": "number",
+            "scope": "null",
+            "source": "string",
+            "source_session_id": "null",
+            "starred": "boolean",
+            "strength": "number",
+            "summary_dirty": "number",
+            "superseded_by": "null",
+            "tags": [],
+            "tenantId": "string",
+            "trace_outcome": "null",
+            "valid_from": "string",
+          },
+          "isGlobal": "boolean",
+          "origin": "string",
+          "score": "number",
+          "tokens": "number",
+        },
+      ],
+      "tokens": "number",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "create": {
+    "body": {
+      "id": "string",
+      "kind": "string",
+      "tenantId": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "drill": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "Id is a leaf row, not a level-2+ summary; nothing to drill into",
+    "status": 422,
+  },
+  "forget": {
+    "body": {
+      "id": "string",
+      "ok": "boolean",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "graph": {
+    "body": {
+      "edges": [],
+      "nodes": [],
+      "truncated": "boolean",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "outcome": {
+    "body": {
+      "applied": "number",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "outcomeLast": {
+    "body": {
+      "applied": "number",
+      "ids": [
+        "string",
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "promote": {
+    "body": {
+      "globalId": "string",
+      "ok": "boolean",
+      "sourceId": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "recall": {
+    "body": {
+      "continuity": {
+        "activeSnapshot": "null",
+        "recentSessionEvents": [],
+        "sessionHandoff": "null",
+      },
+      "continuityTokens": "number",
+      "results": [
+        {
+          "content": "string",
+          "id": "string",
+          "layer": "string",
+          "score": "number",
+          "strength": "number",
+        },
+      ],
+      "suppressionSummary": {
+        "droppedByBudget": "number",
+        "droppedPreRank": "number",
+        "freshTailAdded": "number",
+        "summarySubstitutionsAdded": "number",
+        "suppressedByInterference": "number",
+        "totalCandidates": "number",
+      },
+      "tokens": "number",
+      "total": "number",
+      "windowSize": "number",
+    },
+    "cacheControl": "no-store",
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "recallBadMode": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "mode must be 'bm25', 'hybrid', or 'physics'",
+    "status": 400,
+  },
+  "sleep": {
+    "body": {
+      "active": "number",
+      "audit": {
+        "errorsRemoved": "number",
+        "warningCount": "number",
+      },
+      "details": [
+        "string",
+      ],
+      "dryRun": "boolean",
+      "mergedEpisodic": "number",
+      "newSemantic": "number",
+      "removed": "number",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersede": {
+    "body": {
+      "newId": "string",
+      "ok": "boolean",
+      "oldId": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > non-routes, wrong methods and malformed paths 1`] = `
+{
+  "arrayBody": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "request body must be a JSON object",
+    "status": 400,
+  },
+  "badId": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "memory id contains invalid characters; allowed: A-Z a-z 0-9 _ : . -",
+    "status": 400,
+  },
+  "encodedSlash": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "URL-encoded slash (%2F) not allowed in path segments",
+    "status": 400,
+  },
+  "encodedSlashUnknown": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "URL-encoded slash (%2F) not allowed in path segments",
+    "status": 400,
+  },
+  "githubNoSecret": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "health": {
+    "body": {
+      "ok": "boolean",
+      "pid": "number",
+      "started_at": "string",
+      "version": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "healthPost": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "invalidJson": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "invalid JSON body",
+    "status": 400,
+  },
+  "malformedPercentDeep": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "URI malformed",
+    "status": 400,
+  },
+  "malformedPercentWrongMethod": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "URI malformed",
+    "status": 400,
+  },
+  "mcpBadJson": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "invalid JSON-RPC body",
+    "status": 400,
+  },
+  "mcpWrongMethod": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "nonNumericRegexId": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "slackNoSecret": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "slackWrongMethod": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "unknownRoot": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "unknownV1": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "wrongMethodExact": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "wrongMethodParam": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+  "wrongMethodRegex": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "not found",
+    "status": 404,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > policy and skill routes with valid input 1`] = `
+{
+  "asof": {
+    "body": {
+      "policies": [
+        {
+          "changeSummary": "null",
+          "closedAt": "null",
+          "createdAt": "string",
+          "id": "number",
+          "memoryId": "string",
+          "policyName": "string",
+          "policyText": "string",
+          "status": "string",
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+          "validFrom": "string",
+          "validTo": "null",
+          "version": "number",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "closePolicy": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "closePolicy: policy 1 is not active (status='superseded'); only active policies can be closed.",
+    "status": 409,
+  },
+  "closeSkill": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "closeSkill: skill 1 is not active (status='superseded'); only active skills can be closed.",
+    "status": 409,
+  },
+  "exportSkills": {
+    "body": {
+      "markdown": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "policies": {
+    "body": {
+      "policies": [
+        {
+          "changeSummary": "null",
+          "closedAt": "null",
+          "createdAt": "string",
+          "id": "number",
+          "memoryId": "string",
+          "policyName": "string",
+          "policyText": "string",
+          "status": "string",
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+          "validFrom": "string",
+          "validTo": "null",
+          "version": "number",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "policy": {
+    "body": {
+      "policy": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "memoryId": "string",
+        "policyName": "string",
+        "policyText": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "validFrom": "string",
+        "validTo": "null",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "policyById": {
+    "body": {
+      "policy": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "memoryId": "string",
+        "policyName": "string",
+        "policyText": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "validFrom": "string",
+        "validTo": "null",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "skill": {
+    "body": {
+      "skill": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "instructions": "string",
+        "memoryId": "string",
+        "skillName": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "trigger": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "skillById": {
+    "body": {
+      "skill": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "instructions": "string",
+        "memoryId": "string",
+        "skillName": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "trigger": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "skills": {
+    "body": {
+      "skills": [
+        {
+          "changeSummary": "null",
+          "closedAt": "null",
+          "createdAt": "string",
+          "id": "number",
+          "instructions": "string",
+          "memoryId": "string",
+          "skillName": "string",
+          "status": "string",
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+          "trigger": "string",
+          "version": "number",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersedePolicy": {
+    "body": {
+      "policy": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "memoryId": "string",
+        "policyName": "string",
+        "policyText": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "validFrom": "string",
+        "validTo": "null",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersedeSkill": {
+    "body": {
+      "skill": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "instructions": "string",
+        "memoryId": "string",
+        "skillName": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "trigger": "null",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > prediction and decision routes with valid input 1`] = `
+{
+  "closeDecision": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "closeDecision: decision 1 is not active (status='superseded'); only active decisions can be closed.",
+    "status": 409,
+  },
+  "closePrediction": {
+    "body": {
+      "prediction": {
+        "actualValue": "number",
+        "claimText": "string",
+        "classTag": "string",
+        "closedAt": "string",
+        "closureNote": "null",
+        "closureState": "string",
+        "createdAt": "string",
+        "estimateUnit": "string",
+        "estimateValue": "number",
+        "id": "number",
+        "memoryId": "string",
+        "targetDate": "null",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "decide": {
+    "body": {
+      "decision": {
+        "closedAt": "null",
+        "context": "string",
+        "createdAt": "string",
+        "decisionText": "string",
+        "id": "number",
+        "memoryId": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "decision": {
+    "body": {
+      "decision": {
+        "closedAt": "null",
+        "context": "string",
+        "createdAt": "string",
+        "decisionText": "string",
+        "id": "number",
+        "memoryId": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "decisions": {
+    "body": {
+      "decisions": [
+        {
+          "closedAt": "null",
+          "context": "string",
+          "createdAt": "string",
+          "decisionText": "string",
+          "id": "number",
+          "memoryId": "string",
+          "status": "string",
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "predict": {
+    "body": {
+      "prediction": {
+        "actualValue": "null",
+        "claimText": "string",
+        "classTag": "string",
+        "closedAt": "null",
+        "closureNote": "null",
+        "closureState": "string",
+        "createdAt": "string",
+        "estimateUnit": "string",
+        "estimateValue": "number",
+        "id": "number",
+        "memoryId": "string",
+        "targetDate": "null",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "prediction": {
+    "body": {
+      "prediction": {
+        "actualValue": "null",
+        "claimText": "string",
+        "classTag": "string",
+        "closedAt": "null",
+        "closureNote": "null",
+        "closureState": "string",
+        "createdAt": "string",
+        "estimateUnit": "string",
+        "estimateValue": "number",
+        "id": "number",
+        "memoryId": "string",
+        "targetDate": "null",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "predictions": {
+    "body": {
+      "predictions": [
+        {
+          "actualValue": "null",
+          "claimText": "string",
+          "classTag": "string",
+          "closedAt": "null",
+          "closureNote": "null",
+          "closureState": "string",
+          "createdAt": "string",
+          "estimateUnit": "string",
+          "estimateValue": "number",
+          "id": "number",
+          "memoryId": "string",
+          "targetDate": "null",
+          "tenantId": "string",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "stats": {
+    "body": {
+      "baserate": {
+        "classTag": "string",
+        "mae": "null",
+        "meanActual": "null",
+        "meanEstimate": "null",
+        "meanRatio": "null",
+        "nClosed": "number",
+        "nRatioEligible": "number",
+        "p50Ratio": "null",
+        "summary": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersedeDecision": {
+    "body": {
+      "decision": {
+        "closedAt": "null",
+        "context": "null",
+        "createdAt": "string",
+        "decisionText": "string",
+        "id": "number",
+        "memoryId": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+}
+`;
+
+exports[`HTTP route parity: status, headers and body shape per route > project brief and customer note routes with valid input 1`] = `
+{
+  "brief": {
+    "body": {
+      "brief": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "memoryId": "string",
+        "repo": "string",
+        "status": "string",
+        "summary": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "briefById": {
+    "body": {
+      "brief": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "memoryId": "string",
+        "repo": "string",
+        "status": "string",
+        "summary": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "briefs": {
+    "body": {
+      "briefs": [
+        {
+          "changeSummary": "null",
+          "closedAt": "null",
+          "createdAt": "string",
+          "id": "number",
+          "memoryId": "string",
+          "repo": "string",
+          "status": "string",
+          "summary": "string",
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+          "version": "number",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "closeBrief": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "closeProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be closed.",
+    "status": 409,
+  },
+  "closeNote": {
+    "body": {
+      "error": "string",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "error": "closeCustomerNote: note 1 is not active (status='superseded'); only active notes can be closed.",
+    "status": 409,
+  },
+  "note": {
+    "body": {
+      "note": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "customer": "string",
+        "id": "number",
+        "memoryId": "string",
+        "note": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 201,
+  },
+  "noteById": {
+    "body": {
+      "note": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "customer": "string",
+        "id": "number",
+        "memoryId": "string",
+        "note": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "notes": {
+    "body": {
+      "notes": [
+        {
+          "changeSummary": "null",
+          "closedAt": "null",
+          "createdAt": "string",
+          "customer": "string",
+          "id": "number",
+          "memoryId": "string",
+          "note": "string",
+          "status": "string",
+          "supersededAt": "null",
+          "supersededBy": "null",
+          "tenantId": "string",
+          "version": "number",
+        },
+      ],
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "refresh": {
+    "body": {
+      "markdown": "string",
+      "receiptCount": "number",
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersedeBrief": {
+    "body": {
+      "brief": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "id": "number",
+        "memoryId": "string",
+        "repo": "string",
+        "status": "string",
+        "summary": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+  "supersedeNote": {
+    "body": {
+      "note": {
+        "changeSummary": "null",
+        "closedAt": "null",
+        "createdAt": "string",
+        "customer": "string",
+        "id": "number",
+        "memoryId": "string",
+        "note": "string",
+        "status": "string",
+        "supersededAt": "null",
+        "supersededBy": "null",
+        "tenantId": "string",
+        "version": "number",
+      },
+    },
+    "cacheControl": null,
+    "contentType": "application/json",
+    "status": 200,
+  },
+}
+`;

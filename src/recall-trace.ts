@@ -19,6 +19,7 @@
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import type { RerankStep } from './search.js';
+import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -237,4 +238,194 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
     // eslint-disable-next-line no-console
     console.error(`[hippo] recall trace outcome write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+/** Pruned on write, counted back from the event's ts capped at the real clock, so a far-future fake time spares real rows. */
+export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
+/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
+export const DELIVERY_LEDGER_WAIT_MS = 50;
+/** Two prompt-identical events without a host turn id this close together are one turn fired twice. */
+export const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
+
+const DELIVERY_EVENT_COLUMNS = [
+  'ts', 'ledger_version', 'tenant_id', 'runtime', 'event_type', 'surface', 'store_hash', 'write_store', 'project_hash',
+  'session_id', 'session_state', 'host_turn_id', 'turn_seq', 'duplicate_of', 'prompt_hash', 'prompt_length', 'query_hash',
+  'recall_trace_id', 'block_state', 'prompt_recall', 'considered_count', 'filtered_count', 'selected_count', 'emitted_count',
+  'rejected_count', 'rejected_unlisted', 'sections_shown', 'sections_dropped', 'budget_tokens', 'selected_tokens',
+  'injected_tokens', 'static_hash', 'recall_hash', 'emitted_hash', 'elapsed_ms',
+] as const;
+
+/** One stored `delivery_candidates` row. */
+export interface DeliveryCandidateRow {
+  event_id: number;
+  tenant_id: string;
+  memory_id: string;
+  source_store: string;
+  pool: string;
+  stage: string;
+  outcome: string;
+  reason: string | null;
+  cand_rank: number | null;
+  score: number | null;
+  tokens: number | null;
+}
+
+/** One stored `delivery_events` row with its candidate rows. */
+export interface DeliveryEventRow {
+  id: number;
+  ts: string;
+  ledger_version: number;
+  tenant_id: string;
+  runtime: string;
+  event_type: string;
+  surface: string;
+  store_hash: string;
+  write_store: string;
+  project_hash: string | null;
+  session_id: string | null;
+  session_state: string;
+  host_turn_id: string | null;
+  turn_seq: number | null;
+  duplicate_of: number | null;
+  prompt_hash: string | null;
+  prompt_length: number;
+  query_hash: string | null;
+  recall_trace_id: number | null;
+  block_state: string;
+  prompt_recall: number;
+  considered_count: number;
+  filtered_count: number;
+  selected_count: number;
+  emitted_count: number;
+  rejected_count: number;
+  rejected_unlisted: number;
+  sections_shown: number;
+  sections_dropped: number;
+  budget_tokens: number;
+  selected_tokens: number;
+  injected_tokens: number;
+  static_hash: string | null;
+  recall_hash: string | null;
+  emitted_hash: string | null;
+  elapsed_ms: number;
+  candidates: DeliveryCandidateRow[];
+}
+
+function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  if (input.hostTurnId !== null) {
+    // SAFETY: a single `id` column, undefined when no row matches.
+    const row = db.prepare(`
+      SELECT id FROM delivery_events
+      WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND host_turn_id = ? AND turn_seq IS NOT NULL
+      ORDER BY id LIMIT 1
+    `).get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as { id: number } | undefined;
+    return row?.id ?? null;
+  }
+  if (input.promptHash === null) return null;
+  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
+  const rows = db.prepare(`
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND prompt_hash = ? AND host_turn_id IS NULL AND turn_seq IS NOT NULL
+    ORDER BY id
+  `).all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{ id: number; ts: string }>;
+  const at = Date.parse(input.ts);
+  // Absolute difference: two hook processes can commit out of ts order.
+  return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
+}
+
+function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
+  // SAFETY: a single MAX aggregate aliased `m`, NULL when the session has no turns yet.
+  const row = db.prepare(`
+    SELECT MAX(turn_seq) AS m FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+  `).get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
+  return (row.m ?? 0) + 1;
+}
+
+/** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a transaction on `db`. */
+export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
+      const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
+      const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
+      const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
+      const values = [
+        input.ts, DELIVERY_LEDGER_VERSION, input.tenantId, input.runtime, input.eventType, input.surface, input.storeHash,
+        input.writeStore, input.projectHash, input.sessionId, input.sessionState, input.hostTurnId, turnSeq, duplicateOf,
+        input.promptHash, input.promptLength, input.queryHash, input.recallTraceId, input.blockState, input.promptRecall ? 1 : 0,
+        input.consideredCount, input.filteredCount, input.selectedCount, input.emittedCount, input.rejectedCount,
+        input.rejectedUnlisted, input.sectionsShown, input.sectionsDropped, input.budgetTokens, input.selectedTokens,
+        input.injectedTokens, input.staticHash, input.recallHash, input.emittedHash, Math.round(input.elapsedMs),
+      ];
+      const eventId = Number(db.prepare(`
+        INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
+        VALUES (${DELIVERY_EVENT_COLUMNS.map(() => '?').join(', ')})
+      `).run(...values).lastInsertRowid);
+      const insertCandidate = db.prepare(`
+        INSERT INTO delivery_candidates (event_id, tenant_id, memory_id, source_store, pool, stage, outcome, reason, cand_rank, score, tokens)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const c of input.candidates) {
+        insertCandidate.run(eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score, c.tokens);
+      }
+      const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
+      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+      db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
+      db.exec('COMMIT');
+      return eventId;
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* SQLite may already have rolled back (SQLITE_FULL, IOERR); keep the original error */ }
+      throw error;
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+/** Write on a short-lived connection that waits at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
+export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput): number | null {
+  let db: DatabaseSyncLike;
+  try {
+    db = openHippoDb(root, { busyWaitMs: DELIVERY_LEDGER_WAIT_MS });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+  try {
+    return writeDeliveryEvent(db, input);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back after. */
+export function writeDeliveryEventOnHandle(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  const prior = Math.trunc(Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout));
+  db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
+  try {
+    return writeDeliveryEvent(db, input);
+  } finally {
+    db.exec(`PRAGMA busy_timeout = ${prior}`);
+  }
+}
+
+/** A session's delivery events in write order, each with its candidate rows; `sessionId` null reads session-less events. */
+export function readDeliveryEvents(db: DatabaseSyncLike, tenantId: string, sessionId: string | null): DeliveryEventRow[] {
+  // SAFETY: SELECT * over delivery_events returns exactly the columns DeliveryEventRow names, less `candidates`.
+  const events = db.prepare(`SELECT * FROM delivery_events WHERE tenant_id = ? AND session_id IS ? ORDER BY id`)
+    .all(tenantId, sessionId) as Array<Omit<DeliveryEventRow, 'candidates'>>;
+  const candidates = db.prepare(`
+    SELECT * FROM delivery_candidates WHERE event_id = ?
+    ORDER BY outcome = 'rejected', cand_rank, memory_id
+  `);
+  return events.map((e) => ({
+    ...e,
+    // SAFETY: SELECT * over delivery_candidates returns exactly the columns DeliveryCandidateRow names.
+    candidates: candidates.all(e.id) as DeliveryCandidateRow[],
+  }));
 }

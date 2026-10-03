@@ -26,6 +26,8 @@ afterEach(() => {
   }
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
+// Long sync tests starve the worker's RPC; a macrotask turn between tests lets its replies through.
+afterEach(() => new Promise((r) => setTimeout(r, 0)));
 
 const tmp = (prefix: string): string => {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -187,7 +189,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const dump = join(dumpDir, 'env.jsonl');
     writeFileSync(dumpJs, "require('fs').appendFileSync(process.argv[2], JSON.stringify(process.env) + '\\n');\n");
     const dumpCmd = `node "${dumpJs}" "${dump}"`;
-    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'repoA', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'FIX add in lib.js', { setup: dumpCmd, test: `${dumpCmd} && node test.js` }), task(r, 'a2', 'look around only')] }] });
+    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'repoA', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'FIX add in lib.js', { setup: dumpCmd, test: `${dumpCmd} && node test.js` }), task(r, 'a2', 'look around add in lib.js only')] }] });
     await run(spec, ['A0', 'A1', 'A2', 'A5'], out);
     const childEnvs = readFileSync(dump, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(childEnvs).toHaveLength(8);
@@ -379,14 +381,14 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     for (const f of ['k2.json', 'k2.test.txt']) expect(existsSync(join(out, 'raw', 'seqK', 'A2', 'seed1', f)), f).toBe(false);
   }, 60_000);
 
-  it('an instruction file the agent wrote above work/ voids the next session without running it, and the run goes on', async () => {
+  it('an instruction file the agent wrote above work/ voids its own cell, skips every later session, and the run goes on', async () => {
     isolate();
     const r = makeRepo();
     const out = tmp('ab-run-ancestor-');
     const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'ESCAPE look around'), task(r, 'a2', 'FIX add in lib.js'), task(r, 'a3', 'look around only')] }] });
     await run(spec, ['A1'], out);
     const [a1, a2, a3] = readRecords(out);
-    expect(a1).toMatchObject({ taskId: 'a1', invalid: null });
+    expect(a1).toMatchObject({ taskId: 'a1', invalid: 'ancestor-instructions', resolved: false, usage: null, toolCalls: null });
     for (const x of [a2, a3]) expect(x).toMatchObject({ ...NO_SESSION, invalid: 'ancestor-instructions', leak: false, agentError: null });
     const raw = join(out, 'raw', 'seqA', 'A1', 'seed1');
     expect(existsSync(join(raw, 'a2.json'))).toBe(false);
@@ -405,14 +407,15 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(b2).toMatchObject({ taskId: 'b2', invalid: 'ancestor-instructions', limitRetries: 1, resolved: false, usage: null, toolCalls: null });
   }, 60_000);
 
-  it.skipIf(process.platform === 'win32')('an agent that deletes its own work dir is graded, not abandoned, and the run goes on', async () => {
+  it.skipIf(process.platform === 'win32')('an agent that deletes its own work dir voids that cell and the run goes on', async () => {
     isolate();
     const r = makeRepo();
     const out = tmp('ab-run-rmwork-');
     const spec = validateTasks({ sequences: [{ id: 'seqW', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'w1', 'FIX RMWORK'), task(r, 'w2', 'FIX add in lib.js')] }] });
     await run(spec, ['A1'], out);
     const [w1, w2] = readRecords(out);
-    expect(w1).toMatchObject({ taskId: 'w1', invalid: null, resolved: false });
+    // Deleting work/ deletes its .git, so the runner's own git fails after the session (README reading 11).
+    expect(w1).toMatchObject({ taskId: 'w1', invalid: 'workspace', resolved: false, usage: null, costUsd: null, turns: null, toolCalls: null, fileReads: null, wallMs: null, acceptancePassed: null, lessons: [] });
     expect(w2).toMatchObject({ taskId: 'w2', invalid: null, resolved: true });
   }, 60_000);
 

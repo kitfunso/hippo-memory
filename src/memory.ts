@@ -705,3 +705,40 @@ function inferValence(tags: string[]): EmotionalValence {
   if (tags.includes('success') || tags.includes('win')) return 'positive';
   return 'neutral';
 }
+
+/**
+ * Update retrieval metadata on entries that were returned by a search.
+ * Returns the mutated copies (caller must persist to disk).
+ *
+ * EVAL-ONLY ablation (see ablation.ts): with HIPPO_ABLATE_RECALL_BOOST set,
+ * this returns the entries UNMUTATED - neutralizing all three strengthening
+ * sub-effects (clock reset, retrieval_count, half-life increment) at the
+ * single shared write site. The entries (not an empty array) must be
+ * returned because callers derive `last_retrieval_ids` from the return
+ * value, and a later `hippo outcome --good/--bad` targets those ids - an
+ * empty return would silently co-ablate the outcome channel in the
+ * strengthen-off arm. PERSISTENCE is gated separately at
+ * each persisting caller (CLI recall, api context, MCP recall/context,
+ * consolidation replay): writeEntry on identical rows still refreshes
+ * updated_at, rewrites mirrors, and marks DAG parents dirty,
+ * so those write loops skip under the flag.
+ * The default `now` honors HIPPO_FAKE_NOW (simulated-time protocols).
+ */
+// Confidence is deliberately absent below: it is an epistemic tier, not a
+// recency signal, and a stored 'stale' is always a deliberate mark.
+export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
+  if (isRecallBoostAblated()) return entries;
+  return entries.map((e) => {
+    if (e.superseded_by) return e;
+    const wrong = netWrong(e) > 0;
+    const updated: MemoryEntry = {
+      ...e,
+      retrieval_count: e.retrieval_count + 1,
+      last_retrieved: wrong ? e.last_retrieved : now.toISOString(),
+      // +2 days half-life per retrieval (PLAN.md); a wrong memory keeps both, since last_retrieved is the decay anchor
+      half_life_days: wrong ? e.half_life_days : e.half_life_days + 2,
+    };
+    updated.strength = calculateStrength(updated, now);
+    return updated;
+  });
+}
