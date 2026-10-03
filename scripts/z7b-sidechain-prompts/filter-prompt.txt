@@ -1,11 +1,13 @@
 You are reviewing candidate lessons another model found in a delegated agent's work, for a memory study. Most candidates fail. Block A is the task, Block B the sub-agent's messages and tool errors, then the candidate lessons, numbered from 0.
 
 Give each candidate exactly one label:
-- "file": an agent could recover it by opening the file, script or config it concerns, its git history, the project's docs or a CLAUDE.md (what code imports or defaults to, how a file is laid out, where something lives).
-- "self": the tool's own error or output states the cause or the fix, so any agent that hits it learns it then.
-- "known": a capable coding agent already knows it (standard behaviour of a language, shell, operating system, git or a widely used library).
-- "result": an outcome of this task (a finding, score, count or decision about this work) rather than something that changes how a later task is done.
-- "keep": none of the above applies.
+- "file": an agent could recover it by opening the file, script or config it concerns, its git history, the project's docs or a CLAUDE.md (what code imports or defaults to, how a file is laid out, where something lives). This includes the format or layout of any data file, log, transcript or output folder, which opening one shows; any behaviour a config or test-setup file sets; and anything Block A already states or tells the agent to do.
+- "self": the tool's own error or output states the cause or the fix, so any agent that hits it learns it then. This includes a 404 or not-found reply, a redirect, an interactive prompt the tool prints, and output that is visibly binary or garbled: the first attempt shows the problem.
+- "known": a capable coding agent already knows it (standard behaviour of a language, shell, operating system, git or a widely used library). This includes anything the agent's own tool descriptions state, such as how its shell tool runs background jobs.
+- "result": an outcome of this task (a finding, score, count or decision about this work) rather than something that changes how a later task is done. This includes a finding about this project's own code, data or detectors (that a function is wrong, too narrow or slow), which is a fact to fix, not a way of working.
+- "keep": none of the above applies: the lesson is a surprising behaviour of a tool, service or environment that an agent would hit again, that no file or error message would have told it, and that Block A does not state.
+
+When unsure between "keep" and another label, choose the other label.
 
 Reply with JSON only: {"labels":[{"i":<number>,"label":"file|self|known|result|keep"}, ...]} with one entry per candidate.
 
