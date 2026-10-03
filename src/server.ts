@@ -443,9 +443,24 @@ export function isCrossSite(req: IncomingMessage): boolean {
   return origin !== undefined && origin !== `http://${req.headers.host}`;
 }
 
+// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.
+const PROXY_HEADERS = ['forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip'] as const;
+
+// The auth helpers only see the request, so its id rides here for their log lines.
+const requestIds = new WeakMap<IncomingMessage, string>();
+
 // A browser on this machine is loopback too, so the no-key fallback also needs a local Host and a same-site caller.
 function assertLocalCaller(req: IncomingMessage): void {
   if (!isLoopback(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
+  const proxyHeader = PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
+  if (proxyHeader !== undefined) {
+    log.warn(
+      `proxied loopback request refused: it carries ${proxyHeader}, so the no-key local fallback does not apply. ` +
+        'Send an API key (hippo auth create, then Authorization: Bearer hk_...).',
+      { requestId: requestIds.get(req) },
+    );
+    throw new HttpError(401, 'auth required');
+  }
   const host = req.headers.host;
   if ((host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req)) {
     throw new HttpError(403, 'cross-site or non-local request refused; send an API key');
@@ -648,9 +663,8 @@ async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promi
     return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor };
   }
 
-  // No Authorization header. Loopback-only fallback, unless explicitly
-  // disabled via HIPPO_REQUIRE_AUTH=1 (used by the bearer-lockdown test
-  // and by deployments that want to forbid the local-CLI escape hatch).
+  // No Authorization header. Loopback-only fallback for a direct local caller (no proxy headers),
+  // unless HIPPO_REQUIRE_AUTH=1 forbids the local-CLI escape hatch.
   if (process.env.HIPPO_REQUIRE_AUTH === '1') {
     throw new HttpError(401, 'auth required');
   }
@@ -2987,7 +3001,9 @@ async function handleRequest(
  * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
  * secrets and 404 when those secrets are unset. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
- * requests from a loopback remote address, so binding to a non-loopback host
+ * requests from a loopback remote address (unless they carry Forwarded,
+ * X-Forwarded-For/-Host/-Proto or X-Real-IP, which mark a same-host proxy and get
+ * a 401 like any keyless remote request), so binding to a non-loopback host
  * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
  * which forces every request (loopback or not) through Bearer-token
  * validation. Without that env var set, a non-loopback bind would expose the
@@ -3037,6 +3053,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
 
   const server: Server = createServer((req, res) => {
     const requestId = resolveRequestId(req.headers['x-request-id']);
+    requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
     handleRequest(req, res, opts, startedAt, limiter).catch(<E>(err: E) => {
       logRequestFailure(req, err, requestId);
