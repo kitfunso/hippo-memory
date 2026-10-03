@@ -59,7 +59,7 @@
   "src/instruction-detect.ts": 1,
   "src/invalidation.ts": 3,
   "src/mcp/framing.ts": 1,
-  "src/mcp/server.ts": 20,
+  "src/mcp/server.ts": 17,
   "src/memory-value-weights.ts": 7,
   "src/memory-value.ts": 20,
   "src/memory.ts": 34,

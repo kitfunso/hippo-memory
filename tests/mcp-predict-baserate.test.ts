@@ -109,8 +109,18 @@ describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
     expect(text).toContain('hippo_predict');
   });
 
-  it('missing class_tag returns clear usage message', async () => {
+  it('missing class_tag is rejected as an invalid argument', async () => {
     const res = await callTool(3, 'hippo_predict_baserate', {}, {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: 'mcp:test',
+    });
+    expect(res?.result).toMatchObject({ isError: true });
+    expect(extractText(res)).toContain('class_tag is required');
+  });
+
+  it('blank class_tag returns clear usage message', async () => {
+    const res = await callTool(4, 'hippo_predict_baserate', { class_tag: '  ' }, {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
