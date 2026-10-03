@@ -554,8 +554,9 @@ read from the store the token ledger writes to: the project's local store when i
 else the global store. Each per-prompt hook call then records one event (session, turn
 number, whether the block was sent, reused, empty or disabled, counts and token totals) and
 one row per candidate memory: emitted, reused or rejected, with the stage and the
-reason it was dropped. It holds ids, hashes, counts and reasons only, never prompt or memory
-text. A ledger failure prints one stderr line and never changes what the hook prints. Rows
+reason it was dropped. With prompt recall on, recent memories dropped by the quality filter
+are not recorded yet. It holds ids, hashes, counts and reasons only, never prompt or memory
+text; the prompt hash is unsalted, so a very short prompt can be guessed. A ledger failure prints one stderr line and never changes what the hook prints. Rows
 older than 90 days are pruned; at a heavy 300 prompts a day that is about 190 MB per store.
 
 ---

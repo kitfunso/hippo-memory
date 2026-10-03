@@ -2562,8 +2562,8 @@ const MIGRATIONS: Migration[] = [
   {
     version: 50,
     up: (db) => {
-      // Per-turn delivery events (src/recall-trace.ts). Additive only: no min_compatible_binary bump, and dropping both tables
-      // restores v49 exactly. No CHECK on enum columns since SQLite cannot alter one; src/delivery-recorder.ts unions are the allowlist.
+      // Per-turn delivery events (src/recall-trace.ts). Additive only: no min_compatible_binary bump; rollback drops both tables
+      // and sets schema_version back to 49. No CHECK on enum columns since SQLite cannot alter one; delivery-recorder.ts unions are the allowlist.
       db.exec(`
         CREATE TABLE IF NOT EXISTS delivery_events (
           id                INTEGER PRIMARY KEY AUTOINCREMENT,
