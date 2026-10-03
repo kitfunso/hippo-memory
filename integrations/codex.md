@@ -79,9 +79,9 @@ Hippo renames the original launcher to a sibling backup such as `codex.hippo-rea
 
 ## Session source
 
-Hippo captures Codex sessions from the real session transcript files under `~/.codex/sessions/`, not just from `history.jsonl`.
+Hippo captures Codex sessions from the real session transcript files under `$CODEX_HOME/sessions/` (default `~/.codex`), not just from `history.jsonl`.
 
-The wrapper records the `history.jsonl` byte offset at launch, finds the new `session_id` written during that run, resolves the matching transcript file in `~/.codex/sessions/...`, and feeds that transcript to `hippo capture --last-session`.
+The wrapper records the `history.jsonl` byte offset at launch, finds the new `session_id` written during that run, resolves the matching transcript file in `$CODEX_HOME/sessions/...`, and feeds that transcript to `hippo capture --last-session`.
 
 This gives Hippo access to both user messages and assistant responses from the Codex rollout transcript.
 

@@ -3572,7 +3572,8 @@ function cmdCodexRun(
 ): void {
   const metadata = loadCodexWrapperMetadata();
   const startedAtMs = Date.now();
-  const historyPath = metadata.historyPath;
+  // Codex reads CODEX_HOME at each launch, so resolve it now, not from the install-time metadata.
+  const { historyPath } = resolveCodexWrapperPaths();
   const startOffsetBytes = fs.existsSync(historyPath) ? fs.statSync(historyPath).size : 0;
 
   try {
@@ -3665,7 +3666,7 @@ async function cmdCodexSessionEndWorker(
   try {
     const codexHome = typeof flags['codex-home'] === 'string'
       ? (flags['codex-home'] as string)
-      : path.join(os.homedir(), '.codex');
+      : resolveCodexWrapperPaths().codexHome;
     const historyPath = typeof flags['history-path'] === 'string'
       ? (flags['history-path'] as string)
       : path.join(codexHome, 'history.jsonl');
