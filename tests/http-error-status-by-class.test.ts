@@ -131,7 +131,10 @@ describe('an untyped error is a 500 that hides its text', () => {
   let handle: ServerHandle;
 
   beforeAll(async () => {
-    home = makeRoot();
+    // A directory where the database file should be makes SQLite fail with its own, untyped error. It is made
+    // before serve starts because a running server holds the file open, and Windows refuses to delete an open file.
+    home = mkdtempSync(join(tmpdir(), 'hippo-error-class-'));
+    mkdirSync(join(home, 'hippo.db'));
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
@@ -145,9 +148,6 @@ describe('an untyped error is a 500 that hides its text', () => {
   });
 
   it('returns a generic body with the request id and logs the cause with that id', async () => {
-    // A directory where the database file should be makes SQLite fail with its own, untyped error.
-    rmSync(join(home, 'hippo.db'), { force: true });
-    mkdirSync(join(home, 'hippo.db'));
     const writes: string[] = [];
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
       writes.push(String(chunk));
