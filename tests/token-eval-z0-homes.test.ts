@@ -3,8 +3,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync, lstatSync, symlinkSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter, resolve } from 'node:path';
-import { execFileSync, spawnSync, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawnSync, spawn } from 'node:child_process';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
+import { promisify } from 'node:util';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
@@ -27,7 +28,8 @@ const tmp = (prefix: string): string => {
   return d;
 };
 const win = process.platform === 'win32';
-const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const execFileAsync = promisify(execFile);
+const esc =(s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 interface GitRepo {
   repo: string;
@@ -37,19 +39,21 @@ interface GitRepo {
 }
 
 /** A git repo with `files` committed as `base`, then `fix` changing lib.js. */
-function gitRepo(files: Record<string, string>): GitRepo {
+async function gitRepo(files: Record<string, string>): Promise<GitRepo> {
   const repo = tmp('z0-repo-');
   const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
-  g('init', '-q');
-  for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false']]) g('config', k, v);
+  // Async children: without one real await per test, the file's sync tests run as one event-loop turn past vitest's 60 s RPC timeout.
+  const ga = async (...args: string[]): Promise<string> => (await execFileAsync('git', args, { cwd: repo, encoding: 'utf8' })).stdout.trim();
+  await ga('init', '-q');
+  for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false']]) await ga('config', k, v);
   for (const [p, text] of Object.entries(files)) writeFileSync(join(repo, p), text);
   writeFileSync(join(repo, 'lib.js'), 'a - b\n');
-  g('add', '.');
-  g('commit', '-qm', 'base');
-  const base = g('rev-parse', 'HEAD');
+  await ga('add', '.');
+  await ga('commit', '-qm', 'base');
+  const base = await ga('rev-parse', 'HEAD');
   writeFileSync(join(repo, 'lib.js'), 'a + b, the fix that a later task must never see in an earlier workspace\n');
-  g('commit', '-qam', 'fix');
-  return { repo, base, fix: g('rev-parse', 'HEAD'), g };
+  await ga('commit', '-qam', 'fix');
+  return { repo, base, fix: await ga('rev-parse', 'HEAD'), g };
 }
 
 /** An empty work repo set up the way the runner sets one up. */
@@ -341,8 +345,8 @@ function withFs<K extends 'readdirSync' | 'openSync'>(name: K, hooks: FsHooks, f
 const filesText = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? filesText(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
 
 describe('workspace checkout', () => {
-  it.each(['A0', 'A2'])('%s: leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs, worktrees and nested repos', (arm) => {
-    const { repo, base, fix } = gitRepo({});
+  it.each(['A0', 'A2'])('%s: leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs, worktrees and nested repos', async (arm) => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
     checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix }, arm);
@@ -388,8 +392,8 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it('rebuilds a .git the agent replaced with a gitfile, keeping the runner config and a clean detached HEAD', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('rebuilds a .git the agent replaced with a gitfile, keeping the runner config and a clean detached HEAD', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
     checkoutBase(repo, work, 'seqG', { id: 'g1', baseRef: fix }, 'A0');
@@ -408,8 +412,8 @@ describe('workspace checkout', () => {
     expect(wg('config', 'user.email')).toBe('eval@localhost');
   });
 
-  it('runs no hook from a hooksPath the agent put in the global git config it shares with the runner', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('runs no hook from a hooksPath the agent put in the global git config it shares with the runner', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqK', { id: 'k1', baseRef: fix }, 'A0');
     const home = tmp('z0-agent-home-');
@@ -426,8 +430,8 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it.each(['A0', 'A2'])('%s: clears a path over 260 characters the agent left, without throwing', (arm) => {
-    const { repo, base, fix } = gitRepo({});
+  it.each(['A0', 'A2'])('%s: clears a path over 260 characters the agent left, without throwing', async (arm) => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqL', { id: 'l1', baseRef: fix }, arm);
     const segments = Array.from({ length: 6 }, (_, i) => String(i).repeat(50));
@@ -453,24 +457,24 @@ describe('workspace checkout', () => {
     return r.g('rev-parse', 'HEAD');
   };
 
-  it('refuses a task whose stub tree holds an instruction file as a symlink, before touching the workspace', () => {
-    const r = gitRepo({ 'CLAUDE.md': 'native\n' });
+  it('refuses a task whose stub tree holds an instruction file as a symlink, before touching the workspace', async () => {
+    const r = await gitRepo({ 'CLAUDE.md': 'native\n' });
     const head = withLinks(r, { 'AGENTS.md': 'CLAUDE.md' });
     const work = workRepo();
     expect(() => checkoutBase(r.repo, work, 'seqY', { id: 'y1', baseRef: head }, 'A0')).toThrow('Z0 task seqY/y1: instruction file AGENTS.md is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task');
     expect(spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: work }).status).not.toBe(0);
   });
 
-  it('refuses a symlinked .claude or .claude/rules, whose rules an agent could edit past the carry', () => {
+  it('refuses a symlinked .claude or .claude/rules, whose rules an agent could edit past the carry', async () => {
     for (const rel of ['.claude', '.claude/rules']) {
-      const r = gitRepo({});
+      const r = await gitRepo({});
       const head = withLinks(r, { [rel]: 'config/claude' });
       expect(() => checkoutBase(r.repo, workRepo(), 'seqD', { id: 'd1', baseRef: head }, 'A0'), rel).toThrow(`Z0 task seqD/d1: .claude entry ${rel} is a symlink in the task repo`);
     }
   });
 
-  it('checks out a repo whose root CLAUDE.md links to AGENTS.md, since the stub replaces that link', () => {
-    const r = gitRepo({ 'AGENTS.md': 'native rules\n' });
+  it('checks out a repo whose root CLAUDE.md links to AGENTS.md, since the stub replaces that link', async () => {
+    const r = await gitRepo({ 'AGENTS.md': 'native rules\n' });
     const head = withLinks(r, { 'CLAUDE.md': 'AGENTS.md' });
     const work = workRepo();
     checkoutBase(r.repo, work, 'seqC', { id: 'c1', baseRef: head }, 'A0');
@@ -478,14 +482,14 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'AGENTS.md'), 'utf8')).toBe('native rules\n');
   });
 
-  it('goldLines surfaces a git error instead of turning the leak check off', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('goldLines surfaces a git error instead of turning the leak check off', async () => {
+    const { repo, base, fix } = await gitRepo({});
     expect(goldLines(repo, { baseRef: base, fixRef: fix })).toEqual(['a + b, the fix that a later task must never see in an earlier workspace']);
     expect(() => goldLines(repo, { baseRef: base, fixRef: 'no-such-ref' })).toThrow(/no-such-ref/);
   });
 
-  it('goldLines and writeHiddenTests ignore the global git config and attributes the agent shares, running nothing from them', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('goldLines and writeHiddenTests ignore the global git config and attributes the agent shares, running nothing from them', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const t = { baseRef: base, fixRef: fix, testFiles: ['lib.js'] };
     const clean = goldLines(repo, t);
     expect(clean).toHaveLength(1);
@@ -521,8 +525,8 @@ describe('workspace checkout', () => {
     expect(existsSync(marker), 'cache repo config').toBe(false);
   });
 
-  it('fetches the stub from the cache even when the global config the agent shares rewrites that path to a decoy', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('fetches the stub from the cache even when the global config the agent shares rewrites that path to a decoy', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqU', { id: 'u1', baseRef: fix }, 'A0');
     const decoy = tmp('z0-decoy-');
@@ -536,8 +540,8 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it('runs no hook the agent put in the task repo cache', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('runs no hook the agent put in the task repo cache', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const marker = join(tmp('z0-hook-mark-'), 'ran');
     for (const hook of ['reference-transaction', 'post-checkout', 'post-commit']) writeFileSync(join(repo, '.git', 'hooks', hook), `#!/bin/sh\necho ran >> "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
     const work = workRepo();
@@ -546,8 +550,8 @@ describe('workspace checkout', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  it('runs no core.fsmonitor command the agent put in the task repo cache config', () => {
-    const { repo, base, fix, g } = gitRepo({});
+  it('runs no core.fsmonitor command the agent put in the task repo cache config', async () => {
+    const { repo, base, fix, g } = await gitRepo({});
     const marker = join(tmp('z0-fsmon-mark-'), 'ran');
     const script = join(tmp('z0-fsmon-'), 'fsmon.sh');
     writeFileSync(script, `#!/bin/sh\necho ran >> "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
@@ -558,8 +562,8 @@ describe('workspace checkout', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  it('neither runs a hook nor stops when the agent plants one wherever the runner points core.hooksPath', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('neither runs a hook nor stops when the agent plants one wherever the runner points core.hooksPath', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqJ', { id: 'j1', baseRef: fix }, 'A0');
     const hooks = resolve(work, git(['config', 'core.hooksPath'], work).trim());
@@ -586,8 +590,8 @@ describe('workspace checkout', () => {
     }
   });
 
-  it('A2: drops every repo piece, bundle and link a kept .hippo holds, and keeps the hippo store', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('A2: drops every repo piece, bundle and link a kept .hippo holds, and keeps the hippo store', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
     checkoutBase(repo, work, 'seqH', { id: 'h1', baseRef: fix }, 'A2');
@@ -625,8 +629,8 @@ describe('workspace checkout', () => {
     expect(existsSync(join(outside, 'clone', 'lib.js'))).toBe(true);
   });
 
-  it.runIf(win)('A2 on win32: drops repo pieces whatever the case of their names, as NTFS and Git for Windows read them', () => {
-    const { repo, base, fix } = gitRepo({});
+  it.runIf(win)('A2 on win32: drops repo pieces whatever the case of their names, as NTFS and Git for Windows read them', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
     checkoutBase(repo, work, 'seqN', { id: 'n1', baseRef: fix }, 'A2');
@@ -648,8 +652,8 @@ describe('workspace checkout', () => {
     expect(readdirSync(hippo)).toEqual(['hippo.db']);
   });
 
-  it('A2: takes a store file or dir that vanishes after the purge lists it as gone, as SQLite drops -wal and -shm on close', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('A2: takes a store file or dir that vanishes after the purge lists it as gone, as SQLite drops -wal and -shm on close', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqV', { id: 'v1', baseRef: fix }, 'A2');
     const hippo = join(work, '.hippo');
@@ -669,8 +673,8 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it('A2: still throws on any other error opening a store file', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('A2: still throws on any other error opening a store file', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqE', { id: 'e1', baseRef: fix }, 'A2');
     mkdirSync(join(work, '.hippo'));
@@ -681,8 +685,8 @@ describe('workspace checkout', () => {
     withFs('openSync', { before: deny }, () => expect(() => checkoutBase(repo, work, 'seqE', { id: 'e2', baseRef: base }, 'A2')).toThrow(/EACCES/));
   });
 
-  it('waits out a process from the last session that holds a workspace dir for a second, then clears it', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('waits out a process from the last session that holds a workspace dir for a second, then clears it', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqS', { id: 's1', baseRef: fix }, 'A0');
     mkdirSync(join(work, 'server'));
@@ -695,8 +699,8 @@ describe('workspace checkout', () => {
     }
   });
 
-  it('replaces a workspace the agent swapped for a link with a real dir, leaving the link target alone', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('replaces a workspace the agent swapped for a link with a real dir, leaving the link target alone', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = join(tmp('z0-wparent-'), 'work');
     mkdirSync(work);
     checkoutBase(repo, work, 'seqW', { id: 'w1', baseRef: fix }, 'A0');
@@ -710,8 +714,8 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it('recreates a workspace the agent deleted, and reads it as holding no instruction files', () => {
-    const { repo, base, fix } = gitRepo({});
+  it('recreates a workspace the agent deleted, and reads it as holding no instruction files', async () => {
+    const { repo, base, fix } = await gitRepo({});
     const work = join(tmp('z0-wparent-'), 'work');
     mkdirSync(work);
     checkoutBase(repo, work, 'seqM', { id: 'm1', baseRef: fix }, 'A1');
@@ -721,8 +725,8 @@ describe('workspace checkout', () => {
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it('writes a hidden test inside the workspace when the agent replaced a parent dir with a link', () => {
-    const r = gitRepo({});
+  it('writes a hidden test inside the workspace when the agent replaced a parent dir with a link', async () => {
+    const r = await gitRepo({});
     mkdirSync(join(r.repo, 'tests'));
     writeFileSync(join(r.repo, 'tests', 't.js'), 'hidden test\n');
     r.g('add', '.');
