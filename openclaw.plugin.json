@@ -2,7 +2,7 @@
   "id": "hippo-memory",
   "name": "Hippo Memory",
   "description": "Memory for AI agents that learns what is wrong and ranks it down. Injects context at session start and captures errors.",
-  "version": "1.55.0",
+  "version": "1.56.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

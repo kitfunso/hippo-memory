@@ -12,15 +12,17 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   initStore,
+  saveSessionHandoff,
+} from '../src/store.js';
+import {
   createCard,
   claimCard,
   addCardComment,
-  saveSessionHandoff,
   blockCard,
   reviewCard,
   completeCard,
   heartbeatCard,
-} from '../src/store.js';
+} from '../src/store-cards.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { resolveTenantId } from '../src/tenant.js';
 

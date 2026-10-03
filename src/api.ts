@@ -72,6 +72,7 @@ import {
   createSuccessor,
   applyOutcome,
   calculateStrength,
+  markRetrieved,
   type MemoryKind,
   type MemoryEntry,
   CHURN_STALE_TAG,
@@ -88,6 +89,7 @@ import {
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
 import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from './recall-trace.js';
+import type { DeliveryObserver } from './delivery-recorder.js';
 import { evalNow } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
@@ -99,7 +101,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
+import { estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';
@@ -127,6 +129,7 @@ import {
 import {
   detectAnchoring,
   hashQueryText,
+  biasHintEnabled,
   type AnchoringHint,
   type RecallHistorySnapshot,
 } from './recall-history.js';
@@ -237,7 +240,7 @@ export { classifyOriginProject } from './project-identity.js';
  *   injects inside its owning project; flagged rows with no project origin
  *   (''/null) never ambient-inject at all. Explicit recall is unaffected -
  *   recalling a secret is a deliberate act.
- * - S2 envelope parity: private scopes + quarantine buckets never inject.
+ * - S2 envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
  * - S3 origin partition: other-project rows are excluded unless
  *   `includeCrossProject`.
  */
@@ -245,17 +248,17 @@ function ambientAdmitEntry(
   e: MemoryEntry,
   currentProjectName: string,
   includeCrossProject: boolean,
+  exactScope?: string,
 ): boolean {
   if (!ambientSecretAdmit(e, currentProjectName)) return false;
-  if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
+  if (!passesScopeFilterForRecall(e.scope ?? null, exactScope)) return false;
   if (includeCrossProject) return true;
   return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
 }
 
 /**
- * v39 S4: the secret half of the ambient policy on its own, for surfaces
- * with their own scope semantics (MCP hippo_context's explicit-scope
- * exact-match). A flagged row is only admitted inside its owning project;
+ * v39 S4: the secret half of the ambient policy on its own, for callers
+ * that apply their own scope rule. A flagged row is only admitted inside its owning project;
  * flagged rows with no project origin never ambient-inject.
  */
 export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
@@ -273,12 +276,17 @@ function loadAmbientEntries(
   includeRecent: number,
   admit: (e: MemoryEntry) => boolean,
   recall?: AmbientRecallRequest,
+  onQualityDrop?: (e: MemoryEntry) => void,
 ): AmbientLoadResult {
   if (!pinnedOnly) return { entries: loadAllEntries(hippoRoot, tenantId).filter(admit) };
   // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
   // counts by it too, or it stops short of a store whose newest rows are junk.
-  const admitAmbient = (e: MemoryEntry): boolean =>
-    admit(e) && (e.pinned || isContentWorthStoring(e.content));
+  const admitAmbient = (e: MemoryEntry): boolean => {
+    if (!admit(e)) return false;
+    if (e.pinned || isContentWorthStoring(e.content)) return true;
+    onQualityDrop?.(e);
+    return false;
+  };
   return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient, recall);
 }
 
@@ -511,16 +519,23 @@ export interface RecallOpts {
    * Mirrors `suppressAvailabilityHint`'s pattern: callers that run their OWN
    * tracing over a DIFFERENT result set must suppress api.recall's copy so
    * the training corpus doesn't get a trace mislabeled as 'api' pipeline
-   * when the caller's actual user-visible results came from elsewhere. The
-   * MCP handler sets this — its primary ranked band comes from a separate
-   * physics/hybrid scorer, not this api.recall call's BM25 band (real MCP
-   * tracing is the reserved 'mcp' pipeline, a follow-up). HTTP / direct SDK
-   * callers leave this unset and get the trace.
+   * when the caller's actual user-visible results came from elsewhere. Under
+   * `showRanked` it also drops the 'mcp' trace of the shown list. HTTP /
+   * direct SDK callers leave this unset and get the trace.
    */
   suppressRecallTrace?: boolean;
   /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
    *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
   keepHeldCopies?: boolean;
+  /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
+  showRanked?: (ranking: StoreRanking, result: RecallResult) => readonly string[];
+}
+
+/** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope filter. */
+export interface StoreRanking {
+  ranked: SearchResult[];
+  pool: MemoryEntry[];
+  droppedByScope: number;
 }
 
 export interface ContinuityBlock {
@@ -802,6 +817,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
+  if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked);
   let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false);
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null };
@@ -813,6 +829,45 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   }
   const result = recallFrom(ctx, opts, windowSize, candidates);
   strengthenRetrieved(ctx.hippoRoot, result.results.map((r) => r.id), ctx.tenantId);
+  return result;
+}
+
+/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid otherwise, over every admitted row. */
+async function retrieveFromStore(
+  ctx: Context,
+  opts: RecallOpts,
+  windowSize: number,
+  show: NonNullable<RecallOpts['showRanked']>,
+): Promise<RecallResult> {
+  const store = loadAllEntries(ctx.hippoRoot, ctx.tenantId);
+  const pool = store.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope));
+  // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
+  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot };
+  let ranked = opts.mode === 'physics'
+    ? await physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
+    : await hybridSearch(opts.query, pool, searchOpts);
+  if (opts.sessionId && !opts.goalTag) {
+    const db = openHippoDb(ctx.hippoRoot);
+    try {
+      ranked = applyGoalStackBoost(db, ranked, { sessionId: opts.sessionId, tenantId: ctx.tenantId, limit: ranked.length });
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+  const window = ranked.slice(0, windowSize).map((r) => r.entry);
+  const result = recallFrom(ctx, { ...opts, suppressRecallTrace: true }, windowSize, window);
+  const shown = show({ ranked, pool, droppedByScope: store.length - pool.length }, result);
+  strengthenRetrieved(ctx.hippoRoot, shown, ctx.tenantId);
+  if (!opts.suppressRecallTrace) {
+    const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
+    writeRecallTraceAtRoot(ctx.hippoRoot, {
+      tenantId: ctx.tenantId,
+      sessionId: opts.sessionId ?? null,
+      pipeline: 'mcp',
+      query: opts.query,
+      results: shown.map((id) => ({ memoryId: id, score: scores.get(id) ?? 0 })),
+    });
+  }
   return result;
 }
 
@@ -1146,9 +1201,9 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // handle. v1.11.5 contract lock holds — api.recall does NOT write
   // last_trace_id (tests/api-recall-no-side-effects.test.ts); a trace INSERT
   // is the same observability class as the audit row it sits beside, not
-  // retrieval state. F2 fix: suppressed when the caller (currently only the
-  // MCP handler) traces its own, different result set — see
-  // opts.suppressRecallTrace JSDoc. Fail-soft internally; never throws.
+  // retrieval state. F2 fix: suppressed when the caller traces its own,
+  // different result set (retrieve under showRanked traces the shown list as
+  // 'mcp'). Fail-soft internally; never throws.
   if (!opts.suppressRecallTrace) {
     writeRecallTrace(db, {
       tenantId: ctx.tenantId,
@@ -1250,7 +1305,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // detect call returns null and api.recall's anchoringHint stays absent.
   let anchoringHint: AnchoringHint | null = null;
   let suppressedByInterferenceCount = 0;
-  if (process.env.HIPPO_ANCHORING !== 'off' && opts.recallHistory) {
+  if (biasHintEnabled('anchoring') && opts.recallHistory) {
     const queryHash = hashQueryText(opts.query);
     const topMemoryId = rankedOut[0]?.id ?? null;
     anchoringHint = detectAnchoring(opts.recallHistory, queryHash, topMemoryId);
@@ -1301,7 +1356,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // opts.recallHistory gate above so we never double-emit the audit op. Audit
   // emission is pipeline-local, mirroring the J1 block above.
   let availabilityHint: AvailabilityHint | null = null;
-  if (process.env.HIPPO_AVAILABILITY !== 'off' && !opts.suppressAvailabilityHint) {
+  if (biasHintEnabled('availability') && !opts.suppressAvailabilityHint) {
     availabilityHint = detectAvailabilityBias({
       topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
       pool: entries.map((e) => ({ id: e.id, created: e.created })),
@@ -2526,6 +2581,8 @@ export interface ContextOpts {
   limit?: number;
   pinnedOnly?: boolean;
   scope?: string;
+  /** Envelope scope to match exactly, as in `recall`: admits that scope even when private, after the actor's scope check. */
+  exactScope?: string;
   /** With `pinnedOnly`, also inject the N most recent writes that pass the
    *  quality floor (`isContentWorthStoring`, DF3). Filtering happens BEFORE
    *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
@@ -2555,6 +2612,8 @@ export interface ContextOpts {
   prompt?: string;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
   cost?: ContextCost;
+  /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with or without it. */
+  deliveryObserver?: DeliveryObserver;
 }
 
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
@@ -2627,6 +2686,8 @@ export async function getContext(
   const limit = opts.limit ?? Number.POSITIVE_INFINITY;
   const includeRecent = opts.includeRecent ?? 0;
   const activeScope = opts.scope ?? '';
+  assertScopeRequestAllowed(ctx.actor, opts.exactScope);
+  const exactScope = opts.exactScope || undefined;
 
   if (budget <= 0) {
     return { entries: [], tokens: 0 };
@@ -2643,10 +2704,7 @@ export async function getContext(
   const hasLocalTaskState = hasLocal && !primaryIsGlobal;
 
   // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
-  // S2: envelope-filter parity with api.recall for AMBIENT context - private
-  // scopes and quarantine buckets never inject. `requested` is deliberately
-  // undefined: opts.scope is the scope-TAG boost input here, not an
-  // envelope-scope request (api.recall's exact-match semantics don't apply).
+  // S2: envelope-filter parity with api.recall; opts.scope is only the tag boost, opts.exactScope the envelope request.
   // S3: origin partition - other-project memories are excluded unless the
   // caller explicitly asks for them (crossProject) or isolation is disabled.
   const config = loadConfig(ctx.hippoRoot);
@@ -2671,6 +2729,9 @@ export async function getContext(
     ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProjectName) })
     : estimateTokens(entry.content);
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
+  const obs = opts.deliveryObserver;
+  obs?.facts({ projectName: currentProjectName, budgetTokens: blockBudget, promptRecall: promptRecallPending });
+  if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   let left = cost
     ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
     : blockBudget;
@@ -2693,10 +2754,9 @@ export async function getContext(
         sessionId: opts.currentSessionId,
       })
     : null;
-  // W1: pre-existing leak; same `requested: undefined` ambientAdmitEntry
-  // already uses when it scope-filters memory rows above.
+  // W1: the same envelope rule ambientAdmitEntry applies to memory rows.
   const activeSnapshot =
-    rawActiveSnapshot && passesScopeFilterForRecall(rowScope(rawActiveSnapshot), undefined)
+    rawActiveSnapshot && passesScopeFilterForRecall(rowScope(rawActiveSnapshot), exactScope)
       ? rawActiveSnapshot
       : null;
   // Key on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
@@ -2711,7 +2771,7 @@ export async function getContext(
           scopeFilter: 'default-deny',
         });
   const sessionHandoff =
-    rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), undefined)
+    rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), exactScope)
       ? rawSessionHandoff
       : null;
   // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
@@ -2719,11 +2779,15 @@ export async function getContext(
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
         session_id: rawActiveSnapshot.session_id,
         limit: 5,
-      }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
+      }).filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope))
     : [];
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
   const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+  obs?.sections(
+    Number(shownSnapshot !== null) + Number(shownHandoff !== null) + Number(shownEvents.length > 0),
+    Number(activeSnapshot !== shownSnapshot) + Number(sessionHandoff !== shownHandoff) + Number(recentSessionEvents.length !== shownEvents.length),
+  );
 
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   let digestHiddenForHandoff = false;
@@ -2733,7 +2797,7 @@ export async function getContext(
       digestHiddenForHandoff = true;
       return false;
     }
-    return ambientAdmitEntry(e, currentProjectName, includeCrossProject);
+    return ambientAdmitEntry(e, currentProjectName, includeCrossProject, exactScope);
   };
   const ownSessionId = opts.currentSessionId || '';
   // Inside admit, not after the load, so the loader's window widens past a session's own items.
@@ -2743,13 +2807,16 @@ export async function getContext(
     e.tags.includes(COMPACTION_MEMORY_TAG);
   // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
+  const loadAdmit = obs ? obs.watchAdmit(admit) : admit;
+  const qualityDrop = (isGlobal: boolean): ((e: MemoryEntry) => void) | undefined =>
+    obs && !promptRecallPending ? (e) => obs.qualityDropped(e, isGlobal) : undefined;
 
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(primaryIsGlobal))
     : { entries: [] };
   const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(true))
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;
@@ -2780,7 +2847,10 @@ export async function getContext(
     // Effective budget: explicit opts.budget wins over config, less what the sections took.
     const effBudget = left;
     const nowP = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+    obs?.offer(localEntries, primaryIsGlobal);
+    obs?.offer(globalEntries, true);
     const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP);
+    obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
     const selectedIds = new Set<string>();
     let usedP = 0;
 
@@ -2848,13 +2918,23 @@ export async function getContext(
         // Candidates came off the ambient load's own connection (recallRequest above), not a fresh open.
         // A candidate carrying a pin's text would inject that memory a second time.
         const pinnedText = new Set(rankedPinned.map((r) => r.entry.content));
-        const eligible = (e: MemoryEntry): boolean =>
-          admit(e) && !e.pinned && isContentWorthStoring(e.content) && !pinnedText.has(e.content);
-        const [localCandidates, globalCandidates] = oneCopyPerMemory(
-          (localLoad.recall ?? []).filter(eligible),
-          (globalLoad.recall ?? []).filter(eligible),
-          nowP,
-        );
+        const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
+          !admit(e) ? 'scope'
+            : e.pinned ? 'pinned'
+              : !isContentWorthStoring(e.content) ? 'quality'
+                : pinnedText.has(e.content) ? 'duplicate'
+                  : null;
+        const eligible = (e: MemoryEntry): boolean => {
+          const why = ineligibleReason(e);
+          if (why !== null && why !== 'pinned') obs?.reject(e, 'eligible', why);
+          return why === null;
+        };
+        obs?.offer(localLoad.recall ?? [], primaryIsGlobal, 'prompt-recall');
+        obs?.offer(globalLoad.recall ?? [], true, 'prompt-recall');
+        const localEligible = (localLoad.recall ?? []).filter(eligible);
+        const globalEligible = (globalLoad.recall ?? []).filter(eligible);
+        const [localCandidates, globalCandidates] = oneCopyPerMemory(localEligible, globalEligible, nowP);
+        obs?.dropMissing([...localEligible, ...globalEligible], [...localCandidates, ...globalCandidates], 'eligible', 'duplicate');
         const seenCandidateIds = new Set<string>();
         const candidateItems: Array<{ id: string; tokens: Set<string>; entry: MemoryEntry; isGlobal: boolean }> = [];
         // Local wins the id collision (a global row synced into the local store).
@@ -2869,10 +2949,14 @@ export async function getContext(
           candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: true });
         }
         const gated = gatePromptRecall(p, candidateItems, gate);
+        obs?.gated(p, candidateItems, gate, gated);
         for (const g of gated) {
           if (selectedIds.has(g.item.id)) continue;
           const tokens = price(g.item.entry, g.item.isGlobal, true);
-          if (usedP + tokens > recentBudget) continue;
+          if (usedP + tokens > recentBudget) {
+            obs?.reject(g.item.entry, 'budget', 'budget', g.score, tokens);
+            continue;
+          }
           selectedItems.push({ entry: g.item.entry, score: g.score, tokens, isGlobal: g.item.isGlobal, promptRecall: true });
           selectedIds.add(g.item.id);
           usedP += tokens;
@@ -2923,7 +3007,10 @@ export async function getContext(
 
       for (const r of recent) {
         if (selectedIds.has(r.entry.id)) continue;
-        if (usedP + r.tokens > recentBudget) continue;
+        if (usedP + r.tokens > recentBudget) {
+          obs?.reject(r.entry, 'budget', 'budget', r.score, r.tokens);
+          continue;
+        }
         selectedItems.push(r);
         selectedIds.add(r.entry.id);
         usedP += r.tokens;
@@ -2941,7 +3028,10 @@ export async function getContext(
 
     for (const r of rankedPinned) {
       if (selectedIds.has(r.entry.id)) continue;
-      if (usedP + r.tokens > effBudget) continue;
+      if (usedP + r.tokens > effBudget) {
+        obs?.reject(r.entry, 'budget', 'budget', r.score, r.tokens);
+        continue;
+      }
       selectedItems.push(r);
       selectedIds.add(r.entry.id);
       usedP += r.tokens;
@@ -3074,9 +3164,13 @@ export async function getContext(
   }
 
   if (limit < selectedItems.length) {
-    selectedItems = selectedItems.slice(0, limit);
+    const cut = selectedItems.slice(0, limit);
+    obs?.dropMissing(selectedItems.map((r) => r.entry), cut.map((r) => r.entry), 'limit', 'limit');
+    selectedItems = cut;
   }
-  selectedItems = dropHeldCopies(selectedItems, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  const heldDropped = dropHeldCopies(selectedItems, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  obs?.dropMissing(selectedItems.map((r) => r.entry), heldDropped.map((r) => r.entry), 'limit', 'duplicate');
+  selectedItems = heldDropped;
   totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
 
   // v39: annotate every returned entry with its origin and how it relates to
@@ -3086,6 +3180,7 @@ export async function getContext(
     origin: r.entry.origin_project ?? null,
     category: classifyOriginProject(r.entry.origin_project, currentProjectName),
   }));
+  obs?.selected(selectedItems);
 
   if (
     selectedItems.length === 0 &&

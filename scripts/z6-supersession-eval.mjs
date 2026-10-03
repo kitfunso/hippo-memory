@@ -959,7 +959,7 @@ function selftestFixtureContract(fx, check) {
 }
 
 async function selftestQuestionReach(fx, check) {
-  const search = await import(pathToFileURL(path.join(REPO, 'dist', 'search.js')).href);
+  const search = await import(pathToFileURL(path.join(REPO, 'dist', 'tokenize.js')).href);
   const tokenize = search.tokenize;
   const content = (t) => new Set(tokenize(t).filter((w) => !STOP.has(w)));
   const shares = (a, b) => { const B = content(b); return [...content(a)].some((w) => B.has(w)); };

@@ -38,7 +38,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { execFileSync, execSync, spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import {
   installJsonHooks,
   uninstallJsonHooks,
@@ -50,7 +50,6 @@ import {
   detectRealCodexPath,
   isCodexPresent,
   isCodexWrapperInstalled,
-  CODEX_TRUST_LINE,
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
   resolveCodexSessionTranscript,
@@ -86,7 +85,6 @@ import {
   deleteEntry,
   loadAllEntries,
   loadSearchEntries,
-  loadRecallSearchEntries,
   loadIndex,
   saveIndex,
   loadStats,
@@ -107,6 +105,9 @@ import {
   writeSessionEndHandoff,
   TaskSnapshot,
   SessionEvent,
+  memoriesBackingObjects,
+} from './store.js';
+import {
   createCard,
   loadCard,
   listCards,
@@ -118,23 +119,21 @@ import {
   completeCard,
   reclaimExpiredCards,
   addCardComment,
-  memoriesBackingObjects,
-} from './store.js';
+} from './store-cards.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
-import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
+import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome } from './handoff.js';
 import { readSessionScan, recordSessionDigest } from './session-digest.js';
 import { type Card, isCardStatus } from './card.js';
 import { loadCardDetail, type CardDetail } from './card-detail.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
-import { search, estimateTokens, fitBudget, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep, type SearchResult } from './search.js';
-import { compareEntryIdentity } from './compare.js';
+import { search, estimateTokens, fitBudget, explainMatch, type SearchResult } from './search.js';
 import { renderTraceContent, parseSteps } from './trace.js';
-import { writeRecallTraceAtRoot } from './recall-trace.js';
+import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle, writeRecallTraceAtRoot } from './recall-trace.js';
+import { createDeliveryRecorder, type DeliveryRecorder } from './delivery-recorder.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
 import {
-  isEmbeddingAvailable,
   embedAll,
   embedMemory,
   loadEmbeddingIndex,
@@ -152,22 +151,19 @@ import { PACKAGE_VERSION } from './version.js';
 import { captureToolFailure } from './capture-error.js';
 import type { JsonValue } from './working-memory.js';
 import {
-  blockHash, hookPayloadSessionId, isSubagentPayload, lastSentState, readApiCalls, recordRereads, recordTokenUse, shouldSkipUnchanged,
+  blockHash, isSubagentPayload, lastSentState, readApiCalls, recordRereads, recordTokenUse, shouldSkipUnchanged,
   type TokenSurface, type TranscriptCalls,
 } from './token-ledger.js';
 import { FAILURE_LOG_RETENTION_DAYS } from './failure-log.js';
-import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, applyGoalStackBoost } from './goals.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, writeGoalRecallLog } from './goals.js';
 import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
 import { rowToGoal } from './goals.js';
 import {
   captureError,
-  extractLessons,
-  partitionLessons,
   runWatched,
-  fetchGitLog,
   isGitRepo,
 } from './autolearn.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
+import { dropHeldCopies } from './same-text.js';
 import {
   currentMachine,
   importAtCompaction,
@@ -176,10 +172,11 @@ import {
   importProjectMemories,
   importUserMemories,
 } from './agent-memories/sync.js';
-import { detailLines, emptyReport, mergeReports, summaryLine, type ImportReport } from './agent-memories/report.js';
-import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
-import { deriveOriginProject, isGlobalStoreRoot, resolveProjectIdentity } from './project-identity.js';
+import { detailLines, emptyReport, mergeReports, summaryLine } from './agent-memories/report.js';
+import { invalidateMatching, InvalidationTarget } from './invalidation.js';
+import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
+import { autoDetectContext } from './context-auto.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
   getGlobalRoot,
@@ -190,14 +187,9 @@ import {
   autoShare,
   transferScore,
   searchBoth,
-  searchBothHybrid,
   syncGlobalToLocal,
 } from './shared.js';
 import {
-  DAILY_TASK_NAME,
-  buildDailyRunnerCommand,
-  buildSchtasksCreateArgs,
-  buildWindowsTaskRun,
   listRegisteredWorkspaces,
   registerWorkspace,
   runDailyMaintenance,
@@ -211,12 +203,11 @@ import {
   importVault,
   ImportOptions,
 } from './importers.js';
-import { cmdCapture, CaptureOptions, cmdPreCompact, cmdPostCompact, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage, transcriptWorkingState } from './capture.js';
+import { cmdCapture, CaptureOptions, cmdPreCompact, cmdPostCompact, resolveLastSessionTranscript, truncateCodePointSafe, transcriptWorkingState } from './capture.js';
 import { COMPACTION_DB_WAIT_MS, replayCompactionsAt } from './compaction-record.js';
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
-  appendAuditEvent,
   auditQueryFields,
   queryAuditEvents,
   AUDIT_OPS,
@@ -224,7 +215,7 @@ import {
   type AuditOp,
   type AuditResult,
 } from './audit.js';
-import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
+import { createApiKey, listApiKeys, type ApiKeyListItem } from './auth.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
@@ -239,10 +230,10 @@ import * as briefsModule from './project-briefs.js';
 import * as customerNotesModule from './customer-notes.js';
 import { extractGraph } from './graph-extract.js';
 import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from './graph-view.js';
-import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
   hashQueryText,
+  biasHintEnabled,
   buildSessionKey,
   getOrCreateRing,
   appendRecall,
@@ -275,16 +266,15 @@ export function __resetSessionRecallHistoryCli(): void {
   sessionRecallHistoryCli.clear();
 }
 import * as client from './client.js';
-import { detectServer, removePidfileIfOwned, type ServerInfo } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
-import { multihopSearch } from './multihop.js';
-import { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
-import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
+import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
 import { getReranker } from './rerankers/index.js';
+import type { RerankerFn } from './rerankers/types.js';
+import { rankRecall, type RankStage, type RecallGraphHops, type RecallGraphStream, type RecallReranker } from './recall-pipeline.js';
 import { JEV_DEFAULT_TOP_K } from './rerankers/jev.js';
 import { computeSalience } from './salience.js';
 import { renderAmbientSummary } from './ambient.js';
@@ -303,159 +293,45 @@ import {
   removeWorkspace as removeSlackWorkspace,
 } from './connectors/slack/workspaces.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
+import {
+  parseLimitFlag,
+  parseCountFlag,
+  parseBudgetFlag,
+  emitCliAudit,
+  requireInit,
+  runChurnStaleForRepo,
+  runViaServerIfAvailable,
+  fmt,
+  recallEntryText,
+  recallHeading,
+  printAgentImport,
+  hippoBlock,
+  installCodexMemoryHooks,
+  setupDailySchedule,
+  type CliFlags,
+  parseAsOfFlag,
+  engineFlags,
+  collectHandoffEvidence,
+  logSessionEndImport,
+  appendSessionEndCloseLog,
+  printActiveTaskSnapshot,
+  printSessionEvents,
+  printHandoff,
+  cardStringFlag,
+  hostSessionId,
+  resetHookInjection,
+  captureConsole,
+  hookStoreRoot,
+  withLedgerDb,
+  learnFromRepo,
+  HOOK_MARKERS,
+  HOOKS,
+  resolveAuthRoot,
+} from './cli/shared.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function parseLimitFlag(value: string | boolean | string[] | undefined): number {
-  if (!value) return Infinity;
-  const parsed = parseInt(String(value), 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
-}
-
-function parseCountFlag(value: string | boolean | string[] | undefined): number {
-  if (!value || value === true || Array.isArray(value)) return 0;
-  const parsed = parseInt(String(value), 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 0;
-}
-
-function parseBudgetFlag(value: string | boolean | string[] | undefined, fallback: number): number {
-  if (value === undefined) return fallback;
-  // A value-less flag and a junk value are different typos; the --hops guard already splits them.
-  if (typeof value !== 'string') {
-    console.error('--budget requires an integer value (e.g. --budget 1500).');
-    process.exit(1);
-  }
-  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    console.error(`Invalid --budget: "${value}". Must be a non-negative integer.`);
-    process.exit(1);
-  }
-  return parsed;
-}
-
-/**
- * Emit an audit event against `hippoRoot`'s db. Opens its own short-lived
- * connection so callers don't have to thread a db handle. Swallows all errors
- * — audit must never crash a CLI command.
- */
-function emitCliAudit(
-  hippoRoot: string,
-  op: AuditOp,
-  targetId?: string,
-  metadata?: Record<string, unknown>,
-): void {
-  try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      appendAuditEvent(db, {
-        tenantId: resolveTenantId({}),
-        actor: 'cli',
-        op,
-        targetId,
-        metadata,
-      });
-    } finally {
-      closeHippoDb(db);
-    }
-  } catch {
-    // Audit is best-effort; surface failures only via missing rows.
-  }
-}
-
-function requireInit(hippoRoot: string): void {
-  if (!isInitialized(hippoRoot)) {
-    console.error(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
-    process.exit(1);
-  }
-}
-
-/** FE2: run detectChurnStale against every store this repo's memories can live in. */
-function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
-  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true }).trim();
-  const projectName = resolveProjectIdentity(process.cwd()).name;
-  const globalRoot = getGlobalRoot();
-  const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
-  const tenantId = resolveTenantId({});
-  return roots.map((root) => {
-    // One store failing must not abort sleep's later phases or skip the other store.
-    try {
-      return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, dryRun }) };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
-    }
-  });
-}
-
-/**
- * H2: when HIPPO_REQUIRE_SERVER is set, the CLI must not silently fall back to
- * direct DB mode — a missing server then masks a real misconfiguration (the
- * configured HIPPO_API_KEY is also silently discarded on fallback). Throws a
- * clear error then. It guards only the routed writes (remember, forget, archive,
- * promote); every other command opens the store directly, knob or not.
- */
-function failIfServerRequired(reason: string): void {
-  if (process.env['HIPPO_REQUIRE_SERVER']) {
-    throw new Error(
-      `hippo: HIPPO_REQUIRE_SERVER is set but ${reason}. ` +
-      `Start \`hippo serve\`, or unset HIPPO_REQUIRE_SERVER to allow direct-mode fallback.`,
-    );
-  }
-}
-
-/**
- * Run an HTTP-routed command if a `hippo serve` instance is detected for
- * `hippoRoot`. Returns:
- *   - true  if the HTTP path ran (success OR a structured server error that
- *           was already surfaced to stdout/stderr by `httpFn`),
- *   - false if no server was detected, or if the detected pidfile turned out
- *           to be stale (connection refused). On stale, the pidfile is removed
- *           if it still names that dead server (a newer one may have replaced
- *           it) and the caller should fall back to the direct path.
- *
- * Per the A1 plan footgun #1: stale pidfiles must self-heal, not crash.
- * H2: when HIPPO_REQUIRE_SERVER is set, both fallback paths throw instead of
- * returning false, so a missing server fails loudly rather than silently
- * degrading to direct mode.
- */
-async function runViaServerIfAvailable(
-  hippoRoot: string,
-  httpFn: (info: ServerInfo, apiKey: string | undefined) => Promise<void>,
-): Promise<boolean> {
-  const info = await detectServer(hippoRoot);
-  if (!info) {
-    failIfServerRequired('no running server was detected for this hippoRoot');
-    return false;
-  }
-  const apiKey = process.env['HIPPO_API_KEY'];
-  try {
-    await httpFn(info, apiKey);
-    return true;
-  } catch (err) {
-    const failure = client.classifyTransportFailure(err);
-    if (failure === 'never-sent') {
-      failIfServerRequired('the server pidfile was stale (connection refused)');
-      console.error('hippo: stale server pidfile detected, falling back to direct mode');
-      // Clear the pidfile only if it still names the dead server we just
-      // probed — a newer server may have rewritten it (removePidfileIfOwned).
-      removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });
-      return false;
-    }
-    if (failure === 'delivery-unknown') {
-      // Every caller of this helper is a non-idempotent write, so replaying on
-      // the direct path would store a row the server may already have committed.
-      // Leave the pidfile alone: the next command's connect-phase failure heals it.
-      console.error(
-        `hippo: the connection to ${info.url} dropped mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
-      );
-      process.exit(1);
-    }
-    throw err;
-  }
-}
 
 // Every switch the CLI reads. A value on one reads as on under Boolean() (`--fix=false` would fix)
 // and as off under === true (`--pin=true` would not pin), so parseArgs and main() refuse one.
@@ -583,50 +459,6 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
   }
 
   return { command, args, flags };
-}
-
-function fmt(n: number, digits = 2): string {
-  return n.toFixed(digits);
-}
-
-// What `hippo recall` prints for one result; the budget prices this same text.
-function recallEntryText(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean): string {
-  const e = r.entry;
-  const label = confidenceLabel(e);
-  const confLabel = label.warn ? `[${label.text}] ⚠️` : `[${label.text}]`;
-  const bars = Math.round(e.strength * 10);
-  const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
-  const lines = [
-    `--- ${e.id} [${e.layer}] ${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
-    `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`,
-  ];
-  if (showWhy) {
-    const explanation = explainMatch(query, r);
-    lines.push(`    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`, `    reason: ${explanation.reason}`);
-    const env = explanation.envelope;
-    if (env) {
-      lines.push(`    kind: ${env.kind}`);
-      if (env.scope) lines.push(`    scope: ${env.scope}`);
-      if (env.owner) lines.push(`    owner: ${env.owner}`);
-      if (env.artifact_ref) lines.push(`    artifact_ref: ${env.artifact_ref}`);
-      if (env.session_id) lines.push(`    session_id: ${env.session_id}`);
-      lines.push(`    confidence: ${env.confidence}`);
-    }
-    // A7 recall-trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost x1.50 -> 0.189".
-    if (r.rerankTrace && r.rerankTrace.length > 0) {
-      const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
-      for (const step of r.rerankTrace) {
-        parts.push(`${step.stage}${step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : ''}`, fmt(step.scoreAfter, 3));
-      }
-      lines.push(`    ranking: ${parts.join(' -> ')}`);
-    }
-  }
-  lines.push('', e.content, '');
-  return lines.join('\n');
-}
-
-function recallHeading(entries: number, tokens: number, query: string): string {
-  return `Found ${entries} memories (${tokens} tokens) for: "${query}"\n`;
 }
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
@@ -811,13 +643,6 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
   if (!flags['no-learn']) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
 }
 
-/** One line when an agent memory import moved anything; its warnings go to stderr. */
-function printAgentImport(report: ImportReport, indent = '   '): void {
-  const line = summaryLine(report);
-  if (line !== null) console.log(`${indent}${line}`);
-  for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
-}
-
 /** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
 function initInstallsIntegrations(flags: Record<string, string | boolean | string[]>): boolean {
   if (flags['no-hooks']) return false;
@@ -877,19 +702,6 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
   }
 }
 
-/** The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is undefined for an edited block. */
-function hippoBlock(text: string): { start: number; end: number; eol: string; inner: string; owner?: string } | null {
-  const at = text.indexOf(HOOK_MARKERS.start);
-  const start = at + HOOK_MARKERS.start.length;
-  const end = text.indexOf(HOOK_MARKERS.end, start);
-  if (at < 0 || end < 0) return null;
-  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own ending.
-  const raw = text.slice(start, end);
-  const inner = raw.replace(/\r\n/g, '\n').trim();
-  const owner = Object.keys(HOOKS).find((k) => HOOKS[k].content === inner) ?? SHIPPED_HOOK_HASHES.get(createHash('sha256').update(inner).digest('hex'));
-  return { start, end, eol: raw.includes('\r\n') ? '\r\n' : '\n', inner, owner };
-}
-
 /** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with a hint. */
 function refreshShippedBlock(filePath: string, text: string, hook: string): void {
   const block = hippoBlock(text);
@@ -902,23 +714,6 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
   }
   fs.writeFileSync(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`, 'utf8');
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
-}
-
-/** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
-function installCodexMemoryHooks(indent: string): void {
-  const result = installJsonHooks('codex');
-  if (result.invalidJson) {
-    console.log(`${indent}WARNING: ${result.settingsPath} is not a hooks file hippo can merge into; fix it, then run \`hippo hook install codex\`.`);
-    return;
-  }
-  const added = [
-    result.installedUserPromptSubmit ? 'UserPromptSubmit' : '',
-    result.installedCompactResume ? 'SessionStart(compact)' : '',
-  ].filter(Boolean);
-  console.log(added.length > 0
-    ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
-    : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
-  console.log(`${indent}${CODEX_TRUST_LINE}`);
 }
 
 /** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
@@ -979,66 +774,6 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
       if (result.jsonRepairFailed) {
         console.log(`   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
       }
-    }
-  }
-}
-
-/**
- * Set up a machine-level daily runner that sweeps all registered Hippo
- * workspaces.
- * Linux/macOS: writes to user crontab.
- * Windows: creates a scheduled task.
- * Skips if already installed.
- */
-function setupDailySchedule(globalRoot: string): void {
-  const runnerDir = path.resolve(globalRoot);
-  // Reject paths with characters that could break shell/crontab quoting
-  // (backslash is normal on Windows, only dangerous in Unix shell/crontab)
-  const unsafeChars = process.platform === 'win32' ? /["`$%\n\r]/ : /["`$\n\r\\]/;
-  if (unsafeChars.test(runnerDir)) {
-    console.log(`   Skipping schedule: runner path contains unsafe characters.`);
-    return;
-  }
-  const isWindows = process.platform === 'win32';
-  const taskName = DAILY_TASK_NAME;
-  const cmd = buildDailyRunnerCommand(runnerDir);
-
-  if (isWindows) {
-    // Check if task already exists
-    try {
-      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true });
-      if (existing.includes(taskName)) {
-        return; // already scheduled
-      }
-    } catch {
-      // Task doesn't exist, create it
-    }
-
-    try {
-      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true });
-      console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
-    } catch {
-      // No admin rights or schtasks unavailable, fall back to printing instructions
-      console.log(`   To schedule the machine-level daily runner, run:`);
-      console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
-    }
-  } else {
-    // Unix: check crontab for existing entry
-    const marker = `# hippo:${taskName}`;
-    try {
-      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true });
-      if (existing.includes(marker)) {
-        return; // already scheduled
-      }
-
-      const cronLine = `15 6 * * * ${cmd} ${marker}`;
-      const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-      console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
-    } catch {
-      const cronLine = `15 6 * * * ${cmd}`;
-      console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
-      console.log(`   ${cronLine}`);
     }
   }
 }
@@ -1255,10 +990,128 @@ function cmdSupersede(
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
 }
 
+/** A flag value, or the deferred error that rejects it. */
+interface ParsedFlag<T> { value?: T; fail?: () => never }
+
+/** A flag the ranking stages read, rejected where the old mid-pipeline check printed its error. */
+interface LateFlagError { stage: RankStage; fail: () => never }
+
+interface RecallLateFlags {
+  graphHops?: RecallGraphHops;
+  reranker?: RecallReranker;
+  salienceThreshold?: number;
+  outcome?: string;
+  layer?: string;
+  error?: LateFlagError;
+}
+
+function failWith(message: string): () => never {
+  return () => {
+    console.error(message);
+    process.exit(1);
+  };
+}
+
+/** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local store only. */
+function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
+  let hops: number | undefined;
+  if (flags['graph-hops'] !== undefined) {
+    if (typeof flags['graph-hops'] === 'boolean') failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
+    const h = Number(flags['graph-hops']);
+    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
+      failWith(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`)();
+    }
+    hops = h;
+  }
+  let seeds: number | undefined;
+  if (flags['graph-seeds'] !== undefined) {
+    if (typeof flags['graph-seeds'] === 'boolean') failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
+    const s = Number(flags['graph-seeds']);
+    if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`)();
+    seeds = s;
+  }
+  return { hops, seeds };
+}
+
+function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
+  if (flags['hops'] === undefined) return {};
+  // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
+  if (typeof flags['hops'] === 'boolean') return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
+  const hops = Number(flags['hops']);
+  if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
+    return { fail: failWith(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`) };
+  }
+  const raw = flags['max-neighbors'];
+  if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
+  if (typeof raw === 'boolean') return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
+  const maxNeighbors = Number(raw);
+  if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
+    return { fail: failWith(`Invalid --max-neighbors: "${String(raw)}". Must be an integer 1..200.`) };
+  }
+  return { value: { hops, maxNeighbors } };
+}
+
+function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
+  const name = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
+  let fn: RerankerFn | null;
+  try {
+    fn = getReranker(name);
+  } catch (err) {
+    // An unknown name throws to the top-level handler, as it did when the lookup sat mid-pipeline.
+    return { fail: () => { throw err; } };
+  }
+  if (!fn) return {};
+  const topK = flags['reranker-top-k'] !== undefined
+    ? parseInt(String(flags['reranker-top-k']), 10)
+    : name === 'jev' ? JEV_DEFAULT_TOP_K : 50;
+  return { value: { fn, topK } };
+}
+
+function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
+  const raw = flags['salience-threshold'];
+  if (raw === undefined) return {};
+  const threshold = Number(raw);
+  if (!Number.isFinite(threshold) || threshold <= 0) {
+    return { fail: failWith(`Invalid --salience-threshold: "${String(raw)}". Must be a positive number.`) };
+  }
+  return { value: threshold };
+}
+
+function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
+  const value = flags[name] !== undefined ? String(flags[name]).trim() : '';
+  if (!value) return {};
+  if (!valid.includes(value)) return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
+  return { value };
+}
+
+/** Parses every flag a ranking stage reads; the first invalid one in pipeline order becomes `error`. */
+function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
+  const graphHops = parseHopsFlags(flags);
+  const reranker = parseRerankerFlag(flags);
+  const salience = parseSalienceFlag(flags);
+  const outcome = parseChoiceFlag(flags, 'outcome', ['success', 'failure', 'partial']);
+  const layer = parseChoiceFlag(flags, 'layer', Object.values(Layer));
+  const staged: ReadonlyArray<readonly [RankStage, (() => never) | undefined]> = [
+    ['expand', graphHops.fail], ['rerank', reranker.fail], ['salience', salience.fail], ['outcome', outcome.fail], ['layer', layer.fail],
+  ];
+  let error: LateFlagError | undefined;
+  for (const [stage, fail] of staged) {
+    if (fail) { error = { stage, fail }; break; }
+  }
+  return {
+    graphHops: graphHops.value,
+    reranker: reranker.value,
+    salienceThreshold: salience.value,
+    outcome: outcome.value,
+    layer: layer.value,
+    error,
+  };
+}
+
 async function cmdRecall(
   hippoRoot: string,
   query: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
 
@@ -1266,168 +1119,27 @@ async function cmdRecall(
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
   const showWhy = Boolean(flags['why']);
-  const forcePhysics = Boolean(flags['physics']);
-  const forceClassic = Boolean(flags['classic']);
   const includeSuperseded = Boolean(flags['include-superseded']);
-  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
-  if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
-    console.error(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
-  }
+  const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
   const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
-
-  // A5 stub auth: resolve the active tenant once and thread it through every
-  // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
+  // Cross-tenant rows must never surface, so the tenant is resolved once and threaded through every load.
   const tenantId = resolveTenantId({});
-
-  // v1.25.0 (v39 follow-up #1): the direct CLI recall path applies the recall
-  // scope rule. SQL half via loadRecallSearchEntries in 'additive' mode —
-  // default-deny (`unknown:legacy` quarantine) always, and an explicit
-  // `--scope X` UNLOCKS envelope scope X on top of the default-admitted set
-  // (the CLI flag is historically a tag-boost hint over scope-NULL rows, so
-  // api.recall's narrowing exact-match would empty every tag-scoped recall —
-  // see passesCliRecallScopeFilter in recall-scope.ts). The regex-only
-  // `<source>:private:*` half is the JS post-filter below. Hoisted here
-  // (it previously lived with the boost flags): recallExplicitScope is the
-  // FILTER input; recallActiveScope (which falls back to detectScope()) stays
-  // boost-only — auto-detection must never become a filter input or
-  // detected-project recalls would change shape.
+  // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
   const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const requestedScopeForFilter = recallExplicitScope || undefined;
-
-  const loadSuperseded = includeSuperseded || Boolean(asOf);
-  let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded);
-  let globalEntries = globalRoot !== hippoRoot && isInitialized(globalRoot)
-    ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded)
-    : [];
-
-  // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
-  // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
-  // filter drops (pre-rank AND post-rank); its meaning is unchanged by C5.
-  //
-  // C5 (2026-08-24): search-engine internal drops (scored-to-zero rows that
-  // hybridSearch/physicsSearch returns fewer of than they were given) now
-  // count toward droppedByBudget, not "not counted at all" as the old v1
-  // convention had it. That old convention is exactly why the `Cutoff:` line
-  // never printed: cmdRecall measured droppedByBudget from `results.length -
-  // limit` (cli.ts ~1547) AFTER the search call, but `results` had already
-  // been ranked and truncated by the search engine to a handful of rows, so
-  // `limit < results.length` was almost always false and the counter stayed
-  // 0 while hundreds of candidates silently vanished (see the plan's measured
-  // table: 397 of 400 candidates gone, every counter reading 0). droppedByBudget
-  // is now derived as "everything not attributed to a named pre-rank filter",
-  // computed after the final `--limit` slice — see the definition near
-  // line ~1545 for the exact formula and the double-count argument.
-  // totalCandidates = post-SQL-predicate count (api.recall parity: measured
-  // after loadRecallSearchEntries, before the JS scope filter). NOTE the
-  // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
-  // v1.25.0 pre-window ':private:' exclusion) are pre-candidate and are NOT
-  // counted as drops; the JS half below normally drops 0 and exists as
-  // defense-in-depth (LIKE/regex divergence, exact-mode mismatch).
-  const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
-  let droppedPreRankCountCmd = 0;
-  // Graph expansion adds candidates AFTER totalCandidatesCountCmd is taken,
-  // so they are folded back in before the budget residual is derived.
-  let graphAddedCountCmd = 0;
-
-  // v1.25.0: JS half of the recall scope rule (private-scope regex deny with
-  // explicit-request unlock), via the canonical helper — do not inline a
-  // fourth copy of this predicate.
-  const passesRecallScope = (e: MemoryEntry) =>
-    api.passesCliRecallScopeFilter(e.scope ?? null, requestedScopeForFilter);
-  const beforeScopeFilterCmd = localEntries.length + globalEntries.length;
-  localEntries = localEntries.filter(passesRecallScope);
-  globalEntries = globalEntries.filter(passesRecallScope);
-  droppedPreRankCountCmd += beforeScopeFilterCmd - (localEntries.length + globalEntries.length);
-
-  // Bi-temporal filtering for physics path (hybridSearch handles it internally)
-  if (asOf) {
-    const filterAsOf = (entries: MemoryEntry[]) => {
-      const asOfDate = new Date(asOf);
-      const successorValidFrom = new Map<string, string>();
-      for (const e of entries) {
-        if (e.superseded_by) {
-          const successor = entries.find(s => s.id === e.superseded_by);
-          if (successor) successorValidFrom.set(e.id, successor.valid_from);
-        }
-      }
-      return entries.filter(e => {
-        if (new Date(e.valid_from) > asOfDate) return false;
-        if (!e.superseded_by) return true;
-        const succVf = successorValidFrom.get(e.id);
-        return succVf ? new Date(succVf) > asOfDate : true;
-      });
-    };
-    const beforeAsOf = localEntries.length + globalEntries.length;
-    localEntries = filterAsOf(localEntries);
-    globalEntries = filterAsOf(globalEntries);
-    droppedPreRankCountCmd += beforeAsOf - (localEntries.length + globalEntries.length);
-  } else if (!includeSuperseded) {
-    const beforeSupersededDrop = localEntries.length + globalEntries.length;
-    localEntries = localEntries.filter(e => !e.superseded_by);
-    globalEntries = globalEntries.filter(e => !e.superseded_by);
-    droppedPreRankCountCmd += beforeSupersededDrop - (localEntries.length + globalEntries.length);
-  }
-
-  const hasGlobal = globalEntries.length > 0;
-
-  // Determine search mode: --physics forces physics, --classic forces BM25+cosine,
-  // default uses physics if config.physics.enabled is not false
   const config = loadConfig(hippoRoot);
-  const usePhysics = forcePhysics
-    || (!forceClassic && config.physics.enabled !== false);
-
-  const noMmr = Boolean(flags['no-mmr']);
-  const mmrLambda = flags['mmr-lambda'] !== undefined
-    ? parseFloat(String(flags['mmr-lambda']))
-    : config.mmr.lambda;
-  const mmrEnabled = !noMmr && config.mmr.enabled;
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : config.search.localBump;
   const minResults = flags['min-results'] !== undefined
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
-  // recallExplicitScope hoisted above the candidate loads (v1.25.0) — see the
-  // scope-filter block near the top of cmdRecall.
   const recallActiveScope = recallExplicitScope || detectScope();
-
-  const useMultihop = flags['multihop'] === true || config.multihop.enabled;
-
-  // L1 — graph-retrieval stream. `--graph-stream` forces rrf fusion + the graph stream
-  // (see src/graph-stream.ts). NOTE: it implies `scoring:'rrf'` (production default is
-  // 'blend'), so the flag bundles two behaviours by design. CLI surface is local-store
-  // only for now; the library API supports a globalRoot for callers who need it.
-  const useGraphStream = flags['graph-stream'] === true;
-  let graphStreamHops: number | undefined;
-  if (useGraphStream && flags['graph-hops'] !== undefined) {
-    if (typeof flags['graph-hops'] === 'boolean') {
-      console.error(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`);
-      process.exit(1);
-    }
-    const h = Number(flags['graph-hops']);
-    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
-      console.error(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`);
-      process.exit(1);
-    }
-    graphStreamHops = h;
-  }
-  let graphStreamSeeds: number | undefined;
-  if (useGraphStream && flags['graph-seeds'] !== undefined) {
-    if (typeof flags['graph-seeds'] === 'boolean') {
-      console.error('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).');
-      process.exit(1);
-    }
-    const s = Number(flags['graph-seeds']);
-    if (!Number.isInteger(s) || s < 1) {
-      console.error(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`);
-      process.exit(1);
-    }
-    graphStreamSeeds = s;
-  }
+  const graphStream = flags['graph-stream'] === true ? parseGraphStreamFlags(flags) : undefined;
+  const late = parseRecallLateFlags(flags);
+  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
 
   // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
   const localIndex = loadIndex(hippoRoot);
@@ -1436,505 +1148,43 @@ async function cmdRecall(
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
-  let results;
-  if (useGraphStream) {
-    if (!isEmbeddingAvailable()) {
-      // The graph stream fuses inside the rrf path, which only runs with embeddings; without
-      // them hybridSearch falls back to BM25-only and the stream is inert. Say so plainly
-      // rather than silently no-op.
-      console.error('[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run `hippo embed` first.');
-    }
-    if (hasGlobal) {
-      console.error('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
-    }
-    // The stream anchors on the top-`seedCount` lexical hits and re-ranks the rank>seedCount
-    // tail; on a pool with <= seedCount candidates EVERY candidate is a seed and the stream
-    // is inert (it degrades to the 2-list fusion). Tune the anchor count with --graph-seeds.
-    results = await hybridSearch(query, localEntries, {
-      budget: entryBudget, cost: printCost, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
-      includeSuperseded, asOf,
-      scoring: 'rrf',
-      graphStream: { weight: DEFAULT_GRAPH_STREAM_WEIGHT, tenantId, hops: graphStreamHops, seedCount: graphStreamSeeds },
-    });
-  } else if (useMultihop) {
-    // Unlike searchBothHybrid below, multihop ranks one pooled list, so a shared memory's two copies both compete.
-    const allEntries = api.oneCopyPerMemory(localEntries, globalEntries, evalNow()).flat();
-    results = multihopSearch(query, allEntries, {
-      budget: entryBudget,
-      cost: printCost,
-      hippoRoot,
-      minResults,
-      includeSuperseded,
-      asOf,
-    });
-  } else if (usePhysics && !hasGlobal) {
-    results = await physicsSearch(query, localEntries, {
-      budget: entryBudget,
-      cost: printCost,
-      hippoRoot,
-      physicsConfig: config.physics,
-      minResults,
-      scope: recallActiveScope,
-      includeSuperseded,
-      asOf,
-    });
-  } else if (hasGlobal) {
-    // Use searchBothHybrid for merged results with embedding support.
-    // recallScope (v1.25.0): searchBothHybrid re-loads candidates internally,
-    // so the scope rule must be plumbed in — the filtered localEntries /
-    // globalEntries above are NOT what this path ranks.
-    results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget: entryBudget, cost: printCost, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
-      includeSuperseded, asOf,
-      recallScope: recallExplicitScope
-        ? { requested: recallExplicitScope, additive: true }
-        : {},
-    });
-  } else {
-    results = await hybridSearch(query, localEntries, {
-      budget: entryBudget, cost: printCost, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
-      includeSuperseded, asOf,
-    });
-  }
-
-  // E3.2 multi-hop graph recall. After the base branch produces `results`, optionally
-  // augment with memories reached by walking the entities/relations graph `--hops N` out
-  // from the lexical seeds. Runs BEFORE the opt-in re-rankers below so graph-reached
-  // results are first-class candidates in any downstream re-ranking / --why. Default OFF
-  // (absent or 0 = no-op). Reached memories are loaded directly by id (NOT via the
-  // lexical candidate set, which would exclude the orthogonal neighbours graph recall
-  // exists to surface); the engine re-applies the same superseded/asOf hard filters.
-  if (flags['hops'] !== undefined) {
-    // Reject a value-less `--hops` (parseArgs stores boolean true): Number(true) === 1
-    // would otherwise silently run a 1-hop expansion when the user fat-fingered the value.
-    if (typeof flags['hops'] === 'boolean') {
-      console.error(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`);
-      process.exit(1);
-    }
-    const hops = Number(flags['hops']);
-    if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
-      console.error(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`);
-      process.exit(1);
-    }
-    let maxNeighbors = DEFAULT_MAX_NEIGHBORS;
-    if (flags['max-neighbors'] !== undefined) {
-      if (typeof flags['max-neighbors'] === 'boolean') {
-        console.error(`--max-neighbors requires an integer value 1..200.`);
-        process.exit(1);
-      }
-      maxNeighbors = Number(flags['max-neighbors']);
-      if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
-        console.error(`Invalid --max-neighbors: "${String(flags['max-neighbors'])}". Must be an integer 1..200.`);
-        process.exit(1);
-      }
-    }
-    if (hops > 0) {
-      // graphExpandRecall can SURFACE rows that were never in the lexical
-      // candidate pool (a graph neighbour reached by entity edge, not by
-      // query match), and totalCandidatesCountCmd was snapshotted before the
-      // search. Without this the derived budget count goes negative, clamps
-      // to 0, and the accounting silently breaks: 1 candidate, 2 returned,
-      // 0 drops. Found independently by two reviewers. Count the additions
-      // so the invariant holds on graph-expanded recalls too.
-      // GROSS, not net. graphExpandRecall both adds neighbours AND evicts weak
-      // base rows in one call (graph-recall.ts:285), so a net delta of 0 hides
-      // 3 added + 3 evicted: the additions escape the candidate total and the
-      // evictions escape the drop count, and the Cutoff line goes silent again.
-      // Compare ID sets so both directions are counted.
-      const beforeGraphIds = new Set(results.map((r) => r.entry.id));
-      results = graphExpandRecall(results, {
-        hops,
-        maxNeighbors,
-        hippoRoot,
-        globalRoot: isInitialized(globalRoot) && globalRoot !== hippoRoot ? globalRoot : undefined,
-        tenantId,
-        includeSuperseded,
-        asOf,
-        budget: entryBudget,
-        cost: printCost,
-        minResults: minResults ?? 1,
-        recallScope: recallExplicitScope
-          ? { requested: recallExplicitScope, additive: true }
-          : {},
-      });
-      // Rows the graph surfaced that the lexical pool never held.
-      for (const r of results) {
-        if (!beforeGraphIds.has(r.entry.id)) graphAddedCountCmd++;
-      }
-    }
-  }
-
-  // ACC EVC-adaptive recall (RESEARCH.md §PFC.ACC). When the initial top-K is
-  // dominated by lexically similar but distinct memories (high pairwise token
-  // overlap = same topic, different facts = conflict), allocate extra retrieval
-  // effort: take a wider candidate pool, drop low-relevance distractors, and
-  // re-rank by recency to surface the most up-to-date item from the cluster.
-  // Default off; opt-in via --evc-adaptive.
-  if (flags['evc-adaptive'] && results.length >= 2) {
-    const sliceSize = Math.min(3, results.length);
-    const slice = results.slice(0, sliceSize);
-    let pairs = 0;
-    let overlapSum = 0;
-    for (let i = 0; i < slice.length; i++) {
-      for (let j = i + 1; j < slice.length; j++) {
-        overlapSum += textOverlap(slice[i].entry.content, slice[j].entry.content);
-        pairs++;
-      }
-    }
-    const avgOverlap = pairs > 0 ? overlapSum / pairs : 0;
-    if (avgOverlap >= 0.4) {
-      const poolSize = Math.min(results.length, Math.max(sliceSize * 3, 9));
-      const pool = results.slice(0, poolSize);
-      const tail = results.slice(poolSize);
-      const maxScore = pool.reduce((m, r) => Math.max(m, r.score), 0);
-      const scoreFloor = maxScore * 0.5;
-      // On-topic test: score floor OR query coverage. The score floor alone
-      // proxied topicality via ranking score, but the disambiguating update
-      // this mechanic exists to surface is BY NATURE phrased differently
-      // (weaker lexical/embedding overlap), so under the #t2 embed-text
-      // format (docs/plans/2026-07-09-recall-determinism.md T1, which
-      // de-compressed similarity gaps) it fell below any sane floor
-      // (measured 0.33x max on the acc-evc micro fixture). Query coverage —
-      // the fraction of query tokens present in the candidate — is the
-      // mechanic's own definition of "same topic, different fact" applied
-      // to the query, and is score-scale-independent. Principled EVC
-      // calibration remains roadmapped as B1 depth.
-      const queryTokens = new Set(tokenizeQuery(query));
-      const onTopic: typeof pool = [];
-      const offTopic: typeof pool = [];
-      for (const r of pool) {
-        let hits = 0;
-        if (queryTokens.size > 0) {
-          const candTokens = new Set(tokenizeQuery(r.entry.content));
-          for (const t of queryTokens) if (candTokens.has(t)) hits++;
-        }
-        const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;
-        (r.score >= scoreFloor || queryCoverage >= 0.6 ? onTopic : offTopic).push(r);
-      }
-      // Recency is the true primary key (unchanged) — that's the whole
-      // point of --evc-adaptive. compareEntryIdentity is only a TAIL for
-      // entries created at the exact same timestamp, which previously fell
-      // to array/scan order (T2, deterministic tie keys).
-      onTopic.sort((a, b) => {
-        const ta = new Date(a.entry.created).getTime();
-        const tb = new Date(b.entry.created).getTime();
-        return tb !== ta ? tb - ta : compareEntryIdentity(a.entry, b.entry);
-      });
-      results = [...onTopic, ...offTopic, ...tail];
-    }
-  }
-
-  // vlPFC interference filter (RESEARCH.md §PFC.vlPFC). Suppress task-irrelevant
-  // memories using *recorded* supersession + conflict structure only. Default
-  // off; opt-in via --filter-conflicts. Two effects, both surgical:
-  //   1. Drop entries with `superseded_by` set. (No-op under default recall,
-  //      which already filters them; matters when `--include-superseded` was
-  //      passed. The flag re-asserts the gate.)
-  //   2. Apply a 0.3x score multiplier to entries whose `conflicts_with` list
-  //      references another entry that ALSO appears in the result set. The
-  //      multiplier is conservative — we never delete on conflict, only
-  //      down-rank, so the user can still surface the loser via --include-*.
-  // We never infer conflicts from lexical overlap. The v1 salience gate did
-  // that and destroyed LoCoMo (0.28 → 0.02). Recorded structure only.
-  if (flags['filter-conflicts']) {
-    const beforeFilterConflicts = results.length;
-    results = results.filter((r) => !r.entry.superseded_by);
-    droppedPreRankCountCmd += beforeFilterConflicts - results.length;
-    const presentIds = new Set(results.map((r) => r.entry.id));
-    results = results.map((r) => {
-      const peers = r.entry.conflicts_with || [];
-      const hasPeerInResults = peers.some((peerId) => presentIds.has(peerId));
-      if (!hasPeerInResults) return r;
-      const next = { ...r, score: r.score * 0.3 };
-      // A7 recall-trace: interference (vlPFC) down-rank. Only when --why.
-      if (showWhy) {
-        next.rerankTrace = [
-          ...(r.rerankTrace ?? []),
-          { stage: 'interference', multiplier: 0.3, scoreBefore: r.score, scoreAfter: next.score },
-        ];
-      }
-      return next;
-    });
-    // T2 note: PLAIN stable score sort on purpose (here and in the rerank
-    // blocks below) -- these are RE-SORTS of an already deterministically-
-    // ordered ranking, so sort stability inherits the upstream content-tail
-    // determinism, and ties preserve the prior rank rather than reordering
-    // by content (a no-signal boost must not shuffle its input).
-    results.sort((a, b) => b.score - a.score);
-  }
-
-  // vmPFC continuous value attribution (RESEARCH.md §PFC.vmPFC). Continuous
-  // value scoring per memory based on cumulative outcome attribution. Memories
-  // with positive cumulative outcomes are boosted; those with negative outcomes
-  // are demoted. The multiplier is a tanh-shaped function clamped to [0.7, 1.3]
-  // — wider than the always-on outcomeBoost (which clamps [0.85, 1.15]) so this
-  // flag has additional decisive effect when value attribution should drive
-  // ranking. Default off; opt-in via --value-aware. Reuses outcome_positive /
-  // outcome_negative columns; no schema change.
-  if (flags['value-aware'] && results.length >= 1) {
-    results = results.map((r) => {
-      const pos = r.entry.outcome_positive ?? 0;
-      const neg = r.entry.outcome_negative ?? 0;
-      if (pos === 0 && neg === 0) return r;
-      const raw = 1 + 0.3 * Math.tanh(pos - neg);
-      const valueMult = Math.max(0.7, Math.min(1.3, raw));
-      const next = { ...r, score: r.score * valueMult };
-      // A7 recall-trace: vmPFC continuous value attribution. Only when --why.
-      if (showWhy) {
-        next.rerankTrace = [
-          ...(r.rerankTrace ?? []),
-          { stage: 'value', multiplier: valueMult, scoreBefore: r.score, scoreAfter: next.score },
-        ];
-      }
-      return next;
-    });
-    results.sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // OFC option-value re-ranker MVP (RESEARCH.md §PFC.OFC). Combine relevance,
-  // strength, and integration cost into a single utility score and re-sort.
-  // OFC neurons encode a "common currency" across heterogeneous attributes
-  // (Rangel et al., 2008); this is the simplest demonstration of that mechanism.
-  // Default off; opt-in via --rerank-utility.
-  //
-  //   utility = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
-  //   cost_factor = min(0.3, tokens / 10000)
-  //
-  // The full OFC spec (option_valuation table in RESEARCH.md) decomposes value
-  // into reward / cost / risk / confidence components. The MVP collapses these
-  // to: score (relevance proxy), strength (persistence proxy), tokens (cost).
-  // CAVEAT: cost penalty is monotone with token count; LoCoMo's harder QAs
-  // often live in long evidence-rich memories. Default off — needs LoCoMo
-  // eval before enabling broadly.
-  if (flags['rerank-utility']) {
-    results = results
-      .map((r) => {
-        const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
-        const costFactor = Math.min(0.3, (r.tokens || 0) / 10000);
-        const utilityMult = (0.5 + 0.5 * strength) * (1 - costFactor);
-        const utility = r.score * utilityMult;
-        const next = { ...r, score: utility };
-        // A7 recall-trace: OFC option-value re-rank. Only when --why.
-        if (showWhy) {
-          next.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility },
-          ];
-        }
-        return next;
-      })
-      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // F6 reranker pass (docs/plans/2026-05-10-f6-reranker-hardening.md). When
-  // --reranker <name> is set, look up the reranker fn from the registry
-  // (src/rerankers/index.ts) and apply it to the top-K candidates. The
-  // reranker reorders (and may rescale) results; the post-budget set is
-  // returned. Default off; opt-in via --reranker <cross-encoder|jev|llm>. The
-  // structurally similar --rerank-utility block above is the OFC MVP and is
-  // independent — both can run in the same recall, with --rerank-utility
-  // applied first. Available rerankers: cross-encoder, jev, llm (see
-  // src/rerankers/index.ts). The Track 1 `features` reranker was removed in
-  // v1.9.1 per the F10 HARD RETRACTION; it is no longer a valid value.
-  const rerankerName = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
-  if (rerankerName) {
-    const rerankerFn = getReranker(rerankerName);
-    if (rerankerFn) {
-      const topK = flags['reranker-top-k'] !== undefined
-        ? parseInt(String(flags['reranker-top-k']), 10)
-        : rerankerName === 'jev' ? JEV_DEFAULT_TOP_K : 50;
-      const head = results.slice(0, topK);
-      const tail = results.slice(topK);
-      const rerankInput = head.map((r, i) => ({ ...r, preRerankRank: i + 1 }));
-      const reranked = await rerankerFn(query, rerankInput, { topK });
-      // Copy rerankScore into score so downstream blocks (--goal, goal-stack,
-      // salience) that sort by `r.score` honor the reranker's order rather
-      // than unwinding it. Original score is preserved on rerankScore's
-      // input, but downstream sorters key on `score`.
-      const withPostRank = reranked.map((r, i) => {
-        const next = {
-          ...r,
-          score: r.rerankScore,
-          postRerankRank: i + 1,
-        };
-        // A7 recall-trace: F6 reranker pass (reorder + rescale; not a scalar
-        // multiply, so no multiplier field). Only when --why.
-        if (showWhy) {
-          next.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
-          ];
-        }
-        return next;
-      });
-      results = [...withPostRank, ...tail];
-    }
-  }
-
-  // dlPFC goal-conditioned recall MVP (RESEARCH.md §PFC.dlPFC). When --goal
-  // <tag> is set, memories whose `tags` array contains the goal tag receive
-  // a 1.5x score boost and results are re-sorted. The full dlPFC spec
-  // (goal_stack + retrieval_policy tables) maintains a hierarchical task
-  // stack with weighted retrieval policies; this MVP collapses that to a
-  // single-tag boost — the smallest demonstrable goal-conditioning signal.
-  // Default off; opt-in via --goal <tag>. No schema change.
-  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
-  if (goalTag) {
-    results = results
-      .map((r) => {
-        if (!r.entry.tags?.includes(goalTag)) return r;
-        const boosted = { ...r, score: r.score * 1.5 };
-        // A7 recall-trace: the explicit `--goal <tag>` boost is a public CLI
-        // re-ranker (score *= 1.5) and is mutually exclusive with the session
-        // goal-stack boost below, so it must record its OWN step or `--why
-        // --goal` produces no ranking line (codex review). Stage `goal`
-        // (explicit flag) is distinct from `goal-boost` (session stack).
-        if (showWhy) {
-          boosted.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'goal', multiplier: 1.5, scoreBefore: r.score, scoreAfter: r.score * 1.5, note: `--goal ${goalTag}` },
-          ];
-        }
-        return boosted;
-      })
-      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // dlPFC depth (B3, v0.38; lifted v1.7.4 into applyGoalStackBoost). When
-  // HIPPO_SESSION_ID is set (env or --session-id flag) and the
-  // (tenant, session) has active goals, the helper boosts memories whose tags
-  // overlap any active goal's name and logs (memory, goal) pairs into
-  // goal_recall_log. Runs AFTER the explicit `--goal <tag>` block so an
-  // explicit flag always wins (gated on `goalTag === ''`).
-  const sessionId = (
-    flags['session-id'] !== undefined
-      ? String(flags['session-id'])
-      : process.env.HIPPO_SESSION_ID ?? ''
-  ).trim();
-  if (sessionId && goalTag === '') {
+  const rank = await rankRecall(
+    { hippoRoot, globalRoot: globalRoot !== hippoRoot && globalOn ? globalRoot : undefined, tenantId, note: (line) => console.error(line) },
+    {
+      query, budget: entryBudget, cost: printCost, limit, why: showWhy, includeSuperseded, asOf,
+      explicitScope: recallExplicitScope, activeScope: recallActiveScope,
+      search: { ...engineFlags(flags, config), multihop: flags['multihop'] === true || config.multihop.enabled, graphStream, minResults, explain: false },
+      graphHops: late.graphHops,
+      evcAdaptive: Boolean(flags['evc-adaptive']),
+      filterConflicts: Boolean(flags['filter-conflicts']),
+      valueAware: Boolean(flags['value-aware']),
+      rerankUtility: Boolean(flags['rerank-utility']),
+      reranker: late.reranker,
+      goalTag,
+      sessionId,
+      salienceThreshold: late.salienceThreshold,
+      outcome: late.outcome,
+      layer: late.layer,
+      haltBefore: late.error?.stage,
+    },
+  );
+  if (rank.goalRecallLog.length > 0) {
     const dbForGoals = openHippoDb(hippoRoot);
-    // A7 recall-trace: goal-boost is the shared helper, not an inline map. It
-    // writes its steps into this SEPARATE accumulator (keyed by entry id), NOT
-    // onto the row (the helper strips internal markers on re-spread). Only
-    // allocated under --why.
-    const goalBoostTrace = showWhy ? new Map<string, RerankStep>() : undefined;
     try {
-      results = applyGoalStackBoost(dbForGoals, results, {
-        sessionId,
-        tenantId,
-        limit,
-        ...(goalBoostTrace ? { trace: goalBoostTrace } : {}),
-      });
+      writeGoalRecallLog(dbForGoals, rank.goalRecallLog);
     } finally {
       closeHippoDb(dbForGoals);
     }
-    // Merge the accumulated goal-boost steps onto the matching SearchResult.
-    if (goalBoostTrace && goalBoostTrace.size > 0) {
-      results = results.map((r) => {
-        const step = goalBoostTrace.get(r.entry.id);
-        if (!step) return r;
-        return { ...r, rerankTrace: [...(r.rerankTrace ?? []), step] };
-      });
-    }
   }
-
-  // Pineal salience MVP (RESEARCH.md §"AI Pineal Gland — Intuition and Awareness
-  // Module"). When --salience-threshold T is set (T > 0), memories whose
-  // retrieval_count is below T are downweighted: score *= max(0.5, count / T).
-  // At or above T, no change. This makes salience emerge from USE — high-recall
-  // memories earn full ranking weight, low-recall memories are softly demoted.
-  //
-  // CRITICAL HISTORY: The v1 salience gate (60% lexical-overlap gate at memory
-  // CREATION time) destroyed LoCoMo recall (0.28 -> 0.02) by dropping same-
-  // session relevant turns at intake. See MEMORY.md "Hippo salience gate
-  // destroys benchmark recall". This v2 is the inverse:
-  //   - retrieval-side only (no creation-time gating)
-  //   - retrieval_count signal only (no lexical overlap, no novelty heuristic)
-  //   - default OFF, opt-in via the flag (no behaviour change without it)
-  //   - 0.5 floor so non-salient entries stay reachable, never dropped
-  // Reuses the existing retrieval_count column; no schema change.
-  const salienceThresholdRaw = flags['salience-threshold'];
-  if (salienceThresholdRaw !== undefined) {
-    const T = Number(salienceThresholdRaw);
-    if (!Number.isFinite(T) || T <= 0) {
-      console.error(
-        `Invalid --salience-threshold: "${salienceThresholdRaw}". Must be a positive number.`,
-      );
-      process.exit(1);
-    }
-    results = results
-      .map((r) => {
-        const count = r.entry.retrieval_count ?? 0;
-        if (count >= T) return r;
-        const mult = Math.max(0.5, count / T);
-        const next = { ...r, score: r.score * mult };
-        // A7 recall-trace: pineal salience (retrieval_count) down-weight. The
-        // stage names the ACTUAL transform (retrieval_count, not goal-stack).
-        // Only when --why.
-        if (showWhy) {
-          next.rerankTrace = [
-            ...(r.rerankTrace ?? []),
-            { stage: 'retrieval-count-downweight', multiplier: mult, scoreBefore: r.score, scoreAfter: next.score },
-          ];
-        }
-        return next;
-      })
-      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
-  }
-
-  // --outcome filter: drop trace entries whose trace_outcome !== target.
-  // Non-trace entries pass through unaffected (traces are the only layer with
-  // a meaningful outcome; filtering non-traces by outcome would be incoherent).
-  const outcomeFilter = flags['outcome'] !== undefined ? String(flags['outcome']).trim() : '';
-  if (outcomeFilter) {
-    const validOutcomes = ['success', 'failure', 'partial'];
-    if (!validOutcomes.includes(outcomeFilter)) {
-      console.error(`Invalid --outcome: "${outcomeFilter}". Must be one of: ${validOutcomes.join(', ')}.`);
-      process.exit(1);
-    }
-    const beforeOutcomeFilter = results.length;
-    results = results.filter((r) => {
-      if (r.entry.layer !== Layer.Trace) return true;
-      return r.entry.trace_outcome === outcomeFilter;
-    });
-    droppedPreRankCountCmd += beforeOutcomeFilter - results.length;
-  }
-
-  // --layer filter: strict, drops entries whose layer does not match.
-  const layerFilter = flags['layer'] !== undefined ? String(flags['layer']).trim() : '';
-  if (layerFilter) {
-    const validLayers = Object.values(Layer) as string[];
-    if (!validLayers.includes(layerFilter)) {
-      console.error(`Invalid --layer: "${layerFilter}". Must be one of: ${validLayers.join(', ')}.`);
-      process.exit(1);
-    }
-    const beforeLayerFilter = results.length;
-    results = results.filter((r) => r.entry.layer === layerFilter);
-    droppedPreRankCountCmd += beforeLayerFilter - results.length;
-  }
-
-  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter. Apply the final
-  // `--limit` slice first, then derive the count ARITHMETICALLY as
-  // "everything lost that droppedPreRank did not already claim":
-  //
-  //   droppedByBudget = totalCandidates - droppedPreRank - returned
-  //
-  // This is the invariant the plan requires (totalCandidates == droppedPreRank
-  // + droppedByBudget + returned) restated as an assignment, so it holds by
-  // construction rather than by two counters happening to agree. It also
-  // cannot double-count the post-search droppedPreRank sites (--filter-
-  // conflicts, --outcome, --layer, ~1270/1528/1541): those are subtracted
-  // once here, not re-counted, because this line does not re-walk any filter
-  // — it only compares the two totals already tracked above. Everything left
-  // over — search-engine internal rank-step drops AND the `--limit` slice
-  // itself — lands in droppedByBudget, per the C5 accounting change in the
-  // comment near line ~976. Clamped at 0 as a defensive floor: if a future
-  // pipeline change ever returns MORE rows than totalCandidates minus
-  // droppedPreRank (should not happen), report "nothing dropped" rather than
-  // a negative count.
-  if (limit < results.length) {
-    results = results.slice(0, limit);
-  }
+  late.error?.fail();
+  const {
+    localEntries,
+    globalEntries,
+    totalCandidates: totalCandidatesCountCmd,
+    droppedPreRank: droppedPreRankCountCmd,
+    graphAdded: graphAddedCountCmd,
+  } = rank;
+  let results = rank.results;
 
   // Continuity assembly (--continuity). Lives BEFORE the zero-result branch
   // so a no-match query with active continuity state still returns a useful
@@ -1993,11 +1243,11 @@ async function cmdRecall(
 
   // J1, J2 and C5: each pipeline computes its hints over the list it returns, so they follow the list as it shrinks.
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = process.env.HIPPO_ANCHORING !== 'off' && sessionId
+  const anchorRing = biasHintEnabled('anchoring') && sessionId
     ? getOrCreateRing(sessionRecallHistoryCli, buildSessionKey(tenantId, sessionId))
     : null;
   const queryHash = hashQueryText(query);
-  const availabilityPool = process.env.HIPPO_AVAILABILITY !== 'off'
+  const availabilityPool = biasHintEnabled('availability')
     ? [...localEntries, ...globalEntries].map((e) => ({ id: e.id, created: e.created }))
     : null;
   const hintsFor = (list: SearchResult[], held: number) => {
@@ -2061,7 +1311,7 @@ async function cmdRecall(
   if (anchorRing) {
     // Appended after every detect: anchoredOn feeds the cooldown for the next recall on this session.
     appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
-  } else if (process.env.HIPPO_ANCHORING !== 'off') {
+  } else if (biasHintEnabled('anchoring')) {
     // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
     emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query));
   }
@@ -2256,140 +1506,62 @@ async function cmdRecall(
   emit(recallText);
 }
 
+/** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
+function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
+  const probe = [
+    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
+    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
+  ];
+  // Window-capped, so the count is a floor on large stores; fine for a "why is my row missing" hint.
+  const hidden = probe.filter((e) => !api.passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
+  if (hidden > 0) {
+    console.error(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
+  }
+}
+
 async function cmdExplain(
   hippoRoot: string,
   query: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
 
   const budget = parseBudgetFlag(flags['budget'], 4000);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
-  const forcePhysics = Boolean(flags['physics']);
-  const forceClassic = Boolean(flags['classic']);
-  const explainIncludeSuperseded = Boolean(flags['include-superseded']);
-  const explainAsOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
-  if (explainAsOf !== undefined && Number.isNaN(new Date(explainAsOf).getTime())) {
-    console.error(`Error: --as-of value "${explainAsOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
-  }
+  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
-
-  // A5: scope explain results to the active tenant.
   const tenantId = resolveTenantId({});
+  // Explain shows what recall would see, so it applies the same scope rule.
+  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
+  const explainGlobalOn = isInitialized(globalRoot);
+  noteScopeHidden(hippoRoot, explainGlobalOn ? globalRoot : undefined, query, tenantId, explicitScope || undefined);
 
-  // v1.25.0 (v39 follow-up #1): cmdExplain shares cmdRecall's leak class —
-  // same unscoped loads, same fix, same semantics (explain explains what
-  // recall would see). Flag hoisted above the loads; the note below keeps the
-  // command honest for an operator debugging a hidden row.
-  const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const explainRequestedScope = explainExplicitScope || undefined;
-  const explainLoadSuperseded = explainIncludeSuperseded || Boolean(explainAsOf);
-  let explainLocalEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, explainRequestedScope, 'additive', explainLoadSuperseded);
-  let explainGlobalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, explainRequestedScope, 'additive', explainLoadSuperseded) : [];
-  const passesExplainScope = (e: MemoryEntry) =>
-    api.passesCliRecallScopeFilter(e.scope ?? null, explainRequestedScope);
-  explainLocalEntries = explainLocalEntries.filter(passesExplainScope);
-  explainGlobalEntries = explainGlobalEntries.filter(passesExplainScope);
-  // Honesty note (grill finding #2): the SQL predicate excludes denied rows
-  // BEFORE the candidate window (codex P2 fix), so the pipeline never sees
-  // them. For the diagnostic note only, probe the unscoped window and count
-  // what the scope policy hides — window-capped, so the count is a floor on
-  // large stores, which is fine for a "why is my row missing" hint.
-  const explainUnscopedProbe = [
-    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
-    ...(isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
-  ];
-  const explainScopeDropped = explainUnscopedProbe.filter((e) => !passesExplainScope(e)).length;
-  if (explainScopeDropped > 0) {
-    console.error(`[note] ${explainScopeDropped} candidate${explainScopeDropped === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
-  }
-
-  // Bi-temporal filtering
-  if (explainAsOf) {
-    const filterAsOfExplain = (entries: MemoryEntry[]) => {
-      const asOfDate = new Date(explainAsOf);
-      const successorValidFrom = new Map<string, string>();
-      for (const e of entries) {
-        if (e.superseded_by) {
-          const successor = entries.find(s => s.id === e.superseded_by);
-          if (successor) successorValidFrom.set(e.id, successor.valid_from);
-        }
-      }
-      return entries.filter(e => {
-        if (new Date(e.valid_from) > asOfDate) return false;
-        if (!e.superseded_by) return true;
-        const succVf = successorValidFrom.get(e.id);
-        return succVf ? new Date(succVf) > asOfDate : true;
-      });
-    };
-    explainLocalEntries = filterAsOfExplain(explainLocalEntries);
-    explainGlobalEntries = filterAsOfExplain(explainGlobalEntries);
-  } else if (!explainIncludeSuperseded) {
-    explainLocalEntries = explainLocalEntries.filter(e => !e.superseded_by);
-    explainGlobalEntries = explainGlobalEntries.filter(e => !e.superseded_by);
-  }
-
-  const hasGlobal = explainGlobalEntries.length > 0;
   const config = loadConfig(hippoRoot);
-  const usePhysics = forcePhysics
-    || (!forceClassic && config.physics.enabled !== false);
-
-  const noMmr = Boolean(flags['no-mmr']);
-  const mmrLambda = flags['mmr-lambda'] !== undefined
-    ? parseFloat(String(flags['mmr-lambda']))
-    : config.mmr.lambda;
-  const mmrEnabled = !noMmr && config.mmr.enabled;
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : config.search.localBump;
-  // explainExplicitScope hoisted above the candidate loads (v1.25.0).
-  const explainActiveScope = explainExplicitScope || detectScope();
+  const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const explainIndex = loadIndex(hippoRoot);
-  const explainGlobalOn = isInitialized(globalRoot);
   const cost = (r: SearchResult): number =>
     printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
-  let results;
-  let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
-  if (usePhysics && !hasGlobal) {
-    results = await physicsSearch(query, explainLocalEntries, {
-      budget: entryBudget,
-      cost,
-      hippoRoot,
-      physicsConfig: config.physics,
-      explain: true,
-      scope: explainActiveScope,
-    });
-    modeUsed = 'physics';
-  } else if (hasGlobal) {
-    results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget: entryBudget, cost, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
-      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf, tenantId,
-      recallScope: explainExplicitScope
-        ? { requested: explainExplicitScope, additive: true }
-        : {},
-    });
-    modeUsed = 'searchBothHybrid';
-  } else {
-    results = await hybridSearch(query, explainLocalEntries, {
-      budget: entryBudget, cost, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda, scope: explainActiveScope,
-      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
-    });
-    modeUsed = 'hybrid';
-  }
+  const rank = await rankRecall(
+    { hippoRoot, globalRoot: explainGlobalOn ? globalRoot : undefined, tenantId },
+    {
+      query, budget: entryBudget, cost, limit, includeSuperseded, asOf,
+      explicitScope, activeScope: explicitScope || detectScope(),
+      search: { ...engine, multihop: false, explain: true },
+    },
+  );
+  const hasGlobal = rank.globalEntries.length > 0;
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
+    ? 'physics'
+    : hasGlobal ? 'searchBothHybrid' : 'hybrid';
+  const results = dropHeldCopies(rank.results, (r) => r.entry);
 
-  if (limit < results.length) {
-    results = results.slice(0, limit);
-  }
-  results = dropHeldCopies(results, (r) => r.entry);
-
-  const candidates = explainLocalEntries.length + explainGlobalEntries.length;
+  const candidates = rank.localEntries.length + rank.globalEntries.length;
 
   if (asJson) {
     const output = results.map((r, rank) => ({
@@ -2950,174 +2122,6 @@ function cmdDedup(
   }
 }
 
-async function cmdSleep(
-  hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
-): Promise<void> {
-  // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
-  // hook uses this so the output is captured somewhere the SessionStart hook
-  // can re-display it next time the agent UI starts.
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
-  let restoreStdout: (() => void) | null = null;
-  if (logFile) {
-    try {
-      fs.mkdirSync(path.dirname(logFile), { recursive: true });
-      fs.writeFileSync(logFile, `[hippo] ${new Date().toISOString()} consolidating memory...\n`, 'utf8');
-      const origStdoutWrite = process.stdout.write.bind(process.stdout);
-      const origStderrWrite = process.stderr.write.bind(process.stderr);
-      const tee = (chunk: unknown) => {
-        try {
-          const buf = typeof chunk === 'string' ? chunk : Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
-          fs.appendFileSync(logFile, buf, 'utf8');
-        } catch {
-          // log failures are non-fatal — still write to the real stream
-        }
-      };
-      process.stdout.write = ((chunk: any, enc?: any, cb?: any): boolean => {
-        tee(chunk);
-        return origStdoutWrite(chunk, enc, cb);
-      }) as typeof process.stdout.write;
-      process.stderr.write = ((chunk: any, enc?: any, cb?: any): boolean => {
-        tee(chunk);
-        return origStderrWrite(chunk, enc, cb);
-      }) as typeof process.stderr.write;
-      restoreStdout = () => {
-        process.stdout.write = origStdoutWrite;
-        process.stderr.write = origStderrWrite;
-      };
-    } catch (err) {
-      console.error(`[hippo] warning: could not open log file ${logFile}: ${(err as Error).message}`);
-    }
-  }
-
-  try {
-    await cmdSleepCore(hippoRoot, flags);
-    if (logFile) console.log('[hippo] sleep complete');
-  } catch (err) {
-    if (logFile) console.log(`[hippo] sleep failed: ${(err as Error).message}`);
-    throw err;
-  } finally {
-    if (restoreStdout) restoreStdout();
-  }
-}
-
-/**
- * Render an api.sleep result as console output, byte-identical to the
- * pre-extraction inline implementation in cmdSleepCore.
- */
-/** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
-export function renderSleepResult(result: api.SleepResult): void {
-  console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
-
-  console.log(`\nResults:`);
-  console.log(`   Active memories:  ${result.active}`);
-  console.log(`   Removed (decayed): ${result.removed}`);
-  // Only when dormant.enabled moved something, so every other render stays
-  // byte-identical (tests/cli-context-render-snapshot.test.ts).
-  if (result.dormant !== undefined && result.dormant > 0) {
-    console.log(`   Kept dormant:      ${result.dormant}  (hippo dormant to list)`);
-  }
-  if (result.dormantExpired !== undefined && result.dormantExpired > 0) {
-    console.log(`   Expired dormant:   ${result.dormantExpired}  (past dormant.retentionDays)`);
-  }
-  console.log(`   Merged episodic:   ${result.mergedEpisodic}`);
-  console.log(`   New semantic:      ${result.newSemantic}`);
-
-  if (result.details && result.details.length > 0) {
-    console.log('\nDetails:');
-    for (const d of result.details) {
-      console.log(d);
-    }
-  }
-
-  if (result.dryRun) console.log('\n(dry run  - nothing written)');
-
-  if (result.deduped && result.deduped.removed > 0) {
-    const { removed, semDups, epiDups, crossDups } = result.deduped;
-    const parts: string[] = [];
-    if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
-    if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
-    if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
-    console.log(`\n${result.dryRun ? 'Would dedupe' : 'Deduped'} ${removed} duplicates (${parts.join(', ')}). ${result.dryRun ? 'Would keep' : 'Kept'} stronger copies.`);
-  }
-
-  if (result.audit) {
-    if (result.audit.errorsRemoved > 0) {
-      console.log(`\nAudit: ${result.dryRun ? 'would remove' : 'removed'} ${result.audit.errorsRemoved} junk memories (too short/empty).`);
-    }
-    if (result.audit.warningCount > 0) {
-      console.log(`Audit: ${result.audit.warningCount} low-quality memories detected (run \`hippo audit\` for details).`);
-    }
-  }
-
-  if (result.shared !== undefined && result.shared > 0) {
-    console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
-  }
-
-  if (result.secretSkipped !== undefined && result.secretSkipped > 0) {
-    // v1.25.0 (v39 follow-up #2): the secret veto is no longer silent.
-    console.log(`\nAuto-share: withheld ${result.secretSkipped} secret-flagged ${result.secretSkipped === 1 ? 'memory' : 'memories'} (secret veto).`);
-  }
-
-  if (result.ambient) {
-    console.log(`\n${renderAmbientSummary(result.ambient)}`);
-  }
-
-  if (result.graph && result.graph.tenants > 0) {
-    const { tenants, entities, relations } = result.graph;
-    console.log(
-      `\nGraph: rebuilt ${tenants} tenant${tenants === 1 ? '' : 's'} (${entities} entities, ${relations} relations).`,
-    );
-  }
-}
-
-async function cmdSleepCore(
-  hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
-): Promise<void> {
-  requireInit(hippoRoot);
-
-  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
-  // Stays in cli.ts; api.sleep covers Phase 2-6 only.
-  if (!flags['no-learn'] && flags['dry-run']) {
-    console.log("Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` previews those).");
-  } else if (!flags['no-learn']) {
-    const config = loadConfig(hippoRoot);
-    if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
-      const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
-      if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
-    }
-
-    // FE2: opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
-    if (config.churnStaleness.enabled && isGitRepo(process.cwd())) {
-      for (const { root, result } of runChurnStaleForRepo(hippoRoot, false)) {
-        if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
-        if (result.error) console.error(`Churn-staleness check failed for ${root}: ${result.error}`);
-      }
-    }
-
-    printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }), '');
-  }
-
-  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
-  if (!flags['dry-run']) {
-    const finished = replayCompactionsAt(hippoRoot, (message) => console.error(`compaction replay: ${message}`));
-    if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
-  }
-
-  // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
-  const result = await api.sleep(ctx, {
-    dryRun: Boolean(flags['dry-run']),
-    noShare: Boolean(flags['no-share']),
-  });
-  renderSleepResult(result);
-}
-
 /** Prints the SessionEnd sleep log, then clears it. Stderr, because Claude Code adds
  *  SessionStart stdout to the model's context and this log is for the user. */
 function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void {
@@ -3322,46 +2326,6 @@ async function cmdSessionEnd(
   }
 }
 
-/**
- * Detached worker that counts re-reads, runs sleep, then capture. Invoked via the internal
- * `__session-end-worker` subcommand (not user-facing). Failures in one stage
- * do not block the other.
- */
-// Best-effort git state; a missing git, non-repo cwd, or the timeout all
-// yield null fields rather than throw (autolearn.ts execFileSync shape).
-function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testStatus']): HandoffEvidence {
-  let gitRef: string | null = null;
-  try {
-    gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    }).trim() || null;
-  } catch {
-    gitRef = null;
-  }
-  let dirtyTree: boolean | null = null;
-  try {
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    });
-    dirtyTree = status.trim().length > 0;
-  } catch {
-    dirtyTree = null;
-  }
-  return { gitRef, dirtyTree, testStatus };
-}
-
-/** A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here. */
-function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
-  try {
-    const report = importAtSessionEnd(process.cwd(), transcriptPath, { machine: currentMachine() });
-    const line = summaryLine(report);
-    if (line !== null) appendSessionEndCloseLog(logFile, line);
-    for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
-  } catch (err) {
-    appendSessionEndCloseLog(logFile, `agent memory import failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
 async function cmdSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -3384,7 +2348,7 @@ async function cmdSessionEndWorker(
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
-      await cmdSleep(hippoRoot, flags);
+      await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags);
     } catch {
       // sleep errors are already tee'd to the log file via cmdSleep's
       // `[hippo] sleep failed: ...` line. Continue to capture regardless.
@@ -3501,27 +2465,6 @@ async function bookSessionRereads(
   return lines;
 }
 
-/**
- * Best-effort log line for the DF1 T3 snapshot-close step in
- * `cmdSessionEndWorker`. `cmdSleep`/`cmdCapture` each tee console output to
- * `logFile` only for their own duration (the tee is restored before this
- * runs), so a plain `console.log` here would be silently discarded under
- * the detached worker's `stdio: 'ignore'` — write straight to the file
- * instead, matching capture.ts's `appendPreCompactLog` convention.
- */
-function appendSessionEndCloseLog(logFile: string | null, message: string, opts: { startFresh?: boolean } = {}): void {
-  if (!logFile) return;
-  try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    // sanitizeLogMessage: `message` interpolates the payload-controlled
-    // session_id — same log-forgery guard appendPreCompactLog applies.
-    const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
-    write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
-  } catch {
-    // Best-effort only — never let a log-write failure surface as an error.
-  }
-}
-
 function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   const { metadataPath } = resolveCodexWrapperPaths();
   if (!fs.existsSync(metadataPath)) {
@@ -3570,7 +2513,8 @@ function cmdCodexRun(
 ): void {
   const metadata = loadCodexWrapperMetadata();
   const startedAtMs = Date.now();
-  const historyPath = metadata.historyPath;
+  // Codex reads CODEX_HOME at each launch, so resolve it now, not from the install-time metadata.
+  const { historyPath } = resolveCodexWrapperPaths();
   const startOffsetBytes = fs.existsSync(historyPath) ? fs.statSync(historyPath).size : 0;
 
   try {
@@ -3651,7 +2595,7 @@ async function cmdCodexSessionEndWorker(
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
-      await cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
+      await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
     } catch {
       // sleep errors are already written via cmdSleep
     }
@@ -3663,7 +2607,7 @@ async function cmdCodexSessionEndWorker(
   try {
     const codexHome = typeof flags['codex-home'] === 'string'
       ? (flags['codex-home'] as string)
-      : path.join(os.homedir(), '.codex');
+      : resolveCodexWrapperPaths().codexHome;
     const historyPath = typeof flags['history-path'] === 'string'
       ? (flags['history-path'] as string)
       : path.join(codexHome, 'history.jsonl');
@@ -4038,14 +2982,6 @@ function cmdInspect(hippoRoot: string, id: string): void {
   console.log('Content:');
   console.log('-'.repeat(40));
   console.log(entry.content);
-}
-
-function printActiveTaskSnapshot(snapshot: TaskSnapshot): void {
-  console.log(snapshotText(snapshot));
-}
-
-function printSessionEvents(events: SessionEvent[]): void {
-  console.log(events.length === 0 ? 'No session events found.' : sessionTrailText(events));
 }
 
 function cmdConflicts(
@@ -4727,10 +3663,6 @@ function cmdSession(
   process.exit(1);
 }
 
-function printHandoff(handoff: SessionHandoff): void {
-  console.log(handoffText(handoff));
-}
-
 function cmdHandoff(
   hippoRoot: string,
   args: string[],
@@ -4910,15 +3842,6 @@ function printCard(detail: CardDetail): void {
     console.log(handoff.summary);
   }
   console.log('');
-}
-
-// parseArgs turns a value-less flag into `true`; refuse rather than silently
-// stringifying it (String(true) === 'true'), mirroring cmdHandoff's guard.
-function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
-  const v = flags[key];
-  if (v === undefined) return undefined;
-  if (v === true || v === false || Array.isArray(v)) { console.error(`--${key} requires a value`); process.exit(1); }
-  return v.trim();
 }
 
 // A too-large --run would silently round to a different id (mirrors parsePositiveIncidentId).
@@ -6789,16 +5712,59 @@ function cmdCurrent(
   process.exit(1);
 }
 
-// Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
-function hostSessionId(): string | undefined {
-  return process.env.HIPPO_SESSION_ID?.trim() || process.env.CLAUDE_CODE_SESSION_ID?.trim() || undefined;
-}
-
 async function cmdContext(
   hippoRoot: string,
   args: string[],
   flags: Record<string, string | boolean | string[]>,
   stdinText?: string
+): Promise<void> {
+  const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
+  // No try/finally: a render throw keeps its own exit code and writes no event.
+  await renderContext(hippoRoot, args, flags, stdinText, rec);
+  flushDeliveryRecorder(rec);
+}
+
+/** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
+function startDeliveryRecorder(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+  stdinText: string | undefined,
+): DeliveryRecorder | null {
+  if (flags['pinned-only'] !== true) return null;
+  try {
+    // The same store withLedgerDb writes the token ledger to, so its config governs both.
+    const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
+    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
+    return createDeliveryRecorder({
+      root,
+      storeHash: blockHash(path.resolve(root)),
+      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
+      tenantId: resolveTenantId({}),
+      stdinText,
+      envSessionId: hostSessionId(),
+    });
+  } catch (error) {
+    console.error(`[hippo] delivery ledger skipped: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+/** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
+function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
+  if (rec === null) return;
+  try {
+    rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
+  } catch (error) {
+    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function renderContext(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+  stdinText: string | undefined,
+  rec: DeliveryRecorder | null,
 ): Promise<void> {
   // --pinned-only fires on every UserPromptSubmit — including in directories
   // that don't have a local .hippo. Skip requireInit for that path and fall
@@ -6810,7 +5776,10 @@ async function cmdContext(
   }
 
   const budget = parseBudgetFlag(flags['budget'], 1500);
-  if (budget <= 0) return;
+  if (budget <= 0) {
+    rec?.disabled();
+    return;
+  }
 
   // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
   // fall through to api.getContext's '*' fallback. api.getContext is host-
@@ -6873,6 +5842,7 @@ async function cmdContext(
     prompt: payloadPrompt,
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
     cost: contextCost(format === 'additional-context' ? 'additional-context' : 'markdown', framing),
+    deliveryObserver: rec ?? undefined,
   };
 
   const result = await api.getContext(ctx, opts);
@@ -6883,7 +5853,10 @@ async function cmdContext(
     result.activeSnapshot ||
     result.sessionHandoff ||
     (result.recentEvents && result.recentEvents.length > 0);
-  if (!hasContextData) return;
+  if (!hasContextData) {
+    rec?.delivered({ state: 'empty' });
+    return;
+  }
 
   // Adapter: ContextResultEntry -> the print-helper input shape. v39:
   // cross-project inclusions (only present under --cross-project or with
@@ -6919,10 +5892,14 @@ async function cmdContext(
       tokens: result.tokens,
     });
     console.log(jsonText);
-    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
-    }));
+    rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
+    withLedgerDb(hippoRoot, (db) => {
+      recordTokenUse(db, {
+        tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
+        event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
+      });
+      flushDeliveryRecorder(rec, db);
+    });
   } else if (format === 'additional-context') {
     // Z1: split into a static block (snapshot/handoff/events/pins/recent-N,
     // TE2-skippable) and a prompt-recall block (never skipped, own heading).
@@ -6945,7 +5922,10 @@ async function cmdContext(
     const recallBlock = recallItems.length > 0
       ? settleTokens((t) => captureConsole(() => printContextMarkdown(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' })))
       : '';
-    if (!staticBlock.trim() && !recallBlock.trim()) return;
+    if (!staticBlock.trim() && !recallBlock.trim()) {
+      rec?.delivered({ state: 'empty' });
+      return;
+    }
 
     const surface: TokenSurface = pinnedOnly ? 'hook' : 'context';
     let sendStatic = staticBlock.trim().length > 0;
@@ -6962,10 +5942,15 @@ async function cmdContext(
         const last = withLedgerDb(hippoRoot, (db) =>
           lastSentState(db, ctx.tenantId, payloadSessionId, surface));
         if (shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) {
-          withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-            tenantId: ctx.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-            items: staticItems.length, tokens: estimateTokens(staticBlock), hash: staticHash,
-          }));
+          withLedgerDb(hippoRoot, (db) => {
+            recordTokenUse(db, {
+              tenantId: ctx.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
+              items: staticItems.length, tokens: estimateTokens(staticBlock), hash: staticHash,
+            });
+            if (recallBlock.trim()) return;
+            rec?.delivered({ state: 'reused', staticHash, staticReused: true });
+            flushDeliveryRecorder(rec, db);
+          });
           sendStatic = false;
         }
       }
@@ -6975,7 +5960,11 @@ async function cmdContext(
     const additionalContext = finalStatic && recallBlock
       ? `${finalStatic}\n\n${recallBlock}`
       : finalStatic || recallBlock;
-    if (!additionalContext.trim()) return;
+    const staticReused = !sendStatic && staticBlock.trim().length > 0;
+    if (!additionalContext.trim()) {
+      rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
+      return;
+    }
 
     const payload = {
       hookSpecificOutput: {
@@ -6984,6 +5973,13 @@ async function cmdContext(
       },
     };
     process.stdout.write(JSON.stringify(payload));
+    rec?.delivered({
+      state: staticReused ? 'reused-recall-sent' : 'sent',
+      staticHash: staticBlock.trim() ? blockHash(staticBlock) : null,
+      recallHash: recallBlock ? blockHash(recallBlock) : null,
+      emittedText: additionalContext,
+      staticReused,
+    });
     if (finalStatic || recallBlock) {
       // One connection for both rows; each insert in its own try so one failing doesn't skip the other.
       withLedgerDb(hippoRoot, (db) => {
@@ -7003,6 +5999,7 @@ async function cmdContext(
             });
           } catch { /* best effort; see withLedgerDb doc comment */ }
         }
+        flushDeliveryRecorder(rec, db);
       });
     }
   } else {
@@ -7024,81 +6021,14 @@ async function cmdContext(
       }
     }));
     if (text.length > 0) console.log(text);
-    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
-    }));
-  }
-}
-
-/**
- * TE2: compaction drops the pinned blocks the per-prompt hook injected
- * earlier, so record a `reset` for the payload's session and the next prompt
- * injects again even if nothing changed. `requiredSource` limits it to hook
- * payloads with that `source` (SessionStart fires for other reasons too).
- * Best-effort and silent: a malformed payload records nothing.
- */
-function resetHookInjection(hippoRoot: string, stdinText: string | undefined, requiredSource: string | null): void {
-  const sessionId = hookPayloadSessionId(stdinText, requiredSource);
-  // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
-  if (sessionId === null || isSubagentPayload(stdinText)) return;
-  withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-    tenantId: resolveTenantId({}), sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
-  }));
-}
-
-/**
- * Run `fn` with console.log captured; returns the captured lines joined by
- * newlines (what the same calls would have printed, minus the final newline).
- */
-function captureConsole(fn: () => void): string {
-  const lines: string[] = [];
-  const realLog = console.log;
-  console.log = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
-  try {
-    fn();
-  } finally {
-    console.log = realLog;
-  }
-  return lines.join('\n');
-}
-
-/**
- * The store a Claude Code hook writes to: the project store when there is
- * one, else an existing global store, else the project path (which the hook
- * then skips, since hooks fire in every directory and must not create one).
- * Pre-compact and compact-resume must agree, or a snapshot saved to one store
- * is looked for in the other.
- */
-function hookStoreRoot(hippoRoot: string): string {
-  if (isInitialized(hippoRoot)) return hippoRoot;
-  const globalRoot = getGlobalRoot();
-  return isInitialized(globalRoot) ? globalRoot : hippoRoot;
-}
-
-/**
- * Run `fn` against the token ledger's store: the local store when it is
- * initialized, else the global one (the per-prompt hook runs in directories
- * without a local store). Best-effort: returns undefined and never throws,
- * because a ledger failure must not break context or recall.
- */
-function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T | undefined {
-  let root: string | null = null;
-  try {
-    if (isInitialized(hippoRoot)) root = hippoRoot;
-    else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
-  } catch {
-    return undefined;
-  }
-  if (root === null) return undefined;
-  let db: ReturnType<typeof openHippoDb> | undefined;
-  try {
-    db = openHippoDb(root);
-    return fn(db);
-  } catch {
-    return undefined;
-  } finally {
-    if (db) closeHippoDb(db);
+    rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
+    withLedgerDb(hippoRoot, (db) => {
+      recordTokenUse(db, {
+        tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
+        event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
+      });
+      flushDeliveryRecorder(rec, db);
+    });
   }
 }
 
@@ -7124,42 +6054,6 @@ export function printContextMarkdown(
   const showStrength = opts.showStrength !== false;
   console.log(contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens));
   for (const item of items) console.log(contextLine(item, framing, showStrength, now));
-}
-
-function autoDetectContext(): string {
-  // Try git diff --name-only for changed files
-  try {
-    const diff = execSync('git diff --name-only HEAD 2>&1', {
-      encoding: 'utf8',
-      timeout: 3000,
-      windowsHide: true,
-    }).trim();
-
-    if (diff) {
-      // Extract meaningful terms from file paths
-      const terms = diff
-        .split('\n')
-        .flatMap((f: string) => f.replace(/[\/\\\.]/g, ' ').split(/\s+/))
-        .filter((t: string) => t.length > 2 && !['src', 'dist', 'test', 'tests', 'node_modules', 'index'].includes(t))
-        .slice(0, 10);
-      if (terms.length > 0) return terms.join(' ');
-    }
-
-    // Try branch name
-    const branch = execSync('git branch --show-current 2>&1', {
-      encoding: 'utf8',
-      timeout: 3000,
-      windowsHide: true,
-    }).trim();
-
-    if (branch && branch !== 'main' && branch !== 'master') {
-      return branch.replace(/[-_\/]/g, ' ');
-    }
-  } catch {
-    // Not a git repo or git not available, fall through
-  }
-
-  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -7312,134 +6206,6 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Learn command
 // ---------------------------------------------------------------------------
-
-function learnFromRepo(
-  hippoRoot: string,
-  repoPath: string,
-  days: number,
-  label?: string
-): { added: number; skipped: number; lowInfo: number } {
-  const prefix = label ? `[${label}] ` : '';
-
-  if (!isGitRepo(repoPath)) {
-    console.log(`${prefix}No git history found (or not a git repository).`);
-    return { added: 0, skipped: 0, lowInfo: 0 };
-  }
-
-  const gitLog = fetchGitLog(repoPath, days);
-  if (!gitLog.trim()) {
-    console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0, lowInfo: 0 };
-  }
-
-  // Same patterns as MCP hippo_learn: config.gitLearnPatterns (whose default
-  // equals extractLessons' built-in list) so a custom list applies everywhere.
-  const config = loadConfig(hippoRoot);
-  const parsedLessons = extractLessons(gitLog, config.gitLearnPatterns);
-  if (parsedLessons.length === 0) {
-    console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0, lowInfo: 0 };
-  }
-
-  // DF4: admission gate lives at the write path, not in extractLessons
-  // (a published API surface that only parses). Bare subjects like "fixed
-  // signals" are dropped here, before they ever become a memory.
-  // The gate filters the loop INPUT, so a dropped lesson neither stores nor
-  // invalidates. That is deliberate, and it was argued both ways.
-  //
-  // Round 1 of review called the lost invalidation a P1: a migration subject
-  // too thin to store ("replace webpack with vite") would stop weakening
-  // stale webpack memories. True. So the loop was widened to walk every
-  // parsed lesson with the gate on the write alone.
-  //
-  // Round 2 then found the cure was worse. STORAGE is what makes invalidation
-  // idempotent here: a stored lesson is recognised by its same-text key on
-  // the next scan and short-circuits before invalidating again. A lesson that
-  // invalidates but is never stored has no such record, so every rescan
-  // re-invalidates, and invalidateMatching halves half_life_days each time.
-  // Measured: 7 -> 3 -> 1 over two runs. That is compounding data damage.
-  //
-  // Measured frequency decided it. Across 413 real auto-learn rows in 4
-  // stores, 24 are gated and ZERO of those carry an invalidation target; the
-  // 45 lessons that do carry targets all pass the gate and are unaffected
-  // either way. Both failure modes are empty on real data, so the tie breaks
-  // on which one is benign if it ever fires: not invalidating is a missed
-  // improvement, re-invalidating forever is damage.
-  //
-  // Documented limitation, pinned by test: a migration subject too thin to
-  // store also does not invalidate. Making invalidateMatching idempotent
-  // would allow both, and is backlogged - it is a latent issue for the manual
-  // `hippo invalidate` path too, not just this one.
-  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
-  const lowInfo = dropped.length;
-
-  let added = 0;
-  let skipped = 0;
-  // AT1 (plan §3 containment): per-lesson refusal must not abort the rest
-  // of the git-log scan. No signature change (added/skipped return shape
-  // used by cmdLearn + cmdSleepCore callers) — counted locally, folded into
-  // the existing summary line.
-  let rejected = 0;
-  const gitLearnTags = ['error', 'git-learned'];
-  const existingForSchema = loadAllEntries(hippoRoot, resolveTenantId({}));
-  const keys = storedTextKeys(existingForSchema);
-
-  for (const lesson of lessons) {
-    if (keys.has(duplicateKey(lesson))) {
-      skipped++;
-      continue;
-    }
-
-    const target = extractInvalidationTarget(lesson);
-    if (target) {
-      const invResult = invalidateMatching(hippoRoot, target, resolveTenantId({}));
-      if (invResult.invalidated > 0) {
-        console.log(`${prefix}   Invalidated ${invResult.invalidated} memories referencing "${target.from}"`);
-      }
-    }
-
-    const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
-
-    const entry = createMemory(lesson, {
-      layer: Layer.Episodic,
-      tags: [...gitLearnTags],
-      source: 'git-learn',
-      confidence: 'observed',
-      schema_fit: schemaFitVal,
-      tenantId: resolveTenantId({}),
-      baseHalfLifeDays: config.defaultHalfLifeDays,
-    });
-
-    // Auto-tag with path context from the repo being learned
-    const learnPathTags = extractPathTags(repoPath);
-    for (const pt of learnPathTags) {
-      if (!entry.tags.includes(pt)) entry.tags.push(pt);
-    }
-
-    try {
-      writeEntry(hippoRoot, entry);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejected++;
-        continue;
-      }
-      throw err;
-    }
-    updateStats(hippoRoot, { remembered: 1 });
-    keys.add(duplicateKey(lesson));
-    void embedMemory(hippoRoot, entry);
-
-    added++;
-  }
-
-  console.log(
-    `${prefix}${added} new lessons added, ${skipped} duplicates skipped` +
-      (rejected > 0 ? `, ${rejected} rejected value(s) skipped` : '') +
-      (lowInfo > 0 ? `, ${lowInfo} low-information subject(s) dropped` : '') +
-      '.',
-  );
-  return { added, skipped, lowInfo };
-}
 
 function cmdLearn(
   hippoRoot: string,
@@ -7705,226 +6471,6 @@ function cmdSync(hippoRoot: string, flags: Record<string, string | boolean | str
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
 // ---------------------------------------------------------------------------
-
-const HOOK_MARKERS = {
-  start: '<!-- hippo:start -->',
-  end: '<!-- hippo:end -->',
-};
-
-const HOOKS: Record<string, { file: string; content: string; description: string }> = {
-  'claude-code': {
-    file: 'CLAUDE.md',
-    description: 'Claude Code',
-    content: `
-## Project Memory (Hippo)
-
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-
-When you find out why something failed, record it right then, while you
-work, never as a closing step:
-\`\`\`bash
-hippo remember "<what went wrong and why>" --error
-\`\`\`
-
-The installed hooks store failed tool calls and capture the session when it
-ends, so there is nothing to run before you finish.
-`.trim(),
-  },
-  'codex': {
-    file: 'AGENTS.md',
-    description: 'OpenAI Codex',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When Hippo's Codex wrapper is installed, session-end capture runs automatically.
-If the wrapper is not installed, capture a brief summary manually:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'cursor': {
-    file: 'AGENTS.md',
-    description: 'Cursor',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'openclaw': {
-    file: 'AGENTS.md',
-    description: 'OpenClaw',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every session, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'opencode': {
-    file: 'AGENTS.md',
-    description: 'OpenCode',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When stuck or repeating yourself, check if this happened before:
-\`\`\`bash
-hippo recall "<what's going wrong>" --budget 2000
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'pi': {
-    file: 'AGENTS.md',
-    description: 'Pi',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every session, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-
-For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extensions/hippo-memory/\`.
-`.trim(),
-  },
-};
-
-// sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash when a block changes.
-const SHIPPED_HOOK_HASHES = new Map([
-  ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
-  ['e6b12bd8983c032e5ca8e95a97aeff4178a5a05026d10acad5b2e1b25d5656dd', 'claude-code'],
-  ['4c64e11d3e5be68fa547c9248d7553feb645a02f7cf13ba02f7275e1854baf44', 'claude-code'],
-  ['293bd319bbc86225a0ee027490a3322a0336257f5832f7fade65e4ffb2530654', 'claude-code'],
-  ['15abcece9712279fb4721f7a8f0ba117457400278977beb5cf5b5d7ba49f7b1a', 'codex'],
-  ['0c81a6b2c21473313001f624b80ea870e661aecbfda9bfe8503febc0d5f34533', 'codex'],
-  ['88e45358aba4f17912f113221c991dc758275991335d1daa4aa1974a69c46769', 'codex'],
-  ['e61632fe177450a06541c148a9a4f9182530d8df667806927a99792825903298', 'codex'],
-  ['a1415ecda9b2f8f317c233738e4a5ac16e6b2cc385a017c0c8ecfbfacbcab6a3', 'cursor'],
-  ['a38c428bbdfc14ec50f6f7b9183785170a4eae1ce9cde60257cca6efc7206b3a', 'cursor'],
-  ['0ec9f556abfd55e94f9e6fb47ece0fc5acb841977d144b35a2371e03645d8636', 'cursor'],
-  ['40524c3bd5a2eb04036567cc761451961d950995768bccd93a9900b0f75eafea', 'openclaw'],
-  ['7b3518e8c0feaa7b8b454cde7743f7598ad14cd9979e1680d0954484e2464aae', 'openclaw'],
-  ['1137dcf04568caf011e41db77bc55324faee88bc29c3a5fcc98ab687cd952a16', 'openclaw'],
-  ['4601c67c31f41cd5b1324cfccdb1afc66872b7fb0bc1e7c5789ecabb1f6bd942', 'opencode'],
-  ['90d9e21d8d1ecbe99a0fc7b7f2d9f8af7b5315a6b4b0203df4f7a9bdc0699b98', 'opencode'],
-  ['ca4e00284f1397ed2f2fcc53210c27f63b90edf6b37fd66dad5ee58b94ea3eee', 'opencode'],
-  ['8b8f5986d7f7ed15f06e68720d8913c3cab23d94366b411935ca2bbaa334553b', 'pi'],
-  ['37767b355e18beac726b05b9e2b898dab8c6135fd7b98f3aa52edc734d5dd283', 'pi'],
-  ['6e85a5cccb3cfeaa9a080713754936db730f96376f94cc9a9888a746149c7268', 'pi'],
-]);
 
 function cmdHook(
   args: string[],
@@ -8537,15 +7083,6 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
 // Auth subcommands (A5 stub auth)
 // ---------------------------------------------------------------------------
 
-function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
-  if (flags['global']) {
-    initGlobal();
-    return getGlobalRoot();
-  }
-  requireInit(hippoRoot);
-  return hippoRoot;
-}
-
 function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
@@ -8635,56 +7172,29 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
 
 function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const asJson = Boolean(flags['json']);
-
+  // The local CLI owns every tenant, so the revoke runs in the key's own tenant.
   const db = openHippoDb(root);
-  let exists = false;
-  let alreadyRevoked = false;
-  let revokedAt: string | null = null;
-  let keyTenantId: string | null = null;
+  let keyTenant: string | undefined;
   try {
-    const row = db.prepare(`SELECT key_id, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
-      | { key_id: string; tenant_id: string; revoked_at: string | null }
-      | undefined;
-    if (!row) {
-      // Let the finally{} block close the db. M4: avoid manual close before
-      // process.exit() — the finally already handles it on every path.
-      console.error(`Unknown key_id: ${keyId}`);
-      process.exit(1);
-    }
-    exists = true;
-    keyTenantId = row.tenant_id;
-    if (row.revoked_at) {
-      alreadyRevoked = true;
-      revokedAt = row.revoked_at;
-    } else {
-      revokeApiKey(db, keyId);
-      const updated = db.prepare(`SELECT revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
-        | { revoked_at: string | null }
-        | undefined;
-      revokedAt = updated?.revoked_at ?? null;
-    }
-    // M1: emit auth_revoke audit event. Skip on no-op revoke (already revoked)
-    // so re-running the command doesn't pad the audit log with duplicates.
-    if (!alreadyRevoked && keyTenantId) {
-      try {
-        appendAuditEvent(db, {
-          tenantId: keyTenantId,
-          actor: 'cli',
-          op: 'auth_revoke',
-          targetId: keyId,
-        });
-      } catch {
-        // Audit must not crash a successful revoke.
-      }
-    }
+    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
+    const row = db.prepare(`SELECT tenant_id FROM api_keys WHERE key_id = ?`).get(keyId) as { tenant_id: string } | undefined;
+    keyTenant = row?.tenant_id;
   } finally {
     closeHippoDb(db);
   }
-
-  if (!exists) return;
-
-  if (asJson) {
+  if (keyTenant === undefined) {
+    console.error(`Unknown key_id: ${keyId}`);
+    process.exit(1);
+  }
+  const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
+  let revokedAt: string;
+  try {
+    revokedAt = api.authRevoke(ctx, keyId).revokedAt;
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  if (flags['json']) {
     console.log(JSON.stringify({ keyId, revokedAt }));
     return;
   }
@@ -10188,7 +8698,7 @@ async function main(
       break;
 
     case 'sleep':
-      await cmdSleep(hippoRoot, flags);
+      await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags);
       break;
 
     case 'last-sleep':

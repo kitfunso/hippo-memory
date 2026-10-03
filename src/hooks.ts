@@ -62,8 +62,8 @@ export interface CodexWrapperPaths {
   wrapperShPath: string;
   logFile: string;
   runsDir: string;
+  codexHome: string;
   historyPath: string;
-  sessionsDir: string;
 }
 
 export interface CodexWrapperInstallResult {
@@ -82,8 +82,6 @@ export interface CodexWrapperMetadata {
   backupPath: string;
   installMode: 'same-path' | 'cmd-shim';
   logFile: string;
-  historyPath: string;
-  sessionsDir: string;
   installedAt: string;
 }
 
@@ -253,7 +251,7 @@ export function defaultPreCompactLogPath(): string {
 
 export function resolveCodexWrapperPaths(): CodexWrapperPaths {
   const home = homeDir();
-  const codexHome = path.join(home, '.codex');
+  const codexHome = codexHomeDir(home);
   const wrapperDir = path.join(home, '.hippo', 'bin');
   return {
     wrapperDir,
@@ -263,8 +261,8 @@ export function resolveCodexWrapperPaths(): CodexWrapperPaths {
     wrapperShPath: path.join(wrapperDir, 'codex'),
     logFile: path.join(home, '.hippo', 'logs', 'codex-sleep.log'),
     runsDir: path.join(home, '.hippo', 'runs', 'codex'),
+    codexHome,
     historyPath: path.join(codexHome, 'history.jsonl'),
-    sessionsDir: path.join(codexHome, 'sessions'),
   };
 }
 
@@ -479,8 +477,6 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
     backupPath: plan.backupPath,
     installMode: plan.installMode,
     logFile: paths.logFile,
-    historyPath: paths.historyPath,
-    sessionsDir: paths.sessionsDir,
     installedAt: new Date().toISOString(),
   };
   fs.writeFileSync(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n', 'utf8');

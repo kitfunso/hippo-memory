@@ -21,7 +21,8 @@
  */
 
 import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry, assertTenantId } from './store.js';
+import { writeEntry } from './store.js';
+import { assertTenantId } from './tenant.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';

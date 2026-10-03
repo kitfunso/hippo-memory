@@ -48,7 +48,7 @@ describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   it('gates the detector behind HIPPO_ANCHORING env knob (zero-work when off)', () => {
     // Lock that the env check happens BEFORE the ring lookup so the
     // off path truly costs zero work.
-    expect(cliText).toContain("process.env.HIPPO_ANCHORING !== 'off'");
+    expect(cliText).toContain("biasHintEnabled('anchoring')");
   });
 
   it('uses buildSessionKey (not colon string-concat) for the ring key', () => {

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { loadAllEntries } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { markRetrieved } from '../src/search.js';
+import { markRetrieved } from '../src/memory.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 

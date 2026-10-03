@@ -35,6 +35,7 @@ claim is a shorter context, not a better answer.
 |---|---|
 | [2026-09-26-z1-prompt-recall-prereg.md](2026-09-26-z1-prompt-recall-prereg.md) | Pre-registration: does gating the prompt hook's backfill on the prompt raise overlap with later failures, replayed on the frozen SI0 corpus |
 | [2026-09-26-z1-prompt-recall-result.md](2026-09-26-z1-prompt-recall-result.md) | Result: FAIL; overlap flat (0.0545 both arms), tokens down (847 to 533), p95 over 0.28 s; ships off by default |
+| [2026-10-03-z0-analyzer.md](2026-10-03-z0-analyzer.md) | The Z0 analyzer: CLI, the `z0-record/1` contract, filter order, blind mode, and the readings where the Z0 prereg is silent |
 
 ### Mechanism audit (2026-09)
 

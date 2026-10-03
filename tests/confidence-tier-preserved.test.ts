@@ -5,7 +5,7 @@ import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
 import { createMemory, resolveConfidence, type MemoryEntry } from '../src/memory.js';
-import { markRetrieved } from '../src/search.js';
+import { markRetrieved } from '../src/memory.js';
 import { sampleForReplay } from '../src/replay.js';
 
 let tmpDir: string;

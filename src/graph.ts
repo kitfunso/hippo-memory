@@ -19,7 +19,7 @@
  */
 
 import { openHippoDb, closeHippoDb } from './db.js';
-import { assertTenantId } from './store.js';
+import { assertTenantId } from './tenant.js';
 
 /** The DB connection handle `openHippoDb` returns. Threaded (optionally) through
  *  the graph writers so `extractGraph` can run clear + all inserts in ONE

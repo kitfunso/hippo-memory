@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.55.0",
+  "version": "1.56.0",
   "description": "Memory for AI agents that learns what is wrong and ranks it down. MCP server, hooks for Claude Code, OpenCode and Codex, AGENTS.md instructions for Codex, Cursor, OpenClaw and Pi. SQLite, zero runtime deps.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
@@ -34,6 +34,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:delivery-ledger": "vitest run tests/delivery-ledger",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
     "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",

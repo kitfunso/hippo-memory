@@ -29,7 +29,8 @@ import {
   writeEntry,
   loadAllEntries,
 } from '../src/store.js';
-import { search, markRetrieved } from '../src/search.js';
+import { search } from '../src/search.js';
+import { markRetrieved } from '../src/memory.js';
 
 // ---------------------------------------------------------------------------
 // Trap categories — each has a lesson and 2-3 task instances

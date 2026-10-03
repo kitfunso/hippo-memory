@@ -21,7 +21,8 @@ import {
   applyOutcome,
   type MemoryEntry,
 } from '../src/memory.js';
-import { hybridSearch, markRetrieved, outcomeMultiplier } from '../src/search.js';
+import { hybridSearch, outcomeMultiplier } from '../src/search.js';
+import { markRetrieved } from '../src/memory.js';
 import { evalNow, _resetAblationCacheForTests } from '../src/ablation.js';
 
 const ABLATION_ENV_VARS = [

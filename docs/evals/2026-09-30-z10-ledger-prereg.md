@@ -24,6 +24,19 @@ Primary engineering metric: fraction of known fixture events reconstructed with 
 
 **Task/default gate.** [Z0](./2026-09-29-z0-built-in-memory-prereg.md) remains the task proof. Name the primary benefit and minimum useful effect before freeze. Promotion requires a valid win meeting that effect and explicit H4 pass, while preserving task quality and the recall floor where applicable. H4 retains the upper 95% cost-ratio bound below 1.10 and lower 95% resolve-rate-difference bound above -5 points. Cost per resolved task is secondary unless a new registration declares it primary.
 
+## Slice 1: engineering scope (settled)
+
+This section settles the engineering part of the per-prompt hook path only. The task-level part above stays DRAFT / NOT REGISTERED.
+
+- **Fixture inventory.** F1 budget rejection and injected tokens; F2 gate rejection with scores and the 16-row rejected cap; F3 unchanged-block reuse; F4 duplicate events (Claude payload repeat, Codex `turn_id`); F5 concurrent sessions; F6 missing and sub-agent sessions; F7 fail-soft (rollback, busy lock, recorder fault, render throw); F8 flag off writes nothing; F9 byte-identical stdout on vs off; F10 no raw text. Event fields are the schema v50 `delivery_events` and `delivery_candidates` columns.
+- **Runtime matrix.** Claude Code and Codex payload shapes as fixtures; live host versions are recorded at registration.
+- **Decision invariance.** Zero tolerance: selected ids, `ContextResult` and stdout are byte-identical with the ledger off and on.
+- **Trace completeness.** 100% of fixture events reconstructed with the correct store, session, turn, ids and stage.
+- **Overhead bounds.** Stdout identical in 100% of turns and injected-token delta exactly 0; `p95_on/p95_off <= 1.10` in every arm and mode (H4's ratio borrowed as a latency proxy, not H4 itself); `p50_on - p50_off <= 15 ms`; mean bytes per turn <= 7168.
+- **Arms.** The same binary with `deliveryLedger.enabled` off vs on, each crossed with `pinnedInject.promptRecall` off and on.
+- **Runner.** `npm run build && npm run test:delivery-ledger && node scripts/hook-latency.mjs --ledger-compare --memories 2000 --runs 30`. Result in the PR body plus `docs/evals/2026-10-03-z10-ledger-slice1-result.md`.
+- **Open.** Z0/H4 sample, corpus snapshot, unit of analysis and power, margins and multiplicity, readiness and stopping, the transcript join, application labels, compaction, resume, session-end and tool-failure events, and Z12 links.
+
 ## Controls and failure cases
 
 - Fixture oracle includes rejected candidates, emitted-but-undelivered context, unknown application, concurrent turns, compaction, missing hooks and duplicate events.
@@ -37,10 +50,10 @@ Primary engineering metric: fraction of known fixture events reconstructed with 
 
 ## Required decisions before registration
 
-- [ ] Fixture inventory, expected event fields and runtime/version matrix.
-- [ ] Decision-invariance and trace-completeness acceptance bounds; per-event latency and token overhead bounds.
+- [ ] Fixture inventory, expected event fields and runtime/version matrix. Engineering part settled in slice 1; task part open.
+- [ ] Decision-invariance and trace-completeness acceptance bounds; per-event latency and token overhead bounds. Engineering part settled in slice 1; task part open.
 - [ ] Independent Z0/H4 sample or designated validity-fixture subset; measurement method and confidence intervals.
-- [ ] Baseline/treatment commit hashes, feature flags, runtime/model versions and configuration.
+- [ ] Baseline/treatment commit hashes, feature flags, runtime/model versions and configuration. Engineering part settled in slice 1; task part open.
 - [ ] Corpus snapshot location outside the repo where host transcripts are used; SHA-256, eligibility dates, exclusions and the development/held-out split. Copy it at registration; live host paths are not a reproducible corpus.
 - [ ] Unit of analysis, paired design, minimum sample and power/calibration rule. Cluster repeated events by task/lesson family and session as appropriate; no per-turn pseudo-replication.
 - [ ] Acceptance/equivalence/harm margins, interval method, multiplicity, scoring rubric and independent label agreement where a judge is used.
