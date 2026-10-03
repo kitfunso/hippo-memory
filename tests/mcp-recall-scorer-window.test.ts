@@ -5,9 +5,7 @@
  * content than the default (formatMemories does NOT include windowSize in
  * text — codex P2-3 — so we assert observable behaviour).
  *
- * Cross-transport invariant (codex CRITICAL[2]): MCP must Number-coerce
- * non-numeric input so `scorer_window: "abc"` produces the same typed
- * RecallContractError as HTTP `?scorer_window=abc`.
+ * A non-numeric scorer_window fails the tool's inputSchema before recall runs.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -129,15 +127,13 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
     expect(text).toContain('Fresh tail / substituted summaries');
   });
 
-  it('scorer_window="abc" (string, transport-coerced) rejects with invalid_scorer_window', async () => {
-    // Codex CRITICAL[2]: MCP Number-coerces non-numeric input so the
-    // rejection reaches recall() and produces the same typed code as HTTP.
-    const call = callTool(
+  it('scorer_window="abc" is rejected as an invalid argument before recall runs', async () => {
+    const result = await callTool(
       'hippo_recall',
       { query: 'alpha', scorer_window: 'abc' },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
-    await expect(call).rejects.toBeInstanceOf(RecallContractError);
-    await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
+    expect(result?.result).toMatchObject({ isError: true });
+    expect(extractResultText(result)).toContain('scorer_window must be a number');
   });
 });

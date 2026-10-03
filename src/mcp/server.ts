@@ -57,6 +57,7 @@ export function __resetSessionRecallHistoryMcp(): void {
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
+import { validateToolArgs, type ToolInputSchema } from './tool-args.js';
 
 // ── Find hippo root ──
 
@@ -334,7 +335,18 @@ function planningSection(r: RecallResult): string {
 
 // ── Tool definitions ──
 
-const TOOLS = [
+// HTTP sets no budget cap; 25x the 4000 recall default leaves room for large-context clients while bounding one call's work.
+const MAX_BUDGET_TOKENS = 100_000;
+// Same ceiling as the HTTP list routes' parseListLimit.
+const MAX_LIST_LIMIT = 1000;
+
+interface McpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: ToolInputSchema;
+}
+
+const TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'hippo_recall',
     description:
@@ -343,7 +355,12 @@ const TOOLS = [
       type: 'object' as const,
       properties: {
         query: { type: 'string', description: 'What to search for in memory (natural language)' },
-        budget: { type: 'number', description: 'Max tokens to return (default: config.defaultBudget, 4000)' },
+        budget: {
+          type: 'number',
+          minimum: 0,
+          maximum: MAX_BUDGET_TOKENS,
+          description: `Max tokens to return (default: config.defaultBudget, 4000; max ${MAX_BUDGET_TOKENS})`,
+        },
         include_continuity: {
           type: 'boolean',
           description: 'Append continuity context (active snapshot + handoff + last 5 session events) below the memory results. Useful at session boot.',
@@ -390,7 +407,9 @@ const TOOLS = [
         },
         budget: {
           type: 'number',
-          description: 'Token budget for the assembled context (default 4000). Eviction kicks in over budget.',
+          minimum: 0,
+          maximum: MAX_BUDGET_TOKENS,
+          description: `Token budget for the assembled context (default 4000; max ${MAX_BUDGET_TOKENS}). Eviction kicks in over budget.`,
         },
         fresh_tail_count: {
           type: 'number',
@@ -421,11 +440,15 @@ const TOOLS = [
         },
         limit: {
           type: 'number',
-          description: 'Max children to return (default 50).',
+          minimum: 0,
+          maximum: MAX_LIST_LIMIT,
+          description: `Max children to return (default 50; max ${MAX_LIST_LIMIT}).`,
         },
         budget: {
           type: 'number',
-          description: 'Max total token cost (~ chars/4) of returned children. Truncates chronologically.',
+          minimum: 0,
+          maximum: MAX_BUDGET_TOKENS,
+          description: `Max total token cost (~ chars/4) of returned children (max ${MAX_BUDGET_TOKENS}). Truncates chronologically.`,
         },
         depth: {
           type: 'integer',
@@ -477,7 +500,12 @@ const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        budget: { type: 'number', minimum: 0, description: 'Max tokens (default: config.defaultContextBudget, 3000)' },
+        budget: {
+          type: 'number',
+          minimum: 0,
+          maximum: MAX_BUDGET_TOKENS,
+          description: `Max tokens (default: config.defaultContextBudget, 3000; max ${MAX_BUDGET_TOKENS})`,
+        },
         scope: {
           type: 'string',
           description: 'Restrict memories, snapshot, handoff and trail to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
@@ -568,6 +596,8 @@ const TOOLS = [
     },
   },
 ];
+
+const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
 // ── Track last recalled IDs for outcome feedback ──
 //
@@ -672,12 +702,7 @@ async function executeTool(
       const summarizeOverflow = isJsonBoolean(args.summarize_overflow)
         ? args.summarize_overflow
         : undefined;
-      // v1.7.2 T4 — scorer_window: Number-coerce so non-numeric input
-      // (string 'abc', boolean, etc.) reaches api.retrieve() and produces
-      // the same typed RecallContractError(code='invalid_scorer_window')
-      // as HTTP. Codex CRITICAL[2]: do NOT use `typeof === 'number'` — that
-      // would silently default-200 on string `"5"` while HTTP 400s on the
-      // same value. Both transports must agree.
+      // The inputSchema already rejected non-numbers; api.retrieve still rejects 0 or negative with RecallContractError.
       const scorerWindow = args.scorer_window === undefined
         ? undefined
         : Number(args.scorer_window);
@@ -891,17 +916,8 @@ async function executeTool(
       if (!summaryId) return 'No summary_id provided.';
       const limit = Number(args.limit);
       const budget = Number(args.budget);
-      // v0.30 / E5: depth walks N levels (default 1, hard cap 10).
-      // independent-review MED #5 fold: reject out-of-range explicitly
-      // (no silent clamp) so MCP callers see the constraint at their layer.
-      let depth: number | undefined;
-      if (args.depth !== undefined) {
-        const depthRaw = Number(args.depth);
-        if (!Number.isInteger(depthRaw) || depthRaw < 1 || depthRaw > 10) {
-          return `depth must be an integer between 1 and 10 (got ${args.depth})`;
-        }
-        depth = depthRaw;
-      }
+      // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the cap.
+      const depth = args.depth === undefined ? undefined : Number(args.depth);
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
@@ -1163,7 +1179,8 @@ async function executeTool(
     }
 
     default:
-      return `Unknown tool: ${name}`;
+      // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this switch drifted apart.
+      throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
   }
 }
 
@@ -1203,8 +1220,24 @@ export async function handleMcpRequest(
     case 'tools/call': {
       const nameValue = params?.name;
       const toolName = isJsonString(nameValue) ? nameValue : '';
+      const tool = TOOLS_BY_NAME.get(toolName);
+      if (!tool) {
+        return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
+      }
       const argumentsValue = params?.arguments;
+      if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObjectRecord(argumentsValue)) {
+        return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
+      }
       const toolArgs = isJsonObjectRecord(argumentsValue) ? argumentsValue : {};
+      // The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
+      const problems = validateToolArgs(tool.inputSchema, toolArgs);
+      if (problems.length > 0) {
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: { content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }], isError: true },
+        };
+      }
       const output = await executeTool(toolName, toolArgs, ctx);
       recordMcpTokens(toolName, output, ctx);
       return {

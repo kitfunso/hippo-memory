@@ -83,7 +83,7 @@ function buildDashboardData(hippoRoot: string): DashboardData {
   // render resolved conflicts as faded historical context, not just open
   // conflicts. The open_conflicts stat below still counts only 'open' rows
   // to preserve the existing badge meaning.
-  const conflicts = listMemoryConflicts(hippoRoot, '*');
+  const conflicts = listMemoryConflicts(hippoRoot, '*', tenantId);
   // D4 v1.12.10: tenant-scope peer discovery in the dashboard (matches the
   // tenantId already used for loadAllEntries on line 72).
   const peers = listPeers(undefined, tenantId);

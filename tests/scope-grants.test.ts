@@ -63,7 +63,7 @@ describe('scope grants over HTTP', () => {
     return fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${key}` } });
   }
 
-  async function callTool(key: string, name: string, args: Record<string, string>): Promise<{ status: number; text: string }> {
+  async function callTool(key: string, name: string, args: Record<string, string | number>): Promise<{ status: number; text: string }> {
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -88,7 +88,7 @@ describe('scope grants over HTTP', () => {
     const recallOpen = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski' });
     expect(recallOpen.text).not.toContain('payroll');
 
-    const contextDenied = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: '4000' });
+    const contextDenied = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: 4000 });
     expect(contextDenied.text).not.toContain('payroll');
     expect(JSON.parse(contextDenied.text).error).toBeTruthy();
 
@@ -112,7 +112,7 @@ describe('scope grants over HTTP', () => {
     // hippo_context ranks by an auto-detected git query, not args.query, so content
     // relevance is out of scope here; the grant is proven by the absence of the
     // scope-forbidden error that the denied case above asserts.
-    const contextAllowed = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: '4000' });
+    const contextAllowed = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: 4000 });
     expect(JSON.parse(contextAllowed.text).error).toBeUndefined();
 
     // A second restricted scope, never granted, stays denied.

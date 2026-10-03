@@ -1,0 +1,4 @@
+### Fixed
+
+- **The dashboard shows only the running tenant's conflicts.** `/api/conflicts` and the open-conflict count on `/api/stats` now follow `HIPPO_TENANT`, like the memory list; before, every tenant's conflicts appeared.
+- **MCP tool arguments are checked against each tool's `inputSchema` before the tool runs.** Wrong types, missing required fields and out-of-range numbers come back as a tool result with `isError: true` naming each problem; an unknown tool or non-object `arguments` is a JSON-RPC `-32602` error. `budget` is capped at 100000 tokens on `hippo_recall`, `hippo_assemble`, `hippo_drill` and `hippo_context`, and `hippo_drill` `limit` at 1000 (the HTTP list cap). A string `scorer_window` is now an invalid argument instead of a thrown `RecallContractError`.
