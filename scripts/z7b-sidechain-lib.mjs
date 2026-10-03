@@ -136,11 +136,13 @@ export function finalizeAuditZ7b(preliminary, ci, n, confirmed) {
 
 const sample = (ids, rng) => L.shuffled([...ids].sort(cmp), rng);
 
-export function calibSamples(round, bearingIds, removedIds, priorIds) {
+// topUpIds (one judge only) fill a short precision sample after every both-judge id: a harder test, never an easier one.
+export function calibSamples(round, bearingIds, removedIds, priorIds, topUpIds = []) {
   const rng = L.rngFromString(`z7b-calib-r${round}`);
   const prior = new Set(priorIds);
   const fresh = (ids) => { const s = sample(ids, rng); return [...s.filter((id) => !prior.has(id)), ...s.filter((id) => prior.has(id))]; };
-  return { precision: fresh(bearingIds).slice(0, PRECISION_SAMPLE), falsex: fresh(removedIds).slice(0, FALSEX_SAMPLE) };
+  const precision = fresh(bearingIds), falsex = fresh(removedIds);
+  return { precision: [...precision, ...fresh(topUpIds)].slice(0, PRECISION_SAMPLE), falsex: falsex.slice(0, FALSEX_SAMPLE) };
 }
 
 const markOk = (m) => m === 'confirmed' || (L.isStr(m) && m.startsWith('rejected:') && MARK_CLASSES.includes(m.slice(9)));

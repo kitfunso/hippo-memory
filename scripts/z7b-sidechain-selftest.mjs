@@ -137,6 +137,11 @@ function selftestSamples(t) {
   t('calibSamples: fewer ids than the cap gives fewer, prior ones still included last', short.falsex.length === 3 && short.precision.length === 12);
   const tiny = Z.calibSamples(1, ids('b', 4), [], []);
   t('calibSamples: a short or empty list gives a short or empty sample', tiny.precision.length === 4 && tiny.falsex.length === 0);
+  const up = Z.calibSamples(1, ids('b', 8), rem, [], ids('u', 6));
+  t('calibSamples: a top-up fills a short sample after every bearing id and leaves falsex alone',
+    up.precision.length === 12 && up.precision.slice(0, 8).every((id) => id.startsWith('b')) && up.precision.slice(8).every((id) => id.startsWith('u'))
+    && JSON.stringify(up.falsex) === JSON.stringify(Z.calibSamples(1, ids('b', 8), rem, []).falsex));
+  t('calibSamples: a top-up is unused when the bearing list fills the sample', JSON.stringify(Z.calibSamples(1, bear, rem, [], ids('u', 6))) === JSON.stringify(a));
 
   const au = Z.auditSample(bear, rem);
   t('auditSample: 12 bearing plus 4 dropped in one list, deterministic', au.ids.length === 16 && au.bearing.length === 12 && au.dropped.length === 4 && JSON.stringify(au) === JSON.stringify(Z.auditSample(bear, rem))

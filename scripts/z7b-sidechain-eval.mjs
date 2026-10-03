@@ -212,10 +212,11 @@ function cmdCalib(a) {
   const bearing = fFil.rows.filter((r) => r.both);
   const removed = Object.entries(round.filter.items).filter(([, v]) => v.removed.length).map(([id]) => id);
   const prior = records.flatMap((r) => { const c = readJson(dir, `calib-r${r.round}.json`); return [...c.precision, ...c.falsex]; });
-  const s = Z.calibSamples(a.round, bearing.map((r) => r.id), removed, prior);
+  const topUp = fFil.rows.filter((r) => r.either && !r.both).map((r) => r.id);
+  const s = Z.calibSamples(a.round, bearing.map((r) => r.id), removed, prior, topUp);
   const side = (id) => path.join(dir, `${id}.parent.txt`);
   const precision = ['# Dev calibration precision sample, round ' + a.round, '', 'Confirm a sub-agent only if a listed lesson is durable, in none of the filter classes, and absent from its parent side file.', ''];
-  for (const id of s.precision) precision.push(...lessonLines(bearing.find((r) => r.id === id), side(id)));
+  for (const id of s.precision) precision.push(...lessonLines(fFil.rows.find((r) => r.id === id), side(id)));
   const falsex = ['# Dev calibration false-exclusion sample, round ' + a.round, '', 'Confirm a sub-agent only if a listed lesson is durable, not recoverable and absent from its parent side file.', ''];
   for (const id of s.falsex) {
     const cut = round.filter.items[id].removed;
@@ -229,6 +230,7 @@ function cmdCalib(a) {
   out('lesson_bearing_dev_items', bearing.length);
   out('filter_removed_dev_items', removed.length);
   out('precision_sample', s.precision.length);
+  out('precision_sample_one_judge_topup', s.precision.filter((id) => topUp.includes(id)).length);
   out('falsex_sample', s.falsex.length);
 }
 

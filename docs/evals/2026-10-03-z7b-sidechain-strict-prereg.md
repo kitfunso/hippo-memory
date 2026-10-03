@@ -126,12 +126,12 @@ Dev rounds: at most 3. Each round judges, rechecks and filters all 114 dev items
 Each judge, recheck and filter command records the SHA-256 of every prompt file it read; the calibration samples are only drawn when those records agree with each other and with the files on disk, so the prompts that pass are the prompts the round actually ran.
 
 After a round, the script draws two seeded samples (seed `z7b-calib-r<k>`; from round 2 on, sub-agents not sampled in an earlier round come first) and writes them to the archive:
-- **Precision sample**: 12 lesson-bearing dev sub-agents, with their surviving lessons and parent-side paths.
+- **Precision sample**: 12 lesson-bearing dev sub-agents, with their surviving lessons and parent-side paths. If fewer than 12 are lesson-bearing, every one is taken and the sample is topped up, by the same seed, from dev sub-agents where one judge alone keeps a lesson after the filter (Amendment 1).
 - **False-exclusion sample**: 8 dev sub-agents with a lesson the filter removed, with the removed lessons (labels hidden).
 
 The orchestrator writes one mark per sampled id to a marks file: `confirmed`, or `rejected:<class>` with class `file`, `self`, `known`, `result`, `present` (the parent side states it) or `other`. A sub-agent is **confirmed** if at least one listed lesson is durable, in none of the filter classes, and absent from the parent side. Absence is checked by searching the parent-side file for the lesson's key terms and reading each hit in context for a paraphrase (Z7 searched terms only, which can overstate precision).
 
-`calib-record --round k` reads the marks file, refuses unless its ids equal both samples exactly, and records the counts and the SHA-256 of every prompt file used that round. The round **passes** when the precision sample has at least 10 ids and at least 75% are confirmed (9 of 12). Fewer than 10 lesson-bearing dev sub-agents fails the round, since it points at a filter that removes too much. The false-exclusion share is reported only. If no round passes after the third, the run stops as INVALID before the lock and the result says so.
+`calib-record --round k` reads the marks file, refuses unless its ids equal both samples exactly, and records the counts and the SHA-256 of every prompt file used that round. The round **passes** when the precision sample has at least 10 ids and at least 75% are confirmed (9 of 12). A precision sample under 10 ids, after the top-up, fails the round. The false-exclusion share is reported only. If no round passes after the third, the run stops as INVALID before the lock and the result says so.
 
 From round 2 on the samples can include items whose rejections drove an amendment, so the dev precision is optimistic; the scored audit is the figure that counts.
 
@@ -166,7 +166,7 @@ As Z7: the repo gets the scripts, this file and a result with counts only. Lesso
 
 ## Amendments
 
-None yet.
+1. **Precision sample top-up (dev round 1, before any mark).** Round 1 left 8 of 114 dev sub-agents lesson-bearing for both judges, and the filter removed none of the 8, so the old rule (fewer than 10 fails the round, read as a filter that removes too much) would have failed the round for the judges' strictness, which is the point of Z7b. The alternatives were worse: rerunning unchanged prompts returns the same cached replies, and loosening them to reach 10 items biases the run toward BUILD. The sample now tops up from sub-agents where one judge alone keeps a lesson. Those lessons are less precise than both-judge ones, so the top-up can only make the round harder to pass. Round 1 dev counts at the time: both judges 10 before the recheck, 8 after it and 8 after the filter; either judge 16 after the recheck and 11 after the filter; filter labels file 3, self 3, known 0, result 1, keep 23; G2, G3, G5 and G6 passed (decoys 0 of 9 unplanted kept, 10 of 10 planted kept).
 
 ## Pins
 
