@@ -800,6 +800,2017 @@ function validateIdSegment(id: string, fieldName: string): void {
   }
 }
 
+/** Per-request values the /v1 route handlers read. */
+interface RouteRequest {
+  req: IncomingMessage;
+  res: ServerResponse;
+  opts: ServeOpts;
+  query: URLSearchParams;
+}
+
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. */
+type Route =
+  | { method: string; path: string; handler: (r: RouteRequest) => Promise<void> }
+  | { method: string; pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
+  | { method: string; regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> };
+
+// POST /v1/memories
+async function handleCreateMemory({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const content = getString(body, 'content');
+  if (!content) {
+    throw new HttpError(400, 'content is required');
+  }
+  const kindRaw = getString(body, 'kind');
+  if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
+    throw new HttpError(400, `invalid kind: ${kindRaw}`);
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = remember(ctx, {
+    content,
+    kind: kindRaw,
+    scope: getString(body, 'scope'),
+    owner: getString(body, 'owner'),
+    artifactRef: getString(body, 'artifactRef'),
+    tags: getStringArray(body, 'tags'),
+  });
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
+async function handleGetGraph({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const entityRaw = query.get('entity');
+  // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
+  // long decision/policy name remains focusable over HTTP (codex P2).
+  if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
+    throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
+  }
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
+    entity: entityRaw ?? undefined,
+    limit,
+  });
+  sendJson(res, 200, model);
+  return;
+}
+
+// GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
+async function handleRecallMemories({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const q = query.get('q');
+  if (!q) {
+    throw new HttpError(400, 'q is required');
+  }
+  const limitRaw = query.get('limit');
+  const limit = limitRaw === null ? undefined : parseListLimit(limitRaw);
+  const mode = query.get('mode');
+  if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
+    throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
+  }
+  const scope = query.get('scope');
+  const includeContinuityRaw = query.get('include_continuity');
+  const includeContinuity = includeContinuityRaw === '1'
+    || includeContinuityRaw === 'true';
+  // v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP
+  // callers. Pre-v1.6.2 the route silently ignored these so the
+  // session-scoped fresh-tail and summary substitution were JS-only.
+  const freshTailCountRaw = query.get('fresh_tail_count');
+  const freshTailCount = freshTailCountRaw === null ? undefined : Number(freshTailCountRaw);
+  if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
+    throw new HttpError(400, 'fresh_tail_count must be a non-negative number');
+  }
+  // v1.6.3 senior-review P1-3: cap session_id length consistent with the
+  // rest of the API. Untrimmed strings round-trip through the SQL layer
+  // and through any downstream metric/log; 256 is generous for a session
+  // id and matches the rest of this file's id-shaped param parsers.
+  const freshTailSessionIdRaw = query.get('fresh_tail_session_id');
+  if (freshTailSessionIdRaw !== null && freshTailSessionIdRaw.length > 256) {
+    throw new HttpError(400, 'fresh_tail_session_id exceeds 256-character cap');
+  }
+  const freshTailSessionId = freshTailSessionIdRaw && freshTailSessionIdRaw.length > 0
+    ? freshTailSessionIdRaw
+    : undefined;
+  // v1.6.3 senior-review P1-4: tighten parser to match the includeContinuity
+  // convention. Pre-v1.6.3 accepted any non-'0'/'false' value as `true`,
+  // so `?summarize_overflow=banana` and `?summarize_overflow=` both
+  // turned it on. Surface convention drift fixed.
+  const summarizeOverflowRaw = query.get('summarize_overflow');
+  const summarizeOverflow = summarizeOverflowRaw === null
+    ? undefined
+    : (summarizeOverflowRaw === '1' || summarizeOverflowRaw === 'true');
+  // recall() owns the shape rule (NaN, 0 and negatives throw invalid_scorer_window); the transport caps remote cost.
+  const scorerWindowRaw = query.get('scorer_window');
+  const scorerWindow = scorerWindowRaw === null ? undefined : Number(scorerWindowRaw);
+  if (scorerWindow !== undefined && scorerWindow > 1000) {
+    throw new HttpError(400, 'scorer_window must be <= 1000');
+  }
+  // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
+  // fresh_tail_session_id (above). Trim then drop if empty so api.recall
+  // sees undefined when the param is omitted or whitespace-only.
+  const sessionIdRaw = query.get('session_id');
+  if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
+    throw new HttpError(400, 'session_id exceeds 256-character cap');
+  }
+  const sessionId = sessionIdRaw && sessionIdRaw.trim().length > 0
+    ? sessionIdRaw.trim()
+    : undefined;
+  // A7 recall-trace: opt-in explain flag. When set, api.recall attaches the
+  // lifecycle re-ranking trace (goal-boost step on the api pipeline) +
+  // rerankPipeline:'api' to each result item; the field then rides on the
+  // serialized RecallResult. Mirrors the include_continuity convention.
+  const explainRaw = query.get('explain');
+  const explain = explainRaw === '1' || explainRaw === 'true';
+  const ctx = await buildContextWithAuth(req, opts);
+
+  // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
+  // ring snapshot via opts.recallHistory so api.recall's own
+  // anchoringHint compute path activates. Unlike CLI (which computes
+  // its own hint separately because cmdRecall runs its own physics/
+  // hybrid pipeline outside api.recall), HTTP's /v1/memories response
+  // body IS api.recall's result directly. So the api.recall-computed
+  // hint flows through. HIPPO_ANCHORING=off short-circuits.
+  let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
+  let httpRingKey: string | undefined;
+  if (biasHintEnabled('anchoring')) {
+    if (sessionId) {
+      // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
+      // before recall() preflight runs. A request with an invalid
+      // scorer_window / fresh_tail_count would create-or-touch the
+      // session ring (LRU-evicting valid sessions) even though recall
+      // throws 400. Snapshot the EXISTING ring if present; only
+      // create-or-touch after the recall returns successfully.
+      httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
+      const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
+      httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
+    } else {
+      // Telemetry: caller had no session_id so ring tracking skipped.
+      // Per the normal recall-audit convention (api.ts:854 stores
+      // SHA-256/16 hash of the query, NOT raw text), avoid retaining
+      // prompts in audit_log here too — query content can contain
+      // secrets, PII, or RTBF-restricted material. Codex round-2 P2
+      // catch: hashQueryText is a 32-bit FNV-1a designed for recall
+      // matching, NOT a privacy hash; brute-force trivial for low-
+      // entropy queries. Use the same SHA-256/16 truncation as the
+      // canonical recall audit.
+      const dbForAudit = openHippoDb(opts.hippoRoot);
+      try {
+        appendAuditEvent(dbForAudit, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor.subject,
+          op: 'recall_anchor_skipped_no_session',
+          targetId: undefined,
+          metadata: auditQueryFields(q),
+        });
+      } finally {
+        closeHippoDb(dbForAudit);
+      }
+    }
+  }
+
+  const recallExtra: Pick<
+    RecallOpts,
+    'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId' | 'recallHistory' | 'explain'
+  > = {};
+  if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
+  if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
+  if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
+  if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
+  if (sessionId !== undefined) recallExtra.sessionId = sessionId;
+  if (httpRecallHistory !== undefined) recallExtra.recallHistory = httpRecallHistory;
+  if (explain) recallExtra.explain = explain;
+
+  const result = await retrieve(ctx, {
+    query: q,
+    limit,
+    mode: mode ?? undefined,
+    scope: scope ?? undefined,
+    includeContinuity,
+    ...recallExtra,
+  });
+
+  // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
+  // recall() ran). anchoredOn carries the memoryId of any hint that fired
+  // (api.recall computed it from the same snapshot we passed in), feeding
+  // the cooldown logic for the NEXT recall on this session.
+  // Codex round-5 P2 fix: create-or-touch the ring ONLY HERE, after recall
+  // returns successfully. Invalid requests that throw 400 in recall()
+  // never reach this point, so they cannot LRU-evict valid sessions.
+  if (httpRingKey) {
+    const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
+    const topId = result.results[0]?.id ?? null;
+    appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
+  }
+
+  // Each recall surface counts its own hits; api.recall is no chokepoint,
+  // since the CLI never calls it and MCP shows the user a different band.
+  updateStats(opts.hippoRoot, { recalled: result.results.length });
+
+  // Continuity payloads should never be cached. The caller is asking for
+  // session-state-aware data; intermediaries must not reuse it across users.
+  if (includeContinuity) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1
+// Phase 2 context-engine API. Returns ordered AssembledContextItem[]
+// with fresh-tail raws + summary substitutions + bio-aware budget fit.
+// Tenant scope from Bearer; default-deny on private rows.
+async function handleAssembleSession({ req, res, opts, query }: RouteRequest, assembleMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(assembleMatch.id!, 'session id');
+  const budgetRaw = query.get('budget');
+  const budget = budgetRaw === null ? undefined : Number(budgetRaw);
+  if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
+    throw new HttpError(400, 'budget must be a positive number');
+  }
+  const ftRaw = query.get('freshTail');
+  const freshTailCount = ftRaw === null ? undefined : Number(ftRaw);
+  if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
+    throw new HttpError(400, 'freshTail must be a non-negative number');
+  }
+  // v1.6.3 senior review P1: same strict-parse convention as the v1.6.3
+  // summarize_overflow tighten on /v1/memories. Pre-v1.6.3 accepted any
+  // non-'0'/'false' as true; ?summarizeOlder=banana now correctly returns
+  // false (matches includeContinuity convention).
+  const sumOlderRaw = query.get('summarizeOlder');
+  const summarizeOlder = sumOlderRaw === null
+    ? undefined
+    : (sumOlderRaw === '1' || sumOlderRaw === 'true');
+  const scopeQ = query.get('scope');
+  const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
+  const ctx = await buildContextWithAuth(req, opts);
+  const assembleExtra: Pick<AssembleOpts, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
+  if (budget !== undefined) assembleExtra.budget = budget;
+  if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
+  if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
+  if (scope !== undefined) assembleExtra.scope = scope;
+  const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
+  recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/recall/drill/:id?limit=N&budget=N
+// Companion to /v1/memories. When recall surfaces a level-2 summary in
+// place of overflowed children (RecallResultItem.isSummary === true), the
+// caller drills into the summary id to recover the originals. Tenant
+// scoped via Bearer; default-deny on private scopes for both summary
+// and children.
+async function handleDrillRecall({ req, res, opts, query }: RouteRequest, drillMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(drillMatch.id!, 'summary id');
+  const limitRaw = query.get('limit');
+  const limit = limitRaw === null ? undefined : Number(limitRaw);
+  if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
+    throw new HttpError(400, 'limit must be a positive number');
+  }
+  const budgetRaw = query.get('budget');
+  const budget = budgetRaw === null ? undefined : Number(budgetRaw);
+  if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
+    throw new HttpError(400, 'budget must be a positive number');
+  }
+  // v0.30 / E5: depth query param walks N levels (default 1, hard cap 10).
+  const depthRaw = query.get('depth');
+  let depth: number | undefined;
+  if (depthRaw !== null) {
+    const parsed = Number(depthRaw);
+    // L4 fold: reject out-of-range explicitly (no silent clamp).
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+      throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
+    }
+    depth = parsed;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const drillExtra: Pick<DrillDownOpts, 'limit' | 'budget' | 'depth'> = {};
+  if (limit !== undefined) drillExtra.limit = limit;
+  if (budget !== undefined) drillExtra.budget = budget;
+  if (depth !== undefined) drillExtra.depth = depth;
+  const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
+  if ('failure' in result) {
+    // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
+    // as 404 to avoid leaking cross-tenant existence or scope grants.
+    if (result.failure === 'not_drillable') {
+      throw new HttpError(422, 'Id is a leaf row, not a level-2+ summary; nothing to drill into');
+    }
+    throw new HttpError(404, 'No drillable summary at this id');
+  }
+  sendJson(res, 200, result);
+  return;
+}
+
+// /v1/memories/:id/* and DELETE /v1/memories/:id
+async function handleArchiveMemory({ req, res, opts }: RouteRequest, archiveMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(archiveMatch.id!, 'memory id');
+  const body = await parseJsonBody(req);
+  const reason = getString(body, 'reason');
+  if (!reason) {
+    throw new HttpError(400, 'reason is required');
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = archiveRaw(ctx, archiveMatch.id!, reason);
+  sendJson(res, 200, result);
+  return;
+}
+
+async function handleSupersedeMemory({ req, res, opts }: RouteRequest, supersedeMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(supersedeMatch.id!, 'memory id');
+  const body = await parseJsonBody(req);
+  const content = getString(body, 'content');
+  if (!content) {
+    throw new HttpError(400, 'content is required');
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = supersede(ctx, supersedeMatch.id!, content);
+  sendJson(res, 200, result);
+  return;
+}
+
+async function handlePromoteMemory({ req, res, opts }: RouteRequest, promoteMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(promoteMatch.id!, 'memory id');
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = promote(ctx, promoteMatch.id!);
+  sendJson(res, 200, result);
+  return;
+}
+
+async function handleForgetMemory({ req, res, opts }: RouteRequest, idMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(idMatch.id!, 'memory id');
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = forget(ctx, idMatch.id!);
+  sendJson(res, 200, result);
+  return;
+}
+
+// POST /v1/outcome — apply a positive/negative outcome to memory ids.
+// Body: {ids?: string[], good: boolean}. If ids omitted, falls back to
+// the last-recall path (api.outcomeForLastRecall); returned shape is
+// {applied, ids} in that case so callers can disambiguate "no recent
+// recall" from "all ids skipped". Each applied id writes one audit_log
+// row (op='outcome', actor from Bearer).
+async function handleApplyOutcome({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const good = body['good'];
+  if (!isJsonBoolean(good)) {
+    throw new HttpError(400, 'good is required (boolean)');
+  }
+  const idsRaw = body['ids'];
+  let ids: string[] | undefined;
+  if (idsRaw !== undefined) {
+    if (!Array.isArray(idsRaw)) {
+      throw new HttpError(400, 'ids must be an array of non-empty strings');
+    }
+    const isNonEmptyId = (item: JsonValue): item is string => isJsonString(item) && item.length > 0;
+    if (!idsRaw.every(isNonEmptyId)) {
+      throw new HttpError(400, 'ids must be an array of non-empty strings');
+    }
+    // v1.11.5: DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
+    // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
+    // to sub-second wall time on SQLite hot path. Cap BEFORE buildContextWithAuth
+    // so attack traffic doesn't pay the api-key lookup cost.
+    if (idsRaw.length > 1000) {
+      throw new HttpError(400, 'ids exceeds 1000-id cap');
+    }
+    ids = idsRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  if (ids !== undefined) {
+    const { applied } = outcome(ctx, ids, good);
+    sendJson(res, 200, { applied });
+  } else {
+    const result = outcomeForLastRecall(ctx, good);
+    sendJson(res, 200, result);
+  }
+  return;
+}
+
+// GET /v1/context — assemble a budget-bounded context bundle. Returns
+// ContextResult JSON (entries + tokens + activeSnapshot + sessionHandoff
+// + recentEvents). No server-side rendering; clients render. Tenant-scoped
+// via the Bearer. Pinned-only + '*' fallback skip the recall audit emit
+// (matches cmdContext); real-query hybrid search emits one 'recall' row.
+async function handleGetContext({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const q = query.get('q') ?? undefined;
+  // v1.11.5: DoS cap on q-param length. 1024 covers real multi-clause queries
+  // (pasted error messages, multi-stem searches) while bounding BM25
+  // tokenisation cost (~150 tokens worst case at 1024 chars).
+  if (q !== undefined && q.length > 1024) {
+    throw new HttpError(400, 'q exceeds 1024-character cap');
+  }
+  const budgetRaw = query.get('budget');
+  let budget: number | undefined;
+  if (budgetRaw !== null) {
+    budget = Number(budgetRaw);
+    if (!Number.isFinite(budget) || budget < 0) {
+      throw new HttpError(400, 'budget must be a non-negative number');
+    }
+  }
+  const limitRaw = query.get('limit');
+  let limit: number | undefined;
+  if (limitRaw !== null) {
+    limit = Number(limitRaw);
+    if (!Number.isFinite(limit) || limit <= 0) {
+      throw new HttpError(400, 'limit must be a positive number');
+    }
+  }
+  const pinnedOnlyRaw = query.get('pinned_only');
+  const pinnedOnly = pinnedOnlyRaw === '1' || pinnedOnlyRaw === 'true';
+  const scopeRaw = query.get('scope');
+  if (scopeRaw !== null && scopeRaw.length > 256) {
+    throw new HttpError(400, 'scope exceeds 256-character cap');
+  }
+  const scope = scopeRaw === null ? undefined : scopeRaw;
+  const includeRecentRaw = query.get('include_recent');
+  let includeRecent: number | undefined;
+  if (includeRecentRaw !== null) {
+    includeRecent = Number(includeRecentRaw);
+    if (!Number.isFinite(includeRecent) || includeRecent < 0) {
+      throw new HttpError(400, 'include_recent must be a non-negative number');
+    }
+  }
+  // v39 memory scope isolation: cross_project=1|true re-includes
+  // other-project rows (tagged category 'cross-project' in the response).
+  // The partition identity comes from the SERVED STORE's location, not the
+  // daemon's process cwd - a daemon started from anywhere still isolates
+  // the project it serves.
+  const crossProjectRaw = query.get('cross_project');
+  const crossProject = crossProjectRaw === '1' || crossProjectRaw === 'true';
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = await getContext(ctx, {
+    q,
+    budget,
+    limit,
+    pinnedOnly,
+    scope,
+    includeRecent,
+    crossProject,
+    currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))).name,
+    cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
+  });
+  recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
+  sendJson(res, 200, result);
+  return;
+}
+
+// POST /v1/sleep — host-wide consolidation pipeline (consolidate + dedup +
+// audit + share + ambient). serve() refuses non-loopback hosts at boot, AND
+// this per-request loopback assertion makes the host-wide semantic fail-
+// closed regardless of any future serve() boot-config change. Body:
+// {dry_run?, no_share?}. Returns SleepResult JSON.
+//
+// Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
+// on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
+// The loopback-only guard is the trust boundary today. Future non-loopback
+// serving must also zero the cross-tenant counters for other tenants
+// (D1 in docs/decisions/2026-05-24-blocked-items.md).
+async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
+  // Defensive per-request loopback guard. Uses the canonical isLoopback()
+  // helper above so any future extension (additional mapped/IPv6 forms,
+  // NAT64 prefixes) flows through without drift. serve()'s boot-time host
+  // check is the primary trust boundary; this is belt-and-suspenders.
+  if (!isLoopback(req.socket.remoteAddress)) {
+    throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
+  }
+  // v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today
+  // under loopback-only enforcement (loopback fallback is admin by default;
+  // any Bearer-authed caller now carries an explicit role from the api_keys
+  // row). When non-loopback serving lands, this gate is the actual auth
+  // boundary on host-wide sleep.
+  const sleepCtx = await buildContextWithAuth(req, opts);
+  // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
+  assertCrossTenantAdmin(sleepCtx, '/v1/sleep');
+  const body = await parseJsonBody(req);
+  const dryRunRaw = body['dry_run'];
+  if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
+    throw new HttpError(400, 'dry_run must be a boolean');
+  }
+  const noShareRaw = body['no_share'];
+  if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
+    throw new HttpError(400, 'no_share must be a boolean');
+  }
+  // v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
+  const result = await sleep(sleepCtx, {
+    dryRun: dryRunRaw === true,
+    noShare: noShareRaw === true,
+  });
+  sendJson(res, 200, result);
+  return;
+}
+
+// POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
+// body (Task 8): the HTTP layer hands it to the client; the user-facing
+// "store this somewhere safe" warning belongs in the CLI client, not here.
+async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const labelRaw = body['label'];
+  if (labelRaw !== undefined && !isJsonString(labelRaw)) {
+    throw new HttpError(400, 'label must be a string');
+  }
+  // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
+  // strictly — anything other than 'admin'|'member' is a 400 (no silent
+  // fallback to admin). authCreate refuses a member caller with a 403.
+  const roleRaw = body['role'];
+  let role: 'admin' | 'member' | undefined;
+  if (roleRaw !== undefined) {
+    if (roleRaw !== 'admin' && roleRaw !== 'member') {
+      throw new HttpError(400, "role must be 'admin' or 'member'");
+    }
+    role = roleRaw;
+  }
+  // Security: any `tenantId` in the body is IGNORED. The minted key is
+  // bound to the caller's authenticated tenant (ctx.tenantId, resolved
+  // from the Bearer token). Forwarding body.tenantId here would let
+  // tenant A mint a key for tenant B — see authCreate doc comment.
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = authCreate(ctx, {
+    label: labelRaw,
+    role,
+  });
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/auth/keys?active=true — list keys visible to ctx.tenantId.
+// `active` defaults to true so the common case (show me usable keys) is
+// a single GET; ?active=false includes revoked rows.
+async function handleListAuthKeys({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const activeRaw = query.get('active');
+  let active = true;
+  if (activeRaw !== null) {
+    if (activeRaw === 'true') active = true;
+    else if (activeRaw === 'false') active = false;
+    else throw new HttpError(400, "active must be 'true' or 'false'");
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = authList(ctx, { active });
+  sendJson(res, 200, result);
+  return;
+}
+
+// DELETE /v1/auth/keys/:keyId — revoke. Missing or cross-tenant keys are 404
+// (no info leak); a member key targeting any key but its own is 403.
+// 200 with the body rather than 204 so the caller sees revokedAt.
+async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(keyMatch.keyId!, 'key id');
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = authRevoke(ctx, keyMatch.keyId!);
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/quarantine?status=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
+async function handleListQuarantine({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const ctx = await buildContextWithAuth(req, opts);
+  if (ctx.actor.role !== 'admin') {
+    throw new HttpError(403, '/v1/quarantine requires admin role');
+  }
+  const statusRaw = query.get('status');
+  let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
+  if (statusRaw !== null) {
+    if (statusRaw !== 'pending' && statusRaw !== 'approved' && statusRaw !== 'rejected' && statusRaw !== 'all') {
+      throw new HttpError(400, 'status must be one of: pending | approved | rejected | all');
+    }
+    status = statusRaw;
+  }
+  sendJson(res, 200, { quarantine: quarantineList(ctx, { status }) });
+  return;
+}
+
+// POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
+async function handleApproveQuarantine({ req, res, opts }: RouteRequest, quarantineApproveMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(quarantineApproveMatch.id!, 'memory id');
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    quarantineApprove(ctx, quarantineApproveMatch.id!);
+    sendJson(res, 200, { approved: quarantineApproveMatch.id });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not quarantined')) throw new HttpError(404, msg);
+    if (msg.includes('is already') || msg.includes('scope changed')) throw new HttpError(409, msg);
+    throw e;
+  }
+  return;
+}
+
+// POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
+async function handleRejectQuarantine({ req, res, opts }: RouteRequest, quarantineRejectMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(quarantineRejectMatch.id!, 'memory id');
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    quarantineReject(ctx, quarantineRejectMatch.id!);
+    sendJson(res, 200, { rejected: quarantineRejectMatch.id });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not quarantined')) throw new HttpError(404, msg);
+    if (msg.includes('is already')) throw new HttpError(409, msg);
+    throw e;
+  }
+  return;
+}
+
+// GET /v1/audit?op=&since=&limit= — read audit events. All three filters
+// validated at the route boundary so an invalid value lands a 400 before
+// we hit the DB.
+async function handleListAudit({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const opRaw = query.get('op');
+  let op: AuditOp | undefined;
+  if (opRaw !== null) {
+    if (!isSetMember(VALID_AUDIT_OPS, opRaw)) {
+      throw new HttpError(400, `invalid op: ${opRaw}`);
+    }
+    op = opRaw;
+  }
+  const sinceRaw = query.get('since');
+  let since: string | undefined;
+  if (sinceRaw !== null) {
+    const parsed = Date.parse(sinceRaw);
+    if (!Number.isFinite(parsed)) {
+      throw new HttpError(400, `invalid since: ${sinceRaw}`);
+    }
+    since = sinceRaw;
+  }
+  const limitRaw = query.get('limit');
+  let limit: number | undefined;
+  if (limitRaw !== null) {
+    const parsed = Number(limitRaw);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
+      throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
+    }
+    limit = parsed;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
+  const tenantOverride = query.get('tenant');
+  const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
+  if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
+  const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
+  const result = auditList(effectiveCtx, { op, since, limit });
+  sendJson(res, 200, result);
+  return;
+}
+
+// ── E2 prediction first-class object (v0.31) ──
+// docs/plans/2026-05-26-e2-prediction-object.md
+//
+// 4 routes: POST /v1/predictions (create), GET /v1/predictions (list),
+// GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
+// All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
+// validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
+// (4096 chars) + closureNote (2048 chars) per v1.11.4 pattern.
+async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const claim = body['claim'];
+  if (!isJsonString(claim) || claim.length === 0) {
+    throw new HttpError(400, 'claim is required (non-empty string)');
+  }
+  if (claim.length > 4096) {
+    throw new HttpError(400, 'claim exceeds 4096-character cap');
+  }
+  const classTag = body['classTag'];
+  if (!isJsonString(classTag) || classTag.length === 0) {
+    throw new HttpError(400, 'classTag is required (non-empty string)');
+  }
+  const estimate = body['estimate'];
+  let estimateValue: number | undefined;
+  if (estimate !== undefined && estimate !== null) {
+    if (!isJsonNumber(estimate) || !Number.isFinite(estimate)) {
+      throw new HttpError(400, 'estimate must be a finite number');
+    }
+    estimateValue = estimate;
+  }
+  const unit = body['unit'];
+  let estimateUnit: string | undefined;
+  if (unit !== undefined && unit !== null) {
+    if (!isJsonString(unit)) {
+      throw new HttpError(400, 'unit must be a string');
+    }
+    estimateUnit = unit;
+  }
+  const targetDate = body['targetDate'];
+  let targetDateValue: string | undefined;
+  if (targetDate !== undefined && targetDate !== null) {
+    if (!isJsonString(targetDate)) {
+      throw new HttpError(400, 'targetDate must be an ISO date string');
+    }
+    targetDateValue = targetDate;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const prediction = savePrediction(opts.hippoRoot, ctx.tenantId, {
+    classTag,
+    claimText: claim,
+    estimateValue,
+    estimateUnit,
+    targetDate: targetDateValue,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { prediction });
+  return;
+}
+
+async function handleListPredictions({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const classTag = query.get('class') ?? undefined;
+  const status = query.get('status') ?? 'all';
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  let predictions;
+  if (status === 'all') {
+    if (classTag) {
+      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit });
+    } else {
+      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit });
+    }
+  } else if (status === 'open') {
+    predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, {
+      classTag: classTag || undefined,
+      limit,
+    });
+  } else {
+    if (!isSetMember(VALID_CLOSURE_STATES, status)) {
+      throw new HttpError(400, `status must be one of: open | closed | closed-unknown | all (got "${status}")`);
+    }
+    if (!classTag) {
+      throw new HttpError(400, 'status filter (non-open) requires class param');
+    }
+    predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, {
+      closureState: status,
+      limit,
+    });
+  }
+  sendJson(res, 200, { predictions });
+  return;
+}
+
+// J3 reference-class / planning-fallacy detector (v0.31).
+// Order matters: this must match BEFORE /v1/predictions/:id since 'stats'
+// is not a number — the :id regex requires \d+ so they don't conflict,
+// but routing this first avoids the dispatch order risk.
+async function handlePredictionStats({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const classTag = query.get('class');
+  if (!classTag || classTag.length === 0) {
+    throw new HttpError(400, 'class param is required');
+  }
+  if (classTag.length > 256) {
+    throw new HttpError(400, 'class exceeds 256-character cap');
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const baserate = computePredictionBaserate(opts.hippoRoot, ctx.tenantId, classTag, ctx.actor.subject);
+  sendJson(res, 200, { baserate });
+  return;
+}
+
+async function handleGetPrediction({ req, res, opts }: RouteRequest, predictionByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(predictionByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const prediction = loadPredictionById(opts.hippoRoot, ctx.tenantId, id);
+  if (!prediction) {
+    throw new HttpError(404, `prediction ${id} not found`);
+  }
+  sendJson(res, 200, { prediction });
+  return;
+}
+
+async function handleClosePrediction({ req, res, opts }: RouteRequest, predictionCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(predictionCloseMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const state = body['state'];
+  if (!isJsonString(state) || !isSetMember(VALID_CLOSURE_STATES, state) || state === 'open') {
+    throw new HttpError(400, 'state is required and must be one of: closed | closed-unknown');
+  }
+  const actual = body['actual'];
+  let actualValue: number | undefined;
+  if (actual !== undefined && actual !== null) {
+    if (!isJsonNumber(actual) || !Number.isFinite(actual)) {
+      throw new HttpError(400, 'actual must be a finite number');
+    }
+    actualValue = actual;
+  }
+  const note = body['note'];
+  let closureNote: string | undefined;
+  if (note !== undefined && note !== null) {
+    if (!isJsonString(note)) {
+      throw new HttpError(400, 'note must be a string');
+    }
+    if (note.length > 2048) {
+      throw new HttpError(400, 'note exceeds 2048-character cap');
+    }
+    closureNote = note;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
+      closureState: state,
+      actualValue,
+      closureNote,
+    }, ctx.actor.subject);
+    sendJson(res, 200, { prediction });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+// ── decisions (E2 first-class object) ──
+//
+// 5 routes: POST /v1/decisions (create, optional supersedesDecisionId),
+// GET /v1/decisions (list, status filter), GET /v1/decisions/:id (show),
+// POST /v1/decisions/:id/supersede (create a successor + supersede :id),
+// POST /v1/decisions/:id/close (retire). Bearer-authed + tenant-scoped via
+// buildContextWithAuth. status validated against VALID_DECISION_STATES.
+// DoS caps: text 4096, context 4096 (v1.11.4 pattern). The HTTP surface is
+// new (no legacy --supersedes <memory-id> constraint), so it supersedes by
+// table id and never weakens a memory mirror.
+async function handleCreateDecision({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const text = body['text'];
+  if (!isJsonString(text) || text.length === 0) {
+    throw new HttpError(400, 'text is required (non-empty string)');
+  }
+  if (text.length > 4096) {
+    throw new HttpError(400, 'text exceeds 4096-character cap');
+  }
+  const contextRaw = body['context'];
+  let context: string | undefined;
+  if (contextRaw !== undefined && contextRaw !== null) {
+    if (!isJsonString(contextRaw)) {
+      throw new HttpError(400, 'context must be a string');
+    }
+    if (contextRaw.length > 4096) {
+      throw new HttpError(400, 'context exceeds 4096-character cap');
+    }
+    context = contextRaw;
+  }
+  const supRaw = body['supersedesDecisionId'];
+  let supersedesDecisionId: number | undefined;
+  if (supRaw !== undefined && supRaw !== null) {
+    if (!isJsonNumber(supRaw) || !Number.isInteger(supRaw) || supRaw <= 0) {
+      throw new HttpError(400, 'supersedesDecisionId must be a positive integer');
+    }
+    supersedesDecisionId = supRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
+      decisionText: text,
+      context,
+      supersedesDecisionId,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { decision });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found') || msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleListDecisions({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  let decisions;
+  if (status === 'all') {
+    decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit });
+  } else {
+    if (!isSetMember(VALID_DECISION_STATES, status)) {
+      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+    }
+    decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, {
+      status,
+      limit,
+    });
+  }
+  sendJson(res, 200, { decisions });
+  return;
+}
+
+async function handleSupersedeDecision({ req, res, opts }: RouteRequest, decisionSupersedeMatch: RegExpMatchArray): Promise<void> {
+  const oldId = parseInt(decisionSupersedeMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const text = body['text'];
+  if (!isJsonString(text) || text.length === 0) {
+    throw new HttpError(400, 'text is required (non-empty string)');
+  }
+  if (text.length > 4096) {
+    throw new HttpError(400, 'text exceeds 4096-character cap');
+  }
+  const contextRaw = body['context'];
+  let context: string | undefined;
+  if (contextRaw !== undefined && contextRaw !== null) {
+    if (!isJsonString(contextRaw)) {
+      throw new HttpError(400, 'context must be a string');
+    }
+    if (contextRaw.length > 4096) {
+      throw new HttpError(400, 'context exceeds 4096-character cap');
+    }
+    context = contextRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
+      decisionText: text,
+      context,
+      supersedesDecisionId: oldId,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { decision });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleCloseDecision({ req, res, opts }: RouteRequest, decisionCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(decisionCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { decision });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetDecision({ req, res, opts }: RouteRequest, decisionByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(decisionByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const decision = loadDecisionById(opts.hippoRoot, ctx.tenantId, id);
+  if (!decision) {
+    throw new HttpError(404, `decision ${id} not found`);
+  }
+  sendJson(res, 200, { decision });
+  return;
+}
+
+// ── incidents (E2 first-class object) ──
+//
+// 5 routes: POST /v1/incidents (open; body text + context + linkedMemoryIds[]),
+// GET /v1/incidents (list, status filter), GET /v1/incidents/:id (show),
+// POST /v1/incidents/:id/resolve (open -> resolved; body resolutionText),
+// POST /v1/incidents/:id/close (open|resolved -> closed). Bearer-authed +
+// tenant-scoped via buildContextWithAuth. status validated against
+// VALID_INCIDENT_STATES. DoS caps: text 4096, context 4096, resolutionText
+// 4096 (v1.11.4 pattern). Mirrors /v1/decisions; lifecycle is
+// open->resolved->closed (no supersede), so linkedMemoryIds replaces
+// supersedesDecisionId on create.
+async function handleCreateIncident({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const text = body['text'];
+  if (!isJsonString(text) || text.length === 0) {
+    throw new HttpError(400, 'text is required (non-empty string)');
+  }
+  if (text.length > 4096) {
+    throw new HttpError(400, 'text exceeds 4096-character cap');
+  }
+  const contextRaw = body['context'];
+  let context: string | undefined;
+  if (contextRaw !== undefined && contextRaw !== null) {
+    if (!isJsonString(contextRaw)) {
+      throw new HttpError(400, 'context must be a string');
+    }
+    if (contextRaw.length > 4096) {
+      throw new HttpError(400, 'context exceeds 4096-character cap');
+    }
+    context = contextRaw;
+  }
+  const linkedRaw = body['linkedMemoryIds'];
+  let linkedMemoryIds: string[] | undefined;
+  if (linkedRaw !== undefined && linkedRaw !== null) {
+    if (!Array.isArray(linkedRaw)) {
+      throw new HttpError(400, 'linkedMemoryIds must be an array of memory ids');
+    }
+    if (linkedRaw.length > 256) {
+      throw new HttpError(400, 'linkedMemoryIds exceeds 256-item cap');
+    }
+    const isValidMemoryId = (item: JsonValue): item is string =>
+      isJsonString(item) && item.length > 0 && item.length <= 4096;
+    if (!linkedRaw.every(isValidMemoryId)) {
+      throw new HttpError(400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars');
+    }
+    linkedMemoryIds = linkedRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const incident = saveIncident(opts.hippoRoot, ctx.tenantId, {
+      incidentText: text,
+      context,
+      linkedMemoryIds,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { incident });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleListIncidents({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  let incidents;
+  if (status === 'all') {
+    incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit });
+  } else {
+    if (!isSetMember(VALID_INCIDENT_STATES, status)) {
+      throw new HttpError(400, `status must be one of: open | resolved | closed | all (got "${status}")`);
+    }
+    incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, {
+      status,
+      limit,
+    });
+  }
+  sendJson(res, 200, { incidents });
+  return;
+}
+
+async function handleResolveIncident({ req, res, opts }: RouteRequest, incidentResolveMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(incidentResolveMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const resolutionText = body['resolutionText'];
+  if (!isJsonString(resolutionText) || resolutionText.trim().length === 0) {
+    throw new HttpError(400, 'resolutionText is required (non-empty string)');
+  }
+  if (resolutionText.length > 4096) {
+    throw new HttpError(400, 'resolutionText exceeds 4096-character cap');
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
+    sendJson(res, 200, { incident });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not open')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleCloseIncident({ req, res, opts }: RouteRequest, incidentCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(incidentCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { incident });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('already closed')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetIncident({ req, res, opts }: RouteRequest, incidentByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(incidentByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const incident = loadIncidentById(opts.hippoRoot, ctx.tenantId, id);
+  if (!incident) {
+    throw new HttpError(404, `incident ${id} not found`);
+  }
+  sendJson(res, 200, { incident });
+  return;
+}
+
+// ── processes (E2 first-class object) ──
+//
+// 5 routes: POST /v1/processes (new; body processName + steps[] + description),
+// GET /v1/processes (list, status filter), GET /v1/processes/:id (show),
+// POST /v1/processes/:id/supersede (active -> superseded by a new version; body
+// steps[] + changeSummary + description; reuses the predecessor's name),
+// POST /v1/processes/:id/close (active -> closed). Bearer-authed + tenant-scoped
+// via buildContextWithAuth. status validated against VALID_PROCESS_STATES. DoS
+// caps: processName/description/changeSummary 4096, steps 200x2000
+// (validateProcessStepsBody). Mirrors /v1/decisions; the delta lifecycle is the
+// decision supersede path.
+async function handleCreateProcess({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const processName = body['processName'];
+  if (!isJsonString(processName) || processName.trim().length === 0) {
+    throw new HttpError(400, 'processName is required (non-empty string)');
+  }
+  if (processName.length > 4096) {
+    throw new HttpError(400, 'processName exceeds 4096-character cap');
+  }
+  const steps = validateProcessStepsBody(body['steps']);
+  const descriptionRaw = body['description'];
+  let description: string | undefined;
+  if (descriptionRaw !== undefined && descriptionRaw !== null) {
+    if (!isJsonString(descriptionRaw)) {
+      throw new HttpError(400, 'description must be a string');
+    }
+    if (descriptionRaw.length > 4096) {
+      throw new HttpError(400, 'description exceeds 4096-character cap');
+    }
+    description = descriptionRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
+    processName,
+    steps,
+    description,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { process });
+  return;
+}
+
+async function handleListProcesses({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  let processes;
+  if (status === 'all') {
+    processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit });
+  } else {
+    if (!isSetMember(VALID_PROCESS_STATES, status)) {
+      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+    }
+    processes = loadProcesses(opts.hippoRoot, ctx.tenantId, {
+      status,
+      limit,
+    });
+  }
+  sendJson(res, 200, { processes });
+  return;
+}
+
+async function handleSupersedeProcess({ req, res, opts }: RouteRequest, processSupersedeMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(processSupersedeMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const steps = validateProcessStepsBody(body['steps']);
+  if (steps.length === 0) {
+    throw new HttpError(400, 'steps is required (at least one step) for a supersession');
+  }
+  const changeRaw = body['changeSummary'];
+  let changeSummary: string | undefined;
+  if (changeRaw !== undefined && changeRaw !== null) {
+    if (!isJsonString(changeRaw)) {
+      throw new HttpError(400, 'changeSummary must be a string');
+    }
+    if (changeRaw.length > 4096) {
+      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+    }
+    changeSummary = changeRaw;
+  }
+  const descRaw = body['description'];
+  let description: string | undefined;
+  if (descRaw !== undefined && descRaw !== null) {
+    if (!isJsonString(descRaw)) {
+      throw new HttpError(400, 'description must be a string');
+    }
+    if (descRaw.length > 4096) {
+      throw new HttpError(400, 'description exceeds 4096-character cap');
+    }
+    description = descRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  // A supersession is a new version of the SAME process: reuse the
+  // predecessor's name. 404 if the target does not exist; saveProcess's
+  // in-SAVEPOINT preflight is the authoritative active-state check (409).
+  const existing = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
+  if (!existing) {
+    throw new HttpError(404, `process ${id} not found`);
+  }
+  try {
+    const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
+      processName: existing.processName,
+      steps,
+      description,
+      changeSummary,
+      supersedesProcessId: id,
+    }, ctx.actor.subject);
+    sendJson(res, 200, { process });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active') || msg.includes('could not be superseded')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleCloseProcess({ req, res, opts }: RouteRequest, processCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(processCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { process });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetProcess({ req, res, opts }: RouteRequest, processByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(processByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const process = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
+  if (!process) {
+    throw new HttpError(404, `process ${id} not found`);
+  }
+  sendJson(res, 200, { process });
+  return;
+}
+
+// ── policies (E2 first-class object, bi-temporal-first) ──
+//
+// 6 routes: POST /v1/policies (new; processName-style body policyName +
+// policyText + validFrom? + validTo?), GET /v1/policies (list, status filter),
+// GET /v1/policies/asof (date + optional name; the bi-temporal as-of query;
+// placed BEFORE the /:id GET so the literal 'asof' is matched first), GET
+// /v1/policies/:id, POST /v1/policies/:id/supersede, POST /v1/policies/:id/close.
+// Date inputs are normalized + range-validated in the store; an invalid/inverted
+// date throws -> 400. DoS caps: policyName/policyText/changeSummary 4096.
+async function handleCreatePolicy({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const policyName = body['policyName'];
+  if (!isJsonString(policyName) || policyName.trim().length === 0) {
+    throw new HttpError(400, 'policyName is required (non-empty string)');
+  }
+  if (policyName.length > 4096) {
+    throw new HttpError(400, 'policyName exceeds 4096-character cap');
+  }
+  const policyText = body['policyText'];
+  if (!isJsonString(policyText) || policyText.trim().length === 0) {
+    throw new HttpError(400, 'policyText is required (non-empty string)');
+  }
+  if (policyText.length > 4096) {
+    throw new HttpError(400, 'policyText exceeds 4096-character cap');
+  }
+  const validFrom = optionalDateField(body['validFrom'], 'validFrom');
+  const validTo = optionalDateField(body['validTo'], 'validTo');
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
+      policyName,
+      policyText,
+      validFrom,
+      validTo,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { policy });
+  } catch (e) {
+    // savePolicy throws on invalid/inverted dates (validation) -> 400.
+    throw new HttpError(400, e instanceof Error ? e.message : String(e));
+  }
+  return;
+}
+
+async function handleListPolicies({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  let policies;
+  if (status === 'all') {
+    policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit });
+  } else {
+    if (!isSetMember(VALID_POLICY_STATES, status)) {
+      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+    }
+    policies = loadPolicies(opts.hippoRoot, ctx.tenantId, {
+      status,
+      limit,
+    });
+  }
+  sendJson(res, 200, { policies });
+  return;
+}
+
+// The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so
+// the /(\d+)/ route would not match it, but order it first for clarity).
+async function handlePoliciesAsOf({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const date = query.get('date');
+  if (date === null || date.length === 0) {
+    throw new HttpError(400, 'date is required (ISO-8601 valid-time)');
+  }
+  const name = query.get('name') ?? undefined;
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
+    sendJson(res, 200, { policies });
+  } catch (e) {
+    throw new HttpError(400, e instanceof Error ? e.message : String(e));
+  }
+  return;
+}
+
+async function handleSupersedePolicy({ req, res, opts }: RouteRequest, policySupersedeMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(policySupersedeMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const policyText = body['policyText'];
+  if (!isJsonString(policyText) || policyText.trim().length === 0) {
+    throw new HttpError(400, 'policyText is required (non-empty string)');
+  }
+  if (policyText.length > 4096) {
+    throw new HttpError(400, 'policyText exceeds 4096-character cap');
+  }
+  const validFrom = optionalDateField(body['validFrom'], 'validFrom');
+  const validTo = optionalDateField(body['validTo'], 'validTo');
+  const changeRaw = body['changeSummary'];
+  let changeSummary: string | undefined;
+  if (changeRaw !== undefined && changeRaw !== null) {
+    if (!isJsonString(changeRaw)) {
+      throw new HttpError(400, 'changeSummary must be a string');
+    }
+    if (changeRaw.length > 4096) {
+      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+    }
+    changeSummary = changeRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const existing = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
+  if (!existing) {
+    throw new HttpError(404, `policy ${id} not found`);
+  }
+  try {
+    const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
+      policyName: existing.policyName,
+      policyText,
+      validFrom,
+      validTo,
+      changeSummary,
+      supersedesPolicyId: id,
+    }, ctx.actor.subject);
+    sendJson(res, 200, { policy });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active') || msg.includes('could not be superseded')) {
+      throw new HttpError(409, msg);
+    }
+    // invalid/inverted date or missing field -> validation.
+    throw new HttpError(400, msg);
+  }
+  return;
+}
+
+async function handleClosePolicy({ req, res, opts }: RouteRequest, policyCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(policyCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { policy });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetPolicy({ req, res, opts }: RouteRequest, policyByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(policyByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const policy = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
+  if (!policy) {
+    throw new HttpError(404, `policy ${id} not found`);
+  }
+  sendJson(res, 200, { policy });
+  return;
+}
+
+// ── skills (E2 first-class object, executable/exportable) ──
+//
+// 6 routes: POST /v1/skills (new; body skillName + instructions + trigger?),
+// GET /v1/skills (list, status filter; shared parseListLimit), GET
+// /v1/skills/export (renders ACTIVE skills as an AGENTS.md/CLAUDE.md markdown
+// block -> {markdown}; literal 'export' is non-numeric so the /:id (\d+) route
+// cannot capture it, but it is ordered first regardless), GET /v1/skills/:id,
+// POST /v1/skills/:id/supersede, POST /v1/skills/:id/close. DoS caps:
+// skillName 256, instructions 8192, trigger 1024, changeSummary 4096. The store
+// validates + throws; the boundary maps validation -> 400, not-found -> 404,
+// not-active -> 409. Mirrors /v1/processes; "executable" = exportable
+// instruction (no code exec).
+async function handleCreateSkill({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const skillName = body['skillName'];
+  if (!isJsonString(skillName) || skillName.trim().length === 0) {
+    throw new HttpError(400, 'skillName is required (non-empty string)');
+  }
+  if (skillName.length > 256) {
+    throw new HttpError(400, 'skillName exceeds 256-character cap');
+  }
+  const instructions = body['instructions'];
+  if (!isJsonString(instructions) || instructions.trim().length === 0) {
+    throw new HttpError(400, 'instructions are required (non-empty string)');
+  }
+  if (instructions.length > 8192) {
+    throw new HttpError(400, 'instructions exceed 8192-character cap');
+  }
+  const triggerRaw = body['trigger'];
+  let trigger: string | undefined;
+  if (triggerRaw !== undefined && triggerRaw !== null) {
+    if (!isJsonString(triggerRaw)) {
+      throw new HttpError(400, 'trigger must be a string');
+    }
+    if (triggerRaw.length > 1024) {
+      throw new HttpError(400, 'trigger exceeds 1024-character cap');
+    }
+    trigger = triggerRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+      skillName,
+      instructions,
+      trigger,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { skill });
+  } catch (e) {
+    // saveSkill throws on validation (single-line name etc.) -> 400.
+    throw new HttpError(400, e instanceof Error ? e.message : String(e));
+  }
+  return;
+}
+
+async function handleListSkills({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  let skills;
+  if (status === 'all') {
+    skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit });
+  } else {
+    if (!isSetMember(VALID_SKILL_STATES, status)) {
+      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+    }
+    skills = loadSkills(opts.hippoRoot, ctx.tenantId, {
+      status,
+      limit,
+    });
+  }
+  sendJson(res, 200, { skills });
+  return;
+}
+
+// The export renderer: must precede the /:id GET (literal 'export' is
+// non-numeric so the /(\d+)/ route would not match it, but order it first).
+async function handleExportSkills({ req, res, opts }: RouteRequest): Promise<void> {
+  const ctx = await buildContextWithAuth(req, opts);
+  const markdown = exportSkills(opts.hippoRoot, ctx.tenantId);
+  sendJson(res, 200, { markdown });
+  return;
+}
+
+async function handleSupersedeSkill({ req, res, opts }: RouteRequest, skillSupersedeMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(skillSupersedeMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const instructions = body['instructions'];
+  if (!isJsonString(instructions) || instructions.trim().length === 0) {
+    throw new HttpError(400, 'instructions are required (non-empty string)');
+  }
+  if (instructions.length > 8192) {
+    throw new HttpError(400, 'instructions exceed 8192-character cap');
+  }
+  const triggerRaw = body['trigger'];
+  let trigger: string | undefined;
+  if (triggerRaw !== undefined && triggerRaw !== null) {
+    if (!isJsonString(triggerRaw)) {
+      throw new HttpError(400, 'trigger must be a string');
+    }
+    if (triggerRaw.length > 1024) {
+      throw new HttpError(400, 'trigger exceeds 1024-character cap');
+    }
+    trigger = triggerRaw;
+  }
+  const changeRaw = body['changeSummary'];
+  let changeSummary: string | undefined;
+  if (changeRaw !== undefined && changeRaw !== null) {
+    if (!isJsonString(changeRaw)) {
+      throw new HttpError(400, 'changeSummary must be a string');
+    }
+    if (changeRaw.length > 4096) {
+      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+    }
+    changeSummary = changeRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const existing = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
+  if (!existing) {
+    throw new HttpError(404, `skill ${id} not found`);
+  }
+  try {
+    const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+      skillName: existing.skillName,
+      instructions,
+      trigger,
+      changeSummary,
+      supersedesSkillId: id,
+    }, ctx.actor.subject);
+    sendJson(res, 200, { skill });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active') || msg.includes('could not be superseded')) {
+      throw new HttpError(409, msg);
+    }
+    throw new HttpError(400, msg);
+  }
+  return;
+}
+
+async function handleCloseSkill({ req, res, opts }: RouteRequest, skillCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(skillCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { skill });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetSkill({ req, res, opts }: RouteRequest, skillByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(skillByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const skill = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
+  if (!skill) {
+    throw new HttpError(404, `skill ${id} not found`);
+  }
+  sendJson(res, 200, { skill });
+  return;
+}
+
+// Named list-opts shape for GET /v1/project-briefs (see no-known-value-widening:
+// a named interface is not flagged the way an inline anonymous object type is).
+interface ProjectBriefListOpts {
+  status?: BriefStatus;
+  repo?: string;
+  limit: number;
+}
+
+// ── E2 project_brief routes ──
+//
+// 6 routes: POST /v1/project-briefs (new; body repo + summary), GET
+// /v1/project-briefs (list; status + repo filter; shared parseListLimit), POST
+// /v1/project-briefs/refresh (body {repo, dryRun?} -> auto-assemble the brief
+// from the repo's receipts; dryRun returns {markdown} without writing; ordered
+// before /:id), GET /v1/project-briefs/:id, POST /v1/project-briefs/:id/supersede,
+// POST /v1/project-briefs/:id/close. DoS caps: repo 256, summary 8192,
+// changeSummary 4096. The store validates + throws; the boundary maps validation
+// -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
+async function handleCreateProjectBrief({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const repo = body['repo'];
+  if (!isJsonString(repo) || repo.trim().length === 0) {
+    throw new HttpError(400, 'repo is required (non-empty string)');
+  }
+  if (repo.length > 256) {
+    throw new HttpError(400, 'repo exceeds 256-character cap');
+  }
+  const summary = body['summary'];
+  if (!isJsonString(summary) || summary.trim().length === 0) {
+    throw new HttpError(400, 'summary is required (non-empty string)');
+  }
+  if (summary.length > 8192) {
+    throw new HttpError(400, 'summary exceeds 8192-character cap');
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
+      repo,
+      summary,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { brief });
+  } catch (e) {
+    // saveProjectBrief throws on validation (single-line repo etc.) -> 400.
+    throw new HttpError(400, e instanceof Error ? e.message : String(e));
+  }
+  return;
+}
+
+async function handleListProjectBriefs({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const repoFilter = query.get('repo');
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  const listOpts: ProjectBriefListOpts = { limit };
+  if (repoFilter !== null && repoFilter.trim().length > 0) {
+    listOpts.repo = repoFilter.trim();
+  }
+  if (status !== 'all') {
+    if (!isSetMember(VALID_BRIEF_STATES, status)) {
+      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+    }
+    listOpts.status = status;
+  }
+  const briefs = loadProjectBriefs(opts.hippoRoot, ctx.tenantId, listOpts);
+  sendJson(res, 200, { briefs });
+  return;
+}
+
+// The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
+// so the /(\d+)/ routes would not match it, but order it first).
+async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const repo = body['repo'];
+  if (!isJsonString(repo) || repo.trim().length === 0) {
+    throw new HttpError(400, 'repo is required (non-empty string)');
+  }
+  if (repo.length > 256) {
+    throw new HttpError(400, 'repo exceeds 256-character cap');
+  }
+  const dryRun = body['dryRun'] === true;
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    if (dryRun) {
+      const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
+      sendJson(res, 200, { markdown, receiptCount });
+      return;
+    }
+    const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
+    sendJson(res, 200, { brief });
+  } catch (e) {
+    // A refresh race (the active brief is closed/superseded between
+    // loadActiveBriefForRepo and the supersede CAS) is a state conflict, not a
+    // validation error — map it to 409 like the explicit supersede route
+    // (codex-review 2026-05-30, P3).
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active') || msg.includes('could not be superseded')) {
+      throw new HttpError(409, msg);
+    }
+    throw new HttpError(400, msg);
+  }
+  return;
+}
+
+async function handleSupersedeProjectBrief({ req, res, opts }: RouteRequest, briefSupersedeMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(briefSupersedeMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const summary = body['summary'];
+  if (!isJsonString(summary) || summary.trim().length === 0) {
+    throw new HttpError(400, 'summary is required (non-empty string)');
+  }
+  if (summary.length > 8192) {
+    throw new HttpError(400, 'summary exceeds 8192-character cap');
+  }
+  const changeRaw = body['changeSummary'];
+  let changeSummary: string | undefined;
+  if (changeRaw !== undefined && changeRaw !== null) {
+    if (!isJsonString(changeRaw)) {
+      throw new HttpError(400, 'changeSummary must be a string');
+    }
+    if (changeRaw.length > 4096) {
+      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+    }
+    changeSummary = changeRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const existing = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
+  if (!existing) {
+    throw new HttpError(404, `project brief ${id} not found`);
+  }
+  try {
+    const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
+      repo: existing.repo,
+      summary,
+      changeSummary,
+      supersedesBriefId: id,
+    }, ctx.actor.subject);
+    sendJson(res, 200, { brief });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active') || msg.includes('could not be superseded')) {
+      throw new HttpError(409, msg);
+    }
+    throw new HttpError(400, msg);
+  }
+  return;
+}
+
+async function handleCloseProjectBrief({ req, res, opts }: RouteRequest, briefCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(briefCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { brief });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetProjectBrief({ req, res, opts }: RouteRequest, briefByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(briefByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const brief = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
+  if (!brief) {
+    throw new HttpError(404, `project brief ${id} not found`);
+  }
+  sendJson(res, 200, { brief });
+  return;
+}
+
+// ── E2 customer_note routes ──
+//
+// 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
+// note), GET /v1/customer-notes (list; status + customer filter; shared
+// parseListLimit), GET /v1/customer-notes/:id, POST /v1/customer-notes/:id/supersede,
+// POST /v1/customer-notes/:id/close. DoS caps: customer 256, note 8192,
+// changeSummary 4096. The store validates + throws; the boundary maps validation ->
+// 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
+async function handleCreateCustomerNote({ req, res, opts }: RouteRequest): Promise<void> {
+  const body = await parseJsonBody(req);
+  const customer = body['customer'];
+  if (!isJsonString(customer) || customer.trim().length === 0) {
+    throw new HttpError(400, 'customer is required (non-empty string)');
+  }
+  if (customer.length > 256) {
+    throw new HttpError(400, 'customer exceeds 256-character cap');
+  }
+  const note = body['note'];
+  if (!isJsonString(note) || note.trim().length === 0) {
+    throw new HttpError(400, 'note is required (non-empty string)');
+  }
+  if (note.length > 8192) {
+    throw new HttpError(400, 'note exceeds 8192-character cap');
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+      customer,
+      note,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { note: customerNote });
+  } catch (e) {
+    // saveCustomerNote throws on validation (single-line customer etc.) -> 400.
+    throw new HttpError(400, e instanceof Error ? e.message : String(e));
+  }
+  return;
+}
+
+// Named list-opts shape for GET /v1/customer-notes (see the matching
+// ProjectBriefListOpts comment above: named interfaces are exempt from
+// no-known-value-widening, inline anonymous object types are not).
+interface CustomerNoteListOpts {
+  status?: NoteStatus;
+  customer?: string;
+  limit: number;
+}
+
+async function handleListCustomerNotes({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const status = query.get('status') ?? 'all';
+  const customerFilter = query.get('customer');
+  const limit = parseListLimit(query.get('limit'));
+  const ctx = await buildContextWithAuth(req, opts);
+  const listOpts: CustomerNoteListOpts = { limit };
+  if (customerFilter !== null && customerFilter.trim().length > 0) {
+    listOpts.customer = customerFilter.trim();
+  }
+  if (status !== 'all') {
+    if (!isSetMember(VALID_NOTE_STATES, status)) {
+      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+    }
+    listOpts.status = status;
+  }
+  const notes = loadCustomerNotes(opts.hippoRoot, ctx.tenantId, listOpts);
+  sendJson(res, 200, { notes });
+  return;
+}
+
+async function handleSupersedeCustomerNote({ req, res, opts }: RouteRequest, noteSupersedeMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(noteSupersedeMatch[1], 10);
+  const body = await parseJsonBody(req);
+  const note = body['note'];
+  if (!isJsonString(note) || note.trim().length === 0) {
+    throw new HttpError(400, 'note is required (non-empty string)');
+  }
+  if (note.length > 8192) {
+    throw new HttpError(400, 'note exceeds 8192-character cap');
+  }
+  const changeRaw = body['changeSummary'];
+  let changeSummary: string | undefined;
+  if (changeRaw !== undefined && changeRaw !== null) {
+    if (!isJsonString(changeRaw)) {
+      throw new HttpError(400, 'changeSummary must be a string');
+    }
+    if (changeRaw.length > 4096) {
+      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+    }
+    changeSummary = changeRaw;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const existing = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
+  if (!existing) {
+    throw new HttpError(404, `customer note ${id} not found`);
+  }
+  try {
+    const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+      customer: existing.customer,
+      note,
+      changeSummary,
+      supersedesNoteId: id,
+    }, ctx.actor.subject);
+    sendJson(res, 200, { note: customerNote });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active') || msg.includes('could not be superseded')) {
+      throw new HttpError(409, msg);
+    }
+    throw new HttpError(400, msg);
+  }
+  return;
+}
+
+async function handleCloseCustomerNote({ req, res, opts }: RouteRequest, noteCloseMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(noteCloseMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  try {
+    const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+    sendJson(res, 200, { note: customerNote });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('not found')) {
+      throw new HttpError(404, msg);
+    }
+    if (msg.includes('not active')) {
+      throw new HttpError(409, msg);
+    }
+    throw e;
+  }
+  return;
+}
+
+async function handleGetCustomerNote({ req, res, opts }: RouteRequest, noteByIdMatch: RegExpMatchArray): Promise<void> {
+  const id = parseInt(noteByIdMatch[1], 10);
+  const ctx = await buildContextWithAuth(req, opts);
+  const customerNote = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
+  if (!customerNote) {
+    throw new HttpError(404, `customer note ${id} not found`);
+  }
+  sendJson(res, 200, { note: customerNote });
+  return;
+}
+
+/** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
+const V1_ROUTES: readonly Route[] = [
+  { method: 'POST', path: '/v1/memories', handler: handleCreateMemory },
+  { method: 'GET', path: '/v1/graph', handler: handleGetGraph },
+  { method: 'GET', path: '/v1/memories', handler: handleRecallMemories },
+  { method: 'GET', pattern: '/v1/sessions/:id/assemble', handler: handleAssembleSession },
+  { method: 'GET', pattern: '/v1/recall/drill/:id', handler: handleDrillRecall },
+  { method: 'POST', pattern: '/v1/memories/:id/archive', handler: handleArchiveMemory },
+  { method: 'POST', pattern: '/v1/memories/:id/supersede', handler: handleSupersedeMemory },
+  { method: 'POST', pattern: '/v1/memories/:id/promote', handler: handlePromoteMemory },
+  { method: 'DELETE', pattern: '/v1/memories/:id', handler: handleForgetMemory },
+  { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
+  { method: 'GET', path: '/v1/context', handler: handleGetContext },
+  { method: 'POST', path: '/v1/sleep', handler: handleSleep },
+  { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
+  { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
+  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', handler: handleRevokeAuthKey },
+  { method: 'GET', path: '/v1/quarantine', handler: handleListQuarantine },
+  { method: 'POST', pattern: '/v1/quarantine/:id/approve', handler: handleApproveQuarantine },
+  { method: 'POST', pattern: '/v1/quarantine/:id/reject', handler: handleRejectQuarantine },
+  { method: 'GET', path: '/v1/audit', handler: handleListAudit },
+  { method: 'POST', path: '/v1/predictions', handler: handleCreatePrediction },
+  { method: 'GET', path: '/v1/predictions', handler: handleListPredictions },
+  { method: 'GET', path: '/v1/predictions/stats', handler: handlePredictionStats },
+  { method: 'GET', regex: /^\/v1\/predictions\/(\d+)$/, handler: handleGetPrediction },
+  { method: 'POST', regex: /^\/v1\/predictions\/(\d+)\/close$/, handler: handleClosePrediction },
+  { method: 'POST', path: '/v1/decisions', handler: handleCreateDecision },
+  { method: 'GET', path: '/v1/decisions', handler: handleListDecisions },
+  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/supersede$/, handler: handleSupersedeDecision },
+  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/close$/, handler: handleCloseDecision },
+  { method: 'GET', regex: /^\/v1\/decisions\/(\d+)$/, handler: handleGetDecision },
+  { method: 'POST', path: '/v1/incidents', handler: handleCreateIncident },
+  { method: 'GET', path: '/v1/incidents', handler: handleListIncidents },
+  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/resolve$/, handler: handleResolveIncident },
+  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/close$/, handler: handleCloseIncident },
+  { method: 'GET', regex: /^\/v1\/incidents\/(\d+)$/, handler: handleGetIncident },
+  { method: 'POST', path: '/v1/processes', handler: handleCreateProcess },
+  { method: 'GET', path: '/v1/processes', handler: handleListProcesses },
+  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/supersede$/, handler: handleSupersedeProcess },
+  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/close$/, handler: handleCloseProcess },
+  { method: 'GET', regex: /^\/v1\/processes\/(\d+)$/, handler: handleGetProcess },
+  { method: 'POST', path: '/v1/policies', handler: handleCreatePolicy },
+  { method: 'GET', path: '/v1/policies', handler: handleListPolicies },
+  { method: 'GET', path: '/v1/policies/asof', handler: handlePoliciesAsOf },
+  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/supersede$/, handler: handleSupersedePolicy },
+  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/close$/, handler: handleClosePolicy },
+  { method: 'GET', regex: /^\/v1\/policies\/(\d+)$/, handler: handleGetPolicy },
+  { method: 'POST', path: '/v1/skills', handler: handleCreateSkill },
+  { method: 'GET', path: '/v1/skills', handler: handleListSkills },
+  { method: 'GET', path: '/v1/skills/export', handler: handleExportSkills },
+  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/supersede$/, handler: handleSupersedeSkill },
+  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/close$/, handler: handleCloseSkill },
+  { method: 'GET', regex: /^\/v1\/skills\/(\d+)$/, handler: handleGetSkill },
+  { method: 'POST', path: '/v1/project-briefs', handler: handleCreateProjectBrief },
+  { method: 'GET', path: '/v1/project-briefs', handler: handleListProjectBriefs },
+  { method: 'POST', path: '/v1/project-briefs/refresh', handler: handleRefreshProjectBrief },
+  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/, handler: handleSupersedeProjectBrief },
+  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/close$/, handler: handleCloseProjectBrief },
+  { method: 'GET', regex: /^\/v1\/project-briefs\/(\d+)$/, handler: handleGetProjectBrief },
+  { method: 'POST', path: '/v1/customer-notes', handler: handleCreateCustomerNote },
+  { method: 'GET', path: '/v1/customer-notes', handler: handleListCustomerNotes },
+  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/, handler: handleSupersedeCustomerNote },
+  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/close$/, handler: handleCloseCustomerNote },
+  { method: 'GET', regex: /^\/v1\/customer-notes\/(\d+)$/, handler: handleGetCustomerNote },
+];
+
+/**
+ * Run the first /v1 route whose method and path match. Each matcher runs before its method check, as the
+ * inline route blocks did, so a malformed `%` escape still throws from matchPath on any method.
+ */
+async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
+  for (const route of V1_ROUTES) {
+    if ('path' in route) {
+      if (method === route.method && path === route.path) {
+        await route.handler(r);
+        return true;
+      }
+    } else if ('pattern' in route) {
+      const params = matchPath(route.pattern, path);
+      if (method === route.method && params) {
+        await route.handler(r, params);
+        return true;
+      }
+    } else {
+      const match = path.match(route.regex);
+      if (method === route.method && match) {
+        await route.handler(r, match);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -847,1941 +2858,7 @@ async function handleRequest(
     }
   }
 
-  // POST /v1/memories
-  if (method === 'POST' && path === '/v1/memories') {
-    const body = await parseJsonBody(req);
-    const content = getString(body, 'content');
-    if (!content) {
-      throw new HttpError(400, 'content is required');
-    }
-    const kindRaw = getString(body, 'kind');
-    if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
-      throw new HttpError(400, `invalid kind: ${kindRaw}`);
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = remember(ctx, {
-      content,
-      kind: kindRaw,
-      scope: getString(body, 'scope'),
-      owner: getString(body, 'owner'),
-      artifactRef: getString(body, 'artifactRef'),
-      tags: getStringArray(body, 'tags'),
-    });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
-  if (method === 'GET' && path === '/v1/graph') {
-    const entityRaw = query.get('entity');
-    // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
-    // long decision/policy name remains focusable over HTTP (codex P2).
-    if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
-      throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
-    }
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
-      entity: entityRaw ?? undefined,
-      limit,
-    });
-    sendJson(res, 200, model);
-    return;
-  }
-
-  // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
-  if (method === 'GET' && path === '/v1/memories') {
-    const q = query.get('q');
-    if (!q) {
-      throw new HttpError(400, 'q is required');
-    }
-    const limitRaw = query.get('limit');
-    const limit = limitRaw === null ? undefined : parseListLimit(limitRaw);
-    const mode = query.get('mode');
-    if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
-      throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
-    }
-    const scope = query.get('scope');
-    const includeContinuityRaw = query.get('include_continuity');
-    const includeContinuity = includeContinuityRaw === '1'
-      || includeContinuityRaw === 'true';
-    // v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP
-    // callers. Pre-v1.6.2 the route silently ignored these so the
-    // session-scoped fresh-tail and summary substitution were JS-only.
-    const freshTailCountRaw = query.get('fresh_tail_count');
-    const freshTailCount = freshTailCountRaw === null ? undefined : Number(freshTailCountRaw);
-    if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
-      throw new HttpError(400, 'fresh_tail_count must be a non-negative number');
-    }
-    // v1.6.3 senior-review P1-3: cap session_id length consistent with the
-    // rest of the API. Untrimmed strings round-trip through the SQL layer
-    // and through any downstream metric/log; 256 is generous for a session
-    // id and matches the rest of this file's id-shaped param parsers.
-    const freshTailSessionIdRaw = query.get('fresh_tail_session_id');
-    if (freshTailSessionIdRaw !== null && freshTailSessionIdRaw.length > 256) {
-      throw new HttpError(400, 'fresh_tail_session_id exceeds 256-character cap');
-    }
-    const freshTailSessionId = freshTailSessionIdRaw && freshTailSessionIdRaw.length > 0
-      ? freshTailSessionIdRaw
-      : undefined;
-    // v1.6.3 senior-review P1-4: tighten parser to match the includeContinuity
-    // convention. Pre-v1.6.3 accepted any non-'0'/'false' value as `true`,
-    // so `?summarize_overflow=banana` and `?summarize_overflow=` both
-    // turned it on. Surface convention drift fixed.
-    const summarizeOverflowRaw = query.get('summarize_overflow');
-    const summarizeOverflow = summarizeOverflowRaw === null
-      ? undefined
-      : (summarizeOverflowRaw === '1' || summarizeOverflowRaw === 'true');
-    // recall() owns the shape rule (NaN, 0 and negatives throw invalid_scorer_window); the transport caps remote cost.
-    const scorerWindowRaw = query.get('scorer_window');
-    const scorerWindow = scorerWindowRaw === null ? undefined : Number(scorerWindowRaw);
-    if (scorerWindow !== undefined && scorerWindow > 1000) {
-      throw new HttpError(400, 'scorer_window must be <= 1000');
-    }
-    // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
-    // fresh_tail_session_id (above). Trim then drop if empty so api.recall
-    // sees undefined when the param is omitted or whitespace-only.
-    const sessionIdRaw = query.get('session_id');
-    if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
-      throw new HttpError(400, 'session_id exceeds 256-character cap');
-    }
-    const sessionId = sessionIdRaw && sessionIdRaw.trim().length > 0
-      ? sessionIdRaw.trim()
-      : undefined;
-    // A7 recall-trace: opt-in explain flag. When set, api.recall attaches the
-    // lifecycle re-ranking trace (goal-boost step on the api pipeline) +
-    // rerankPipeline:'api' to each result item; the field then rides on the
-    // serialized RecallResult. Mirrors the include_continuity convention.
-    const explainRaw = query.get('explain');
-    const explain = explainRaw === '1' || explainRaw === 'true';
-    const ctx = await buildContextWithAuth(req, opts);
-
-    // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
-    // ring snapshot via opts.recallHistory so api.recall's own
-    // anchoringHint compute path activates. Unlike CLI (which computes
-    // its own hint separately because cmdRecall runs its own physics/
-    // hybrid pipeline outside api.recall), HTTP's /v1/memories response
-    // body IS api.recall's result directly. So the api.recall-computed
-    // hint flows through. HIPPO_ANCHORING=off short-circuits.
-    let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
-    let httpRingKey: string | undefined;
-    if (biasHintEnabled('anchoring')) {
-      if (sessionId) {
-        // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
-        // before recall() preflight runs. A request with an invalid
-        // scorer_window / fresh_tail_count would create-or-touch the
-        // session ring (LRU-evicting valid sessions) even though recall
-        // throws 400. Snapshot the EXISTING ring if present; only
-        // create-or-touch after the recall returns successfully.
-        httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
-        const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
-        httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
-      } else {
-        // Telemetry: caller had no session_id so ring tracking skipped.
-        // Per the normal recall-audit convention (api.ts:854 stores
-        // SHA-256/16 hash of the query, NOT raw text), avoid retaining
-        // prompts in audit_log here too — query content can contain
-        // secrets, PII, or RTBF-restricted material. Codex round-2 P2
-        // catch: hashQueryText is a 32-bit FNV-1a designed for recall
-        // matching, NOT a privacy hash; brute-force trivial for low-
-        // entropy queries. Use the same SHA-256/16 truncation as the
-        // canonical recall audit.
-        const dbForAudit = openHippoDb(opts.hippoRoot);
-        try {
-          appendAuditEvent(dbForAudit, {
-            tenantId: ctx.tenantId,
-            actor: ctx.actor.subject,
-            op: 'recall_anchor_skipped_no_session',
-            targetId: undefined,
-            metadata: auditQueryFields(q),
-          });
-        } finally {
-          closeHippoDb(dbForAudit);
-        }
-      }
-    }
-
-    const recallExtra: Pick<
-      RecallOpts,
-      'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId' | 'recallHistory' | 'explain'
-    > = {};
-    if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
-    if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
-    if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
-    if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
-    if (sessionId !== undefined) recallExtra.sessionId = sessionId;
-    if (httpRecallHistory !== undefined) recallExtra.recallHistory = httpRecallHistory;
-    if (explain) recallExtra.explain = explain;
-
-    const result = await retrieve(ctx, {
-      query: q,
-      limit,
-      mode: mode ?? undefined,
-      scope: scope ?? undefined,
-      includeContinuity,
-      ...recallExtra,
-    });
-
-    // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
-    // recall() ran). anchoredOn carries the memoryId of any hint that fired
-    // (api.recall computed it from the same snapshot we passed in), feeding
-    // the cooldown logic for the NEXT recall on this session.
-    // Codex round-5 P2 fix: create-or-touch the ring ONLY HERE, after recall
-    // returns successfully. Invalid requests that throw 400 in recall()
-    // never reach this point, so they cannot LRU-evict valid sessions.
-    if (httpRingKey) {
-      const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
-      const topId = result.results[0]?.id ?? null;
-      appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
-    }
-
-    // Each recall surface counts its own hits; api.recall is no chokepoint,
-    // since the CLI never calls it and MCP shows the user a different band.
-    updateStats(opts.hippoRoot, { recalled: result.results.length });
-
-    // Continuity payloads should never be cached. The caller is asking for
-    // session-state-aware data; intermediaries must not reuse it across users.
-    if (includeContinuity) {
-      res.setHeader('Cache-Control', 'no-store');
-    }
-    recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1
-  // Phase 2 context-engine API. Returns ordered AssembledContextItem[]
-  // with fresh-tail raws + summary substitutions + bio-aware budget fit.
-  // Tenant scope from Bearer; default-deny on private rows.
-  const assembleMatch = matchPath('/v1/sessions/:id/assemble', path);
-  if (method === 'GET' && assembleMatch) {
-    validateIdSegment(assembleMatch.id!, 'session id');
-    const budgetRaw = query.get('budget');
-    const budget = budgetRaw === null ? undefined : Number(budgetRaw);
-    if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
-      throw new HttpError(400, 'budget must be a positive number');
-    }
-    const ftRaw = query.get('freshTail');
-    const freshTailCount = ftRaw === null ? undefined : Number(ftRaw);
-    if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
-      throw new HttpError(400, 'freshTail must be a non-negative number');
-    }
-    // v1.6.3 senior review P1: same strict-parse convention as the v1.6.3
-    // summarize_overflow tighten on /v1/memories. Pre-v1.6.3 accepted any
-    // non-'0'/'false' as true; ?summarizeOlder=banana now correctly returns
-    // false (matches includeContinuity convention).
-    const sumOlderRaw = query.get('summarizeOlder');
-    const summarizeOlder = sumOlderRaw === null
-      ? undefined
-      : (sumOlderRaw === '1' || sumOlderRaw === 'true');
-    const scopeQ = query.get('scope');
-    const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
-    const ctx = await buildContextWithAuth(req, opts);
-    const assembleExtra: Pick<AssembleOpts, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
-    if (budget !== undefined) assembleExtra.budget = budget;
-    if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
-    if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
-    if (scope !== undefined) assembleExtra.scope = scope;
-    const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
-    recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // GET /v1/recall/drill/:id?limit=N&budget=N
-  // Companion to /v1/memories. When recall surfaces a level-2 summary in
-  // place of overflowed children (RecallResultItem.isSummary === true), the
-  // caller drills into the summary id to recover the originals. Tenant
-  // scoped via Bearer; default-deny on private scopes for both summary
-  // and children.
-  const drillMatch = matchPath('/v1/recall/drill/:id', path);
-  if (method === 'GET' && drillMatch) {
-    validateIdSegment(drillMatch.id!, 'summary id');
-    const limitRaw = query.get('limit');
-    const limit = limitRaw === null ? undefined : Number(limitRaw);
-    if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
-      throw new HttpError(400, 'limit must be a positive number');
-    }
-    const budgetRaw = query.get('budget');
-    const budget = budgetRaw === null ? undefined : Number(budgetRaw);
-    if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
-      throw new HttpError(400, 'budget must be a positive number');
-    }
-    // v0.30 / E5: depth query param walks N levels (default 1, hard cap 10).
-    const depthRaw = query.get('depth');
-    let depth: number | undefined;
-    if (depthRaw !== null) {
-      const parsed = Number(depthRaw);
-      // L4 fold: reject out-of-range explicitly (no silent clamp).
-      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
-        throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
-      }
-      depth = parsed;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const drillExtra: Pick<DrillDownOpts, 'limit' | 'budget' | 'depth'> = {};
-    if (limit !== undefined) drillExtra.limit = limit;
-    if (budget !== undefined) drillExtra.budget = budget;
-    if (depth !== undefined) drillExtra.depth = depth;
-    const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
-    if ('failure' in result) {
-      // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
-      // as 404 to avoid leaking cross-tenant existence or scope grants.
-      if (result.failure === 'not_drillable') {
-        throw new HttpError(422, 'Id is a leaf row, not a level-2+ summary; nothing to drill into');
-      }
-      throw new HttpError(404, 'No drillable summary at this id');
-    }
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // /v1/memories/:id/* and DELETE /v1/memories/:id
-  const archiveMatch = matchPath('/v1/memories/:id/archive', path);
-  if (method === 'POST' && archiveMatch) {
-    validateIdSegment(archiveMatch.id!, 'memory id');
-    const body = await parseJsonBody(req);
-    const reason = getString(body, 'reason');
-    if (!reason) {
-      throw new HttpError(400, 'reason is required');
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = archiveRaw(ctx, archiveMatch.id!, reason);
-    sendJson(res, 200, result);
-    return;
-  }
-
-  const supersedeMatch = matchPath('/v1/memories/:id/supersede', path);
-  if (method === 'POST' && supersedeMatch) {
-    validateIdSegment(supersedeMatch.id!, 'memory id');
-    const body = await parseJsonBody(req);
-    const content = getString(body, 'content');
-    if (!content) {
-      throw new HttpError(400, 'content is required');
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = supersede(ctx, supersedeMatch.id!, content);
-    sendJson(res, 200, result);
-    return;
-  }
-
-  const promoteMatch = matchPath('/v1/memories/:id/promote', path);
-  if (method === 'POST' && promoteMatch) {
-    validateIdSegment(promoteMatch.id!, 'memory id');
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = promote(ctx, promoteMatch.id!);
-    sendJson(res, 200, result);
-    return;
-  }
-
-  const idMatch = matchPath('/v1/memories/:id', path);
-  if (method === 'DELETE' && idMatch) {
-    validateIdSegment(idMatch.id!, 'memory id');
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = forget(ctx, idMatch.id!);
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // POST /v1/outcome — apply a positive/negative outcome to memory ids.
-  // Body: {ids?: string[], good: boolean}. If ids omitted, falls back to
-  // the last-recall path (api.outcomeForLastRecall); returned shape is
-  // {applied, ids} in that case so callers can disambiguate "no recent
-  // recall" from "all ids skipped". Each applied id writes one audit_log
-  // row (op='outcome', actor from Bearer).
-  if (method === 'POST' && path === '/v1/outcome') {
-    const body = await parseJsonBody(req);
-    const good = body['good'];
-    if (!isJsonBoolean(good)) {
-      throw new HttpError(400, 'good is required (boolean)');
-    }
-    const idsRaw = body['ids'];
-    let ids: string[] | undefined;
-    if (idsRaw !== undefined) {
-      if (!Array.isArray(idsRaw)) {
-        throw new HttpError(400, 'ids must be an array of non-empty strings');
-      }
-      const isNonEmptyId = (item: JsonValue): item is string => isJsonString(item) && item.length > 0;
-      if (!idsRaw.every(isNonEmptyId)) {
-        throw new HttpError(400, 'ids must be an array of non-empty strings');
-      }
-      // v1.11.5: DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
-      // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
-      // to sub-second wall time on SQLite hot path. Cap BEFORE buildContextWithAuth
-      // so attack traffic doesn't pay the api-key lookup cost.
-      if (idsRaw.length > 1000) {
-        throw new HttpError(400, 'ids exceeds 1000-id cap');
-      }
-      ids = idsRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    if (ids !== undefined) {
-      const { applied } = outcome(ctx, ids, good);
-      sendJson(res, 200, { applied });
-    } else {
-      const result = outcomeForLastRecall(ctx, good);
-      sendJson(res, 200, result);
-    }
-    return;
-  }
-
-  // GET /v1/context — assemble a budget-bounded context bundle. Returns
-  // ContextResult JSON (entries + tokens + activeSnapshot + sessionHandoff
-  // + recentEvents). No server-side rendering; clients render. Tenant-scoped
-  // via the Bearer. Pinned-only + '*' fallback skip the recall audit emit
-  // (matches cmdContext); real-query hybrid search emits one 'recall' row.
-  if (method === 'GET' && path === '/v1/context') {
-    const q = query.get('q') ?? undefined;
-    // v1.11.5: DoS cap on q-param length. 1024 covers real multi-clause queries
-    // (pasted error messages, multi-stem searches) while bounding BM25
-    // tokenisation cost (~150 tokens worst case at 1024 chars).
-    if (q !== undefined && q.length > 1024) {
-      throw new HttpError(400, 'q exceeds 1024-character cap');
-    }
-    const budgetRaw = query.get('budget');
-    let budget: number | undefined;
-    if (budgetRaw !== null) {
-      budget = Number(budgetRaw);
-      if (!Number.isFinite(budget) || budget < 0) {
-        throw new HttpError(400, 'budget must be a non-negative number');
-      }
-    }
-    const limitRaw = query.get('limit');
-    let limit: number | undefined;
-    if (limitRaw !== null) {
-      limit = Number(limitRaw);
-      if (!Number.isFinite(limit) || limit <= 0) {
-        throw new HttpError(400, 'limit must be a positive number');
-      }
-    }
-    const pinnedOnlyRaw = query.get('pinned_only');
-    const pinnedOnly = pinnedOnlyRaw === '1' || pinnedOnlyRaw === 'true';
-    const scopeRaw = query.get('scope');
-    if (scopeRaw !== null && scopeRaw.length > 256) {
-      throw new HttpError(400, 'scope exceeds 256-character cap');
-    }
-    const scope = scopeRaw === null ? undefined : scopeRaw;
-    const includeRecentRaw = query.get('include_recent');
-    let includeRecent: number | undefined;
-    if (includeRecentRaw !== null) {
-      includeRecent = Number(includeRecentRaw);
-      if (!Number.isFinite(includeRecent) || includeRecent < 0) {
-        throw new HttpError(400, 'include_recent must be a non-negative number');
-      }
-    }
-    // v39 memory scope isolation: cross_project=1|true re-includes
-    // other-project rows (tagged category 'cross-project' in the response).
-    // The partition identity comes from the SERVED STORE's location, not the
-    // daemon's process cwd - a daemon started from anywhere still isolates
-    // the project it serves.
-    const crossProjectRaw = query.get('cross_project');
-    const crossProject = crossProjectRaw === '1' || crossProjectRaw === 'true';
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = await getContext(ctx, {
-      q,
-      budget,
-      limit,
-      pinnedOnly,
-      scope,
-      includeRecent,
-      crossProject,
-      currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))).name,
-      cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
-    });
-    recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // POST /v1/sleep — host-wide consolidation pipeline (consolidate + dedup +
-  // audit + share + ambient). serve() refuses non-loopback hosts at boot, AND
-  // this per-request loopback assertion makes the host-wide semantic fail-
-  // closed regardless of any future serve() boot-config change. Body:
-  // {dry_run?, no_share?}. Returns SleepResult JSON.
-  //
-  // Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
-  // on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
-  // The loopback-only guard is the trust boundary today. Future non-loopback
-  // serving must also zero the cross-tenant counters for other tenants
-  // (D1 in docs/decisions/2026-05-24-blocked-items.md).
-  if (method === 'POST' && path === '/v1/sleep') {
-    // Defensive per-request loopback guard. Uses the canonical isLoopback()
-    // helper above so any future extension (additional mapped/IPv6 forms,
-    // NAT64 prefixes) flows through without drift. serve()'s boot-time host
-    // check is the primary trust boundary; this is belt-and-suspenders.
-    if (!isLoopback(req.socket.remoteAddress)) {
-      throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
-    }
-    // v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today
-    // under loopback-only enforcement (loopback fallback is admin by default;
-    // any Bearer-authed caller now carries an explicit role from the api_keys
-    // row). When non-loopback serving lands, this gate is the actual auth
-    // boundary on host-wide sleep.
-    const sleepCtx = await buildContextWithAuth(req, opts);
-    // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
-    assertCrossTenantAdmin(sleepCtx, '/v1/sleep');
-    const body = await parseJsonBody(req);
-    const dryRunRaw = body['dry_run'];
-    if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
-      throw new HttpError(400, 'dry_run must be a boolean');
-    }
-    const noShareRaw = body['no_share'];
-    if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
-      throw new HttpError(400, 'no_share must be a boolean');
-    }
-    // v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
-    const result = await sleep(sleepCtx, {
-      dryRun: dryRunRaw === true,
-      noShare: noShareRaw === true,
-    });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
-  // body (Task 8): the HTTP layer hands it to the client; the user-facing
-  // "store this somewhere safe" warning belongs in the CLI client, not here.
-  if (method === 'POST' && path === '/v1/auth/keys') {
-    const body = await parseJsonBody(req);
-    const labelRaw = body['label'];
-    if (labelRaw !== undefined && !isJsonString(labelRaw)) {
-      throw new HttpError(400, 'label must be a string');
-    }
-    // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
-    // strictly — anything other than 'admin'|'member' is a 400 (no silent
-    // fallback to admin). authCreate refuses a member caller with a 403.
-    const roleRaw = body['role'];
-    let role: 'admin' | 'member' | undefined;
-    if (roleRaw !== undefined) {
-      if (roleRaw !== 'admin' && roleRaw !== 'member') {
-        throw new HttpError(400, "role must be 'admin' or 'member'");
-      }
-      role = roleRaw;
-    }
-    // Security: any `tenantId` in the body is IGNORED. The minted key is
-    // bound to the caller's authenticated tenant (ctx.tenantId, resolved
-    // from the Bearer token). Forwarding body.tenantId here would let
-    // tenant A mint a key for tenant B — see authCreate doc comment.
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = authCreate(ctx, {
-      label: labelRaw,
-      role,
-    });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // GET /v1/auth/keys?active=true — list keys visible to ctx.tenantId.
-  // `active` defaults to true so the common case (show me usable keys) is
-  // a single GET; ?active=false includes revoked rows.
-  if (method === 'GET' && path === '/v1/auth/keys') {
-    const activeRaw = query.get('active');
-    let active = true;
-    if (activeRaw !== null) {
-      if (activeRaw === 'true') active = true;
-      else if (activeRaw === 'false') active = false;
-      else throw new HttpError(400, "active must be 'true' or 'false'");
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = authList(ctx, { active });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // DELETE /v1/auth/keys/:keyId — revoke. Missing or cross-tenant keys are 404
-  // (no info leak); a member key targeting any key but its own is 403.
-  // 200 with the body rather than 204 so the caller sees revokedAt.
-  const keyMatch = matchPath('/v1/auth/keys/:keyId', path);
-  if (method === 'DELETE' && keyMatch) {
-    validateIdSegment(keyMatch.keyId!, 'key id');
-    const ctx = await buildContextWithAuth(req, opts);
-    const result = authRevoke(ctx, keyMatch.keyId!);
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // GET /v1/quarantine?status=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
-  if (method === 'GET' && path === '/v1/quarantine') {
-    const ctx = await buildContextWithAuth(req, opts);
-    if (ctx.actor.role !== 'admin') {
-      throw new HttpError(403, '/v1/quarantine requires admin role');
-    }
-    const statusRaw = query.get('status');
-    let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
-    if (statusRaw !== null) {
-      if (statusRaw !== 'pending' && statusRaw !== 'approved' && statusRaw !== 'rejected' && statusRaw !== 'all') {
-        throw new HttpError(400, 'status must be one of: pending | approved | rejected | all');
-      }
-      status = statusRaw;
-    }
-    sendJson(res, 200, { quarantine: quarantineList(ctx, { status }) });
-    return;
-  }
-
-  // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
-  const quarantineApproveMatch = matchPath('/v1/quarantine/:id/approve', path);
-  if (method === 'POST' && quarantineApproveMatch) {
-    validateIdSegment(quarantineApproveMatch.id!, 'memory id');
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      quarantineApprove(ctx, quarantineApproveMatch.id!);
-      sendJson(res, 200, { approved: quarantineApproveMatch.id });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not quarantined')) throw new HttpError(404, msg);
-      if (msg.includes('is already') || msg.includes('scope changed')) throw new HttpError(409, msg);
-      throw e;
-    }
-    return;
-  }
-
-  // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
-  const quarantineRejectMatch = matchPath('/v1/quarantine/:id/reject', path);
-  if (method === 'POST' && quarantineRejectMatch) {
-    validateIdSegment(quarantineRejectMatch.id!, 'memory id');
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      quarantineReject(ctx, quarantineRejectMatch.id!);
-      sendJson(res, 200, { rejected: quarantineRejectMatch.id });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not quarantined')) throw new HttpError(404, msg);
-      if (msg.includes('is already')) throw new HttpError(409, msg);
-      throw e;
-    }
-    return;
-  }
-
-  // GET /v1/audit?op=&since=&limit= — read audit events. All three filters
-  // validated at the route boundary so an invalid value lands a 400 before
-  // we hit the DB.
-  if (method === 'GET' && path === '/v1/audit') {
-    const opRaw = query.get('op');
-    let op: AuditOp | undefined;
-    if (opRaw !== null) {
-      if (!isSetMember(VALID_AUDIT_OPS, opRaw)) {
-        throw new HttpError(400, `invalid op: ${opRaw}`);
-      }
-      op = opRaw;
-    }
-    const sinceRaw = query.get('since');
-    let since: string | undefined;
-    if (sinceRaw !== null) {
-      const parsed = Date.parse(sinceRaw);
-      if (!Number.isFinite(parsed)) {
-        throw new HttpError(400, `invalid since: ${sinceRaw}`);
-      }
-      since = sinceRaw;
-    }
-    const limitRaw = query.get('limit');
-    let limit: number | undefined;
-    if (limitRaw !== null) {
-      const parsed = Number(limitRaw);
-      if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
-        throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
-      }
-      limit = parsed;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
-    const tenantOverride = query.get('tenant');
-    const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
-    if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
-    const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
-    const result = auditList(effectiveCtx, { op, since, limit });
-    sendJson(res, 200, result);
-    return;
-  }
-
-  // ── E2 prediction first-class object (v0.31) ──
-  // docs/plans/2026-05-26-e2-prediction-object.md
-  //
-  // 4 routes: POST /v1/predictions (create), GET /v1/predictions (list),
-  // GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
-  // All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
-  // validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
-  // (4096 chars) + closureNote (2048 chars) per v1.11.4 pattern.
-
-  if (method === 'POST' && path === '/v1/predictions') {
-    const body = await parseJsonBody(req);
-    const claim = body['claim'];
-    if (!isJsonString(claim) || claim.length === 0) {
-      throw new HttpError(400, 'claim is required (non-empty string)');
-    }
-    if (claim.length > 4096) {
-      throw new HttpError(400, 'claim exceeds 4096-character cap');
-    }
-    const classTag = body['classTag'];
-    if (!isJsonString(classTag) || classTag.length === 0) {
-      throw new HttpError(400, 'classTag is required (non-empty string)');
-    }
-    const estimate = body['estimate'];
-    let estimateValue: number | undefined;
-    if (estimate !== undefined && estimate !== null) {
-      if (!isJsonNumber(estimate) || !Number.isFinite(estimate)) {
-        throw new HttpError(400, 'estimate must be a finite number');
-      }
-      estimateValue = estimate;
-    }
-    const unit = body['unit'];
-    let estimateUnit: string | undefined;
-    if (unit !== undefined && unit !== null) {
-      if (!isJsonString(unit)) {
-        throw new HttpError(400, 'unit must be a string');
-      }
-      estimateUnit = unit;
-    }
-    const targetDate = body['targetDate'];
-    let targetDateValue: string | undefined;
-    if (targetDate !== undefined && targetDate !== null) {
-      if (!isJsonString(targetDate)) {
-        throw new HttpError(400, 'targetDate must be an ISO date string');
-      }
-      targetDateValue = targetDate;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const prediction = savePrediction(opts.hippoRoot, ctx.tenantId, {
-      classTag,
-      claimText: claim,
-      estimateValue,
-      estimateUnit,
-      targetDate: targetDateValue,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { prediction });
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/predictions') {
-    const classTag = query.get('class') ?? undefined;
-    const status = query.get('status') ?? 'all';
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    let predictions;
-    if (status === 'all') {
-      if (classTag) {
-        predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit });
-      } else {
-        predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit });
-      }
-    } else if (status === 'open') {
-      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, {
-        classTag: classTag || undefined,
-        limit,
-      });
-    } else {
-      if (!isSetMember(VALID_CLOSURE_STATES, status)) {
-        throw new HttpError(400, `status must be one of: open | closed | closed-unknown | all (got "${status}")`);
-      }
-      if (!classTag) {
-        throw new HttpError(400, 'status filter (non-open) requires class param');
-      }
-      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, {
-        closureState: status,
-        limit,
-      });
-    }
-    sendJson(res, 200, { predictions });
-    return;
-  }
-
-  // J3 reference-class / planning-fallacy detector (v0.31).
-  // Order matters: this must match BEFORE /v1/predictions/:id since 'stats'
-  // is not a number — the :id regex requires \d+ so they don't conflict,
-  // but routing this first avoids the dispatch order risk.
-  if (method === 'GET' && path === '/v1/predictions/stats') {
-    const classTag = query.get('class');
-    if (!classTag || classTag.length === 0) {
-      throw new HttpError(400, 'class param is required');
-    }
-    if (classTag.length > 256) {
-      throw new HttpError(400, 'class exceeds 256-character cap');
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const baserate = computePredictionBaserate(opts.hippoRoot, ctx.tenantId, classTag, ctx.actor.subject);
-    sendJson(res, 200, { baserate });
-    return;
-  }
-
-  const predictionByIdMatch = path.match(/^\/v1\/predictions\/(\d+)$/);
-  if (method === 'GET' && predictionByIdMatch) {
-    const id = parseInt(predictionByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const prediction = loadPredictionById(opts.hippoRoot, ctx.tenantId, id);
-    if (!prediction) {
-      throw new HttpError(404, `prediction ${id} not found`);
-    }
-    sendJson(res, 200, { prediction });
-    return;
-  }
-
-  const predictionCloseMatch = path.match(/^\/v1\/predictions\/(\d+)\/close$/);
-  if (method === 'POST' && predictionCloseMatch) {
-    const id = parseInt(predictionCloseMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const state = body['state'];
-    if (!isJsonString(state) || !isSetMember(VALID_CLOSURE_STATES, state) || state === 'open') {
-      throw new HttpError(400, 'state is required and must be one of: closed | closed-unknown');
-    }
-    const actual = body['actual'];
-    let actualValue: number | undefined;
-    if (actual !== undefined && actual !== null) {
-      if (!isJsonNumber(actual) || !Number.isFinite(actual)) {
-        throw new HttpError(400, 'actual must be a finite number');
-      }
-      actualValue = actual;
-    }
-    const note = body['note'];
-    let closureNote: string | undefined;
-    if (note !== undefined && note !== null) {
-      if (!isJsonString(note)) {
-        throw new HttpError(400, 'note must be a string');
-      }
-      if (note.length > 2048) {
-        throw new HttpError(400, 'note exceeds 2048-character cap');
-      }
-      closureNote = note;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
-        closureState: state,
-        actualValue,
-        closureNote,
-      }, ctx.actor.subject);
-      sendJson(res, 200, { prediction });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  // ── decisions (E2 first-class object) ──
-  //
-  // 5 routes: POST /v1/decisions (create, optional supersedesDecisionId),
-  // GET /v1/decisions (list, status filter), GET /v1/decisions/:id (show),
-  // POST /v1/decisions/:id/supersede (create a successor + supersede :id),
-  // POST /v1/decisions/:id/close (retire). Bearer-authed + tenant-scoped via
-  // buildContextWithAuth. status validated against VALID_DECISION_STATES.
-  // DoS caps: text 4096, context 4096 (v1.11.4 pattern). The HTTP surface is
-  // new (no legacy --supersedes <memory-id> constraint), so it supersedes by
-  // table id and never weakens a memory mirror.
-  if (method === 'POST' && path === '/v1/decisions') {
-    const body = await parseJsonBody(req);
-    const text = body['text'];
-    if (!isJsonString(text) || text.length === 0) {
-      throw new HttpError(400, 'text is required (non-empty string)');
-    }
-    if (text.length > 4096) {
-      throw new HttpError(400, 'text exceeds 4096-character cap');
-    }
-    const contextRaw = body['context'];
-    let context: string | undefined;
-    if (contextRaw !== undefined && contextRaw !== null) {
-      if (!isJsonString(contextRaw)) {
-        throw new HttpError(400, 'context must be a string');
-      }
-      if (contextRaw.length > 4096) {
-        throw new HttpError(400, 'context exceeds 4096-character cap');
-      }
-      context = contextRaw;
-    }
-    const supRaw = body['supersedesDecisionId'];
-    let supersedesDecisionId: number | undefined;
-    if (supRaw !== undefined && supRaw !== null) {
-      if (!isJsonNumber(supRaw) || !Number.isInteger(supRaw) || supRaw <= 0) {
-        throw new HttpError(400, 'supersedesDecisionId must be a positive integer');
-      }
-      supersedesDecisionId = supRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
-        decisionText: text,
-        context,
-        supersedesDecisionId,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { decision });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found') || msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/decisions') {
-    const status = query.get('status') ?? 'all';
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    let decisions;
-    if (status === 'all') {
-      decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit });
-    } else {
-      if (!isSetMember(VALID_DECISION_STATES, status)) {
-        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-      }
-      decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, {
-        status,
-        limit,
-      });
-    }
-    sendJson(res, 200, { decisions });
-    return;
-  }
-
-  const decisionSupersedeMatch = path.match(/^\/v1\/decisions\/(\d+)\/supersede$/);
-  if (method === 'POST' && decisionSupersedeMatch) {
-    const oldId = parseInt(decisionSupersedeMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const text = body['text'];
-    if (!isJsonString(text) || text.length === 0) {
-      throw new HttpError(400, 'text is required (non-empty string)');
-    }
-    if (text.length > 4096) {
-      throw new HttpError(400, 'text exceeds 4096-character cap');
-    }
-    const contextRaw = body['context'];
-    let context: string | undefined;
-    if (contextRaw !== undefined && contextRaw !== null) {
-      if (!isJsonString(contextRaw)) {
-        throw new HttpError(400, 'context must be a string');
-      }
-      if (contextRaw.length > 4096) {
-        throw new HttpError(400, 'context exceeds 4096-character cap');
-      }
-      context = contextRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
-        decisionText: text,
-        context,
-        supersedesDecisionId: oldId,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { decision });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const decisionCloseMatch = path.match(/^\/v1\/decisions\/(\d+)\/close$/);
-  if (method === 'POST' && decisionCloseMatch) {
-    const id = parseInt(decisionCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { decision });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const decisionByIdMatch = path.match(/^\/v1\/decisions\/(\d+)$/);
-  if (method === 'GET' && decisionByIdMatch) {
-    const id = parseInt(decisionByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const decision = loadDecisionById(opts.hippoRoot, ctx.tenantId, id);
-    if (!decision) {
-      throw new HttpError(404, `decision ${id} not found`);
-    }
-    sendJson(res, 200, { decision });
-    return;
-  }
-
-  // ── incidents (E2 first-class object) ──
-  //
-  // 5 routes: POST /v1/incidents (open; body text + context + linkedMemoryIds[]),
-  // GET /v1/incidents (list, status filter), GET /v1/incidents/:id (show),
-  // POST /v1/incidents/:id/resolve (open -> resolved; body resolutionText),
-  // POST /v1/incidents/:id/close (open|resolved -> closed). Bearer-authed +
-  // tenant-scoped via buildContextWithAuth. status validated against
-  // VALID_INCIDENT_STATES. DoS caps: text 4096, context 4096, resolutionText
-  // 4096 (v1.11.4 pattern). Mirrors /v1/decisions; lifecycle is
-  // open->resolved->closed (no supersede), so linkedMemoryIds replaces
-  // supersedesDecisionId on create.
-  if (method === 'POST' && path === '/v1/incidents') {
-    const body = await parseJsonBody(req);
-    const text = body['text'];
-    if (!isJsonString(text) || text.length === 0) {
-      throw new HttpError(400, 'text is required (non-empty string)');
-    }
-    if (text.length > 4096) {
-      throw new HttpError(400, 'text exceeds 4096-character cap');
-    }
-    const contextRaw = body['context'];
-    let context: string | undefined;
-    if (contextRaw !== undefined && contextRaw !== null) {
-      if (!isJsonString(contextRaw)) {
-        throw new HttpError(400, 'context must be a string');
-      }
-      if (contextRaw.length > 4096) {
-        throw new HttpError(400, 'context exceeds 4096-character cap');
-      }
-      context = contextRaw;
-    }
-    const linkedRaw = body['linkedMemoryIds'];
-    let linkedMemoryIds: string[] | undefined;
-    if (linkedRaw !== undefined && linkedRaw !== null) {
-      if (!Array.isArray(linkedRaw)) {
-        throw new HttpError(400, 'linkedMemoryIds must be an array of memory ids');
-      }
-      if (linkedRaw.length > 256) {
-        throw new HttpError(400, 'linkedMemoryIds exceeds 256-item cap');
-      }
-      const isValidMemoryId = (item: JsonValue): item is string =>
-        isJsonString(item) && item.length > 0 && item.length <= 4096;
-      if (!linkedRaw.every(isValidMemoryId)) {
-        throw new HttpError(400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars');
-      }
-      linkedMemoryIds = linkedRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const incident = saveIncident(opts.hippoRoot, ctx.tenantId, {
-        incidentText: text,
-        context,
-        linkedMemoryIds,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { incident });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/incidents') {
-    const status = query.get('status') ?? 'all';
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    let incidents;
-    if (status === 'all') {
-      incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit });
-    } else {
-      if (!isSetMember(VALID_INCIDENT_STATES, status)) {
-        throw new HttpError(400, `status must be one of: open | resolved | closed | all (got "${status}")`);
-      }
-      incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, {
-        status,
-        limit,
-      });
-    }
-    sendJson(res, 200, { incidents });
-    return;
-  }
-
-  const incidentResolveMatch = path.match(/^\/v1\/incidents\/(\d+)\/resolve$/);
-  if (method === 'POST' && incidentResolveMatch) {
-    const id = parseInt(incidentResolveMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const resolutionText = body['resolutionText'];
-    if (!isJsonString(resolutionText) || resolutionText.trim().length === 0) {
-      throw new HttpError(400, 'resolutionText is required (non-empty string)');
-    }
-    if (resolutionText.length > 4096) {
-      throw new HttpError(400, 'resolutionText exceeds 4096-character cap');
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
-      sendJson(res, 200, { incident });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not open')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const incidentCloseMatch = path.match(/^\/v1\/incidents\/(\d+)\/close$/);
-  if (method === 'POST' && incidentCloseMatch) {
-    const id = parseInt(incidentCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { incident });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('already closed')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const incidentByIdMatch = path.match(/^\/v1\/incidents\/(\d+)$/);
-  if (method === 'GET' && incidentByIdMatch) {
-    const id = parseInt(incidentByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const incident = loadIncidentById(opts.hippoRoot, ctx.tenantId, id);
-    if (!incident) {
-      throw new HttpError(404, `incident ${id} not found`);
-    }
-    sendJson(res, 200, { incident });
-    return;
-  }
-
-  // ── processes (E2 first-class object) ──
-  //
-  // 5 routes: POST /v1/processes (new; body processName + steps[] + description),
-  // GET /v1/processes (list, status filter), GET /v1/processes/:id (show),
-  // POST /v1/processes/:id/supersede (active -> superseded by a new version; body
-  // steps[] + changeSummary + description; reuses the predecessor's name),
-  // POST /v1/processes/:id/close (active -> closed). Bearer-authed + tenant-scoped
-  // via buildContextWithAuth. status validated against VALID_PROCESS_STATES. DoS
-  // caps: processName/description/changeSummary 4096, steps 200x2000
-  // (validateProcessStepsBody). Mirrors /v1/decisions; the delta lifecycle is the
-  // decision supersede path.
-  if (method === 'POST' && path === '/v1/processes') {
-    const body = await parseJsonBody(req);
-    const processName = body['processName'];
-    if (!isJsonString(processName) || processName.trim().length === 0) {
-      throw new HttpError(400, 'processName is required (non-empty string)');
-    }
-    if (processName.length > 4096) {
-      throw new HttpError(400, 'processName exceeds 4096-character cap');
-    }
-    const steps = validateProcessStepsBody(body['steps']);
-    const descriptionRaw = body['description'];
-    let description: string | undefined;
-    if (descriptionRaw !== undefined && descriptionRaw !== null) {
-      if (!isJsonString(descriptionRaw)) {
-        throw new HttpError(400, 'description must be a string');
-      }
-      if (descriptionRaw.length > 4096) {
-        throw new HttpError(400, 'description exceeds 4096-character cap');
-      }
-      description = descriptionRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
-      processName,
-      steps,
-      description,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { process });
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/processes') {
-    const status = query.get('status') ?? 'all';
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    let processes;
-    if (status === 'all') {
-      processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit });
-    } else {
-      if (!isSetMember(VALID_PROCESS_STATES, status)) {
-        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-      }
-      processes = loadProcesses(opts.hippoRoot, ctx.tenantId, {
-        status,
-        limit,
-      });
-    }
-    sendJson(res, 200, { processes });
-    return;
-  }
-
-  const processSupersedeMatch = path.match(/^\/v1\/processes\/(\d+)\/supersede$/);
-  if (method === 'POST' && processSupersedeMatch) {
-    const id = parseInt(processSupersedeMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const steps = validateProcessStepsBody(body['steps']);
-    if (steps.length === 0) {
-      throw new HttpError(400, 'steps is required (at least one step) for a supersession');
-    }
-    const changeRaw = body['changeSummary'];
-    let changeSummary: string | undefined;
-    if (changeRaw !== undefined && changeRaw !== null) {
-      if (!isJsonString(changeRaw)) {
-        throw new HttpError(400, 'changeSummary must be a string');
-      }
-      if (changeRaw.length > 4096) {
-        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-      }
-      changeSummary = changeRaw;
-    }
-    const descRaw = body['description'];
-    let description: string | undefined;
-    if (descRaw !== undefined && descRaw !== null) {
-      if (!isJsonString(descRaw)) {
-        throw new HttpError(400, 'description must be a string');
-      }
-      if (descRaw.length > 4096) {
-        throw new HttpError(400, 'description exceeds 4096-character cap');
-      }
-      description = descRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    // A supersession is a new version of the SAME process: reuse the
-    // predecessor's name. 404 if the target does not exist; saveProcess's
-    // in-SAVEPOINT preflight is the authoritative active-state check (409).
-    const existing = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
-    if (!existing) {
-      throw new HttpError(404, `process ${id} not found`);
-    }
-    try {
-      const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
-        processName: existing.processName,
-        steps,
-        description,
-        changeSummary,
-        supersedesProcessId: id,
-      }, ctx.actor.subject);
-      sendJson(res, 200, { process });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active') || msg.includes('could not be superseded')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const processCloseMatch = path.match(/^\/v1\/processes\/(\d+)\/close$/);
-  if (method === 'POST' && processCloseMatch) {
-    const id = parseInt(processCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { process });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const processByIdMatch = path.match(/^\/v1\/processes\/(\d+)$/);
-  if (method === 'GET' && processByIdMatch) {
-    const id = parseInt(processByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const process = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
-    if (!process) {
-      throw new HttpError(404, `process ${id} not found`);
-    }
-    sendJson(res, 200, { process });
-    return;
-  }
-
-  // ── policies (E2 first-class object, bi-temporal-first) ──
-  //
-  // 6 routes: POST /v1/policies (new; processName-style body policyName +
-  // policyText + validFrom? + validTo?), GET /v1/policies (list, status filter),
-  // GET /v1/policies/asof (date + optional name; the bi-temporal as-of query;
-  // placed BEFORE the /:id GET so the literal 'asof' is matched first), GET
-  // /v1/policies/:id, POST /v1/policies/:id/supersede, POST /v1/policies/:id/close.
-  // Date inputs are normalized + range-validated in the store; an invalid/inverted
-  // date throws -> 400. DoS caps: policyName/policyText/changeSummary 4096.
-  if (method === 'POST' && path === '/v1/policies') {
-    const body = await parseJsonBody(req);
-    const policyName = body['policyName'];
-    if (!isJsonString(policyName) || policyName.trim().length === 0) {
-      throw new HttpError(400, 'policyName is required (non-empty string)');
-    }
-    if (policyName.length > 4096) {
-      throw new HttpError(400, 'policyName exceeds 4096-character cap');
-    }
-    const policyText = body['policyText'];
-    if (!isJsonString(policyText) || policyText.trim().length === 0) {
-      throw new HttpError(400, 'policyText is required (non-empty string)');
-    }
-    if (policyText.length > 4096) {
-      throw new HttpError(400, 'policyText exceeds 4096-character cap');
-    }
-    const validFrom = optionalDateField(body['validFrom'], 'validFrom');
-    const validTo = optionalDateField(body['validTo'], 'validTo');
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
-        policyName,
-        policyText,
-        validFrom,
-        validTo,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { policy });
-    } catch (e) {
-      // savePolicy throws on invalid/inverted dates (validation) -> 400.
-      throw new HttpError(400, e instanceof Error ? e.message : String(e));
-    }
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/policies') {
-    const status = query.get('status') ?? 'all';
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    let policies;
-    if (status === 'all') {
-      policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit });
-    } else {
-      if (!isSetMember(VALID_POLICY_STATES, status)) {
-        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-      }
-      policies = loadPolicies(opts.hippoRoot, ctx.tenantId, {
-        status,
-        limit,
-      });
-    }
-    sendJson(res, 200, { policies });
-    return;
-  }
-
-  // The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so
-  // the /(\d+)/ route would not match it, but order it first for clarity).
-  if (method === 'GET' && path === '/v1/policies/asof') {
-    const date = query.get('date');
-    if (date === null || date.length === 0) {
-      throw new HttpError(400, 'date is required (ISO-8601 valid-time)');
-    }
-    const name = query.get('name') ?? undefined;
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
-      sendJson(res, 200, { policies });
-    } catch (e) {
-      throw new HttpError(400, e instanceof Error ? e.message : String(e));
-    }
-    return;
-  }
-
-  const policySupersedeMatch = path.match(/^\/v1\/policies\/(\d+)\/supersede$/);
-  if (method === 'POST' && policySupersedeMatch) {
-    const id = parseInt(policySupersedeMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const policyText = body['policyText'];
-    if (!isJsonString(policyText) || policyText.trim().length === 0) {
-      throw new HttpError(400, 'policyText is required (non-empty string)');
-    }
-    if (policyText.length > 4096) {
-      throw new HttpError(400, 'policyText exceeds 4096-character cap');
-    }
-    const validFrom = optionalDateField(body['validFrom'], 'validFrom');
-    const validTo = optionalDateField(body['validTo'], 'validTo');
-    const changeRaw = body['changeSummary'];
-    let changeSummary: string | undefined;
-    if (changeRaw !== undefined && changeRaw !== null) {
-      if (!isJsonString(changeRaw)) {
-        throw new HttpError(400, 'changeSummary must be a string');
-      }
-      if (changeRaw.length > 4096) {
-        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-      }
-      changeSummary = changeRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const existing = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
-    if (!existing) {
-      throw new HttpError(404, `policy ${id} not found`);
-    }
-    try {
-      const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
-        policyName: existing.policyName,
-        policyText,
-        validFrom,
-        validTo,
-        changeSummary,
-        supersedesPolicyId: id,
-      }, ctx.actor.subject);
-      sendJson(res, 200, { policy });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active') || msg.includes('could not be superseded')) {
-        throw new HttpError(409, msg);
-      }
-      // invalid/inverted date or missing field -> validation.
-      throw new HttpError(400, msg);
-    }
-    return;
-  }
-
-  const policyCloseMatch = path.match(/^\/v1\/policies\/(\d+)\/close$/);
-  if (method === 'POST' && policyCloseMatch) {
-    const id = parseInt(policyCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { policy });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const policyByIdMatch = path.match(/^\/v1\/policies\/(\d+)$/);
-  if (method === 'GET' && policyByIdMatch) {
-    const id = parseInt(policyByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const policy = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
-    if (!policy) {
-      throw new HttpError(404, `policy ${id} not found`);
-    }
-    sendJson(res, 200, { policy });
-    return;
-  }
-
-  // ── skills (E2 first-class object, executable/exportable) ──
-  //
-  // 6 routes: POST /v1/skills (new; body skillName + instructions + trigger?),
-  // GET /v1/skills (list, status filter; shared parseListLimit), GET
-  // /v1/skills/export (renders ACTIVE skills as an AGENTS.md/CLAUDE.md markdown
-  // block -> {markdown}; literal 'export' is non-numeric so the /:id (\d+) route
-  // cannot capture it, but it is ordered first regardless), GET /v1/skills/:id,
-  // POST /v1/skills/:id/supersede, POST /v1/skills/:id/close. DoS caps:
-  // skillName 256, instructions 8192, trigger 1024, changeSummary 4096. The store
-  // validates + throws; the boundary maps validation -> 400, not-found -> 404,
-  // not-active -> 409. Mirrors /v1/processes; "executable" = exportable
-  // instruction (no code exec).
-  if (method === 'POST' && path === '/v1/skills') {
-    const body = await parseJsonBody(req);
-    const skillName = body['skillName'];
-    if (!isJsonString(skillName) || skillName.trim().length === 0) {
-      throw new HttpError(400, 'skillName is required (non-empty string)');
-    }
-    if (skillName.length > 256) {
-      throw new HttpError(400, 'skillName exceeds 256-character cap');
-    }
-    const instructions = body['instructions'];
-    if (!isJsonString(instructions) || instructions.trim().length === 0) {
-      throw new HttpError(400, 'instructions are required (non-empty string)');
-    }
-    if (instructions.length > 8192) {
-      throw new HttpError(400, 'instructions exceed 8192-character cap');
-    }
-    const triggerRaw = body['trigger'];
-    let trigger: string | undefined;
-    if (triggerRaw !== undefined && triggerRaw !== null) {
-      if (!isJsonString(triggerRaw)) {
-        throw new HttpError(400, 'trigger must be a string');
-      }
-      if (triggerRaw.length > 1024) {
-        throw new HttpError(400, 'trigger exceeds 1024-character cap');
-      }
-      trigger = triggerRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
-        skillName,
-        instructions,
-        trigger,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { skill });
-    } catch (e) {
-      // saveSkill throws on validation (single-line name etc.) -> 400.
-      throw new HttpError(400, e instanceof Error ? e.message : String(e));
-    }
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/skills') {
-    const status = query.get('status') ?? 'all';
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    let skills;
-    if (status === 'all') {
-      skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit });
-    } else {
-      if (!isSetMember(VALID_SKILL_STATES, status)) {
-        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-      }
-      skills = loadSkills(opts.hippoRoot, ctx.tenantId, {
-        status,
-        limit,
-      });
-    }
-    sendJson(res, 200, { skills });
-    return;
-  }
-
-  // The export renderer: must precede the /:id GET (literal 'export' is
-  // non-numeric so the /(\d+)/ route would not match it, but order it first).
-  if (method === 'GET' && path === '/v1/skills/export') {
-    const ctx = await buildContextWithAuth(req, opts);
-    const markdown = exportSkills(opts.hippoRoot, ctx.tenantId);
-    sendJson(res, 200, { markdown });
-    return;
-  }
-
-  const skillSupersedeMatch = path.match(/^\/v1\/skills\/(\d+)\/supersede$/);
-  if (method === 'POST' && skillSupersedeMatch) {
-    const id = parseInt(skillSupersedeMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const instructions = body['instructions'];
-    if (!isJsonString(instructions) || instructions.trim().length === 0) {
-      throw new HttpError(400, 'instructions are required (non-empty string)');
-    }
-    if (instructions.length > 8192) {
-      throw new HttpError(400, 'instructions exceed 8192-character cap');
-    }
-    const triggerRaw = body['trigger'];
-    let trigger: string | undefined;
-    if (triggerRaw !== undefined && triggerRaw !== null) {
-      if (!isJsonString(triggerRaw)) {
-        throw new HttpError(400, 'trigger must be a string');
-      }
-      if (triggerRaw.length > 1024) {
-        throw new HttpError(400, 'trigger exceeds 1024-character cap');
-      }
-      trigger = triggerRaw;
-    }
-    const changeRaw = body['changeSummary'];
-    let changeSummary: string | undefined;
-    if (changeRaw !== undefined && changeRaw !== null) {
-      if (!isJsonString(changeRaw)) {
-        throw new HttpError(400, 'changeSummary must be a string');
-      }
-      if (changeRaw.length > 4096) {
-        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-      }
-      changeSummary = changeRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const existing = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
-    if (!existing) {
-      throw new HttpError(404, `skill ${id} not found`);
-    }
-    try {
-      const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
-        skillName: existing.skillName,
-        instructions,
-        trigger,
-        changeSummary,
-        supersedesSkillId: id,
-      }, ctx.actor.subject);
-      sendJson(res, 200, { skill });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active') || msg.includes('could not be superseded')) {
-        throw new HttpError(409, msg);
-      }
-      throw new HttpError(400, msg);
-    }
-    return;
-  }
-
-  const skillCloseMatch = path.match(/^\/v1\/skills\/(\d+)\/close$/);
-  if (method === 'POST' && skillCloseMatch) {
-    const id = parseInt(skillCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { skill });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const skillByIdMatch = path.match(/^\/v1\/skills\/(\d+)$/);
-  if (method === 'GET' && skillByIdMatch) {
-    const id = parseInt(skillByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const skill = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
-    if (!skill) {
-      throw new HttpError(404, `skill ${id} not found`);
-    }
-    sendJson(res, 200, { skill });
-    return;
-  }
-
-  // Named list-opts shape for GET /v1/project-briefs (see no-known-value-widening:
-  // a named interface is not flagged the way an inline anonymous object type is).
-  interface ProjectBriefListOpts {
-    status?: BriefStatus;
-    repo?: string;
-    limit: number;
-  }
-
-  // ── E2 project_brief routes ──
-  //
-  // 6 routes: POST /v1/project-briefs (new; body repo + summary), GET
-  // /v1/project-briefs (list; status + repo filter; shared parseListLimit), POST
-  // /v1/project-briefs/refresh (body {repo, dryRun?} -> auto-assemble the brief
-  // from the repo's receipts; dryRun returns {markdown} without writing; ordered
-  // before /:id), GET /v1/project-briefs/:id, POST /v1/project-briefs/:id/supersede,
-  // POST /v1/project-briefs/:id/close. DoS caps: repo 256, summary 8192,
-  // changeSummary 4096. The store validates + throws; the boundary maps validation
-  // -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
-  if (method === 'POST' && path === '/v1/project-briefs') {
-    const body = await parseJsonBody(req);
-    const repo = body['repo'];
-    if (!isJsonString(repo) || repo.trim().length === 0) {
-      throw new HttpError(400, 'repo is required (non-empty string)');
-    }
-    if (repo.length > 256) {
-      throw new HttpError(400, 'repo exceeds 256-character cap');
-    }
-    const summary = body['summary'];
-    if (!isJsonString(summary) || summary.trim().length === 0) {
-      throw new HttpError(400, 'summary is required (non-empty string)');
-    }
-    if (summary.length > 8192) {
-      throw new HttpError(400, 'summary exceeds 8192-character cap');
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
-        repo,
-        summary,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { brief });
-    } catch (e) {
-      // saveProjectBrief throws on validation (single-line repo etc.) -> 400.
-      throw new HttpError(400, e instanceof Error ? e.message : String(e));
-    }
-    return;
-  }
-
-  if (method === 'GET' && path === '/v1/project-briefs') {
-    const status = query.get('status') ?? 'all';
-    const repoFilter = query.get('repo');
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    const listOpts: ProjectBriefListOpts = { limit };
-    if (repoFilter !== null && repoFilter.trim().length > 0) {
-      listOpts.repo = repoFilter.trim();
-    }
-    if (status !== 'all') {
-      if (!isSetMember(VALID_BRIEF_STATES, status)) {
-        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-      }
-      listOpts.status = status;
-    }
-    const briefs = loadProjectBriefs(opts.hippoRoot, ctx.tenantId, listOpts);
-    sendJson(res, 200, { briefs });
-    return;
-  }
-
-  // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
-  // so the /(\d+)/ routes would not match it, but order it first).
-  if (method === 'POST' && path === '/v1/project-briefs/refresh') {
-    const body = await parseJsonBody(req);
-    const repo = body['repo'];
-    if (!isJsonString(repo) || repo.trim().length === 0) {
-      throw new HttpError(400, 'repo is required (non-empty string)');
-    }
-    if (repo.length > 256) {
-      throw new HttpError(400, 'repo exceeds 256-character cap');
-    }
-    const dryRun = body['dryRun'] === true;
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      if (dryRun) {
-        const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
-        sendJson(res, 200, { markdown, receiptCount });
-        return;
-      }
-      const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
-      sendJson(res, 200, { brief });
-    } catch (e) {
-      // A refresh race (the active brief is closed/superseded between
-      // loadActiveBriefForRepo and the supersede CAS) is a state conflict, not a
-      // validation error — map it to 409 like the explicit supersede route
-      // (codex-review 2026-05-30, P3).
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active') || msg.includes('could not be superseded')) {
-        throw new HttpError(409, msg);
-      }
-      throw new HttpError(400, msg);
-    }
-    return;
-  }
-
-  const briefSupersedeMatch = path.match(/^\/v1\/project-briefs\/(\d+)\/supersede$/);
-  if (method === 'POST' && briefSupersedeMatch) {
-    const id = parseInt(briefSupersedeMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const summary = body['summary'];
-    if (!isJsonString(summary) || summary.trim().length === 0) {
-      throw new HttpError(400, 'summary is required (non-empty string)');
-    }
-    if (summary.length > 8192) {
-      throw new HttpError(400, 'summary exceeds 8192-character cap');
-    }
-    const changeRaw = body['changeSummary'];
-    let changeSummary: string | undefined;
-    if (changeRaw !== undefined && changeRaw !== null) {
-      if (!isJsonString(changeRaw)) {
-        throw new HttpError(400, 'changeSummary must be a string');
-      }
-      if (changeRaw.length > 4096) {
-        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-      }
-      changeSummary = changeRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const existing = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
-    if (!existing) {
-      throw new HttpError(404, `project brief ${id} not found`);
-    }
-    try {
-      const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
-        repo: existing.repo,
-        summary,
-        changeSummary,
-        supersedesBriefId: id,
-      }, ctx.actor.subject);
-      sendJson(res, 200, { brief });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active') || msg.includes('could not be superseded')) {
-        throw new HttpError(409, msg);
-      }
-      throw new HttpError(400, msg);
-    }
-    return;
-  }
-
-  const briefCloseMatch = path.match(/^\/v1\/project-briefs\/(\d+)\/close$/);
-  if (method === 'POST' && briefCloseMatch) {
-    const id = parseInt(briefCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { brief });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const briefByIdMatch = path.match(/^\/v1\/project-briefs\/(\d+)$/);
-  if (method === 'GET' && briefByIdMatch) {
-    const id = parseInt(briefByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const brief = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
-    if (!brief) {
-      throw new HttpError(404, `project brief ${id} not found`);
-    }
-    sendJson(res, 200, { brief });
-    return;
-  }
-
-  // ── E2 customer_note routes ──
-  //
-  // 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
-  // note), GET /v1/customer-notes (list; status + customer filter; shared
-  // parseListLimit), GET /v1/customer-notes/:id, POST /v1/customer-notes/:id/supersede,
-  // POST /v1/customer-notes/:id/close. DoS caps: customer 256, note 8192,
-  // changeSummary 4096. The store validates + throws; the boundary maps validation ->
-  // 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
-  if (method === 'POST' && path === '/v1/customer-notes') {
-    const body = await parseJsonBody(req);
-    const customer = body['customer'];
-    if (!isJsonString(customer) || customer.trim().length === 0) {
-      throw new HttpError(400, 'customer is required (non-empty string)');
-    }
-    if (customer.length > 256) {
-      throw new HttpError(400, 'customer exceeds 256-character cap');
-    }
-    const note = body['note'];
-    if (!isJsonString(note) || note.trim().length === 0) {
-      throw new HttpError(400, 'note is required (non-empty string)');
-    }
-    if (note.length > 8192) {
-      throw new HttpError(400, 'note exceeds 8192-character cap');
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
-        customer,
-        note,
-      }, ctx.actor.subject);
-      sendJson(res, 201, { note: customerNote });
-    } catch (e) {
-      // saveCustomerNote throws on validation (single-line customer etc.) -> 400.
-      throw new HttpError(400, e instanceof Error ? e.message : String(e));
-    }
-    return;
-  }
-
-  // Named list-opts shape for GET /v1/customer-notes (see the matching
-  // ProjectBriefListOpts comment above: named interfaces are exempt from
-  // no-known-value-widening, inline anonymous object types are not).
-  interface CustomerNoteListOpts {
-    status?: NoteStatus;
-    customer?: string;
-    limit: number;
-  }
-
-  if (method === 'GET' && path === '/v1/customer-notes') {
-    const status = query.get('status') ?? 'all';
-    const customerFilter = query.get('customer');
-    const limit = parseListLimit(query.get('limit'));
-    const ctx = await buildContextWithAuth(req, opts);
-    const listOpts: CustomerNoteListOpts = { limit };
-    if (customerFilter !== null && customerFilter.trim().length > 0) {
-      listOpts.customer = customerFilter.trim();
-    }
-    if (status !== 'all') {
-      if (!isSetMember(VALID_NOTE_STATES, status)) {
-        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-      }
-      listOpts.status = status;
-    }
-    const notes = loadCustomerNotes(opts.hippoRoot, ctx.tenantId, listOpts);
-    sendJson(res, 200, { notes });
-    return;
-  }
-
-  const noteSupersedeMatch = path.match(/^\/v1\/customer-notes\/(\d+)\/supersede$/);
-  if (method === 'POST' && noteSupersedeMatch) {
-    const id = parseInt(noteSupersedeMatch[1], 10);
-    const body = await parseJsonBody(req);
-    const note = body['note'];
-    if (!isJsonString(note) || note.trim().length === 0) {
-      throw new HttpError(400, 'note is required (non-empty string)');
-    }
-    if (note.length > 8192) {
-      throw new HttpError(400, 'note exceeds 8192-character cap');
-    }
-    const changeRaw = body['changeSummary'];
-    let changeSummary: string | undefined;
-    if (changeRaw !== undefined && changeRaw !== null) {
-      if (!isJsonString(changeRaw)) {
-        throw new HttpError(400, 'changeSummary must be a string');
-      }
-      if (changeRaw.length > 4096) {
-        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-      }
-      changeSummary = changeRaw;
-    }
-    const ctx = await buildContextWithAuth(req, opts);
-    const existing = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
-    if (!existing) {
-      throw new HttpError(404, `customer note ${id} not found`);
-    }
-    try {
-      const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
-        customer: existing.customer,
-        note,
-        changeSummary,
-        supersedesNoteId: id,
-      }, ctx.actor.subject);
-      sendJson(res, 200, { note: customerNote });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active') || msg.includes('could not be superseded')) {
-        throw new HttpError(409, msg);
-      }
-      throw new HttpError(400, msg);
-    }
-    return;
-  }
-
-  const noteCloseMatch = path.match(/^\/v1\/customer-notes\/(\d+)\/close$/);
-  if (method === 'POST' && noteCloseMatch) {
-    const id = parseInt(noteCloseMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    try {
-      const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-      sendJson(res, 200, { note: customerNote });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('not found')) {
-        throw new HttpError(404, msg);
-      }
-      if (msg.includes('not active')) {
-        throw new HttpError(409, msg);
-      }
-      throw e;
-    }
-    return;
-  }
-
-  const noteByIdMatch = path.match(/^\/v1\/customer-notes\/(\d+)$/);
-  if (method === 'GET' && noteByIdMatch) {
-    const id = parseInt(noteByIdMatch[1], 10);
-    const ctx = await buildContextWithAuth(req, opts);
-    const customerNote = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
-    if (!customerNote) {
-      throw new HttpError(404, `customer note ${id} not found`);
-    }
-    sendJson(res, 200, { note: customerNote });
-    return;
-  }
+  if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
 
   // ── POST /v1/connectors/slack/events ──
   //
