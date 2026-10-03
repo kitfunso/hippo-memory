@@ -25,6 +25,7 @@ export function readPilotArm(db: DatabaseSyncLike, sessionId: string): PilotArm 
 }
 
 /** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
+// The 1 s bound holds only on a handle opened with `busyWaitMs: ARM_LOCK_WAIT_MS`.
 export function ensurePilotArm(
   db: DatabaseSyncLike, tenantId: string, sessionId: string, rateBp: number, now?: string,
 ): PilotArm {

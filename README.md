@@ -564,8 +564,10 @@ to hold back memories from about 20% of sessions. The rate is in basis points, 0
 is off (the default). The setting is read from the store the token ledger writes to. A session
 lands in its arm by a hash of its id, and the first hook call writes one row to the token ledger.
 A holdout session gets no memories from the per-prompt hook, the SessionStart hook or compact-resume.
-The agent's own `hippo context` pull is gated in Claude Code only. Capture still runs. Pulls such as
-`hippo recall` and the MCP tools stay open and are not recorded as arm rows. Set the rate to 0 only after the pilot window closes, because 0 ends every holdout at once.
+The agent's own `hippo context` pull is gated in Claude Code only, so a Codex holdout session still
+gets memories from it. Capture still runs. `hippo recall`, the HTTP API and the MCP tools are not gated
+and write no arm row. Agents are told to call the MCP context tool at session start, and those calls
+are not recorded. Set the rate to 0 only after the pilot window closes, because 0 ends every holdout at once.
 `hippo doctor` shows the pilot when it is on.
 
 ---

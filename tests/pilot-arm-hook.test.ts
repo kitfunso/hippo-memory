@@ -186,10 +186,13 @@ describe('the per-prompt hook', () => {
     expect(arms()).toHaveLength(1);
   });
 
-  it('a blank payload session id is treated as absent by compact-resume', () => {
-    snapshotFor('');
-    const r = run(['compact-resume'], { session_id: '  ', source: 'compact' });
-    expect(r.status).toBe(0);
+  it('a blank payload session id skips the pilot gate but keeps the X5 cross-restore guard', () => {
+    snapshotFor('other-session');
+    expect(run(['compact-resume'], { session_id: '  ', source: 'compact' }).stdout).toBe('');
+    snapshotFor('  ');
+    // At rate 10000 any hashed id is holdout, so printing proves the blank id never reached the gate.
+    expect(run(['compact-resume'], { session_id: '  ', source: 'compact' }).stdout).toContain('Restored after compaction');
+    expect(run(HOOK_ARGS, prompt('  ')).stdout).toContain('rollback plan');
     expect(arms()).toHaveLength(0);
   });
 

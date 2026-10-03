@@ -2216,7 +2216,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
           suppressOutput = true;
         }
-        if (typeof payload.session_id === 'string' && payload.session_id.trim() !== '') {
+        if (typeof payload.session_id === 'string') {
           payloadSessionId = payload.session_id;
         }
       }
@@ -5783,7 +5783,7 @@ function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typ
  * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
  */
 function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
-  if (sessionId === undefined) return false;
+  if (sessionId === undefined || sessionId.trim() === '') return false;
   const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
   if (root === null) return false;
   const rate = loadConfig(root).pilot.holdoutRateBp;
