@@ -168,7 +168,7 @@ function selftestFrozen(t) {
   t('pins parsed from a synthetic block, other sections ignored', JSON.stringify(pins.dist) === JSON.stringify(dist) && JSON.stringify(pins.prompts) === JSON.stringify(prompts)
     && pins.manifest === hex('a') && pins.scoredList === hex('b') && pins.claude === '2.1.288');
   const ok = { dist, prompts, claude: '2.1.288 (Claude Code)' };
-  t('pins match, and a prefix-matched claude version passes', L.checkPins(pins, ok).length === 0 && L.checkPins(pins, { manifest: hex('a'), scoredList: hex('b') }).length === 0);
+  t('pins match, and the claude version token is compared exactly', L.checkPins(pins, ok).length === 0 && ['2.1.2880', '2.1.288-dev', '2.1', 'v2.1.288'].every((v) => L.checkPins(pins, { claude: v }).length === 1) && L.checkPins(pins, { claude: '2.1.288\n' }).length === 0 && L.checkPins(pins, { manifest: hex('a'), scoredList: hex('b') }).length === 0);
   const bad = L.checkPins(pins, { dist: { ...dist, 'capture.js': hex('0') }, prompts: { ...prompts, 'judge-prompt.txt': undefined }, claude: '2.1.289', manifest: hex('0') });
   t('pin mismatches are named', bad.join() === 'dist/capture.js,judge-prompt.txt,manifest,claude --version');
   t('a missing pin is a mismatch', L.checkPins(L.parsePins('no pins here'), ok).length === 8 && L.checkPins(L.parsePins(md), { scoredList: undefined }).join() === 'scoredList');
@@ -188,6 +188,13 @@ function selftestDrawPinned(t) {
   const redev = copy();
   redev.dev.pop();
   t('draw refused: scored list, items mapping, dev list', /scored list/.test(L.drawMismatch(fresh, swapped, pin)) && /items mapping/.test(L.drawMismatch(fresh, remapped, pin)) && /dev list/.test(L.drawMismatch(fresh, redev, pin)));
+  const mapped = copy();
+  mapped.items[fresh.dev[0]].agentType = 'other';
+  const extra = copy();
+  extra.items.zz = { session: 'zz' };
+  const counted = copy();
+  counted.eligibleSubs += 1;
+  t('draw refused: a dev mapping, an extra id, any other field', /items mapping differs/.test(L.drawMismatch(fresh, mapped, pin)) && /different set of ids/.test(L.drawMismatch(fresh, extra, pin)) && /eligibleSubs/.test(L.drawMismatch(fresh, counted, pin)));
   t('draw refused when the list sha256 differs from the pin', /prereg pin/.test(L.drawMismatch(fresh, copy(), hex('c'))));
 }
 
@@ -245,12 +252,17 @@ function selftestGuard(t) {
     fs.writeFileSync(path.join(distDir, 'capture.js'), 'edited build');
     t('guard refuses a dist pin mismatch', refuses(/pin mismatch: dist\/capture\.js/));
     fs.writeFileSync(path.join(distDir, 'capture.js'), body('dist', 'capture.js'));
-    cfg.claudeVersion = () => '9.9.9';
-    t('guard refuses a claude version mismatch', refuses(/claude --version/));
+    for (const v of ['9.9.9', '2.1.2880', '2.1.288-dev']) {
+      cfg.claudeVersion = () => v;
+      t(`guard refuses claude ${v}`, refuses(/claude --version/));
+    }
     cfg.claudeVersion = () => '2.1.288 (Claude Code)';
     fs.writeFileSync(cfg.scriptFiles[0], 'export const x = 1;\n');
     commit('later change');
     t('guard refuses a script that changed after the lock commit, even when committed', refuses(/after the lock commit/));
+    fs.appendFileSync(cfg.prereg, '\nA later note.\n');
+    commit('prereg edit after the script change');
+    t('a later prereg edit does not move the lock commit', refuses(/after the lock commit/));
     fs.writeFileSync(cfg.scriptFiles[0], 'export {};\n');
     commit('restore');
     const lock = guardScored(cfg);
