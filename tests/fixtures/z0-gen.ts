@@ -32,7 +32,7 @@ export interface Z0Record {
   limitRetries: number; carryUnionMerges: number; surfaceRestored?: boolean; chain?: Chain; wordOverlap?: number;
 }
 
-export interface PlanCell { sequence: string; seed: number; position: number; arm: string }
+export interface PlanCell { sequence: string; seed: number; position: number; arm: string; taskId?: string; repo?: string }
 export interface Generated { records: Z0Record[]; plan: PlanCell[] }
 
 export interface Knobs {
@@ -142,8 +142,22 @@ export function generate(opts: GenOpts = {}): Generated {
       }
     }
   }
-  const plan = records.map((r) => ({ sequence: r.sequence, seed: r.seed, position: r.position, arm: r.arm }));
-  return { records, plan };
+  return { records, plan: planOf(records) };
 }
 
+/** The plan E1's writePlan would write for these records, taskId and repo included. */
+export const planOf = (records: readonly Z0Record[]): PlanCell[] =>
+  records.map((r) => ({ sequence: r.sequence, seed: r.seed, position: r.position, arm: r.arm, taskId: r.taskId, repo: r.repo }));
+
 export const jsonl = (records: readonly Z0Record[]): string => records.map((r) => JSON.stringify(r)).join('\n');
+
+export const GRADING = { flippedLessons: [], acceptanceFlips: 0, readerSample: { n: 30, disagreements: 0 } };
+
+type Cell = { arm: string; sequence: string; seed: number; position: number };
+export const at = (recs: readonly Cell[], arm: string, sequence: string, seed: number, position: number): number =>
+  recs.findIndex((r) => r.arm === arm && r.sequence === sequence && r.seed === seed && r.position === position);
+
+/** The shape E1 writes for a crashed session: nulls where nothing ran. */
+export const crash = (r: Z0Record, invalid = 'no-result'): void => {
+  Object.assign(r, { invalid, usage: null, turns: null, toolCalls: null, acceptancePassed: null, resolved: false, lessons: [] });
+};

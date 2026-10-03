@@ -10,33 +10,49 @@ import { SEALED, blindView, inputHashes, loadOrCreateKey, unblindRefusal } from 
 import { filterRecords } from './z0-filters.mjs';
 import { computeGates } from './z0-gates.mjs';
 import { NOT_RUN, computeHypotheses, computeReported } from './z0-hypotheses.mjs';
-import { isString, parsePlan, parseZ0Records, validateCorpus } from './z0-records.mjs';
+import { ALL_ARMS, isString, parsePlan, parseZ0Records, validateCorpus } from './z0-records.mjs';
 
 export const ITERATIONS = 10_000;
 export const SEED = 1;
+export const ABANDONED = 'abandoned';
+export const NOT_ANALYSED = 'not analysed: the run is abandoned (prereg 114)';
 const USAGE = 'usage: z0-analyze.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--grading FILE] [--drop-list FILE] [--key FILE] [--unblind] [--seed N --iterations N] [--out FILE]';
 const SINGLE = new Map([['--prices', 'prices'], ['--grading', 'grading'], ['--drop-list', 'dropList'], ['--key', 'key'], ['--out', 'out'], ['--seed', 'seed'], ['--iterations', 'iterations']]);
 const PRICE_FIELDS = ['inputPerMTok', 'cacheWritePerMTok', 'cacheReadPerMTok', 'outputPerMTok'];
 
-/** Validation, filters and gates; the hypothesis and reported blocks only when unblinding is allowed and every gate passes. */
+/** Registered arms and sets the plan left out (reading 11); "not run" in a hypothesis must not read as the registered design. */
+export function unplannedDesign(filtered) {
+  const arms = ALL_ARMS.filter((a) => !filtered.arms.includes(a));
+  const sets = ['R', 'N', 'X'].filter((s) => !filtered.sets.includes(s)).map((s) => `set ${s}`);
+  return [...arms, ...sets];
+}
+
+/** Validation, filters and gates; the hypothesis and reported blocks only when unblinding is allowed and every gate passes.
+ * An abandoned run is never analysed (114): no gates, no hypotheses, and its codes stay closed. */
 export function analyzeZ0(records, opts) {
   const { unchecked } = validateCorpus(records, opts.planCells);
   const filtered = filterRecords(records, opts.planCells, { grading: opts.grading ?? null, dropList: opts.dropList ?? null });
+  const unplanned = unplannedDesign(filtered);
+  if (filtered.abandoned.length > 0) {
+    const refusal = opts.unblind ? 'the run is abandoned and never analysed (prereg 114), so its codes stay closed' : null;
+    return { status: ABANDONED, unchecked, filtered, unplanned, gates: null, refusal, hypotheses: null, reported: null };
+  }
   const stat = { iterations: opts.iterations ?? ITERATIONS, seed: opts.seed ?? SEED };
   const gates = computeGates(records, filtered, opts.grading ?? null, stat);
   const refusal = opts.unblind ? (opts.refuse?.(gates) ?? null) : null;
   const open = opts.unblind === true && refusal === null && gates.pass;
   return {
-    unchecked, filtered, gates, refusal,
+    status: gates.pass ? 'valid' : 'invalid', unchecked, filtered, unplanned, gates, refusal,
     hypotheses: open ? computeHypotheses(filtered, opts.prices, stat) : null,
     reported: open ? computeReported(records, filtered, opts.prices, stat) : null,
   };
 }
 
 export function parseArgs(argv) {
-  const args = { runs: [], plan: [], prices: null, grading: null, dropList: null, key: null, out: null, seed: null, iterations: null, unblind: false };
+  const args = { runs: [], plan: [], prices: null, grading: null, dropList: null, key: null, out: null, seed: null, iterations: null, unblind: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
+    if (flag === '--help' || flag === '-h') return { ...args, help: true };
     if (flag === '--unblind') {
       args.unblind = true;
       continue;
@@ -101,13 +117,16 @@ export function buildReport(analysis, inputs, args, codes, hashes) {
   const view = blindView(analysis, blind ? codes : Object.fromEntries(analysis.filtered.arms.map((a) => [a, a])));
   const ofRecord = (args.iterations ?? ITERATIONS) === ITERATIONS && (args.seed ?? SEED) === SEED;
   const voids = blind ? view.voids : Object.fromEntries(Object.entries(analysis.filtered.counts).map(([a, c]) => [a, c.voidReasons]));
-  let hypotheses = SEALED;
-  if (!blind) hypotheses = analysis.gates.pass ? analysis.hypotheses : `withheld: invalid run (${analysis.gates.failed.join(', ')})`;
+  const abandoned = analysis.status === ABANDONED;
+  let hypotheses = blind ? SEALED : analysis.hypotheses;
+  if (abandoned) hypotheses = NOT_ANALYSED;
+  else if (!blind && !analysis.gates.pass) hypotheses = `withheld: invalid run (${analysis.gates.failed.join(', ')})`;
   return {
-    schema: 'z0-report/1', mode: blind ? 'blind' : 'unblinded', ofRecord, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED,
-    abandoned: analysis.filtered.abandoned, unchecked: analysis.unchecked, warnings: inputs.warnings,
-    counts: view.perCode, voids, gates: view.gates, invalid: analysis.gates.failed,
-    hypotheses, reported: blind ? SEALED : analysis.reported, hashes,
+    schema: 'z0-report/1', mode: blind ? 'blind' : 'unblinded', status: analysis.status, ofRecord, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED,
+    abandoned: analysis.filtered.abandoned, designNotRun: analysis.unplanned, unchecked: analysis.unchecked,
+    untaughtApplyDrops: analysis.filtered.untaughtApplyDrops, warnings: inputs.warnings,
+    counts: view.perCode, voids, gates: view.gates, invalid: abandoned ? null : analysis.gates.failed,
+    hypotheses, reported: abandoned ? NOT_ANALYSED : blind ? SEALED : analysis.reported, hashes,
   };
 }
 
@@ -133,9 +152,12 @@ function hypothesisLines(h) {
   const lines = [];
   for (const name of h.order) {
     if (name === 'H4') {
-      lines.push(isString(h.H4) ? `H4 ${h.H4}` : `H4 ${h.H4.gate.pass ? 'pass' : 'FAIL'}: set N cost ratio ${est(h.H4.costRatio)}, resolve difference ${est(h.H4.resolveDiff)}`);
+      const g = h.H4;
+      if (isString(g)) lines.push(`H4 ${g}`);
+      else lines.push(`H4 ${g.gate.pass ? 'pass' : 'FAIL'}: ${g.reason ?? `set N cost ratio ${est(g.costRatio)}, resolve difference ${est(g.resolveDiff)}`}`);
     } else if (name === 'attribution') {
-      lines.push(isString(h.attribution) ? `attribution ${h.attribution}` : `attribution: ${h.attribution.sentence}; A2 vs A5 ${pairText(h.attribution)}`);
+      const a = h.attribution;
+      lines.push(isString(a) ? `attribution ${a}` : `attribution: ${a.sentence ?? a.reason}; A2 vs A5 ${pairText(a)}`);
     } else {
       const v = h.verdicts[name];
       const small = v.final.verdict === 'win' && !v.final.reachesMinimum ? ' (small win)' : '';
@@ -155,7 +177,11 @@ function reportedLines(rep) {
   for (const [arm, a] of Object.entries(rep.perArm)) lines.push(`  ${arm}: ${a.tasks} tasks, resolve ${est(a.resolveRate)}, cost per resolved ${est(a.costPerResolved)}, stale-follow ${est(a.staleFollow)}`);
   lines.push(`  maintainer only: H1 ${pairText(rep.maintainerOnly.H1)}; H2 ${pairText(rep.maintainerOnly.H2)}; H3 ${est(rep.maintainerOnly.H3)}`);
   lines.push(`  first apply only: H1 ${pairText(rep.firstApply.H1)}`);
-  for (const [bucket, p] of Object.entries(rep.bySinceTeach)) lines.push(`  tasksSinceTeach ${bucket}: ${pairText(p)}`);
+  const rate = (e) => (isString(e) ? e : f3(e.estimate));
+  for (const [bucket, p] of Object.entries(rep.bySinceTeach)) {
+    const rates = Object.entries(rep.ratesBySinceTeach[bucket]).map(([arm, r]) => `${arm} ${rate(r.violation)}/${rate(r.excluded)}`);
+    lines.push(`  tasksSinceTeach ${bucket}: A2 - A1 ${pairText(p)}; rates (violation/excluded) ${rates.join(', ')}`);
+  }
   const wo = rep.wordOverlap;
   lines.push(`  wordOverlap Spearman: ${isString(wo) ? wo : `violation ${est(wo.violation)}; excluded ${est(wo.excluded)}`}`);
   const s = rep.sensitivity;
@@ -165,10 +191,11 @@ function reportedLines(rep) {
 }
 
 export function renderText(r) {
-  const lines = [`Z0 analysis, ${r.mode}${r.ofRecord ? '' : ` (not of record: ${r.iterations} resamples, seed ${r.seed})`}`];
+  const lines = [`Z0 analysis, ${r.mode}${r.ofRecord ? '' : ` (not of record: ${r.iterations} resamples, seed ${r.seed})`}`, `status: ${r.status}`];
   lines.push(`abandoned: ${r.abandoned.length === 0 ? 'none' : r.abandoned.join(', ')}`);
   const first3 = (xs) => `${xs.slice(0, 3).join(', ')}${xs.length > 3 ? ', ...' : ''}`;
   lines.push(`unchecked apply records (teach cell missing or invalid): ${r.unchecked.length === 0 ? 'none' : `${r.unchecked.length} (${first3(r.unchecked)})`}`);
+  lines.push(`untaught-apply drops: ${r.untaughtApplyDrops} positions`);
   const grouped = new Map();
   for (const w of r.warnings) {
     const [where, message] = [w.slice(0, w.indexOf(': ')), w.slice(w.indexOf(': ') + 2)];
@@ -176,10 +203,11 @@ export function renderText(r) {
   }
   for (const [message, wheres] of grouped) lines.push(`warning, ${wheres.length} records: ${message} (${first3(wheres)})`);
   for (const [k, c] of Object.entries(r.counts)) {
-    lines.push(`${k}: ${c.records} records of ${c.planned} planned; voids ${c.voids} (${pct(c.voidShare)}), invalid ${c.invalid} (${pct(c.invalidShare)}), missing ${c.missing} (${pct(c.missingShare)})`);
+    lines.push(`${k}: ${c.records} records of ${c.planned} planned; voids ${c.voids} (${pct(c.voidShare)}), invalid ${c.invalid} (${pct(c.invalidShare)}), missing ${c.missing} (${pct(c.missingShare)}), abandoned tail ${c.abandoned}`);
   }
   lines.push(`void reasons: ${JSON.stringify(r.voids)}`);
-  lines.push(...gateLines(r), r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);
+  if (r.gates !== null) lines.push(...gateLines(r), r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);
+  if (r.designNotRun.length > 0) lines.push(`design not fully run: ${r.designNotRun.join(', ')} not planned`);
   if (isString(r.hypotheses)) lines.push(r.hypotheses);
   else lines.push(...hypothesisLines(r.hypotheses), ...reportedLines(r.reported));
   lines.push('sha256:', ...r.hashes.map((h) => `  ${h.sha256}  ${h.role} ${h.file}`));
@@ -195,6 +223,7 @@ export function runCli(argv, cwd = process.cwd()) {
   let codes = null;
   try {
     args = parseArgs(argv);
+    if (args.help) return { code: 0, stdout: `${USAGE}\n`, stderr: '' };
     inputs = loadInputs(args, cwd);
     analysis = analyzeZ0(inputs.records, { ...inputs, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED, unblind: args.unblind, refuse: (gates) => unblindRefusal(args, gates, cwd) });
     if (analysis.refusal !== null) return fail(2, `unblind refused: ${analysis.refusal}`);

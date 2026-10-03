@@ -13,6 +13,7 @@ const REPEAT_SPEC = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt:
 export const SPECS = { H1: REPEAT_SPEC, H2: REPEAT_SPEC, H3: { helpful: 'lower', tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 } };
 export const LESSONS_SENTENCE = "hippo's lessons cut repeat mistakes";
 export const BEHAVIOUR_SENTENCE = 'installing hippo changed behaviour, and this run cannot say its lessons did';
+export const NO_N_DATA = 'no set N data';
 
 export const sum = (xs) => xs.reduce((s, x) => s + x, 0);
 export const mean = (xs) => sum(xs) / xs.length;
@@ -29,7 +30,9 @@ export function shareFail(r, coding) {
   return lessons.filter((l) => l.first !== 'pass').length / lessons.length;
 }
 
-/** Repository, then family, blocks in first-seen order, so a rerun on one seed draws the same resamples. */
+const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Repository, then family, blocks sorted by key, so the resamples depend on neither a seed rerun nor argv order. */
 export function blocks(units) {
   const repos = new Map();
   for (const u of units) {
@@ -37,7 +40,7 @@ export function blocks(units) {
     families.set(u.family, [...(families.get(u.family) ?? []), u]);
     repos.set(u.repo, families);
   }
-  return [...repos.values()].map((f) => [...f.values()]);
+  return [...repos].sort(byKey).map(([, f]) => [...f].sort(byKey).map(([, us]) => us));
 }
 
 /** Units are finite by construction, so a dropped resample is a bug, never data. */
@@ -114,8 +117,24 @@ function reportOrder(verdicts, h4) {
   const losses = HYPOTHESES.filter((h) => verdicts[h].final.verdict === 'loss');
   const h4Failed = h4 !== null && !h4.gate.pass;
   const rest = HYPOTHESES.filter((h) => !losses.includes(h));
-  const order = h4 === null ? [...losses, ...rest] : h4Failed ? [...losses, 'H4', ...rest] : [...losses, ...rest, 'H4'];
+  const order = h4Failed ? [...losses, 'H4', ...rest] : [...losses, ...rest, 'H4'];
   return [...order, 'attribution'];
+}
+
+/** Prereg 148 words a winning H1 two ways, so a tie, loss or inconclusive H1 gets neither sentence (reading 2). */
+function attributionOf(h1Verdict, est) {
+  if (h1Verdict !== 'win') return { ...est, sentence: null, reason: `not applicable, H1 is ${h1Verdict}` };
+  return { ...est, sentence: CODINGS.every((c) => est[c].high < 0) ? LESSONS_SENTENCE : BEHAVIOUR_SENTENCE };
+}
+
+/** H4 is "not run" when set N was never planned, and fails when it was planned but filters left no pair: a harm gate needs data to pass. */
+function harmGateOf(units, setNPlanned, opts) {
+  if (units === null || !setNPlanned) return null;
+  const nUnits = units.filter((u) => u.set === 'N');
+  if (nUnits.length === 0) return { reason: NO_N_DATA, gate: { pass: false, costOk: false, resolveOk: false } };
+  const costRatio = ratioBootstrap(nUnits, 'cost', opts);
+  const resolve = twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
+  return { costRatio, resolveDiff: resolve, gate: harmGate(costRatio, resolve) };
 }
 
 const plannedArms = (filtered) => {
@@ -131,20 +150,9 @@ export function computeHypotheses(filtered, prices, opts) {
   const h2 = runs('X2', 'X3') ? bothCodings(s, 'X2', 'X3', opts, codexApply) : null;
   const units = runs('A1', 'A2') ? taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('R', 'N')) : null;
   const h3 = units && ratioBootstrap(units, 'cost', opts);
-  let h4 = null;
-  if (units) {
-    const nUnits = units.filter((u) => u.set === 'N');
-    const costRatio = ratioBootstrap(nUnits, 'cost', opts);
-    const resolve = twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
-    h4 = { costRatio, resolveDiff: resolve, gate: harmGate(costRatio, resolve) };
-  }
+  const h4 = harmGateOf(units, filtered.sets.includes('N'), opts);
   const verdicts = holmVerdicts(byCoding((c) => ({ H1: h1?.[c] ?? null, H2: h2?.[c] ?? null, H3: h3 })));
-  let attribution = NOT_RUN;
-  if (h1 && runs('A5')) {
-    const est = bothCodings(s, 'A2', 'A5', opts, inSets('R'));
-    const lessons = verdicts.H1.final.verdict === 'win' && CODINGS.every((c) => est[c].high < 0);
-    attribution = { ...est, sentence: lessons ? LESSONS_SENTENCE : BEHAVIOUR_SENTENCE };
-  }
+  const attribution = h1 && runs('A5') ? attributionOf(verdicts.H1.final.verdict, bothCodings(s, 'A2', 'A5', opts, inSets('R'))) : NOT_RUN;
   const h3Block = h3 && {
     ...h3,
     firstSession: ratioBootstrap(units, 'first', opts),
@@ -260,6 +268,29 @@ export const SINCE_TEACH = [
 
 export const withoutRuns = (records, runs) => records.filter((r) => !runs.has(runKey(r.sequence, r.seed)));
 
+/** One arm's own repeat-mistake rate, unpaired and over all its seeds; a unit is a (repo, family, seed) mean, as in H1. */
+export function armRate(s, arm, coding, keep, opts) {
+  const groups = new Map();
+  for (const r of s) {
+    const f = r.arm === arm && r.kind === 'apply' && keep(r) ? shareFail(r, coding) : null;
+    if (f === null) continue;
+    const key = JSON.stringify([r.repo, r.familyId, r.seed]);
+    const g = groups.get(key) ?? { repo: r.repo, family: r.familyId, fails: [] };
+    g.fails.push(f);
+    groups.set(key, g);
+  }
+  const units = [...groups.values()].map((g) => ({ repo: g.repo, family: g.family, value: mean(g.fails) }));
+  return units.length === 0 ? NA : { ...meanBootstrap(units, opts), units: units.length };
+}
+
+/** Prereg 198 asks for the rate itself by tasks since teach; the A2-minus-A1 difference sits beside it in `bySinceTeach`. */
+function ratesBySinceTeach(s, arms, opts) {
+  const rn = arms.filter((a) => a.startsWith('A'));
+  return Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, Object.fromEntries(rn.map((arm) => [
+    arm, byCoding((c) => armRate(s, arm, c, (r) => r.set === 'R' && inBucket(r), opts)),
+  ]))]));
+}
+
 /** Estimates outside the family (190-199), each with a CI and no verdict; `records` are the raw ones, for rotation slots. */
 export function computeReported(records, filtered, prices, opts) {
   const s = filtered.scored;
@@ -280,6 +311,7 @@ export function computeReported(records, filtered, prices, opts) {
     },
     firstApply: { H1: pair(s, 'A2', 'A1', (r) => setR(r) && r.applyIndex === 1) },
     bySinceTeach: Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => [name, pair(s, 'A2', 'A1', (r) => setR(r) && inBucket(r))])),
+    ratesBySinceTeach: ratesBySinceTeach(s, filtered.arms, opts),
     wordOverlap: runs('A1', 'A2') ? byCoding((c) => overlapCorrelation(s, opts, c)) : NOT_RUN,
     sensitivity: {
       carryUnionRuns: filtered.carryUnion.size,

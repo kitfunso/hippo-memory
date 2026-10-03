@@ -1,32 +1,20 @@
 /** Z0 analyzer on generated records with known effects; numbers in test names follow the plan's test list.
- * The records are synthetic: they test the contract, filters and arithmetic, never hippo. */
-import { describe, it, expect, afterAll } from 'vitest';
-import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+ * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.test.ts. */
+import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval-stats.js';
 import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus } from '../scripts/token-eval/z0-records.mjs';
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
-import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, SPECS, bothCodings, codexApply, holmVerdicts, inSets, meanBootstrap, repeatMistake, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
+import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, holmVerdicts, inSets, meanBootstrap, repeatMistake, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';
-import { pooledVoids } from '../scripts/token-eval/z0-blind.mjs';
-import { analyzeZ0, runCli } from '../scripts/token-eval/z0-analyze.mjs';
-import { ARMS, PRICES, generate, jsonl, type GenOpts, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
+import { analyzeZ0 } from '../scripts/token-eval/z0-analyze.mjs';
+import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOpts, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
 
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
-const at = (recs: readonly Z0Record[], arm: string, sequence: string, seed: number, position: number): number =>
-  recs.findIndex((r) => r.arm === arm && r.sequence === sequence && r.seed === seed && r.position === position);
 const runOf = (rs: readonly { sequence: string; seed: number }[], sequence: string, seed: number) =>
   rs.filter((r) => r.sequence === sequence && r.seed === seed);
-const crash = (r: Z0Record, invalid = 'no-result'): void => {
-  Object.assign(r, { invalid, usage: null, turns: null, toolCalls: null, acceptancePassed: null, resolved: false, lessons: [] });
-};
 const STAT = { iterations: 2000, seed: 1 };
-const GRADING = { flippedLessons: [], acceptanceFlips: 0, readerSample: { n: 30, disagreements: 0 } };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
 const analyze = (g: Generated, extra = {}) =>
   analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, ...STAT, ...extra });
@@ -53,8 +41,11 @@ describe('Z0 records contract', () => {
     rejects((rs) => { const i = rs.findIndex((r) => r.resolved); rs[i]!.timedOut = true; return i; }, /resolved must equal/);
     rejects((rs) => { const i = at(rs, 'A2', 'rn-repo2', 1, 6); rs[i]!.lessons[0]!.lessonId = 'ghost'; return i; }, /lesson ghost is in no teach record/);
     rejects((rs) => { const i = at(rs, 'A2', 'rn-repo2', 1, 6); rs[i]!.tasksSinceTeach = 5; return i; }, /tasksSinceTeach 5 but 4 positions/);
+    rejects((rs) => { const i = at(rs, 'A1', 'rn-repo2', 1, 0); rs[i]!.familyId = 'rn-repo1-f0'; return i; }, /familyId rn-repo1-f0 appears in repos repo1 and repo2/);
+    rejects((rs) => { const i = at(rs, 'A2', 'rn-repo3', 2, 5); rs[i]!.taskId = 'other'; return i; }, /taskId other but the plan has rn-repo3-t5/);
     const { records, plan } = fresh();
     expect(() => validateCorpus([...parse(records), ...parse(records)], plan)).toThrow(/duplicate record for cell .*: runs\.jsonl line 1 and runs\.jsonl line 1$/);
+    expect(() => parsePlan('[]', 'plan.json')).toThrow(/^plan\.json: the plan has no cells$/);
   });
 
   it('25: a timeout or an na final is never resolved, before or after drops', () => {
@@ -76,7 +67,7 @@ describe('Z0 records contract', () => {
     records.splice(at(records, 'A1', 'rn-repo1', 1, 3), 1);
     crash(records[at(records, 'A2', 'rn-repo2', 1, 0)]!);
     crash(records[at(records, 'X2', 'x-repo1', 2, 0)]!, 'checker');
-    Object.assign(records[at(records, 'A5', 'rn-repo3', 1, 2)]!, { invalid: 'leak', leak: true });
+    Object.assign(records[at(records, 'A5', 'rn-repo3', 1, 2)]!, { invalid: 'leak', leak: true, resolved: false });
     const c = corpus(records, plan);
     expect(c.unchecked).toHaveLength(6);
     expect(c.unchecked).toContain(`runs.jsonl line ${at(records, 'X2', 'x-repo1', 2, 3) + 1}`);
@@ -85,6 +76,26 @@ describe('Z0 records contract', () => {
     expect(f.leaked).toEqual(['rn-repo3 seed 1']);
     const twice = [...parsePlan(JSON.stringify(plan), 'plan.json'), ...parsePlan(JSON.stringify(plan), 'plan.json')];
     expect(() => validateCorpus(c.records, twice)).toThrow(/duplicate planned cell .*: plan\.json entry 1 and plan\.json entry 1$/);
+  });
+
+  it('27: an invalid record must be unresolved, whatever its acceptance tests said', () => {
+    const { records } = fresh();
+    const i = at(records, 'A2', 'rn-repo1', 1, 4);
+    crash(records[i]!, 'no-transcript');
+    Object.assign(records[i]!, { acceptancePassed: true, fileReads: null, wallMs: null, teachTurns: null, correctionTurns: null });
+    expect(parse(records)[i].resolved).toBe(false);
+    records[i]!.resolved = true;
+    expect(() => parse(records)).toThrow(new RegExp(`line ${i + 1}: resolved must be false on an invalid record`));
+  });
+
+  it('31: a pair must share its task, and every arm runs one task per position', () => {
+    const g = fresh();
+    const i = at(g.records, 'A2', 'rn-repo2', 1, 6);
+    g.records[i]!.taskId = 'other';
+    const parsed = parse(g.records);
+    expect(() => pairTasks(parsed, 'A2', 'A1')).toThrow(/rn-repo2#1@6: A2 ran task other and A1 ran rn-repo2-t6/);
+    const noIds = g.plan.map((c) => ({ sequence: c.sequence, seed: c.seed, position: c.position, arm: c.arm }));
+    expect(() => validateCorpus(parsed, noIds)).toThrow(new RegExp(`runs\\.jsonl line ${i + 1}: taskId other but runs\\.jsonl line \\d+ has rn-repo2-t6`));
   });
 });
 
@@ -147,16 +158,26 @@ describe('Z0 filters', () => {
     expect(f.leaked).toEqual(['rn-repo4 seed 1', 'rn-repo5 seed 2']);
     expect(f.abandoned).toEqual(['rn-repo5 seed 2']);
     expect(runOf(f.scored, 'rn-repo4', 1).length + runOf(f.scored, 'rn-repo5', 2).length).toBe(0);
-    expect(f.counts.A1.missing).toBe(10);
+    expect([f.counts.A1.missing, f.counts.A1.abandoned]).toEqual([0, 10]);
     expect(f.scored.some((r: Z0Record) => r.lessons.some((l) => l.lessonId === lesson))).toBe(false);
     expect(f.scored[at(f.scored, 'A2', 'rn-repo6', 1, 4)].resolved).toBe(true);
     const noA5 = fresh();
     const g = filterRecords(parse(noA5.records.filter((r) => r.arm !== 'A5')), noA5.plan);
     expect(g.abandoned).toHaveLength(18);
-    expect(g.counts.A5.missing).toBe(18 * 6 * 3);
+    expect([g.counts.A5.missing, g.counts.A5.abandoned]).toEqual([0, 18 * 6 * 3]);
     const noX = filterRecords(parse(noA5.records.filter((r) => r.set !== 'X')), noA5.plan.filter((c) => !c.arm.startsWith('X')));
     expect(noX.arms).toEqual(['A0', 'A1', 'A2', 'A4', 'A5']);
     expect(() => corpus(noA5.records, noA5.plan.slice(1))).toThrow(/runs\.jsonl line 1: cell .* is not in any plan file/);
+  });
+
+  it('28: an apply whose own arm missed its teach leaves every arm, counted as an untaught-apply drop', () => {
+    const g = fresh();
+    crash(g.records[at(g.records, 'A2', 'rn-repo1', 1, 0)]!);
+    const f = filterRecords(parse(g.records), g.plan);
+    expect(f.untaughtApplyDrops).toBe(2);
+    expect(runOf(f.scored, 'rn-repo1', 1).filter((r: Z0Record) => r.position === 4 || r.position === 11)).toEqual([]);
+    const h1 = repeatMistake(f.scored, 'A2', 'A1', 'violation', STAT, inSets('R'));
+    expect([h1.units, h1.droppedUnits]).toEqual([71, []]);
   });
 });
 
@@ -206,6 +227,16 @@ describe('Z0 hypotheses', () => {
     expect([resolve.H4.gate.resolveOk, resolve.H4.gate.pass]).toEqual([false, false]);
   });
 
+  it('29: H4 is not run without set N in the plan, and fails when filters leave set N empty', () => {
+    const records = fresh().records.filter((r) => r.set !== 'N');
+    const none = analyze({ records, plan: planOf(records) });
+    expect([none.hypotheses.H4, none.hypotheses.order.at(-2), none.unplanned]).toEqual([NOT_RUN, 'H4', ['set N']]);
+    const voided = fresh();
+    for (const r of voided.records) if (r.set === 'N' && r.arm === 'A1') r.void = 'read-past-transcript';
+    const h = analyze(voided).hypotheses;
+    expect([h.H4.reason, h.H4.gate.pass, h.order[0]]).toEqual([NO_N_DATA, false, 'H4']);
+  });
+
   it('8: Holm runs once per coding, then the codings combine', () => {
     const h3 = te(0.85, 0.03, 0.75, 0.97, 1);
     const rm = (p: number) => te(-0.3, p, -0.4, -0.2);
@@ -222,15 +253,20 @@ describe('Z0 hypotheses', () => {
     expect([loss.H1.violation.verdict, loss.H1.excluded.verdict, loss.H1.final.verdict]).toEqual(['loss', 'inconclusive', 'loss']);
   });
 
-  it('18, 19: attribution sentences; H2 reads Codex apply records only', () => {
+  it('18, 19: attribution words a winning H1 only; H2 reads Codex apply records only', () => {
     const behaviour = hyp({ knobs: { A2: { fail: 0.1 }, A5: { fail: 0.1 } } });
     expect([behaviour.verdicts.H1.final.verdict, behaviour.attribution.sentence]).toEqual(['win', BEHAVIOUR_SENTENCE]);
     expect(hyp({ knobs: { A2: { fail: 0.1 } } }).attribution.sentence).toBe(LESSONS_SENTENCE);
+    // A2 beats A5 here, yet a tie gets no sentence.
+    const tie = hyp({ knobs: { A5: { fail: 0.9 } } });
+    expect([tie.verdicts.H1.final.verdict, tie.attribution.sentence, tie.attribution.reason]).toEqual(['tie', null, 'not applicable, H1 is tie']);
+    const loss = hyp({ knobs: { A2: { fail: 0.9 } } });
+    expect([loss.verdicts.H1.final.verdict, loss.attribution.sentence, loss.attribution.reason]).toEqual(['loss', null, 'not applicable, H1 is loss']);
     const h2 = (opts: GenOpts) => bothCodings(scoredOf(generate(opts)), 'X2', 'X3', STAT, codexApply);
     expect(h2({ knobs: { X2: { teachFail: 1 }, X3: { teachFail: 0 } } })).toEqual(h2({}));
   });
 
-  it('21: reported subsets, the carry-union sensitivity block and rotation slots', () => {
+  it('21, 33: reported subsets, per-arm rates by tasks since teach, the carry-union block and rotation slots', () => {
     const g = fresh();
     for (const r of g.records) {
       if (r.kind === 'apply' && r.set === 'R' && (r.arm === 'A1' || r.arm === 'A2')) r.lessons[0]!.first = r.arm === 'A2' && r.applyIndex! > 1 ? 'fail' : 'pass';
@@ -241,6 +277,10 @@ describe('Z0 hypotheses', () => {
     expect(rep.firstApply.H1.violation.estimate).toBe(0);
     expect([h.H1.violation.units, rep.maintainerOnly.H1.violation.units, rep.sensitivity.H1.violation.units]).toEqual([72, 54, 68]);
     expect(rep.sensitivity.carryUnionRuns).toBe(1);
+    const rates = rep.ratesBySinceTeach['2-4'];
+    expect(Object.keys(rates)).toEqual(['A0', 'A1', 'A2', 'A4', 'A5']);
+    // Same units on both sides and no na, so the rates' difference is the paired estimate.
+    expect(rates.A2.violation.estimate - rates.A1.violation.estimate).toBeCloseTo(rep.bySinceTeach['2-4'].violation.estimate, 12);
     const slotOf = rotationSlots(g.records);
     const byPos = new Map<string, number[]>();
     for (const r of g.records) byPos.set(`${r.sequence}#${r.seed}@${r.position}`, [...(byPos.get(`${r.sequence}#${r.seed}@${r.position}`) ?? []), slotOf(r)]);
@@ -288,97 +328,20 @@ describe('Z0 gates', () => {
     expect(gatesOf(g).G4.perArm.A1).toMatchObject({ missing: 1, invalid: 1 });
   });
 
-  it('15, 24: G5 outcomes; abandoned tails count in G4; a planned arm with no records fails G4', () => {
+  it('15, 24: G5 outcomes; an abandoned run is its own status, with no gate and no G4 missing', () => {
     const sample = (n: number, disagreements: number) => g5({ ...GRADING, acceptanceFlips: 2, readerSample: { n, disagreements } });
     expect([sample(29, 0).status, sample(30, 4).status, sample(30, 3).status, g5(null).pass]).toEqual(['reader sample short', 're-grade required', 'pass', false]);
     expect(sample(30, 3).acceptanceFlips).toBe(2);
     const cut = fresh();
     cut.records = cut.records.filter((r) => !(r.sequence === 'rn-repo5' && r.seed === 2 && r.position >= 8));
-    expect(gatesOf(cut).G4.perArm.A1.missing).toBe(10);
+    cut.records.splice(at(cut.records, 'A2', 'rn-repo1', 1, 5), 1);
+    const a = analyze(cut);
+    expect([a.status, a.gates, a.hypotheses, a.filtered.abandoned]).toEqual(['abandoned', null, null, ['rn-repo5 seed 2']]);
+    expect([a.filtered.counts.A1.missing, a.filtered.counts.A1.abandoned, a.filtered.counts.A2.missing]).toEqual([0, 10, 1]);
+    expect(a.refusal).toMatch(/abandoned/);
     const noA5 = fresh();
-    expect(gatesOf({ records: noA5.records.filter((r) => r.arm !== 'A5'), plan: noA5.plan }).failed).toContain('G4');
-    expect(hyp({ arms: ARMS.filter((a) => a !== 'A5') }).attribution).toBe(NOT_RUN);
-  });
-});
-
-describe('Z0 CLI and blind mode', () => {
-  const dirs: string[] = [];
-  afterAll(() => { for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); });
-  const ARM_NAME = /\b(A0|A1|A2|A4|A5|X1|X2|X3|X4)\b/;
-  const ARGS = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--grading', 'grading.json'];
-  function workspace(g: Generated): string {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-analyze-'));
-    dirs.push(dir);
-    const files = { 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), 'prices.json': JSON.stringify(PRICES),
-      'grading.json': JSON.stringify(GRADING), 'drop.json': JSON.stringify({ droppedLessons: [], droppedFamilies: [] }) };
-    for (const [f, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), text);
-    return dir;
-  }
-
-  it('16, 22, 23: blind output names no arm, pools void reasons, reuses its key, is deterministic and hashes its inputs', () => {
-    const g = fresh();
-    g.records[at(g.records, 'A1', 'rn-repo2', 1, 7)]!.void = 'received-hippo-text';
-    g.records[at(g.records, 'X3', 'x-repo2', 1, 7)]!.void = 'read-past-transcript';
-    const dir = workspace(g);
-    const run = () => runCli([...ARGS, '--iterations', '300', '--out', 'out.json'], dir);
-    const first = run();
-    const out = fs.readFileSync(path.join(dir, 'out.json'), 'utf8');
-    expect(first.code).toBe(0);
-    for (const text of [first.stdout, out]) {
-      expect(text).not.toMatch(ARM_NAME);
-      expect(text).not.toMatch(/resolveRate|costPerResolved|staleFollow|verdict|adjustedP|voidReasons/);
-    }
-    const report = JSON.parse(out);
-    expect(report.voids).toEqual({ total: 2, reasons: { 'read-past-transcript': 1, 'received-hippo-text': 1 } });
-    expect(pooledVoids({ A1: { voids: 1, voidReasons: { x: 1 } }, A2: { voids: 0, voidReasons: {} } })).toEqual({ total: 1 });
-    expect(first.stdout).toContain('hypotheses sealed until unblinded');
-    expect(first.stdout).toContain('not of record');
-    const key = fs.readFileSync(path.join(dir, 'z0-blind-key.json'), 'utf8');
-    expect(Object.values(JSON.parse(key).codes).sort()).toEqual(ARMS.map((_, i) => `K${i + 1}`).sort());
-    expect([run().code, fs.readFileSync(path.join(dir, 'z0-blind-key.json'), 'utf8'), fs.readFileSync(path.join(dir, 'out.json'), 'utf8')]).toEqual([0, key, out]);
-    const repo = path.resolve(__dirname, '..');
-    for (const h of report.hashes) {
-      const file = h.role === 'source' ? path.join(repo, h.file) : path.join(dir, h.file);
-      expect(h.sha256).toBe(createHash('sha256').update(fs.readFileSync(file)).digest('hex'));
-    }
-    expect(report.hashes.map((h: { role: string }) => h.role).filter((r: string) => r === 'source')).toHaveLength(8);
-    fs.writeFileSync(path.join(dir, 'z0-blind-key.json'), JSON.stringify({ codes: { A0: 'K1', A1: 'K2' } }));
-    expect(run()).toMatchObject({ code: 1, stderr: expect.stringMatching(/another arm set/) });
-  });
-
-  it('17: unblind needs a committed drop list and grading file and a passing G5', () => {
-    const dir = workspace(generate({ repos: 3 }));
-    const git = (...a: string[]) => execFileSync('git', a, { cwd: dir, stdio: 'pipe' });
-    git('init', '-q');
-    for (const [k, v] of [['user.name', 'z0 test'], ['user.email', 'z0@example.invalid'], ['core.hooksPath', '.no-hooks'], ['commit.gpgsign', 'false']]) git('config', k!, v!);
-    const unblind = (extra: string[] = []) => runCli([...ARGS, '--drop-list', 'drop.json', '--unblind', ...extra], dir);
-    const edit = (f: string, text: string) => fs.writeFileSync(path.join(dir, f), text);
-    expect(unblind().code).toBe(2);
-    git('add', 'drop.json');
-    git('commit', '-qm', 'drop list');
-    expect(unblind()).toMatchObject({ code: 2, stderr: expect.stringMatching(/grading\.json is not tracked/) });
-    git('add', 'grading.json');
-    git('commit', '-qm', 'grading');
-    const drop = fs.readFileSync(path.join(dir, 'drop.json'), 'utf8');
-    edit('drop.json', `${drop}\n`);
-    expect(unblind()).toMatchObject({ code: 2, stderr: expect.stringMatching(/drop\.json has uncommitted changes/) });
-    edit('drop.json', drop);
-    edit('grading.json', JSON.stringify({ ...GRADING, readerSample: { n: 30, disagreements: 4 } }));
-    git('commit', '-qam', 'regrade needed');
-    expect(unblind()).toMatchObject({ code: 2, stderr: expect.stringMatching(/re-grade required/) });
-    edit('grading.json', JSON.stringify(GRADING));
-    git('commit', '-qam', 'regraded');
-    expect(runCli([...ARGS.slice(0, 6), '--drop-list', 'drop.json', '--unblind'], dir)).toMatchObject({ code: 2, stderr: expect.stringMatching(/grading file missing/) });
-    expect(unblind(['--iterations', '300']).code).toBe(2);
-    const open = unblind(['--out', 'open.json']);
-    expect(open.code).toBe(0);
-    expect(open.stdout).toMatch(/^H1 \w+/m);
-    expect(JSON.parse(fs.readFileSync(path.join(dir, 'open.json'), 'utf8')).hypotheses.verdicts.H1.final.verdict).toBeTruthy();
-    const bad = generate({ repos: 3 });
-    bad.records[0]!.void = 'operator-canary';
-    edit('runs.jsonl', jsonl(bad.records));
-    const shut = unblind();
-    expect([shut.code, ARM_NAME.test(shut.stdout), /^H1 /m.test(shut.stdout)]).toEqual([0, true, false]);
-    expect(shut.stdout).toContain('invalid: G1');
+    const b = analyze({ records: noA5.records.filter((r) => r.arm !== 'A5'), plan: noA5.plan }, { unblind: false });
+    expect([b.status, b.gates, b.filtered.counts.A5.abandoned]).toEqual(['abandoned', null, 324]);
+    expect(hyp({ arms: ARMS.filter((x) => x !== 'A5') }).attribution).toBe(NOT_RUN);
   });
 });

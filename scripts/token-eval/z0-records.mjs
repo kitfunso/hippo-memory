@@ -37,9 +37,9 @@ export const runKey = (sequence, seed) => `${sequence}#${seed}`;
 export const positionKey = (r) => `${runKey(r.sequence, r.seed)}@${r.position}`;
 export const cellKey = (r) => `${positionKey(r)}/${r.arm}`;
 
-/** Reading 7: acceptance passed, every remaining lesson's final check is `pass`, and no timeout. */
+/** Reading 7: acceptance passed, every remaining lesson's final check is `pass`, and no timeout; an invalid record never resolves. */
 export function resolvedOf(r) {
-  return r.acceptancePassed === true && r.timedOut !== true && r.lessons.every((l) => l.final === 'pass');
+  return isNullish(r.invalid) && r.acceptancePassed === true && r.timedOut !== true && r.lessons.every((l) => l.final === 'pass');
 }
 
 function check(ok, message) {
@@ -106,7 +106,9 @@ function checkOutcome(r, crashed) {
   check(nullable('acceptancePassed') || isBool(r.acceptancePassed), 'acceptancePassed must be boolean');
   check(isBool(r.timedOut) && isBool(r.leak), 'timedOut and leak must be boolean');
   check(isBool(r.resolved), 'resolved must be boolean');
-  check(r.resolved === resolvedOf(r), 'resolved must equal acceptancePassed with every final check pass and no timeout (reading 7)');
+  // E1 still runs the hidden tests after a crash, so acceptancePassed can be true on a record that never resolves.
+  if (crashed) check(r.resolved === false, 'resolved must be false on an invalid record');
+  else check(r.resolved === resolvedOf(r), 'resolved must equal acceptancePassed with every final check pass and no timeout (reading 7)');
   check(r.invalid === null || isName(r.invalid), 'invalid must be null or a reason');
   check(r.void === null || isName(r.void), 'void must be null or a reason');
   // A setup failure ran no session, so E1 writes no retry or carry counts for it.
@@ -150,7 +152,7 @@ export function parseZ0Records(text, file = 'runs') {
   return { records, warnings };
 }
 
-/** Parse the runner's plan.json: the expected cells, G4's denominator. */
+/** Parse the runner's plan.json: the expected cells, G4's denominator. E1 also writes taskId and repo; both are kept when present. */
 export function parsePlan(text, file = 'plan') {
   let cells;
   try {
@@ -159,12 +161,15 @@ export function parsePlan(text, file = 'plan') {
     throw new Error(`${file}: not JSON (${e.message})`);
   }
   if (!Array.isArray(cells)) throw new Error(`${file}: the plan must be a JSON array of cells`);
+  if (cells.length === 0) throw new Error(`${file}: the plan has no cells`);
   return cells.map((c, i) => {
     const where = `${file} entry ${i + 1}`;
     const ok = isPlainObject(c) && isName(c.sequence) && Number.isInteger(c.seed) && c.seed >= 1 && c.seed <= 3
-      && isCount(c.position) && ALL_ARMS.includes(c.arm) && !(c.seed === 3 && TWO_SEED_ARMS.has(c.arm));
-    if (!ok) throw new Error(`${where}: a cell needs sequence, seed 1-3 (1-2 for A0, A4, X4), position and a known arm`);
+      && isCount(c.position) && ALL_ARMS.includes(c.arm) && !(c.seed === 3 && TWO_SEED_ARMS.has(c.arm))
+      && (c.taskId === undefined || isName(c.taskId)) && (c.repo === undefined || isName(c.repo));
+    if (!ok) throw new Error(`${where}: a cell needs sequence, seed 1-3 (1-2 for A0, A4, X4), position and a known arm; taskId and repo are optional strings`);
     const cell = { sequence: c.sequence, seed: c.seed, position: c.position, arm: c.arm };
+    for (const f of ['taskId', 'repo']) if (c[f] !== undefined) cell[f] = c[f];
     cell[LOCATION] = where;
     return cell;
   });
@@ -208,31 +213,60 @@ function checkApply(a, teach) {
   for (const l of a.lessons) check(taught.has(l.lessonId), `${where}: lesson ${l.lessonId} is in no teach record of family ${a.familyId}`);
 }
 
-/** Cross-record checks against the merged plan. Returns `unchecked`: apply records with a missing or invalid
- * teach cell of their family before them, so neither tasksSinceTeach nor their lessonIds could be checked. */
-export function validateCorpus(records, planCells) {
-  rejectDuplicates(planCells, 'planned cell');
-  rejectDuplicates(records, 'record for cell');
-  const planned = new Set(planCells.map(cellKey));
-  const repoOf = new Map();
+/** For each apply record, its family's valid teach records before it, or null when one is missing or invalid. */
+function teachIndex(records, planCells) {
   const taskAt = new Map();
-  for (const r of records) {
-    check(planned.has(cellKey(r)), `${locationOf(r)}: cell ${cellKey(r)} is not in any plan file`);
-    const repo = repoOf.get(r.sequence) ?? r.repo;
-    check(repo === r.repo, `${locationOf(r)}: sequence ${r.sequence} maps to repos ${repo} and ${r.repo}`);
-    repoOf.set(r.sequence, repo);
-    if (!taskAt.has(positionKey(r))) taskAt.set(positionKey(r), r);
-  }
+  for (const r of records) if (!taskAt.has(positionKey(r))) taskAt.set(positionKey(r), r);
   const positions = new Map();
   for (const c of planCells) {
     const k = `${runKey(c.sequence, c.seed)}/${c.arm}`;
     positions.set(k, [...(positions.get(k) ?? []), c.position]);
   }
   const byCell = new Map(records.map((r) => [cellKey(r), r]));
+  return (a) => priorTeach(a, byCell, taskAt, positions.get(`${runKey(a.sequence, a.seed)}/${a.arm}`));
+}
+
+/** Apply records whose own arm was never taught their family before them (reading 19). */
+export function untaughtApplies(records, planCells) {
+  const teachOf = teachIndex(records, planCells);
+  return records.filter((a) => a.kind === 'apply' && teachOf(a) === null);
+}
+
+/** Each sequence names one repo, each familyId one repo, and every arm runs the same task at a position (prereg 117). */
+function checkIdentities(records, planned) {
+  const repoOf = new Map();
+  const familyRepo = new Map();
+  const taskAt = new Map();
+  for (const r of records) {
+    const where = locationOf(r);
+    const cell = planned.get(cellKey(r));
+    check(cell !== undefined, `${where}: cell ${cellKey(r)} is not in any plan file`);
+    check(cell.taskId === undefined || cell.taskId === r.taskId, `${where}: taskId ${r.taskId} but the plan has ${cell.taskId} at cell ${cellKey(r)}`);
+    const repo = repoOf.get(r.sequence) ?? r.repo;
+    check(repo === r.repo, `${where}: sequence ${r.sequence} maps to repos ${repo} and ${r.repo}`);
+    repoOf.set(r.sequence, repo);
+    if (r.familyId !== null) {
+      const famRepo = familyRepo.get(r.familyId) ?? r.repo;
+      check(famRepo === r.repo, `${where}: familyId ${r.familyId} appears in repos ${famRepo} and ${r.repo}`);
+      familyRepo.set(r.familyId, famRepo);
+    }
+    const task = taskAt.get(positionKey(r)) ?? r;
+    check(task.taskId === r.taskId, `${where}: taskId ${r.taskId} but ${locationOf(task)} has ${task.taskId} at ${positionKey(r)}`);
+    taskAt.set(positionKey(r), task);
+  }
+}
+
+/** Cross-record checks against the merged plan. Returns `unchecked`: apply records with a missing or invalid
+ * teach cell of their family before them, so neither tasksSinceTeach nor their lessonIds could be checked. */
+export function validateCorpus(records, planCells) {
+  rejectDuplicates(planCells, 'planned cell');
+  rejectDuplicates(records, 'record for cell');
+  checkIdentities(records, new Map(planCells.map((c) => [cellKey(c), c])));
+  const teachOf = teachIndex(records, planCells);
   const unchecked = [];
   for (const a of records) {
     if (a.kind !== 'apply') continue;
-    const teach = priorTeach(a, byCell, taskAt, positions.get(`${runKey(a.sequence, a.seed)}/${a.arm}`));
+    const teach = teachOf(a);
     if (teach === null) unchecked.push(locationOf(a));
     else checkApply(a, teach);
   }

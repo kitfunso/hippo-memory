@@ -53,15 +53,15 @@ export function pooledVoids(counts) {
   return voidedCodes < 2 ? { total } : { total, reasons: Object.fromEntries([...reasons].sort(([a], [b]) => a.localeCompare(b))) };
 }
 
-/** Only what the gates need: per-code counts and shares, pooled void reasons, G1-G5 with codes for arms. */
+/** Only what the gates need: per-code counts and shares, pooled void reasons, G1-G5 with codes for arms (null when abandoned). */
 export function blindView(analysis, codes) {
   const perCode = byCode(Object.fromEntries(Object.entries(analysis.filtered.counts).map(([arm, c]) => {
     const share = (n) => (c.planned === 0 ? 0 : n / c.planned);
-    return [arm, { planned: c.planned, records: c.records, voids: c.voids, invalid: c.invalid, missing: c.missing,
+    return [arm, { planned: c.planned, records: c.records, voids: c.voids, invalid: c.invalid, missing: c.missing, abandoned: c.abandoned,
       voidShare: share(c.voids), invalidShare: share(c.invalid), missingShare: share(c.missing) }];
   })), codes);
   const g = analysis.gates;
-  const gates = { ...g, G1: { ...g.G1, perArm: byCode(g.G1.perArm, codes) }, G4: { ...g.G4, perArm: byCode(g.G4.perArm, codes) } };
+  const gates = g === null ? null : { ...g, G1: { ...g.G1, perArm: byCode(g.G1.perArm, codes) }, G4: { ...g.G4, perArm: byCode(g.G4.perArm, codes) } };
   return { perCode, voids: pooledVoids(analysis.filtered.counts), gates };
 }
 
