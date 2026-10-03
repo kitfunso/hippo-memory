@@ -28,7 +28,9 @@ function checkRepoState(cfg) {
   const tracked = git(cfg.repo, ['ls-files', '--', cfg.promptDir]).stdout.split('\n').filter(Boolean).map((p) => path.basename(p)).sort();
   if (tracked.join('|') !== prompts.join('|')) throw new Error('a prompt file is not tracked');
   if (git(cfg.repo, ['status', '--porcelain', '--', cfg.prereg, ...cfg.scriptFiles, cfg.promptDir]).stdout.trim()) throw new Error('prereg, scripts or prompts are not clean at HEAD');
-  const lockCommit = git(cfg.repo, ['log', '-1', '--format=%H', '--', cfg.prereg]).stdout.trim();
+  // The lock is the oldest commit that set the Status line, so a later prereg edit cannot move it.
+  const lockCommit = git(cfg.repo, ['log', '--reverse', '--format=%H', '-G\\*\\*Status:\\*\\* PRE-REG-LOCKED', '--', cfg.prereg]).stdout.split('\n').find(Boolean);
+  if (!lockCommit) throw new Error('no commit set the prereg Status to PRE-REG-LOCKED');
   if (!git(cfg.repo, ['branch', '-r', '--contains', lockCommit]).stdout.trim()) throw new Error('the lock commit is not on a remote branch');
   return lockCommit;
 }

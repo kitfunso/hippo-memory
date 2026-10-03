@@ -616,8 +616,12 @@ export function drawMismatch(fresh, stored, pinSha) {
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   if (!same(fresh.dev, stored.dev)) return 'the dev list differs from the recomputed draw';
   if (!same(fresh.scored, stored.scored)) return 'the scored list differs from the recomputed draw';
-  const wrong = fresh.scored.find((id) => !same(fresh.items[id], stored.items?.[id]));
+  const ids = Object.keys(fresh.items);
+  const wrong = ids.find((id) => !same(fresh.items[id], stored.items?.[id]));
   if (wrong) return `the items mapping differs for ${wrong}`;
+  if (ids.length !== Object.keys(stored.items ?? {}).length) return 'the items mapping has a different set of ids';
+  const field = Object.keys(fresh).find((k) => !same(fresh[k], stored[k]));
+  if (field) return `the ${field} field differs from the recomputed draw`;
   if (fresh.itemListSha256 !== pinSha || stored.itemListSha256 !== pinSha) return 'the scored list sha256 differs from the prereg pin';
   return null;
 }
@@ -640,6 +644,9 @@ export function parsePins(md) {
   };
 }
 
+// The leading version token must stand alone, so 2.1.2880 and 2.1.288-dev are not 2.1.288.
+export const claudeVersionToken = (out) => /^\s*(\d+(?:\.\d+)*)(?=\s|$)/.exec(String(out))?.[1] ?? null;
+
 // Checks only the keys given in actual; a pin that is missing counts as a mismatch. Returns the mismatched names.
 export function checkPins(pins, actual) {
   const bad = [];
@@ -648,6 +655,6 @@ export function checkPins(pins, actual) {
     for (const n of names) if (!pins[group][n] || pins[group][n] !== actual[group][n]) bad.push(group === 'dist' ? `dist/${n}` : n);
   }
   for (const k of ['manifest', 'scoredList']) if (k in actual && (!pins[k] || pins[k] !== actual[k])) bad.push(k);
-  if ('claude' in actual && (!pins.claude || !String(actual.claude).startsWith(pins.claude))) bad.push('claude --version');
+  if ('claude' in actual && (!pins.claude || claudeVersionToken(actual.claude) !== pins.claude)) bad.push('claude --version');
   return bad;
 }
