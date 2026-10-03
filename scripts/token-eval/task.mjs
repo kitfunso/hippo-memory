@@ -97,10 +97,10 @@ function checker(ctx, run, t, stage, sessionIds) {
     const postCommit = stage.fault ? null : guarded(run, t, stage, () => stateCommit(work, stage.pre));
     if (!postCommit) return null;
     try {
-      return runCheck(lesson, {
+      return guarded(run, t, stage, () => runCheck(lesson, {
         work, env: childEnv(run.env), preCommit: stage.pre, postCommit,
         commands: commandLog(transcriptsOf(run, sessionIds)), scratch: path.join(run.dirs.root, 'scratch'),
-      });
+      }));
     } catch (err) {
       if (!(err instanceof CheckerError)) throw err;
       writeLog(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
@@ -127,6 +127,8 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
   if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
   await settle(ctx, run, t.id, 'pre-resume');
+  // Rechecked after grading: a checker or anything else the runner ran since the first scan could have left one.
+  if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
   // A file a cut-off attempt left above work/ voids the cell, so the rerun never spends plan usage and A4 is never taught from it.
   const afterReset = () => (stage.ancestors ||= ancestorHits(ctx, run, t));
   const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));

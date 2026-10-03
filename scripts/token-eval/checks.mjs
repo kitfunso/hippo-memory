@@ -21,15 +21,33 @@ export class WorkspaceGitError extends Error {
   }
 }
 
-/** fn(rgit, scratch) on the workspace's own .git; only a git exit failure becomes a WorkspaceGitError, so runner bugs still throw. */
+// GIT_CONFIG_PARAMETERS quoting: key and value each single-quoted, so a driver name may hold '=', '.' or a quote.
+const sq = (s) => `'${s.replaceAll("'", "'\\''")}'`;
+
+/** GIT_CONFIG_PARAMETERS entries that switch off every filter driver `config --list -z --name-only` names. */
+function filtersOff(listed) {
+  const names = new Set();
+  for (const key of listed.split('\0')) {
+    const last = key.lastIndexOf('.');
+    if (key.startsWith('filter.') && last > 'filter'.length) names.add(key.slice('filter.'.length, last));
+  }
+  // Empty commands make git skip the driver; required=false stops it then failing the file.
+  const off = (n) => [...['clean', 'smudge', 'process'].map((k) => `${sq(`filter.${n}.${k}`)}=''`), `${sq(`filter.${n}.required`)}='false'`];
+  return [...names].flatMap(off).join(' ');
+}
+
+/** fn(rgit, scratch, filterParams) on the workspace's own .git; only a git exit failure becomes a WorkspaceGitError, so runner bugs still throw. */
 export function agentGit(work, fn) {
   // GIT_DIR pinned: with .git deleted, git would otherwise walk up to whatever repo holds the workspace.
   const gitDir = { GIT_DIR: path.join(work, '.git'), GIT_WORK_TREE: work };
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));
   // A sparse checkout the agent turned on would make `add -A` skip tracked edits outside the cone.
-  const rgit = (args, cwd, extra = {}) => git(['-c', 'core.sparseCheckout=false', '-c', 'index.sparse=false', ...args], cwd, { ...gitDir, ...extra });
+  const sparseOff = (args, cwd, extra) => git(['-c', 'core.sparseCheckout=false', '-c', 'index.sparse=false', ...args], cwd, { ...gitDir, ...extra });
   try {
-    return fn(rgit, scratch);
+    // An agent's filter driver would run as the runner on add and checkout-index; listed per call, so after any .git restore.
+    const filterParams = filtersOff(sparseOff(['config', '--list', '--name-only', '-z'], work, {}));
+    const rgit = (args, cwd, extra = {}) => sparseOff(args, cwd, { ...extra, GIT_CONFIG_PARAMETERS: filterParams });
+    return fn(rgit, scratch, filterParams);
   } catch (err) {
     if (Number.isInteger(err.status) && !err.code) throw new WorkspaceGitError(err);
     throw err;
@@ -46,13 +64,14 @@ export class CheckerError extends Error {
   }
 }
 
-/** Run a lesson's checker on the workspace; `commands` goes to the checker as a JSON file named by Z0_COMMANDS. */
+/** Run a lesson's checker on the workspace; `commands` goes to the checker as a JSON file named by Z0_COMMANDS. Throws WorkspaceGitError on a broken .git. */
 export function runCheck(lesson, { work, env, preCommit, postCommit, commands, scratch, timeoutMs = 120_000 }) {
   fs.mkdirSync(scratch, { recursive: true });
   const commandsFile = path.join(scratch, 'z0-commands.json');
   fs.writeFileSync(commandsFile, JSON.stringify(commands));
-  // Appended last so it wins: core.fsmonitor in the agent's .git/config names a program a checker's `git status` would run.
-  const configParams = [env.GIT_CONFIG_PARAMETERS, "'core.fsmonitor=false'"].filter(Boolean).join(' ');
+  // Appended last so they win: core.fsmonitor and filter drivers in the agent's .git/config name programs a checker's `git status` would run.
+  const filterParams = agentGit(work, (_rgit, _scratch, params) => params);
+  const configParams = [env.GIT_CONFIG_PARAMETERS, filterParams, "'core.fsmonitor=false'"].filter(Boolean).join(' ');
   const r = spawnSync(process.execPath, [lesson.checkPath, ...(lesson.check.args ?? [])], {
     cwd: work, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 26,
     // A checker's git reads the workspace config alone, never the operator's global hooks or diff drivers.

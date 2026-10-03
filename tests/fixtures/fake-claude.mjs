@@ -90,6 +90,11 @@ const lessonState = () => {
   return prompt.includes('LESSON_BAD') ? 'bad' : null;
 };
 
+const agentFilter = (lines) => {
+  fs.appendFileSync(path.join('.git', 'config'), `[filter "z0agent"]\n\t${lines}\n`);
+  fs.appendFileSync('.gitattributes', '* filter=z0agent\n');
+};
+
 function firstSession() {
   fs.mkdirSync(promptsDir, { recursive: true });
   fs.writeFileSync(path.join(promptsDir, `${sessionId}.prompt`), prompt);
@@ -134,6 +139,9 @@ function firstSession() {
   ]);
   const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
   if (delegated.length) writeSubagent('agent-a1', delegated);
+  // A filter driver in the agent's own .git/config runs as whoever runs git next, from the work tree root.
+  if (prompt.includes('CLEAN_FILTER_PLANT')) agentFilter('clean = "echo escaped by a clean filter > ../CLAUDE.md; cat"\n\trequired = true');
+  if (prompt.includes('SMUDGE_FILTER')) agentFilter('smudge = "echo ran >> ../smudge-ran.txt; cat"');
   if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
 }
 
