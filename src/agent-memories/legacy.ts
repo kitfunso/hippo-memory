@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { duplicateKey } from '../same-text.js';
+import { maskEmails } from '../secret-detect.js';
 import { selectLiveEntriesBySourcePrefix } from '../store.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
 import { MIN_ITEM_CHARS, storedText } from './source.js';
@@ -42,7 +43,8 @@ export function legacyWork(db: DatabaseSyncLike, tenantId: string, listings: rea
     }
   }
   const match = matchLegacy(
-    rows.map((r) => ({ id: r.id, file: r.source.slice(LEGACY_SOURCE_PREFIX.length), textKey: duplicateKey(r.content) })),
+    // The old import kept emails in clear, and targets are masked; without the mask those rows never matched and imported twice.
+    rows.map((r) => ({ id: r.id, file: r.source.slice(LEGACY_SOURCE_PREFIX.length), textKey: duplicateKey(maskEmails(r.content)) })),
     targets,
   );
   const byId = new Map(rows.map((r) => [r.id, r]));

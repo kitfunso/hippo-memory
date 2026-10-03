@@ -146,6 +146,26 @@ describe('agent memory sync: the PR 2 list', () => {
     expect(liveTexts(w.local)).toEqual([DEPLOY, STAGING].sort());
   });
 
+  it('an old row with an email in clear matches its masked note, and a copy already imported collapses into one row', () => {
+    const MAIL = 'Release notes go to ops-team@example.com before each tag.';
+    const MASKED = 'Release notes go to [email] before each tag.';
+    const dir = projectNotes(w);
+    note(dir, 'release.md', MAIL);
+    const renamed = legacyRow(MAIL, 'old-release-name.md');
+    expect(claude(sync())).toMatchObject({ adopted: 1, imported: 0 });
+    expect(readEntry(w.local, renamed.id)?.superseded_by).toBeNull();
+
+    note(dir, 'mail.md', MAIL.replace('Release', 'Weekly'));
+    sync();
+    const stale = { ...createMemory(MAIL.replace('Release', 'Weekly'), { tags: ['claude-code-memory'], source: 'claude-memory:gone.md', tenantId: 'default' }), created: '2026-01-01T00:00:00.000Z' };
+    writeEntry(w.local, stale);
+
+    sync();
+    const copy = liveRows(w.local).find((e) => e.content === MASKED.replace('Release', 'Weekly'));
+    expect(readEntry(w.local, stale.id)?.superseded_by).toBe(copy?.id);
+    expect(liveRows(w.local).filter((e) => e.content.includes('Weekly'))).toHaveLength(1);
+  });
+
   it.skipIf(process.platform !== 'win32')('Windows folder case is normalised: the same folders in another case are the same container', () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
     sync();
