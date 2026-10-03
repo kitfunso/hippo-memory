@@ -6,6 +6,7 @@ import { closeHippoDb, openHippoDb } from '../db.js';
 import { listProjects, mergeProjects, repairUserGlobalMerges, type ProjectSummary } from '../project-merge.js';
 import { resolveTenantId } from '../tenant.js';
 import { resolveAuthRoot } from './shared.js';
+import { printError } from './output.js';
 
 type Flags = Record<string, string | boolean | string[]>;
 
@@ -16,6 +17,7 @@ function worktreeNames(): Map<string, string> {
     const paths = out.split(/\r?\n/).filter((l) => l.startsWith('worktree ')).map((l) => path.basename(l.slice('worktree '.length)));
     return new Map(paths.slice(1).map((name) => [name, paths[0]]));
   } catch {
+    // Outside a git checkout, or no git on PATH: the list just has no worktree hints.
     return new Map();
   }
 }
@@ -80,10 +82,10 @@ export function cmdProjects(hippoRoot: string, args: string[], flags: Flags): vo
       console.log(apply ? `Backup: ${r.backup}\nEvery id is in the audit log: hippo audit list --op project_repair` : 'Nothing written. Add --apply to run it.');
       return;
     }
-    console.error('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
+    printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
     process.exitCode = 1;
   } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
+    printError(err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
   } finally {
     closeHippoDb(db);
