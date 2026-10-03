@@ -88,7 +88,7 @@ The 30-turn run passes every bound (worst p95 ratio 1.09, worst p50 delta +10.9 
 
 ## In-process ledger time (Amendment 1)
 
-[Amendment 1](./2026-09-30-z10-ledger-prereg.md) replaced the two latency bounds with the ledger's own time per turn, measured in one process, before this run (`cabfe25`). Runner: `node scripts/ledger-overhead.mjs --memories 2000 --runs 200`, 10 warm-ups, same machine and build as the re-runs above. Ledger time is recorder creation, time inside observer calls net of the admit they wrap, `delivered`, and the event write on the token ledger's handle after its inject row. Times in ms.
+[Amendment 1](./2026-09-30-z10-ledger-prereg.md) replaced the two latency bounds with the ledger's own time per turn, measured in one process, in a commit pushed to PR #379 before this run. Runner: `node scripts/ledger-overhead.mjs --memories 2000 --runs 200`, 10 warm-ups, same machine and build as the re-runs above. Ledger time is recorder creation, time inside observer calls net of the admit they wrap, `delivered`, and the event write on the token ledger's handle after its inject row. Times in ms.
 
 | promptRecall | Mode | Ledger p50 / p95 / max | Observer p95 | Write p95 | getContext p50 / p95 | Dropped |
 |---|---|---|---|---|---|---|
