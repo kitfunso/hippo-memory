@@ -3,10 +3,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve, delimiter } from 'node:path';
+import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { runAll, planRuns, validateTasks, usageFromResult, isUsageLimit, prependPath, transcriptWork } from '../scripts/token-eval/ab-run.mjs';
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
+import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
 import { parseRuns, analyze } from '../scripts/token-eval/ab-analyze.mjs';
 import { loadAllEntries } from '../src/store.js';
 
@@ -185,8 +186,20 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sentinel-z0-token';
     const r = makeRepo();
     const out = tmp('ab-run-out-');
-    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'repoA', repo: r.repo, tasks: [task(r, 'a1', 'FIX add in lib.js'), task(r, 'a2', 'look around only')] }] });
+    const dumpDir = tmp('ab-run-dump-');
+    const dumpJs = join(dumpDir, 'dump.js');
+    const dump = join(dumpDir, 'env.jsonl');
+    writeFileSync(dumpJs, "require('fs').appendFileSync(process.argv[2], JSON.stringify(process.env) + '\\n');\n");
+    const dumpCmd = `node "${dumpJs}" "${dump}"`;
+    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'repoA', repo: r.repo, tasks: [task(r, 'a1', 'FIX add in lib.js', { setup: dumpCmd, test: `${dumpCmd} && node test.js` }), task(r, 'a2', 'look around only')] }] });
     await run(spec, ['A0', 'A1', 'A2', 'A5'], out);
+    const childEnvs = readFileSync(dump, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(childEnvs).toHaveLength(8);
+    for (const e of childEnvs) {
+      expect(JSON.stringify(e)).not.toContain('sentinel-z0-token');
+      expect(String(Object.entries(e).find(([k]) => k.toUpperCase() === 'PATH')?.[1]).split(delimiter)).not.toContain(join(dirname(e.CLAUDE_CONFIG_DIR), 'bin'));
+      expect(e.HIPPO_HOME).toMatch(/hippo-home$/);
+    }
 
     const records = readRecords(out);
     expect(records).toHaveLength(8);
@@ -247,6 +260,9 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
       expect(statSync(p).isDirectory() ? textUnder(p) : readFileSync(p, 'utf8')).not.toContain('sentinel-z0-token');
     }
     expect(existsSync(join(home, '.claude'))).toBe(false);
+    // hippo runs with HOME=<out>, so nothing it writes there may become an ancestor instruction file of a workspace.
+    expect(ancestorInstructionFiles(join(out, 'runs', 'seqA', 'A2', 'seed1'), { stopAt: out })).toEqual([]);
+    expect(JSON.parse(readFileSync(join(out, 'plan.json'), 'utf8'))).toHaveLength(records.length);
 
     const result = analyze(parseRuns(readFileSync(join(out, 'runs.jsonl'), 'utf8')), { control: 'A0' });
     expect(result.comparisons.map((c: { arm: string }) => c.arm).sort()).toEqual(['A1', 'A2', 'A5']);
@@ -360,6 +376,22 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const dry = cli(['--dry-run'], { Z0_ANCESTOR_STOP: scratch });
     expect(dry.status, dry.stderr).toBe(0);
     expect(dry.stdout).toContain('steps');
-    expect(dry.stdout).toContain('seqA');
+    const printed = dry.stdout.split('\n').filter((l) => /^ {2}\d+ seed/.test(l));
+    const plan = JSON.parse(readFileSync(join(scratch, 'out', 'plan.json'), 'utf8'));
+    expect(plan).toHaveLength(printed.length);
+    expect(plan.map((s: { seed: number; position: number; arm: string; sequence: string; taskId: string }, i: number) => `  ${i} seed${s.seed} pos${s.position} ${s.arm} ${s.sequence}/${s.taskId}`)).toEqual(printed.map((l) => l.trimEnd()));
+    expect(plan[0]).toMatchObject({ sequence: 'seqA', repo: r.repo });
+
+    const check = cli(['--check-homes'], { Z0_ANCESTOR_STOP: scratch });
+    expect(check.status).not.toBe(0);
+    expect(check.stderr).toContain('run `npm run build` first');
+    const real = cli([], { Z0_ANCESTOR_STOP: scratch, CLAUDE_CODE_OAUTH_TOKEN: 'x' });
+    expect(real.status).not.toBe(0);
+    expect(real.stderr).toMatch(/Z0_ANCESTOR_STOP/);
+    const env = { ...process.env };
+    delete env.CLAUDE_CODE_OAUTH_TOKEN;
+    const noToken = spawnSync(process.execPath, [join(scriptsDir, 'ab-run.mjs'), '--tasks', tasksFile, '--out', join(scratch, 'out')], { encoding: 'utf8', env });
+    expect(noToken.stderr).toContain('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
+    expect(existsSync(join(scratch, 'out', 'runs'))).toBe(false);
   });
 });

@@ -1,0 +1,3 @@
+### Added
+
+- **The token-eval A/B runner now runs the Z0 Claude Code arms.** `scripts/token-eval/ab-run.mjs` runs A0 (no memory), A1 (built-in auto memory), A2 (A1 plus hippo) and A5 (sham hippo) in lockstep, each (sequence, arm, seed) with its own Claude Code config dir, Codex home, hippo home and PATH, a stripped environment, a stub `CLAUDE.md` base and instruction files carried between tasks. `--check-homes` proves before any session that no arm can read the operator's memories or reach an installed hippo, and every mode refuses an out dir with instruction files above it. The TE5 `random-text` and `stale-memory` arms are removed. Analyze Z0 records with `ab-analyze.mjs --control A0`.

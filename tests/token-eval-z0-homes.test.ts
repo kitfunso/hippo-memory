@@ -1,15 +1,19 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, ARMS } from '../scripts/token-eval/arms.mjs';
-import { runDirs, freshRunDirs, assertFreshEmpty } from '../scripts/token-eval/homes.mjs';
+import { HIPPO_JS } from '../scripts/token-eval/exec.mjs';
+import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
+const savedEnv = { ...process.env };
 afterEach(() => {
+  for (const k of Object.keys(process.env)) if (!(k in savedEnv)) delete process.env[k];
+  Object.assign(process.env, savedEnv);
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 const tmp = (prefix: string): string => {
@@ -252,4 +256,95 @@ describe('per-run homes', () => {
     freshRunDirs(run);
     expect(() => assertFreshEmpty(run)).not.toThrow();
   });
+});
+
+describe('ancestor preflight', () => {
+  it('reports instruction files held by any ancestor up to stopAt, and nothing in a clean subtree', () => {
+    const root = tmp('z0-anc-');
+    const put = (rel: string, text = 'x') => {
+      mkdirSync(dirname(join(root, rel)), { recursive: true });
+      writeFileSync(join(root, rel), text);
+    };
+    put('a/CLAUDE.md');
+    put('r/.claude/rules/r.md');
+    put('n/.claude/CLAUDE.md');
+    for (const d of ['a/b/c', 'r/q', 'n/q', 'z/q']) mkdirSync(join(root, d), { recursive: true });
+    expect(ancestorInstructionFiles(join(root, 'a', 'b', 'c'), { stopAt: root })).toEqual([join(root, 'a', 'CLAUDE.md')]);
+    expect(ancestorInstructionFiles(join(root, 'r', 'q'), { stopAt: root })).toEqual([join(root, 'r', '.claude', 'rules')]);
+    expect(ancestorInstructionFiles(join(root, 'n', 'q'), { stopAt: root })).toEqual([join(root, 'n', '.claude', 'CLAUDE.md')]);
+    expect(ancestorInstructionFiles(join(root, 'z', 'q', 'not-yet'), { stopAt: root })).toEqual([]);
+  });
+});
+
+describe('parseImportDryRun', () => {
+  const run = runDirs(join(tmpdir(), 'z0-out'), 'seqA', 'A2', 1);
+  const text = (lines: string[]) => ['Agent memories (dry run, nothing written):', ...lines, '', 'Imported 0 notes.'].join('\n');
+  const fresh = [`  Claude Code: ${run.claudeConfig} (no memory folders found)`, `  Codex: ${run.codexHome} (no memory folders found)`];
+
+  it('passes the exact fresh-run text and ignores four-space container lines', () => {
+    expect(parseImportDryRun(text(fresh))).toEqual([{ label: 'Claude Code', home: run.claudeConfig }, { label: 'Codex', home: run.codexHome }]);
+    expect(() => checkImportHomes(parseImportDryRun(text(fresh)), run, 'seqA/A2/seed1')).not.toThrow();
+    expect(() => checkImportHomes(parseImportDryRun(text([fresh[0], '    project x: 1 note, into project', fresh[1]])), run, 'r')).not.toThrow();
+  });
+
+  it('fails on another tool, not found, a wrong home, two homes or a missing header', () => {
+    const bad: Array<[string, RegExp]> = [
+      [text([...fresh, '  Copilot: C:/x (no memory folders found)']), /seqA\/A2\/seed1.*Copilot/],
+      [text([fresh[0], '  Codex: not found']), /not found/],
+      [text([fresh[0], `  Codex: ${join(tmpdir(), 'operator', '.codex')}`]), /Codex/],
+      [text([`  Claude Code: ${run.claudeConfig}, ${join(tmpdir(), 'other')}`, fresh[1]]), /Claude Code/],
+    ];
+    for (const [t, re] of bad) expect(() => checkImportHomes(parseImportDryRun(t), run, 'seqA/A2/seed1'), t).toThrow(re);
+    expect(() => parseImportDryRun(fresh.join('\n'))).toThrow(/header/);
+  });
+});
+
+describe('homes check (built CLI, no claude session)', () => {
+  /** A fake operator HOME and APPDATA holding canary memories in every place an importer could look. */
+  function operatorWithCanaries(): string {
+    const home = tmp('z0-operator-');
+    const notes: Array<[string, string]> = [
+      [join(home, '.claude', 'projects', 'p', 'memory', 'canary.md'), '---\nname: canary\ntype: project\n---\nZ0-CANARY claude\n'],
+      [join(home, '.codex', 'memories', 'memory_summary.md'), 'v1\n## User Profile\nZ0-CANARY codex\n'],
+      [join(home, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'github.copilot-chat', 'memory-tool', 'memories', 'c.md'), 'Z0-CANARY copilot\n'],
+    ];
+    for (const [f, text] of notes) {
+      mkdirSync(dirname(f), { recursive: true });
+      writeFileSync(f, text);
+    }
+    Object.assign(process.env, { HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming') });
+    return home;
+  }
+  const decoy = () => {
+    const d = toolDir(['hippo']);
+    const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+    process.env[key] = `${d}${delimiter}${process.env[key]}`;
+    return d;
+  };
+  const runs = ARMS.map((arm) => ({ seq: 'seqH', arm, seed: 1 }));
+  const textUnder = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? textUnder(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
+
+  it('passes for all four arms with a hippo decoy on PATH, and a real A2 init plus import keeps the canaries out', () => {
+    operatorWithCanaries();
+    decoy();
+    const out = tmp('z0-check-');
+    checkHomes({ outDir: out, runs, passEnv: [] });
+    expect(existsSync(join(out, 'runs', 'seqH', 'A0', 'seed1'))).toBe(false);
+
+    const run = runDirs(out, 'seqH', 'A2', 1);
+    freshRunDirs(run);
+    execFileSync('git', ['init', '-q'], { cwd: run.work });
+    const env = { ...childEnv(armEnv('A2', run, process.env)), HOME: out, USERPROFILE: out };
+    for (const args of [['init', '--no-schedule'], ['import', '--agents']]) execFileSync(process.execPath, [HIPPO_JS, ...args], { cwd: run.work, env, stdio: 'pipe' });
+    expect(existsSync(join(run.work, '.hippo'))).toBe(true);
+    expect(textUnder(run.root)).not.toContain('Z0-CANARY');
+  }, 60_000);
+
+  it('fails naming the run when a login profile puts the decoy hippo back on PATH', () => {
+    const home = operatorWithCanaries();
+    const d = decoy();
+    const posix = win ? d.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, x: string) => `/${x.toLowerCase()}`) : d;
+    for (const f of ['.bash_profile', '.profile']) writeFileSync(join(home, f), `export PATH="${posix}:$PATH"\n`);
+    expect(() => checkHomes({ outDir: tmp('z0-check-'), runs, passEnv: [] })).toThrow(/seqH\/A0\/seed1.*hippo/);
+  }, 60_000);
 });

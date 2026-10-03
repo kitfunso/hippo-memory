@@ -6,8 +6,8 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { HIPPO_JS, sh, git } from './exec.mjs';
-import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
-import { runDirs, freshRunDirs, homeFiles } from './homes.mjs';
+import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
+import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 
 export { prependPath } from './exec.mjs';
@@ -289,6 +289,13 @@ function runTask(ctx, run, position, order) {
   });
 }
 
+/** The expected cells, written before any session so the analysis can tell a run cut off in lockstep. */
+function writePlan(outDir, steps) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const cells = steps.map((st) => ({ seed: st.seed, position: st.position, arm: st.arm, sequence: st.sequence.id, taskId: st.sequence.tasks[st.position].id, repo: st.sequence.repo }));
+  fs.writeFileSync(path.join(outDir, 'plan.json'), `${JSON.stringify(cells, null, 2)}\n`);
+}
+
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
 export async function runAll(opts) {
   await loadHippo();
@@ -310,8 +317,10 @@ export async function runAll(opts) {
     const warmArgs = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...(ctx.model ? ['--model', ctx.model] : [])];
     sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
   }
+  const steps = planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]);
+  writePlan(outDir, steps);
   const state = new Map();
-  for (const [order, step] of planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]).entries()) {
+  for (const [order, step] of steps.entries()) {
     const { seed, position, arm, sequence: s } = step;
     const cached = path.join(ctx.cacheDir, s.id);
     if (!fs.existsSync(cached)) {
@@ -344,21 +353,39 @@ async function main() {
   const seeds = flag('--seeds', null) === null ? null : Number(flag('--seeds', null));
   const passEnv = argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : []));
   const steps = planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]);
+  const out = path.resolve(outDir);
+  const mode = argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real');
+  const stopAt = process.env.Z0_ANCESTOR_STOP || null;
+  // The stop is for tests under a temp dir; a stray export must never disable a real run's check.
+  if (mode === 'real' && stopAt) throw new Error('Z0_ANCESTOR_STOP is set; it is only honoured for --dry-run and --check-homes. Unset it for a real run.');
+  if (mode === 'real' && !process.env[TOKEN_KEY]) throw new Error('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
+  assertNoAncestorInstructions(out, { stopAt });
   console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seeds ?? ARM_SEEDS[a]}`).join(' ')}.`);
-  if (argv.includes('--dry-run')) {
+  if (mode === 'dry') {
+    writePlan(out, steps);
     for (const [i, r] of steps.entries()) console.log(`  ${i} seed${r.seed} pos${r.position} ${r.arm} ${r.sequence.id}/${r.sequence.tasks[r.position].id}`);
     return;
   }
-  const out = path.resolve(outDir);
-  await runAll({
-    spec, arms, seeds, outDir: out, passEnv,
-    model: flag('--model', null),
-    claudeBin: flag('--claude-bin', 'claude'),
-    maxBudgetUsd: flag('--max-budget-usd', null),
-    settleMs: Number(flag('--settle-ms', '5000')),
-    warmup: !argv.includes('--no-warmup'),
-    permissionMode: flag('--permission-mode', 'bypassPermissions'),
-  });
+  const runs = [...new Map(steps.map((st) => [`${st.sequence.id}|${st.arm}|${st.seed}`, { seq: st.sequence.id, arm: st.arm, seed: st.seed }])).values()];
+  checkHomes({ outDir: out, runs, passEnv });
+  console.log(`Homes check passed for ${runs.length} runs.`);
+  if (mode === 'check') return;
+  const progress = { last: 'none' };
+  try {
+    await runAll({
+      spec, arms, seeds, outDir: out, passEnv, progress,
+      model: flag('--model', null),
+      claudeBin: flag('--claude-bin', 'claude'),
+      maxBudgetUsd: flag('--max-budget-usd', null),
+      settleMs: Number(flag('--settle-ms', '5000')),
+      warmup: !argv.includes('--no-warmup'),
+      permissionMode: flag('--permission-mode', 'bypassPermissions'),
+    });
+  } catch (err) {
+    // Under lockstep a mid-run throw leaves every run partial, so the out dir says so.
+    fs.writeFileSync(path.join(out, 'ABANDONED'), `${err.message}\nlast completed: ${progress.last}\n`);
+    throw err;
+  }
   console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze: node scripts/token-eval/ab-analyze.mjs --runs ${path.join(out, 'runs.jsonl')} --control A0 --prices prices.json`);
 }
 

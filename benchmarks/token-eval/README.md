@@ -103,7 +103,9 @@ node scripts/token-eval/ab-run.mjs --tasks tasks.json --out C:/z0-runs/r1 --mode
 node scripts/token-eval/ab-run.mjs --tasks tasks.json --out C:/z0-runs/r1 --model <model id> --max-budget-usd 3
 ```
 
-`--dry-run` only validates the tasks file and prints the plan: it needs no `npm run build` and no `dist/`. A real run needs `dist/` (`npm run build` first) and fails fast with a clear message if it is missing. `--arms` takes a subset of `A0,A1,A2,A5`.
+`--dry-run` only validates the tasks file, prints the plan and writes it to `<out>/plan.json` (every expected cell, so the analysis can tell a run cut off in lockstep): it needs no `npm run build` and no `dist/`. `--check-homes` runs the homes check below for every planned run and stops; it needs `dist/`. A real run needs `dist/` (`npm run build` first) and `CLAUDE_CODE_OAUTH_TOKEN` (run `claude setup-token` and export it), runs the homes check first, and fails fast with a clear message if either is missing. `--arms` takes a subset of `A0,A1,A2,A5`. If a real run throws partway, `<out>/ABANDONED` holds the error and the last completed step.
+
+**Preflight.** Claude Code loads `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/CLAUDE.md` and `.claude/rules/` from every directory above the workspace, so every mode refuses an out dir with any of them above it: on a machine with a home-level `CLAUDE.md`, use a dir such as `C:/z0-runs` or `/tmp/z0`. `Z0_ANCESTOR_STOP` stops that walk early, for tests only; a real run refuses to start when it is set. A managed-policy `CLAUDE.md` outside that ancestry is not covered. The homes check then, for each planned run, creates its dirs, runs `hippo import --agents --dry-run` in the arm's env and requires exactly Claude Code and Codex at the run's own homes, and runs `command -v hippo` in the agent's login shell (Git Bash on Windows) to require no `hippo` for A0/A1 and the run's `bin/` for A2/A5. That catches a shell profile that puts a global hippo back on PATH.
 
 **3. Analyze** with A0 as the control (ab-analyze defaults to `no-memory`, which Z0 records never use):
 
