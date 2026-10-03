@@ -175,6 +175,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Test stores live in the temp dir, and C: takes 5 ms per fsync against 0.15 ms on D:.
+      - name: Temp dir on D:
+        if: runner.os == 'Windows'
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - name: Vitest
         run: npx vitest run
 
@@ -215,39 +221,3 @@ jobs:
         run: uv run --locked --extra test pytest tests -q -rs
         env:
           HIPPO_REQUIRE_SERVE: '1'
-
-  diag-windows:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - shell: pwsh
-        run: |
-          Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AMRunningMode, OnAccessProtectionEnabled | Format-List
-          Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
-          "TEMP=$env:TEMP RUNNER_TEMP=$env:RUNNER_TEMP"
-          Get-PSDrive -PSProvider FileSystem | Format-Table Name, Used, Free
-      - run: node scripts/t1c-diag.mjs
-      - run: node scripts/t1c-diag.mjs "${{ runner.temp }}"
-      - run: node scripts/t1c-diag.mjs "${{ github.workspace }}"
-      - name: slow files, default temp
-        run: npx vitest run tests/memory-value-fit.test.ts tests/dedupe-survivor-determinism.test.ts
-        continue-on-error: true
-      - name: slow files, runner temp
-        run: npx vitest run tests/memory-value-fit.test.ts tests/dedupe-survivor-determinism.test.ts
-        continue-on-error: true
-        env:
-          TEMP: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-      - shell: pwsh
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
-      - run: node scripts/t1c-diag.mjs
-      - name: slow files, default temp, no realtime scan
-        run: npx vitest run tests/memory-value-fit.test.ts tests/dedupe-survivor-determinism.test.ts
-        continue-on-error: true
