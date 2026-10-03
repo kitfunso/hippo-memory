@@ -86,7 +86,7 @@ const rows = homeFeatures.map((f) => {
                 {row.cells.map((c, ci) => (
                   <td
                     class:list={[
-                      'whitespace-nowrap px-2 py-2.5 text-center align-top text-[13px] leading-snug',
+                      'min-w-[8.5rem] px-3 py-2.5 text-center align-top text-[13px] leading-snug',
                       cellTone(c),
                       ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
                     ]}
