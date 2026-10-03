@@ -144,7 +144,7 @@ import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -8716,11 +8716,13 @@ async function main(
     case 'pre-compact': {
       // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
       const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
-      resetHookInjection(hippoRoot, stdinText, null);
-      await cmdPreCompact(hookStoreRoot(hippoRoot), {
-        stdinText,
-        stdinTimedOut,
-        logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+      await withSharedStoreHandles(async () => {
+        resetHookInjection(hippoRoot, stdinText, null);
+        await cmdPreCompact(hookStoreRoot(hippoRoot), {
+          stdinText,
+          stdinTimedOut,
+          logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+        });
       });
       break;
     }
@@ -8730,7 +8732,7 @@ async function main(
       const { text } = await readStdinBounded();
       const logFlag = flags['log-file'];
       const store = hookStoreRoot(hippoRoot);
-      const line = cmdPostCompact(store, {
+      const line = await withSharedStoreHandles(() => cmdPostCompact(store, {
         stdinText: text,
         logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
         // Passed in, since capture.ts importing the sync would close an import cycle.
@@ -8740,7 +8742,7 @@ async function main(
           if (summary !== null) log(summary);
           for (const warning of report.warnings) log(`agent memories: ${warning}`);
         },
-      });
+      }));
       if (line !== null) console.log(line);
       break;
     }
@@ -8754,7 +8756,8 @@ async function main(
         const payload = (text ?? '').trim();
         if (isInitialized(root) && payload) {
           // SAFETY: JSON.parse returns a JSON value by definition.
-          captureToolFailure(root, resolveTenantId({}), JSON.parse(payload) as JsonValue);
+          const failure = JSON.parse(payload) as JsonValue;
+          await withSharedStoreHandles(() => captureToolFailure(root, resolveTenantId({}), failure));
         }
       } catch {
         // A malformed payload or store error must never fail the agent's tool call.
@@ -8764,8 +8767,10 @@ async function main(
 
     case 'compact-resume': {
       const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
-      resetHookInjection(hippoRoot, stdinText, 'compact');
-      cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
+      await withSharedStoreHandles(() => {
+        resetHookInjection(hippoRoot, stdinText, 'compact');
+        cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
+      });
       break;
     }
 
@@ -9056,7 +9061,7 @@ async function main(
       // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
       // the hot stdin path and a manual run share this one command.
       const { text: stdinText } = await readStdinBounded();
-      await cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText);
+      await withSharedStoreHandles(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
       break;
     }
 

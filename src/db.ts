@@ -19,6 +19,8 @@ export interface DatabaseSyncLike {
   exec(sql: string): void;
   prepare(sql: string): StatementSyncLike;
   close(): void;
+  readonly isOpen?: boolean;
+  readonly isTransaction?: boolean;
 }
 
 // SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at
@@ -2686,8 +2688,48 @@ function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000)
   }
 }
 
+// Hook commands run on every prompt, so inside withSharedStoreHandles each store pays its pragmas, migration check and mirror cleanup once.
+const sharedHandles = new Map<string, DatabaseSyncLike>();
+const sharedSet = new WeakSet<DatabaseSyncLike>();
+let shareDepth = 0;
+
+function closeSharedStoreHandles(): void {
+  for (const db of sharedHandles.values()) {
+    sharedSet.delete(db);
+    if (db.isOpen !== false) db.close();
+  }
+  sharedHandles.clear();
+}
+
+/** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open until `fn` settles or the process exits. */
+export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>): Promise<T> {
+  if (shareDepth++ === 0) process.once('exit', closeSharedStoreHandles);
+  try {
+    return await fn();
+  } finally {
+    if (--shareDepth === 0) {
+      process.off('exit', closeSharedStoreHandles);
+      closeSharedStoreHandles();
+    }
+  }
+}
+
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+  if (shareDepth === 0) return openOwnHippoDb(hippoRoot, opts);
+  const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${opts?.busyWaitMs ?? ''}`;
+  const shared = sharedHandles.get(key);
+  if (shared?.isOpen && !shared.isTransaction) return shared;
+  const db = openOwnHippoDb(hippoRoot, opts);
+  // An open nested inside a transaction gets its own connection, as it did before sharing.
+  if (!shared?.isOpen) {
+    sharedHandles.set(key, db);
+    sharedSet.add(db);
+  }
+  return db;
+}
+
+function openOwnHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   fs.mkdirSync(hippoRoot, { recursive: true });
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   const busyWaitMs = opts?.busyWaitMs;
@@ -3005,6 +3047,7 @@ function backfillFtsIndex(db: DatabaseSyncLike): void {
 }
 
 export function closeHippoDb(db: DatabaseSyncLike): void {
+  if (sharedSet.has(db)) return;
   db.close();
 }
 
