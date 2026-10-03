@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-03  
 **Scope:** engineering bounds from the [Z10 draft](./2026-09-30-z10-ledger-prereg.md), "Slice 1: engineering scope (settled)". No task or efficacy claim.  
-**Verdict:** stdout, token and bytes bounds PASS in every run. On the final code the p95 bound FAILS in every run, and the p50 bound passes only in the rebased run on a quieter machine (worst +13.4 ms). Runs 1 and 2 are dominated by load on the test machine; a fully quiet re-run is still owed.
+**Verdict:** stdout, token and bytes bounds PASS in every run. On the final code the p95 bound FAILS in every run, and the p50 bound passes only in the rebased run on a quieter machine (worst +13.4 ms). Runs 1 and 2 are dominated by load on the test machine; a fully quiet re-run is still owed.  
+**Status: the overhead gate is open.** The p95 ratio bound FAILS in all four runs (1.44 to 1.75), and the `--contention` run is not reported. This gate blocks any decision to turn `deliveryLedger` on by default; it does not block merging this slice, which ships the flag off.
 
 ## Runner
 

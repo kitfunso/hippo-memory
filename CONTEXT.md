@@ -61,7 +61,7 @@ _Avoid_: usage log, telemetry, cost log
 
 **Delivery ledger**:
 The optional per-turn record of the per-prompt hook: one event per call and one row per
-candidate memory, saying whether it was selected, emitted, reused or rejected and why.
+candidate memory, saying whether it was emitted, reused or rejected and why.
 Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
 _Avoid_: delivery log, trace, telemetry
 
