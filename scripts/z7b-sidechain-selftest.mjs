@@ -166,9 +166,8 @@ function selftestPromptFiles(t) {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const read = (dir, n) => fs.readFileSync(path.join(here, dir, n), 'utf8');
   t('prompt dir holds exactly the four pinned prompts', fs.readdirSync(path.join(here, 'z7b-sidechain-prompts')).sort().join() === [...Z.PIN_PROMPTS].sort().join());
-  t('judge-system.txt and recheck-prompt.txt are byte-identical to Z7', ['judge-system.txt', 'recheck-prompt.txt'].every((n) => L.sha256(read('z7b-sidechain-prompts', n)) === L.sha256(read('z7-sidechain-prompts', n))));
-  const foot = (s) => s.slice(s.indexOf('=== Block A (task) ==='));
-  t('judge prompt ends with Z7 block footer and names the six tests', foot(read('z7b-sidechain-prompts', 'judge-prompt.txt')) === foot(read('z7-sidechain-prompts', 'judge-prompt.txt')) && /all six tests/.test(read('z7b-sidechain-prompts', 'judge-prompt.txt')));
+  // Amendment 2: from dev round 2 the judge prompt is Z7's too.
+  t('judge-system, judge-prompt and recheck-prompt are byte-identical to Z7', ['judge-system.txt', 'judge-prompt.txt', 'recheck-prompt.txt'].every((n) => L.sha256(read('z7b-sidechain-prompts', n)) === L.sha256(read('z7-sidechain-prompts', n))));
   const filt = read('z7b-sidechain-prompts', 'filter-prompt.txt');
   t('filter prompt has the A, B and LESSONS slots and every label', ['{{A}}', '{{B}}', '{{LESSONS}}'].every((v) => filt.includes(v)) && !filt.includes('{{C}}') && Z.FILTER_LABELS.every((l) => filt.includes(`"${l}"`)));
 }
