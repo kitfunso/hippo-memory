@@ -94,6 +94,26 @@ describe('getContext prompt recall (api-level)', () => {
     expect(ids(result)).toEqual([relevant.id]);
   });
 
+  it('is on by default: no config swaps the newest memory for the matching one', async () => {
+    const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
+    seed(local, 'unrelated note about coffee and lunch scheduling for the office', {
+      created: '2026-06-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      includeRecent: 5,
+      currentProject: PROJECT,
+      prompt: 'how should the postgres migration rollback plan work',
+    });
+
+    expect(fs.existsSync(path.join(local, 'config.json'))).toBe(false);
+    expect(ids(result)).toEqual([relevant.id]);
+    expect(result.entries[0]!.promptRecall).toBe(true);
+  });
+
   it('treats a non-boolean promptRecall value as off', async () => {
     fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ pinnedInject: { promptRecall: 'false' } }));
     seed(local, 'the postgres migration script needs a rollback plan before deploy');
