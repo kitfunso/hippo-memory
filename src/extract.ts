@@ -130,7 +130,7 @@ export function storeExtractedFacts(
 
   for (const fact of facts) {
     const tags = ['extracted', ...inheritedTags, ...fact.tags];
-    const entry = createMemory(fact.content, {
+    const entry: MemoryEntry = { ...createMemory(fact.content, {
       layer: Layer.Semantic,
       tags,
       emotional_valence: fact.valence,
@@ -145,7 +145,7 @@ export function storeExtractedFacts(
       // the same tenant as the episodic memory they were extracted from.
       tenantId: source.tenantId,
       baseHalfLifeDays,
-    });
+    }), origin_project: source.origin_project };
 
     // AT1 containment: a refusal is per-VALUE — one rejected fact must not
     // drop the rest of this batch. writeEntry has already audited the

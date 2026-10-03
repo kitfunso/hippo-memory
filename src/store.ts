@@ -413,9 +413,9 @@ export function serializeEntry(entry: MemoryEntry): string {
   if (tenantId !== 'default') {
     frontmatter['tenant_id'] = tenantId;
   }
-  // v39: origin_project '' (user-global) is meaningful and must round-trip;
-  // only undefined/null (legacy/unstamped) is omitted.
-  if (entry.origin_project !== undefined && entry.origin_project !== null) {
+  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip;
+  // only undefined (unstamped) is omitted, so a rebuild stamps nothing it can read.
+  if (entry.origin_project !== undefined) {
     frontmatter['origin_project'] = entry.origin_project;
   }
   // Spread into a fresh object literal: dumpFrontmatter's Record<string,
@@ -476,7 +476,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
     artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
     tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? 'default' : String(data['tenant_id']),
-    origin_project: data['origin_project'] === null || data['origin_project'] === undefined ? null : String(data['origin_project']),
+    origin_project: !('origin_project' in data) ? undefined : data['origin_project'] === null ? null : String(data['origin_project']),
   };
 }
 
@@ -1562,7 +1562,7 @@ export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): Memor
 }
 
 /**
- * Import-time variant that ALSO stamps null: used only where evidence exists
+ * Import-time variant for a mirror with no origin field (an explicit null stays null): used only where evidence exists
  * for rows that predate the origin column - the legacy-markdown bootstrap and
  * rebuildIndex import, which are the markdown-store equivalent of the v39 SQL
  * backfill. Same evidence order as the migration: the provenance source
@@ -1571,7 +1571,7 @@ export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): Memor
  * owning project instead of becoming user-global (codex gating round 3 P1).
  */
 function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
-  if (entry.origin_project !== undefined && entry.origin_project !== null) return entry;
+  if (entry.origin_project !== undefined) return entry;
   const fromSource = originFromSource(entry.source);
   return {
     ...entry,

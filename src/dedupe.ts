@@ -104,7 +104,7 @@ export function deduplicateStore(
   const entriesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of entries) {
     // EI2: also split by restricted scope, else a private copy can delete the readable one.
-    const key = derivationPartitionKey(entry.tenantId, entry.scope);
+    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
     const bucket = entriesByTenant.get(key);
     if (bucket) bucket.push(entry);
     else entriesByTenant.set(key, [entry]);

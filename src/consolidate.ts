@@ -792,7 +792,7 @@ export async function consolidate(
   // before this fix — byte-identical behavior there.
   const mergeCandidatesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of mergeCandidates) {
-    const key = derivationPartitionKey(entry.tenantId, entry.scope);
+    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
     const bucket = mergeCandidatesByTenant.get(key);
     if (bucket) bucket.push(entry);
     else mergeCandidatesByTenant.set(key, [entry]);
@@ -810,6 +810,7 @@ export async function consolidate(
   for (const [, tenantCandidates] of mergeCandidatesByTenant) {
     const mergeTenant = tenantCandidates[0].tenantId;
     const mergeScope = derivationScope(tenantCandidates[0].scope);
+    const mergeOrigin = tenantCandidates[0].origin_project;
     const partnersOf = mergePartners(tenantCandidates.map((e) => e.content));
     for (let i = 0; i < tenantCandidates.length; i++) {
       if (used.has(tenantCandidates[i].id) || tenantCandidates[i].content.length > MERGE_MAX_CHARS) continue;
@@ -856,6 +857,7 @@ export async function consolidate(
             scope: mergeScope,
             baseHalfLifeDays: config.defaultHalfLifeDays,
           }),
+          origin_project: mergeOrigin,
           parents: cluster.map((e) => e.id),
         };
       }
@@ -1121,6 +1123,7 @@ export function detectConflicts(
       // exists for stated-rule disagreement, not strategy diversity.
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
+      if (!recalledTogether(survivors[i], survivors[j])) continue;
       if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) continue;
       const reasonAndScore = describeConflict(profiles[i], profiles[j]);
       if (!reasonAndScore) continue;
@@ -1134,6 +1137,13 @@ export function detectConflicts(
   }
 
   return detected;
+}
+
+/** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a project's. */
+function recalledTogether(a: MemoryEntry, b: MemoryEntry): boolean {
+  if (a.tenantId !== b.tenantId) return false;
+  const [x, y] = [a.origin_project ?? null, b.origin_project ?? null];
+  return x === y || (x === '' && y !== null) || (y === '' && x !== null);
 }
 
 type ConflictPolarity = 'positive' | 'negative' | 'neutral';

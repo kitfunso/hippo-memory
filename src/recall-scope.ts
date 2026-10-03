@@ -190,8 +190,11 @@ export function commonDerivationScope(
   return { ok: true, scope: common };
 }
 
-/** Map-partition key for consolidate/dag producers: tenant + derivation scope,
- *  so a derived row never blends two restricted scopes or a mixed pair. */
-export function derivationPartitionKey(tenantId: string, scope: string | null | undefined): string {
-  return `${tenantId}\u0000${derivationScope(scope) ?? ''}`;
+/** Map-partition key for consolidate/dag/dedup producers: tenant + derivation scope + origin project,
+ *  so a derived row never blends two restricted scopes, a mixed pair, or two projects. */
+export function derivationPartitionKey(
+  tenantId: string, scope: string | null | undefined, origin: string | null | undefined,
+): string {
+  const project = origin === undefined ? '\u0002' : origin ?? '\u0001'; // unstamped, unknown and named never share a bucket
+  return `${tenantId}\u0000${derivationScope(scope) ?? ''}\u0000${project}`;
 }

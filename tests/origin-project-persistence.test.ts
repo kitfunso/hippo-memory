@@ -102,11 +102,30 @@ describe('markdown mirror round-trip', () => {
     }
   });
 
-  it('omits legacy null/undefined origin and deserializes it back to null', () => {
-    const base = createMemory('legacy row content here');
-    const raw = serializeEntry({ ...base, origin_project: null });
-    expect(raw).not.toContain('origin_project');
+  it('round-trips an unknown (null) origin, so a rebuild never stamps it user-global', () => {
+    const raw = serializeEntry({ ...createMemory('unknown-origin row content here'), origin_project: null });
+    expect(raw).toContain('origin_project: null');
     expect(deserializeEntry(raw)?.origin_project).toBeNull();
+  });
+
+  it('omits an unstamped origin and reads a mirror with no origin field as unstamped', () => {
+    const raw = serializeEntry(createMemory('unstamped row content here'));
+    expect(raw).not.toContain('origin_project');
+    expect(deserializeEntry(raw)?.origin_project).toBeUndefined();
+  });
+
+  it('a rebuild keeps an explicit null and stamps only a mirror with no origin field', () => {
+    const storeRoot = path.join(tmpRoot, 'proj-a', '.hippo');
+    fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
+    const unknown = { ...createMemory('a merged row from rows of unknown origin'), origin_project: null };
+    const legacy = createMemory('a markdown row from before origins existed');
+    fs.writeFileSync(path.join(storeRoot, 'episodic', `${unknown.id}.md`), serializeEntry(unknown));
+    fs.writeFileSync(path.join(storeRoot, 'episodic', `${legacy.id}.md`), serializeEntry(legacy));
+
+    initStore(storeRoot);
+    const byId = new Map(loadAllEntries(storeRoot).map((e) => [e.id, e.origin_project]));
+    expect(byId.get(unknown.id)).toBeNull();
+    expect(byId.get(legacy.id)).toBe('proj-a');
   });
 });
 
@@ -168,8 +187,9 @@ describe('v39 migration backfill', () => {
     const projectDir = path.join(tmpRoot, 'proj-a');
     const storeRoot = path.join(projectDir, '.hippo');
     fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
-    const sharedRow = { ...createMemory('markdown row shared from proj b', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' }), origin_project: null };
-    const plainRow = { ...createMemory('markdown row written here long ago'), origin_project: null };
+    // Legacy markdown has no origin field at all: leave the origin unstamped.
+    const sharedRow = createMemory('markdown row shared from proj b', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' });
+    const plainRow = createMemory('markdown row written here long ago');
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${sharedRow.id}.md`), serializeEntry(sharedRow));
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${plainRow.id}.md`), serializeEntry(plainRow));
 

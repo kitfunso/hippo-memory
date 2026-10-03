@@ -155,7 +155,7 @@ export async function buildDag(
   // behavior there.
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
-    const key = derivationPartitionKey(fact.tenantId, fact.scope);
+    const key = derivationPartitionKey(fact.tenantId, fact.scope, fact.origin_project);
     const bucket = unparentedByTenant.get(key);
     if (bucket) bucket.push(fact);
     else unparentedByTenant.set(key, [fact]);
@@ -190,6 +190,7 @@ export async function buildDag(
         scope: factScope,
         baseHalfLifeDays,
       });
+      summaryEntry.origin_project = tenantFacts[0].origin_project;
       // Schema v25: cache descendant_count + earliest/latest_at on the summary
       // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
       // can reason about scope without walking the children.
@@ -430,7 +431,7 @@ export async function buildEntityProfiles(
   const byTenant = new Map<string, MemoryEntry[]>();
   for (const l2 of unparented) {
     const tid = l2.tenantId ?? 'default';
-    const key = derivationPartitionKey(tid, l2.scope);
+    const key = derivationPartitionKey(tid, l2.scope, l2.origin_project);
     const list = byTenant.get(key) ?? [];
     list.push(l2);
     byTenant.set(key, list);
@@ -465,6 +466,7 @@ export async function buildEntityProfiles(
         scope,
         baseHalfLifeDays,
       });
+      profileEntry.origin_project = tenantL2s[0].origin_project;
       profileEntry.descendant_count = cluster.members.length;
       profileEntry.earliest_at = memberCreatedAts[0];
       profileEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
