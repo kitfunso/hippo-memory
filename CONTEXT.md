@@ -59,6 +59,12 @@ The record of every block of memory text hippo handed an agent: surface, session
 tokens, and whether it was sent or skipped as unchanged. Counts only, never the text.
 _Avoid_: usage log, telemetry, cost log
 
+**Delivery ledger**:
+The optional per-turn record of the per-prompt hook: one event per call and one row per
+candidate memory, saying whether it was selected, emitted, reused or rejected and why.
+Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
+_Avoid_: delivery log, trace, telemetry
+
 **Failure log**:
 Every failed tool call the capture-error hook sees, stored as a memory or not: outcome, session,
 tool, the routine rule that skipped it, and hashes of the error, never its text. Kept 90 days.

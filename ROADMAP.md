@@ -2361,6 +2361,8 @@ The mutation audit's recall entry is not the whole trace system. [`src/recall-tr
 
 **Exit.** Known fixture events are reconstructable end to end, existing recall decisions are unchanged, and overhead is measured against H4's budget before broad default installation. No task-benefit claim from instrumentation alone. Draft: [Z10 ledger](docs/evals/2026-09-30-z10-ledger-prereg.md).
 
+Slice 1 [built, off by default]: schema v50 `delivery_events` and `delivery_candidates` record each per-prompt hook turn's candidates, rejection stage and reason, and block state behind `deliveryLedger.enabled`; compaction, resume, session-end, tool-failure and the other context surfaces remain open.
+
 ### Z1d. Trigger-then-gate [experiment; after Z10]
 
 Register a new arm using the current prompt, bounded recent conversational context and task state, alongside scoped path, error class, test identity or command-family triggers. Include indirect references such as continuing a previously agreed approach; do not require an explicit file or error to qualify. A path match alone is not relevance. Freeze query construction, allowed context sources and bounds before scoring. Retrieve a small set and admit it only when the registered gate clears; otherwise inject no additional claims. Applicable pins remain.

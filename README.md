@@ -548,6 +548,16 @@ crashed, shows what was sent only. Re-reads usually bill at the provider's cache
 a fraction of the full input price. Counts are estimates (characters / 4), the same estimate
 every budget uses. Rows older than 90 days are pruned.
 
+**See why a memory did or did not reach the agent.** Turn on the delivery ledger with
+`{"deliveryLedger":{"enabled":true}}` in `.hippo/config.json` (off by default). The flag is
+read from the store the token ledger writes to: the project's local store when it has one,
+else the global store. Each per-prompt hook call then records one event (session, turn
+number, whether the block was sent, reused, empty or disabled, counts and token totals) and
+one row per candidate memory: selected, emitted, reused or rejected, with the stage and the
+reason it was dropped. It holds ids, hashes, counts and reasons only, never prompt or memory
+text. A ledger failure prints one stderr line and never changes what the hook prints. Rows
+older than 90 days are pruned; at a heavy 300 prompts a day that is about 190 MB per store.
+
 ---
 
 ### Outcome feedback
