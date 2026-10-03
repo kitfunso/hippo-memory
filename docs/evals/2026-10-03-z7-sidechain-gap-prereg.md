@@ -1,6 +1,6 @@
 # Z7 sub-agent lessons that the parent's capture misses: pre-registration
 
-**Date:** 2026-10-03. **Status:** DRAFT. It locks at the commit that sets this line to PRE-REG-LOCKED, after the dev rounds below and before any scored call.
+**Date:** 2026-10-03. **Status:** PRE-REG-LOCKED. Locked after dev round 1 and three Codex reviews of the script; no scored call was made before this commit.
 
 ## Question
 
