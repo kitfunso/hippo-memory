@@ -1,5 +1,5 @@
 // Pilot arm: one token_ledger row per session names its arm, `hippo` or `holdout`, so a pilot can compare them.
-// `items` holds the holdout rate in basis points; the pilot report reads these rows, so their shape is fixed.
+// `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is fixed.
 import { createHash } from 'node:crypto';
 import { execWithBusyRetry, type DatabaseSyncLike } from './db.js';
 import { recordTokenUse } from './token-ledger.js';
