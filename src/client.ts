@@ -16,6 +16,9 @@
 
 import type { RememberOpts, RememberResult } from './api.js';
 
+/** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
+const SERVER_TIMEOUT_MS = 30_000;
+
 function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   const headers: Record<string, string> = {};
   if (withBody) headers['content-type'] = 'application/json';
@@ -64,6 +67,7 @@ export async function remember(
   const res = await fetch(`${serverUrl}/v1/memories`, {
     method: 'POST',
     headers: buildHeaders(apiKey, true),
+    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
     body: JSON.stringify(opts),
   });
   if (!res.ok) await throwForStatus(res);
@@ -79,6 +83,7 @@ export async function forget(
   const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: buildHeaders(apiKey, false),
+    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
   });
   if (!res.ok) await throwForStatus(res);
   const result: { ok: true; id: string } = await res.json();
@@ -93,6 +98,7 @@ export async function promote(
   const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/promote`, {
     method: 'POST',
     headers: buildHeaders(apiKey, false),
+    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
   });
   if (!res.ok) await throwForStatus(res);
   const result: { ok: true; sourceId: string; globalId: string } = await res.json();
@@ -108,6 +114,7 @@ export async function archiveRaw(
   const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/archive`, {
     method: 'POST',
     headers: buildHeaders(apiKey, true),
+    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) await throwForStatus(res);
@@ -148,5 +155,7 @@ export function classifyTransportFailure(err: unknown): TransportFailure {
     return 'delivery-unknown';
   }
   if (message.includes('socket hang up') || message.includes('fetch failed')) return 'delivery-unknown';
+  // The request was sent and the server went quiet, so it may have committed.
+  if (err.name === 'TimeoutError') return 'delivery-unknown';
   return 'none';
 }

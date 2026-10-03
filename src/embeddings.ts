@@ -310,6 +310,8 @@ async function rebuildEmbeddingIndex(
     const vec = vectors[i];
     if (vec && vec.length > 0) {
       rebuilt[entries[i].id] = vec;
+    } else {
+      noteSkippedEmbedding(entries[i].id);
     }
   }
 
@@ -328,9 +330,15 @@ function resetPhysicsFromIndex(
     } finally {
       closeHippoDb(db);
     }
-  } catch {
-    // Physics reset is best-effort; retrieval will still fall back gracefully.
+  } catch (err) {
+    // Best effort: retrieval still falls back without physics state.
+    log.warn(`physics reset after reindex failed: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/** A provider's `[]` row is a swallowed per-item failure; name the memory so the gap can be traced. */
+function noteSkippedEmbedding(id: string): void {
+  log.warn('memory not embedded; the next embed run retries it', { id });
 }
 
 /**
@@ -363,7 +371,9 @@ export async function getEmbedding(
     // SAFETY: output.data is a Float32Array per the feature-extraction
     // pipeline's documented tensor output shape.
     return Array.from(output.data as Float32Array);
-  } catch {
+  } catch (err) {
+    // The caller sees `[]` and names the memory; the reason only shows at debug.
+    log.debug(`local embedding failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }
@@ -630,13 +640,13 @@ export async function embedMemory(
 /**
  * Embed all entries in hippoRoot that don't already have cached vectors.
  * Prunes orphaned embeddings for memories that no longer exist.
- * Returns the count of newly embedded entries.
+ * Returns the count of newly embedded entries. `provider` defaults to the store's configured one.
  */
 export async function embedAll(
   hippoRoot: string,
-  model?: string
+  model?: string,
+  provider: EmbeddingProvider = resolveEmbeddingProvider(hippoRoot, { model }),
 ): Promise<number> {
-  const provider = resolveEmbeddingProvider(hippoRoot, { model });
   if (!provider.isAvailable()) {
     // A configured (non-disabled) API provider with a missing key is a
     // misconfiguration, not a no-op: surface it so programmatic callers of the
@@ -718,6 +728,8 @@ export async function embedAll(
           count++;
           dirty = true;
           chunkDirty = true;
+        } else {
+          noteSkippedEmbedding(chunk[j].id);
         }
       }
       if (chunkDirty) saveEmbeddingIndex(hippoRoot, index);

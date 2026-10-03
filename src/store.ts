@@ -25,7 +25,7 @@ import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
 import { assertTenantId } from './tenant.js';
 import { isRecallBoostAblated } from './ablation.js';
 import { rarestPromptTerms, RAREST_TERM_COUNT } from './prompt-recall.js';
-import { appendAuditEvent, type AuditOp } from './audit.js';
+import { appendAuditEvent, reportAuditWriteFailure, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { deriveOriginProject, originFromSource, findHippoStoreDir, realpathOrResolve, type ResolveProjectIdentityOpts } from './project-identity.js';
@@ -69,9 +69,9 @@ function audit(
       targetId,
       metadata,
     });
-  } catch {
-    // Audit must never crash a mutation. Failures here mean the audit_log
-    // table is broken; the mutation has already succeeded.
+  } catch (error) {
+    // The mutation has already succeeded; a broken audit table must not undo it.
+    reportAuditWriteFailure(op, String(error), targetId);
   }
 }
 

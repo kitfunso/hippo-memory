@@ -12,7 +12,7 @@ import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
 import { type SearchResult, explainMatch } from '../search.js';
 import { embedMemory } from '../embeddings.js';
 import { type HippoConfig, loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy } from '../db.js';
 import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { isGitRepo, fetchGitLog, extractLessons, partitionLessons } from '../autolearn.js';
 import { storedTextKeys, duplicateKey } from '../same-text.js';
@@ -24,7 +24,7 @@ import { extractPathTags } from '../path-context.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture.js';
-import { type AuditOp, appendAuditEvent } from '../audit.js';
+import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { createHash } from 'node:crypto';
 import * as client from '../client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
@@ -84,8 +84,9 @@ export function emitCliAudit(
     } finally {
       closeHippoDb(db);
     }
-  } catch {
-    // Audit is best-effort; surface failures only via missing rows.
+  } catch (error) {
+    // Best effort: the command already did its work.
+    reportAuditWriteFailure(op, String(error), targetId);
   }
 }
 
@@ -173,7 +174,7 @@ export async function runViaServerIfAvailable(
       // the direct path would store a row the server may already have committed.
       // Leave the pidfile alone: the next command's connect-phase failure heals it.
       console.error(
-        `hippo: the connection to ${info.url} dropped mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
+        `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
       );
       process.exit(1);
     }
@@ -499,7 +500,9 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
   try {
     db = openHippoDb(root);
     return fn(db);
-  } catch {
+  } catch (error) {
+    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
+    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
     return undefined;
   } finally {
     if (db) closeHippoDb(db);

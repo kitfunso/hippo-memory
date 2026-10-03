@@ -22,6 +22,7 @@ exports[`HTTP route parity under the rate limiter > throttles /v1 and /mcp but n
   },
   "health": {
     "body": {
+      "audit_write_failures": "number",
       "ok": "boolean",
       "pid": "number",
       "started_at": "string",
@@ -2330,6 +2331,7 @@ exports[`HTTP route parity: status, headers and body shape per route > non-route
   },
   "health": {
     "body": {
+      "audit_write_failures": "number",
       "ok": "boolean",
       "pid": "number",
       "started_at": "string",

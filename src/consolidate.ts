@@ -40,7 +40,7 @@ import { renderTraceContent } from './trace.js';
 import { resolveTenantId } from './tenant.js';
 import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
 import { derivationScope, commonDerivationScope, derivationPartitionKey } from './recall-scope.js';
 import { isQuarantineScope } from './quarantine.js';
@@ -503,8 +503,8 @@ export async function consolidate(
                 sourceSessionId: session.session_id,
               },
             });
-          } catch {
-            // Best-effort — mirrors store.ts's audit() semantics.
+          } catch (error) {
+            reportAuditWriteFailure('reject_refusal', String(error));
           }
           continue;
         }
@@ -893,8 +893,8 @@ export async function consolidate(
                 sourceIds: rejected.map((e) => e.id),
               },
             });
-          } catch {
-            // Best-effort — mirrors store.ts's audit() semantics.
+          } catch (error) {
+            reportAuditWriteFailure('reject_refusal', String(error));
           }
           continue;
         }
@@ -1020,8 +1020,9 @@ export async function consolidate(
                   ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
                   : {},
               });
-            } catch {
+            } catch (error) {
               auditFailures++;
+              reportAuditWriteFailure('mv_rescue', String(error), entry.id);
             }
           }
           if (auditFailures > 0) {

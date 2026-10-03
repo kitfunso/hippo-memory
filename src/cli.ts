@@ -144,7 +144,7 @@ import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from './db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS, isSqliteBusy, noteStoreBusy } from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -5712,6 +5712,17 @@ function cmdCurrent(
   process.exit(1);
 }
 
+/** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
+async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
+  try {
+    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
+  } catch (error) {
+    if (!isSqliteBusy(error)) throw error;
+    noteStoreBusy('hook skipped');
+    return undefined;
+  }
+}
+
 async function cmdContext(
   hippoRoot: string,
   args: string[],
@@ -5989,7 +6000,7 @@ async function renderContext(
               tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface, event: 'inject',
               items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
             });
-          } catch { /* best effort; see withLedgerDb doc comment */ }
+          } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
         }
         if (recallBlock) {
           try {
@@ -5997,7 +6008,7 @@ async function renderContext(
               tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: 'hook_recall', event: 'inject',
               items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
             });
-          } catch { /* best effort; see withLedgerDb doc comment */ }
+          } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
         }
         flushDeliveryRecorder(rec, db);
       });
@@ -8716,7 +8727,7 @@ async function main(
     case 'pre-compact': {
       // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
       const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
-      await withSharedStoreHandles(async () => {
+      await runHookWithStores(async () => {
         resetHookInjection(hippoRoot, stdinText, null);
         await cmdPreCompact(hookStoreRoot(hippoRoot), {
           stdinText,
@@ -8732,7 +8743,7 @@ async function main(
       const { text } = await readStdinBounded();
       const logFlag = flags['log-file'];
       const store = hookStoreRoot(hippoRoot);
-      const line = await withSharedStoreHandles(() => cmdPostCompact(store, {
+      const line = await runHookWithStores(() => cmdPostCompact(store, {
         stdinText: text,
         logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
         // Passed in, since capture.ts importing the sync would close an import cycle.
@@ -8743,7 +8754,7 @@ async function main(
           for (const warning of report.warnings) log(`agent memories: ${warning}`);
         },
       }));
-      if (line !== null) console.log(line);
+      if (line !== null && line !== undefined) console.log(line);
       break;
     }
 
@@ -8757,7 +8768,7 @@ async function main(
         if (isInitialized(root) && payload) {
           // SAFETY: JSON.parse returns a JSON value by definition.
           const failure = JSON.parse(payload) as JsonValue;
-          await withSharedStoreHandles(() => captureToolFailure(root, resolveTenantId({}), failure));
+          await runHookWithStores(() => captureToolFailure(root, resolveTenantId({}), failure));
         }
       } catch {
         // A malformed payload or store error must never fail the agent's tool call.
@@ -8767,7 +8778,7 @@ async function main(
 
     case 'compact-resume': {
       const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
-      await withSharedStoreHandles(() => {
+      await runHookWithStores(() => {
         resetHookInjection(hippoRoot, stdinText, 'compact');
         cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
       });
@@ -9061,7 +9072,7 @@ async function main(
       // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
       // the hot stdin path and a manual run share this one command.
       const { text: stdinText } = await readStdinBounded();
-      await withSharedStoreHandles(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
+      await runHookWithStores(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
       break;
     }
 

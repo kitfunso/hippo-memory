@@ -1,6 +1,6 @@
 import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './store.js';
 
 export interface ArchiveOpts {
@@ -91,9 +91,9 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         targetId: id,
         metadata: { reason: opts.reason },
       });
-    } catch {
-      // Audit must not crash the archive. Failures here mean the audit table
-      // is unwritable; the archive itself has already succeeded.
+    } catch (error) {
+      // The archive itself has already succeeded; an unwritable audit table must not undo it.
+      reportAuditWriteFailure('archive_raw', String(error), id);
     }
     // v0.30 / E2 — DAG live-coupling: archive of a child under a level-2
     // summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark

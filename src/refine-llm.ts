@@ -16,6 +16,7 @@
 import { MemoryEntry, Layer } from './memory.js';
 import { loadAllEntries, readEntry, writeEntry } from './store.js';
 import { redactSecrets } from './secret-detect.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 
 const REFINED_TAG = 'llm-refined';
 const CONSOLIDATED_MARKERS = [
@@ -85,7 +86,7 @@ ${sourceBlock}`;
 
   let res: Response;
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -97,7 +98,7 @@ ${sourceBlock}`;
         max_tokens: 800,
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch {
     return null;
   }

@@ -16,7 +16,7 @@ import {
   biasHintEnabled,
   RingBuffer,
 } from './recall-history.js';
-import { appendAuditEvent, auditQueryFields, AUDIT_OPS } from './audit.js';
+import { appendAuditEvent, auditQueryFields, auditWriteFailureCount, AUDIT_OPS } from './audit.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
 // for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
@@ -2803,6 +2803,7 @@ async function handleRequest(
         version: VERSION,
         started_at: startedAt,
         pid: process.pid,
+        audit_write_failures: auditWriteFailureCount(),
       });
     } else {
       sendJson(res, 200, { ok: true });

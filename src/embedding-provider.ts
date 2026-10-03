@@ -40,6 +40,7 @@ import {
 } from './embeddings.js';
 import { loadConfig } from './config.js';
 import { redactSecrets } from './secret-detect.js';
+import { fetchWithRetry } from './http-retry.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -258,15 +259,14 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     let resp: Response;
     try {
-      resp = await fetch(url, {
+      resp = await fetchWithRetry(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${key}`,
         },
         body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecrets), role)),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+      }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key));

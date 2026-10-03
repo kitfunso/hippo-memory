@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject, JsonValue } from './working-memory.js';
+import { log } from './log.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -314,6 +315,19 @@ export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): v
     opts.targetId ?? null,
     JSON.stringify(opts.metadata ?? {}, bigintSafeReplacer),
   );
+}
+
+let auditWriteFailures = 0;
+
+/** For callers that keep a mutation when its audit row fails: the failure is logged and counted, never silent. */
+export function reportAuditWriteFailure(op: AuditOp, reason: string, targetId?: string | null): void {
+  auditWriteFailures++;
+  log.error(`audit write failed: ${reason}`, { op, target: targetId ?? undefined });
+}
+
+/** Audit rows this process failed to write; the loopback `/health` body reports it. */
+export function auditWriteFailureCount(): number {
+  return auditWriteFailures;
 }
 
 export interface QueryAuditOpts {

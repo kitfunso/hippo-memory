@@ -411,7 +411,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     let call = 0;
     const fetcher = vi.fn<typeof fetch>(async () => {
       call++;
-      if (call === 1) return new Response('upstream error', { status: 503 });
+      // A 400, because fetchWithRetry would retry a 5xx into the second summary's reply.
+      if (call === 1) return new Response('bad request', { status: 400 });
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
     });
 

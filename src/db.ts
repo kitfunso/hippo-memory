@@ -6,6 +6,7 @@ import { createPhysicsTable } from './physics-state.js';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { PACKAGE_VERSION, compareSemver } from './version.js';
 import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from './project-identity.js';
+import { log } from './log.js';
 
 const require = createRequire(import.meta.url);
 
@@ -2692,6 +2693,19 @@ function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000)
 const sharedHandles = new Map<string, DatabaseSyncLike>();
 const sharedSet = new WeakSet<DatabaseSyncLike>();
 let shareDepth = 0;
+let shareBusyWaitMs: number | undefined;
+
+/** Lock wait for hook commands: under the 5 s prompt-hook budget even after a few skipped writes, and far above a normal write's hold. */
+export const HOOK_DB_WAIT_MS = 1000;
+
+/** A busy store made a command skip work: warn once per process (the holder is usually `hippo sleep`). */
+export function noteStoreBusy(skipped: string): void {
+  log.once('store-busy', 'warn', `store busy (another hippo process holds the write lock); ${skipped}`);
+  // A lock held past one full wait belongs to a long transaction, so the hook's later writes skip at once.
+  for (const db of sharedHandles.values()) {
+    if (db.isOpen !== false) db.exec('PRAGMA busy_timeout = 0');
+  }
+}
 
 function closeSharedStoreHandles(): void {
   for (const db of sharedHandles.values()) {
@@ -2701,15 +2715,20 @@ function closeSharedStoreHandles(): void {
   sharedHandles.clear();
 }
 
-/** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open until `fn` settles or the process exits. */
-export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>): Promise<T> {
-  if (shareDepth++ === 0) process.once('exit', closeSharedStoreHandles);
+/** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open until `fn` settles or the process exits.
+ *  `busyWaitMs` is the lock wait of every open inside `fn` that does not pass its own. */
+export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>, opts?: { busyWaitMs?: number }): Promise<T> {
+  if (shareDepth++ === 0) {
+    process.once('exit', closeSharedStoreHandles);
+    shareBusyWaitMs = opts?.busyWaitMs;
+  }
   try {
     return await fn();
   } finally {
     if (--shareDepth === 0) {
       process.off('exit', closeSharedStoreHandles);
       closeSharedStoreHandles();
+      shareBusyWaitMs = undefined;
     }
   }
 }
@@ -2717,10 +2736,11 @@ export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>): Promi
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   if (shareDepth === 0) return openOwnHippoDb(hippoRoot, opts);
-  const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${opts?.busyWaitMs ?? ''}`;
+  const busyWaitMs = opts?.busyWaitMs ?? shareBusyWaitMs;
+  const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${busyWaitMs ?? ''}`;
   const shared = sharedHandles.get(key);
   if (shared?.isOpen && !shared.isTransaction) return shared;
-  const db = openOwnHippoDb(hippoRoot, opts);
+  const db = openOwnHippoDb(hippoRoot, { busyWaitMs });
   // An open nested inside a transaction gets its own connection, as it did before sharing.
   if (!shared?.isOpen) {
     sharedHandles.set(key, db);

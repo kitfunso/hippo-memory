@@ -8,6 +8,7 @@ import {
 } from './store.js';
 import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
 import { neverAutoShareTags } from './shared.js';
@@ -88,7 +89,7 @@ export async function generateDagSummary(
 
   let res: Response;
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -100,7 +101,7 @@ export async function generateDagSummary(
         max_tokens: 400,
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
     opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;

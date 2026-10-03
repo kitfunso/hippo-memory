@@ -3,6 +3,7 @@ import { writeEntry } from './store.js';
 import { loadConfig } from './config.js';
 import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
 
 export interface ExtractedFact {
@@ -49,7 +50,7 @@ export async function extractFacts(
 
   let res: Response;
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -61,7 +62,7 @@ export async function extractFacts(
         max_tokens: 1200,
         messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecrets(text) }],
       }),
-    });
+    }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
     opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];

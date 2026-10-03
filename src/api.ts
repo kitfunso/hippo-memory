@@ -80,6 +80,7 @@ import {
 } from './memory.js';
 import {
   appendAuditEvent,
+  reportAuditWriteFailure,
   auditQueryFields,
   queryAuditEvents,
   auditMemories,
@@ -2370,8 +2371,9 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
           role,
         },
       });
-    } catch {
+    } catch (error) {
       // Audit must not crash a successful mint.
+      reportAuditWriteFailure('auth_create', String(error), result.keyId);
     }
     return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId, role };
   } finally {
@@ -2465,8 +2467,9 @@ export function authRevoke(
           op: 'auth_revoke',
           targetId: keyId,
         });
-      } catch {
+      } catch (error) {
         // Audit must not crash a successful revoke.
+        reportAuditWriteFailure('auth_revoke', String(error), keyId);
       }
     }
 
@@ -2516,7 +2519,7 @@ function changeScopeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_
       appendAuditEvent(db, { tenantId: ctx.tenantId, actor: ctx.actor.subject, op, targetId: keyId, metadata: { scope } });
     } catch (err) {
       // Audit must not undo a grant change that already committed; surface it instead.
-      console.error(`auth: audit write failed for ${op} ${keyId}: ${err instanceof Error ? err.message : String(err)}`);
+      reportAuditWriteFailure(op, String(err), keyId);
     }
     return { ok: true };
   } finally {
@@ -3470,8 +3473,9 @@ export function forgetDormant(ctx: Context, id: string): void {
         targetId: id,
         metadata: { dormant: true },
       });
-    } catch {
+    } catch (error) {
       // Best-effort, like every other forget audit row: the delete stands.
+      reportAuditWriteFailure('forget', String(error), id);
     }
   } finally {
     closeHippoDb(db);
@@ -3989,18 +3993,8 @@ export async function sleep(
         closeHippoDb(db);
       }
     } catch (auditErr) {
-      // Audit emit failure must NOT mask the original phaseError. Log to
-      // stderr so the secondary failure is observable but does not throw.
-      // This guards the case where consolidation AND audit-emit fail in the
-      // same invocation against the same DB (correlated: same disk, same
-      // schema state) — losing the original error makes diagnosis much harder.
-      // SAFETY: this is a best-effort log message only; property access on
-      // any JS value is safe (undefined if absent), preserving the existing
-      // lenient formatting even when something non-Error was thrown.
-      // eslint-disable-next-line no-console
-      console.error(
-        `[hippo] api.sleep audit emit failed: ${(auditErr as Error).message}`,
-      );
+      // Logged, never thrown: a second failure must not mask the original phaseError.
+      reportAuditWriteFailure('consolidate', String(auditErr));
     }
   }
 }

@@ -1,0 +1,132 @@
+// Every outbound call goes through fetchWithRetry, so a stalled peer or a rate limit must end bounded and predictable.
+import { afterEach, describe, expect, it } from 'vitest';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, parseRetryAfterMs } from '../src/http-retry.js';
+import { classifyTransportFailure } from '../src/client.js';
+
+interface Reply {
+  status: number;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+let server: http.Server | null = null;
+const stalled: http.ServerResponse[] = [];
+
+/** Serves `replies` in order (the last one repeats); a null reply never answers. */
+async function startServer(replies: readonly (Reply | null)[]): Promise<{ url: string; hits: () => number }> {
+  let hits = 0;
+  server = http.createServer((_req, res) => {
+    const reply = replies[Math.min(hits, replies.length - 1)];
+    hits++;
+    if (reply === null) {
+      stalled.push(res);
+      return;
+    }
+    res.writeHead(reply.status, reply.headers ?? {});
+    res.end(reply.body ?? '');
+  });
+  await new Promise<void>((resolve) => server?.listen(0, '127.0.0.1', resolve));
+  // SAFETY: a server listening on a TCP port reports an AddressInfo, never a pipe name or null.
+  const { port } = server.address() as AddressInfo;
+  return { url: `http://127.0.0.1:${port}/`, hits: () => hits };
+}
+
+afterEach(async () => {
+  for (const res of stalled.splice(0)) res.destroy();
+  if (server) {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server?.close(() => resolve()));
+  }
+  server = null;
+  delete process.env.HIPPO_LLM_TIMEOUT_MS;
+});
+
+const noSleep = { sleep: async () => undefined };
+
+describe('fetchWithRetry against a local server', () => {
+  it('ends a stalled request with a TimeoutError instead of hanging', async () => {
+    const { url, hits } = await startServer([null]);
+    const started = Date.now();
+    const err = await fetchWithRetry(url, {}, { timeoutMs: 200 }).then(() => null, (e: Error) => e);
+    expect(err?.name).toBe('TimeoutError');
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(hits()).toBe(1);
+    // A timed-out write to `hippo serve` may have landed, so the CLI must not replay it locally.
+    expect(classifyTransportFailure(err)).toBe('delivery-unknown');
+  });
+
+  it('retries a 503 and returns the 200 that follows', async () => {
+    const { url, hits } = await startServer([{ status: 503 }, { status: 200, body: 'ok' }]);
+    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('ok');
+    expect(hits()).toBe(2);
+  });
+
+  it('waits the Retry-After seconds on a 429, then retries', async () => {
+    const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '2' } }, { status: 200 }]);
+    const sleeps: number[] = [];
+    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, sleep: async (ms) => { sleeps.push(ms); } });
+    expect(res.status).toBe(200);
+    expect(hits()).toBe(2);
+    expect(sleeps).toEqual([2000]);
+  });
+
+  it('never retries a 400', async () => {
+    const { url, hits } = await startServer([{ status: 400, body: 'bad request' }, { status: 200 }]);
+    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });
+    expect(res.status).toBe(400);
+    expect(hits()).toBe(1);
+  });
+
+  it('stops after three attempts and hands back the last 5xx', async () => {
+    const { url, hits } = await startServer([{ status: 502 }]);
+    const sleeps: number[] = [];
+    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, random: () => 0, sleep: async (ms) => { sleeps.push(ms); } });
+    expect(res.status).toBe(502);
+    expect(hits()).toBe(3);
+    // random() = 0 gives the floor of each jitter window: half of 250, then half of 500.
+    expect(sleeps).toEqual([125, 250]);
+  });
+
+  it('returns a 429 whose Retry-After exceeds the cap, so the caller can run its own longer pause', async () => {
+    const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '60' } }, { status: 200 }]);
+    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });
+    expect(res.status).toBe(429);
+    expect(hits()).toBe(1);
+  });
+
+  it('still honours a caller abort signal alongside its own timeout', async () => {
+    const { url } = await startServer([null]);
+    const controller = new AbortController();
+    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000 });
+    setTimeout(() => controller.abort(), 50);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('retry helpers', () => {
+  it('treats only 429 and 5xx as retryable', () => {
+    expect([429, 500, 503, 529, 599].every(isRetryableStatus)).toBe(true);
+    expect([200, 301, 400, 401, 403, 404, 600].some(isRetryableStatus)).toBe(false);
+  });
+
+  it('reads Retry-After as seconds or as an HTTP date', () => {
+    const now = Date.parse('2026-01-01T00:00:00Z');
+    expect(parseRetryAfterMs('0.05', now)).toBe(50);
+    expect(parseRetryAfterMs('Thu, 01 Jan 2026 00:00:03 GMT', now)).toBe(3000);
+    expect(parseRetryAfterMs('Wed, 31 Dec 2025 23:59:00 GMT', now)).toBe(0);
+    expect(parseRetryAfterMs(null, now)).toBeNull();
+    expect(parseRetryAfterMs('soon', now)).toBeNull();
+  });
+
+  it('takes the LLM timeout from HIPPO_LLM_TIMEOUT_MS and ignores junk', () => {
+    expect(llmTimeoutMs()).toBe(60_000);
+    process.env.HIPPO_LLM_TIMEOUT_MS = '1500';
+    expect(llmTimeoutMs()).toBe(1500);
+    process.env.HIPPO_LLM_TIMEOUT_MS = 'zero';
+    expect(llmTimeoutMs()).toBe(60_000);
+  });
+});
