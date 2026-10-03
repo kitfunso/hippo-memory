@@ -72,6 +72,7 @@ import {
   createSuccessor,
   applyOutcome,
   calculateStrength,
+  markRetrieved,
   type MemoryKind,
   type MemoryEntry,
   CHURN_STALE_TAG,
@@ -100,7 +101,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
+import { estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';

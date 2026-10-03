@@ -9,7 +9,9 @@ export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, ca
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   return createStoreMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS });
 }
-export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
+export { search, hybridSearch, physicsSearch, estimateTokens, textOverlap, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
+export { tokenize } from './tokenize.js';
+export { markRetrieved } from './memory.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';
 export {

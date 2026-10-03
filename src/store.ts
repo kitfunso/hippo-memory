@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryEntry, Layer, ConfidenceLevel, MemoryKind, generateId, AUTO_DELETABLE_SQL, DEFAULT_HALF_LIFE_DAYS } from './memory.js';
+import { MemoryEntry, Layer, ConfidenceLevel, MemoryKind, generateId, AUTO_DELETABLE_SQL, DEFAULT_HALF_LIFE_DAYS, markRetrieved } from './memory.js';
 import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 import {
   openHippoDb,
@@ -21,7 +21,9 @@ import {
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, HandoffEvidence, HandoffOutcome, isHandoffOutcome } from './handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
-import { tokenize, markRetrieved } from './search.js';
+import { tokenize } from './tokenize.js';
+import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+import { assertTenantId } from './tenant.js';
 import { isRecallBoostAblated } from './ablation.js';
 import { rarestPromptTerms, RAREST_TERM_COUNT } from './prompt-recall.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
@@ -262,38 +264,6 @@ const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieve
  * this for `RecallResult.windowSize` reporting so the two cannot drift.
  */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
-
-/**
- * v1.7.2 — literal scopes excluded from recall by default-deny when the
- * caller passes no `scope`. The SQL clause in `loadSearchRows` and the JS
- * helper `passesScopeFilterForRecall` (src/api.ts) both read from this
- * constant. Adding a deny scope is a one-place change.
- *
- * Regex-based denies (e.g. `<source>:private:*`) stay in
- * `passesScopeFilterForRecall` as a separate JS step — they don't translate
- * cleanly to SQL.
- *
- * Invariant: never empty. An empty array would silently allow quarantine
- * scopes through both paths (SQL clause omitted, JS check vacuous). The
- * module-load assertion below pins this loudly.
- */
-export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
-
-/**
- * @internal v1.7.3 — runtime guard against a future maintainer blanking a
- * load-bearing literal array. Extracted from the inline guard so the throw
- * path is directly testable. `as const` arrays widen via `readonly T[]` at
- * the call site so the empty case is reachable at runtime.
- */
-export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
-  if (arr.length === 0) {
-    throw new Error(
-      `${name} cannot be empty — would silently allow quarantine scopes`,
-    );
-  }
-}
-
-assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -2708,35 +2678,6 @@ export function incrementSleepCount(hippoRoot: string): void {
     setMeta(db, 'sleep_count', String(current + 1));
   } finally {
     closeHippoDb(db);
-  }
-}
-
-/**
- * Defensive runtime guard for tenant id arguments.
- *
- * The continuity helpers (saveActiveTaskSnapshot, listSessionEvents, etc.)
- * gained a required `tenantId` parameter in v0.41 / schema v22 to close a
- * cross-tenant data leak. TypeScript catches misbinding at compile time, but
- * JavaScript callers from older versions can silently pass a `sessionId`
- * where `tenantId` is now expected, e.g.
- *   loadLatestHandoff(root, 'sess-abc')   // WRONG: 'sess-abc' becomes the tenant
- * which would silently filter to a non-existent tenant and return null with
- * no error. This guard rejects the most common shape of that mistake (any
- * value beginning with the conventional `sess-` / `sess_` session prefix).
- *
- * False-positive cost: a tenant literally named `sess-...` will be rejected.
- * Acceptable tradeoff for catching the silent-leak class.
- */
-export function assertTenantId(fnName: string, value: JsonValue): asserts value is string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`${fnName}: tenantId is required (got ${typeof value})`);
-  }
-  if (/^sess[-_]/i.test(value)) {
-    throw new Error(
-      `${fnName}: tenantId looks like a session id ('${value}'). ` +
-      `In v0.41+ these helpers take (hippoRoot, tenantId, ...). ` +
-      `Pass the tenant id (e.g. 'default') and the session id separately.`,
-    );
   }
 }
 
