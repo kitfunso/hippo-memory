@@ -66,6 +66,9 @@ import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
 import { buildGraphModel } from './graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from './graph.js';
+
+// Add-on packages revoke keys through these without importing the whole api surface.
+export { authRevoke, ForbiddenError, type Context, type Actor };
 import {
   savePrediction,
   closePrediction,
@@ -292,7 +295,7 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys) that outlive IdP deprovisioning. */
+  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on revokes them through the exported authRevoke when the IdP deprovisions the minter. */
   role: 'admin' | 'member';
   scopes?: readonly string[];
 }
@@ -539,8 +542,14 @@ type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTime
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
-  'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories',
+  'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories', 'scim',
 ] as const;
+
+/** Add-ons call this to refuse a subject that would collide with a built-in actor. */
+export function isReservedActor(subject: string): boolean {
+  const lower = subject.toLowerCase();
+  return RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`));
+}
 
 function hasControlChar(s: string): boolean {
   for (let i = 0; i < s.length; i++) {
@@ -562,8 +571,7 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   if (!isJsonString(subject) || subject.length < 1 || subject.length > 256) return null;
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
-  const lower = subject.toLowerCase();
-  if (RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`))) return null;
+  if (isReservedActor(subject)) return null;
   const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
   if (Array.isArray(scopes)) clean.scopes = scopes.filter((s) => isJsonString(s));
   return clean;
