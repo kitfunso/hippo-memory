@@ -23,11 +23,13 @@ On this box's real sessions, how often does a sub-agent transcript hold a durabl
 
 **Earlier attempt.** Episode 01M3KRD3C6 planned a Z7 eval on 2026-09-28 (plan review passed at round 4) and stalled before any script or snapshot existed. This design is smaller: `claude -p` judges instead of Agent-based miners, judges and recheckers. It keeps that plan's findings about the transcript format and its full-session recheck, cited where they apply below.
 
-**Dataset checks run before this draft** (audit rule 19):
-- Order: no sub-agent transcript has a timestamp out of order.
-- Spread: assistant text per sub-agent is 0 to 34,293 characters (median 3,160); 5 have none. 568 of 1,490 have at least one tool result marked as an error.
-- Templates: 579 transcripts fall in 137 groups whose first 120 prompt characters are identical (benchmark answerers, blind judges, plan critics). One session holds 280 sub-agents; the median session holds 8.
-- Damage: the snapshot holds 98 lines that do not parse as JSON. The reader skips and counts them; the self-test includes one.
+**Dataset checks** (audit rule 19; the first draft quoted the live folder, these are the snapshot's figures from `profile`):
+- Size: 55 sessions, 1,493 sub-agent transcripts, every one with a `.meta.json`, and 128 workflow transcripts.
+- Order: 412 sub-agent transcripts have a timestamp earlier than the line before it, almost all on attachment, compaction-summary and `isMeta` lines, which replay old timestamps. Skipping those, 37 do. Nothing in the eval depends on timestamp order: files are read in line order, and the cutoff uses the parent's latest timestamp.
+- Spread: assistant text per sub-agent is 0 to 34,293 characters (median 3,156); 6 have none. 565 of 1,493 have at least one tool result marked as an error.
+- Templates: 549 transcripts fall in 135 groups whose first 120 task characters, whitespace collapsed, are identical (benchmark answerers, blind judges, plan critics). One session holds 280 sub-agents; the median session holds 8.
+- Damage: no line in the snapshot fails to parse as JSON (the first draft's 98 were counted on the live folder, not the snapshot). The reader still skips and counts bad lines; the self-test includes one.
+- Eligibility: 858 sub-agents in 46 sessions are eligible. The draw gives 24 dev items and 90 scored items from 34 sessions.
 
 ## Estimand
 
@@ -50,7 +52,7 @@ Draw, exactly:
 
 No scored item is read by a person or a judge before the lock.
 
-**Power.** About 38 scored sessions give at most 114 items, likely 90 to 100. With session clustering, the 95% interval is roughly 0.20 wide around 0.3. So BUILD needs a point estimate near 0.30 or more, DROP needs one near 0.04 or less, and anything between is INCONCLUSIVE. The script prints the realised n, session count and interval width.
+**Power.** The draw gives 90 scored items from 34 sessions (the draft estimated 90 to 100 from about 38). With session clustering, the 95% interval is roughly 0.20 wide around 0.3. So BUILD needs a point estimate near 0.30 or more, DROP needs one near 0.04 or less, and anything between is INCONCLUSIVE. The script prints the realised n, session count and interval width.
 
 ## Reading a sub-agent file
 
@@ -150,7 +152,8 @@ The repo gets the script, this file and the result, which reports counts only: n
 - The scored and control runs refuse unless this file says PRE-REG-LOCKED, it and the script are committed and unchanged at HEAD, and the commit that locked it is on a remote branch.
 - Before its first call, the scored run creates `~/.hippo-eval-locks/z7-sidechain-gap.json` with the `wx` flag (lock commit, scored item list SHA-256, time) and refuses if it exists, so deleting outputs cannot buy a second draw of the judges. The control run checks the same marker exists and was made by this lock commit.
 - The scored recheck, its decoys and the rule arm run only inside the marker-guarded scored run. Dev runs refuse any scored item id.
-- Each scored output file is written once and refuses to be overwritten.
+- Each scored output file is written once: a later write is accepted only if it is identical, otherwise refused.
+- Resume. A scored run cut off part-way (a plan-quota limit, a crash) may be resumed with `scored --resume`, only while `result.json` does not exist and only under a marker made by this lock commit for this item list. A resume re-runs isolation, reuses every cached passing reply, and asks again only the calls that never returned one, so it cannot redraw a judge. A call that ran but still did not parse after 3 tries is a fixed G2 failure and is not asked again. In the scored run, a call that cannot run at all (non-zero exit, empty output, a usage-limit reply) stops the run for a resume rather than counting as a failure. Each resume is logged beside the marker and reported in the result.
 
 ## Disclosed limits
 
@@ -166,4 +169,10 @@ Master commit, `dist/` SHA-256, snapshot manifest SHA-256, `claude --version`, a
 
 ## Amendments
 
-None yet.
+Before the lock, from building the script (no judge call had been made):
+1. **Recheck scope.** The recheck runs on every sub-agent where either judge keeps a verified lesson, not only where both do, because the union share in the DROP rule is defined after the recheck. G5 and G6 therefore see more decoys.
+2. **Retries.** A judge, recheck or rule-arm call is retried up to 3 times on a failed exit or a reply that does not parse; G2 counts calls that still fail after that. Only passing replies are cached.
+3. **Untested gates.** A gate with nothing to measure (for example G5 when no decoy was unplanted) is reported as untested, listed in the result, and does not fail the run.
+4. **Files.** The script is three files: `scripts/z7-sidechain-lib.mjs`, `scripts/z7-sidechain-eval.mjs` and `scripts/z7-sidechain-selftest.mjs`, with prompts in `scripts/z7-sidechain-prompts/`. The lock checks all of them.
+5. **Non-gating row.** The row with other sub-agents' reports re-asks only the lessons the main recheck did not keep, with its own decoy, which no gate counts.
+6. **Resume** (Lock section), added so that a quota limit cannot spend the one scored run.
