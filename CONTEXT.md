@@ -188,6 +188,12 @@ A human message that tells the agent something it just did, said, proposed or as
 or unwanted, or turns it against that. A detected one is a candidate lesson, not a stored memory.
 _Avoid_: feedback (outcomes are feedback too), complaint, redirect
 
+**Sub-agent transcript**:
+The JSONL file Claude Code writes for one delegated agent, in the parent session's `subagents/`
+folder and apart from the parent's own transcript. Each turn ends in a text-only message that goes
+back to the parent; the last one is its final report. Session-end capture reads only the parent's.
+_Avoid_: sidechain log, child transcript
+
 ### Support
 
 **Support bundle**:
