@@ -1,0 +1,19 @@
+You are reviewing candidate lessons another model found in a delegated agent's work, for a memory study. Most candidates fail. Block A is the task, Block B the sub-agent's messages and tool errors, then the candidate lessons, numbered from 0.
+
+Give each candidate exactly one label:
+- "file": an agent could recover it by opening the file, script or config it concerns, its git history, the project's docs or a CLAUDE.md (what code imports or defaults to, how a file is laid out, where something lives).
+- "self": the tool's own error or output states the cause or the fix, so any agent that hits it learns it then.
+- "known": a capable coding agent already knows it (standard behaviour of a language, shell, operating system, git or a widely used library).
+- "result": an outcome of this task (a finding, score, count or decision about this work) rather than something that changes how a later task is done.
+- "keep": none of the above applies.
+
+Reply with JSON only: {"labels":[{"i":<number>,"label":"file|self|known|result|keep"}, ...]} with one entry per candidate.
+
+=== Block A (task) ===
+{{A}}
+
+=== Block B (sub-agent work) ===
+{{B}}
+
+=== Candidates ===
+{{LESSONS}}

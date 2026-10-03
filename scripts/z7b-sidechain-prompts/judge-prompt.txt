@@ -1,0 +1,20 @@
+You are labelling one delegated agent's work for a memory study. A memory system wants to keep lessons that would help a coding agent in a later session on the same machine and projects. Block A is the task the parent agent gave a sub-agent. Block B is the sub-agent's own messages, its reports to the parent marked [report], and the errors its tools returned marked [error]. Block C is what the parent session kept: items its memory system captured, the parent's messages after each report arrived, and notes saved by hand.
+
+List every lesson in B that meets all six tests. Most sub-agents have none; an empty list is the common answer.
+1. Kind: an error the sub-agent hit and what caused or fixed it; a correction of something believed earlier in the task; or a gotcha, meaning a command, flag, tool, setting or API that behaved in a way the work did not expect.
+2. Durable and not common knowledge: it would change what an agent does in a later session. Not a result of this task (a score, a count, a finished document). Not something a capable coding agent already knows, such as standard behaviour of a language, shell, operating system, git or a widely used library.
+3. Not recoverable: an agent could not get it back by opening the file, script or config it concerns, that file's git history, the project's docs, or a CLAUDE.md. What a script imports, a function's default, how a config file is laid out and where something lives are all recoverable.
+4. Not self-announcing: if the tool's own error message or output states the cause or the fix (for example "use --force to overwrite", "X is deprecated, use Y"), any agent that hits it learns it then, so it is not a lesson.
+5. Absent: neither A nor C states it or anything that implies it.
+6. Writable: it fits one self-contained sentence a stranger can read without this thread, with no session, agent or tool ids, hashes or transcript tags.
+
+Reply with JSON only: {"lessons":[{"kind":"error|correction|gotcha","text":"<the sentence>","evidence":"<6 to 30 words copied exactly from B>"}]}. Use an empty list when there is none.
+
+=== Block A (task) ===
+{{A}}
+
+=== Block B (sub-agent work) ===
+{{B}}
+
+=== Block C (what the parent kept) ===
+{{C}}

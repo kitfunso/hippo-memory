@@ -13,7 +13,7 @@ export const FALSEX_SAMPLE = 8;
 export const AUDIT_DROPPED = 4;
 
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isObj = (v) => v !== null && v instanceof Object && !Array.isArray(v);
 const idOf = (it) => L.itemId(it.session, it.file);
 const tplKey = (it) => `${it.session}|${it.template}`;
 
@@ -66,7 +66,7 @@ export function checkDrawZ7b(inp, pins, z7Pin = Z7_SCORED_SHA) {
 
 export function promptShaAgree(sidecars, current, names) {
   if (!sidecars.length) return false;
-  return sidecars.every((s) => isObj(s) && names.every((n) => typeof current[n] === 'string' && s[n] === current[n]));
+  return sidecars.every((s) => isObj(s) && names.every((n) => L.isStr(current[n]) && s[n] === current[n]));
 }
 
 // Only the named prompts count; parsePins collects every backticked .txt hash in the section.
@@ -143,7 +143,7 @@ export function calibSamples(round, bearingIds, removedIds, priorIds) {
   return { precision: fresh(bearingIds).slice(0, PRECISION_SAMPLE), falsex: fresh(removedIds).slice(0, FALSEX_SAMPLE) };
 }
 
-const markOk = (m) => m === 'confirmed' || (typeof m === 'string' && m.startsWith('rejected:') && MARK_CLASSES.includes(m.slice(9)));
+const markOk = (m) => m === 'confirmed' || (L.isStr(m) && m.startsWith('rejected:') && MARK_CLASSES.includes(m.slice(9)));
 
 export function checkMarks(marks, sampleIds) {
   if (!isObj(marks)) return 'the marks must be an object keyed by id';

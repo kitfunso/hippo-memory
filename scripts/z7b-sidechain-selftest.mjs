@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as L from './z7-sidechain-lib.mjs';
 import * as Z from './z7b-sidechain-lib.mjs';
 import { git, guardScored, createMarker } from './z7-sidechain-guard.mjs';
@@ -156,6 +157,17 @@ function selftestMarks(t) {
   t('summariseMarks: counts and rejected classes', JSON.stringify(Z.summariseMarks(good)) === JSON.stringify({ n: 3, confirmed: 1, byClass: { file: 1, present: 1 } }));
 }
 
+function selftestPromptFiles(t) {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const read = (dir, n) => fs.readFileSync(path.join(here, dir, n), 'utf8');
+  t('prompt dir holds exactly the four pinned prompts', fs.readdirSync(path.join(here, 'z7b-sidechain-prompts')).sort().join() === [...Z.PIN_PROMPTS].sort().join());
+  t('judge-system.txt and recheck-prompt.txt are byte-identical to Z7', ['judge-system.txt', 'recheck-prompt.txt'].every((n) => L.sha256(read('z7b-sidechain-prompts', n)) === L.sha256(read('z7-sidechain-prompts', n))));
+  const foot = (s) => s.slice(s.indexOf('=== Block A (task) ==='));
+  t('judge prompt ends with Z7 block footer and names the six tests', foot(read('z7b-sidechain-prompts', 'judge-prompt.txt')) === foot(read('z7-sidechain-prompts', 'judge-prompt.txt')) && /all six tests/.test(read('z7b-sidechain-prompts', 'judge-prompt.txt')));
+  const filt = read('z7b-sidechain-prompts', 'filter-prompt.txt');
+  t('filter prompt has the A, B and LESSONS slots and every label', ['{{A}}', '{{B}}', '{{LESSONS}}'].every((v) => filt.includes(v)) && !filt.includes('{{C}}') && Z.FILTER_LABELS.every((l) => filt.includes(`"${l}"`)));
+}
+
 function pinsBlock(prompts) {
   const named = Z.PIN_PROMPTS.map((n) => `\`${n}\` \`${prompts[n]}\``).join(', ');
   return ['## Pins', '', `- Snapshot manifest SHA-256 \`${hex('a')}\`; scored item list SHA-256 \`${hex('b')}\`.`, `- Prompts SHA-256: ${named}.`].join('\n');
@@ -217,4 +229,4 @@ function selftestGuard(t) {
   }
 }
 
-export const z7bSelftests = [selftestDraw, selftestPrompts, selftestFilter, selftestFigures, selftestGatesAndVerdict, selftestSamples, selftestMarks, selftestGuard];
+export const z7bSelftests = [selftestDraw, selftestPrompts, selftestFilter, selftestFigures, selftestGatesAndVerdict, selftestSamples, selftestMarks, selftestPromptFiles, selftestGuard];
