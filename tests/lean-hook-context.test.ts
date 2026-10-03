@@ -109,6 +109,8 @@ describe('a memory with a copy in the global store', () => {
   const newest = 'run the migration check before tagging a release, it catches missing indexes';
 
   it('reaches the prompt hook once, and the freed recent slot goes to the next memory', () => {
+    // The freed slot is a newest-5 backfill, so pin the pre-1.55.0 default.
+    fs.writeFileSync(path.join(project, '.hippo', 'config.json'), JSON.stringify({ pinnedInject: { promptRecall: false } }));
     hippo(['promote', remember(rule, '--pin')]);
     remember(older);
     hippo(['share', remember(newest), '--force']);

@@ -34,8 +34,6 @@ export const MAX_FILES = 10;
 export const MAX_DIGEST_CHARS = 1200;
 /** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
-/** The pinned hook shows the newest 5 memories, so older digests were never injected. */
-const RECENT_DIGESTS = 5;
 
 export interface DigestEdit {
   filePath: string;
@@ -536,12 +534,10 @@ export interface DigestOutcome {
   files: number;
 }
 
-/** What hippo could have injected into the session: recent digests and the ambient handoff, never this session's own. */
+/** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient handoff, never this session's own. */
 function injectedTexts(hippoRoot: string, opts: SessionDigestOptions): string[] {
   const digests = loadAllEntries(hippoRoot, opts.tenantId)
     .filter((e) => isSessionDigestRow(e) && !e.superseded_by && e.source_session_id !== opts.key)
-    .sort((a, b) => (a.created < b.created ? 1 : a.created > b.created ? -1 : 0))
-    .slice(0, RECENT_DIGESTS)
     .map((e) => e.content);
   const handoff = loadLatestHandoff(hippoRoot, opts.tenantId, undefined, {
     unfinishedOnly: true,

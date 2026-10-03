@@ -492,9 +492,9 @@ describe('session evidence', () => {
   it('the hippo field sums the ledger over both turns when the resume has its own session id', async () => {
     const { out } = isolate('hippo-sum');
     const r = makeRepo();
-    // n0 stores a memory first, so the hook injects on both of t1's turns.
-    const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
-      task(r, 'n0', 'FIX add in lib.js'), teach(r, 't1', 'f1-l1', 'LESSON_OK NEW_ID_ON_RESUME'),
+    // n0 stores a memory first, and both t1 prompts share its words, so prompt recall injects on both turns.
+    const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file for add in lib.js')])], [
+      task(r, 'n0', 'FIX add in lib.js'), teach(r, 't1', 'f1-l1', 'LESSON_OK NEW_ID_ON_RESUME add in lib.js'),
       plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'look around only'), apply(r, 'a2', 'f1-l1', 'look around only'),
     ]);
     await run(s, ['A2'], out);

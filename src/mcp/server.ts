@@ -32,9 +32,8 @@ import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, dr
 import { assertScopeRequestAllowed } from '../recall-scope.js';
 import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent, auditQueryFields } from '../audit.js';
 import { RejectedValueError } from '../rejection.js';
-import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
   hashQueryText,
@@ -115,6 +114,7 @@ export interface McpContext {
   role?: 'admin' | 'member';
   /** EI2: scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
+  viaAuthResolver?: true;
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
@@ -130,7 +130,9 @@ export interface McpContext {
  * a member key never acts as admin through MCP.
  */
 function mcpActor(ctx: McpContext | undefined): ApiActor {
-  return { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
+  const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
+  if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
+  return actor;
 }
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
@@ -863,10 +865,7 @@ async function executeTool(
               actor: ctx?.actor ?? 'mcp',
               op: 'recall_anchor_skipped_no_session',
               targetId: undefined,
-              metadata: {
-                query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
-                query_length: query.length,
-              },
+              metadata: auditQueryFields(query),
             });
           } finally {
             closeHippoDb(dbForAudit);

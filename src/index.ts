@@ -147,3 +147,14 @@ export {
   formatAmbientVector,
   AmbientState,
 } from './ambient.js';
+export {
+  appendAuditEvent,
+  queryAuditEvents,
+  listAuditEventsAfter,
+  AUDIT_OPS,
+  type AuditEvent,
+  type AuditOp,
+  type QueryAuditOpts,
+  type ListAuditAfterOpts,
+} from './audit.js';
+export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db.js';

@@ -217,6 +217,7 @@ import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
   appendAuditEvent,
+  auditQueryFields,
   queryAuditEvents,
   AUDIT_OPS,
   type AuditEvent,
@@ -2062,10 +2063,7 @@ async function cmdRecall(
     appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
   } else if (process.env.HIPPO_ANCHORING !== 'off') {
     // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
-    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
-      query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
-      query_length: query.length,
-    });
+    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query));
   }
   if (cmdAnchoringHint?.reason === 'memory_dominance') {
     emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
@@ -2087,7 +2085,7 @@ async function cmdRecall(
 
   // A5 audit: one 'recall' event per query, before the early-empty return, in every participating store.
   const recallMetadata: Record<string, unknown> = {
-    query: query.slice(0, 200),
+    ...auditQueryFields(query),
     results: results.length,
   };
   emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
@@ -3555,10 +3553,11 @@ function spawnRealCodex(
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
     const command = `"${realCodexPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
+    // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
     return spawn(
       'cmd.exe',
-      ['/d', '/s', '/c', command],
-      { cwd, stdio: 'inherit', windowsHide: false },
+      ['/d', '/s', '/c', `"${command}"`],
+      { cwd, stdio: 'inherit', windowsHide: false, windowsVerbatimArguments: true },
     );
   }
 
@@ -9457,7 +9456,7 @@ Commands:
     --budget <n>           Token budget for the whole printed block (default: 1500)
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
-    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on)
+    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
     --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
