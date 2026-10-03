@@ -1,11 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from './project-identity.js';
 import { assembleCost, contextCost, drillCost } from './context-render.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, type DatabaseSyncLike } from './db.js';
 import { updateStats } from './store.js';
 import {
   buildSessionKey,
@@ -2830,7 +2831,22 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
       : undefined;
 
+  // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
+  // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
+  let heldDb: DatabaseSyncLike | undefined;
+  let stopHolding = false;
+  const holdStore = (): void => {
+    if (heldDb || stopHolding || !existsSync(getHippoDbPath(opts.hippoRoot))) return;
+    try {
+      heldDb = openHippoDb(opts.hippoRoot);
+    } catch (err) {
+      stopHolding = true;
+      console.error('hippo serve: could not hold a store connection; requests still work, only slower:', err);
+    }
+  };
+
   const server: Server = createServer((req, res) => {
+    res.once('finish', holdStore);
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
@@ -2897,6 +2913,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const url = `http://${host}:${actualPort}`;
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
+  holdStore();
 
   let stopping = false;
   const stop = async (): Promise<void> => {
@@ -2914,6 +2931,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
+    stopHolding = true;
+    if (heldDb) closeHippoDb(heldDb);
+    heldDb = undefined;
   };
 
   if (opts.handleSignals) {

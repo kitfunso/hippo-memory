@@ -134,6 +134,30 @@ describe('resolveProjectIdentity', () => {
     expect(id.root).toBe(fs.realpathSync.native(outside));
   });
 
+  it('ends the walk at the temp root unchecked, so markers above it never name a sandbox', () => {
+    const tmp = mkdirs('outer', 'tmp');
+    fs.mkdirSync(path.join(tmpRoot, 'outer', '.hippo'));
+    fs.mkdirSync(path.join(tmpRoot, 'outer', '.git'));
+    const plain = mkdirs('outer', 'tmp', 'plain');
+    const repo = mkdirs('outer', 'tmp', 'repo');
+    fs.mkdirSync(path.join(repo, '.git'));
+    expect(resolveProjectIdentity(plain, { homeDir: home }).name).toBe('outer');
+
+    const saved = { TMPDIR: process.env.TMPDIR, TEMP: process.env.TEMP, TMP: process.env.TMP };
+    process.env.TMPDIR = tmp;
+    process.env.TEMP = tmp;
+    process.env.TMP = tmp;
+    try {
+      expect(resolveProjectIdentity(plain, { homeDir: home }).name).toBe('');
+      expect(resolveProjectIdentity(repo, { homeDir: home }).name).toBe('repo');
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
+
   it('lowercases the project name', () => {
     const proj = mkdirs('home', 'MyApp');
     fs.mkdirSync(path.join(proj, '.hippo'));

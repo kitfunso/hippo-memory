@@ -158,12 +158,15 @@ jobs:
         env:
           TMPDIR: /dev/shm
 
-  # Every other job is Linux, where Windows-only tests skip and win32 branches never run.
-  # Selecting files that name win32 keeps a new Windows test covered without editing this list.
-  # One file at a time, since that list grows by itself and parallel files on four cores ate a test's 30 s budget.
-  windows:
-    runs-on: windows-latest
-    timeout-minutes: 20
+  # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
+  suite:
+    name: suite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -172,11 +175,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Vitest on the test files that name win32
-        shell: bash
-        run: |
-          files=$(git grep -l win32 -- 'tests/*.test.ts' 'tests/*.test.mjs')
-          npx vitest run --no-file-parallelism $files
+      - name: Vitest
+        run: npx vitest run
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:

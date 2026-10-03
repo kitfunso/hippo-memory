@@ -11,7 +11,7 @@ import * as path from 'path';
  *   directory is the project root; if none exists, the nearest ancestor
  *   containing `.git` (directory or worktree file).
  * - The user home directory is NEVER a project, even though it contains the
- *   global store at `~/.hippo`. Reaching home ends the walk.
+ *   global store at `~/.hippo`. Reaching home or the temp root (inside home on Windows) ends the walk.
  * - A directory with no marker anywhere up the walk is NOT a project: it
  *   resolves to the user-global identity (empty name), so memories written
  *   there stay injectable everywhere (matches pre-isolation behavior).
@@ -105,10 +105,11 @@ export function resolveProjectIdentity(
   }
 
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
-  const stopDir = opts?.stopDir ? realpathOrResolve(opts.stopDir) : null;
+  const stops = [realpathOrResolve(os.tmpdir())];
+  if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
   const start = realpathOrResolve(startInput);
 
-  const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(start, home, stopDir === null ? [] : [stopDir]);
+  const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(start, home, stops);
 
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
