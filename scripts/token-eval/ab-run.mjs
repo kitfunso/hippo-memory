@@ -9,6 +9,7 @@ import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv
 import { runDirs, freshRunDirs, homeFiles, ancestorInstructionFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { checkoutBase, stubBaseCommit, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import { isUsageLimit, findTranscript, transcriptWork, usageFromResult, skippedRecord } from './records.mjs';
+import { validateFamilies } from './lessons.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -25,8 +26,8 @@ async function loadHippo() {
   return hippoLib;
 }
 
-/** Validate a tasks file. Throws on the first problem. */
-export function validateTasks(spec) {
+/** Validate a tasks file; `baseDir` (the file's folder) resolves checker scripts. Throws on the first problem. */
+export function validateTasks(spec, baseDir = null) {
   if (!spec || !Array.isArray(spec.sequences) || spec.sequences.length === 0) throw new Error('tasks file needs a non-empty "sequences" array');
   const ids = new Set();
   for (const s of spec.sequences) {
@@ -34,13 +35,16 @@ export function validateTasks(spec) {
     if (ids.has(s.id)) throw new Error(`duplicate sequence id ${s.id}`);
     ids.add(s.id);
     if (!Array.isArray(s.tasks) || s.tasks.length < 2) throw new Error(`sequence ${s.id} needs at least 2 tasks (the first is not scored)`);
+    const taskIds = new Set();
     for (const t of s.tasks) {
       for (const f of ['id', 'baseRef', 'fixRef', 'prompt', 'test']) if (!t[f]) throw new Error(`task in ${s.id} missing "${f}"`);
+      if (taskIds.has(t.id)) throw new Error(`sequence ${s.id} has task id ${t.id} twice`);
+      taskIds.add(t.id);
       if (!Array.isArray(t.testFiles)) throw new Error(`task ${t.id} needs a "testFiles" array`);
       if (t.needsReview) throw new Error(`task ${t.id} still has needsReview: rewrite its prompt as the problem (not the fix), then delete needsReview`);
     }
   }
-  return spec;
+  return validateFamilies(spec, baseDir);
 }
 
 /** The settings hippo's installer writes for Claude Code, generated under a throwaway HOME. */
@@ -318,7 +322,7 @@ async function main() {
     console.error('Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A5] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--dry-run | --check-homes]');
     process.exit(1);
   }
-  const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')));
+  const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')), path.dirname(path.resolve(tasksFile)));
   const arms = flag('--arms', ARMS.join(',')).split(',').map((a) => a.trim());
   for (const a of arms) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
   if (new Set(arms).size !== arms.length) throw new Error(`--arms names an arm twice (${arms.join(',')}); each arm runs once`);
@@ -333,6 +337,8 @@ async function main() {
   if (mode !== 'check' && fs.existsSync(path.join(out, 'runs.jsonl'))) throw new Error(`${out} already holds runs.jsonl from an earlier run; this run would append to it and rewrite plan.json. Pick a new --out.`);
   const stopAt = process.env.Z0_ANCESTOR_STOP || null;
   // The stop is for tests under a temp dir; a stray export must never disable a real run's check.
+  // A dev file may skip screen tasks, so it can never feed a real run.
+  if (mode === 'real' && spec.dev === true) throw new Error('the tasks file sets "dev": true; it is for --dry-run and --check-homes only, never a real run');
   if (mode === 'real' && stopAt) throw new Error('Z0_ANCESTOR_STOP is set; it is only honoured for --dry-run and --check-homes. Unset it for a real run.');
   if (mode === 'real' && !process.env[TOKEN_KEY]) throw new Error('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
   // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
