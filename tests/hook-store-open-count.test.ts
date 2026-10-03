@@ -42,6 +42,12 @@ function seed(root: string, content: string, created: string, extra: Partial<Mem
   writeEntry(root, { ...createMemory(content, { baseHalfLifeDays: 30 }), created, last_retrieved: created, ...extra });
 }
 
+// Stamped by hand: derived from the temp dir, the origin is whichever project marker sits above it on this machine.
+function seedGlobalPin(): void {
+  initStore(globalRoot);
+  seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', { pinned: true, origin_project: '' });
+}
+
 interface HookRun {
   stdout: string;
   /** Connections opened per database, keyed `local`, `global` or the file path. */
@@ -50,7 +56,8 @@ interface HookRun {
 
 function runHook(args: string[], input: string): HookRun {
   const stdout = execFileSync(process.execPath, ['--no-warnings', '--import', pathToFileURL(preloadPath).href, HIPPO_JS, ...args], {
-    env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_FAKE_NOW: FAKE_NOW, P2_OPEN_LOG: logPath },
+    // Home is the test dir, so the project walk from cwd stops there instead of finding a marker above the temp root.
+    env: { ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: globalRoot, HIPPO_FAKE_NOW: FAKE_NOW, P2_OPEN_LOG: logPath },
     cwd: projectDir,
     input,
     encoding: 'utf8',
@@ -102,18 +109,16 @@ describe('per-prompt context hook', () => {
   });
 
   it('opens each of the local and global stores once', () => {
-    initStore(globalRoot);
-    seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', { pinned: true });
+    seedGlobalPin();
 
     const run = runHook(PROMPT_HOOK, promptPayload('sess-open-2'));
-    expect(run.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 28 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
+    expect(run.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (2 entries, 45 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n- **[verified] [global] PINNED: never force-push the main branch**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
     expect(run.opens).toEqual({ local: 1, global: 1 });
   });
 
   it('opens the global store once from a directory with no local store', () => {
     fs.rmSync(localRoot, { recursive: true, force: true });
-    initStore(globalRoot);
-    seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', { pinned: true });
+    seedGlobalPin();
 
     const run = runHook(PROMPT_HOOK, promptPayload('sess-open-3'));
     expect(run.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 27 tokens)\\n\\n- **[verified] [global] PINNED: never force-push the main branch**"}}"`);
