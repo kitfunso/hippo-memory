@@ -2910,7 +2910,7 @@ async function handleRequest(
       }
     } else {
       // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
-      resolvedTenant = process.env.HIPPO_TENANT ?? 'default';
+      resolvedTenant = resolveTenantId({});
     }
     const ctx: Context = {
       hippoRoot: opts.hippoRoot,
@@ -3046,7 +3046,7 @@ async function handleRequest(
       const db = openHippoDb(opts.hippoRoot);
       try {
         writeToGitHubDlq(db, {
-          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          tenantId: resolveTenantId({}),
           rawPayload: rawBody,
           error: 'missing X-GitHub-Delivery header',
           bucket: 'parse_error',
@@ -3079,7 +3079,7 @@ async function handleRequest(
       const db = openHippoDb(opts.hippoRoot);
       try {
         writeToGitHubDlq(db, {
-          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          tenantId: resolveTenantId({}),
           rawPayload: rawBody,
           error: `unhandled event: ${eventName ?? '(missing X-GitHub-Event)'}`,
           bucket: 'unhandled',
@@ -3103,7 +3103,7 @@ async function handleRequest(
       const db = openHippoDb(opts.hippoRoot);
       try {
         writeToGitHubDlq(db, {
-          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          tenantId: resolveTenantId({}),
           rawPayload: rawBody,
           error: 'invalid JSON',
           bucket: 'parse_error',
@@ -3124,7 +3124,7 @@ async function handleRequest(
       const db = openHippoDb(opts.hippoRoot);
       try {
         writeToGitHubDlq(db, {
-          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          tenantId: resolveTenantId({}),
           rawPayload: rawBody,
           error: 'not a GitHub webhook envelope',
           bucket: 'parse_error',
