@@ -49,8 +49,9 @@ const rows = homeFeatures.map((f) => {
 
     <!-- trimmed matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
     <div class="relative mt-10">
-      <div class="overflow-x-auto rounded-2xl glass" data-scroll-x>
-        <table class="w-full min-w-[560px] border-collapse text-left text-sm">
+      <!-- Capped width and equal fixed columns: auto layout let the long LongMemEval cells set every column's width. -->
+      <div class="max-w-3xl overflow-x-auto rounded-2xl glass" data-scroll-x>
+        <table class="w-full min-w-[640px] table-fixed border-collapse text-left text-sm">
           <thead>
             <tr class="border-b border-white/10">
               <th
