@@ -227,6 +227,6 @@ function main() {
   if (outFile) console.log(`\nWrote ${outFile}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main();
 }

@@ -205,6 +205,6 @@ function main() {
   if (outFile) console.log(`Wrote ${path.relative(REPO, path.resolve(outFile))}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main();
 }

@@ -78,7 +78,8 @@ const promptPayload = (sessionId: string): string =>
   JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan for the deploy' });
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hook-open-count-'));
+  // Real path: the CLI logs opens by resolved path, and macOS spells the temp root through the /var symlink.
+  tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hook-open-count-')));
   projectDir = path.join(tmp, 'proj');
   localRoot = path.join(projectDir, '.hippo');
   globalRoot = path.join(tmp, 'global');

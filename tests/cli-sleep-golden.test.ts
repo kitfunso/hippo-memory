@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
@@ -66,7 +66,8 @@ function normalise(text: string, home: string): string {
 interface RunOutput { status: number | null; stdout: string; stderr: string; log?: string }
 
 function run(c: Case): RunOutput {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-sleep-golden-'));
+  // Real path: the CLI prints resolved paths, and macOS spells the temp root through the /var symlink.
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-sleep-golden-')));
   try {
     if (!c.uninitialised) cpSync(template, join(home, '.hippo'), { recursive: true });
     const env: NodeJS.ProcessEnv = { ...process.env };
