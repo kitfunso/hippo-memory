@@ -26,6 +26,7 @@
  * cross-tenant or nonexistent id is rejected (throw) before the insert.
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -157,7 +158,7 @@ export function saveIncident(
   actor: string = 'cli',
 ): Incident {
   assertTenantId('saveIncident', tenantId);
-  if (!opts.incidentText) throw new Error('saveIncident: incidentText is required');
+  if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
 
   const now = new Date().toISOString();
   const content = opts.context
@@ -192,7 +193,7 @@ export function saveIncident(
           `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
         ).get(linkId, tenantId) as { id: string } | undefined;
         if (!exists) {
-          throw new Error(
+          throw new NotFoundError(
             `saveIncident: linked memory ${linkId} not found for tenant ${tenantId}`,
           );
         }
@@ -257,7 +258,7 @@ export function resolveIncident(
 ): Incident {
   assertTenantId('resolveIncident', tenantId);
   if (!resolutionText || !resolutionText.trim()) {
-    throw new Error('resolveIncident: resolutionText is required (non-empty)');
+    throw new BadRequestError('resolveIncident: resolutionText is required (non-empty)');
   }
   const now = new Date().toISOString();
   const db = openHippoDb(hippoRoot);
@@ -276,9 +277,9 @@ export function resolveIncident(
           `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `resolveIncident: incident ${id} is not open (status='${existing.status}'); only open incidents can be resolved.`,
         );
       }
@@ -286,7 +287,7 @@ export function resolveIncident(
       // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as IncidentRow | undefined;
-      if (!row) throw new Error(`resolveIncident: incident ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -341,9 +342,9 @@ export function closeIncident(
           `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeIncident: incident ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeIncident: incident ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeIncident: incident ${id} is already closed (status='${existing.status}'); only open or resolved incidents can be closed.`,
         );
       }
@@ -351,7 +352,7 @@ export function closeIncident(
       // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as IncidentRow | undefined;
-      if (!row) throw new Error(`closeIncident: incident ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeIncident: incident ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -405,7 +406,7 @@ export function loadIncidents(
     let rows: IncidentRow[];
     if (opts.status) {
       if (!VALID_INCIDENT_STATES.has(opts.status)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadIncidents: status must be one of ${Array.from(VALID_INCIDENT_STATES).join('|')}; got ${opts.status}`,
         );
       }

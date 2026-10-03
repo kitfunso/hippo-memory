@@ -10,7 +10,7 @@
   "src/capture.ts": 38,
   "src/card.ts": 1,
   "src/churn-git.ts": 1,
-  "src/cli.ts": 90,
+  "src/cli.ts": 88,
   "src/compare.ts": 6,
   "src/config.ts": 16,
   "src/connectors/github/backfill.ts": 9,
@@ -86,11 +86,11 @@
   "src/rerankers/llm.ts": 1,
   "src/rerankers/types.ts": 1,
   "src/rrf.ts": 2,
-  "src/search.ts": 39,
+  "src/search.ts": 35,
   "src/secret-detect.ts": 5,
-  "src/server.ts": 69,
+  "src/server.ts": 61,
   "src/shared.ts": 27,
   "src/skills.ts": 8,
-  "src/store.ts": 146,
+  "src/store.ts": 143,
   "src/token-ledger.ts": 3
 }

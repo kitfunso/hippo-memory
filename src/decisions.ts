@@ -24,6 +24,7 @@
  * step rolls all of them back. Pattern matches savePrediction (predictions.ts).
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -139,7 +140,7 @@ export function saveDecision(
   actor: string = 'cli',
 ): Decision {
   assertTenantId('saveDecision', tenantId);
-  if (!opts.decisionText) throw new Error('saveDecision: decisionText is required');
+  if (!opts.decisionText) throw new BadRequestError('saveDecision: decisionText is required');
 
   const now = new Date().toISOString();
   const content = opts.context
@@ -174,12 +175,12 @@ export function saveDecision(
           `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesDecisionId, tenantId) as { status: string } | undefined;
         if (!pred) {
-          throw new Error(
+          throw new NotFoundError(
             `saveDecision: decision ${opts.supersedesDecisionId} to supersede not found for tenant ${tenantId}`,
           );
         }
         if (pred.status !== 'active') {
-          throw new Error(
+          throw new ConflictError(
             `saveDecision: decision ${opts.supersedesDecisionId} is not active (status='${pred.status}'); only active decisions can be superseded.`,
           );
         }
@@ -210,7 +211,7 @@ export function saveDecision(
           WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
         `).run(decisionId, now, opts.supersedesDecisionId, tenantId, decisionId);
         if (sup.changes === 0) {
-          throw new Error(
+          throw new BadRequestError(
             `saveDecision: decision ${opts.supersedesDecisionId} could not be superseded (no longer active or self-reference).`,
           );
         }
@@ -287,9 +288,9 @@ export function closeDecision(
           `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeDecision: decision ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeDecision: decision ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeDecision: decision ${id} is not active (status='${existing.status}'); only active decisions can be closed.`,
         );
       }
@@ -297,7 +298,7 @@ export function closeDecision(
       // SAFETY: row's shape matches the columns named in DECISION_COLS above.
       const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as DecisionRow | undefined;
-      if (!row) throw new Error(`closeDecision: decision ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeDecision: decision ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -362,7 +363,7 @@ export function loadDecisions(
     let rows: DecisionRow[];
     if (opts.status) {
       if (!VALID_DECISION_STATES.has(opts.status)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadDecisions: status must be one of ${Array.from(VALID_DECISION_STATES).join('|')}; got ${opts.status}`,
         );
       }

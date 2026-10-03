@@ -22,6 +22,7 @@
  * closed (retired).
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -129,21 +130,21 @@ function validateBriefFields(
   changeSummary: string | undefined,
 ) {
   const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new Error('saveProjectBrief: repo is required');
+  if (normalizedRepo.length === 0) throw new BadRequestError('saveProjectBrief: repo is required');
   if (/[\r\n]/.test(normalizedRepo)) {
-    throw new Error('saveProjectBrief: repo must be a single line (no newlines)');
+    throw new BadRequestError('saveProjectBrief: repo must be a single line (no newlines)');
   }
   if (normalizedRepo.length > MAX_REPO_LEN) {
-    throw new Error(`saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`);
+    throw new BadRequestError(`saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`);
   }
   if (!summary || summary.trim().length === 0) {
-    throw new Error('saveProjectBrief: summary is required');
+    throw new BadRequestError('saveProjectBrief: summary is required');
   }
   if (summary.length > MAX_BRIEF_SUMMARY_LEN) {
-    throw new Error(`saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`);
+    throw new BadRequestError(`saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`);
   }
   if (changeSummary !== undefined && changeSummary.length > MAX_CHANGE_SUMMARY_LEN) {
-    throw new Error(`saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
+    throw new BadRequestError(`saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
   }
   return { repo: normalizedRepo };
 }
@@ -253,12 +254,12 @@ export function saveProjectBrief(
           | { status: string; version: number }
           | undefined;
         if (!pred) {
-          throw new Error(
+          throw new NotFoundError(
             `saveProjectBrief: brief ${opts.supersedesBriefId} to supersede not found for tenant ${tenantId}`,
           );
         }
         if (pred.status !== 'active') {
-          throw new Error(
+          throw new ConflictError(
             `saveProjectBrief: brief ${opts.supersedesBriefId} is not active (status='${pred.status}'); only active briefs can be superseded.`,
           );
         }
@@ -288,7 +289,7 @@ export function saveProjectBrief(
           WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
         `).run(briefId, now, opts.supersedesBriefId, tenantId, briefId);
         if (sup.changes === 0) {
-          throw new Error(
+          throw new ConflictError(
             `saveProjectBrief: brief ${opts.supersedesBriefId} could not be superseded (no longer active or self-reference).`,
           );
         }
@@ -369,9 +370,9 @@ export function closeProjectBrief(
           `SELECT status FROM project_briefs WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeProjectBrief: brief ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeProjectBrief: brief ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeProjectBrief: brief ${id} is not active (status='${existing.status}'); only active briefs can be closed.`,
         );
       }
@@ -381,7 +382,7 @@ export function closeProjectBrief(
       // only in an impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as ProjectBriefRow | undefined;
-      if (!row) throw new Error(`closeProjectBrief: brief ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeProjectBrief: brief ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -443,7 +444,7 @@ export function loadProjectBriefs(
   assertTenantId('loadProjectBriefs', tenantId);
   const limit = opts.limit ?? 100;
   if (opts.status && !VALID_BRIEF_STATES.has(opts.status)) {
-    throw new Error(
+    throw new BadRequestError(
       `loadProjectBriefs: status must be one of ${Array.from(VALID_BRIEF_STATES).join('|')}; got ${opts.status}`,
     );
   }
@@ -543,7 +544,7 @@ export function assembleBriefFromReceipts(
   assertTenantId('assembleBriefFromReceipts', tenantId);
   const normalizedRepo = (repo ?? '').trim();
   if (normalizedRepo.length === 0) {
-    throw new Error('assembleBriefFromReceipts: repo is required');
+    throw new BadRequestError('assembleBriefFromReceipts: repo is required');
   }
   const tag = `path:${normalizedRepo.toLowerCase()}`;
   const likeParam = `%"${escapeLike(tag)}"%`;
@@ -645,7 +646,7 @@ export function refreshBrief(
 ): ProjectBrief {
   assertTenantId('refreshBrief', tenantId);
   const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new Error('refreshBrief: repo is required');
+  if (normalizedRepo.length === 0) throw new BadRequestError('refreshBrief: repo is required');
 
   const { markdown, receiptCount } = assembleBriefFromReceipts(hippoRoot, tenantId, normalizedRepo);
   const active = loadActiveBriefForRepo(hippoRoot, tenantId, normalizedRepo);

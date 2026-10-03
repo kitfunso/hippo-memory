@@ -25,6 +25,7 @@
  * this module ships the data layer.
  */
 
+import { BadRequestError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -144,8 +145,8 @@ export function savePrediction(
   actor: string = 'cli',
 ): Prediction {
   assertTenantId('savePrediction', tenantId);
-  if (!opts.classTag) throw new Error('savePrediction: classTag is required');
-  if (!opts.claimText) throw new Error('savePrediction: claimText is required');
+  if (!opts.classTag) throw new BadRequestError('savePrediction: classTag is required');
+  if (!opts.claimText) throw new BadRequestError('savePrediction: claimText is required');
 
   const now = new Date().toISOString();
   const mem = createMemory(opts.claimText, {
@@ -237,7 +238,7 @@ export function closePrediction(
 ): Prediction {
   assertTenantId('closePrediction', tenantId);
   if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
-    throw new Error(
+    throw new BadRequestError(
       `closePrediction: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ${opts.closureState}`,
     );
   }
@@ -276,9 +277,9 @@ export function closePrediction(
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
         `).get(id, tenantId) as { closure_state: string } | undefined;
         if (!existing) {
-          throw new Error(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new BadRequestError(
           `closePrediction: prediction ${id} is already closed (state='${existing.closure_state}'); ` +
           `cannot re-close. Open predictions only.`,
         );
@@ -293,7 +294,7 @@ export function closePrediction(
       `).get(id, tenantId) as PredictionRow | undefined;
 
       if (!row) {
-        throw new Error(`closePrediction: prediction ${id} not found after UPDATE`);
+        throw new NotFoundError(`closePrediction: prediction ${id} not found after UPDATE`);
       }
 
       appendAuditEvent(db, {
@@ -357,7 +358,7 @@ export function loadPredictionsByClass(
     let rows: PredictionRow[];
     if (opts.closureState) {
       if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadPredictionsByClass: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ${opts.closureState}`,
         );
       }
@@ -450,7 +451,7 @@ export function computePredictionBaserate(
   emitAudit: boolean = true,
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
-  if (!classTag) throw new Error('computePredictionBaserate: classTag is required');
+  if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
 
   const db = openHippoDb(hippoRoot);
   try {

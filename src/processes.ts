@@ -31,6 +31,7 @@
  * them back. Pattern matches saveDecision (decisions.ts).
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -113,10 +114,10 @@ export interface ListProcessesOpts {
  */
 export function validateProcessSteps(steps: JsonValue): string[] {
   if (!Array.isArray(steps)) {
-    throw new Error('saveProcess: steps must be an array of strings');
+    throw new BadRequestError('saveProcess: steps must be an array of strings');
   }
   if (steps.length > MAX_PROCESS_STEPS) {
-    throw new Error(
+    throw new BadRequestError(
       `saveProcess: steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`,
     );
   }
@@ -124,14 +125,14 @@ export function validateProcessSteps(steps: JsonValue): string[] {
   for (let i = 0; i < steps.length; i++) {
     const raw = steps[i];
     if (!isString(raw)) {
-      throw new Error(`saveProcess: step ${i + 1} is not a string`);
+      throw new BadRequestError(`saveProcess: step ${i + 1} is not a string`);
     }
     const trimmed = raw.trim();
     if (trimmed.length === 0) {
-      throw new Error(`saveProcess: step ${i + 1} is empty`);
+      throw new BadRequestError(`saveProcess: step ${i + 1} is empty`);
     }
     if (trimmed.length > MAX_PROCESS_STEP_LEN) {
-      throw new Error(
+      throw new BadRequestError(
         `saveProcess: step ${i + 1} exceeds the ${MAX_PROCESS_STEP_LEN}-char cap`,
       );
     }
@@ -230,7 +231,7 @@ export function saveProcess(
 ): Process {
   assertTenantId('saveProcess', tenantId);
   if (!opts.processName || opts.processName.trim().length === 0) {
-    throw new Error('saveProcess: processName is required');
+    throw new BadRequestError('saveProcess: processName is required');
   }
   const steps = validateProcessSteps(opts.steps);
   const isSupersede = opts.supersedesProcessId !== undefined;
@@ -271,12 +272,12 @@ export function saveProcess(
           | { status: string; version: number }
           | undefined;
         if (!pred) {
-          throw new Error(
+          throw new NotFoundError(
             `saveProcess: process ${opts.supersedesProcessId} to supersede not found for tenant ${tenantId}`,
           );
         }
         if (pred.status !== 'active') {
-          throw new Error(
+          throw new ConflictError(
             `saveProcess: process ${opts.supersedesProcessId} is not active (status='${pred.status}'); only active processes can be superseded.`,
           );
         }
@@ -307,7 +308,7 @@ export function saveProcess(
           WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
         `).run(processId, now, opts.supersedesProcessId, tenantId, processId);
         if (sup.changes === 0) {
-          throw new Error(
+          throw new ConflictError(
             `saveProcess: process ${opts.supersedesProcessId} could not be superseded (no longer active or self-reference).`,
           );
         }
@@ -384,9 +385,9 @@ export function closeProcess(
           `SELECT status FROM processes WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeProcess: process ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeProcess: process ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeProcess: process ${id} is not active (status='${existing.status}'); only active processes can be closed.`,
         );
       }
@@ -395,7 +396,7 @@ export function closeProcess(
       // 1:1 (see PROCESS_COLS above).
       const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as ProcessRow | undefined;
-      if (!row) throw new Error(`closeProcess: process ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeProcess: process ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -450,7 +451,7 @@ export function loadProcesses(
     let rows: ProcessRow[];
     if (opts.status) {
       if (!VALID_PROCESS_STATES.has(opts.status)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadProcesses: status must be one of ${Array.from(VALID_PROCESS_STATES).join('|')}; got ${opts.status}`,
         );
       }

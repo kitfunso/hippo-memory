@@ -3,6 +3,7 @@
  * Based on the strength formula from PLAN.md.
  */
 
+import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
 import {
   isDecayAblated,
@@ -543,12 +544,12 @@ export function createMemory(content: string, options: CreateMemoryOptions): Mem
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   const trimmed = content.trim();
   if (trimmed.length < 3) {
-    throw new Error(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+    throw new BadRequestError(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
   }
 
   const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
   if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
-    throw new Error(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
+    throw new BadRequestError(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
   }
 
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)

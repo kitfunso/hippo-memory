@@ -5,6 +5,7 @@
  * Local .hippo/ stores are per-project.
  */
 
+import { BadRequestError, NotFoundError } from './api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -63,18 +64,18 @@ export function promoteToGlobal(
   opts?: { actor?: string; tenantId?: string },
 ): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
-  if (!entry) throw new Error(`Memory not found: ${id}`);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   // CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
-    throw new Error(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+    throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
   }
 
   // v39 S4 producer veto: promote is a producer path to the global store
   // exactly like shareMemory - same hard rule (codex gating review P2).
   const promoteSecret = detectSecret(entry);
   if (promoteSecret.flagged) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to promote ${id} to the global store: content matches secret material (${promoteSecret.reason}). ` +
       `Secrets stay in their owning project's store.`,
     );
@@ -393,14 +394,14 @@ export function shareMemory(
   // B's memory to global. readEntry returns null on cross-tenant lookups
   // when tenantId is provided.
   const entry = readEntry(localRoot, id, options.tenantId);
-  if (!entry) throw new Error(`Memory not found: ${id}`);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   // v39 S4 producer veto: secrets never go to the global store, not even
   // with --force. Explicit and loud - a silent null would read as "low
   // transfer score" and invite retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
       `Secrets stay in their owning project's store.`,
     );
@@ -408,7 +409,7 @@ export function shareMemory(
 
   // CD5: a quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
   if (isQuarantineScope(entry.scope)) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }

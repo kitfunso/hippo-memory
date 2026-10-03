@@ -17,6 +17,5 @@
   "unicorn(no-invalid-fetch-options)": 1,
   "unicorn(no-new-array)": 21,
   "unicorn(no-useless-fallback-in-spread)": 13,
-  "unicorn(no-useless-spread)": 1,
-  "unicorn(prefer-string-starts-ends-with)": 1
+  "unicorn(no-useless-spread)": 1
 }

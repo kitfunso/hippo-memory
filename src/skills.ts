@@ -22,6 +22,7 @@
  * closed (retired). Export renders ACTIVE skills only.
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -112,27 +113,27 @@ function validateSkillFields(
   trigger: string | undefined,
 ): ValidatedSkillFields {
   const name = (skillName ?? '').trim();
-  if (name.length === 0) throw new Error('saveSkill: skillName is required');
-  if (/[\r\n]/.test(name)) throw new Error('saveSkill: skillName must be a single line (no newlines)');
+  if (name.length === 0) throw new BadRequestError('saveSkill: skillName is required');
+  if (/[\r\n]/.test(name)) throw new BadRequestError('saveSkill: skillName must be a single line (no newlines)');
   if (name.length > MAX_SKILL_NAME_LEN) {
-    throw new Error(`saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`);
+    throw new BadRequestError(`saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`);
   }
   if (!instructions || instructions.trim().length === 0) {
-    throw new Error('saveSkill: instructions are required');
+    throw new BadRequestError('saveSkill: instructions are required');
   }
   if (instructions.length > MAX_SKILL_INSTRUCTIONS_LEN) {
-    throw new Error(`saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`);
+    throw new BadRequestError(`saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`);
   }
   let triggerVal: string | null = null;
   if (trigger !== undefined && trigger !== null && trigger.trim().length > 0) {
     if (trigger.length > MAX_SKILL_TRIGGER_LEN) {
-      throw new Error(`saveSkill: trigger exceeds the ${MAX_SKILL_TRIGGER_LEN}-char cap`);
+      throw new BadRequestError(`saveSkill: trigger exceeds the ${MAX_SKILL_TRIGGER_LEN}-char cap`);
     }
     // Single-line, like skill_name: a trigger is a short "when to apply" phrase,
     // and a newline would let it forge a heading inside the export **When:** line
     // (independent-review 2026-05-30). Reject rather than emit a multi-line trigger.
     if (/[\r\n]/.test(trigger)) {
-      throw new Error('saveSkill: trigger must be a single line (no newlines)');
+      throw new BadRequestError('saveSkill: trigger must be a single line (no newlines)');
     }
     triggerVal = trigger;
   }
@@ -246,12 +247,12 @@ export function saveSkill(
           | { status: string; version: number }
           | undefined;
         if (!pred) {
-          throw new Error(
+          throw new NotFoundError(
             `saveSkill: skill ${opts.supersedesSkillId} to supersede not found for tenant ${tenantId}`,
           );
         }
         if (pred.status !== 'active') {
-          throw new Error(
+          throw new ConflictError(
             `saveSkill: skill ${opts.supersedesSkillId} is not active (status='${pred.status}'); only active skills can be superseded.`,
           );
         }
@@ -282,7 +283,7 @@ export function saveSkill(
           WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
         `).run(skillId, now, opts.supersedesSkillId, tenantId, skillId);
         if (sup.changes === 0) {
-          throw new Error(
+          throw new ConflictError(
             `saveSkill: skill ${opts.supersedesSkillId} could not be superseded (no longer active or self-reference).`,
           );
         }
@@ -354,9 +355,9 @@ export function closeSkill(
           `SELECT status FROM skills WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeSkill: skill ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeSkill: skill ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeSkill: skill ${id} is not active (status='${existing.status}'); only active skills can be closed.`,
         );
       }
@@ -364,7 +365,7 @@ export function closeSkill(
       // SAFETY: row's shape matches the columns named in SKILL_COLS above.
       const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as SkillRow | undefined;
-      if (!row) throw new Error(`closeSkill: skill ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeSkill: skill ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -418,7 +419,7 @@ export function loadSkills(
     let rows: SkillRow[];
     if (opts.status) {
       if (!VALID_SKILL_STATES.has(opts.status)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadSkills: status must be one of ${Array.from(VALID_SKILL_STATES).join('|')}; got ${opts.status}`,
         );
       }

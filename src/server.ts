@@ -38,7 +38,6 @@ import {
   remember,
   retrieve,
   RecallContractError,
-  ForbiddenError,
   drillDown,
   assemble,
   forget,
@@ -141,10 +140,12 @@ import {
   BodyTooLargeError,
   isHeaderString,
   isJsonObjectRecord,
+  mapApiError,
   readBody,
   sendJson,
   type JsonValue,
 } from './http-util.js';
+import { NotFoundError } from './api-errors.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -323,11 +324,10 @@ function resolveRequestId(header: string | string[] | undefined): string {
 }
 
 /** One line per failed request; 4xx is the caller's mistake, so it stays below the default level. */
-function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
-  const status = err instanceof HttpError ? err.status : undefined;
+function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string, status: number): void {
   const message = err instanceof Error ? err.message : String(err);
   const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
-  if (status !== undefined && status >= 500) log.error(line, { requestId, status });
+  if (status >= 500) log.error(line, { requestId, status });
   else log.info(line, { requestId, status });
 }
 
@@ -350,34 +350,6 @@ async function parseJsonBody(req: IncomingMessage): Promise<Record<string, JsonV
   }
 }
 
-/**
- * Map an error thrown by an api.* function into an HTTP status + message.
- * api.* uses plain Error, so we discriminate by message pattern. Stable
- * patterns we rely on:
- *   - /not found/i  → 404 (forget on unknown id, supersede on unknown old id, etc.)
- *   - /unknown/i    → 404 (auth_revoke on unknown key_id)
- *   - /already superseded/i → 409 (chain conflict)
- *   - /not raw/i    → 400 (archive_raw on non-raw row)
- * ForbiddenError maps to 403; everything else to 400 (bad input).
- */
-function mapApiError<E>(err: E) {
-  const message = err instanceof Error ? err.message : String(err);
-  if (err instanceof ForbiddenError) {
-    return { status: 403, message };
-  }
-  const lower = message.toLowerCase();
-  if (/not found/.test(lower) || /^unknown /.test(lower)) {
-    return { status: 404, message };
-  }
-  if (/already superseded/.test(lower)) {
-    return { status: 409, message };
-  }
-  if (/requires admin role/.test(lower)) {
-    return { status: 403, message };
-  }
-  return { status: 400, message };
-}
-
 interface ParsedRoute {
   method: string;
   path: string;
@@ -385,7 +357,14 @@ interface ParsedRoute {
 }
 
 function parseRequest(req: IncomingMessage): ParsedRoute {
-  const url = new URL(req.url ?? '/', 'http://placeholder');
+  let url: URL;
+  try {
+    url = new URL(req.url ?? '/', 'http://placeholder');
+  } catch (e) {
+    // A request target the URL parser rejects is the caller's fault, not a server failure.
+    if (e instanceof TypeError) throw new HttpError(400, e.message);
+    throw e;
+  }
   return {
     method: req.method ?? 'GET',
     path: url.pathname,
@@ -401,6 +380,15 @@ function parseRequest(req: IncomingMessage): ParsedRoute {
  * mapping each :param name to its value. Path segments are exact-matched
  * except for parameter slots.
  */
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch (e) {
+    if (e instanceof URIError) throw new HttpError(400, e.message);
+    throw e;
+  }
+}
+
 function matchPath(pattern: string, path: string): Record<string, string> | null {
   const patternParts = pattern.split('/');
   const pathParts = path.split('/');
@@ -411,7 +399,7 @@ function matchPath(pattern: string, path: string): Record<string, string> | null
     const ap = pathParts[i]!;
     if (pp.startsWith(':')) {
       if (ap.length === 0) return null;
-      params[pp.slice(1)] = decodeURIComponent(ap);
+      params[pp.slice(1)] = decodePathSegment(ap);
     } else if (pp !== ap) {
       return null;
     }
@@ -1350,15 +1338,8 @@ async function handleListQuarantine({ req, res, opts, query }: RouteRequest): Pr
 async function handleApproveQuarantine({ req, res, opts }: RouteRequest, quarantineApproveMatch: Record<string, string>): Promise<void> {
   validateIdSegment(quarantineApproveMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    quarantineApprove(ctx, quarantineApproveMatch.id!);
-    sendJson(res, 200, { approved: quarantineApproveMatch.id });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not quarantined')) throw new HttpError(404, msg);
-    if (msg.includes('is already') || msg.includes('scope changed')) throw new HttpError(409, msg);
-    throw e;
-  }
+  quarantineApprove(ctx, quarantineApproveMatch.id!);
+  sendJson(res, 200, { approved: quarantineApproveMatch.id });
   return;
 }
 
@@ -1366,15 +1347,8 @@ async function handleApproveQuarantine({ req, res, opts }: RouteRequest, quarant
 async function handleRejectQuarantine({ req, res, opts }: RouteRequest, quarantineRejectMatch: Record<string, string>): Promise<void> {
   validateIdSegment(quarantineRejectMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    quarantineReject(ctx, quarantineRejectMatch.id!);
-    sendJson(res, 200, { rejected: quarantineRejectMatch.id });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not quarantined')) throw new HttpError(404, msg);
-    if (msg.includes('is already')) throw new HttpError(409, msg);
-    throw e;
-  }
+  quarantineReject(ctx, quarantineRejectMatch.id!);
+  sendJson(res, 200, { rejected: quarantineRejectMatch.id });
   return;
 }
 
@@ -1565,20 +1539,12 @@ async function handleClosePrediction({ req, res, opts }: RouteRequest, predictio
     closureNote = note;
   }
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
-      closureState: state,
-      actualValue,
-      closureNote,
-    }, ctx.actor.subject);
-    sendJson(res, 200, { prediction });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    throw e;
-  }
+  const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
+    closureState: state,
+    actualValue,
+    closureNote,
+  }, ctx.actor.subject);
+  sendJson(res, 200, { prediction });
   return;
 }
 
@@ -1629,10 +1595,8 @@ async function handleCreateDecision({ req, res, opts }: RouteRequest): Promise<v
     }, ctx.actor.subject);
     sendJson(res, 201, { decision });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found') || msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
+    // A missing referenced row is a conflict with the create, not a missing target.
+    if (e instanceof NotFoundError) throw new HttpError(409, e.message);
     throw e;
   }
   return;
@@ -1680,42 +1644,20 @@ async function handleSupersedeDecision({ req, res, opts }: RouteRequest, decisio
     context = contextRaw;
   }
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
-      decisionText: text,
-      context,
-      supersedesDecisionId: oldId,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { decision });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
+    decisionText: text,
+    context,
+    supersedesDecisionId: oldId,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { decision });
   return;
 }
 
 async function handleCloseDecision({ req, res, opts }: RouteRequest, decisionCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(decisionCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { decision });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { decision });
   return;
 }
 
@@ -1786,10 +1728,8 @@ async function handleCreateIncident({ req, res, opts }: RouteRequest): Promise<v
     }, ctx.actor.subject);
     sendJson(res, 201, { incident });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(409, msg);
-    }
+    // A missing referenced row is a conflict with the create, not a missing target.
+    if (e instanceof NotFoundError) throw new HttpError(409, e.message);
     throw e;
   }
   return;
@@ -1826,38 +1766,16 @@ async function handleResolveIncident({ req, res, opts }: RouteRequest, incidentR
     throw new HttpError(400, 'resolutionText exceeds 4096-character cap');
   }
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
-    sendJson(res, 200, { incident });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not open')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
+  sendJson(res, 200, { incident });
   return;
 }
 
 async function handleCloseIncident({ req, res, opts }: RouteRequest, incidentCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(incidentCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { incident });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('already closed')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { incident });
   return;
 }
 
@@ -1971,44 +1889,22 @@ async function handleSupersedeProcess({ req, res, opts }: RouteRequest, processS
   if (!existing) {
     throw new HttpError(404, `process ${id} not found`);
   }
-  try {
-    const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
-      processName: existing.processName,
-      steps,
-      description,
-      changeSummary,
-      supersedesProcessId: id,
-    }, ctx.actor.subject);
-    sendJson(res, 200, { process });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active') || msg.includes('could not be superseded')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
+    processName: existing.processName,
+    steps,
+    description,
+    changeSummary,
+    supersedesProcessId: id,
+  }, ctx.actor.subject);
+  sendJson(res, 200, { process });
   return;
 }
 
 async function handleCloseProcess({ req, res, opts }: RouteRequest, processCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(processCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { process });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { process });
   return;
 }
 
@@ -2051,18 +1947,13 @@ async function handleCreatePolicy({ req, res, opts }: RouteRequest): Promise<voi
   const validFrom = optionalDateField(body['validFrom'], 'validFrom');
   const validTo = optionalDateField(body['validTo'], 'validTo');
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
-      policyName,
-      policyText,
-      validFrom,
-      validTo,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { policy });
-  } catch (e) {
-    // savePolicy throws on invalid/inverted dates (validation) -> 400.
-    throw new HttpError(400, e instanceof Error ? e.message : String(e));
-  }
+  const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
+    policyName,
+    policyText,
+    validFrom,
+    validTo,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { policy });
   return;
 }
 
@@ -2095,12 +1986,8 @@ async function handlePoliciesAsOf({ req, res, opts, query }: RouteRequest): Prom
   }
   const name = query.get('name') ?? undefined;
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
-    sendJson(res, 200, { policies });
-  } catch (e) {
-    throw new HttpError(400, e instanceof Error ? e.message : String(e));
-  }
+  const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
+  sendJson(res, 200, { policies });
   return;
 }
 
@@ -2132,46 +2019,23 @@ async function handleSupersedePolicy({ req, res, opts }: RouteRequest, policySup
   if (!existing) {
     throw new HttpError(404, `policy ${id} not found`);
   }
-  try {
-    const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
-      policyName: existing.policyName,
-      policyText,
-      validFrom,
-      validTo,
-      changeSummary,
-      supersedesPolicyId: id,
-    }, ctx.actor.subject);
-    sendJson(res, 200, { policy });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active') || msg.includes('could not be superseded')) {
-      throw new HttpError(409, msg);
-    }
-    // invalid/inverted date or missing field -> validation.
-    throw new HttpError(400, msg);
-  }
+  const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
+    policyName: existing.policyName,
+    policyText,
+    validFrom,
+    validTo,
+    changeSummary,
+    supersedesPolicyId: id,
+  }, ctx.actor.subject);
+  sendJson(res, 200, { policy });
   return;
 }
 
 async function handleClosePolicy({ req, res, opts }: RouteRequest, policyCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(policyCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { policy });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { policy });
   return;
 }
 
@@ -2226,17 +2090,12 @@ async function handleCreateSkill({ req, res, opts }: RouteRequest): Promise<void
     trigger = triggerRaw;
   }
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
-      skillName,
-      instructions,
-      trigger,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { skill });
-  } catch (e) {
-    // saveSkill throws on validation (single-line name etc.) -> 400.
-    throw new HttpError(400, e instanceof Error ? e.message : String(e));
-  }
+  const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+    skillName,
+    instructions,
+    trigger,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { skill });
   return;
 }
 
@@ -2306,44 +2165,22 @@ async function handleSupersedeSkill({ req, res, opts }: RouteRequest, skillSuper
   if (!existing) {
     throw new HttpError(404, `skill ${id} not found`);
   }
-  try {
-    const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
-      skillName: existing.skillName,
-      instructions,
-      trigger,
-      changeSummary,
-      supersedesSkillId: id,
-    }, ctx.actor.subject);
-    sendJson(res, 200, { skill });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active') || msg.includes('could not be superseded')) {
-      throw new HttpError(409, msg);
-    }
-    throw new HttpError(400, msg);
-  }
+  const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+    skillName: existing.skillName,
+    instructions,
+    trigger,
+    changeSummary,
+    supersedesSkillId: id,
+  }, ctx.actor.subject);
+  sendJson(res, 200, { skill });
   return;
 }
 
 async function handleCloseSkill({ req, res, opts }: RouteRequest, skillCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(skillCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { skill });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { skill });
   return;
 }
 
@@ -2393,16 +2230,11 @@ async function handleCreateProjectBrief({ req, res, opts }: RouteRequest): Promi
     throw new HttpError(400, 'summary exceeds 8192-character cap');
   }
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
-      repo,
-      summary,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { brief });
-  } catch (e) {
-    // saveProjectBrief throws on validation (single-line repo etc.) -> 400.
-    throw new HttpError(400, e instanceof Error ? e.message : String(e));
-  }
+  const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
+    repo,
+    summary,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { brief });
   return;
 }
 
@@ -2439,28 +2271,13 @@ async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Prom
   }
   const dryRun = body['dryRun'] === true;
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    if (dryRun) {
-      const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
-      sendJson(res, 200, { markdown, receiptCount });
-      return;
-    }
-    const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
-    sendJson(res, 200, { brief });
-  } catch (e) {
-    // A refresh race (the active brief is closed/superseded between
-    // loadActiveBriefForRepo and the supersede CAS) is a state conflict, not a
-    // validation error — map it to 409 like the explicit supersede route
-    // (codex-review 2026-05-30, P3).
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active') || msg.includes('could not be superseded')) {
-      throw new HttpError(409, msg);
-    }
-    throw new HttpError(400, msg);
+  if (dryRun) {
+    const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
+    sendJson(res, 200, { markdown, receiptCount });
+    return;
   }
+  const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
+  sendJson(res, 200, { brief });
   return;
 }
 
@@ -2490,43 +2307,21 @@ async function handleSupersedeProjectBrief({ req, res, opts }: RouteRequest, bri
   if (!existing) {
     throw new HttpError(404, `project brief ${id} not found`);
   }
-  try {
-    const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
-      repo: existing.repo,
-      summary,
-      changeSummary,
-      supersedesBriefId: id,
-    }, ctx.actor.subject);
-    sendJson(res, 200, { brief });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active') || msg.includes('could not be superseded')) {
-      throw new HttpError(409, msg);
-    }
-    throw new HttpError(400, msg);
-  }
+  const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
+    repo: existing.repo,
+    summary,
+    changeSummary,
+    supersedesBriefId: id,
+  }, ctx.actor.subject);
+  sendJson(res, 200, { brief });
   return;
 }
 
 async function handleCloseProjectBrief({ req, res, opts }: RouteRequest, briefCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(briefCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { brief });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { brief });
   return;
 }
 
@@ -2566,16 +2361,11 @@ async function handleCreateCustomerNote({ req, res, opts }: RouteRequest): Promi
     throw new HttpError(400, 'note exceeds 8192-character cap');
   }
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
-      customer,
-      note,
-    }, ctx.actor.subject);
-    sendJson(res, 201, { note: customerNote });
-  } catch (e) {
-    // saveCustomerNote throws on validation (single-line customer etc.) -> 400.
-    throw new HttpError(400, e instanceof Error ? e.message : String(e));
-  }
+  const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+    customer,
+    note,
+  }, ctx.actor.subject);
+  sendJson(res, 201, { note: customerNote });
   return;
 }
 
@@ -2634,43 +2424,21 @@ async function handleSupersedeCustomerNote({ req, res, opts }: RouteRequest, not
   if (!existing) {
     throw new HttpError(404, `customer note ${id} not found`);
   }
-  try {
-    const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
-      customer: existing.customer,
-      note,
-      changeSummary,
-      supersedesNoteId: id,
-    }, ctx.actor.subject);
-    sendJson(res, 200, { note: customerNote });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active') || msg.includes('could not be superseded')) {
-      throw new HttpError(409, msg);
-    }
-    throw new HttpError(400, msg);
-  }
+  const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+    customer: existing.customer,
+    note,
+    changeSummary,
+    supersedesNoteId: id,
+  }, ctx.actor.subject);
+  sendJson(res, 200, { note: customerNote });
   return;
 }
 
 async function handleCloseCustomerNote({ req, res, opts }: RouteRequest, noteCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(noteCloseMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  try {
-    const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-    sendJson(res, 200, { note: customerNote });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('not found')) {
-      throw new HttpError(404, msg);
-    }
-    if (msg.includes('not active')) {
-      throw new HttpError(409, msg);
-    }
-    throw e;
-  }
+  const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+  sendJson(res, 200, { note: customerNote });
   return;
 }
 
@@ -3059,38 +2827,25 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
     handleRequest(req, res, opts, startedAt, limiter).catch(<E>(err: E) => {
-      logRequestFailure(req, err, requestId);
+      const mapped = mapApiError(err);
+      logRequestFailure(req, err, requestId, mapped.status);
       if (res.headersSent) {
         try { res.end(); } catch { /* socket already gone */ }
         return;
       }
-      if (err instanceof BodyTooLargeError) {
-        sendError(res, 413, err.message);
-        // M3: readBody hit the 1 MB cap mid-stream, so the request body is
-        // only partially consumed. Destroy the socket rather than let the
-        // client's remaining (unbounded) bytes drain into an exchange we have
-        // already answered.
-        req.destroy();
+      if (mapped.status === 500) {
+        // The id lets an operator find the logged cause without the client seeing internal text.
+        sendJson(res, 500, { error: mapped.message, requestId });
         return;
       }
-      if (err instanceof HttpError) {
-        sendError(res, err.status, err.message);
-        return;
-      }
-      // F5 (v1.6.5) + v1.7.0 api-contract review: RecallContractError lands
-      // at 400 with {error: <message>, code: <code>}. The `error` field
-      // matches `sendError`'s shape (human message, used by HttpError /
-      // BodyTooLargeError / mapApiError). The `code` field is the typed
-      // discriminator — clients can branch on `body.code` without parsing
-      // prose. Earlier draft used {error: code, message: text} but that
-      // diverged from the rest of v1/* and forced clients to special-case
-      // the error path.
+      // RecallContractError keeps the shared {error} shape and adds `code` so clients branch without parsing prose.
       if (err instanceof RecallContractError) {
         sendJson(res, 400, { error: err.message, code: err.code });
         return;
       }
-      const mapped = mapApiError(err);
       sendError(res, mapped.status, mapped.message);
+      // M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
+      if (err instanceof BodyTooLargeError) req.destroy();
     });
   });
 

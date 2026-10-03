@@ -20,6 +20,7 @@
  * Lifecycle: active -> superseded (a corrected version) or active -> closed (retired).
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -100,21 +101,21 @@ function validateNoteFields(
   changeSummary: string | undefined,
 ) {
   const normalizedCustomer = (customer ?? '').trim();
-  if (normalizedCustomer.length === 0) throw new Error('saveCustomerNote: customer is required');
+  if (normalizedCustomer.length === 0) throw new BadRequestError('saveCustomerNote: customer is required');
   if (/[\r\n]/.test(normalizedCustomer)) {
-    throw new Error('saveCustomerNote: customer must be a single line (no newlines)');
+    throw new BadRequestError('saveCustomerNote: customer must be a single line (no newlines)');
   }
   if (normalizedCustomer.length > MAX_CUSTOMER_LEN) {
-    throw new Error(`saveCustomerNote: customer exceeds the ${MAX_CUSTOMER_LEN}-char cap`);
+    throw new BadRequestError(`saveCustomerNote: customer exceeds the ${MAX_CUSTOMER_LEN}-char cap`);
   }
   if (!note || note.trim().length === 0) {
-    throw new Error('saveCustomerNote: note is required');
+    throw new BadRequestError('saveCustomerNote: note is required');
   }
   if (note.length > MAX_NOTE_LEN) {
-    throw new Error(`saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`);
+    throw new BadRequestError(`saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`);
   }
   if (changeSummary !== undefined && changeSummary.length > MAX_CHANGE_SUMMARY_LEN) {
-    throw new Error(`saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
+    throw new BadRequestError(`saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
   }
   return { customer: normalizedCustomer };
 }
@@ -226,12 +227,12 @@ export function saveCustomerNote(
           | { status: string; version: number }
           | undefined;
         if (!pred) {
-          throw new Error(
+          throw new NotFoundError(
             `saveCustomerNote: note ${opts.supersedesNoteId} to supersede not found for tenant ${tenantId}`,
           );
         }
         if (pred.status !== 'active') {
-          throw new Error(
+          throw new ConflictError(
             `saveCustomerNote: note ${opts.supersedesNoteId} is not active (status='${pred.status}'); only active notes can be superseded.`,
           );
         }
@@ -261,7 +262,7 @@ export function saveCustomerNote(
           WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
         `).run(noteId, now, opts.supersedesNoteId, tenantId, noteId);
         if (sup.changes === 0) {
-          throw new Error(
+          throw new ConflictError(
             `saveCustomerNote: note ${opts.supersedesNoteId} could not be superseded (no longer active or self-reference).`,
           );
         }
@@ -337,9 +338,9 @@ export function closeCustomerNote(
           `SELECT status FROM customer_notes WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeCustomerNote: note ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeCustomerNote: note ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeCustomerNote: note ${id} is not active (status='${existing.status}'); only active notes can be closed.`,
         );
       }
@@ -349,7 +350,7 @@ export function closeCustomerNote(
       // impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as CustomerNoteRow | undefined;
-      if (!row) throw new Error(`closeCustomerNote: note ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeCustomerNote: note ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -410,7 +411,7 @@ export function loadCustomerNotes(
   assertTenantId('loadCustomerNotes', tenantId);
   const limit = opts.limit ?? 100;
   if (opts.status && !VALID_NOTE_STATES.has(opts.status)) {
-    throw new Error(
+    throw new BadRequestError(
       `loadCustomerNotes: status must be one of ${Array.from(VALID_NOTE_STATES).join('|')}; got ${opts.status}`,
     );
   }

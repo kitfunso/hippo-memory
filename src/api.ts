@@ -8,6 +8,8 @@
  */
 
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './api-errors.js';
+export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './api-errors.js';
 import {
   writeEntry,
   writeEntryDbOnly,
@@ -189,7 +191,7 @@ export function adminActor(subject: string): Actor {
  *     full-store fallback (codex v1.7.0 diff-pass P1). Validated upfront
  *     so the contract holds.
  */
-export class RecallContractError extends Error {
+export class RecallContractError extends BadRequestError {
   public readonly code:
     | 'fresh_tail_requires_session_id'
     | 'invalid_scorer_window';
@@ -202,14 +204,6 @@ export class RecallContractError extends Error {
     super(message);
     this.name = 'RecallContractError';
     this.code = code;
-  }
-}
-
-/** The actor's role or identity does not allow the operation. HTTP maps it to 403. */
-export class ForbiddenError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ForbiddenError';
   }
 }
 
@@ -1929,14 +1923,14 @@ export function forget(ctx: Context, id: string): ForgetResult {
       .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
       .get(id) as { tenant_id?: string } | undefined;
     if (!row || row.tenant_id !== ctx.tenantId) {
-      throw new Error(`memory not found: ${id}`);
+      throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
     closeHippoDb(db);
   }
   const removed = deleteEntry(ctx.hippoRoot, id, { actor: ctx.actor.subject });
   if (!removed) {
-    throw new Error(`memory not found: ${id}`);
+    throw new NotFoundError(`memory not found: ${id}`);
   }
   // Counted here, not in the CLI: both callers of this function (cmdForget and
   // the HTTP route) are the two paths of one user command, so neither can miss
@@ -1998,7 +1992,7 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
         .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
         .get(opts.memoryId) as { tenant_id?: string } | undefined;
       if (!row || row.tenant_id !== ctx.tenantId) {
-        throw new Error(`memory not found: ${opts.memoryId}`);
+        throw new NotFoundError(`memory not found: ${opts.memoryId}`);
       }
     } finally {
       closeHippoDb(db);
@@ -2024,10 +2018,10 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
 export function unreject(ctx: Context, digestOrPrefix: string) {
   const outcome = unrejectValue(ctx.hippoRoot, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
   if (outcome.status === 'not_found') {
-    throw new Error(`no rejected value matches: ${digestOrPrefix}`);
+    throw new NotFoundError(`no rejected value matches: ${digestOrPrefix}`);
   }
   if (outcome.status === 'ambiguous') {
-    throw new Error(
+    throw new BadRequestError(
       `"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones; use a longer prefix`,
     );
   }
@@ -2077,7 +2071,7 @@ export function promote(
       .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
       .get(id) as { tenant_id?: string } | undefined;
     if (!row || row.tenant_id !== ctx.tenantId) {
-      throw new Error(`memory not found: ${id}`);
+      throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
     closeHippoDb(ownerDb);
@@ -2130,13 +2124,13 @@ export function supersede(
   // info leak.
   const old: MemoryEntry | null = readEntry(ctx.hippoRoot, oldId, ctx.tenantId);
   if (!old) {
-    throw new Error(`Memory not found: ${oldId}`);
+    throw new NotFoundError(`Memory not found: ${oldId}`);
   }
   // Guard: not already superseded. The CAS UPDATE below race-safely closes
   // the window between this read and the write; this check just produces a
   // clearer error in the common single-writer case.
   if (old.superseded_by) {
-    throw new Error(
+    throw new ConflictError(
       `Memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`,
     );
   }
@@ -2168,7 +2162,7 @@ export function supersede(
       `).run(newEntry.id, oldId, ctx.tenantId);
       if ((result.changes ?? 0) === 0) {
         db.exec('ROLLBACK');
-        throw new Error(`Memory ${oldId} already superseded by another writer`);
+        throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
       }
       // v0.30 / E2 — DAG live-coupling: OLD entry just transitioned to
       // superseded. Its parent (if any) needs rebuild. Lands strictly
@@ -2269,7 +2263,7 @@ export function archiveRaw(
       .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
       .get(id) as { tenant_id?: string } | undefined;
     if (!row || row.tenant_id !== ctx.tenantId) {
-      throw new Error(`memory not found: ${id}`);
+      throw new NotFoundError(`memory not found: ${id}`);
     }
     archiveRawMemory(db, id, {
       reason,
@@ -2438,11 +2432,11 @@ export function authRevoke(
       | { key_id: string; tenant_id: string; revoked_at: string | null; role: string }
       | undefined;
     if (!row) {
-      throw new Error(`Unknown key_id: ${keyId}`);
+      throw new NotFoundError(`Unknown key_id: ${keyId}`);
     }
     // Cross-tenant access denied: same message as missing key, no info leak.
     if (row.tenant_id !== ctx.tenantId) {
-      throw new Error(`Unknown key_id: ${keyId}`);
+      throw new NotFoundError(`Unknown key_id: ${keyId}`);
     }
     if (ctx.actor.viaAuthResolver && row.role === 'admin') {
       throw new ForbiddenError('An auth resolver admin cannot revoke an admin key, which outranks it');
@@ -2509,13 +2503,13 @@ function changeScopeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_
       .prepare(`SELECT tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
       .get(keyId) as { tenant_id: string; revoked_at: string | null } | undefined;
     if (!row || row.tenant_id !== ctx.tenantId) {
-      throw new Error(`Unknown key_id: ${keyId}`);
+      throw new NotFoundError(`Unknown key_id: ${keyId}`);
     }
     if (op === 'auth_grant' && row.revoked_at) {
-      throw new Error(`${keyId} is revoked; a grant on it would never apply`);
+      throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
     }
     if (!isRestrictedScope(scope)) {
-      throw new Error(`${scope} is not a restricted scope; it is already readable by default`);
+      throw new BadRequestError(`${scope} is not a restricted scope; it is already readable by default`);
     }
     if (op === 'auth_grant') grantScope(db, keyId, scope);
     else ungrantScope(db, keyId, scope);
@@ -3409,10 +3403,10 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
     try {
       const dormant = readDormantSnapshot(db, ctx.tenantId, id);
       if (!dormant) {
-        throw new Error(`dormant memory not found: ${id}`);
+        throw new NotFoundError(`dormant memory not found: ${id}`);
       }
       if (db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined) {
-        throw new Error(`memory ${id} is already active; forget it before restoring its dormant copy`);
+        throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
       }
       const now = new Date();
       // Dormant rows are long-lived, so a snapshot can predate a field added
@@ -3467,7 +3461,7 @@ export function forgetDormant(ctx: Context, id: string): void {
   const db = openHippoDb(ctx.hippoRoot);
   try {
     if (!deleteDormantRow(db, ctx.tenantId, id)) {
-      throw new Error(`dormant memory not found: ${id}`);
+      throw new NotFoundError(`dormant memory not found: ${id}`);
     }
     try {
       appendAuditEvent(db, {
@@ -3543,8 +3537,8 @@ export function quarantineList(
 
 function loadPendingQuarantineRow(db: DatabaseSyncLike, tenantId: string, id: string) {
   const row = getQuarantineRow(db, tenantId, id);
-  if (!row) throw new Error(`not quarantined: ${id}`);
-  if (row.status !== 'pending') throw new Error(`${id} is already ${row.status}`);
+  if (!row) throw new NotFoundError(`not quarantined: ${id}`);
+  if (row.status !== 'pending') throw new ConflictError(`${id} is already ${row.status}`);
   return row;
 }
 
@@ -3563,7 +3557,7 @@ export function quarantineApprove(ctx: Context, id: string): void {
         .prepare(`UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`)
         .run(row.originalScope, id, ctx.tenantId, quarantineScope);
       if (Number(updated.changes ?? 0) !== 1) {
-        throw new Error(`memory ${id} scope changed since quarantine; refusing to approve`);
+        throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
       }
       approveQuarantineRow(db, ctx.tenantId, id, ctx.actor.subject);
       appendAuditEvent(db, {

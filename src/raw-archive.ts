@@ -1,3 +1,4 @@
+import { BadRequestError, NotFoundError } from './api-errors.js';
 import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
@@ -39,9 +40,9 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
   const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as
     | ArchivedMemoryRow
     | undefined;
-  if (!row) throw new Error(`memory not found: ${id}`);
+  if (!row) throw new NotFoundError(`memory not found: ${id}`);
   if (row.kind !== 'raw') {
-    throw new Error(`memory ${id} is not raw (kind=${String(row.kind)})`);
+    throw new BadRequestError(`memory ${id} is not raw (kind=${String(row.kind)})`);
   }
 
   // SAVEPOINT (not BEGIN) so this works whether or not we're already inside a

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { ApiError } from './api-errors.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
 
@@ -34,6 +35,21 @@ export class HttpError extends Error {
 }
 
 export class BodyTooLargeError extends Error {}
+
+/** The status and client-facing message for one failed request. */
+export interface ApiErrorReply {
+  status: number;
+  message: string;
+}
+
+export const INTERNAL_ERROR_MESSAGE = 'internal server error';
+
+/** Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text stays in the server log. */
+export function mapApiError<E>(err: E): ApiErrorReply {
+  if (err instanceof HttpError || err instanceof ApiError) return { status: err.status, message: err.message };
+  if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
+  return { status: 500, message: INTERNAL_ERROR_MESSAGE };
+}
 
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {
   res.writeHead(status, JSON_HEADERS);

@@ -7,6 +7,8 @@
  * (`api.isPrivateScope`, test imports of `passesScopeFilterForRecall`).
  */
 
+import { ForbiddenError } from './api-errors.js';
+
 /**
  * Literal scopes excluded from recall by default-deny when the
  * caller passes no `scope`. The SQL clause in `loadSearchRows` and the JS
@@ -121,7 +123,7 @@ export function passesCliRecallScopeFilter(
  * Thrown when a caller requests a scope its role may not read. The HTTP layer
  * maps it to 403.
  */
-export class ScopeForbiddenError extends Error {
+export class ScopeForbiddenError extends ForbiddenError {
   readonly scope: string;
 
   constructor(scope: string) {

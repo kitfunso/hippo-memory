@@ -37,6 +37,7 @@
  * supersede, the predecessor's UPDATE) inside writeEntry's SAVEPOINT.
  */
 
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store.js';
 import { assertTenantId } from './tenant.js';
@@ -115,7 +116,7 @@ export interface ListPoliciesOpts {
 export function normalizePolicyDate(input: string, label: string = 'date'): string {
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) {
-    throw new Error(`policy: invalid ${label} "${input}" (expected an ISO-8601 date or datetime)`);
+    throw new BadRequestError(`policy: invalid ${label} "${input}" (expected an ISO-8601 date or datetime)`);
   }
   return d.toISOString();
 }
@@ -134,7 +135,7 @@ export function validatePolicyDates(
     ? normalizePolicyDate(validToRaw, 'valid_to')
     : null;
   if (validTo !== null && validTo <= validFrom) {
-    throw new Error(
+    throw new BadRequestError(
       `policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`,
     );
   }
@@ -219,10 +220,10 @@ export function savePolicy(
 ): Policy {
   assertTenantId('savePolicy', tenantId);
   if (!opts.policyName || opts.policyName.trim().length === 0) {
-    throw new Error('savePolicy: policyName is required');
+    throw new BadRequestError('savePolicy: policyName is required');
   }
   if (!opts.policyText || opts.policyText.trim().length === 0) {
-    throw new Error('savePolicy: policyText is required');
+    throw new BadRequestError('savePolicy: policyText is required');
   }
 
   const now = new Date().toISOString();
@@ -267,12 +268,12 @@ export function savePolicy(
           | { status: string; version: number }
           | undefined;
         if (!pred) {
-          throw new Error(
+          throw new NotFoundError(
             `savePolicy: policy ${opts.supersedesPolicyId} to supersede not found for tenant ${tenantId}`,
           );
         }
         if (pred.status !== 'active') {
-          throw new Error(
+          throw new ConflictError(
             `savePolicy: policy ${opts.supersedesPolicyId} is not active (status='${pred.status}'); only active policies can be superseded.`,
           );
         }
@@ -304,7 +305,7 @@ export function savePolicy(
           WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
         `).run(policyId, now, opts.supersedesPolicyId, tenantId, policyId);
         if (sup.changes === 0) {
-          throw new Error(
+          throw new ConflictError(
             `savePolicy: policy ${opts.supersedesPolicyId} could not be superseded (no longer active or self-reference).`,
           );
         }
@@ -381,9 +382,9 @@ export function closePolicy(
           `SELECT status FROM policies WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closePolicy: policy ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closePolicy: policy ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closePolicy: policy ${id} is not active (status='${existing.status}'); only active policies can be closed.`,
         );
       }
@@ -393,7 +394,7 @@ export function closePolicy(
       // impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as PolicyRow | undefined;
-      if (!row) throw new Error(`closePolicy: policy ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closePolicy: policy ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -458,7 +459,7 @@ export function loadPolicies(
     let rows: PolicyRow[];
     if (opts.status) {
       if (!VALID_POLICY_STATES.has(opts.status)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadPolicies: status must be one of ${Array.from(VALID_POLICY_STATES).join('|')}; got ${opts.status}`,
         );
       }
