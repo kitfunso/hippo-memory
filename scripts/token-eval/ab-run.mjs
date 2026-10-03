@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Z0 Claude Code runner: arms A0, A1, A2 and A5 in lockstep, one record per (task, arm, seed) for ab-analyze.mjs.
+// Z0 Claude Code runner: arms A0, A1, A2 and A5 in lockstep, one record per (task, arm, seed) for z0-analyze.mjs.
 // Protocol: docs/evals/2026-09-29-z0-built-in-memory-prereg.md. Usage, tasks file and fairness: benchmarks/token-eval/README.md.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -9,6 +9,7 @@ import { HIPPO_JS, sh, git } from './exec.mjs';
 import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
+import { isUsageLimit, findTranscript, transcriptWork, usageFromResult, skippedRecord } from './records.mjs';
 
 export { prependPath } from './exec.mjs';
 
@@ -25,15 +26,6 @@ async function loadHippo() {
     throw new Error(`run npm run build first (ab-run needs dist/): ${err.message}`);
   }
   return hippoLib;
-}
-
-const LIMIT_RE = /usage limit|hit your (usage )?limit|limit reached|rate_limit_error|overloaded_error/i;
-
-/** A plan usage limit or an overload: not a task failure, so the session is rerun. */
-export function isUsageLimit(result, output) {
-  // The run's own --max-budget-usd or turn cap is a real outcome, never retried.
-  if (String(result?.subtype ?? '').startsWith('error_max')) return false;
-  return (result === null || Boolean(result.is_error)) && LIMIT_RE.test(output);
 }
 
 /** Validate a tasks file. Throws on the first problem. */
@@ -68,82 +60,6 @@ function hippoHookSettings(tmpHome) {
       else process.env[k] = v;
     }
   }
-}
-
-function findTranscript(projectsDir, sessionId) {
-  if (!sessionId || !fs.existsSync(projectsDir)) return null;
-  for (const p of fs.readdirSync(projectsDir)) {
-    const f = path.join(projectsDir, p, `${sessionId}.jsonl`);
-    if (fs.existsSync(f)) return f;
-  }
-  return null;
-}
-
-const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
-const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;
-// `type` reads a file only in PowerShell; in Git Bash it is a builtin that names a command.
-const PS_READ = /^(?:get-content|select-string|type|gc)(?=\s|$)/i;
-
-/** Whether a shell command has a read command word at its start or after `|`, `;`, `&&`, `||` or `(`. */
-function isShellRead(tool, command) {
-  return String(command ?? '').split(/\|\||&&|[|;(]/).some((part) => {
-    const word = part.trim();
-    return BASH_READ.test(word) || (tool === 'PowerShell' && PS_READ.test(word));
-  });
-}
-
-/** Tool calls, file reads (Read, Grep and shell reads; `shellReads` is the shell share) and repeated error signatures. */
-export function transcriptWork(file, seenErrors) {
-  const work = { toolCalls: 0, fileReads: 0, shellReads: 0, repeatedErrors: 0 };
-  if (!file) return null;
-  const seenTools = new Set();
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue;
-    let o;
-    try {
-      o = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const content = o.message && Array.isArray(o.message.content) ? o.message.content : [];
-    for (const block of content) {
-      if (block.type === 'tool_use' && !seenTools.has(block.id)) {
-        seenTools.add(block.id);
-        work.toolCalls++;
-        if (block.name === 'Read' || block.name === 'Grep') work.fileReads++;
-        else if (SHELL_TOOLS.has(block.name) && isShellRead(block.name, block.input?.command)) {
-          work.fileReads++;
-          work.shellReads++;
-        }
-      } else if (block.type === 'tool_result' && block.is_error) {
-        const text = Array.isArray(block.content) ? block.content.map((c) => c.text ?? '').join(' ') : String(block.content ?? '');
-        const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
-        if (!sig) continue;
-        if (seenErrors.has(sig)) work.repeatedErrors++;
-        else seenErrors.add(sig);
-      }
-    }
-  }
-  return work;
-}
-
-/** Sum Claude Code's per-model usage; the top-level `usage` can read zero when a run stops on its budget cap, so it is only a fallback. */
-export function usageFromResult(result) {
-  const usage = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
-  const models = result.modelUsage ?? {};
-  for (const m of Object.values(models)) {
-    usage.inputTokens += Number(m.inputTokens) || 0;
-    usage.cacheWriteTokens += Number(m.cacheCreationInputTokens) || 0;
-    usage.cacheReadTokens += Number(m.cacheReadInputTokens) || 0;
-    usage.outputTokens += Number(m.outputTokens) || 0;
-  }
-  if (Object.keys(models).length === 0 && result.usage) {
-    usage.inputTokens = Number(result.usage.input_tokens) || 0;
-    usage.cacheWriteTokens = Number(result.usage.cache_creation_input_tokens) || 0;
-    usage.cacheReadTokens = Number(result.usage.cache_read_input_tokens) || 0;
-    usage.outputTokens = Number(result.usage.output_tokens) || 0;
-  }
-  return usage;
 }
 
 function storeLeaks(hippoRoot, lines) {
@@ -209,10 +125,13 @@ function hippoInit(run, fakeHome) {
   fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false } }, null, 2));
 }
 
+const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already in the store, skipped' };
+
 function writeRecord(ctx, record) {
   ctx.records.push(record);
   fs.appendFileSync(path.join(ctx.outDir, 'runs.jsonl'), `${JSON.stringify(record)}\n`);
-  ctx.log(`${record.sequence} ${record.taskId} ${record.arm} seed${record.seed}: ${record.invalid === 'setup' ? 'setup failed, skipped' : (record.resolved ? 'resolved' : 'not resolved')}${record.costUsd ? `, $${record.costUsd.toFixed(4)}` : ''}${record.invalid ? ` (invalid: ${record.invalid})` : ''}`);
+  const outcome = SKIPPED[record.invalid] ?? (record.resolved ? 'resolved' : 'not resolved');
+  ctx.log(`${record.sequence} ${record.taskId} ${record.arm} seed${record.seed}: ${outcome}${record.costUsd ? `, $${record.costUsd.toFixed(4)}` : ''}${record.invalid ? ` (invalid: ${record.invalid})` : ''}`);
 }
 
 const sleep = (ms) => ms > 0 && Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -231,62 +150,82 @@ function runSession(ctx, run, t, reset) {
     } catch {
       result = null;
     }
-    if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`) || attempt > ctx.limitMaxWaits) return { cc, result, limitRetries: attempt - 1 };
+    if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1 };
     fs.writeFileSync(path.join(run.rawDir, `${t.id}.limit${attempt}.txt`), `${cc.stdout}\n${cc.stderr}`.slice(-20000));
+    // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
+    if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
     sleep(ctx.limitWaitMs);
     reset();
   }
 }
 
-/** One step: prepare the checkout, run the session, grade, record. */
+/** One step: prepare the checkout, skip the session if the step is void before it starts, else run, grade and record it. */
 function runTask(ctx, run, position, order) {
   const { s, arm, seed, dirs, env, rawDir } = run;
   const t = s.tasks[position];
   const work = dirs.work;
-  const base = { taskId: t.id, cluster: s.cluster, sequence: s.id, position, order, scored: position > 0, arm, seed, model: ctx.model, claudeVersion: ctx.claudeVersion, startedAt: new Date().toISOString() };
   const prepare = () => ({ commit: checkoutBase(run.cached, work, s.id, t), setup: t.setup ? sh(t.setup, work, childEnv(env)) : null });
   const { commit, setup } = prepare();
+  const base = { taskId: t.id, cluster: s.cluster, sequence: s.id, position, order, scored: position > 0, arm, seed, model: ctx.model, claudeVersion: ctx.claudeVersion, startedAt: new Date().toISOString(), baseCommit: commit };
+  const meta = { envKeys: Object.keys(env).sort(), passEnv: ctx.passEnv };
   fs.mkdirSync(rawDir, { recursive: true });
   if (setup && setup.status !== 0) {
-    // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved".
+    // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved". Carry never ran, so its counts are null.
     fs.writeFileSync(path.join(rawDir, `${t.id}.setup.txt`), `${setup.stdout}\n${setup.stderr}`.slice(-20000));
-    writeRecord(ctx, { ...base, baseCommit: commit, resolved: false, usage: null, costUsd: null, turns: null, sessionId: null, transcriptFound: false, agentError: `setup failed (exit ${setup.status})`, hippo: null, leak: false, invalid: 'setup' });
+    writeRecord(ctx, skippedRecord(base, { agentError: `setup failed (exit ${setup.status})`, leak: false, invalid: 'setup', carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null, ...meta }));
     return;
   }
   const hippoRoot = path.join(work, '.hippo');
   // Setup's own writes are part of the baseline, so they are never counted as the agent's and never carried.
   const baseline = instructionSnapshot(work);
-  if (position === 0 && HIPPO_ARMS.has(arm)) hippoInit(run, ctx.fakeHome);
-  const carry = CARRY_ARMS.has(arm) && position > 0 ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
+  // Init waits for the first step whose setup passed, so a skipped first task cannot leave A2/A5 without hippo.
+  if (HIPPO_ARMS.has(arm) && !run.initDone) {
+    hippoInit(run, ctx.fakeHome);
+    run.initDone = true;
+  }
+  const carry = CARRY_ARMS.has(arm) ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
+  const homesAtStart = run.sessionRan ? null : homeFiles(dirs);
+  if (HIPPO_ARMS.has(arm) && storeLeaks(hippoRoot, goldLines(run.cached, t))) {
+    // The leak is known before the session, so a session the analysis voids is never run and costs no plan usage.
+    run.changes = instructionDelta(baseline, instructionSnapshot(work));
+    writeRecord(ctx, skippedRecord(base, { agentError: null, leak: true, invalid: 'leak', ...carry, homesAtStart, ...meta }));
+    return;
+  }
   const preSession = instructionSnapshot(work);
-  const leak = HIPPO_ARMS.has(arm) ? storeLeaks(hippoRoot, goldLines(run.cached, t)) : false;
-  const homesAtStart = position === 0 ? homeFiles(dirs) : null;
-  const { cc, result, limitRetries } = runSession(ctx, run, t, () => {
-    prepare();
+  const session = runSession(ctx, run, t, () => {
+    // SHORTCUT: restores instruction files only; store and auto memory wait for the E3 surface restore, so the analyzer voids limitRetries > 0 in A1/A2/A5
+    const again = prepare().setup;
+    if (again && again.status !== 0) throw new Error(`${s.id} ${t.id} ${arm} seed${seed}: setup failed on the usage-limit rerun (exit ${again.status})`);
     restoreInstructions(work, preSession);
   });
+  run.sessionRan = true;
+  const graded = gradeSession(ctx, run, t, baseline, session);
+  writeRecord(ctx, { ...base, ...graded, ...carry, homesAtStart, ...meta });
+}
+
+/** After a session: let hippo's capture settle, take the carry delta, run the hidden tests and read the result into record fields. */
+function gradeSession(ctx, run, t, baseline, { cc, result, limitRetries }) {
+  const { arm, dirs, env, rawDir } = run;
+  const work = dirs.work;
   fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
   // SessionEnd runs capture and sleep in a background worker; let it finish.
   if (HIPPO_ARMS.has(arm)) sleep(ctx.settleMs);
   if (CARRY_ARMS.has(arm)) run.changes = instructionDelta(baseline, instructionSnapshot(work));
-
   writeHiddenTests(run.cached, work, t);
   const test = sh(t.test, work, childEnv(env));
   fs.writeFileSync(path.join(rawDir, `${t.id}.test.txt`), `${test.stdout}\n${test.stderr}`.slice(-20000));
   const sessionId = result?.session_id ?? null;
   const transcript = findTranscript(path.join(dirs.claudeConfig, 'projects'), sessionId);
-  writeRecord(ctx, {
-    ...base, baseCommit: commit,
+  return {
     resolved: result !== null && test.status === 0,
     usage: result ? usageFromResult(result) : null, costUsd: result?.total_cost_usd ?? null, turns: result?.num_turns ?? null,
     ...transcriptWork(transcript, run.seenErrors),
     sessionId, transcriptFound: transcript !== null,
     agentError: result === null ? `claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}` : (result.is_error ? result.subtype ?? 'error' : null),
-    hippo: HIPPO_ARMS.has(arm) ? hippoSentFor(hippoRoot, sessionId) : null,
-    leak, invalid: result === null ? 'no-result' : (leak ? 'leak' : null),
-    limitRetries, ...carry, homesAtStart, envKeys: Object.keys(env).sort(), passEnv: ctx.passEnv,
-  });
+    hippo: HIPPO_ARMS.has(arm) ? hippoSentFor(path.join(work, '.hippo'), sessionId) : null,
+    leak: false, invalid: result === null ? 'no-result' : null, limitRetries,
+  };
 }
 
 /** The expected cells, written before any session so the analysis can tell a run cut off in lockstep. */
@@ -350,7 +289,10 @@ async function main() {
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')));
   const arms = flag('--arms', ARMS.join(',')).split(',').map((a) => a.trim());
   for (const a of arms) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
-  const seeds = flag('--seeds', null) === null ? null : Number(flag('--seeds', null));
+  if (new Set(arms).size !== arms.length) throw new Error(`--arms names an arm twice (${arms.join(',')}); each arm runs once`);
+  const seedsArg = flag('--seeds', null);
+  if (seedsArg !== null && !/^[1-9]\d*$/.test(seedsArg)) throw new Error(`--seeds must be a positive integer, got ${seedsArg}`);
+  const seeds = seedsArg === null ? null : Number(seedsArg);
   const passEnv = argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : []));
   const steps = planRuns(spec, arms, seeds ? () => seeds : (arm) => ARM_SEEDS[arm]);
   const out = path.resolve(outDir);
@@ -386,7 +328,8 @@ async function main() {
     fs.writeFileSync(path.join(out, 'ABANDONED'), `${err.message}\nlast completed: ${progress.last}\n`);
     throw err;
   }
-  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze: node scripts/token-eval/ab-analyze.mjs --runs ${path.join(out, 'runs.jsonl')} --control A0 --prices prices.json`);
+  // ab-analyze averages unequal seed counts unpaired, so Z0 records go to the Z0 analyzer, which pairs shared seeds.
+  console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds), never ab-analyze.mjs.`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

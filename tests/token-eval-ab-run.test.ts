@@ -5,7 +5,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { runAll, planRuns, validateTasks, usageFromResult, isUsageLimit, prependPath, transcriptWork } from '../scripts/token-eval/ab-run.mjs';
+import { runAll, planRuns, validateTasks, prependPath } from '../scripts/token-eval/ab-run.mjs';
+import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-eval/records.mjs';
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
 import { parseRuns, analyze } from '../scripts/token-eval/ab-analyze.mjs';
@@ -14,7 +15,7 @@ import { loadAllEntries } from '../src/store.js';
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 const dirs: string[] = [];
-const envKeys = ['HOME', 'USERPROFILE', 'APPDATA', 'PATH', 'Path', 'CLAUDE_CODE_OAUTH_TOKEN', 'FAKE_CLAUDE_LIMIT_ONCE'];
+const envKeys = ['HOME', 'USERPROFILE', 'APPDATA', 'PATH', 'Path', 'CLAUDE_CODE_OAUTH_TOKEN', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS'];
 const savedEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 afterEach(() => {
@@ -44,7 +45,8 @@ function isolate(): string {
 
 interface FixtureRepo { repo: string; base: string; fix: string }
 
-function makeRepo(): FixtureRepo {
+/** A repo whose fix flips add()'s operator and adds its test; `note` adds a comment line to the fix, a gold line for the leak check. */
+function makeRepo(note = ''): FixtureRepo {
   const repo = tmp('ab-run-repo-');
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
   git('init', '-q');
@@ -55,7 +57,7 @@ function makeRepo(): FixtureRepo {
   git('add', '.');
   git('commit', '-qm', 'base');
   const base = git('rev-parse', 'HEAD');
-  writeFileSync(join(repo, 'lib.js'), 'module.exports.add = (a, b) => a + b;\n');
+  writeFileSync(join(repo, 'lib.js'), `${note ? `${note}\n` : ''}module.exports.add = (a, b) => a + b;\n`);
   writeFileSync(join(repo, 'test.js'), "const { add } = require('./lib.js');\nif (add(2, 3) !== 5) { console.error('add is wrong'); process.exit(1); }\n");
   git('add', '.');
   git('commit', '-qm', 'fix add and test it');
@@ -90,6 +92,8 @@ function makeCarryRepo(): FixtureRepo & { base2: string } {
 
 const task = (r: FixtureRepo, id: string, prompt: string, extra: Record<string, string> = {}) => ({ id, baseRef: r.base, fixRef: r.fix, prompt, testFiles: ['test.js'], test: 'node test.js', ...extra });
 const readRecords = (out: string) => readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+/** Every record whose session never gave a result carries these, null rather than absent. */
+const NO_SESSION = { resolved: false, usage: null, costUsd: null, turns: null, toolCalls: null, fileReads: null, shellReads: null, repeatedErrors: null, sessionId: null, transcriptFound: false, hippo: null, limitRetries: 0 };
 const rawResult = (out: string, seq: string, arm: string, id: string) => JSON.parse(readFileSync(join(out, 'raw', seq, arm, 'seed1', `${id}.json`), 'utf8'));
 
 /** A dir on the parent PATH with a working `hippo` that leaves a marker when run. */
@@ -305,9 +309,69 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const spec = validateTasks({ sequences: [{ id: 'seqE', cluster: 'repoE', repo: r.repo, tasks: [task(r, 'e1', 'look around only'), task(r, 'e2', 'FIX add in lib.js', { setup: 'exit 1' })] }] });
     await run(spec, ['A1'], out);
     const e2 = readRecords(out).find((x) => x.taskId === 'e2');
-    expect(e2).toMatchObject({ invalid: 'setup', resolved: false });
+    expect(e2).toMatchObject({ ...NO_SESSION, invalid: 'setup', leak: false, carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null });
     expect(existsSync(join(out, 'raw', 'seqE', 'A1', 'seed1', 'e2.json'))).toBe(false);
     expect(existsSync(join(out, 'raw', 'seqE', 'A1', 'seed1', 'e2.setup.txt'))).toBe(true);
+  }, 60_000);
+
+  it('a crash with no result is recorded with every session metric null, never left out', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-crash-');
+    await run(validateTasks({ sequences: [{ id: 'seqR', cluster: 'c', repo: r.repo, tasks: [task(r, 'r1', 'look around only'), task(r, 'r2', 'CRASH')] }] }), ['A0'], out);
+    const r2 = readRecords(out).find((x) => x.taskId === 'r2');
+    expect(r2).toMatchObject({ ...NO_SESSION, invalid: 'no-result', leak: false, carryMerges: 0 });
+    expect(r2.agentError).toMatch(/claude exited 3/);
+  }, 60_000);
+
+  it('a gold line already in the store skips the session and writes a void leak record', async () => {
+    isolate();
+    const gold = '// add must return the sum of both of its arguments';
+    const r = makeRepo(gold);
+    const out = tmp('ab-run-leak-');
+    const spec = validateTasks({ sequences: [{ id: 'seqK', cluster: 'c', repo: r.repo, tasks: [task(r, 'k1', `look around PLANT:${gold}`), task(r, 'k2', 'FIX add in lib.js')] }] });
+    await run(spec, ['A2'], out);
+    expect(loadAllEntries(join(out, 'runs', 'seqK', 'A2', 'seed1', 'work', '.hippo')).some((e: { content: string }) => e.content.includes(gold))).toBe(true);
+    const [k1, k2] = readRecords(out);
+    expect(k1).toMatchObject({ taskId: 'k1', invalid: null, leak: false });
+    expect(k2).toMatchObject({ ...NO_SESSION, taskId: 'k2', invalid: 'leak', leak: true, agentError: null, carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0, homesAtStart: null });
+    for (const f of ['k2.json', 'k2.test.txt']) expect(existsSync(join(out, 'raw', 'seqK', 'A2', 'seed1', f)), f).toBe(false);
+  }, 60_000);
+
+  it('A2 is initialised at the first task that runs when the first task\'s setup fails', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-late-init-');
+    await run(validateTasks({ sequences: [{ id: 'seqN', cluster: 'c', repo: r.repo, tasks: [task(r, 'n1', 'look around only', { setup: 'exit 1' }), task(r, 'n2', 'look around only')] }] }), ['A2'], out);
+    const [n1, n2] = readRecords(out);
+    expect(n1).toMatchObject({ invalid: 'setup' });
+    expect(n2).toMatchObject({ invalid: null, transcriptFound: true });
+    expect(n2.homesAtStart).not.toBeNull();
+    expect(existsSync(join(out, 'runs', 'seqN', 'A2', 'seed1', 'work', '.hippo'))).toBe(true);
+    expect(rawResult(out, 'seqN', 'A2', 'n2').files['CLAUDE.md']).toContain('hippo:start');
+  }, 60_000);
+
+  it('a plan limit that outlasts every wait rejects the run and grades nothing for that cell', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-limit-out-');
+    process.env.FAKE_CLAUDE_LIMIT_ALWAYS = '1';
+    const spec = validateTasks({ sequences: [{ id: 'seqX', cluster: 'c', repo: r.repo, tasks: [task(r, 'x1', 'LIMIT FIX add in lib.js'), task(r, 'x2', 'look around only')] }] });
+    await expect(run(spec, ['A0'], out, { limitWaitMs: 0, limitMaxWaits: 0 })).rejects.toThrow(/seqX x1 A0 seed1: still at the plan limit after 0 waits/);
+    expect(existsSync(join(out, 'runs.jsonl'))).toBe(false);
+    expect(existsSync(join(out, 'raw', 'seqX', 'A0', 'seed1', 'x1.test.txt'))).toBe(false);
+  }, 60_000);
+
+  it('a setup that fails on the usage-limit rerun rejects the run instead of running on a half-prepared checkout', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-limit-setup-');
+    const once = join(out, 'setup-ran');
+    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    const setup = `node -e "const f=require('fs');if(f.existsSync(process.argv[1]))process.exit(1);f.writeFileSync(process.argv[1],'')" "${once}"`;
+    const spec = validateTasks({ sequences: [{ id: 'seqS', cluster: 'c', repo: r.repo, tasks: [task(r, 's1', 'LIMIT FIX add in lib.js', { setup }), task(r, 's2', 'look around only')] }] });
+    await expect(run(spec, ['A0'], out, { limitWaitMs: 0 })).rejects.toThrow(/setup failed on the usage-limit rerun/);
+    expect(existsSync(join(out, 'runs.jsonl'))).toBe(false);
   }, 60_000);
 
   it('a usage limit waits, resets the checkout and reruns the same session instead of recording a failure', async () => {
@@ -393,5 +457,24 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const noToken = spawnSync(process.execPath, [join(scriptsDir, 'ab-run.mjs'), '--tasks', tasksFile, '--out', join(scratch, 'out')], { encoding: 'utf8', env });
     expect(noToken.stderr).toContain('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
     expect(existsSync(join(scratch, 'out', 'runs'))).toBe(false);
+  });
+
+  it('refuses --seeds that is not a positive integer and --arms that names an arm twice', () => {
+    const scratch = tmp('ab-run-flags-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] }));
+    const cli = (...extra: string[]) => spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', join(scratch, 'out'), '--dry-run', ...extra], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: scratch } });
+    for (const bad of ['0', 'abc', '1.5', '-2']) {
+      const res = cli('--seeds', bad);
+      expect(res.status, bad).not.toBe(0);
+      expect(res.stderr, bad).toContain(`--seeds must be a positive integer, got ${bad}`);
+    }
+    const twice = cli('--arms', 'A0,A1,A0');
+    expect(twice.status).not.toBe(0);
+    expect(twice.stderr).toContain('--arms names an arm twice');
+    const ok = cli('--seeds', '2', '--arms', 'A0,A1');
+    expect(ok.status, ok.stderr).toBe(0);
+    expect(ok.stdout).toContain('seeds A0:2 A1:2');
   });
 });

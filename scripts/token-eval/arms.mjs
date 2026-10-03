@@ -16,6 +16,8 @@ const STRIP_EXACT = new Set(['CLAUDECODE', ...STRIP_ENV].map((k) => k.toUpperCas
 const LAUNCHERS = ['hippo', 'hippo.cmd', 'hippo.ps1', 'hippo.exe', 'hippo.bat'];
 const REQUIRED_TOOLS = ['node', 'npm', 'npx', 'git'];
 const SHAM_COMMANDS = ['remember', 'capture', 'learn', 'outcome'];
+// The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
+const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
 
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
@@ -42,6 +44,8 @@ function getKey(env, name) {
 /** A session's environment: the parent's minus every provider, Claude, Codex and hippo key, plus the run's own homes and PATH. */
 export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
   if (!ARMS.includes(arm)) throw new Error(`unknown arm ${arm}; known: ${ARMS.join(', ')}`);
+  const reserved = passEnv.find((name) => RUNNER_KEYS.includes(name.toUpperCase()));
+  if (reserved !== undefined) throw new Error(`--pass-env ${reserved}: the runner sets ${reserved.toUpperCase()} itself per arm, so it cannot be passed through`);
   const env = Object.fromEntries(Object.entries(baseEnv).filter(([k]) => !stripped(k)));
   const token = getKey(baseEnv, TOKEN_KEY);
   if (token !== undefined) env[TOKEN_KEY] = token;
@@ -84,7 +88,8 @@ export function writeHippoShim(binDir, fakeHome, mode) {
   const shCase = mode === 'sham' ? `case "$1" in ${SHAM_COMMANDS.join('|')}) exit 0;; esac\n` : '';
   const cmdIfs = mode === 'sham' ? SHAM_COMMANDS.map((c) => `@if /i "%~1"=="${c}" exit /b 0\r\n`).join('') : '';
   fs.writeFileSync(path.join(binDir, 'hippo'), `#!/bin/sh\n${shCase}export HOME="${fakeHome}" USERPROFILE="${fakeHome}"\nexec "${process.execPath}" "${HIPPO_JS}" "$@"\n`, { mode: 0o755 });
-  fs.writeFileSync(path.join(binDir, 'hippo.cmd'), `${cmdIfs}@set "HOME=${fakeHome}"\r\n@set "USERPROFILE=${fakeHome}"\r\n@"${process.execPath}" "${HIPPO_JS}" %*\r\n`);
+  // @setlocal: a caller that runs hippo inside a longer cmd line keeps its own HOME afterwards.
+  fs.writeFileSync(path.join(binDir, 'hippo.cmd'), `@setlocal\r\n${cmdIfs}@set "HOME=${fakeHome}"\r\n@set "USERPROFILE=${fakeHome}"\r\n@"${process.execPath}" "${HIPPO_JS}" %*\r\n`);
 }
 
 function normaliseEntry(entry, env, cwd, platform) {

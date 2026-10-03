@@ -40,6 +40,10 @@ export function isInstructionPath(rel) {
   return NAMES.has(parts[parts.length - 1]);
 }
 
+const isLink = (file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
+// A symlink reads as its target path, as git stores it, so an edit made through it shows up on the target file alone.
+const readEntry = (file) => (isLink(file) ? Buffer.from(fs.readlinkSync(file)) : fs.readFileSync(file));
+
 /** Every instruction file on disk as `{path: bytes}`, forward-slash paths; read from disk so git filters never enter. */
 export function instructionSnapshot(workDir) {
   const snap = new Map();
@@ -48,7 +52,7 @@ export function instructionSnapshot(workDir) {
       const child = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) walk(child);
-      } else if (e.isFile() && isInstructionPath(child)) snap.set(child, fs.readFileSync(path.join(workDir, child)));
+      } else if ((e.isFile() || e.isSymbolicLink()) && isInstructionPath(child)) snap.set(child, readEntry(path.join(workDir, child)));
     }
   };
   walk('');
@@ -81,6 +85,9 @@ export function checkoutBase(cacheDir, workDir, sequenceId, t) {
   git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
   // -x also removes gitignored leftovers such as agent notes, so A0 is a true floor.
   git(['clean', '-fdqx', '-e', '.hippo', '-e', 'node_modules'], workDir);
+  // Sequence order comes from the seed, so an earlier base can hold a later task's fix: drop every commit the base cannot reach.
+  git(['reflog', 'expire', '--expire=now', '--expire-unreachable=now', '--all'], workDir);
+  git(['gc', '--quiet', '--prune=now'], workDir);
   assertInstructionSet(workDir, stub);
   return stub;
 }
@@ -101,6 +108,8 @@ const same = (a, b) => (a === null || b === null ? a === b : a.equals(b));
 function writeFile(workDir, rel, bytes) {
   const file = path.join(workDir, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Never write through a symlink into the file it points at.
+  if (isLink(file)) fs.rmSync(file);
   fs.writeFileSync(file, bytes);
 }
 
@@ -148,8 +157,10 @@ export function applyInstructions(workDir, changes, baseline, tmpRoot) {
 
 /** Put the instruction files back exactly as a snapshot holds them, deleting any it lacks. */
 export function restoreInstructions(workDir, snap) {
-  for (const rel of instructionSnapshot(workDir).keys()) if (!snap.has(rel)) fs.rmSync(path.join(workDir, rel));
-  for (const [rel, bytes] of snap) writeFile(workDir, rel, bytes);
+  const now = instructionSnapshot(workDir);
+  for (const rel of now.keys()) if (!snap.has(rel)) fs.rmSync(path.join(workDir, rel));
+  // Entries that already match are left alone, so a checked-out symlink stays a symlink.
+  for (const [rel, bytes] of snap) if (!same(now.get(rel) ?? null, bytes)) writeFile(workDir, rel, bytes);
 }
 
 /** Write the task's hidden test files from fixRef, read from the cache clone. */
@@ -159,10 +170,7 @@ export function writeHiddenTests(cacheDir, workDir, t) {
 
 /** Added lines of a task's gold diff that are long enough to be a leak signal. */
 export function goldLines(cacheDir, t) {
-  try {
-    return git(['diff', t.baseRef, t.fixRef], cacheDir).split('\n')
-      .filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter((l) => l.length >= 40);
-  } catch {
-    return [];
-  }
+  // A git error throws: an empty list would silently turn the leak check off for the task.
+  return git(['diff', t.baseRef, t.fixRef], cacheDir).split('\n')
+    .filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter((l) => l.length >= 40);
 }

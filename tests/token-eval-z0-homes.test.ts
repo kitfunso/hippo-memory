@@ -1,13 +1,13 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter } from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, ARMS } from '../scripts/token-eval/arms.mjs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS } from '../scripts/token-eval/exec.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
-import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions } from '../scripts/token-eval/workspace.mjs';
+import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, checkoutBase, goldLines } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
 const savedEnv = { ...process.env };
@@ -22,6 +22,52 @@ const tmp = (prefix: string): string => {
   return d;
 };
 const win = process.platform === 'win32';
+const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whether this machine lets an unprivileged process create a file symlink (Windows needs developer mode). */
+function canSymlink(): boolean {
+  const d = mkdtempSync(join(tmpdir(), 'z0-link-probe-'));
+  try {
+    symlinkSync('target', join(d, 'link'));
+    return true;
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'EPERM') return false;
+    throw err;
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+}
+
+interface GitRepo {
+  repo: string;
+  base: string;
+  fix: string;
+  g: (...args: string[]) => string;
+}
+
+/** A git repo with `files` committed as `base`, then `fix` changing lib.js. */
+function gitRepo(files: Record<string, string>): GitRepo {
+  const repo = tmp('z0-repo-');
+  const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  g('init', '-q');
+  for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 'T'], ['commit.gpgsign', 'false'], ['core.symlinks', 'true']]) g('config', k, v);
+  for (const [p, text] of Object.entries(files)) writeFileSync(join(repo, p), text);
+  writeFileSync(join(repo, 'lib.js'), 'a - b\n');
+  g('add', '.');
+  g('commit', '-qm', 'base');
+  const base = g('rev-parse', 'HEAD');
+  writeFileSync(join(repo, 'lib.js'), 'a + b, the fix that a later task must never see in an earlier workspace\n');
+  g('commit', '-qam', 'fix');
+  return { repo, base, fix: g('rev-parse', 'HEAD'), g };
+}
+
+/** An empty work repo set up the way the runner sets one up. */
+function workRepo(): string {
+  const work = tmp('z0-work-');
+  execFileSync('git', ['init', '-q'], { cwd: work });
+  for (const [k, v] of [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.symlinks', 'true']]) execFileSync('git', ['config', k, v], { cwd: work });
+  return work;
+}
 
 /** A dir holding empty stand-ins for the named tools, in both bare and .cmd form. */
 function toolDir(names: string[]): string {
@@ -82,6 +128,13 @@ describe('armEnv and childEnv', () => {
     expect(env.ANTHROPIC_BASE_URL).toBe('http://proxy.local');
     expect(env).not.toHaveProperty('anthropic_api_key');
     expect(env).not.toHaveProperty('CLAUDE_CODE_USE_BEDROCK');
+  });
+
+  it('--pass-env refuses, in any case, every key the runner sets itself, naming it', () => {
+    const { run, base } = setup();
+    const own = ['CLAUDE_CONFIG_DIR', 'codex_home', 'HIPPO_HOME', 'Claude_Code_Disable_Auto_Memory', 'HIPPO_AGENT_MEMORY_TOOLS', 'disable_autoupdater', 'EVAL_SEED', 'CLAUDE_CODE_OAUTH_TOKEN', 'PATH', 'Path'];
+    for (const name of own) expect(() => armEnv('A1', run, base, { passEnv: ['ANTHROPIC_BASE_URL', name] }), name).toThrow(new RegExp(`--pass-env ${name}:`));
+    expect(() => armEnv('A1', run, { ...base, CLAUDE_CODE_GIT_BASH_PATH: 'C:/bash.exe' }, { passEnv: ['CLAUDE_CODE_GIT_BASH_PATH'] })).not.toThrow();
   });
 
   it('puts bin/ first for A2/A5 only, drops the hippo dir for all, and childEnv drops bin/', () => {
@@ -243,6 +296,53 @@ describe('applyInstructions', () => {
   });
 });
 
+describe('workspace checkout', () => {
+  it('leaves an earlier task base unreachable once a later task checks out an older base', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix });
+    checkoutBase(repo, work, 'seqP', { id: 'p2', baseRef: base });
+    expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
+    const history = execFileSync('git', ['log', '--all', '--reflog', '--format=%H %P'], { cwd: work, encoding: 'utf8' });
+    expect(history).toContain(base);
+    expect(history).not.toContain(fix);
+    expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it.skipIf(!canSymlink())('checks out a tracked instruction symlink without aborting, and a restore keeps it a symlink', () => {
+    const { repo, g } = gitRepo({ 'CLAUDE.md': 'native\n' });
+    symlinkSync('CLAUDE.md', join(repo, 'AGENTS.md'));
+    g('add', 'AGENTS.md');
+    g('commit', '-qm', 'link');
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqY', { id: 'y1', baseRef: g('rev-parse', 'HEAD') });
+    expect(lstatSync(join(work, 'AGENTS.md')).isSymbolicLink()).toBe(true);
+    const snap = instructionSnapshot(work);
+    expect(snap.get('AGENTS.md')?.toString()).toBe('CLAUDE.md');
+    writeFileSync(join(work, 'CLAUDE.md'), 'agent edit\n');
+    restoreInstructions(work, snap);
+    expect(lstatSync(join(work, 'AGENTS.md')).isSymbolicLink()).toBe(true);
+    expect(readFileSync(join(work, 'CLAUDE.md'), 'utf8')).toBe(STUB_CLAUDE_MD);
+  });
+
+  it('goldLines surfaces a git error instead of turning the leak check off', () => {
+    const { repo, base, fix } = gitRepo({});
+    expect(goldLines(repo, { baseRef: base, fixRef: fix })).toEqual(['a + b, the fix that a later task must never see in an earlier workspace']);
+    expect(() => goldLines(repo, { baseRef: base, fixRef: 'no-such-ref' })).toThrow(/no-such-ref/);
+  });
+});
+
+describe('hippo shim', () => {
+  it.skipIf(!win)('hippo.cmd keeps its fake HOME to itself when called inside a longer cmd script', () => {
+    const d = tmp('z0-shim-');
+    writeHippoShim(join(d, 'bin'), join(d, 'fake-home'), 'real');
+    const probe = join(d, 'probe.cmd');
+    writeFileSync(probe, `@call "${join(d, 'bin', 'hippo.cmd')}" --version >nul\r\n@echo HOME=%HOME%\r\n`);
+    const r = spawnSync('cmd.exe', ['/d', '/c', probe], { env: { ...process.env, HOME: 'operator-home' }, encoding: 'utf8' });
+    expect(r.stdout.trim()).toBe('HOME=operator-home');
+  });
+});
+
 describe('per-run homes', () => {
   it('creates empty homes and throws when one is missing or not empty', () => {
     const run = runDirs(tmp('z0-homes-'), 'seqA', 'A1', 1);
@@ -338,6 +438,18 @@ describe('homes check (built CLI, no claude session)', () => {
     for (const args of [['init', '--no-schedule'], ['import', '--agents']]) execFileSync(process.execPath, [HIPPO_JS, ...args], { cwd: run.work, env, stdio: 'pipe' });
     expect(existsSync(join(run.work, '.hippo'))).toBe(true);
     expect(textUnder(run.root)).not.toContain('Z0-CANARY');
+  }, 60_000);
+
+  it('refuses a run dir that already holds data, naming it, and leaves the data in place', () => {
+    operatorWithCanaries();
+    const out = tmp('z0-check-');
+    const occupied = runDirs(out, 'seqH', 'A1', 1);
+    const evidence = join(occupied.work, 'transcript.jsonl');
+    mkdirSync(occupied.work, { recursive: true });
+    writeFileSync(evidence, 'earlier run\n');
+    expect(() => checkHomes({ outDir: out, runs, passEnv: [] })).toThrow(new RegExp(`${esc(occupied.root)} already holds run data`));
+    expect(readFileSync(evidence, 'utf8')).toBe('earlier run\n');
+    expect(existsSync(join(out, 'runs', 'seqH', 'A0'))).toBe(false);
   }, 60_000);
 
   it('fails naming the run when a login profile puts the decoy hippo back on PATH', () => {

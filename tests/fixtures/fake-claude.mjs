@@ -16,10 +16,17 @@ const prompt = fs.readFileSync(0, 'utf8');
 const SEEN_FILES = ['CLAUDE.md', 'AGENTS.md', 'CLAUDE.local.md', 'docs/AGENTS.md', 'sub/CLAUDE.md', '.claude/rules/r.md', '.claude/agents/x.md', '.scratch/note.md'];
 const files = Object.fromEntries(SEEN_FILES.filter((f) => fs.existsSync(f)).map((f) => [f, fs.readFileSync(f, 'utf8')]));
 
+if (prompt.includes('CRASH')) {
+  console.error('fake crash before any result');
+  process.exit(3);
+}
+
 // FAKE_CLAUDE_LIMIT_ONCE=<marker file>: the first LIMIT prompt leaves stray edits and hits the plan limit.
+// FAKE_CLAUDE_LIMIT_ALWAYS=1: every LIMIT prompt hits it.
 const limitMarker = process.env.FAKE_CLAUDE_LIMIT_ONCE;
-if (limitMarker && prompt.includes('LIMIT') && !fs.existsSync(limitMarker)) {
-  fs.writeFileSync(limitMarker, '');
+const limitAlways = Boolean(process.env.FAKE_CLAUDE_LIMIT_ALWAYS);
+if (prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs.existsSync(limitMarker)))) {
+  if (limitMarker) fs.writeFileSync(limitMarker, '');
   fs.writeFileSync('stray.txt', 'half-done edit\n');
   if (fs.existsSync('AGENTS.md')) fs.appendFileSync('AGENTS.md', 'limited edit\n');
   console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1790000000' }));
@@ -48,6 +55,9 @@ if (prompt.includes('FIX')) {
     execSync('hippo remember "add() in lib.js had its operator flipped; check operators first"', { stdio: ['ignore', 'ignore', 'inherit'] });
   }
 }
+// PLANT:<text> saves <text> to the store verbatim, so a test can put a later task's gold line there.
+const plant = /PLANT:([^\n"]+)/.exec(prompt);
+if (plant && fs.existsSync('.hippo')) execSync(`hippo remember "${plant[1].trim()}"`, { stdio: ['ignore', 'ignore', 'inherit'] });
 
 const write = (f, text) => {
   fs.mkdirSync(path.dirname(f), { recursive: true });

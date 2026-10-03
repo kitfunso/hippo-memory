@@ -134,6 +134,9 @@ function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell }) 
 /** The homes check for every planned run (`--check-homes`, and the first step of a real run). */
 export function checkHomes({ outDir, runs, passEnv = [], baseEnv = process.env }) {
   if (!fs.existsSync(path.join(REPO, 'dist', 'cli.js'))) throw new Error('run `npm run build` first: the homes check runs the built hippo CLI');
+  // The check recreates and removes each run dir, so it refuses any that already holds data rather than delete it.
+  const occupied = runs.map((r) => runDirs(outDir, r.seq, r.arm, r.seed).root).filter((d) => fs.existsSync(d) && fs.readdirSync(d).length > 0);
+  if (occupied.length > 0) throw new Error(`${occupied[0]} already holds run data${occupied.length > 1 ? ` (and ${occupied.length - 1} more run dirs)` : ''}; the homes check never deletes it. Pick a new --out, or move that run away first.`);
   fs.mkdirSync(outDir, { recursive: true });
   const shell = gitBash(baseEnv, passEnv);
   for (const run of runs) checkRunHomes({ outDir, ...run }, { baseEnv, passEnv, shell });
