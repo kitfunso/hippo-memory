@@ -179,6 +179,7 @@ function firstSession() {
   const state = lessonState();
   if (state) fs.writeFileSync('lesson.txt', `${state}\n`);
   for (const m of prompt.matchAll(/NEW_FILE (\S+)/g)) write(m[1], 'new file from the agent\n');
+  if (prompt.includes('BINFILE')) fs.writeFileSync('blob.bin', Buffer.from([0, 1, 2, 255]));
   const staged = /STAGE_EDIT (\S+)/.exec(prompt);
   if (staged) {
     write(staged[1], 'v1\n');

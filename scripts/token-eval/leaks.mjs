@@ -53,7 +53,7 @@ function workspaceFiles(work, pre, phrase) {
 }
 
 /** Each surface entry's bytes as `{key, e, bytes}`, skipping entries the snapshot could not read and files gone since. */
-function* surfaceBytes(root, surfaces, keys) {
+export function* surfaceBytes(root, surfaces, keys) {
   for (const key of keys) {
     for (const e of surfaces[key] ?? []) {
       const bytes = e.error ? null : readOrNull(path.join(root, e.path));

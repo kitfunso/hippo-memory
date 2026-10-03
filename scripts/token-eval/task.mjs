@@ -12,7 +12,8 @@ import {
 import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { findLeaks, storedAt, shownAtStart, capturedBy, holds } from './leaks.mjs';
 import { runSession, resumeSession } from './turns.mjs';
-import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
+import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError, FIRST_REF } from './checks.mjs';
+import { saveGrading, surfaceText } from './grading.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
 import { deliveryHits, sessionVoid } from './readcheck.mjs';
@@ -116,16 +117,17 @@ function resetTask(ctx, run, t, stage) {
 
 /** Run every lesson check through one door, so a broken checker is kept once and never read as a verdict. */
 function checker(ctx, run, t, stage, sessionIds) {
-  const state = { error: null };
+  const state = { error: null, calls: [] };
   state.check = (lesson) => {
     const work = run.dirs.work;
     const postCommit = stage.fault ? null : guarded(run, t, stage, () => stateCommit(work, stage.pre));
     if (!postCommit) return null;
+    if (!state.calls.length) guarded(run, t, stage, () => holdPre(work, postCommit, FIRST_REF));
+    if (stage.fault) return null;
+    const commands = commandLog(transcriptsOf(run, sessionIds));
+    state.calls.push({ lessonId: lesson.id, post: postCommit, commands });
     try {
-      return runCheck(lesson, {
-        work, env: childEnv(run.env), preCommit: stage.pre, postCommit,
-        commands: commandLog(transcriptsOf(run, sessionIds)), scratch: path.join(run.dirs.root, 'scratch'),
-      });
+      return runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, scratch: path.join(run.dirs.root, 'scratch') });
     } catch (err) {
       if (!(err instanceof CheckerError)) throw err;
       writeLog(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
@@ -147,8 +149,13 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const staleFollow = old ? c.check(old) === 'pass' : null;
   const teach = role.kind === 'teach';
   const form = teach ? (first === 'fail' ? 'correction' : 'confirmation') : 'correction';
+  // What the grading save keeps (166): the first check's post commit and the commands each verdict saw.
+  const saved = () => {
+    const own = c.calls.filter((x) => x.lessonId === lesson.id);
+    return { staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null };
+  };
   // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session never (reading 4).
-  const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null };
+  const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null, ...saved() };
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
   if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
   // The resume would load a file session 1 left above work/, so the cell is void already and the resume never spends plan usage.
@@ -176,7 +183,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const grew = Boolean(fresh) || (main !== null && fs.statSync(main).size > resume.bytesBefore);
   // Decision 7: a timed-out teach resume delivered the lesson once its transcript grew past the teach message.
   const delivered = Boolean(resume.result) || (timedOut && grew);
-  return { lesson, first, final, staleFollow, checkerError: c.error, resume, delivered, form: teach ? form : null };
+  return { lesson, first, final, staleFollow, checkerError: c.error, resume, delivered, form: teach ? form : null, ...saved() };
 }
 
 const sum = (a, b) => (a === null || a === undefined ? null : a + (b ?? 0));
@@ -289,6 +296,8 @@ async function runTurns(ctx, run, step, stage, base) {
   // A timed-out session is still checked and resumed (prereg 109, 165).
   const turns = sessionIds.length ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
   const wallMs = Date.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0);
+  // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
+  if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');
   snapshotSurfaces(ctx, run, 'end', step);
   if (HIPPO_ARMS.has(run.arm)) stage.injected = hippoEnd(ctx, run, step, stage, sessionIds);
@@ -302,7 +311,15 @@ async function runTurns(ctx, run, step, stage, base) {
   // Dropped here, not in runTask's finally, so a .git the agent broke voids this cell instead of throwing.
   stage.dropped = true;
   guarded(run, t, stage, () => dropPre(work));
-  return sessionRecord(ctx, run, step, { base, session, turns, sessionIds, acceptancePassed: test.status === 0, wallMs, stage });
+  const parts = { base, session, turns, sessionIds, acceptancePassed: test.status === 0, wallMs, stage };
+  const record = sessionRecord(ctx, run, step, parts);
+  if (record.invalid || step.role.kind === 'screen') return record;
+  // A cell whose trees cannot be saved cannot be regraded (166), so it turns invalid like any other workspace fault.
+  const saved = guarded(run, t, stage, () => {
+    saveGrading(ctx, run, step, stage, turns, record);
+    return true;
+  });
+  return saved ? record : sessionRecord(ctx, run, step, parts);
 }
 
 /** This sequence's lessons whose teach the run has not reached; none in a screen run, which teaches outside the drawn order. */
@@ -415,7 +432,10 @@ async function runTask(ctx, run, step) {
       writeRecord(ctx, invalidRecord(base, 'ancestor-instructions', { ...stage.carry, homesAtStart: stage.homesAtStart, ...meta }));
       return;
     }
-    if (step.role.kind === 'apply') stage.chainPre = chainAtStart(ctx, run, step, stage);
+    if (step.role.kind === 'apply') {
+      stage.chainPre = chainAtStart(ctx, run, step, stage);
+      stage.surfaceText = surfaceText({ root: run.dirs.root, surfaces: stage.snap.surfaces, stores: stage.stores });
+    }
     writeRecord(ctx, await runTurns(ctx, run, step, stage, base));
   } catch (err) {
     failing = true;

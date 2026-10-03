@@ -78,12 +78,17 @@ export function stateCommit(work, parent) {
   });
 }
 
-/** Hold the pre-session commit under PRE_REF so a gc during the task cannot prune it. */
-export function holdPre(work, sha) {
-  agentGit(work, (rgit) => rgit(['update-ref', '--no-deref', PRE_REF, sha], work));
+// The first check's post commit, held through the resume for the grading save (166); an agent gc there would prune it.
+export const FIRST_REF = 'refs/z0/hold/first';
+
+/** Hold a commit (the pre-session one unless `ref` says) so a gc during the task cannot prune it. */
+export function holdPre(work, sha, ref = PRE_REF) {
+  agentGit(work, (rgit) => rgit(['update-ref', '--no-deref', ref, sha], work));
 }
 
 export function dropPre(work) {
   // After the session, so a hook the agent wrote into .git/hooks must not run here.
-  agentGit(work, (rgit) => rgit(['update-ref', '-d', PRE_REF], work));
+  agentGit(work, (rgit) => {
+    for (const ref of [PRE_REF, FIRST_REF]) rgit(['update-ref', '-d', ref], work);
+  });
 }
