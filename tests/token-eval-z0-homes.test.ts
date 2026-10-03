@@ -283,7 +283,7 @@ describe('applyInstructions', () => {
 });
 
 describe('workspace checkout', () => {
-  it('leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs', () => {
+  it('leaves an earlier task base unreachable once a later task checks out an older base, even behind agent refs and worktrees', () => {
     const { repo, base, fix } = gitRepo({});
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
@@ -292,6 +292,12 @@ describe('workspace checkout', () => {
     wg('stash');
     wg('branch', 'agent-work');
     wg('tag', 'agent-tag');
+    wg('symbolic-ref', 'refs/heads/alias', 'refs/remotes/eval/base');
+    const wtRoot = tmp('z0-wt-');
+    wg('worktree', 'add', '-q', '--detach', join(wtRoot, 'wt'), 'HEAD');
+    wg('worktree', 'add', '-q', '--detach', join(wtRoot, 'gone'), 'HEAD');
+    wg('worktree', 'lock', join(wtRoot, 'gone'));
+    rmSync(join(wtRoot, 'gone'), { recursive: true, force: true });
     checkoutBase(repo, work, 'seqP', { id: 'p2', baseRef: base });
     expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
     const history = wg('log', '--all', '--reflog', '--format=%H %P');
@@ -299,17 +305,44 @@ describe('workspace checkout', () => {
     expect(history).not.toContain(fix);
     expect(wg('log', '--all', '--reflog', '-p')).not.toContain('the fix that a later task must never see');
     expect(wg('for-each-ref', '--format=%(refname)')).toBe('refs/remotes/eval/base');
+    expect(wg('worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree '))).toHaveLength(1);
+    expect(existsSync(join(wtRoot, 'wt'))).toBe(false);
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 
-  it('refuses a task whose repo tree holds an instruction file as a symlink, before touching the workspace', () => {
-    const { repo, g } = gitRepo({});
-    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: 'docs/policy.md', encoding: 'utf8' }).trim();
-    g('update-index', '--add', '--cacheinfo', `120000,${blob},CLAUDE.md`);
-    g('commit', '-qm', 'link');
+  /** gitRepo plus one commit adding `links` as 120000 entries; returns that commit. */
+  const withLinks = (r: GitRepo, links: Record<string, string>): string => {
+    for (const [rel, target] of Object.entries(links)) {
+      const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: target, encoding: 'utf8' }).trim();
+      r.g('update-index', '--add', '--cacheinfo', `120000,${blob},${rel}`);
+    }
+    r.g('commit', '-qm', 'link');
+    return r.g('rev-parse', 'HEAD');
+  };
+
+  it('refuses a task whose stub tree holds an instruction file as a symlink, before touching the workspace', () => {
+    const r = gitRepo({ 'CLAUDE.md': 'native\n' });
+    const head = withLinks(r, { 'AGENTS.md': 'CLAUDE.md' });
     const work = workRepo();
-    expect(() => checkoutBase(repo, work, 'seqY', { id: 'y1', baseRef: g('rev-parse', 'HEAD') })).toThrow('Z0 task seqY/y1: instruction file CLAUDE.md is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task');
+    expect(() => checkoutBase(r.repo, work, 'seqY', { id: 'y1', baseRef: head })).toThrow('Z0 task seqY/y1: instruction file AGENTS.md is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task');
     expect(spawnSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: work }).status).not.toBe(0);
+  });
+
+  it('refuses a symlinked .claude or .claude/rules, whose rules an agent could edit past the carry', () => {
+    for (const rel of ['.claude', '.claude/rules']) {
+      const r = gitRepo({});
+      const head = withLinks(r, { [rel]: 'config/claude' });
+      expect(() => checkoutBase(r.repo, workRepo(), 'seqD', { id: 'd1', baseRef: head }), rel).toThrow(`Z0 task seqD/d1: instruction file ${rel} is a symlink in the task repo`);
+    }
+  });
+
+  it('checks out a repo whose root CLAUDE.md links to AGENTS.md, since the stub replaces that link', () => {
+    const r = gitRepo({ 'AGENTS.md': 'native rules\n' });
+    const head = withLinks(r, { 'CLAUDE.md': 'AGENTS.md' });
+    const work = workRepo();
+    checkoutBase(r.repo, work, 'seqC', { id: 'c1', baseRef: head });
+    expect(readFileSync(join(work, 'CLAUDE.md'), 'utf8')).toBe(STUB_CLAUDE_MD);
+    expect(readFileSync(join(work, 'AGENTS.md'), 'utf8')).toBe('native rules\n');
   });
 
   it('goldLines surfaces a git error instead of turning the leak check off', () => {

@@ -57,23 +57,23 @@ export function instructionSnapshot(workDir) {
   return snap;
 }
 
-/** Instruction entries in a commit's tree as `[mode, path]` (gitlinks dropped). */
-function treeInstructions(workDir, commit) {
+/** Blob entries in a commit's tree as `[mode, path]` (gitlinks dropped). */
+function treeBlobs(workDir, commit) {
   return git(['ls-tree', '-r', '-z', '--full-tree', commit], workDir).split('\0').filter(Boolean)
     .map((line) => line.split('\t'))
-    .filter(([meta, rel]) => meta.split(' ')[1] === 'blob' && isInstructionPath(rel))
+    .filter(([meta]) => meta.split(' ')[1] === 'blob')
     .map(([meta, rel]) => [meta.split(' ')[0], rel]);
 }
 
 /** Instruction paths in a commit's tree (gitlinks dropped). */
 export function baseInstructionSet(workDir, commit) {
-  return treeInstructions(workDir, commit).map(([, rel]) => rel);
+  return treeBlobs(workDir, commit).map(([, rel]) => rel).filter(isInstructionPath);
 }
 
-/** Throws when a task's base tree holds an instruction file as a symlink. */
-export function assertNoInstructionLinks(cacheDir, sequenceId, t) {
+/** Throws when the stub tree a task checks out holds an instruction file, or .claude or anything under it, as a symlink. */
+export function assertNoInstructionLinks(cacheDir, sequenceId, t, stub) {
   // A link's bytes are its target path and an edit through it lands on a non-instruction file, so neither carry nor restore can keep it.
-  const link = treeInstructions(cacheDir, t.baseRef).find(([mode]) => mode === '120000');
+  const link = treeBlobs(cacheDir, stub).find(([mode, rel]) => mode === '120000' && (isInstructionPath(rel) || rel === '.claude' || rel.startsWith('.claude/')));
   if (link) throw new Error(`Z0 task ${sequenceId}/${t.id}: instruction file ${link[1]} is a symlink in the task repo; Z0 does not carry symlinked instruction files, pick another task`);
 }
 
@@ -88,8 +88,12 @@ function assertInstructionSet(workDir, commit) {
 
 /** Move the workspace to a task's stub base without its future: the workspace fetches only a ref at that commit. */
 export function checkoutBase(cacheDir, workDir, sequenceId, t) {
-  assertNoInstructionLinks(cacheDir, sequenceId, t);
   const stub = stubBaseCommit(cacheDir, t.baseRef);
+  assertNoInstructionLinks(cacheDir, sequenceId, t, stub);
+  // A linked worktree's HEAD is a gc root that for-each-ref never lists; the first entry is always this workspace.
+  const worktrees = git(['worktree', 'list', '--porcelain'], workDir).split('\n').filter((l) => l.startsWith('worktree ')).slice(1);
+  for (const l of worktrees) git(['worktree', 'remove', '--force', '--force', l.slice('worktree '.length)], workDir);
+  git(['worktree', 'prune'], workDir);
   const ref = `refs/eval/${sequenceId}/${t.id}`;
   git(['update-ref', ref, stub], cacheDir);
   git(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
@@ -98,7 +102,8 @@ export function checkoutBase(cacheDir, workDir, sequenceId, t) {
   git(['clean', '-fdqx', '-e', '.hippo', '-e', 'node_modules'], workDir);
   // An agent's stash, branch, tag or note keeps an earlier base reachable, and is a memory channel even in A0.
   const stale = git(['for-each-ref', '--format=%(refname)'], workDir).split('\n').filter((r) => r && r !== 'refs/remotes/eval/base');
-  for (const r of stale) git(['update-ref', '-d', r], workDir);
+  // --no-deref: deleting an agent's symref must not delete the ref it points at.
+  for (const r of stale) git(['update-ref', '--no-deref', '-d', r], workDir);
   // Sequence order comes from the seed, so an earlier base can hold a later task's fix: drop every commit the base cannot reach.
   git(['reflog', 'expire', '--expire=now', '--expire-unreachable=now', '--all'], workDir);
   git(['gc', '--quiet', '--prune=now'], workDir);
@@ -122,7 +127,7 @@ const same = (a, b) => (a === null || b === null ? a === b : a.equals(b));
 function writeFile(workDir, rel, bytes) {
   const file = path.join(workDir, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  // An agent can turn an instruction file into a link to a file outside the workspace; never write through it.
+  // writeHiddenTests runs with no checkout after the session, so an agent's link at a test path would send the write outside the workspace.
   if (isLink(file)) fs.rmSync(file);
   fs.writeFileSync(file, bytes);
 }

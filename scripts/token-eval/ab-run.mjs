@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { HIPPO_JS, sh, git } from './exec.mjs';
 import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
-import { checkoutBase, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
+import { checkoutBase, stubBaseCommit, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import { isUsageLimit, findTranscript, transcriptWork, usageFromResult, skippedRecord } from './records.mjs';
 
 export { prependPath } from './exec.mjs';
@@ -238,6 +238,19 @@ function writePlan(outDir, steps) {
   fs.writeFileSync(path.join(outDir, 'plan.json'), `${JSON.stringify(cells, null, 2)}\n`);
 }
 
+/** Clone each sequence's repo into the cache, then refuse any task whose stub tree checkoutBase would refuse. */
+export function cacheTaskRepos(spec, cacheDir) {
+  // Finding a symlinked instruction file here saves abandoning a lockstep run midway.
+  for (const s of spec.sequences) {
+    const cached = path.join(cacheDir, s.id);
+    if (!fs.existsSync(cached)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      execFileSync('git', ['clone', '--quiet', s.repo, cached], { stdio: 'ignore' });
+    }
+    for (const t of s.tasks) assertNoInstructionLinks(cached, s.id, t, stubBaseCommit(cached, t.baseRef));
+  }
+}
+
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
 export async function runAll(opts) {
   await loadHippo();
@@ -250,15 +263,7 @@ export async function runAll(opts) {
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
   };
-  // checkoutBase refuses a symlinked instruction file; finding it here saves abandoning a lockstep run midway.
-  for (const s of spec.sequences) {
-    const cached = path.join(ctx.cacheDir, s.id);
-    if (!fs.existsSync(cached)) {
-      fs.mkdirSync(ctx.cacheDir, { recursive: true });
-      execFileSync('git', ['clone', '--quiet', s.repo, cached], { stdio: 'ignore' });
-    }
-    for (const t of s.tasks) assertNoInstructionLinks(cached, s.id, t);
-  }
+  cacheTaskRepos(spec, ctx.cacheDir);
   const warmDir = path.join(outDir, 'warmup');
   const warmEnv = armEnv('A0', { ...runDirs(warmDir, '', '', 0), claudeConfig: path.join(warmDir, 'claude-config') }, process.env, { passEnv });
   ctx.claudeVersion = sh(`${claude} --version`, outDir, warmEnv).stdout.trim() || null;
@@ -310,6 +315,8 @@ async function main() {
   // The stop is for tests under a temp dir; a stray export must never disable a real run's check.
   if (mode === 'real' && stopAt) throw new Error('Z0_ANCESTOR_STOP is set; it is only honoured for --dry-run and --check-homes. Unset it for a real run.');
   if (mode === 'real' && !process.env[TOKEN_KEY]) throw new Error('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
+  // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
+  if (mode === 'real') cacheTaskRepos(spec, path.join(out, 'repo-cache'));
   assertNoAncestorInstructions(out, { stopAt });
   console.log(`${steps.length} steps (Claude Code sessions) in lockstep; seeds ${arms.map((a) => `${a}:${seeds ?? ARM_SEEDS[a]}`).join(' ')}.`);
   if (mode === 'dry') {

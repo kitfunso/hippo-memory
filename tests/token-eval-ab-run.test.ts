@@ -518,4 +518,42 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(readFileSync(join(out, 'runs.jsonl'), 'utf8')).toBe('{"earlier":true}\n');
     expect(readdirSync(out)).toEqual(['runs.jsonl']);
   });
+
+  it('a dry run refuses an --out that already holds runs.jsonl; --check-homes does not', () => {
+    const scratch = tmp('ab-run-reuse-modes-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] }));
+    const out = join(scratch, 'out');
+    mkdirSync(out);
+    writeFileSync(join(out, 'runs.jsonl'), '{"earlier":true}\n');
+    const cli = (mode: string) => spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0', '--seeds', '1', mode], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: scratch } });
+    const dry = cli('--dry-run');
+    expect(dry.status).not.toBe(0);
+    expect(dry.stderr).toContain(`${out} already holds runs.jsonl from an earlier run`);
+    expect(readdirSync(out)).toEqual(['runs.jsonl']);
+    const check = cli('--check-homes');
+    expect(check.status, check.stderr).toBe(0);
+    expect(check.stdout).toContain('Homes check passed for 1 runs.');
+    expect(readFileSync(join(out, 'runs.jsonl'), 'utf8')).toBe('{"earlier":true}\n');
+    expect(existsSync(join(out, 'plan.json'))).toBe(false);
+  }, 60_000);
+
+  it('a real run refuses a symlinked instruction file before the run starts, so it writes no ABANDONED', () => {
+    const scratch = tmp('ab-run-link-cli-');
+    const r = makeRepo();
+    const g = (...args: string[]): string => execFileSync('git', args, { cwd: r.repo, encoding: 'utf8' }).trim();
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: 'policy.md', encoding: 'utf8' }).trim();
+    g('update-index', '--add', '--cacheinfo', `120000,${blob},docs/AGENTS.md`);
+    g('commit', '-qm', 'link');
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: g('rev-parse', 'HEAD') })] }] }));
+    const out = join(scratch, 'out');
+    const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
+    delete env.Z0_ANCESTOR_STOP;
+    const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
+    expect(real.status).not.toBe(0);
+    expect(real.stderr).toContain('Z0 task seqL/l2: instruction file docs/AGENTS.md is a symlink in the task repo');
+    expect(readdirSync(out)).toEqual(['repo-cache']);
+  }, 60_000);
 });
