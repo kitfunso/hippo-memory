@@ -21,6 +21,8 @@
 >
 > **2026-10-02 accepted Computer integration direction:** Part XXII, Track CW adds an optional durable workspace/evidence adapter for externally hosted agents: scoped sources, bounded read capabilities, explicit outcome receipts and verified pull-mode handoffs first; corpus/RLM processing, procedural lessons and CLEF advice remain separately evaluated research. Carry AZ4-AZ6 capture/readiness and low-touch requirements through the adapter. Z0 priority, frozen defaults, locked registrations, the local route and the no-dispatch boundary remain. Planned integration is not shipped support or measured task benefit.
 >
+> **2026-10-04 gaps against Hindsight:** Part XXIII, Track HG maps six gaps found in a comparison with Hindsight by Vectorize. Three were already covered (task evidence via Z0, distribution via K8.6/CD10, and sleep through an S4 arm). It adds HG1 subject profiles with outcome-derived confidence, HG2 event time and ordering queries, and HG3 LongMemEval-S answer accuracy with a cost column. Z0 priority and frozen defaults remain.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ## Current execution index
@@ -33,11 +35,11 @@
 |---|---|---|---|---|
 | Now, 1 | Z0 stage 0; Z10 development instrumentation | Establish whether Hippo adds useful value beyond built-in memory and identify capture/retrieval/delivery/application failures | Complete isolated arms, teaching, sham/control, Codex and blind-analysis prerequisites; instrument without changing selected IDs or rendered context. Then the existing smoke, calibration, freeze and scored protocol. Z10 does not amend Z0's locked endpoints. | Maintainer; Keith for resource/run decisions |
 | Now, 2 | AZ6 foundation; S6 capture/recovery fixtures; AZ4/AZ5 per supported mode | Preserve useful lessons before loss and recover without routine save commands | Inventory every named runtime/mode; establish shared contracts and fixtures, then verify native hooks or supported incremental checkpoints on real hosts. Record source/trust gaps, gold capture precision/coverage, delay, restore and actual delivery separately. No CLEF or new claims schema prerequisite. | Integration maintainer |
-| Next, 3 | One diagnosed S0/S9, Z1d or Z3b component; CAE5; Z12 | Reduce wrong/stale context, repeated mistakes and supervision | Select the bottleneck from Z10 evidence. Isolate representation, admission or correction on fresh development labels; freeze before independent task confirmation. Deterministic permissions/version writes and sealed cases stay outside hillclimb. | Memory/evaluation maintainer |
+| Next, 3 | One diagnosed S0/S9, Z1d or Z3b component (HG1/HG2 if Z10 names profiles or dates); CAE5; Z12 | Reduce wrong/stale context, repeated mistakes and supervision | Select the bottleneck from Z10 evidence. Isolate representation, admission or correction on fresh development labels; freeze before independent task confirmation. Deterministic permissions/version writes and sealed cases stay outside hillclimb. | Memory/evaluation maintainer |
 | Next, 4 | EI2/EI10/EV1/EI11/EV6-EV9; required source adapters; EI15/CD11-CD14 | Deliver governed, low-touch memory and customer-defined value in an enterprise pilot | Scope one partner, required sources, identity provider and deployment. Close applicable access/derivation/revocation gates; configure one objective/metric contract and join permitted outcomes through Z10/Z2b. Include developer and administrator burden. Computer is not a prerequisite. | Keith; enterprise maintainer; customer administrator |
 | Next, 5; bounded development can accompany Now | CLF0/CLF1/CLF4/CLF12; CAE0-CAE4 | Improve a specific memory decision without unpredictable costs or recurring backend management | First compare one role at matched eligible candidates/input bounds against native and applicable Jev/local baselines, with quota controls and native fallback. Complete supported-surface conformance and independent task confirmation before adoption; extend all accepted CLEF roles one at a time. | Decision-layer/evaluation maintainer |
-| Alongside all priorities | MSG1-MSG6; canonical product facts; CAE6/CAE7 | Give users consistent capability, setup, edition and evidence information | Correct current source copy, check roadmap IDs/references and affected tool contracts, then verify the tagged package, actual npm listing and deployed website through their release processes. A source commit is not publication evidence. | Product/release maintainer |
-| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; LC4/Track G and grant research | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
+| Alongside all priorities | MSG1-MSG6; canonical product facts; CAE6/CAE7; K8.6/CD10 registry submission (needs Keith's yes) | Give users consistent capability, setup, edition and evidence information | Correct current source copy, check roadmap IDs/references and affected tool contracts, then verify the tagged package, actual npm listing and deployed website through their release processes. A source commit is not publication evidence. | Product/release maintainer |
+| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 answer-accuracy publication; LC4/Track G and grant research | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
 
 **Operating rule.** Prefer one complete memory loop and a small number of bounded experiments over opening every track simultaneously. Engineering fixtures and development prototypes can proceed alongside Z0 prerequisites; task-benefit/default claims retain their independent gates. Measure repeat mistakes, quality, correction/supervision burden, total cost and latency. Simulated intervention counts are proxies; active human time needs its own registered pilot. Historical benchmark scores do not establish these outcomes.
 
@@ -3241,3 +3243,63 @@ Exit: a scoped retain/reject verdict, failure matrix, operational burden and sup
 First deliver CW0-CW3 against read-only JavaScript and a separate Hippo service; register CW8 before scored work. Then test CW4 continuity and one narrow CW5 task family. Consider CW6/CW7 separately only after an observed bottleneck and appropriate parent gates. Package wider deployment only on demand and verified benefit.
 
 Stop or narrow the adapter if local files/Docker plus Hippo's existing service achieves the same result with less total burden. Defer a native Durable Object memory-store port and live SQLite-through-FUSE operation until a separately approved storage design and consistency/recovery evaluation justify them. Keep provider-independent evidence/receipt improvements even if the Cloudflare adapter is rejected.
+
+---
+
+## Part XXIII - 2026-10-04 update: six gaps against Hindsight (Track HG)
+
+### Why this part exists
+
+On 2026-10-03 someone on X asked for the "most effective and performant memory architecture for agents (validated in production) that understands temporality and supports dreaming." A reply named Hindsight by Vectorize. Hippo meets the temporality and dreaming wording, but not "effective" or "validated in production." This part maps the six gaps that comparison found against existing items and adds only what is missing.
+
+**Hindsight, as checked 2026-10-04** ([repo](https://github.com/vectorize-io/hindsight), [benchmarks](https://benchmarks.hindsight.vectorize.io/), [paper arXiv 2512.12818](https://arxiv.org/html/2512.12818)): an LLM extracts facts, entities, relationships and time data on every write into Postgres with pgvector. Recall runs semantic, BM25, graph and temporal searches in parallel, fuses them and reranks with a cross-encoder. Reflect reasons over memories and moves opinion confidence as evidence arrives. A background job regenerates entity summaries and merges conflicts in favour of new information. Each fact has an occurrence interval, a mention time and temporal links. Vendor leaderboard: LongMemEval-S 94.6% answer accuracy (reader model unstated). Paper with a 120B open model: 89.0% overall, temporal reasoning 85.7%, knowledge update 92.3%, multi-session 81.2%. The serving-cost study arXiv 2608.11879 found that "no system excels on both accuracy and cost axes."
+
+Hippo's position on the same date: decay and sleep have not been shown to improve recall (README; a slept LongMemEval store scored -3.6 hit@5, PR #232). LongMemEval-S R@5 is 85.6% for `hippo recall` at defaults and 98.0% for the benchmark script, but that is retrieval, not answer accuracy. The TE5 pilot was null, and Z0 has not scored.
+
+### Coverage map
+
+1. **No evidence that hippo improves agent tasks.** Covered: Z0, Z12, TE10, TE11, F8, CAE8, CD11/CD12. What is left is running Z0 stage 0, already row 1 of the execution index. No new item.
+2. **Weak capture; nothing turns raw memories into profiles or beliefs.** Partly covered: Z9, S0, S5, S6, SI4, CLF6, Z3/Z3b, Z6, E3.1-E3.3, B6. Remainder: nothing rebuilds a per-subject profile from accumulated claims, and no claim carries a confidence that moves with evidence and outcomes. Closed by HG1.
+3. **Sleep tidies but does not generate.** Partly covered: S4, D10, TE9, I1-I4, CLF7, L2. Measured against it: DAG slice 1 was MEASURED-FALSE, and merge/dedup sat below the 3pp floor. Remainder: no registered arm in which sleep writes new derived text and is scored on answer accuracy. Closed by HG1 running inside sleep, as an added arm in the S4 prereg, with no new ID.
+4. **Temporality is fact validity only.** Partly covered: S3 (validity vs recorded time, `--as-of`), FE5 (event-date `valid_from`), Z6, F5, TE11. Remainder: no occurrence interval separate from validity, no ordering or relative queries ("two weeks before X"), no date-window recall filter and no temporal eval family. Closed by HG2.
+5. **No end-to-end answer-accuracy score.** Partly covered: Part III answer-correctness axis, the lifecycle stress eval (QA axis, headline null), TE3, TE11, F7, WP2/O2. Remainder: no LongMemEval-S answer accuracy by category with a cost column, which is the number Hindsight quotes. Closed by HG3.
+6. **Single-box SQLite, few integrations, no directory listing.** Covered on paper: A6, A8, A10, K8.1-K8.8 (Helm chart; K8.6 registry listing), CD1, CD2, CD10 ("publish to the MCP registry after the next npm release"), AZ3/AZ6. What is left is an outward-facing submission, which needs Keith's yes. It is now named in the execution index. No new item.
+
+### HG1. Subject profiles rebuilt at sleep, with confidence from outcomes [planned; hard: S0 subject/attribute units, Z9 update-or-create; conditional: CLF6 drafting arm; optional producer: E3.1, SI2; rollout gate: S1, Z0; added 2026-10-04]
+
+For each subject with three or more in-force claims (a project, repo, person, tool or service), sleep rebuilds one profile row. The row lists the claims grouped by attribute and ordered by `valid_from`. Each line carries a confidence computed from independent sources, outcome feedback and supersession history. The default path is zero-LLM structured aggregation. The opt-in CLF6 free-first extraction profile may draft a prose summary over the same lines.
+
+The profile is derived and can be rebuilt (Track L rule 2); it is never the record. `hippo explain` on a profile line names its claims and the outcome events that moved its confidence. When a query names the subject, recall packs the profile as one S9 unit. This is the part Hindsight cannot copy cheaply: its opinion confidence is an LLM's own judgement, while hippo's comes from marked-wrong and resolved-task signals. Those signals are the one mechanism the 1.52.3 release confirmation showed working.
+
+Evaluation: lifecycle stress eval arms (profile-packed vs claim-only vs hygiene-only sleep) plus the E1 current-fact family. Pass: QA accuracy within 2pp of claim-only, a stale-answer rate no higher, tokens to answer at least 20% lower, paired bootstrap over 20 seeds, and the S-track R@5 floor holds. Kill: QA falls by more than 2pp on two seed batches (DAG slice 1's shape), or the reader uses a packed profile in under half the questions where one was packed.
+
+### HG2. Event time on claims: occurrence interval, ordering and date-window recall [planned; hard: FE5 date resolver, S3 validity/recorded-time spec; conditional: CLF6 extraction arm; optional baseline: TE11; rollout gate: S1, Z0; added 2026-10-04]
+
+Add two nullable columns, `event_start` and `event_end`, filled by the deterministic date-phrase resolver FE5 already needs. It handles absolute dates, "last Tuesday" and "March to May", resolved against the session clock. They stay separate from `valid_from`, so "I learned on Friday that the outage was Monday" stores both. Recall gains `--between`, `--before <id|date>` and `--after`, plus a relative resolver that reads an anchor memory's event time for "two weeks before the launch". Ordering answers sort admitted claims by `event_start`.
+
+Ranking does not change by default; the filter is a pre-filter under the S1 floor. The opt-in LLM extraction arm fills the same columns through CLF6, never a second schema. Any schema change follows the cross-track migration order and needs its own decision record.
+
+Evaluation: paired R@5 on the LongMemEval-S temporal-reasoning category with the filter on vs the frozen baseline, plus resolver precision on 200 hand-labelled date spans from the organic capture archive. Pass: temporal R@5 up at least 3pp, other categories within -1pp, resolver precision 0.9 or better. Kill: precision under 0.8 after two rounds, or the temporal gain sits inside the paired noise bar.
+
+### HG3. End-to-end answer accuracy with cost on LongMemEval-S, published whatever it says [planned; hard: S9 packing, existing LongMemEval harness; conditional: CLF free-first reader; optional baseline: TE3; added 2026-10-04]
+
+One script in `benchmarks/longmemeval/` hands hippo's packed context, at the 1,500-token S9 cap, to a reader model and scores the answer. Results are reported per category (single-session user, assistant and preference, multi-session, temporal, knowledge update, abstention) with a cost column. Hippo's retrieval is local and free, so cost is reader tokens only. There are four arms, fixed before running, all with the same reader. A no-memory reader is the floor. A BM25 chunk-per-turn index is the naive baseline. Hippo-packed context is the treatment. Oracle gold evidence is the ceiling and the positive control.
+
+The reader and the judge run on free inference only (plan quota through `claude -p`, or a local model), with no paid API. LongMemEval's reference judge is a paid GPT-4o call, so check the free judge against a hand-labelled sample of at least 10 items per category before scoring. Label it as a deviation in the result. Publish paired bootstrap intervals over all 500 questions. The README benchmark table shows the number beside Hindsight's, with the method note and arXiv 2608.11879's accuracy-vs-cost frame.
+
+The result is the deliverable. The only claim allowed is "hippo's packed context beats BM25 with the same reader by more than the noise bar"; if that is false, the README says so. It passes no Z0 gate and changes no default (S-track gate 2). Kill or narrow: if free inference cannot cover 500 questions, run a labelled 50-question subset.
+
+### Rejected ideas
+
+- LLM extraction on every write by default: breaks the zero-LLM write path and free-by-default; the A1 replay recovered 1 of 18 lessons.
+- Hindsight-style decaying temporal graph links over raw text: Track L non-goal 2; S8 is deferred.
+- Four-strategy parallel recall with a cross-encoder: F9 RRF shipped, S2 optional hybrid exists, and the reranker is already opt-in.
+- A standalone belief table with self-reported confidence: HG1's outcome-derived line confidence covers it without a new object or verb.
+- Pulling Postgres forward for distribution: A6 stays for shared deployment; SQLite is the local store.
+- Directory submissions as new items: already K8.6 and CD10; they need Keith's yes, not a new line.
+- A LoCoMo LLM-judge run now: same harness as HG3, later; F7 explains the comparability problem.
+- A benchmark aimed at gap 1: S-track gate 2 says no benchmark passes Z0.
+
+### Sequence and stop rules
+
+HG3 can run beside Z0 prerequisites, because it is measurement that changes no default. HG1 and HG2 enter active work only through the execution index's "one diagnosed component" slot, when Z10 evidence names subject profiles or dates as the bottleneck. A Z0 null does not block HG3's publication, and an HG3 win does not count as task benefit.
