@@ -564,8 +564,12 @@ describe('usage limits around resumes', () => {
     await run(s, ['A0'], out, { limitWaitMs: 5000 });
     const t1 = find(readRecords(out), 'A0', 't1');
     expect(t1).toMatchObject({ invalid: null, limitRetries: 1, lessons: [{ first: 'fail', final: 'pass' }] });
-    // The cut-off attempt and the wait take 10 s between them; the turns that count take well under 5 s.
-    expect(t1.wallMs).toBeLessThan(5000);
+    // t1's step spans its start to n1's start and holds at least the 5 s nap and 5 s wait, which load only stretches; wallMs must leave both out.
+    const started = Object.fromEntries(readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).map((rec) => [rec.taskId, Date.parse(rec.startedAt)]));
+    const stepMs = started.n1 - started.t1;
+    const wallMs = t1.wallMs ?? -1;
+    expect(Number.isInteger(wallMs) && wallMs >= 0).toBe(true);
+    expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);
   }, 300_000);
 
   it('a resume that runs out of time marks the record timed out', async () => {
