@@ -2,8 +2,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { git } from './exec.mjs';
+import { git, gitSpawn } from './exec.mjs';
 import { HIPPO_ARMS } from './arms.mjs';
 
 export const STUB_CLAUDE_MD = '# Instructions for coding agents working in this repository.\n';
@@ -15,35 +14,22 @@ const NAMES = new Set(['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md']);
 const SKIP_DIRS = new Set(['.git', '.hippo', 'node_modules']);
 const win = process.platform === 'win32';
 
-/** Runs fn(rgit, scratch) with a git that reads no system or global config and runs no hooks. */
-function withRunnerGit(fn) {
-  // The agent shares the operator's HOME, so its global config could add hooks, an fsmonitor or a commit encoding to runner calls.
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));
-  const hooks = path.join(scratch, 'hooks');
-  fs.mkdirSync(hooks);
-  // Git for Windows reads /dev/null as the null device; os.devNull (\\.\nul) it refuses.
-  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
-  const rgit = (args, cwd, extra = {}) => git(['-c', `core.hooksPath=${hooks}`, '-c', 'core.longpaths=true', ...args], cwd, { ...env, ...extra });
+/** The base plus a root CLAUDE.md holding only the stub; fixed identity and dates give every arm the same sha. */
+export function stubBaseCommit(cacheDir, baseRef) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-stub-'));
   try {
-    return fn(rgit, scratch);
+    fs.writeFileSync(path.join(scratch, 'stub'), STUB_CLAUDE_MD);
+    const blob = git(['hash-object', '-w', '--no-filters', path.join(scratch, 'stub')], cacheDir).trim();
+    const env = { ...STUB_IDENT, GIT_INDEX_FILE: path.join(scratch, 'index') };
+    const parent = git(['rev-parse', `${baseRef}^{commit}`], cacheDir).trim();
+    git(['read-tree', parent], cacheDir, env);
+    git(['update-index', '--add', '--cacheinfo', `100644,${blob},CLAUDE.md`], cacheDir, env);
+    const tree = git(['write-tree'], cacheDir, env).trim();
+    // --no-gpg-sign: a signing config would make the sha differ per run.
+    return git(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'z0 eval: stub CLAUDE.md'], cacheDir, env).trim();
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
-}
-
-/** The base plus a root CLAUDE.md holding only the stub; fixed identity and dates give every arm the same sha. */
-export function stubBaseCommit(cacheDir, baseRef) {
-  return withRunnerGit((rgit, scratch) => {
-    fs.writeFileSync(path.join(scratch, 'stub'), STUB_CLAUDE_MD);
-    const blob = rgit(['hash-object', '-w', '--no-filters', path.join(scratch, 'stub')], cacheDir).trim();
-    const env = { ...STUB_IDENT, GIT_INDEX_FILE: path.join(scratch, 'index') };
-    const parent = rgit(['rev-parse', `${baseRef}^{commit}`], cacheDir).trim();
-    rgit(['read-tree', parent], cacheDir, env);
-    rgit(['update-index', '--add', '--cacheinfo', `100644,${blob},CLAUDE.md`], cacheDir, env);
-    const tree = rgit(['write-tree'], cacheDir, env).trim();
-    // --no-gpg-sign: a signing config would make the sha differ per run.
-    return rgit(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'z0 eval: stub CLAUDE.md'], cacheDir, env).trim();
-  });
 }
 
 /** A CLAUDE.md, CLAUDE.local.md or AGENTS.md at any depth, or a file under the root .claude/rules/; nothing else under .claude/. */
@@ -103,23 +89,63 @@ function assertInstructionSet(workDir, commit) {
 }
 
 const WORK_CONFIG = [['user.email', 'eval@localhost'], ['user.name', 'eval'], ['core.autocrlf', 'false'], ['core.eol', 'lf'], ['core.longpaths', 'true']];
-const rm = (p) => fs.rmSync(p, { recursive: true, force: true, maxRetries: 3 });
+const SLEEP = new Int32Array(new SharedArrayBuffer(4));
+const LOCKED = new Set(['EPERM', 'EBUSY', 'ENOTEMPTY']);
 
-const holdsRepo = (names) => names.has('.git') || (names.has('HEAD') && names.has('objects') && names.has('refs'));
+/** rmSync, retried for about 11 seconds while a file stays locked, then a throw naming the locked path. */
+function rm(p) {
+  // A process the agent or the hidden tests left running can hold a file after it is told to stop, and rmSync's own maxRetries did not retry EPERM on Node 24.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return fs.rmSync(p, { recursive: true, force: true });
+    } catch (e) {
+      if (attempt > 10 || !LOCKED.has(e.code)) throw new Error(`Z0 workspace: cannot remove ${e.path ?? p} (${e.code ?? e.message}); a process left running from the last session may still hold it`, { cause: e });
+      Atomics.wait(SLEEP, 0, 0, attempt * 200);
+    }
+  }
+}
 
-/** Delete every git repo under a kept dir: below the top the whole dir, at the top only its git entries. */
+// Hippo's store never uses these names (src/store.ts), so in a kept .hippo each marks a repo or a piece of one.
+const GIT_NAMES = ['.git', 'objects', 'refs', 'packed-refs', 'HEAD', 'commondir', 'gitdir'];
+const holdsRepo = (names) => ['.git', 'objects', 'commondir', 'gitdir'].some((n) => names.has(n));
+const GIT_MAGIC = ['# v2 git bundle', '# v3 git bundle', 'PACK\0\0\0\x02', 'PACK\0\0\0\x03'].map((s) => Buffer.from(s, 'latin1'));
+
+/** True for a git bundle or pack file, which clones or unpacks back to the history under any name. */
+function isGitArchive(file) {
+  const head = Buffer.alloc(16);
+  const fd = fs.openSync(file, 'r');
+  try {
+    const n = fs.readSync(fd, head, 0, head.length, 0);
+    return GIT_MAGIC.some((m) => n >= m.length && head.subarray(0, m.length).equals(m));
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Delete every git repo, bundle, pack and link under a kept dir: below the top a repo's whole dir, at the top only its git entries. */
 function dropRepos(dir, top) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries = fs.readdirSync(dir, { withFileTypes: true });
   if (holdsRepo(new Set(entries.map((e) => e.name)))) {
     if (!top) return rm(dir);
-    for (const name of ['.git', 'objects', 'refs']) rm(path.join(dir, name));
+    for (const name of GIT_NAMES) rm(path.join(dir, name));
+    entries = fs.readdirSync(dir, { withFileTypes: true });
   }
-  // Dirent.isDirectory is false for a link or junction, so the walk never leaves the workspace.
-  for (const e of entries) if (e.isDirectory() && fs.existsSync(path.join(dir, e.name))) dropRepos(path.join(dir, e.name), false);
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    // Hippo never makes links, and Dirent.isDirectory is false for one, so a link is removed and never followed.
+    if (e.isSymbolicLink()) rm(p);
+    else if (e.isDirectory()) dropRepos(p, false);
+    else if (e.isFile() && isGitArchive(p)) rm(p);
+  }
 }
 
 /** Empty the workspace but for the arm's own store, so nothing an agent wrote survives except what E3's surface check reads. */
 function emptyWorkspace(workDir, arm) {
+  // Emptying a work dir the agent swapped for a link would delete the link target's files.
+  if (fs.lstatSync(workDir).isSymbolicLink()) {
+    rm(workDir);
+    fs.mkdirSync(workDir);
+  }
   const keep = HIPPO_ARMS.has(arm) ? new Set(['.hippo']) : new Set();
   // Git's own rules (excludes, gitlinks, -ff) are what let agent clones and submodule dirs outlive a clean, so the runner names what stays.
   for (const e of fs.readdirSync(workDir, { withFileTypes: true })) {
@@ -134,16 +160,14 @@ export function checkoutBase(cacheDir, workDir, sequenceId, t, arm) {
   assertNoInstructionLinks(cacheDir, sequenceId, t, stub);
   // Sequence order comes from the seed, so an earlier base can hold a later task's fix.
   emptyWorkspace(workDir, arm);
-  withRunnerGit((rgit) => {
-    rgit(['init', '--quiet'], workDir);
-    for (const [k, v] of WORK_CONFIG) rgit(['config', k, v], workDir);
-    // Keeps a hippo arm's store out of `git status`.
-    fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
-    const ref = `refs/eval/${sequenceId}/${t.id}`;
-    rgit(['update-ref', ref, stub], cacheDir);
-    rgit(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
-    rgit(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
-  });
+  git(['init', '--quiet'], workDir);
+  for (const [k, v] of WORK_CONFIG) git(['config', k, v], workDir);
+  // Keeps a hippo arm's store out of `git status`.
+  fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
+  const ref = `refs/eval/${sequenceId}/${t.id}`;
+  git(['update-ref', ref, stub], cacheDir);
+  git(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
+  git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);
   assertInstructionSet(workDir, stub);
   return stub;
 }
@@ -178,7 +202,7 @@ function mergeFile(rel, after, before, now, tmpRoot) {
       fs.writeFileSync(path.join(dir, name), bytes);
       return path.join(dir, name);
     });
-    const merge = (extra) => spawnSync('git', ['merge-file', '-p', ...extra, ...files], { cwd: dir, maxBuffer: 1 << 28 });
+    const merge = (extra) => gitSpawn(['merge-file', '-p', ...extra, ...files], dir);
     const first = merge([]);
     if (first.status === 0) return { bytes: first.stdout, union: false };
     if (first.status >= 1 && first.status <= 127) {
@@ -219,12 +243,12 @@ export function restoreInstructions(workDir, snap) {
 
 /** Write the task's hidden test files from fixRef, read from the cache clone. */
 export function writeHiddenTests(cacheDir, workDir, t) {
-  for (const f of t.testFiles) writeFile(workDir, f, execFileSync('git', ['show', `${t.fixRef}:${f}`], { cwd: cacheDir, maxBuffer: 1 << 28 }));
+  for (const f of t.testFiles) writeFile(workDir, f, git(['show', `${t.fixRef}:${f}`], cacheDir, {}, 'buffer'));
 }
 
 /** Added lines of a task's gold diff that are long enough to be a leak signal. */
 export function goldLines(cacheDir, t) {
   // A git error throws: an empty list would silently turn the leak check off for the task.
-  return git(['diff', t.baseRef, t.fixRef], cacheDir).split('\n')
+  return git(['diff', '--no-ext-diff', '--no-color', '--no-textconv', t.baseRef, t.fixRef], cacheDir).split('\n')
     .filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter((l) => l.length >= 40);
 }

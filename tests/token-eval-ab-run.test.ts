@@ -626,4 +626,17 @@ describe('Z0 preflight (before the try that writes ABANDONED)', () => {
     expect(() => cacheTaskRepos(spec, cache)).not.toThrow();
     expect(existsSync(join(cache, 'seqC', '.git'))).toBe(true);
   });
+
+  it('cacheTaskRepos clones a repo holding a path over 260 characters', () => {
+    const r = makeRepo();
+    const rel = [...Array.from({ length: 6 }, (_, i) => String(i).repeat(50)), 'deep.txt'].join('/');
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: 'deep\n', encoding: 'utf8' }).trim();
+    execFileSync('git', ['update-index', '--add', '--cacheinfo', `100644,${blob},${rel}`], { cwd: r.repo });
+    execFileSync('git', ['commit', '-qm', 'deep'], { cwd: r.repo });
+    const cache = join(tmp('ab-run-pre-long-'), 'repo-cache');
+    const spec = validateTasks({ sequences: [{ id: 'seqD', cluster: 'c', repo: r.repo, tasks: [task(r, 'd1', 'x'), task(r, 'd2', 'y')] }] });
+    expect(() => cacheTaskRepos(spec, cache)).not.toThrow();
+    expect(join(cache, 'seqD', rel).length).toBeGreaterThan(260);
+    expect(readFileSync(join(cache, 'seqD', rel), 'utf8')).toBe('deep\n');
+  });
 });

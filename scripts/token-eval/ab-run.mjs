@@ -3,9 +3,8 @@
 // Protocol: docs/evals/2026-09-29-z0-built-in-memory-prereg.md. Usage, tasks file and fairness: benchmarks/token-eval/README.md.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { HIPPO_JS, sh } from './exec.mjs';
+import { HIPPO_JS, sh, git } from './exec.mjs';
 import { ARMS, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS, TOKEN_KEY, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs, homeFiles, assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { checkoutBase, stubBaseCommit, assertNoInstructionLinks, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
@@ -243,7 +242,7 @@ export function cacheTaskRepos(spec, cacheDir) {
     const cached = path.join(cacheDir, s.id);
     if (!fs.existsSync(cached)) {
       fs.mkdirSync(cacheDir, { recursive: true });
-      execFileSync('git', ['clone', '--quiet', s.repo, cached], { stdio: 'ignore' });
+      git(['clone', '--quiet', s.repo, cached]);
     }
     for (const t of s.tasks) assertNoInstructionLinks(cached, s.id, t, stubBaseCommit(cached, t.baseRef));
   }

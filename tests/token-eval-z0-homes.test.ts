@@ -1,17 +1,19 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync, lstatSync, symlinkSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
 import { HIPPO_JS } from '../scripts/token-eval/exec.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
-import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines } from '../scripts/token-eval/workspace.mjs';
+import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
 const savedEnv = { ...process.env };
+const savedCwd = process.cwd();
 afterEach(() => {
+  process.chdir(savedCwd);
   for (const k of Object.keys(process.env)) if (!(k in savedEnv)) delete process.env[k];
   Object.assign(process.env, savedEnv);
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
@@ -282,11 +284,11 @@ describe('applyInstructions', () => {
   });
 });
 
-/** Every dir under root holding a .git entry or shaped like a bare repo, root-relative ('' for root). */
+/** Every dir under root holding a .git entry, an object store or a worktree admin file, root-relative ('' for root). */
 function repoDirs(root: string, rel = ''): string[] {
   const entries = readdirSync(join(root, rel), { withFileTypes: true });
   const names = entries.map((e) => e.name);
-  const here = names.includes('.git') || ['HEAD', 'objects', 'refs'].every((n) => names.includes(n)) ? [rel] : [];
+  const here = ['.git', 'objects', 'commondir', 'gitdir'].some((n) => names.includes(n)) ? [rel] : [];
   return [...here, ...entries.filter((e) => e.isDirectory() && e.name !== '.git').flatMap((e) => repoDirs(root, rel ? `${rel}/${e.name}` : e.name))];
 }
 
@@ -434,6 +436,136 @@ describe('workspace checkout', () => {
     const { repo, base, fix } = gitRepo({});
     expect(goldLines(repo, { baseRef: base, fixRef: fix })).toEqual(['a + b, the fix that a later task must never see in an earlier workspace']);
     expect(() => goldLines(repo, { baseRef: base, fixRef: 'no-such-ref' })).toThrow(/no-such-ref/);
+  });
+
+  it('goldLines and writeHiddenTests ignore the global git config and attributes the agent shares, running nothing from them', () => {
+    const { repo, base, fix } = gitRepo({});
+    const t = { baseRef: base, fixRef: fix, testFiles: ['lib.js'] };
+    const clean = goldLines(repo, t);
+    expect(clean).toHaveLength(1);
+    const home = tmp('z0-agent-home-');
+    const fwd = (p: string): string => p.replace(/\\/g, '/');
+    const marker = join(home, 'ran');
+    const run = `sh -c 'echo ran > "${fwd(marker)}"; echo SCRAMBLED' --`;
+    writeFileSync(join(home, 'attrs'), '* diff=x\n');
+    const configs = {
+      color: '[color]\n\tui = always\n',
+      external: `[diff]\n\texternal = ${run}\n`,
+      textconv: `[core]\n\tattributesFile = ${fwd(join(home, 'attrs'))}\n[diff "x"]\n\ttextconv = ${run}\n`,
+      xdgBinary: '',
+    };
+    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
+    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    for (const [name, cfg] of Object.entries(configs)) {
+      writeFileSync(join(home, '.gitconfig'), cfg);
+      if (name === 'xdgBinary') {
+        mkdirSync(join(home, '.config', 'git'), { recursive: true });
+        writeFileSync(join(home, '.config', 'git', 'attributes'), '* -diff\n');
+      }
+      expect(goldLines(repo, t), name).toEqual(clean);
+      const work = tmp('z0-hidden-');
+      writeHiddenTests(repo, work, t);
+      expect(readFileSync(join(work, 'lib.js'), 'utf8'), name).toBe('a + b, the fix that a later task must never see in an earlier workspace\n');
+      expect(existsSync(marker), name).toBe(false);
+    }
+    writeFileSync(join(home, '.gitconfig'), '');
+    writeFileSync(join(repo, '.git', 'info', 'attributes'), '* diff=x\n');
+    for (const [k, v] of [['color.ui', 'always'], ['diff.external', run], ['diff.x.textconv', run]]) execFileSync('git', ['config', k, v], { cwd: repo });
+    expect(goldLines(repo, t), 'cache repo config').toEqual(clean);
+    expect(existsSync(marker), 'cache repo config').toBe(false);
+  });
+
+  it('fetches the stub from the cache even when the global config the agent shares rewrites that path to a decoy', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqU', { id: 'u1', baseRef: fix }, 'A0');
+    const decoy = tmp('z0-decoy-');
+    execFileSync('git', ['init', '-q'], { cwd: decoy });
+    const home = tmp('z0-agent-home-');
+    writeFileSync(join(home, '.gitconfig'), `[url "${decoy.replace(/\\/g, '/')}"]\n\tinsteadOf = ${repo.replace(/\\/g, '\\\\')}\n`);
+    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
+    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    expect(spawnSync('git', ['ls-remote', repo], { encoding: 'utf8' }).stdout).toBe('');
+    checkoutBase(repo, work, 'seqU', { id: 'u2', baseRef: base }, 'A0');
+    expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
+  });
+
+  it('runs no hook the agent put in the task repo cache', () => {
+    const { repo, base, fix } = gitRepo({});
+    const marker = join(tmp('z0-hook-mark-'), 'ran');
+    for (const hook of ['reference-transaction', 'post-checkout', 'post-commit']) writeFileSync(join(repo, '.git', 'hooks', hook), `#!/bin/sh\necho ran >> "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqR', { id: 'r1', baseRef: fix }, 'A0');
+    checkoutBase(repo, work, 'seqR', { id: 'r2', baseRef: base }, 'A0');
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it('A2: drops every repo piece, bundle and link a kept .hippo holds, and keeps the hippo store', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
+    checkoutBase(repo, work, 'seqH', { id: 'h1', baseRef: fix }, 'A2');
+    const hippo = join(work, '.hippo');
+    const store = ['hippo.db', 'hippo.db-wal', 'config.json', 'index.json', 'stats.json', 'embeddings.json', 'buffer/a.md', 'episodic/b.md', 'semantic/c.md', 'conflicts/d.json', 'compactions-spool/e.json'];
+    for (const rel of store) {
+      mkdirSync(dirname(join(hippo, rel)), { recursive: true });
+      writeFileSync(join(hippo, rel), 'store\n');
+    }
+    wg('branch', 'keep');
+    wg('clone', '-q', '--bare', '.', join(hippo, 'cache'));
+    rmSync(join(hippo, 'cache', 'HEAD'));
+    const moved = join(tmp('z0-bare-'), 'b.git');
+    wg('clone', '-q', '--bare', '.', moved);
+    for (const x of ['objects', 'refs', 'packed-refs']) renameSync(join(moved, x), join(hippo, x));
+    mkdirSync(join(hippo, 'wt'));
+    writeFileSync(join(hippo, 'wt', 'HEAD'), 'ref: refs/heads/keep\n');
+    writeFileSync(join(hippo, 'wt', 'commondir'), '../cache\n');
+    mkdirSync(join(hippo, 'wt2'));
+    writeFileSync(join(hippo, 'wt2', 'gitdir'), `${join(work, 'x', '.git')}\n`);
+    wg('bundle', 'create', '-q', join(hippo, 'notes.bin'), '--all');
+    wg('bundle', 'create', '-q', '--version=3', join(hippo, 'buffer', 'z.dat'), '--all');
+    wg('gc', '-q');
+    const packDir = join(work, '.git', 'objects', 'pack');
+    copyFileSync(join(packDir, readdirSync(packDir).find((f) => f.endsWith('.pack'))!), join(hippo, 'episodic', 'blob.dat'));
+    const outside = tmp('z0-outside-');
+    wg('clone', '-q', '.', join(outside, 'clone'));
+    symlinkSync(join(outside, 'clone'), join(hippo, 'link'), 'junction');
+    symlinkSync(join(outside, 'clone'), join(hippo, 'buffer', 'link'), 'junction');
+    checkoutBase(repo, work, 'seqH', { id: 'h2', baseRef: base }, 'A2');
+    expect(readdirSync(hippo).sort()).toEqual(['buffer', 'compactions-spool', 'config.json', 'conflicts', 'embeddings.json', 'episodic', 'hippo.db', 'hippo.db-wal', 'index.json', 'semantic', 'stats.json']);
+    expect(readdirSync(join(hippo, 'buffer'))).toEqual(['a.md']);
+    expect(readdirSync(join(hippo, 'episodic'))).toEqual(['b.md']);
+    for (const rel of store) expect(readFileSync(join(hippo, rel), 'utf8'), rel).toBe('store\n');
+    expect(existsSync(join(outside, 'clone', 'lib.js'))).toBe(true);
+  });
+
+  it('waits out a process from the last session that holds a workspace dir for a second, then clears it', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = workRepo();
+    checkoutBase(repo, work, 'seqS', { id: 's1', baseRef: fix }, 'A0');
+    mkdirSync(join(work, 'server'));
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 1500)'], { cwd: join(work, 'server'), stdio: 'ignore' });
+    try {
+      checkoutBase(repo, work, 'seqS', { id: 's2', baseRef: base }, 'A0');
+      expect(existsSync(join(work, 'server'))).toBe(false);
+    } finally {
+      child.kill();
+    }
+  });
+
+  it('replaces a workspace the agent swapped for a link with a real dir, leaving the link target alone', () => {
+    const { repo, base, fix } = gitRepo({});
+    const work = join(tmp('z0-wparent-'), 'work');
+    mkdirSync(work);
+    checkoutBase(repo, work, 'seqW', { id: 'w1', baseRef: fix }, 'A0');
+    const outside = tmp('z0-outside-');
+    writeFileSync(join(outside, 'marker.txt'), 'outside\n');
+    rmSync(work, { recursive: true, force: true });
+    symlinkSync(outside, work, 'junction');
+    checkoutBase(repo, work, 'seqW', { id: 'w2', baseRef: base }, 'A0');
+    expect(lstatSync(work).isSymbolicLink()).toBe(false);
+    expect(readdirSync(outside)).toEqual(['marker.txt']);
+    expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
   });
 });
 
