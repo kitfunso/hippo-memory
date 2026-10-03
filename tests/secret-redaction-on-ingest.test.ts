@@ -18,6 +18,9 @@ import {
 } from '../src/importers.js';
 import { captureToolFailure } from '../src/capture-error.js';
 import { captureError, partitionLessons } from '../src/autolearn.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { addWorkspace } from '../src/connectors/slack/workspaces.js';
+import { replayDlqEntry } from '../src/connectors/slack/dlq.js';
 
 // Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
@@ -115,6 +118,81 @@ describe('connector webhooks', () => {
     });
     expect(res.status).toBe(200);
     expectRedacted(storedContents(), GHP, 'the pull still fails');
+  });
+
+  const post = (route: string, body: string, headers: Record<string, string>): Promise<Response> =>
+    fetch(`http://127.0.0.1:${handle.port}/v1/connectors/${route}/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body,
+    });
+  const slackHeaders = (body: string) => {
+    const ts = String(Math.floor(Date.now() / 1000));
+    return { 'x-slack-request-timestamp': ts, 'x-slack-signature': `v0=${createHmac('sha256', SIGNING).update(`v0:${ts}:${body}`).digest('hex')}` };
+  };
+  const dlqRows = (table: 'slack_dlq' | 'github_dlq'): Array<{ id: number; raw_payload: string; signature: string | null; error: string }> => {
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: the SELECT names exactly these four columns.
+      return db.prepare(`SELECT id, raw_payload, signature, error FROM ${table} ORDER BY id`).all() as Array<{ id: number; raw_payload: string; signature: string | null; error: string }>;
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+  const withDb = (fn: (db: ReturnType<typeof openHippoDb>) => void): void => {
+    const db = openHippoDb(root);
+    try { fn(db); } finally { closeHippoDb(db); }
+  };
+
+  it('an unroutable Slack message lands in the dead-letter table redacted, and replays once routed', async () => {
+    withDb((db) => addWorkspace(db, { teamId: 'T_OTHER', tenantId: 'default' }));
+    const body = JSON.stringify({
+      type: 'event_callback',
+      team_id: 'T1',
+      event_id: 'EvDlq',
+      event_time: Math.floor(Date.now() / 1000),
+      event: { type: 'message', channel: 'C1', channel_type: 'channel', user: 'U1', text: `bot token ${SLACK_TOKEN} expires on friday`, ts: '1700000000.000300' },
+    });
+    expect((await post('slack', body, slackHeaders(body))).status).toBe(200);
+
+    const [row] = dlqRows('slack_dlq');
+    expect(row.raw_payload).not.toContain(SLACK_TOKEN);
+    expect(row.raw_payload).toContain('[REDACTED]');
+    expect(row.signature).toBeNull();
+    expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
+
+    withDb((db) => addWorkspace(db, { teamId: 'T1', tenantId: 'default' }));
+    expect(replayDlqEntry({ hippoRoot: root }, row.id, { signingSecret: SIGNING }).status).toBe('sig_missing');
+    expect(replayDlqEntry({ hippoRoot: root }, row.id, { force: true }).ok).toBe(true);
+    expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
+  });
+
+  it('a Slack body that is not JSON lands in the dead-letter table redacted', async () => {
+    const body = `{"team_id":"T1","event":{"text":"token ${SLACK_TOKEN} here"`;
+    expect((await post('slack', body, slackHeaders(body))).status).toBe(200);
+    const [row] = dlqRows('slack_dlq');
+    expect(row.raw_payload).not.toContain(SLACK_TOKEN);
+    expect(row.raw_payload).toContain('[REDACTED]');
+  });
+
+  it('a GitHub event parked for review lands in the dead-letter table redacted', async () => {
+    const body = JSON.stringify({
+      action: 'deleted',
+      issue: { number: 7, title: 'old', body: `the token ${GHP} was pasted here`, user: { login: 'alice', id: 1 } },
+      repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
+      sender: { login: 'alice', id: 1 },
+      installation: { id: 99 },
+    });
+    const res = await post('github', body, {
+      'x-hub-signature-256': `sha256=${createHmac('sha256', SIGNING).update(body).digest('hex')}`,
+      'x-github-event': 'issues',
+      'x-github-delivery': 'd-dlq',
+    });
+    expect(res.status).toBe(200);
+    const [row] = dlqRows('github_dlq');
+    expect(row.raw_payload).not.toContain(GHP);
+    expect(JSON.parse(row.raw_payload).issue.body).toBe('the token [REDACTED] was pasted here');
+    expect(row.signature).toBeNull();
   });
 });
 

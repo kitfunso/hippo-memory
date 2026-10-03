@@ -3,6 +3,7 @@ import type { Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope, type JsonValue } from './types.js';
+import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
 
 /**
  * GitHub webhook DLQ. Mirrors the Slack DLQ shape (src/connectors/slack/dlq.ts)
@@ -54,6 +55,8 @@ export interface WriteDlqOpts {
 }
 
 export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
+  const rawPayload = redactPayload(opts.rawPayload);
+  const redacted = rawPayload !== opts.rawPayload;
   const result = db
     .prepare(
       `INSERT INTO github_dlq
@@ -63,11 +66,11 @@ export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
     )
     .run(
       opts.tenantId ?? '__unroutable__',
-      opts.rawPayload,
-      opts.error,
+      rawPayload,
+      redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
       opts.eventName ?? null,
       opts.deliveryId ?? null,
-      opts.signature ?? null,
+      redacted ? null : opts.signature ?? null,
       opts.installationId ?? null,
       opts.repoFullName ?? null,
       new Date().toISOString(),
@@ -258,7 +261,7 @@ export async function replayDlqEntry(
         status: 'sig_missing',
         memoryId: null,
         retryCount: row.retryCount,
-        reason: 'legacy row without signature; pass --force to replay',
+        reason: 'row has no signature (legacy, or redacted before storing); pass --force to replay',
       };
     }
     const sigOk = verifyGitHubSignature({

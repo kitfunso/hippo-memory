@@ -136,6 +136,25 @@ export function vetSecrets(content: string, tags: readonly string[], scrub: bool
   return { content: kept, warnings };
 }
 
+const JSON_STRING = /"(?:[^"\\]|\\.)*"/g;
+
+/** Appended to a dead-letter row's error when `redactPayload` changed its body. */
+export const DLQ_REDACTED_NOTE = 'secret-shaped text redacted, signature dropped; replay needs --force';
+
+/** `vetSecrets` redaction for a raw webhook body: JSON stays valid for replay, and an untouched body stays byte-identical so its signature still verifies. */
+export function redactPayload(raw: string): string {
+  try {
+    JSON.parse(raw);
+  } catch {
+    return redactSecretsStrict(raw);
+  }
+  return raw.replace(JSON_STRING, (literal) => {
+    const text: string = JSON.parse(literal);
+    const kept = redactSecretsStrict(text);
+    return kept === text ? literal : JSON.stringify(kept);
+  });
+}
+
 function redactText(text: string, strict: boolean): string {
   if (!text) return text;
   let result = text;

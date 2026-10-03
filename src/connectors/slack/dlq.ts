@@ -6,6 +6,7 @@ import { resolveTenantForTeam } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type JsonValue } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
+import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
 
 export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';
 
@@ -43,6 +44,9 @@ export interface WriteDlqOpts {
 }
 
 export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
+  const rawPayload = redactPayload(opts.rawPayload);
+  // A redacted body can never match its signature, so the row keeps none and replay needs --force.
+  const redacted = rawPayload !== opts.rawPayload;
   const result = db
     .prepare(
       `INSERT INTO slack_dlq
@@ -52,11 +56,11 @@ export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
     .run(
       opts.tenantId ?? '__unroutable__',
       opts.teamId ?? null,
-      opts.rawPayload,
-      opts.error,
+      rawPayload,
+      redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
       new Date().toISOString(),
       opts.bucket ?? 'parse_error',
-      opts.signature ?? null,
+      redacted ? null : opts.signature ?? null,
       opts.slackTimestamp ?? null,
     );
   return Number(result.lastInsertRowid);
@@ -189,7 +193,7 @@ export function replayDlqEntry(
         status: 'sig_missing',
         memoryId: null,
         retryCount: row.retryCount,
-        reason: 'legacy row without signature/timestamp; pass --force to replay',
+        reason: 'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
       };
     }
     if (opts.signingSecret) {
