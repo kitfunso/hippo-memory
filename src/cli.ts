@@ -244,6 +244,7 @@ import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
   hashQueryText,
+  biasHintEnabled,
   buildSessionKey,
   getOrCreateRing,
   appendRecall,
@@ -1994,11 +1995,11 @@ async function cmdRecall(
 
   // J1, J2 and C5: each pipeline computes its hints over the list it returns, so they follow the list as it shrinks.
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = process.env.HIPPO_ANCHORING !== 'off' && sessionId
+  const anchorRing = biasHintEnabled('anchoring') && sessionId
     ? getOrCreateRing(sessionRecallHistoryCli, buildSessionKey(tenantId, sessionId))
     : null;
   const queryHash = hashQueryText(query);
-  const availabilityPool = process.env.HIPPO_AVAILABILITY !== 'off'
+  const availabilityPool = biasHintEnabled('availability')
     ? [...localEntries, ...globalEntries].map((e) => ({ id: e.id, created: e.created }))
     : null;
   const hintsFor = (list: SearchResult[], held: number) => {
@@ -2062,7 +2063,7 @@ async function cmdRecall(
   if (anchorRing) {
     // Appended after every detect: anchoredOn feeds the cooldown for the next recall on this session.
     appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
-  } else if (process.env.HIPPO_ANCHORING !== 'off') {
+  } else if (biasHintEnabled('anchoring')) {
     // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
     emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query));
   }

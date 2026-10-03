@@ -37,6 +37,7 @@ import { RejectedValueError } from '../rejection.js';
 import {
   detectAnchoring,
   hashQueryText,
+  biasHintEnabled,
   buildSessionKey,
   getOrCreateRing,
   appendRecall,
@@ -763,14 +764,14 @@ async function executeTool(
       }
 
       // J1, J2 and C5: MCP ranks its own list (its top-1 can differ from api.recall's), so its hints and Cutoff block are its own.
-      const anchorRing = process.env.HIPPO_ANCHORING !== 'off' && sessionId
+      const anchorRing = biasHintEnabled('anchoring') && sessionId
         ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
         : null;
       const queryHash = hashQueryText(query);
       const render = (cut: SearchResult[]) => {
         const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
         const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
-        const availability = process.env.HIPPO_AVAILABILITY !== 'off'
+        const availability = biasHintEnabled('availability')
           ? detectAvailabilityBias({
               topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
               pool: entries.map((e) => ({ id: e.id, created: e.created })),
@@ -818,7 +819,7 @@ async function executeTool(
       strengthenRetrieved(hippoRoot, retrievedIds);
       lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
 
-      if (process.env.HIPPO_ANCHORING !== 'off') {
+      if (biasHintEnabled('anchoring')) {
         if (anchorRing) {
           // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
           appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);

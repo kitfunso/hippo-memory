@@ -13,6 +13,7 @@ import {
   appendRecall,
   snapshotRing,
   hashQueryText,
+  biasHintEnabled,
   RingBuffer,
 } from './recall-history.js';
 import { appendAuditEvent, auditQueryFields, AUDIT_OPS } from './audit.js';
@@ -964,7 +965,7 @@ async function handleRequest(
     // hint flows through. HIPPO_ANCHORING=off short-circuits.
     let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
     let httpRingKey: string | undefined;
-    if (process.env.HIPPO_ANCHORING !== 'off') {
+    if (biasHintEnabled('anchoring')) {
       if (sessionId) {
         // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
         // before recall() preflight runs. A request with an invalid

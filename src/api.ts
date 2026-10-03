@@ -128,6 +128,7 @@ import {
 import {
   detectAnchoring,
   hashQueryText,
+  biasHintEnabled,
   type AnchoringHint,
   type RecallHistorySnapshot,
 } from './recall-history.js';
@@ -1256,7 +1257,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // detect call returns null and api.recall's anchoringHint stays absent.
   let anchoringHint: AnchoringHint | null = null;
   let suppressedByInterferenceCount = 0;
-  if (process.env.HIPPO_ANCHORING !== 'off' && opts.recallHistory) {
+  if (biasHintEnabled('anchoring') && opts.recallHistory) {
     const queryHash = hashQueryText(opts.query);
     const topMemoryId = rankedOut[0]?.id ?? null;
     anchoringHint = detectAnchoring(opts.recallHistory, queryHash, topMemoryId);
@@ -1307,7 +1308,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // opts.recallHistory gate above so we never double-emit the audit op. Audit
   // emission is pipeline-local, mirroring the J1 block above.
   let availabilityHint: AvailabilityHint | null = null;
-  if (process.env.HIPPO_AVAILABILITY !== 'off' && !opts.suppressAvailabilityHint) {
+  if (biasHintEnabled('availability') && !opts.suppressAvailabilityHint) {
     availabilityHint = detectAvailabilityBias({
       topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
       pool: entries.map((e) => ({ id: e.id, created: e.created })),
