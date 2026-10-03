@@ -187,7 +187,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const dump = join(dumpDir, 'env.jsonl');
     writeFileSync(dumpJs, "require('fs').appendFileSync(process.argv[2], JSON.stringify(process.env) + '\\n');\n");
     const dumpCmd = `node "${dumpJs}" "${dump}"`;
-    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'repoA', repo: r.repo, tasks: [task(r, 'a1', 'FIX add in lib.js', { setup: dumpCmd, test: `${dumpCmd} && node test.js` }), task(r, 'a2', 'look around only')] }] });
+    const spec = validateTasks({ sequences: [{ id: 'seqA', cluster: 'repoA', repo: r.repo, tasks: [task(r, 'a1', 'FIX add in lib.js', { setup: dumpCmd, test: `${dumpCmd} && node test.js` }), task(r, 'a2', 'look around add in lib.js only')] }] });
     await run(spec, ['A0', 'A1', 'A2', 'A5'], out);
     const childEnvs = readFileSync(dump, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(childEnvs).toHaveLength(8);

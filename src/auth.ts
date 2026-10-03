@@ -1,7 +1,8 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DatabaseSyncLike } from './db.js';
 
-const KEY_PREFIX = 'hk_';
+/** Every minted API key starts with this, so the server can route a bearer token by shape. */
+export const API_KEY_PREFIX = 'hk_';
 const ID_LEN = 24;       // base32 chars after prefix
 const SECRET_LEN = 32;   // base32 chars after dot
 const SCRYPT_KEYLEN = 32;
@@ -59,7 +60,7 @@ export interface CreateApiKeyResult {
 }
 
 export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): CreateApiKeyResult {
-  const keyId = `${KEY_PREFIX}${randBase32(ID_LEN)}`;
+  const keyId = `${API_KEY_PREFIX}${randBase32(ID_LEN)}`;
   const secret = randBase32(SECRET_LEN);
   const plaintext = `${keyId}.${secret}`;
   const hash = hashKey(plaintext);

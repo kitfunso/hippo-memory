@@ -4,6 +4,7 @@
 **Status:** DRAFT / NOT REGISTERED / NOT RUN  
 **Roadmap:** Z1d, [Parts XVI-XVIII](../../ROADMAP.md)  
 **Default policy:** No default change.
+**Note (2026-10-03):** `pinnedInject.promptRecall` is on by default from 1.55.0 (ROADMAP Z11). The "current pinned + newest 5 hook" below now needs the flag pinned off; name the comparator before registering.
 
 This is a planning draft. No corpus or implementation is frozen, no scored data is collected under this draft, and no result is claimed. Prior result documents have been read; their seen splits are development evidence, not independent confirmation. Resolve every item below and commit a locked registration before a scored run. This file does not amend an existing locked preregistration.
 

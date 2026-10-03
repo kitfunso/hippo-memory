@@ -64,9 +64,10 @@ export function replayTrace(trace, arm) {
   const hippoRoot = path.join(workDir, '.hippo');
   try {
     initStore(hippoRoot);
-    if (arm === 'every-turn') {
-      fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ pinnedInject: { skipUnchanged: false } }));
-    }
+    // Traces carry no prompt text, so prompt recall (default on since 1.55.0) would never fire.
+    const pinnedInject = { promptRecall: false };
+    if (arm === 'every-turn') pinnedInject.skipUnchanged = false;
+    fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ pinnedInject }));
     for (const text of trace.pinned ?? []) {
       writeEntry(hippoRoot, createMemory(text, { pinned: true, layer: Layer.Episodic }));
     }

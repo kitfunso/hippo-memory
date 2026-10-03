@@ -1,7 +1,11 @@
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+// withFakeHome empties PATH; a child process still needs node and cmd.exe.
+const prevPathForChild = process.env.PATH ?? '';
 
 import {
   ensureCodexWrapperInstalled,
@@ -27,7 +31,7 @@ function withFakeHome() {
       process.env.HOME = prevHome;
       process.env.USERPROFILE = prevUserProfile;
       process.env.PATH = prevPath;
-      fs.rmSync(fake, { recursive: true, force: true });
+      fs.rmSync(fake, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     },
   };
 }
@@ -167,6 +171,36 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     expect(result.status).toBe('source-checkout');
     expect(fs.readFileSync(realCodex, 'utf8')).toContain('updated real codex');
     expect(isCodexWrapperInstalled()).toBe(true);
+  });
+
+  it('codex-run launches a cmd launcher and passes every argument through intact', () => {
+    const realBin = path.join(env.home, 'real bin');
+    const realCodex = path.join(realBin, 'codex.cmd');
+    const argvOut = path.join(env.home, 'argv.json');
+    fs.mkdirSync(realBin, { recursive: true });
+    fs.writeFileSync(
+      realCodex,
+      '@echo off\r\nnode -e "require(\'fs\').writeFileSync(process.env.ARGV_OUT, JSON.stringify(process.argv.slice(1)))" -- %*\r\n',
+      'utf8',
+    );
+    installCodexWrapper(realCodex);
+
+    const forwarded = ['exec', 'fix the bug & ship', 'a "quoted" word', ''];
+    execFileSync('node', [path.join(process.cwd(), 'bin', 'hippo.js'), 'codex-run', '--', ...forwarded], {
+      cwd: env.home,
+      env: { ...process.env, PATH: prevPathForChild, HOME: env.home, USERPROFILE: env.home, HIPPO_HOME: path.join(env.home, '.hippo-global'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ARGV_OUT: argvOut },
+      stdio: 'pipe',
+    });
+
+    expect(JSON.parse(fs.readFileSync(argvOut, 'utf8'))).toEqual(forwarded);
+
+    // codex-run leaves a detached session-end worker; let it finish before cleanup removes its folder.
+    const workerLog = resolveCodexWrapperPaths().logFile;
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline && !(fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'))) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+    expect(fs.readFileSync(workerLog, 'utf8')).toContain('skip: no hippo store');
   });
 });
 

@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.55.0 - 2026-10-03
+
+### Changed
+
+- **The per-prompt hook now injects memories that match your prompt, not the five newest.** `pinnedInject.promptRecall` defaults to true. Each prompt gets your pinned memories plus up to 5 that share words with it, and only the pinned ones when nothing matches. A prompt-less payload still gets the five newest. The Z1 replay (`docs/evals/2026-09-26-z1-prompt-recall-result.md`) cut median injected tokens from 847 to 533, with its primary overlap score tied at 0.0545. It also had costs: the mean fell only from 684 to 662, the p90 rose from 1,438 to 1,600 because the matched block is never skipped as unchanged, and session-lifetime overlap fell from 0.086 to 0.067. Hook p95 at 10,000 memories is about 210 to 230 ms since 1.52.1, against about 210 ms for the old hook. A lesson saved earlier in the session no longer rides along on every prompt; it appears when a prompt touches it. This default carries no task-benefit claim. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the old newest-5 behaviour.
+
+### Fixed
+
+- **A session digest no longer copies an older digest that prompt recall injected.** The echo filter checked only the five newest digests, which was all the old hook could inject. It now checks every live digest from other sessions.
+
+## 1.54.0 - 2026-10-03
+
+### Added
+
+- **`serve()` accepts an `authResolver` so an add-on can vouch for bearer tokens that are not API keys.** Tokens are routed by shape: an `hk_` token only ever reaches API-key validation, and any other token only reaches the resolver, which never sees a hippo key and cannot override one. A null answer is a 401 without opening the database. The core sanitises each answer (reserved or whitespace-padded subjects, empty or reserved tenants, and unknown roles are rejected or downgraded). A resolver that throws or misses its deadline (`authResolverTimeoutMs`, default 5000 ms) gets a 503 "auth provider unavailable", and an open `/mcp/stream` skips that heartbeat instead of closing as revoked. A resolver admin is a tenant admin: it gets a 403 for `GET /v1/audit?tenant=<other>` and `POST /v1/sleep`, while API-key admins keep both, and it can mint and revoke member API keys only, so no key it touches outranks it. The server is importable as `hippo-memory/server`.
+- **`listAuditEventsAfter` reads the audit log by id cursor, for exporters.** Ascending, with an optional tenant filter. The audit and database open/close functions, plus `openHippoDbReadOnly` (it never creates a store), are exported from the main entry.
+
+### Security
+
+- **The per-IP rate limiter now covers `/mcp` and `/mcp/stream`, not only `/v1/*`.** Bearer guessing through the MCP transport was unthrottled.
+- **Context recall and CLI recall no longer write query text into the audit log.** Both stored the first 200 characters of the query; they now store `query_hash` and `query_length` like every other recall path, through one shared `auditQueryFields` helper in `src/audit.ts`. Rows written before this release keep their text; nothing rewrites them.
+
+## 1.53.2 - 2026-10-03
+
+### Fixed
+
+- **The Codex wrapper starts Codex again on Windows when Codex is installed through npm.** The wrapper launched the real `codex.hippo-real.cmd` through cmd.exe with its command line quoted twice, so `codex` failed with "is not recognized as an internal or external command" and never started. Arguments with spaces, quotes, `&` or an empty string now reach Codex unchanged.
+
 ## 1.53.1 - 2026-10-03
 
 ### Changed

@@ -1,0 +1,11 @@
+You are checking what a parent agent wrote or saved during one session. The parent side below is everything the parent itself wrote or saved, in session order (part {{PART}} of {{PARTS}}). After it comes a numbered list of lessons.
+
+For each lesson, decide whether the parent side states it or states anything that implies it. A reworded statement of the same fact counts. A statement of a different fact on the same topic does not.
+
+Reply with JSON only: {"kept":[<lesson number>, ...]} listing the numbers of the lessons the parent side states or implies. Use an empty list when there are none.
+
+=== Parent side ===
+{{PARENT_SIDE}}
+
+=== Lessons ===
+{{LESSONS}}

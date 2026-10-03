@@ -93,6 +93,23 @@ Permission for one member API key to read one restricted scope. Admin keys, the 
 stdio MCP need none.
 _Avoid_: ACL entry, share, permission
 
+**Auth resolver**:
+A function the server asks to vouch for a bearer token that is not an API key. Tokens are routed
+by shape: an `hk_` token goes only to API-key validation, any other token only to the resolver.
+Returns a tenant, subject, role and scope grants, or nothing (a 401). It throws only when its
+upstream is down; a throw or a missed deadline is a 503, which a stream heartbeat skips rather than
+treating as revocation. It runs on every authenticated request and every stream heartbeat, so it
+must be cache-backed. Its admin role is tenant admin: no other tenant's audit log, no host-wide
+sleep. It can mint and revoke member API keys only, and those outlive the user's removal from the
+identity provider.
+_Avoid_: auth plugin, identity provider
+
+**Audit cursor**:
+The last audit event id an exporter has read; `listAuditEventsAfter` returns the events after it.
+Retention prune deletes events whether or not they were exported, so an exporter must keep up with
+the prune window; gaps in ids are normal.
+_Avoid_: offset, page token
+
 **Derived memory**:
 A memory built from other memories' content: a consolidation merge, a DAG summary or profile, an
 extracted fact. It carries the restricted scope of its sources and is never built from sources in
@@ -170,6 +187,12 @@ _Avoid_: compaction summary, compaction log, snapshot
 A human message that tells the agent something it just did, said, proposed or assumed is wrong
 or unwanted, or turns it against that. A detected one is a candidate lesson, not a stored memory.
 _Avoid_: feedback (outcomes are feedback too), complaint, redirect
+
+**Sub-agent transcript**:
+The JSONL file Claude Code writes for one delegated agent, in the parent session's `subagents/`
+folder and apart from the parent's own transcript. Each turn ends in a text-only message that goes
+back to the parent; the last one is its final report. Session-end capture reads only the parent's.
+_Avoid_: sidechain log, child transcript
 
 ### Support
 

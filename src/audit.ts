@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject, JsonValue } from './working-memory.js';
@@ -290,6 +291,18 @@ function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValue
   return isBigIntValue(value) ? value.toString() : value;
 }
 
+export type AuditQueryFields = {
+  query_hash: string;
+  query_length: number;
+};
+
+export function auditQueryFields(query: string): AuditQueryFields {
+  return {
+    query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
+    query_length: query.length,
+  };
+}
+
 export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
   db.prepare(
     `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -332,23 +345,64 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
     params.push(opts.since);
   }
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 10000));
-  // SAFETY: the SELECT above names exactly these six columns in this order, so the
-  // row shape matches this assertion.
+  // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(
-      `SELECT id, ts, tenant_id, actor, op, target_id, metadata_json
-       FROM audit_log WHERE ${where.join(' AND ')} ORDER BY ts DESC, id DESC LIMIT ?`,
+      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY ts DESC, id DESC LIMIT ?`,
     )
-    .all(...params, limit) as Array<{
-    id: number;
-    ts: string;
-    tenant_id: string;
-    actor: string;
-    op: string;
-    target_id: string | null;
-    metadata_json: string;
-  }>;
-  return rows.map((r) => ({
+    .all(...params, limit) as AuditRow[];
+  return rows.map(rowToAuditEvent);
+}
+
+export interface ListAuditAfterOpts {
+  /** Last id already consumed; 0 starts from the beginning. */
+  afterId: number;
+  /** Clamped to 1..10000; default 1000. */
+  limit?: number;
+  /** Omit for every tenant (deployment-wide export). */
+  tenantId?: string;
+}
+
+/**
+ * Cursor read: events with id > afterId, ascending by id. Ids are AUTOINCREMENT
+ * and never reused, but deletes (retention prune) leave gaps, so resume from
+ * the last id returned, never from a count.
+ */
+export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterOpts): AuditEvent[] {
+  if (!Number.isInteger(opts.afterId) || opts.afterId < 0) {
+    throw new RangeError('afterId must be a non-negative integer');
+  }
+  if (opts.limit !== undefined && !Number.isInteger(opts.limit)) {
+    throw new RangeError('limit must be an integer');
+  }
+  const where: string[] = ['id > ?'];
+  const params: unknown[] = [opts.afterId];
+  if (opts.tenantId !== undefined) {
+    where.push('+tenant_id = ?');
+    params.push(opts.tenantId);
+  }
+  const limit = Math.max(1, Math.min(opts.limit ?? 1000, 10000));
+  // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
+  const rows = db
+    .prepare(`SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`)
+    .all(...params, limit) as AuditRow[];
+  return rows.map(rowToAuditEvent);
+}
+
+const AUDIT_COLUMNS = 'id, ts, tenant_id, actor, op, target_id, metadata_json';
+
+interface AuditRow {
+  id: number;
+  ts: string;
+  tenant_id: string;
+  actor: string;
+  op: string;
+  target_id: string | null;
+  metadata_json: string;
+}
+
+function rowToAuditEvent(r: AuditRow): AuditEvent {
+  return {
     id: r.id,
     ts: r.ts,
     tenantId: r.tenant_id,
@@ -358,7 +412,7 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
     op: r.op as AuditOp,
     targetId: r.target_id,
     metadata: safeJsonParse(r.metadata_json),
-  }));
+  };
 }
 
 function safeJsonParse(raw: string): JsonObject {
