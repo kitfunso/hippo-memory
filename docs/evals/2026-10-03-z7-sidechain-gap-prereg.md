@@ -163,16 +163,26 @@ The repo gets the script, this file and the result, which reports counts only: n
 - The roadmap counts "file-level facts". Following Z9.4 (do not save what the file or git can tell you), this eval counts a fact about a file only when it is a gotcha the file would not reveal. That narrows the count toward DROP.
 - Sessions start 2026-09-02 (retention), mostly on this owner's projects; the result speaks for this box's use.
 
-## Pins (filled at the lock)
-
-Master commit, `dist/` SHA-256, snapshot manifest SHA-256, `claude --version`, and the frozen prompts' SHA-256.
-
 ## Amendments
 
 Before the lock, from building the script (no judge call had been made):
 1. **Recheck scope.** The recheck runs on every sub-agent where either judge keeps a verified lesson, not only where both do, because the union share in the DROP rule is defined after the recheck. G5 and G6 therefore see more decoys.
 2. **Retries.** A judge, recheck or rule-arm call is retried up to 3 times on a failed exit or a reply that does not parse; G2 counts calls that still fail after that. Only passing replies are cached.
 3. **Untested gates.** A gate with nothing to measure (for example G5 when no decoy was unplanted) is reported as untested, listed in the result, and does not fail the run.
-4. **Files.** The script is three files: `scripts/z7-sidechain-lib.mjs`, `scripts/z7-sidechain-eval.mjs` and `scripts/z7-sidechain-selftest.mjs`, with prompts in `scripts/z7-sidechain-prompts/`. The lock checks all of them.
+4. **Files.** The script is four files: `scripts/z7-sidechain-lib.mjs`, `scripts/z7-sidechain-eval.mjs`, `scripts/z7-sidechain-guard.mjs` and `scripts/z7-sidechain-selftest.mjs`, with prompts in `scripts/z7-sidechain-prompts/`. The lock checks all of them.
 5. **Non-gating row.** The row with other sub-agents' reports re-asks only the lessons the main recheck did not keep, with its own decoy, which no gate counts.
 6. **Resume** (Lock section), added so that a quota limit cannot spend the one scored run.
+7. **From the Codex review of the script (four findings, all taken).** (a) Before the marker, the scored run refuses if any script or prompt file differs between the lock commit and HEAD, or if any value under Pins below (the `dist/` files, prompts, manifest, scored item list, `claude --version`) does not match. (b) It recomputes the draw from the verified snapshot and refuses unless it equals `work/draw.json` in full. (c) G2 counts the control calls with each judge's own calls, and G4 is taken only over control items where both calls parsed; if fewer than 27 of the 30 parsed, G4 fails. (d) The precision audit ends with `audit-finalize --confirmed K`, which records the count once and turns a BUILD into INCONCLUSIVE below 0.75; `result.json` stays as the record before the audit.
+
+Dev rounds (24 dev items from 9 sessions; dev figures never enter the scored numbers):
+8. **Round 1 was the only round.** All 48 judge calls and every recheck call parsed (G2), both judges were under the evidence-failure bar (G3), and the recheck kept 0 of 3 unplanted decoys (G5) and 8 of 8 planted ones (G6). Before the recheck 6 sub-agents had a verified lesson from both judges; the recheck kept 5 lessons, leaving 5 lesson-bearing (7 by either judge). No prompt or cut was changed, so the frozen prompts are the ones committed with the script.
+9. **Calibration: 4 of 5 confirmed (0.80), pass.** Four sub-agents held a durable, non-recoverable lesson absent from their parent side. The one rejected was a harness rule whose own error message states the fix, so any agent already has it. Disclosure: the `score` command prints kappa, so the orchestrator saw the dev kappa before marking, against the order in the calibration paragraph above. The scored run is unaffected.
+10. **The audit is required only on BUILD**, since calibration was informative.
+
+## Pins
+
+- Script base: master `28ca777`. `src/capture.ts`, `src/same-text.ts` and `src/secret-detect.ts` are unchanged from there to `c2b3840` (1.53.2).
+- `dist/` SHA-256: `capture.js` `cb6ad6e10cde1b66e6333ddec74a6129d93cb02ddded9956b2e960bcfa32668b`, `same-text.js` `2e3863a520f0a37b5e560019583f476190219f705fade2525abc51e95b34fb87`, `secret-detect.js` `a4999c5c50583aae9f0eef5ba487de948d3e1a252c673b81bcf9f4cfec495ddd`.
+- Snapshot manifest SHA-256 `84028a76df0a4c9b16ea4aaffcaed3284f26ef37985c4cd0a7837765496966e0`; scored item list SHA-256 `cb58dd16d537be7ec882c2faa18d82687bf9af3fac917be644592bd5f9c808ac`.
+- `claude --version`: 2.1.288.
+- Prompts SHA-256: `judge-prompt.txt` `e76d157b8fd6279744e34098bd05da62129a610596e944b23c59def2e40f693a`, `judge-system.txt` `db6157da9b267006457bf57d6b64f98891c99733ff5ac33e071c5c7b487c22b3`, `recheck-prompt.txt` `1d1a286d8be6272afaf33ad576794a0436696087d8a2e3c4298056841852ec4f`, `rule-arm-prompt.txt` `23073d822273daf4e32e4cf8fc4b0bf40606bc6d7947fa8517777648a30dc199`.

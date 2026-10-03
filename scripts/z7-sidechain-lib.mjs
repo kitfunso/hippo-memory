@@ -503,15 +503,35 @@ export function verdict(ci, unionCi, valid) {
 const frac = (k, n) => (n ? k / n : null);
 const test = (v, f) => (v === null ? null : f(v));
 
+// A control call that failed to parse is no negative result: under 90% of the control items parsed by both judges fails G4.
+function controlG4(c) {
+  if (c.parsed < Math.ceil(c.total * 0.9)) return false;
+  return test(frac(c.hits, c.parsed), (r) => r <= 0.1);
+}
+
+// ctl: {model: {id: {ok, verified}}}; G4 counts only items where both judges parsed.
+export function controlFigures(ctl, ids) {
+  const [m1, m2] = MODELS;
+  const ok = (m, id) => ctl[m][id]?.ok === true;
+  const hit = (m, id) => (ctl[m][id]?.verified ?? []).length > 0;
+  const parsed = ids.filter((id) => ok(m1, id) && ok(m2, id));
+  return {
+    total: ids.length, parsed: parsed.length, hits: parsed.filter((id) => hit(m1, id) && hit(m2, id)).length,
+    parse: { sonnet: [ids.filter((id) => ok(m1, id)).length, ids.length], opus: [ids.filter((id) => ok(m2, id)).length, ids.length] },
+  };
+}
+
 // s holds [hits, total] pairs per gate; a gate with nothing to measure is null (untested), never a silent pass.
 export function gateResults(s) {
   const parse = ([k, n]) => test(frac(k, n), (r) => r >= 0.95);
+  const cp = s.control?.parse ?? { sonnet: [0, 0], opus: [0, 0] };
+  const withControl = (a, b) => [a[0] + b[0], a[1] + b[1]];
   const evid = ([k, n]) => test(frac(k, n), (r) => r <= 0.3);
   return {
     G1: s.isolation,
-    G2: { sonnet: parse(s.parse.sonnet), opus: parse(s.parse.opus), recheck: parse(s.parse.recheck) },
+    G2: { sonnet: parse(withControl(s.parse.sonnet, cp.sonnet)), opus: parse(withControl(s.parse.opus, cp.opus)), recheck: parse(s.parse.recheck) },
     G3: { sonnet: evid(s.evidenceFail.sonnet), opus: evid(s.evidenceFail.opus) },
-    G4: s.control ? test(frac(...s.control), (r) => r <= 0.1) : null,
+    G4: s.control ? controlG4(s.control) : null,
     G5: test(frac(...s.unplanted), (r) => r <= 0.15),
     G6: test(frac(...s.planted), (r) => r >= 0.85),
   };
@@ -571,4 +591,63 @@ export function figures(items, judge, recheck) {
     planted: [dec('planted').filter((r) => r.decoyKept).length, dec('planted').length],
     decoySkipped: dec('skipped').length,
   };
+}
+
+// A BUILD stands only if at least 75% of the audited sample is confirmed; every other verdict is unchanged.
+export function finalizeAudit(preliminary, n, confirmed) {
+  const stands = n > 0 && confirmed * 4 >= n * 3;
+  return { sampleN: n, confirmed, share: n ? confirmed / n : null, preliminary, final: preliminary === 'BUILD' && !stands ? 'INCONCLUSIVE' : preliminary };
+}
+
+export function buildDraw(eligible) {
+  const d = drawSplit(eligible);
+  const ids = (xs) => xs.map((it) => itemId(it.session, it.file));
+  const items = {};
+  for (const it of [...d.dev, ...d.scored]) items[itemId(it.session, it.file)] = { session: it.session, file: it.file, agentType: it.agentType, project: it.project };
+  const scored = ids(d.scored);
+  return {
+    seedString: SEED_STRING, seedHex: d.seedHex, eligibleSubs: eligible.length, eligibleSessions: new Set(eligible.map((i) => i.session)).size,
+    devSessions: d.devSessions, scoredSessions: d.scoredSessions, dev: ids(d.dev), scored, items, itemListSha256: sha256(scored.join('\n')),
+  };
+}
+
+// Returns why a stored draw.json cannot stand against the recomputed draw and the prereg's list pin, or null.
+export function drawMismatch(fresh, stored, pinSha) {
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (!same(fresh.dev, stored.dev)) return 'the dev list differs from the recomputed draw';
+  if (!same(fresh.scored, stored.scored)) return 'the scored list differs from the recomputed draw';
+  const wrong = fresh.scored.find((id) => !same(fresh.items[id], stored.items?.[id]));
+  if (wrong) return `the items mapping differs for ${wrong}`;
+  if (fresh.itemListSha256 !== pinSha || stored.itemListSha256 !== pinSha) return 'the scored list sha256 differs from the prereg pin';
+  return null;
+}
+
+export const PIN_DIST = ['capture.js', 'same-text.js', 'secret-detect.js'];
+export const PIN_PROMPTS = ['judge-prompt.txt', 'judge-system.txt', 'recheck-prompt.txt', 'rule-arm-prompt.txt'];
+
+// Reads the prereg's "## Pins" section: hashes keyed by file name, the two list pins and the claude version.
+export function parsePins(md) {
+  const at = md.indexOf('\n## Pins');
+  const rest = at < 0 ? '' : md.slice(at + 1);
+  const end = rest.indexOf('\n## ', 3);
+  const sec = end < 0 ? rest : rest.slice(0, end);
+  const named = (ext) => Object.fromEntries([...sec.matchAll(/`([\w.-]+)`\s+`([0-9a-f]{64})`/g)].filter((m) => m[1].endsWith(ext)).map((m) => [m[1], m[2]]));
+  const one = (re) => re.exec(sec)?.[1] ?? null;
+  return {
+    dist: named('.js'), prompts: named('.txt'),
+    manifest: one(/Snapshot manifest SHA-256\s+`([0-9a-f]{64})`/), scoredList: one(/scored item list SHA-256\s+`([0-9a-f]{64})`/),
+    claude: one(/`claude --version`:\s*(\d+(?:\.\d+)*)/),
+  };
+}
+
+// Checks only the keys given in actual; a pin that is missing counts as a mismatch. Returns the mismatched names.
+export function checkPins(pins, actual) {
+  const bad = [];
+  for (const [group, names] of [['dist', PIN_DIST], ['prompts', PIN_PROMPTS]]) {
+    if (!actual[group]) continue;
+    for (const n of names) if (!pins[group][n] || pins[group][n] !== actual[group][n]) bad.push(group === 'dist' ? `dist/${n}` : n);
+  }
+  for (const k of ['manifest', 'scoredList']) if (k in actual && (!pins[k] || pins[k] !== actual[k])) bad.push(k);
+  if ('claude' in actual && (!pins.claude || !String(actual.claude).startsWith(pins.claude))) bad.push('claude --version');
+  return bad;
 }

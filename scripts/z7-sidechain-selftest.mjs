@@ -1,5 +1,9 @@
 // Offline synthetic cases for z7-sidechain-lib.mjs; run through the eval script's selftest command.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import * as L from './z7-sidechain-lib.mjs';
+import { git, guardScored, createMarker, startResume, countResumes, resumesLog, refuseApiKey } from './z7-sidechain-guard.mjs';
 
 const [SONNET, OPUS] = L.MODELS;
 const jl = (entries, extraLines = []) => [...entries.map((e) => JSON.stringify(e)), ...extraLines].join('\n');
@@ -141,7 +145,7 @@ function selftestStats(t) {
     && v(0, 0.0999, 0.1) === 'INCONCLUSIVE' && v(0, 0.1, 0.05) === 'INCONCLUSIVE' && v(0.3, 0.5, 0.5, false) === 'INVALID');
   t('parsers: fenced JSON, kind coercion, kept range', L.parseLessons('```json\n{"lessons":[{"kind":"Error","text":"x","evidence":"y"},{"kind":"bad","text":"z","evidence":"w"}]}\n```').lessons.map((l) => l.kind).join() === 'error,other'
     && !L.parseLessons('nope').ok && L.parseKept('{"kept":[0,5,1,1]}', 3).kept.join() === '0,1');
-  const g = L.gateResults({ isolation: true, parse: { sonnet: [19, 20], opus: [20, 20], recheck: [0, 0] }, evidenceFail: { sonnet: [3, 10], opus: [4, 10] }, control: [1, 10], unplanted: [4, 20], planted: [17, 20] });
+  const g = L.gateResults({ isolation: true, parse: { sonnet: [19, 20], opus: [20, 20], recheck: [0, 0] }, evidenceFail: { sonnet: [3, 10], opus: [4, 10] }, control: { total: 10, parsed: 10, hits: 1, parse: { sonnet: [10, 10], opus: [10, 10] } }, unplanted: [4, 20], planted: [17, 20] });
   t('gates: G2 95%, G3 30%, G4 10%, G5 15%, G6 85%, empty is untested', g.G2.sonnet === true && g.G2.recheck === null && g.G3.sonnet === true && g.G3.opus === false && g.G4 === true && g.G5 === false && g.G6 === true && !L.gatesValid(g));
   const J = { [SONNET]: { i1: { ok: true, returned: 1, failed: 0, verified: [{ kind: 'error', text: 'a', evidence: 'e', inReport: true }] } }, [OPUS]: { i1: { ok: true, returned: 1, failed: 0, verified: [{ kind: 'error', text: 'b', evidence: 'e', inReport: false }] } } };
   const R = { i1: { keptKeys: [`${OPUS}:0`], callsTotal: 1, callsOk: 1, decoy: 'planted', decoyKept: true } };
@@ -149,5 +153,124 @@ function selftestStats(t) {
   t('figures: a kept lesson removes consensus but not the union', f.pBefore === 1 && f.consensus === 0 && f.union === 1 && f.overturned === 1 && f.planted.join() === '1,1');
 }
 
+const hex = (c) => c.repeat(64);
+export function pinsBlock(dist, prompts, claude = '2.1.288') {
+  const named = (names, map) => names.map((n) => `\`${n}\` \`${map[n]}\``).join(', ');
+  return ['## Pins', '', `- \`dist/\` SHA-256: ${named(L.PIN_DIST, dist)}.`, `- Snapshot manifest SHA-256 \`${hex('a')}\`; scored item list SHA-256 \`${hex('b')}\`.`,
+    `- \`claude --version\`: ${claude}.`, `- Prompts SHA-256: ${named(L.PIN_PROMPTS, prompts)}.`].join('\n');
+}
 
-export const libSelftests = [selftestSub, selftestParent, selftestEvidence, selftestDrawAndChunks, selftestStats];
+function selftestFrozen(t) {
+  const dist = Object.fromEntries(L.PIN_DIST.map((n, i) => [n, hex(String(i + 1))]));
+  const prompts = Object.fromEntries(L.PIN_PROMPTS.map((n, i) => [n, hex('cdef'[i])]));
+  const md = `# x\n\n## Earlier\n\n- \`other.js\` \`${hex('9')}\`\n\n${pinsBlock(dist, prompts)}\n\n## Later\n\n- \`late.txt\` \`${hex('8')}\`\n`;
+  const pins = L.parsePins(md);
+  t('pins parsed from a synthetic block, other sections ignored', JSON.stringify(pins.dist) === JSON.stringify(dist) && JSON.stringify(pins.prompts) === JSON.stringify(prompts)
+    && pins.manifest === hex('a') && pins.scoredList === hex('b') && pins.claude === '2.1.288');
+  const ok = { dist, prompts, claude: '2.1.288 (Claude Code)' };
+  t('pins match, and a prefix-matched claude version passes', L.checkPins(pins, ok).length === 0 && L.checkPins(pins, { manifest: hex('a'), scoredList: hex('b') }).length === 0);
+  const bad = L.checkPins(pins, { dist: { ...dist, 'capture.js': hex('0') }, prompts: { ...prompts, 'judge-prompt.txt': undefined }, claude: '2.1.289', manifest: hex('0') });
+  t('pin mismatches are named', bad.join() === 'dist/capture.js,judge-prompt.txt,manifest,claude --version');
+  t('a missing pin is a mismatch', L.checkPins(L.parsePins('no pins here'), ok).length === 8 && L.checkPins(L.parsePins(md), { scoredList: undefined }).join() === 'scoredList');
+}
+
+function selftestDrawPinned(t) {
+  const items = [];
+  for (let s = 0; s < 20; s++) for (let k = 0; k < 7; k++) items.push({ session: `s${s}`, file: `agent-${k}.jsonl`, template: `tpl${k % 5}`, agentType: 'worker', project: 'p' });
+  const fresh = L.buildDraw(items);
+  const copy = () => JSON.parse(JSON.stringify(fresh));
+  const pin = fresh.itemListSha256;
+  t('a matching draw.json passes against the recomputed draw and the pin', L.drawMismatch(fresh, copy(), pin) === null);
+  const swapped = copy();
+  swapped.scored.reverse();
+  const remapped = copy();
+  remapped.items[fresh.scored[0]].project = 'other';
+  const redev = copy();
+  redev.dev.pop();
+  t('draw refused: scored list, items mapping, dev list', /scored list/.test(L.drawMismatch(fresh, swapped, pin)) && /items mapping/.test(L.drawMismatch(fresh, remapped, pin)) && /dev list/.test(L.drawMismatch(fresh, redev, pin)));
+  t('draw refused when the list sha256 differs from the pin', /prereg pin/.test(L.drawMismatch(fresh, copy(), hex('c'))));
+}
+
+function selftestControlAndAudit(t) {
+  const ids = Array.from({ length: 30 }, (_, i) => `i${i}`);
+  const mk = (okN, hitN) => Object.fromEntries(ids.map((id, i) => [id, { ok: i < okN, verified: i < hitN ? [{ kind: 'error', text: 'x' }] : [] }]));
+  const c = L.controlFigures({ [SONNET]: mk(30, 0), [OPUS]: mk(26, 0) }, ids);
+  t('control counts: per-judge parse and items parsed by both', c.total === 30 && c.parsed === 26 && c.parse.sonnet.join() === '30,30' && c.parse.opus.join() === '26,30');
+  const gates = (primary, control) => L.gateResults({ isolation: true, parse: { ...primary, recheck: [1, 1] }, evidenceFail: { sonnet: [0, 1], opus: [0, 1] }, control, unplanted: [0, 1], planted: [1, 1] });
+  const ctl = (parsed, hits, parse = { sonnet: [30, 30], opus: [30, 30] }) => ({ total: 30, parsed, hits, parse });
+  const primary = { sonnet: [19, 20], opus: [20, 20] };
+  t('G4 false when under 27 of 30 parsed, else hits over parsed', gates(primary, ctl(26, 0)).G4 === false && gates(primary, ctl(27, 2)).G4 === true && gates(primary, ctl(27, 3)).G4 === false && gates(primary, ctl(30, 3)).G4 === true && gates(primary, ctl(30, 4)).G4 === false);
+  t('G2 counts control calls with the primary calls per judge', gates(primary, ctl(30, 0)).G2.sonnet === true && gates(primary, ctl(30, 0, { sonnet: [0, 10], opus: [10, 10] })).G2.sonnet === false);
+  const fin = (v, n, k) => L.finalizeAudit(v, n, k).final;
+  t('audit finalize at the 0.75 boundary', fin('BUILD', 4, 3) === 'BUILD' && fin('BUILD', 10, 7) === 'INCONCLUSIVE' && fin('BUILD', 10, 8) === 'BUILD' && fin('BUILD', 3, 2) === 'INCONCLUSIVE' && fin('BUILD', 3, 3) === 'BUILD');
+  t('audit finalize leaves other verdicts unchanged and reports the share', fin('DROP', 10, 0) === 'DROP' && fin('INCONCLUSIVE', 10, 0) === 'INCONCLUSIVE' && fin('INVALID', 10, 10) === 'INVALID' && L.finalizeAudit('BUILD', 8, 6).share === 0.75);
+}
+
+function selftestGuard(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z7-guard-'));
+  const distDir = fs.mkdtempSync(path.join(os.tmpdir(), 'z7-dist-'));
+  const G = (...args) => { const r = git(dir, args); if (r.status !== 0) throw new Error(r.stderr); return r; };
+  const body = (kind, n) => `${kind} ${n}`;
+  const cfg = {
+    repo: dir, prereg: path.join(dir, 'prereg.md'), scriptFiles: [path.join(dir, 'a.mjs'), path.join(dir, 'b.mjs')], promptDir: path.join(dir, 'prompts'),
+    distDir, claudeVersion: () => '2.1.288 (Claude Code)', lockDir: path.join(dir, 'locks'),
+  };
+  const throws = (fn, re) => { try { fn(); return false; } catch (e) { return re.test(e.message); } };
+  const refuses = (re, resume = false) => throws(() => guardScored(cfg, resume), re);
+  const commit = (msg) => { G('add', '-A'); G('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', msg); };
+  const hashes = (names, kind) => Object.fromEntries(names.map((n) => [n, L.sha256(body(kind, n))]));
+  const prereg = (status) => `**Date:** x. **Status:** ${status}\n\n${pinsBlock(hashes(L.PIN_DIST, 'dist'), hashes(L.PIN_PROMPTS, 'prompt'))}\n`;
+  try {
+    G('init', '-q');
+    fs.mkdirSync(cfg.promptDir);
+    for (const n of L.PIN_PROMPTS) fs.writeFileSync(path.join(cfg.promptDir, n), body('prompt', n));
+    for (const n of L.PIN_DIST) fs.writeFileSync(path.join(distDir, n), body('dist', n));
+    for (const f of cfg.scriptFiles) fs.writeFileSync(f, 'export {};\n');
+    fs.writeFileSync(cfg.prereg, prereg('PRE-REG-LOCKED.'));
+    t('guard refuses an untracked prereg', refuses(/not tracked/));
+    fs.writeFileSync(cfg.prereg, prereg('DRAFT. It locks at the commit that sets this line to PRE-REG-LOCKED.'));
+    commit('draft');
+    t('guard refuses a DRAFT status, even when the line names PRE-REG-LOCKED', refuses(/PRE-REG-LOCKED/));
+    fs.writeFileSync(cfg.prereg, prereg('PRE-REG-LOCKED.'));
+    commit('lock');
+    t('guard refuses a lock commit on no remote branch', refuses(/remote branch/));
+    G('update-ref', 'refs/remotes/origin/test', 'HEAD');
+    t('guard passes when everything holds', !refuses(/./) && guardScored(cfg).lockCommit.length === 40);
+    fs.writeFileSync(cfg.scriptFiles[0], 'export const x = 1;\n');
+    t('guard refuses a dirty script', refuses(/not clean/));
+    G('checkout', '--', 'a.mjs');
+    fs.writeFileSync(path.join(cfg.promptDir, 'new.txt'), 'untracked prompt');
+    t('guard refuses an untracked prompt file', refuses(/prompt file is not tracked/));
+    fs.rmSync(path.join(cfg.promptDir, 'new.txt'));
+    fs.writeFileSync(path.join(distDir, 'capture.js'), 'edited build');
+    t('guard refuses a dist pin mismatch', refuses(/pin mismatch: dist\/capture\.js/));
+    fs.writeFileSync(path.join(distDir, 'capture.js'), body('dist', 'capture.js'));
+    cfg.claudeVersion = () => '9.9.9';
+    t('guard refuses a claude version mismatch', refuses(/claude --version/));
+    cfg.claudeVersion = () => '2.1.288 (Claude Code)';
+    fs.writeFileSync(cfg.scriptFiles[0], 'export const x = 1;\n');
+    commit('later change');
+    t('guard refuses a script that changed after the lock commit, even when committed', refuses(/after the lock commit/));
+    fs.writeFileSync(cfg.scriptFiles[0], 'export {};\n');
+    commit('restore');
+    const lock = guardScored(cfg);
+    t('resume refused without a marker', refuses(/no lock marker/, true));
+    createMarker(lock, 'abc');
+    t('guard refuses once the marker exists, and the marker is create-once', refuses(/marker exists/) && throws(() => createMarker(lock, 'abc'), /EEXIST/));
+    const sdir = path.join(dir, 'scored');
+    fs.mkdirSync(sdir);
+    t('resume guard passes with a marker', !refuses(/./, true));
+    t('resume refused for another lock commit', throws(() => startResume({ ...lock, lockCommit: 'f'.repeat(40) }, 'abc', sdir), /different lock commit/));
+    t('resume refused for another item list', throws(() => startResume(lock, 'other', sdir), /item list/));
+    startResume(lock, 'abc', sdir);
+    t('resume accepted and logged', countResumes(lock) === 1 && JSON.parse(fs.readFileSync(resumesLog(lock), 'utf8').trim()).lockCommit === lock.lockCommit);
+    fs.writeFileSync(path.join(sdir, 'result.json'), '{}');
+    t('resume refused once result.json exists', throws(() => startResume(lock, 'abc', sdir), /finished/));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(distDir, { recursive: true, force: true });
+  }
+  t('ANTHROPIC_API_KEY refusal', throws(() => refuseApiKey({ ANTHROPIC_API_KEY: 'x' }), /ANTHROPIC_API_KEY/) && refuseApiKey({}) === undefined);
+}
+
+export const libSelftests = [selftestSub, selftestParent, selftestEvidence, selftestDrawAndChunks, selftestStats, selftestFrozen, selftestDrawPinned, selftestControlAndAudit, selftestGuard];

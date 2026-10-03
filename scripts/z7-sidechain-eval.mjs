@@ -4,20 +4,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as L from './z7-sidechain-lib.mjs';
 import { libSelftests } from './z7-sidechain-selftest.mjs';
+import { guardScored, createMarker, appendLine, countResumes, startResume, refuseApiKey } from './z7-sidechain-guard.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPTS = path.join(REPO, 'scripts');
 const PROMPT_DIR = path.join(SCRIPTS, 'z7-sidechain-prompts');
 const PREREG = path.join(REPO, 'docs', 'evals', '2026-10-03-z7-sidechain-gap-prereg.md');
-const SCRIPT_FILES = ['z7-sidechain-lib.mjs', 'z7-sidechain-eval.mjs', 'z7-sidechain-selftest.mjs'].map((f) => path.join(SCRIPTS, f));
+const SCRIPT_FILES = ['z7-sidechain-lib.mjs', 'z7-sidechain-eval.mjs', 'z7-sidechain-selftest.mjs', 'z7-sidechain-guard.mjs'].map((f) => path.join(SCRIPTS, f));
 const DEFAULT_ARCHIVE = 'C:/Users/skf_s/hippo-archive/z7-sidechain-2026-10-03';
 const MANIFEST_SHA = '84028a76df0a4c9b16ea4aaffcaed3284f26ef37985c4cd0a7837765496966e0';
-const LOCK_NAME = 'z7-sidechain-gap.json';
 const CONCURRENCY = 3;
 const QUOTA_RE = /usage limit|rate limit|quota|overloaded|try again later/i;
 const [SONNET, OPUS] = L.MODELS;
@@ -27,16 +26,18 @@ const hash = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const byStr = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 function parseArgs(argv) {
-  const a = { cmd: argv[0], archive: DEFAULT_ARCHIVE, split: null, round: null, resume: false };
+  const a = { cmd: argv[0], archive: DEFAULT_ARCHIVE, split: null, round: null, resume: false, confirmed: null };
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === '--archive') a.archive = argv[++i];
     else if (argv[i] === '--split') a.split = argv[++i];
     else if (argv[i] === '--round') a.round = Number(argv[++i]);
     else if (argv[i] === '--resume') a.resume = true;
+    else if (argv[i] === '--confirmed') a.confirmed = Number(argv[++i]);
     else throw new Error(`unknown flag ${argv[i]}`);
   }
   if (!path.isAbsolute(a.archive)) throw new Error('--archive must be an absolute path');
   if (a.resume && a.cmd !== 'scored') throw new Error('--resume belongs to the scored command only');
+  if (a.confirmed !== null && a.cmd !== 'audit-finalize') throw new Error('--confirmed belongs to audit-finalize only');
   return a;
 }
 
@@ -47,7 +48,7 @@ function openArchive(archive) {
   if (hash(raw) !== MANIFEST_SHA) throw new Error('manifest sha256 differs from the pinned value');
   const files = new Map(Object.values(JSON.parse(raw.toString('utf8')).files).map((f) => [f.rel.replace(/\\/g, '/'), f]));
   return {
-    archive, files, work: path.join(archive, 'work'),
+    archive, files, work: path.join(archive, 'work'), manifestSha: hash(raw),
     read(rel) {
       const f = files.get(rel);
       if (!f) throw new Error(`not in manifest: ${rel}`);
@@ -156,21 +157,13 @@ function writeIdempotent(file, data) {
 
 function cmdDraw(a) {
   const ar = openArchive(a.archive);
-  const el = eligibleItems(scanArchive(ar));
-  const d = L.drawSplit(el);
-  const items = {};
-  for (const it of [...d.dev, ...d.scored]) items[L.itemId(it.session, it.file)] = { session: it.session, file: it.file, agentType: it.agentType, project: it.project };
-  const ids = (xs) => xs.map((it) => L.itemId(it.session, it.file));
-  const draw = {
-    seedString: L.SEED_STRING, seedHex: d.seedHex, eligibleSubs: el.length, eligibleSessions: new Set(el.map((i) => i.session)).size,
-    devSessions: d.devSessions, scoredSessions: d.scoredSessions, dev: ids(d.dev), scored: ids(d.scored), items, itemListSha256: L.sha256(ids(d.scored).join('\n')),
-  };
+  const draw = L.buildDraw(eligibleItems(scanArchive(ar)));
   writeIdempotent(path.join(ar.work, 'draw.json'), draw);
   out('eligible_subagents', draw.eligibleSubs);
   out('eligible_sessions', draw.eligibleSessions);
-  out('dev_sessions', d.devSessions.length);
+  out('dev_sessions', draw.devSessions.length);
   out('dev_items', draw.dev.length);
-  out('scored_sessions_with_items', new Set(d.scored.map((i) => i.session)).size);
+  out('scored_sessions_with_items', new Set(draw.scored.map((id) => draw.items[id].session)).size);
   out('scored_n', draw.scored.length);
   out('scored_item_list_sha256', draw.itemListSha256);
 }
@@ -533,65 +526,25 @@ function cmdCalib(a) {
   out('lesson_bearing_dev_items', f.rows.filter((x) => x.both).length);
 }
 
-// --- guard: the scored run's lock ---
+// --- scored run: lock config, draw check, stages ---
 
-function refuseApiKey(env) {
-  if (env.ANTHROPIC_API_KEY !== undefined) throw new Error('ANTHROPIC_API_KEY is set; refusing every command that calls claude');
+const claudeVersion = () => spawnSync(resolveClaudeExe(), ['--version'], { encoding: 'utf8' }).stdout.trim();
+const lockConfig = () => ({ repo: REPO, prereg: PREREG, scriptFiles: SCRIPT_FILES, promptDir: PROMPT_DIR, distDir: path.join(REPO, 'dist'), claudeVersion, lockDir: path.join(os.homedir(), '.hippo-eval-locks') });
+
+// The draw is recomputed from the verified archive, so a stale or edited draw.json cannot stand.
+function checkDraw(ar, draw, pins) {
+  const bad = L.checkPins(pins, { manifest: ar.manifestSha });
+  if (bad.length) throw new Error(`pin mismatch: ${bad.join(', ')}`);
+  const why = L.drawMismatch(L.buildDraw(eligibleItems(scanArchive(ar))), draw, pins.scoredList);
+  if (why) throw new Error(`draw.json refused: ${why}`);
 }
-
-function git(repo, args) {
-  return spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
-}
-
-function guardScored(cfg, resume = false) {
-  const status = /\*\*Status:\*\*\s*([A-Za-z-]+)/.exec(fs.readFileSync(cfg.prereg, 'utf8'))?.[1];
-  if (status !== 'PRE-REG-LOCKED') throw new Error('prereg Status is not PRE-REG-LOCKED');
-  const prompts = fs.readdirSync(cfg.promptDir).sort();
-  if (!prompts.length) throw new Error('no prompt files');
-  const paths = [cfg.prereg, ...cfg.scriptFiles, cfg.promptDir];
-  for (const f of [cfg.prereg, ...cfg.scriptFiles]) {
-    if (git(cfg.repo, ['ls-files', '--error-unmatch', '--', f]).status !== 0) throw new Error(`not tracked: ${path.basename(f)}`);
-  }
-  const tracked = git(cfg.repo, ['ls-files', '--', cfg.promptDir]).stdout.split('\n').filter(Boolean).map((p) => path.basename(p)).sort();
-  if (tracked.join('|') !== prompts.join('|')) throw new Error('a prompt file is not tracked');
-  if (git(cfg.repo, ['status', '--porcelain', '--', ...paths]).stdout.trim()) throw new Error('prereg, scripts or prompts are not clean at HEAD');
-  const lockCommit = git(cfg.repo, ['log', '-1', '--format=%H', '--', cfg.prereg]).stdout.trim();
-  if (!git(cfg.repo, ['branch', '-r', '--contains', lockCommit]).stdout.trim()) throw new Error('the lock commit is not on a remote branch');
-  const marker = path.join(cfg.lockDir, LOCK_NAME);
-  if (resume && !fs.existsSync(marker)) throw new Error('no lock marker to resume from');
-  if (!resume && fs.existsSync(marker)) throw new Error('the lock marker exists; the scored run happens once (use --resume to continue it)');
-  const pin = (files) => Object.fromEntries(files.map((f) => [path.basename(f), hash(fs.readFileSync(f))]));
-  return { lockCommit, marker, scripts: pin(cfg.scriptFiles), prompts: pin(prompts.map((p) => path.join(cfg.promptDir, p))) };
-}
-
-function createMarker(lock, itemListSha256) {
-  fs.mkdirSync(path.dirname(lock.marker), { recursive: true });
-  const body = { lockCommit: lock.lockCommit, scoredItemListSha256: itemListSha256, createdAt: new Date().toISOString(), scripts: lock.scripts, prompts: lock.prompts };
-  fs.writeFileSync(lock.marker, JSON.stringify(body, null, 1), { flag: 'wx' });
-}
-
-const appendLine = (file, obj) => fs.appendFileSync(file, `${JSON.stringify({ time: new Date().toISOString(), ...obj })}\n`);
-const resumesLog = (lock) => `${lock.marker.slice(0, -5)}.resumes.jsonl`;
-const countResumes = (lock) => (fs.existsSync(resumesLog(lock)) ? fs.readFileSync(resumesLog(lock), 'utf8').split('\n').filter(Boolean).length : 0);
-
-// A resume continues the same lock and the same item list, and only before a result exists.
-function startResume(lock, itemListSha256, dir) {
-  const m = JSON.parse(fs.readFileSync(lock.marker, 'utf8'));
-  if (m.lockCommit !== lock.lockCommit) throw new Error('the marker belongs to a different lock commit');
-  if (m.scoredItemListSha256 !== itemListSha256) throw new Error('the marker belongs to a different scored item list');
-  if (fs.existsSync(path.join(dir, 'result.json'))) throw new Error('result.json exists; the scored run is finished');
-  appendLine(resumesLog(lock), { lockCommit: lock.lockCommit });
-}
-
-const lockConfig = () => ({ repo: REPO, prereg: PREREG, scriptFiles: SCRIPT_FILES, promptDir: PROMPT_DIR, lockDir: path.join(os.homedir(), '.hippo-eval-locks') });
-
-// --- scored run ---
 
 async function cmdScored(a) {
   const lock = guardScored(lockConfig(), a.resume);
   const ar = openArchive(a.archive);
   const draw = readDraw(ar);
   if (L.sha256(draw.scored.join('\n')) !== draw.itemListSha256) throw new Error('scored list does not match its recorded sha256');
+  checkDraw(ar, draw, lock.pins);
   const dir = path.join(ar.work, 'scored');
   if (a.resume) startResume(lock, draw.itemListSha256, dir);
   else createMarker(lock, draw.itemListSha256);
@@ -612,12 +565,12 @@ async function cmdScored(a) {
   const controlIds = L.shuffled([...draw.scored].sort(byStr), L.rngFromString('z7-control')).slice(0, 30);
   const controlItems = items.filter((it) => controlIds.includes(it.id));
   const ctl = await judgeStage({ ...ctx, idem: true }, controlItems, 'control', true);
-  const both = controlItems.filter((it) => L.MODELS.every((m) => (ctl[m][it.id]?.verified ?? []).length)).length;
+  const control = L.controlFigures(ctl, controlItems.map((it) => it.id));
   const recheck = await recheckStage(ctx, items, judge, 'recheck-final.json', null);
   const aug = await recheckStage(ctx, items, judge, 'recheck-aug.json', recheck);
   const deps = await loadDeps();
   const rule = await ruleArmStage(ctx, ar, deps, items);
-  finishScored(ctx, items, judge, recheck, aug, rule, { iso, control: [both, controlItems.length], lock, draw });
+  finishScored(ctx, items, judge, recheck, aug, rule, { iso, control, lock, draw });
 }
 
 function ruleSummary(rule) {
@@ -654,6 +607,8 @@ function finishScored(ctx, items, judge, recheck, aug, rule, run) {
   out('p_union_ci95', `${fmt(unionCi.p)} ${fmt(unionCi.lo)} ${fmt(unionCi.hi)}`);
   out('interval_width', fmt(ci.width));
   out('p_with_other_reports', fmt(result.pWithOtherReports));
+  out('control_items_parsed_by_both', `${run.control.parsed}/${run.control.total}`);
+  out('control_parse_ok_sonnet_opus', `${run.control.parse.sonnet.join('/')} ${run.control.parse.opus.join('/')}`);
   out('rule_arm', JSON.stringify(result.ruleArm));
   out('verdict', result.verdict);
 }
@@ -680,66 +635,28 @@ function cmdAudit(a) {
   out('audit_sample', sample.length);
 }
 
-function selftestGuard(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z7-guard-'));
-  const G = (...args) => { const r = git(dir, args); assert.equal(r.status, 0, r.stderr); return r; };
-  const cfg = { repo: dir, prereg: path.join(dir, 'prereg.md'), scriptFiles: [path.join(dir, 'a.mjs'), path.join(dir, 'b.mjs')], promptDir: path.join(dir, 'prompts'), lockDir: path.join(dir, 'locks') };
-  const throws = (fn, re) => { try { fn(); return false; } catch (e) { return re.test(e.message); } };
-  const refuses = (re, resume = false) => throws(() => guardScored(cfg, resume), re);
-  const commit = (msg) => { G('add', '-A'); G('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', msg); };
-  try {
-    G('init', '-q');
-    fs.mkdirSync(cfg.promptDir);
-    fs.writeFileSync(path.join(cfg.promptDir, 'p.txt'), 'prompt');
-    for (const f of cfg.scriptFiles) fs.writeFileSync(f, 'export {};\n');
-    fs.writeFileSync(cfg.prereg, '**Date:** x. **Status:** PRE-REG-LOCKED.\n');
-    t('guard refuses an untracked prereg', refuses(/not tracked/));
-    fs.writeFileSync(cfg.prereg, '**Date:** x. **Status:** DRAFT. It locks at the commit that sets this line to PRE-REG-LOCKED.\n');
-    commit('draft');
-    t('guard refuses a DRAFT status, even when the line names PRE-REG-LOCKED', refuses(/PRE-REG-LOCKED/));
-    fs.writeFileSync(cfg.prereg, '**Date:** x. **Status:** PRE-REG-LOCKED.\n');
-    commit('lock');
-    t('guard refuses a lock commit on no remote branch', refuses(/remote branch/));
-    G('update-ref', 'refs/remotes/origin/test', 'HEAD');
-    t('guard passes when everything holds', !refuses(/./) && guardScored(cfg).lockCommit.length === 40);
-    fs.writeFileSync(cfg.scriptFiles[0], 'export const x = 1;\n');
-    t('guard refuses a dirty script', refuses(/not clean/));
-    G('checkout', '--', 'a.mjs');
-    fs.writeFileSync(path.join(cfg.promptDir, 'new.txt'), 'untracked prompt');
-    t('guard refuses an untracked prompt file', refuses(/prompt file is not tracked/));
-    fs.rmSync(path.join(cfg.promptDir, 'new.txt'));
-    const lock = guardScored(cfg);
-    t('resume refused without a marker', refuses(/no lock marker/, true));
-    createMarker(lock, 'abc');
-    t('guard refuses once the marker exists, and the marker is create-once', refuses(/marker exists/) && (() => { try { createMarker(lock, 'abc'); return false; } catch { return true; } })());
-    const sdir = path.join(dir, 'scored');
-    fs.mkdirSync(sdir);
-    t('resume guard passes with a marker', !refuses(/./, true));
-    t('resume refused for another lock commit', throws(() => startResume({ ...lock, lockCommit: 'f'.repeat(40) }, 'abc', sdir), /different lock commit/));
-    t('resume refused for another item list', throws(() => startResume(lock, 'other', sdir), /item list/));
-    startResume(lock, 'abc', sdir);
-    t('resume accepted and logged', countResumes(lock) === 1 && JSON.parse(fs.readFileSync(resumesLog(lock), 'utf8').trim()).lockCommit === lock.lockCommit);
-    fs.writeFileSync(path.join(sdir, 'result.json'), '{}');
-    t('resume refused once result.json exists', throws(() => startResume(lock, 'abc', sdir), /finished/));
-    const f1 = path.join(dir, 'idem.json'), f2 = path.join(dir, 'idem.txt');
-    writeIdempotent(f1, { a: 1 });
-    writeIdempotent(f2, 'text body');
-    t('writeIdempotent accepts identical content', !throws(() => { writeIdempotent(f1, { a: 1 }); writeIdempotent(f2, 'text body'); }, /./) );
-    t('writeIdempotent refuses different content', throws(() => writeIdempotent(f1, { a: 2 }), /differs/) && throws(() => writeIdempotent(f2, 'other'), /differs/));
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-  let keyRefused = false;
-  try { refuseApiKey({ ANTHROPIC_API_KEY: 'x' }); } catch { keyRefused = true; }
-  t('ANTHROPIC_API_KEY refusal', keyRefused && refuseApiKey({}) === undefined);
+// Writes the verdict after the precision audit once, and only after audit.json exists.
+function cmdAuditFinalize(a) {
+  if (!Number.isInteger(a.confirmed) || a.confirmed < 0) throw new Error('--confirmed K must be a non-negative integer');
+  const dir = path.join(openArchive(a.archive).work, 'scored');
+  if (fs.existsSync(path.join(dir, 'audit-result.json'))) throw new Error('audit-result.json exists; the audit is finalised once');
+  if (!fs.existsSync(path.join(dir, 'audit.json'))) throw new Error('audit.json is missing; run audit first');
+  const n = readJson(dir, 'audit.json').ids.length;
+  if (a.confirmed > n) throw new Error(`--confirmed ${a.confirmed} exceeds the sample of ${n}`);
+  const rec = L.finalizeAudit(readJson(dir, 'result.json').verdict, n, a.confirmed);
+  fs.writeFileSync(path.join(dir, 'audit-result.json'), JSON.stringify(rec, null, 1), { flag: 'wx' });
+  out('audit_sample', rec.sampleN);
+  out('audit_confirmed', rec.confirmed);
+  out('audit_share', fmt(rec.share));
+  out('verdict_preliminary', rec.preliminary);
+  out('verdict_final', rec.final);
 }
 
 // The exe is a path that cannot spawn, so any reply that comes back was read from the cache.
 async function selftestCache(t) {
   const callsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'z7-calls-'));
   try {
-    const key = (p) => L.sha256(`m
-${p}`).slice(0, 32);
+    const key = (p) => L.sha256(`m\n${p}`).slice(0, 32);
     fs.writeFileSync(path.join(callsDir, `${key('pass')}.json`), JSON.stringify({ stdout: 'cached', attempts: 1, ok: true }));
     fs.writeFileSync(path.join(callsDir, `${key('fail')}.fail.json`), JSON.stringify({ stdout: 'bad', attempts: 3, ok: false }));
     const ctx = { callsDir, exe: path.join(callsDir, 'no-such-claude'), system: 's', cwd: callsDir, strict: true };
@@ -748,6 +665,14 @@ ${p}`).slice(0, 32);
     t('an exhausted exit-0 failure is reused in a strict run', (await callClaude(ctx, 'm', 'fail', never, false)).ok === false);
     let aborted = false;
     try { await callClaude(ctx, 'm', 'unseen', never, false); } catch { aborted = true; }
+    const f1 = path.join(callsDir, 'idem.json'), f2 = path.join(callsDir, 'idem.txt');
+    const throws = (fn) => { try { fn(); return false; } catch (err) { return /differs/.test(err.message); } };
+    writeIdempotent(f1, { a: 1 });
+    writeIdempotent(f2, 'text body');
+    writeIdempotent(f1, { a: 1 });
+    writeIdempotent(f2, 'text body');
+    t('writeIdempotent accepts identical content, JSON and text', true);
+    t('writeIdempotent refuses different content, JSON and text', throws(() => writeIdempotent(f1, { a: 2 })) && throws(() => writeIdempotent(f2, 'other')));
     t('a strict call that cannot run aborts instead of recording a failure', aborted && !fs.existsSync(path.join(callsDir, `${key('unseen')}.fail.json`)));
   } finally {
     fs.rmSync(callsDir, { recursive: true, force: true });
@@ -758,7 +683,7 @@ async function selftest() {
   let n = 0;
   const failed = [];
   const t = (name, ok) => { n++; if (!ok) failed.push(name); };
-  for (const group of [...libSelftests, selftestGuard]) group(t);
+  for (const group of libSelftests) group(t);
   await selftestCache(t);
   console.log(`selftest: ${n} cases, ${failed.length} failed`);
   for (const name of failed) console.log(`FAIL: ${name}`);
@@ -771,7 +696,7 @@ async function main() {
   if (['judge', 'recheck', 'scored'].includes(a.cmd)) refuseApiKey(process.env);
   const table = {
     profile: cmdProfile, draw: cmdDraw, build: cmdBuildDev, judge: cmdJudgeDev, recheck: cmdRecheckDev,
-    score: cmdScoreDev, calib: (x) => cmdCalib(x), scored: cmdScored, audit: cmdAudit,
+    score: cmdScoreDev, calib: (x) => cmdCalib(x), scored: cmdScored, audit: cmdAudit, 'audit-finalize': cmdAuditFinalize,
   };
   if (!table[a.cmd]) throw new Error(`unknown command ${a.cmd}`);
   return table[a.cmd](a);
