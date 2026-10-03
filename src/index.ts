@@ -157,4 +157,4 @@ export {
   type QueryAuditOpts,
   type ListAuditAfterOpts,
 } from './audit.js';
-export { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db.js';
