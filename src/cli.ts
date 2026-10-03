@@ -3555,10 +3555,11 @@ function spawnRealCodex(
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
     const command = `"${realCodexPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
+    // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
     return spawn(
       'cmd.exe',
-      ['/d', '/s', '/c', command],
-      { cwd, stdio: 'inherit', windowsHide: false },
+      ['/d', '/s', '/c', `"${command}"`],
+      { cwd, stdio: 'inherit', windowsHide: false, windowsVerbatimArguments: true },
     );
   }
 
