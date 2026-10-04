@@ -39,6 +39,7 @@
 - **The Python SDK's `auth_list` follows `X-Next-Cursor`,** so it still returns every key past the new 1,000-key page, and takes an optional `page_size`.
 - **CI runs the p99 recall benchmark at 1,000 memories** on every pull request, so a recall latency regression fails a PR before release.
 - **The CLI's `auth`, `goal` and `learn` verbs and MCP `hippo_learn` now run through the api layer.** `hippo auth revoke|grant|ungrant` look up a key's tenant through `api.authKeyTenant` instead of their own SQL, `hippo goal` calls the new `api.goalPush`, `goalList`, `goalComplete`, `goalSuspend` and `goalResume`, and `hippo learn --git`, init, sleep and `hippo_learn` share one `api.learn` that keeps the host-admin check. The id-to-tenant queries the api used for keys and memories live in `src/store/tenant-lookup.ts`. Output, exit codes, written rows and audit rows are unchanged; new parity tests pin them.
+- **The 22 longest functions in the connectors, store, importers, capture and predictions code are split into named stages, each 80 lines or fewer.** This covers the Slack and GitHub webhooks, the DLQ replays, ingest and backfill, `resolveConflict`, `batchWriteAndDelete`, `applyRebuildResult`, `hippo capture`, the PreCompact hook, the importers and the prediction store. Behaviour does not change: the same SQL, transaction boundaries, write order, secret veto and retry rules. Their entries leave `.size-baseline.json`.
 
 ### Fixed
 
@@ -55,6 +56,7 @@
 - **A memory tag that contains a comma now reads back as one tag.** The markdown mirror quoted such a tag on write, but the reader split it at the comma, so `"a, b"` came back as two broken tags. The reader now honours quotes and escapes in inline lists and in `- ` block lists. Line breaks inside a frontmatter value are written as `\n`, so they no longer break the file. A string field that reads as `true`, `null` or a number is quoted, so it comes back as a string.
 - **The memory-value simulation opens its store once per run, not 12 times a round.** `benchmarks/memory-value/simulate.mjs` now runs inside `withSharedStoreHandles`, so each read and write stops paying the pragmas, migration check and mirror sweep again. The full 30-round determinism test drops from about 30 s to 4 to 8 s on Windows (84 to 94 s on the CI runner against its 90 s limit, where it failed on PR #444), and the harness file from about 35 s to 6 to 14 s. Same rows, same assertions.
 - **The recall-trace storage smoke shares one store handle across its 100 recalls.** It measures trace growth, not open cost; it ran at 62% of its 30 s limit on the Windows runner.
+- **The Codex wrapper CODEX_HOME test no longer fails at random during temp-dir cleanup.** It stopped waiting when the captured memory appeared, but the detached session-end worker kept writing its log after that and recreated a folder inside the temp dir while cleanup removed it (ENOTEMPTY on CI). The test now waits for the worker's last log line. No source file changed.
 
 ### Security
 
