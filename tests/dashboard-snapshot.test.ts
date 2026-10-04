@@ -107,7 +107,9 @@ describe('dashboard snapshot', () => {
     const two = seed(store.hippoRoot, 'embedded two');
     seed(store.hippoRoot, 'not embedded');
     seed(store.hippoRoot, 'also not embedded');
-    embed(store.hippoRoot, [one.id, two.id]);
+    const old = seed(store.hippoRoot, 'replaced', { kind: 'superseded', superseded_by: one.id });
+    // memory_vectors has no foreign key, so a vector for a superseded or deleted memory must not count.
+    embed(store.hippoRoot, [one.id, two.id, old.id, 'orphan-id']);
 
     const snap = snapshot();
 

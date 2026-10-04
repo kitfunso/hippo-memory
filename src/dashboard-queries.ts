@@ -89,7 +89,7 @@ function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
     },
     {
       id: 'embeddingCoverage', label: 'Embedding coverage', value: snap.embeddingCoverage ?? 0, series: null,
-      delta: snap.embeddingCoverage === null ? 'embedding index unreadable' : `${total - embedded} not embedded`,
+      delta: snap.embeddingCoverage === null ? 'no vector table yet' : `${total - embedded} not embedded`,
     },
   ];
 }

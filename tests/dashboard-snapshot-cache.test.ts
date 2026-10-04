@@ -1,7 +1,7 @@
-// The snapshot cache: when a read reuses it, when an outside commit, a dashboard write, the TTL or ?fresh=1 rebuilds it, and what it never writes.
+// The snapshot cache: when a read reuses it, when an outside commit, a dashboard write, the TTL or ?fresh=1 rebuilds it, and how it counts vectors.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer } from '../src/memory.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
@@ -154,6 +154,8 @@ describe('vector coverage', () => {
 
     expect(snap.facts).toHaveLength(1);
     expect(snap.embeddingCoverage).toBe(0);
+    expect(existsSync(join(store.hippoRoot, 'embeddings.json'))).toBe(false);
+    expect(readdirSync(store.hippoRoot).some((f) => f.startsWith('embeddings.json.corrupt-'))).toBe(true);
   });
 
   it('shows a vector write once the coalescing window has passed, not before', () => {
