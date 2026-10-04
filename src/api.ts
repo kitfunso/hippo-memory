@@ -60,7 +60,7 @@ import {
   type DormantMemory,
   type ListDormantOpts,
 } from './dormant.js';
-import { recordTokenUse, summarizeTokenUse, type TokenSummary, type TokenSurface } from './token-ledger.js';
+import { estimateTokens, recordTokenUse, summarizeTokenUse, type TokenSummary, type TokenSurface } from './token-ledger.js';
 import { detectInstruction } from './instruction-detect.js';
 import {
   quarantineScopeFor,
@@ -109,7 +109,11 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type HybridVectorCandidates, type RerankStep, type SearchResult } from './search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { physicsSearch } from './search/physics-search.js';
+import { churnStaleFactor } from './search/boosts.js';
+import type { HybridVectorCandidates } from './search/vector.js';
+import type { RerankStep, SearchResult } from './search/types.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';

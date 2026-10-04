@@ -7,7 +7,7 @@
  */
 
 import type { MemoryEntry } from './memory.js';
-import { textOverlap } from './search.js';
+import { textOverlap } from './tokenize.js';
 import { duplicateKey, heldTextKeys } from './same-text.js';
 
 export type SalienceDecision = 'store' | 'skip' | 'start_weak';

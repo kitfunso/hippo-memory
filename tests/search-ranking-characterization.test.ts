@@ -10,7 +10,10 @@ import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { savePhysicsState } from '../src/physics-state.js';
-import { search, hybridSearch, physicsSearch, type SearchResult } from '../src/search.js';
+import { search } from '../src/search/bm25-search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { physicsSearch } from '../src/search/physics-search.js';
+import type { SearchResult } from '../src/search/types.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
@@ -43,18 +46,18 @@ const ENTRIES: MemoryEntry[] = [
 ];
 
 /** Query vector is [1,0,0]: z2 matches it exactly with no shared word, d1 and s1 sit close, noise is orthogonal. */
-const VECTORS: Record<string, number[]> = {
+const VECTORS = {
   d1: [0.9, 0.1, 0], d2: [0.6, 0.8, 0], d3: [0.5, 0.5, 0.5], d4: [0.2, 0.9, 0.1], d5: [0.7, 0.7, 0],
   d6: [0.7, 0.69, 0.1], d7: [0.4, 0.4, 0.8], x1: [0.8, 0.2, 0.1], s1: [0.88, 0.12, 0], c1: [0.3, 0, 0.9],
   o1: [0.5, 0.1, 0.8], n1: [0.6, 0.3, 0.3], z1: [0, 0, 1], z2: [1, 0, 0],
-};
+} satisfies Record<string, number[]>;
 
 /** Rows only the vector arm can add: in the store, absent from the caller's pool. */
 const OUTSIDE: MemoryEntry[] = [
   mk('v1', 'release trains leave every tuesday morning', 7),
   mk('v2', 'canary hosts get the build first', 8),
 ];
-const OUTSIDE_VECTORS: Record<string, number[]> = { v1: [0.99, 0.05, 0], v2: [0.95, 0.2, 0.1] };
+const OUTSIDE_VECTORS = { v1: [0.99, 0.05, 0], v2: [0.95, 0.2, 0.1] } satisfies Record<string, number[]>;
 
 type Pinned = Omit<SearchResult, 'entry' | 'rerankTrace'> & { id: string };
 
@@ -95,31 +98,36 @@ describe('search ranking characterization: hybrid without vectors', () => {
   });
 });
 
+function seedStore(): string {
+  const root = mkdtempSync(join(tmpdir(), 'hippo-rank-char-'));
+  writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
+  initStore(root);
+  for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
+  process.env.OPENAI_API_KEY = 'sk-test';
+  saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
+  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(root).id);
+  const entity = (memoryId: string): number =>
+    insertEntity(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
+  for (const [from, to] of [['z2', 'c1'], ['x1', 'd4'], ['d1', 'd3']]) {
+    insertRelation(root, TENANT, { fromEntityId: entity(from), toEntityId: entity(to), relType: 'supersedes', memoryId: from });
+  }
+  const db = openHippoDb(root);
+  try {
+    savePhysicsState(db, (['d1', 'd2', 'd3', 's1', 'z2', 'n1'] as const).map((id, i) => ({
+      memoryId: id, position: VECTORS[id], velocity: [0.01 * i, 0, 0], mass: 1 + i / 4, charge: 0, temperature: 0.5,
+      lastSimulation: NOW.toISOString(),
+    })));
+  } finally {
+    closeHippoDb(db);
+  }
+  return root;
+}
+
 describe('search ranking characterization: hybrid and physics with a store', () => {
   let root: string;
 
   beforeAll(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-rank-char-'));
-    writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
-    initStore(root);
-    for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
-    process.env.OPENAI_API_KEY = 'sk-test';
-    saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
-    saveStoredEmbeddingModel(root, resolveEmbeddingProvider(root).id);
-    const entity = (memoryId: string): number =>
-      insertEntity(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
-    for (const [from, to] of [['z2', 'c1'], ['x1', 'd4'], ['d1', 'd3']]) {
-      insertRelation(root, TENANT, { fromEntityId: entity(from), toEntityId: entity(to), relType: 'supersedes', memoryId: from });
-    }
-    const db = openHippoDb(root);
-    try {
-      savePhysicsState(db, ['d1', 'd2', 'd3', 's1', 'z2', 'n1'].map((id, i) => ({
-        memoryId: id, position: VECTORS[id], velocity: [0.01 * i, 0, 0], mass: 1 + i / 4, charge: 0, temperature: 0.5,
-        lastSimulation: NOW.toISOString(),
-      })));
-    } finally {
-      closeHippoDb(db);
-    }
+    root = seedStore();
   });
 
   afterAll(() => {
@@ -153,7 +161,8 @@ describe('search ranking characterization: hybrid and physics with a store', () 
     expect(pin(await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf', graphStream }))).toMatchSnapshot();
   });
   it('reranker reverses the head', async () => {
-    const reranker: RerankerFn = async (_q, items) => [...items].reverse().map((r, i) => ({ ...r, rerankScore: i }));
+    const reranker: RerankerFn = async (_q, items) =>
+      [...items].reverse().map((r, i) => ({ ...r, rerankScore: i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: i + 1 }));
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), reranker, rerankerOptions: { topK: 3 } });
     expect(pin(res)).toMatchSnapshot();
   });

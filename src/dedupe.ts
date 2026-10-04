@@ -21,7 +21,7 @@
  * superseded rows are not candidates at all (v1.38.1).
  */
 
-import { textOverlap } from './search.js';
+import { textOverlap } from './tokenize.js';
 import { loadAllEntries, deleteEntry, memoriesBackingObjects } from './store.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';

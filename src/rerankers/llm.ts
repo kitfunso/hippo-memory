@@ -1,5 +1,5 @@
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import type { SearchResult } from '../search.js';
+import type { SearchResult } from '../search/types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { log } from '../log.js';
 

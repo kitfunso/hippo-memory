@@ -21,7 +21,9 @@ import {
   writeEntry,
   loadAllEntries,
 } from '../src/store.js';
-import { hybridSearch, physicsSearch, type SearchResult } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { physicsSearch } from '../src/search/physics-search.js';
+import type { SearchResult } from '../src/search/types.js';
 import { saveEmbeddingIndex } from '../src/embeddings.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {

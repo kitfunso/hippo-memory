@@ -21,7 +21,8 @@ import {
   rebuildDirtySummaries,
 } from '../src/dag.js';
 import { drillDown, type Context, type DrillDownOutcome, type DrillDownResult } from '../src/api.js';
-import { hybridSearch, isDagSummary } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { isDagSummary } from '../src/search/boosts.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {

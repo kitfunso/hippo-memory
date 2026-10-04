@@ -22,7 +22,7 @@ import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/embeddings.js';
 import { isEmbeddingAvailable } from '../src/local-embedding.js';
-import { physicsSearch } from '../src/search.js';
+import { physicsSearch } from '../src/search/physics-search.js';
 import { consolidate } from '../src/consolidate.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
 

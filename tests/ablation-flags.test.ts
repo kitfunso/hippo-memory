@@ -22,7 +22,8 @@ import {
   type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
-import { hybridSearch, outcomeMultiplier } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { outcomeMultiplier } from '../src/search/boosts.js';
 import { markRetrieved } from '../src/memory.js';
 import { evalNow, _resetAblationCacheForTests } from '../src/ablation.js';
 

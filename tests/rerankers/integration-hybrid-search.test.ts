@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hybridSearch } from '../../src/search.js';
+import { hybridSearch } from '../../src/search/hybrid.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 

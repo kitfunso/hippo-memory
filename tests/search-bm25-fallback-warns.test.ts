@@ -6,7 +6,7 @@ import * as path from 'path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/embeddings.js';
-import { hybridSearch } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
 import { resetLogOnce } from '../src/log.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';

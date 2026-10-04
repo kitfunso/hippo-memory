@@ -19,11 +19,11 @@ import {
   SessionEvent,
 } from '../store.js';
 import { readSessionScan, recordSessionDigest } from '../session-digest.js';
-import { estimateTokens } from '../search.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { captureToolFailure } from '../capture-error.js';
 import type { JsonValue } from '../working-memory.js';
 import {
+  estimateTokens,
   isSubagentPayload,
   readApiCalls,
   recordRereads,

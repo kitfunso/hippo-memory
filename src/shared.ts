@@ -23,7 +23,10 @@ import {
   readEntry,
 } from './store.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
-import { search, hybridSearch, fitBudget, SearchResult, type ResultCost } from './search.js';
+import { search } from './search/bm25-search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { fitBudget } from './search/finalize.js';
+import type { SearchResult, ResultCost } from './search/types.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';

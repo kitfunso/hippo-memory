@@ -14,10 +14,12 @@ import { multihopSearch } from './multihop.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { passesCliRecallScopeFilter } from './recall-scope.js';
 import type { RerankerFn } from './rerankers/types.js';
-import { hybridSearch, physicsSearch, textOverlap, type RerankStep, type ResultCost, type SearchResult } from './search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { physicsSearch } from './search/physics-search.js';
+import type { RerankStep, ResultCost, SearchResult } from './search/types.js';
 import { searchBothHybrid } from './shared.js';
 import { loadRecallSearchEntries, recallScopeFilter } from './store.js';
-import { tokenize as tokenizeQuery } from './tokenize.js';
+import { textOverlap, tokenize as tokenizeQuery } from './tokenize.js';
 
 /** Stores rankRecall reads and where it sends operator notes. */
 export interface RankRecallCtx {

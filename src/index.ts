@@ -9,8 +9,14 @@ export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, ca
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   return createStoreMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS });
 }
-export { search, hybridSearch, physicsSearch, estimateTokens, textOverlap, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
-export { tokenize } from './tokenize.js';
+export { search } from './search/bm25-search.js';
+export { hybridSearch } from './search/hybrid.js';
+export { physicsSearch } from './search/physics-search.js';
+export { explainMatch, MatchExplanation } from './search/explain.js';
+export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
+export { SearchResult } from './search/types.js';
+export { estimateTokens } from './token-ledger.js';
+export { tokenize, textOverlap } from './tokenize.js';
 export { markRetrieved } from './memory.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';

@@ -20,7 +20,8 @@ import {
   applyOutcome,
   calculateStrength,
 } from '../memory.js';
-import { fitBudget, estimateTokens, type SearchResult } from '../search.js';
+import { fitBudget } from '../search/finalize.js';
+import type { SearchResult } from '../search/types.js';
 import { evalNow } from '../ablation.js';
 import { loadStrengthRows, loadTextsHoldingWords, writeEntry, readEntry, initStore, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep, type SessionEvent, type TaskSnapshot } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
@@ -58,7 +59,7 @@ export function __resetSessionRecallHistoryMcp(): void {
   sessionRecallHistoryMcp.clear();
 }
 import { openHippoDb, closeHippoDb, isSqliteBusy, STORE_BUSY_MESSAGE } from '../db.js';
-import { recordTokenUse, type TokenSurface } from '../token-ledger.js';
+import { estimateTokens, recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs, type ToolInputSchema } from './tool-args.js';
 

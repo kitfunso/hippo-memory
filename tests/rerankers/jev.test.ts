@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/search.js';
+import type { SearchResult } from '../../src/search/types.js';
 import { getReranker } from '../../src/rerankers/index.js';
 import { createJevReranker, jevReranker } from '../../src/rerankers/jev.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';

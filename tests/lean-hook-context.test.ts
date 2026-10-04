@@ -7,7 +7,8 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { estimateTokens, type SearchResult } from '../src/search.js';
+import { estimateTokens } from '../src/token-ledger.js';
+import type { SearchResult } from '../src/search/types.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 

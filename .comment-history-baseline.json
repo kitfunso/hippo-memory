@@ -99,7 +99,6 @@
   "src/rerankers/llm.ts": 1,
   "src/rerankers/types.ts": 1,
   "src/rrf.ts": 2,
-  "src/search.ts": 35,
   "src/secret-detect.ts": 5,
   "src/server.ts": 61,
   "src/shared.ts": 27,

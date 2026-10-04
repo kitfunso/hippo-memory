@@ -20,7 +20,7 @@ import {
   loadAllEntries,
 } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { hybridSearch } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
 import { sampleForReplay } from '../src/replay.js';
 import { initializeParticle, savePhysicsState, loadPhysicsState } from '../src/physics-state.js';
 

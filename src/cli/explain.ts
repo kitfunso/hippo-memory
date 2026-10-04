@@ -2,7 +2,7 @@
 
 import { confidenceFacets } from '../memory.js';
 import { isInitialized, loadSearchEntries, loadIndex } from '../store.js';
-import type { SearchResult } from '../search.js';
+import type { SearchResult } from '../search/types.js';
 import { loadConfig } from '../config.js';
 import { dropHeldCopies } from '../same-text.js';
 import { detectScope } from '../scope.js';

@@ -4,13 +4,13 @@ import { evalNow } from '../ablation.js';
 import * as path from 'path';
 import { MemoryEntry } from '../memory.js';
 import { isInitialized } from '../store.js';
-import { estimateTokens } from '../search.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from '../recall-trace.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../delivery-recorder.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, isSqliteBusy, noteStoreBusy } from '../db.js';
 import {
   blockHash,
+  estimateTokens,
   isSubagentPayload,
   lastSentState,
   recordTokenUse,

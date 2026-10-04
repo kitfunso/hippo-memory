@@ -29,7 +29,9 @@ import { embedMemory, loadEmbeddingIndex } from '../dist/embeddings.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/local-embedding.js';
 import { resetAllPhysicsState, loadPhysicsState } from '../dist/physics-state.js';
 import { openHippoDb, closeHippoDb } from '../dist/db.js';
-import { hybridSearch, physicsSearch, buildCorpus } from '../dist/search.js';
+import { hybridSearch } from '../dist/search/hybrid.js';
+import { physicsSearch } from '../dist/search/physics-search.js';
+import { buildCorpus } from '../dist/search/bm25.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../dist/physics-config.js';
 
 // ---------------------------------------------------------------------------

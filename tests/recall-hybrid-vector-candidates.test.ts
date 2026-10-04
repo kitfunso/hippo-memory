@@ -10,7 +10,7 @@ import { createMemory, type CreateMemoryOptions } from '../src/memory.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { searchBothHybrid } from '../src/shared.js';
-import { hybridSearch } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
 import { retrieve, getContext } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 

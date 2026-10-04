@@ -1,6 +1,6 @@
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
-import type { SearchResult } from '../search.js';
+import type { SearchResult } from '../search/types.js';
 import { isJsonObjectRecord, type JsonValue } from '../http-util.js';
 import { log } from '../log.js';
 

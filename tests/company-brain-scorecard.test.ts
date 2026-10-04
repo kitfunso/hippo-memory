@@ -16,7 +16,7 @@ import {
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
 import { buildCorrectionLatency } from '../src/correction-latency.js';
-import { estimateTokens } from '../src/search.js';
+import { estimateTokens } from '../src/token-ledger.js';
 
 let tmpDir: string;
 

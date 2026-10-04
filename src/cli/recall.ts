@@ -15,11 +15,13 @@ import {
 } from '../store.js';
 import type { SessionHandoff } from '../handoff.js';
 import { passesScopeFilterForRecall } from '../recall-scope.js';
-import { estimateTokens, fitBudget, explainMatch, type SearchResult } from '../search.js';
+import { fitBudget } from '../search/finalize.js';
+import { explainMatch } from '../search/explain.js';
+import type { SearchResult } from '../search/types.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { recordTokenUse } from '../token-ledger.js';
+import { estimateTokens, recordTokenUse } from '../token-ledger.js';
 import { writeGoalRecallLog } from '../goals.js';
 import { dropHeldCopies } from '../same-text.js';
 import { isGlobalStoreRoot } from '../project-identity.js';

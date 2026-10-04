@@ -24,7 +24,7 @@ import {
   writeEntry,
   loadAllEntries,
 } from '../src/store.js';
-import { search } from '../src/search.js';
+import { search } from '../src/search/bm25-search.js';
 
 // ---------------------------------------------------------------------------
 // Load trap definitions

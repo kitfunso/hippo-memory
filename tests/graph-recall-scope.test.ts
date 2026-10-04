@@ -16,7 +16,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { estimateTokens, type SearchResult } from '../src/search.js';
+import { estimateTokens } from '../src/token-ledger.js';
+import type { SearchResult } from '../src/search/types.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 

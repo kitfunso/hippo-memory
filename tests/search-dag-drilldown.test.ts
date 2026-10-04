@@ -5,7 +5,7 @@ import * as path from 'path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { search } from '../src/search.js';
+import { search } from '../src/search/bm25-search.js';
 
 describe('DAG drill-down search', () => {
   let hippoRoot: string;

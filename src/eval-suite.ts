@@ -13,7 +13,9 @@
  */
 
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
-import { search, hybridSearch, detectTemporalDirection, computeTemporalRange, temporalBoost } from './search.js';
+import { search } from './search/bm25-search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { detectTemporalDirection, computeTemporalRange, temporalBoost } from './search/temporal.js';
 import { multihopSearch } from './multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 

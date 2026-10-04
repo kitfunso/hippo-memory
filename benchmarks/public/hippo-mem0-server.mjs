@@ -41,7 +41,7 @@ const DIST = path.resolve(arg('dist', path.join(REPO, 'dist')));
 const distImport = (name) => import(pathToFileURL(path.join(DIST, name)).href);
 const { createMemory } = await distImport('memory.js');
 const { initStore, loadAllEntries, batchWriteAndDelete } = await distImport('store.js');
-const { hybridSearch } = await distImport('search.js');
+const { hybridSearch } = await distImport('search/hybrid.js');
 const { embedMemory } = await distImport('embeddings.js');
 const { isEmbeddingAvailable } = await distImport('local-embedding.js');
 

@@ -15,7 +15,8 @@ import { fileURLToPath } from 'url';
 
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { search, estimateTokens } from '../src/search.js';
+import { search } from '../src/search/bm25-search.js';
+import { estimateTokens } from '../src/token-ledger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

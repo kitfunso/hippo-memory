@@ -9,7 +9,8 @@ import { confidenceLabel, computeSchemaFit, createMemory, Layer } from '../memor
 import { isInitialized, TaskSnapshot, SessionEvent, loadAllEntries, writeEntry, updateStats } from '../store.js';
 import { RejectedValueError } from '../rejection.js';
 import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
-import { type SearchResult, explainMatch } from '../search.js';
+import type { SearchResult } from '../search/types.js';
+import { explainMatch } from '../search/explain.js';
 import { embedMemory } from '../embeddings.js';
 import { type HippoConfig, loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';

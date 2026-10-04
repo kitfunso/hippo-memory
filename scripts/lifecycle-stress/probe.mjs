@@ -18,7 +18,7 @@ import { createMemory } from '../../dist/memory.js';
 import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
 import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
 import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
-import { physicsSearch } from '../../dist/search.js';
+import { physicsSearch } from '../../dist/search/physics-search.js';
 import { consolidate } from '../../dist/consolidate.js';
 import { resetAllPhysicsState, loadPhysicsState } from '../../dist/physics-state.js';
 import { openHippoDb, closeHippoDb } from '../../dist/db.js';

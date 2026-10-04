@@ -11,7 +11,10 @@ import {
 } from '../src/invalidation.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
 import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { search, hybridSearch, physicsSearch, CHURN_STALE_RANK_MULTIPLIER } from '../src/search.js';
+import { search } from '../src/search/bm25-search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { physicsSearch } from '../src/search/physics-search.js';
+import { CHURN_STALE_RANK_MULTIPLIER } from '../src/search/boosts.js';
 import { openHippoDb } from '../src/db.js';
 import { savePhysicsState } from '../src/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
