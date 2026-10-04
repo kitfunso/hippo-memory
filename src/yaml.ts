@@ -6,12 +6,43 @@
 
 type YamlValue = string | number | boolean | null | string[] | number[];
 
+const SCALAR_LOOKALIKE = /^(null|true|false|-?\d+(\.\d+)?)$/;
+const UNESCAPES: ReadonlyMap<string, string> = new Map([['\\', '\\'], ['"', '"'], ['n', '\n'], ['r', '\r']]);
+
 function escapeString(s: string): string {
-  // If string contains special chars, quote it
-  if (/[:#\[\]{},\n\r"']/.test(s) || s.trim() !== s || s === '') {
-    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  // A string that reads as null, a boolean or a number is quoted so it comes back a string.
+  if (/[:#\[\]{},\n\r"']/.test(s) || s.trim() !== s || s === '' || SCALAR_LOOKALIKE.test(s)) {
+    const escaped = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    return `"${escaped}"`;
   }
   return s;
+}
+
+// An unknown escape stays as written, so a hand-written Windows path still reads back.
+function unescapeQuoted(body: string): string {
+  return body.replace(/\\([\s\S])/g, (all, ch: string) => UNESCAPES.get(ch) ?? all);
+}
+
+function parseString(raw: string): string {
+  const t = raw.trim();
+  return t.length >= 2 && t.startsWith('"') && t.endsWith('"') ? unescapeQuoted(t.slice(1, -1)) : t;
+}
+
+function splitInlineList(inner: string): string[] {
+  const items: string[] = [];
+  let start = 0;
+  let inQuotes = false;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (inQuotes && ch === '\\') i++;
+    else if (ch === '"') inQuotes = !inQuotes;
+    else if (ch === ',' && !inQuotes) {
+      items.push(inner.slice(start, i));
+      start = i + 1;
+    }
+  }
+  items.push(inner.slice(start));
+  return items.map(parseString);
 }
 
 function isYamlBoolean(val: YamlValue): val is boolean {
@@ -54,16 +85,11 @@ function parseValue(raw: string): YamlValue {
   if (s.startsWith('[') && s.endsWith(']')) {
     const inner = s.slice(1, -1).trim();
     if (inner === '') return [];
-    return inner.split(',').map((item) => {
-      const t = item.trim();
-      return t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1) : t;
-    });
+    return splitInlineList(inner);
   }
 
   // Quoted string
-  if (s.startsWith('"') && s.endsWith('"')) {
-    return s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-  }
+  if (s.startsWith('"') && s.endsWith('"')) return parseString(s);
 
   // Number
   if (/^-?\d+(\.\d+)?$/.test(s)) {
@@ -102,7 +128,7 @@ export function parseFrontmatter(raw: string): ParsedFrontmatter {
       while (j < frontLines.length) {
         const listLine = frontLines[j].trim();
         if (!listLine.startsWith('- ')) break;
-        items.push(listLine.slice(2).trim());
+        items.push(parseString(listLine.slice(2)));
         j++;
       }
 

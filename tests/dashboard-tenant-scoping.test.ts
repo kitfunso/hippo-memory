@@ -16,6 +16,7 @@ import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
+import { boundPort } from './_helpers/listen.js';
 
 function post(
   port: number,
@@ -82,12 +83,8 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
 
     // Run the dashboard under HIPPO_TENANT=tenant_b on an ephemeral port.
     process.env.HIPPO_TENANT = 'tenant_b';
-    const port = 31000 + Math.floor(Math.random() * 5000);
-    server = serveDashboard(hippoRoot, port);
-    await new Promise<void>((resolve) => {
-      if (server!.listening) resolve();
-      else server!.once('listening', () => resolve());
-    });
+    server = serveDashboard(hippoRoot, 0);
+    const port = await boundPort(server);
 
     // POST /api/star/<tenant_a memory id> under HIPPO_TENANT=tenant_b → 404.
     const res = await post(port, `/api/star/${a.id}`);

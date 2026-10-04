@@ -8,6 +8,7 @@ import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember } from '../src/api.js';
 import { classifyTransportFailure, HttpResponseError } from '../src/client.js';
+import { boundPort } from './_helpers/listen.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -26,26 +27,8 @@ function assertFreshBuild(): void {
   }
 }
 
-async function pickFreePort(): Promise<number> {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const port = 30000 + Math.floor(Math.random() * 30000);
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const probe = createServer();
-        probe.once('error', reject);
-        probe.listen(port, '127.0.0.1', () => probe.close(() => resolve()));
-      });
-      return port;
-    } catch { /* taken */ }
-  }
-  throw new Error('could not find a free port after 8 attempts');
-}
-
-/**
- * Answers /health so detectServer accepts the pidfile, then commits a real row
- * for POST /v1/memories and destroys the socket instead of replying.
- */
-function startResettingServer(hippoRoot: string, port: number, startedAt: string): Promise<Server> {
+/** Answers /health so detectServer accepts the pidfile, then commits POST /v1/memories and drops the socket unanswered. */
+async function startResettingServer(hippoRoot: string, startedAt: string): Promise<{ server: Server; port: number }> {
   const server = createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -67,7 +50,8 @@ function startResettingServer(hippoRoot: string, port: number, startedAt: string
     }
     res.writeHead(404).end();
   });
-  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
+  server.listen(0, '127.0.0.1');
+  return { server, port: await boundPort(server) };
 }
 
 function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
@@ -130,9 +114,8 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     mkdirSync(hippoRoot, { recursive: true });
     initStore(hippoRoot);
 
-    const port = await pickFreePort();
     const startedAt = new Date().toISOString();
-    const server = await startResettingServer(hippoRoot, port, startedAt);
+    const { server, port } = await startResettingServer(hippoRoot, startedAt);
     writeFileSync(
       join(hippoRoot, 'server.pid'),
       JSON.stringify({ schema: 1, pid: process.pid, port, url: `http://127.0.0.1:${port}`, started_at: startedAt }),

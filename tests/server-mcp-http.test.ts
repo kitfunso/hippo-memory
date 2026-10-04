@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { presentConnectionsAsRemote } from './_helpers/listen.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -134,17 +135,12 @@ describe('MCP-over-HTTP transport', () => {
   });
 
   it('rejects POST /mcp without auth from a non-loopback origin', async () => {
-    // Smoke check: the auth middleware fires on /mcp routes too. We can't
-    // easily fake a non-loopback connection in-process, so this asserts the
-    // happy-path 200 (loopback no-auth) — the negative case is covered by
-    // the broader auth tests in tests/server-auth.test.ts. Treat the
-    // positive case as a minimal regression guard: if requireAuth threw on
-    // loopback, it would 401 here.
+    presentConnectionsAsRemote(handle.server!);
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'tools/list' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 });

@@ -8,6 +8,7 @@ import type { Server } from 'node:http';
 import { initStore, writeEntry, replaceDetectedConflicts } from '../src/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
+import { boundPort } from './_helpers/listen.js';
 
 function get(port: number, path: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -67,12 +68,8 @@ describe('dashboard conflicts are tenant-scoped', () => {
     ]);
 
     process.env.HIPPO_TENANT = 'tenant_a';
-    const port = 36000 + Math.floor(Math.random() * 5000);
-    server = serveDashboard(hippoRoot, port);
-    await new Promise<void>((resolve) => {
-      if (server!.listening) resolve();
-      else server!.once('listening', () => resolve());
-    });
+    server = serveDashboard(hippoRoot, 0);
+    const port = await boundPort(server);
 
     const conflicts = await get(port, '/api/conflicts');
     expect(conflicts.status).toBe(200);

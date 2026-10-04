@@ -12,6 +12,7 @@ import type { Server } from 'node:http';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
+import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 
@@ -234,12 +235,8 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    const port = 31000 + Math.floor(Math.random() * 5000);
-    server = serveDashboard(hippoRoot, port);
-    await new Promise<void>((res) => {
-      if (server!.listening) res();
-      else server!.once('listening', () => res());
-    });
+    server = serveDashboard(hippoRoot, 0);
+    const port = await boundPort(server);
 
     const memories = JSON.parse(await get(port, '/api/memories')) as Array<{
       id: string;

@@ -25,6 +25,9 @@ import { initStore } from '../src/store.js';
 import type { Context } from '../src/api.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createApiKey } from '../src/auth.js';
+import { presentConnectionsAsRemote } from './_helpers/listen.js';
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-slp-'));
@@ -172,10 +175,21 @@ describe('POST /v1/sleep', () => {
     // cross-tenant rows, confirming the host-wide design.
   });
 
-  // Note: a non-loopback origin test is conceptually correct but hard to
-  // simulate with vitest+serve(port:0) which always binds 127.0.0.1. The
-  // 3-line per-request guard is exercised on every request — verified by
-  // the loopback-origin tests above passing (a non-loopback origin would
-  // throw 403). Future test: spawn serve with a non-loopback bind via
-  // HIPPO_BIND_ALL (when that env knob exists), assert /v1/sleep -> 403.
+  it('non-loopback origin with a valid admin Bearer: 403 from the per-request guard', async () => {
+    const db = openHippoDb(home);
+    let plaintext: string;
+    try {
+      ({ plaintext } = createApiKey(db, { tenantId: 'default', label: 'remote-sleep', role: 'admin' }));
+    } finally {
+      closeHippoDb(db);
+    }
+    presentConnectionsAsRemote(handle.server!);
+    const res = await fetch(`${handle.url}/v1/sleep`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${plaintext}` },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(403);
+    expect((await jsonAs<{ error: string }>(res)).error).toMatch(/loopback-only/);
+  });
 });
