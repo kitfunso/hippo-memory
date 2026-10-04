@@ -2,6 +2,7 @@ import { buildRelevanceRequest, JEV_DEFAULT_TOP_K } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../search.js';
 import { isJsonObjectRecord, type JsonValue } from '../http-util.js';
+import { log } from '../log.js';
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';
@@ -162,9 +163,8 @@ export function createClefReranker(model: ClefModel): RerankerFn {
       const reason = err instanceof Error ? err.message : 'unknown error';
       if (!warned) {
         warned = true;
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[hippo] ${model} reranker unavailable (${reason}); keeping the native order. Subsequent calls will not repeat this warning.`,
+        log.warn(
+          `${model} reranker unavailable (${reason}); keeping the native order. Subsequent calls will not repeat this warning.`,
         );
       }
       return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });

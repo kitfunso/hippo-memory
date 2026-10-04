@@ -2836,7 +2836,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       heldDb = openHippoDb(opts.hippoRoot);
     } catch (err) {
       stopHolding = true;
-      console.error('hippo serve: could not hold a store connection; requests still work, only slower:', err);
+      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

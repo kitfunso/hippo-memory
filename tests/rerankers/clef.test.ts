@@ -40,7 +40,7 @@ describe('clef rerankers', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     for (const k of ENV_KEYS) delete process.env[k];
     process.env.CLOUDFLARE_ACCOUNT_ID = ACCOUNT;
     process.env.CLOUDFLARE_API_TOKEN = FAKE_TOKEN;
