@@ -62,7 +62,7 @@ export default defineConfig({
       autoAttachSubprocess: true,
       excludeAfterRemap: true,
       reporter: ['text-summary', 'json-summary'],
-      thresholds: { lines: 67, branches: 60, functions: 80, statements: 67 },
+      thresholds: { lines: 90, branches: 82, functions: 95, statements: 89 },
     },
   },
 });
