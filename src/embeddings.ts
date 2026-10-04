@@ -229,6 +229,8 @@ interface EmbeddingIdsCacheEntry {
   mtimeMs: number;
   size: number;
   ids: Set<string> | null;
+  /** Set when stat itself failed, so the same failure code logs once instead of on every read. */
+  statErrorCode?: string;
 }
 const embeddingIdsCache = new Map<string, EmbeddingIdsCacheEntry>();
 
@@ -239,8 +241,13 @@ export function readEmbeddingIdsReadOnly(hippoRoot: string): Set<string> | null 
   try {
     stat = fs.statSync(fp);
   } catch (err) {
-    embeddingIdsCache.delete(fp);
-    if (isErrnoCode(err, 'ENOENT')) return new Set();
+    if (isErrnoCode(err, 'ENOENT')) {
+      embeddingIdsCache.delete(fp);
+      return new Set();
+    }
+    const code = err instanceof Error && 'code' in err ? String(err.code) : 'unknown';
+    if (embeddingIdsCache.get(fp)?.statErrorCode === code) return null;
+    embeddingIdsCache.set(fp, { mtimeMs: Number.NaN, size: Number.NaN, ids: null, statErrorCode: code });
     log.warn(`could not stat ${EMBEDDINGS_FILE}; embedding coverage is unknown (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
     return null;
   }

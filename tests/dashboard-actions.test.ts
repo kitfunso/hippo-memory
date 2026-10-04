@@ -1,6 +1,7 @@
 // The four dashboard writes (pin, wrong, resolve, forget): their result mapping, tenant and live-only guards, and the request guards in front of them.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { listMemoryConflicts, readEntry, replaceDetectedConflicts } from '../src/store.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
@@ -219,6 +220,41 @@ describe('request guards', () => {
     expect(big.status).toBe(400);
     expect(broken.status).toBe(400);
     expect(row(target.id).pinned).toBe(false);
+  });
+
+  it('answers 400 and drops the connection once a body passes the 64 KB drain ceiling', async () => {
+    const target = seed(store.hippoRoot, 'drain row');
+    const chunk = Buffer.alloc(8 * 1024, 'x');
+
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({
+        host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      let answered = false;
+      req.on('response', (res) => {
+        answered = true;
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      });
+      // The server destroys the socket after answering, so a late reset is the expected end of the upload.
+      req.on('error', (err) => {
+        if (!answered) reject(err);
+      });
+      const send = async (): Promise<void> => {
+        for (let sent = 0; sent < 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
+          await new Promise<void>((done) => req.write(chunk, () => done()));
+          // Paced so the server has read everything before it drops the socket; an unread backlog would reset the reply away.
+          await new Promise<void>((done) => setTimeout(done, 5));
+        }
+        req.destroy();
+      };
+      void send();
+    });
+
+    expect(status).toBe(400);
+    expect(row(target.id).pinned).toBe(false);
+    expect((await get(dash.port, '/api/overview')).status).toBe(200);
   });
 
   it('answers 400 for a malformed percent sequence in a path, and keeps serving', async () => {

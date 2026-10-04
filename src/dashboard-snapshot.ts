@@ -354,6 +354,8 @@ export interface SnapshotService {
   invalidate(): void;
   /** Id of the most recent build, which is what a client holding the last response still has. */
   currentId(): number;
+  /** Ids with a vector as of the last build (a direct read before any build), so a detail read never re-parses embeddings.json. */
+  embeddedIds(): ReadonlySet<string> | null;
   close(): void;
 }
 
@@ -366,11 +368,16 @@ function embeddingsKey(hippoRoot: string): string {
   }
 }
 
+// Keeps ids rising between two services created in the same millisecond of one process.
+let highestIssuedId = 0;
+
 /** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the snapshot cache; `now` is the clock seam. */
 export function createSnapshotService(hippoRoot: string, now: () => number): SnapshotService {
   let db: DatabaseSyncLike | null = null;
   let cached: CachedSnapshot | null = null;
-  let lastId = 0;
+  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
+  let lastId = Math.max(Date.now(), highestIssuedId);
+  let lastEmbeddedIds: ReadonlySet<string> | null | undefined;
 
   const dataVersion = (): number | null => {
     if (db === null) {
@@ -385,14 +392,10 @@ export function createSnapshotService(hippoRoot: string, now: () => number): Sna
   const build = (tenantId: string, dv: number | null, nowMs: number): Snapshot => {
     const entries = dv === null ? [] : loadAllEntries(hippoRoot, tenantId);
     const openConflicts = dv === null ? [] : listMemoryConflicts(hippoRoot, 'open', tenantId);
-    return buildSnapshot({
-      id: ++lastId,
-      tenantId,
-      nowMs,
-      entries,
-      openConflicts,
-      embeddedIds: readEmbeddingIdsReadOnly(hippoRoot),
-    });
+    lastId += 1;
+    highestIssuedId = Math.max(highestIssuedId, lastId);
+    lastEmbeddedIds = readEmbeddingIdsReadOnly(hippoRoot);
+    return buildSnapshot({ id: lastId, tenantId, nowMs, entries, openConflicts, embeddedIds: lastEmbeddedIds });
   };
 
   return {
@@ -404,11 +407,11 @@ export function createSnapshotService(hippoRoot: string, now: () => number): Sna
       const hit = cached;
       if (hit !== null && !fresh) {
         const age = nowMs - hit.builtAtMs;
+        // An embeddings.json rewrite rides the same coalescing window as a commit: every remember rewrites it.
         const reusable = hit.snapshot.tenantId === tenantId
-          && hit.embeddingsKey === emb
           && (hit.dataVersion !== null || dv === null)
           && age < TTL_MS
-          && (hit.dataVersion === dv || age < COALESCE_MS);
+          && ((hit.dataVersion === dv && hit.embeddingsKey === emb) || age < COALESCE_MS);
         if (reusable) return hit.snapshot;
       }
       const snapshot = build(tenantId, dv, nowMs);
@@ -421,10 +424,14 @@ export function createSnapshotService(hippoRoot: string, now: () => number): Sna
     currentId() {
       return lastId;
     },
+    embeddedIds() {
+      return lastEmbeddedIds === undefined ? readEmbeddingIdsReadOnly(hippoRoot) : lastEmbeddedIds;
+    },
     close() {
       if (db !== null) closeHippoDb(db);
       db = null;
       cached = null;
+      lastEmbeddedIds = undefined;
     },
   };
 }

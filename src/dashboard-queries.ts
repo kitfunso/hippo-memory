@@ -2,7 +2,6 @@
 
 import { calculateStrength, type MemoryEntry } from './memory.js';
 import { listMemoryConflicts, readEntry } from './store.js';
-import { readEmbeddingIdsReadOnly } from './embeddings.js';
 import {
   BANDS, DAY_MS, LAYERS, isLiveMemory, memoryFacts, projectIdentity,
   type Chip, type Fact, type FilteredSet, type ProjectAgg, type Snapshot,
@@ -29,21 +28,21 @@ function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-/** Cumulative daily counts over the last 90 days, oldest first; memories older than the window sit in the base. */
+/** Cumulative counts at 91 daily points, oldest first: point 0 is the base at the window start, point 90 is now. */
 function cumulativeSeries(times: Iterable<number>, nowMs: number): number[] {
-  const days = Array.from({ length: SERIES_DAYS }, () => 0);
+  const days = Array.from({ length: SERIES_DAYS + 1 }, () => 0);
   let base = 0;
   for (const t of times) {
     const ago = Math.floor((nowMs - t) / DAY_MS);
     if (ago >= SERIES_DAYS) base++;
-    else days[SERIES_DAYS - 1 - Math.max(0, ago)]++;
+    else days[SERIES_DAYS - Math.max(0, ago)]++;
   }
   let running = base;
   return days.map((n) => (running += n));
 }
 
 function addedWithin(series: number[]): number {
-  return series[SERIES_DAYS - 1] - series[SERIES_DAYS - 1 - DELTA_DAYS];
+  return series[SERIES_DAYS] - series[SERIES_DAYS - DELTA_DAYS];
 }
 
 function pct(share: number): string {
@@ -334,6 +333,7 @@ export function buildMemoryDetail(
   entry: MemoryEntry,
   snapshotId: number,
   nowMs: number,
+  embedded: boolean,
 ): MemoryDetail {
   const f = memoryFacts(entry, nowMs);
   const project = projectIdentity(entry.origin_project);
@@ -363,7 +363,7 @@ export function buildMemoryDetail(
     scope: entry.scope,
     tenant: entry.tenantId,
     kind: entry.kind,
-    embedded: readEmbeddingIdsReadOnly(hippoRoot)?.has(entry.id) ?? false,
+    embedded,
     conflicts: openConflictsOf(hippoRoot, tenantId, entry, nowMs),
   };
 }

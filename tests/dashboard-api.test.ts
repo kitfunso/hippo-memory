@@ -1,9 +1,9 @@
 // The read routes of the Health view: overview, project, memory page, detail and search, their validation, and the removed endpoints.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Layer, createMemory } from '../src/memory.js';
+import { Layer, createMemory, type MemoryEntry } from '../src/memory.js';
 import { buildSnapshot } from '../src/dashboard-snapshot.js';
-import { buildProjectDetail } from '../src/dashboard-queries.js';
+import { buildOverview, buildProjectDetail } from '../src/dashboard-queries.js';
 import type {
   MemoryDetail, MemoryPage, Overview, ProjectDetail, ScatterGrid, ScatterPoints, SearchResult,
 } from '../src/dashboard-types.js';
@@ -53,7 +53,7 @@ describe('overview and project', () => {
     expect(overview.projects.map((p) => p.key).sort()).toEqual(['p:alpha', 'p:beta']);
     expect(overview.kpis.map((k) => k.id)).toEqual(['total', 'projects', 'atRiskShare', 'openConflicts', 'embeddingCoverage']);
     expect(overview.kpis[0].value).toBe(8);
-    expect(overview.kpis[0].series).toHaveLength(90);
+    expect(overview.kpis[0].series).toHaveLength(91);
     expect(overview.mostAtRisk[0]).toBe('p:alpha');
     expect(overview.generatedAt).toBe(new Date(NOW).toISOString());
   });
@@ -90,6 +90,37 @@ describe('overview and project', () => {
     expect(grid.mode).toBe('grid');
     expect([grid.cols, grid.rows]).toEqual([64, 32]);
     expect(counted).toBe(4_001);
+  });
+});
+
+describe('KPI series', () => {
+  const seriesOf = (id: 'total' | 'projects', entries: MemoryEntry[]): number[] => {
+    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries, openConflicts: [], embeddedIds: new Set() });
+    return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
+  };
+  const aged = (days: number, project: string): MemoryEntry => ({
+    ...createMemory(`aged ${days}`, { tags: [] }),
+    origin_project: project,
+    created: isoAgo(days),
+    last_retrieved: isoAgo(days),
+  });
+
+  it('sends 91 cumulative points whose first-to-last difference counts memories created inside the window', () => {
+    const total = seriesOf('total', [aged(89.5, 'a'), aged(95, 'b'), aged(10, 'c'), aged(0.2, 'c')]);
+
+    expect(total).toHaveLength(91);
+    expect(total[0]).toBe(1);
+    expect(total[90]).toBe(4);
+    expect(total[90] - total[0]).toBe(3);
+    expect(total[90] - total[83]).toBe(1);
+    expect(total[90] - total[60]).toBe(2);
+  });
+
+  it('counts a project from its first memory, so a project first seen 95 days ago stays in the base', () => {
+    const projects = seriesOf('projects', [aged(89.5, 'new'), aged(95, 'old'), aged(3, 'old')]);
+
+    expect(projects[0]).toBe(1);
+    expect(projects[90] - projects[0]).toBe(1);
   });
 });
 

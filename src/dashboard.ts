@@ -34,6 +34,7 @@ const MIME_TYPES = {
 } as const;
 
 const BODY_MAX_BYTES = 4096;
+const BODY_DRAIN_MAX_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
 const CARD_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -77,14 +78,22 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
   }
 }
 
-// Past the cap it keeps draining so the socket stays usable, then refuses.
+/** Raised once a body passes the drain ceiling; the caller answers 400 and drops the socket. */
+class BodyDrainExceeded extends ParamError {}
+
+// Past the cap it keeps draining so the socket stays usable, up to a ceiling, then refuses.
 function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let aborted = false;
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size <= BODY_MAX_BYTES) chunks.push(chunk);
+      if (size > BODY_DRAIN_MAX_BYTES && !aborted) {
+        aborted = true;
+        reject(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
+      }
     });
     req.on('error', reject);
     req.on('end', () => {
@@ -133,7 +142,8 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
     const entry = readEntry(hippoRoot, parseMemoryId(a), tenantId);
     if (entry === null || !isLiveMemory(entry)) return sendOrNotFound(res, null);
     const snapshotId = snapshots.get(tenantId, fresh).id;
-    return sendOrNotFound(res, buildMemoryDetail(hippoRoot, tenantId, entry, snapshotId, ctx.now()));
+    const embedded = snapshots.embeddedIds()?.has(entry.id) ?? false;
+    return sendOrNotFound(res, buildMemoryDetail(hippoRoot, tenantId, entry, snapshotId, ctx.now(), embedded));
   }
   if (head === 'search' && segments.length === 2) {
     return sendOrNotFound(res, buildSearch(snapshots.get(tenantId, fresh), parseSearchText(url.searchParams)));
@@ -179,8 +189,10 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
   const result = action(hippoRoot, tenantId, body);
   if (result.changed) snapshots.invalidate();
   if (result.entry) {
-    const snapshotId = snapshots.get(tenantId).id;
-    jsonResponse(res, buildMemoryDetail(hippoRoot, tenantId, result.entry, snapshotId, ctx.now()), result.status);
+    // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.
+    const embedded = snapshots.embeddedIds()?.has(result.entry.id) ?? false;
+    const detail = buildMemoryDetail(hippoRoot, tenantId, result.entry, snapshots.currentId(), ctx.now(), embedded);
+    jsonResponse(res, detail, result.status);
   } else {
     jsonResponse(res, result.body, result.status);
   }
@@ -241,6 +253,11 @@ export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { 
     handleRequest(req, res).catch((err) => {
       if (res.headersSent) {
         res.end();
+        return;
+      }
+      if (err instanceof BodyDrainExceeded) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', Connection: 'close' });
+        res.end(JSON.stringify({ error: err.message }), () => req.destroy());
         return;
       }
       if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);

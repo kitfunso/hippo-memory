@@ -20,7 +20,7 @@ export interface ProjectSummary {
   layers: Record<Layer, number>;
 }
 
-/** One KPI card; `series` is 90 daily points, oldest first, or null when hippo recorded no history. */
+/** One KPI card; `series` is 91 daily cumulative points, oldest first (point 0 is the base at the window start, point 90 is now) so `last - first` over any range plus one points is exact; null when hippo recorded no history. */
 export interface Kpi {
   id: 'total' | 'projects' | 'atRiskShare' | 'openConflicts' | 'embeddingCoverage';
   label: string;
@@ -30,6 +30,7 @@ export interface Kpi {
 }
 
 export interface Overview {
+  /** Bumped on each rebuild and seeded from the wall clock, so ids keep rising across server restarts. */
   snapshotId: number;
   generatedAt: string;
   total: number;

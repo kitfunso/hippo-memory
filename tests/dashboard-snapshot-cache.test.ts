@@ -33,9 +33,21 @@ describe('snapshot reuse and rebuild', () => {
   it('reuses the snapshot when nothing was written', () => {
     seed(store.hippoRoot, 'first');
     const first = service.get('default');
-    clock += 1_000;
+    clock += COALESCE_MS + 1;
 
     expect(service.get('default').id).toBe(first.id);
+  });
+
+  it('seeds snapshot ids from the wall clock, not the injected clock, so they rise across restarts', () => {
+    const wallBefore = Date.now();
+    seed(store.hippoRoot, 'first');
+
+    const fresh = createSnapshotService(store.hippoRoot, () => clock);
+    try {
+      expect(fresh.get('default').id).toBeGreaterThan(wallBefore);
+    } finally {
+      fresh.close();
+    }
   });
 
   it('shows an outside write after the coalescing window, and at once with fresh', () => {
@@ -142,14 +154,21 @@ describe('embeddings.json handling', () => {
     expect(snap.embeddingCoverage).toBeNull();
   });
 
-  it('refreshes coverage when only embeddings.json changes', () => {
+  it('rewriting embeddings.json with no DB commit changes coverage once the coalescing window has passed, not before', () => {
     const row = seed(store.hippoRoot, 'a row');
-    expect(service.get('default').embeddingCoverage).toBe(0);
+    const first = service.get('default');
+    expect(first.embeddingCoverage).toBe(0);
 
     writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [row.id]: [0.1, 0.2] }));
-    clock += 1_000;
+    clock += COALESCE_MS - 1;
+    const inside = service.get('default');
+    expect(inside.id).toBe(first.id);
+    expect(inside.embeddingCoverage).toBe(0);
 
-    expect(service.get('default').embeddingCoverage).toBe(1);
+    clock += 2;
+    const after = service.get('default');
+    expect(after.id).toBeGreaterThan(first.id);
+    expect(after.embeddingCoverage).toBe(1);
   });
 });
 
@@ -179,6 +198,39 @@ describe('through the server', () => {
     expect(after.snapshotId).toBeGreaterThan(before.snapshotId);
     expect(after.total).toBe(2);
     expect(after.projects[0].pinned).toBe(1);
+  });
+
+  it('keeps the snapshot id across a memory-detail read and a clock move past the coalescing window', async () => {
+    const target = seed(store.hippoRoot, 'read me');
+    const first = parse<Overview>(await get(dash.port, '/api/overview?fresh=1'));
+
+    expect((await get(dash.port, `/api/memory/${target.id}`)).status).toBe(200);
+    clock += COALESCE_MS + 1;
+
+    expect(parse<Overview>(await get(dash.port, '/api/overview')).snapshotId).toBe(first.snapshotId);
+  });
+
+  it('takes the detail embedded flag from the snapshot, so a rewritten embeddings.json shows after the window', async () => {
+    const target = seed(store.hippoRoot, 'embed me');
+    await get(dash.port, '/api/overview?fresh=1');
+    writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [target.id]: [0.1] }));
+
+    const inside = parse<MemoryDetail>(await get(dash.port, `/api/memory/${target.id}`));
+    clock += COALESCE_MS + 1;
+    const after = parse<MemoryDetail>(await get(dash.port, `/api/memory/${target.id}`));
+
+    expect(inside.embedded).toBe(false);
+    expect(after.embedded).toBe(true);
+  });
+
+  it('serves a first snapshotId above the last one a previous server instance issued', async () => {
+    const before = parse<Overview>(await get(dash.port, '/api/overview?fresh=1'));
+    await dash.close();
+
+    dash = await startDashboard(store.hippoRoot, () => clock);
+    const restarted = parse<Overview>(await get(dash.port, '/api/overview'));
+
+    expect(restarted.snapshotId).toBeGreaterThan(before.snapshotId);
   });
 
   it('rebuilds on ?fresh=1 only when asked', async () => {

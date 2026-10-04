@@ -1,6 +1,6 @@
 // readEmbeddingIdsReadOnly reads the ids a dashboard needs and never renames, copies or writes, unlike loadEmbeddingIndex.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -44,6 +45,33 @@ describe('readEmbeddingIdsReadOnly', () => {
     rmSync(file, { recursive: true });
     writeFileSync(file, '[1, 2]');
     expect(readEmbeddingIdsReadOnly(root)).toBeNull();
+  });
+
+  it('warns once for an unreadable path read twice, and once more when the failure changes', () => {
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      lines.push(String(chunk));
+      return true;
+    });
+    mkdirSync(file);
+
+    expect(readEmbeddingIdsReadOnly(root)).toBeNull();
+    expect(readEmbeddingIdsReadOnly(root)).toBeNull();
+    expect(lines.filter((l) => l.includes('embedding coverage is unknown'))).toHaveLength(1);
+  });
+
+  it('warns once when stat itself fails with the same code on every read', () => {
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      lines.push(String(chunk));
+      return true;
+    });
+    // A NUL byte makes statSync throw ERR_INVALID_ARG_VALUE on every platform, where a bad parent gives ENOENT on Windows.
+    const invalid = `${root}\0bad`;
+
+    expect(readEmbeddingIdsReadOnly(invalid)).toBeNull();
+    expect(readEmbeddingIdsReadOnly(invalid)).toBeNull();
+    expect(lines.filter((l) => l.includes('could not stat'))).toHaveLength(1);
   });
 
   it('serves the cached ids until the file changes in size or time', () => {
