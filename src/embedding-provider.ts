@@ -37,7 +37,7 @@ import {
   isEmbeddingAvailable,
   resolveEmbeddingModel,
   DEFAULT_EMBEDDING_MODEL,
-} from './embeddings.js';
+} from './local-embedding.js';
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry } from './http-retry.js';

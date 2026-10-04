@@ -69,9 +69,8 @@ export { consolidate, ConsolidationResult } from './consolidate.js';
 export { strengthBucket } from './dedupe.js';
 
 // Feature 1: Embedding search
+export { isEmbeddingAvailable, getEmbedding } from './local-embedding.js';
 export {
-  isEmbeddingAvailable,
-  getEmbedding,
   cosineSimilarity,
   loadEmbeddingIndex,
   saveEmbeddingIndex,

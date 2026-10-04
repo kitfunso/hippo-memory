@@ -18,7 +18,7 @@ import { listPeers } from './shared.js';
 import { loadEmbeddingIndex } from './embeddings.js';
 import { resolveTenantId } from './tenant.js';
 import { loadCardDetail } from './card-detail.js';
-import { isCrossSite, LOOPBACK_HOST_HEADER } from './server.js';
+import { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 import { log } from './log.js';
 
 interface DashboardData {

@@ -12,7 +12,8 @@ import {
 } from '../src/shared.js';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { embedAll, loadEmbeddingIndex, isEmbeddingAvailable } from '../src/embeddings.js';
+import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
+import { isEmbeddingAvailable } from '../src/local-embedding.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global

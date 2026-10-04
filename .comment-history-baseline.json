@@ -7,7 +7,7 @@
   "src/autolearn.ts": 1,
   "src/availability.ts": 3,
   "src/capture-error.ts": 1,
-  "src/capture.ts": 38,
+  "src/capture.ts": 37,
   "src/card.ts": 1,
   "src/churn-git.ts": 1,
   "src/cli.ts": 88,
@@ -41,7 +41,7 @@
   "src/dedupe.ts": 9,
   "src/doctor.ts": 1,
   "src/embedding-provider.ts": 2,
-  "src/embeddings.ts": 3,
+  "src/embeddings.ts": 2,
   "src/eval-stats.ts": 1,
   "src/extract.ts": 2,
   "src/failure-log.ts": 3,
@@ -91,6 +91,6 @@
   "src/server.ts": 61,
   "src/shared.ts": 27,
   "src/skills.ts": 8,
-  "src/store.ts": 135,
+  "src/store.ts": 131,
   "src/token-ledger.ts": 3
 }

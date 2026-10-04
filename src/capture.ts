@@ -47,7 +47,8 @@ import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
 import { classifyOriginProject } from './project-identity.js';
 import { isObjectLike, isStringValue, readClaudeCodePreCompact } from './capture-contract.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
+import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from './transcript-tail.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -548,11 +549,6 @@ export interface CaptureOptions {
   originProject?: string;
 }
 
-/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
-export function errorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}
-
 /**
  * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
@@ -1027,29 +1023,9 @@ function cmdCaptureCore(
 // `hippo pre-compact` — PreCompact hook producer
 // ---------------------------------------------------------------------------
 
-/** Never read the whole transcript — PreCompact fires exactly when it's largest. */
-export const PRE_COMPACT_TAIL_BYTES = 256 * 1024;
-
 export const PRE_COMPACT_TASK_CAP = 200;
 export const PRE_COMPACT_SUMMARY_CAP = 2000;
 export const PRE_COMPACT_NEXT_STEP_CAP = 500;
-
-/**
- * Truncate `text` to at most `maxChars` UTF-16 code units without splitting
- * a surrogate pair at the boundary. A plain `slice(0, n)` can land between a
- * high and low surrogate, leaving an unpaired surrogate in a stored/
- * re-injected snapshot field. If the code unit at the cut point is a high
- * surrogate (0xD800-0xDBFF), back off one unit so the pair stays whole.
- */
-export function truncateCodePointSafe(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  let end = maxChars;
-  if (end > 0) {
-    const code = text.charCodeAt(end - 1);
-    if (code >= 0xd800 && code <= 0xdbff) end -= 1;
-  }
-  return text.slice(0, end);
-}
 
 /**
  * Cap from the RECENT end: summariseTranscript emits user turns oldest-to-
@@ -1066,50 +1042,6 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
   const nl = text.indexOf('\n', start);
   if (nl !== -1 && nl + 1 < text.length && nl - start < 200) start = nl + 1;
   return '[...earlier turns trimmed]\n' + text.slice(start);
-}
-
-/**
- * Positional read of the last `capBytes` of `transcriptPath`, aligned
- * forward to the first complete JSONL line. Uses fs.openSync/readSync at a
- * byte offset rather than reading the whole file and slicing — PreCompact
- * fires exactly when transcripts are largest, so a whole-file read is the
- * one thing this path cannot do.
- *
- * Boundary handling (X14): a seek that lands mid-line must drop that
- * partial first line so every remaining line parses as complete JSON. A
- * seek that lands exactly after a '\n' already starts on a complete line
- * and must NOT drop it — doing so would silently discard one whole line on
- * every tail read whose start offset happens to align with a line break.
- * Distinguished by peeking at the single byte immediately before `start`.
- */
-export function readTranscriptTail(transcriptPath: string, capBytes: number = PRE_COMPACT_TAIL_BYTES): string {
-  const size = fs.statSync(transcriptPath).size;
-  const start = Math.max(0, size - capBytes);
-  const length = size - start;
-  if (length <= 0) return '';
-
-  const fd = fs.openSync(transcriptPath, 'r');
-  try {
-    let onLineBoundary = start === 0;
-    if (!onLineBoundary) {
-      const prevByte = Buffer.alloc(1);
-      fs.readSync(fd, prevByte, 0, 1, start - 1);
-      onLineBoundary = prevByte[0] === 0x0a; // '\n'
-    }
-
-    const buf = Buffer.alloc(length);
-    fs.readSync(fd, buf, 0, length, start);
-    let text = buf.toString('utf8');
-    if (!onLineBoundary) {
-      // Landed mid-line — drop the partial first line so every remaining
-      // line parses as complete JSON.
-      const nl = text.indexOf('\n');
-      text = nl === -1 ? '' : text.slice(nl + 1);
-    }
-    return text;
-  } finally {
-    fs.closeSync(fd);
-  }
 }
 
 /** Most recent plain-text user message in a JSONL tail. Claude Code transcript shape only (PreCompact is claude-code-only). */

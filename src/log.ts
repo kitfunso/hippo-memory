@@ -58,6 +58,11 @@ export const log = {
   once,
 } as const;
 
+/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
+export function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
 /** Test hook: forget which once-keys have fired. */
 export function resetLogOnce(): void {
   onceKeys.clear();

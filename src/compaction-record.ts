@@ -1,7 +1,6 @@
 // One record per Claude Code compaction, and what turns its summary into kept memories.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, readTranscriptTail, truncateCodePointSafe } from './capture.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { loadConfig } from './config.js';
@@ -12,7 +11,8 @@ import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, updateStats, writeEntryMirrors } from './store.js';
 import { resolveTenantId } from './tenant.js';
-import { log as logger } from './log.js';
+import { errorMessage, log as logger } from './log.js';
+import { readTranscriptTail, truncateCodePointSafe } from './transcript-tail.js';
 
 /** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */
 export const COMPACTION_DB_WAIT_MS = 2000;

@@ -5,7 +5,7 @@ import { evalNow } from './ablation.js';
 import { oneCopyPerMemory } from './api.js';
 import { compareEntryIdentity } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
-import { isEmbeddingAvailable } from './embeddings.js';
+import { isEmbeddingAvailable } from './local-embedding.js';
 import { computeGoalStackBoost, type GoalRecallLogRow } from './goals.js';
 import { graphExpandRecall } from './graph-recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';

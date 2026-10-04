@@ -43,7 +43,8 @@ import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/memory.js';
 import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
-import { embedMemory, isEmbeddingAvailable, loadEmbeddingIndex } from '../../dist/embeddings.js';
+import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
+import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { physicsSearch } from '../../dist/search.js';
 import { consolidate } from '../../dist/consolidate.js';
 import { resetAllPhysicsState } from '../../dist/physics-state.js';

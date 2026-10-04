@@ -37,12 +37,8 @@ import {
   insertRejectedValue,
   findRejectedValue,
 } from './rejection.js';
-// AT1 (plan §5): resolveConflict's kind-aware loser removal needs
-// archiveRawMemory for kind='raw' losers. raw-archive.ts imports
-// markSummaryDirtyInTx from this module — both imports are used only
-// inside function bodies (never at module-evaluation time), so the cycle
-// is the standard safe mutual-function-reference shape under NodeNext ESM.
 import { archiveRawMemory } from './raw-archive.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { insertDormantRow, type DormantMove } from './dormant.js';
 import { log } from './log.js';
 import { topVectorMatches } from './vector-store.js';
@@ -3853,48 +3849,6 @@ export function loadDirtySummaries(
     return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
-  }
-}
-
-/**
- * v0.30 / E2 — in-transaction variant of markSummaryDirty. Takes an open
- * db (caller is responsible for any SAVEPOINT/BEGIN). Used by E2's hook
- * sites: writeEntryDbOnly, api.supersede CAS, deleteEntry, archiveRawMemory,
- * batchWriteAndDelete. Each child mutation's dirty-mark is atomic with the
- * mutation itself (where the mutation IS in a SAVEPOINT/BEGIN — deleteEntry
- * is the exception, acceptably non-atomic by design).
- *
- * EXPORTED (required for cross-module use by api.ts + raw-archive.ts).
- * Risk of misuse (caller without open tx) is mitigated by the InTx
- * suffix + the DatabaseSyncLike typed param. Public surface for end users
- * stays at the markSummaryDirty (own-connection) variant.
- *
- * Same idempotency contract: 0->1 transition only, audit row only on
- * transition, no-op on non-summary / archived / unknown id / cross-tenant.
- */
-export function markSummaryDirtyInTx(
-  db: DatabaseSyncLike,
-  summaryId: string,
-  tenantId: string,
-  actor: string,
-): void {
-  // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
-  // actual level in same round trip so audit metadata stays accurate without
-  // a SELECT-before-UPDATE extra DB op on this hot path (5 caller sites).
-  // SAFETY: result's shape matches the single `dag_level` column returned
-  // above.
-  const result = db.prepare(`
-    UPDATE memories
-       SET summary_dirty = 1
-     WHERE id = ?
-       AND tenant_id = ?
-       AND dag_level IN (2, 3)
-       AND summary_dirty = 0
-       AND kind != 'archived'
-    RETURNING dag_level
-  `).get(summaryId, tenantId) as { dag_level: number } | undefined;
-  if (result) {
-    audit(db, 'summary_marked_dirty', summaryId, { dag_level: result.dag_level, source: 'E2' }, actor, tenantId);
   }
 }
 

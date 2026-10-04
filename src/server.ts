@@ -139,8 +139,10 @@ import {
   HttpError,
   JSON_HEADERS,
   BodyTooLargeError,
+  isCrossSite,
   isHeaderString,
   isJsonObjectRecord,
+  LOOPBACK_HOST_HEADER,
   mapApiError,
   readBody,
   sendJson,
@@ -422,17 +424,6 @@ export function isLoopback(remoteAddress: string | undefined): boolean {
   if (remoteAddress === '::1') return true;
   if (remoteAddress === '::ffff:127.0.0.1') return true;
   return false;
-}
-
-// Any other Host on a loopback socket is DNS rebinding: a hostile page resolved to 127.0.0.1.
-export const LOOPBACK_HOST_HEADER = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
-
-/** A browser request sent by another site. Non-browser clients send neither header and pass. */
-export function isCrossSite(req: IncomingMessage): boolean {
-  const site = req.headers['sec-fetch-site'];
-  if (site !== undefined && site !== 'same-origin' && site !== 'none') return true;
-  const origin = req.headers.origin;
-  return origin !== undefined && origin !== `http://${req.headers.host}`;
 }
 
 // A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.

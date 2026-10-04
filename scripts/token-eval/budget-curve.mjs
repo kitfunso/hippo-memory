@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 import { createMemory, Layer } from '../../dist/memory.js';
 import { writeEntry, initStore, loadAllEntries } from '../../dist/store.js';
 import { hybridSearch } from '../../dist/search.js';
-import { isEmbeddingAvailable } from '../../dist/embeddings.js';
+import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { estimateTokens } from '../../dist/token-ledger.js';
 import { pairedBootstrap } from '../../dist/eval-stats.js';
 

@@ -43,12 +43,12 @@ import {
   type AmbientLoadResult,
   updateStats,
   isInitialized,
-  markSummaryDirtyInTx,
   auditRejectionRefusal,
   type TaskSnapshot,
   type SessionEvent,
   memoriesBackingObjects,
 } from './store.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { RejectedValueError, type RejectedValueRow } from './rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import {

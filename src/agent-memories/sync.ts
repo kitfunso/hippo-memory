@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { errorMessage } from '../capture.js';
+import { errorMessage } from '../log.js';
 import { loadConfig } from '../config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';

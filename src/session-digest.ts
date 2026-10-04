@@ -4,8 +4,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   collectSessionTurns,
-  errorMessage,
-  readTranscriptTail,
   splitSentences,
   type SessionTurn,
   type TranscriptRecord,
@@ -13,11 +11,13 @@ import {
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
+import { errorMessage } from './log.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS, isInitialized, loadAllEntries, loadLatestHandoff, writeEntry } from './store.js';
 import { isSyntheticMessage } from './token-ledger.js';
+import { readTranscriptTail } from './transcript-tail.js';
 
 export const SESSION_DIGEST_TAG = 'session-digest';
 

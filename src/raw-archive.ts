@@ -2,7 +2,7 @@ import { BadRequestError, NotFoundError } from './api-errors.js';
 import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
-import { markSummaryDirtyInTx } from './store.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
 
 export interface ArchiveOpts {
   reason: string;

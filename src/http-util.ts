@@ -77,6 +77,17 @@ export async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+// Any other Host on a loopback socket is DNS rebinding: a hostile page resolved to 127.0.0.1.
+export const LOOPBACK_HOST_HEADER = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
+/** A browser request sent by another site. Non-browser clients send neither header and pass. */
+export function isCrossSite(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return true;
+  const origin = req.headers.origin;
+  return origin !== undefined && origin !== `http://${req.headers.host}`;
+}
+
 /** Per-request values a connector webhook receiver reads; ServeOpts and the /v1 RouteRequest both satisfy it. */
 export interface WebhookRequest {
   req: IncomingMessage;

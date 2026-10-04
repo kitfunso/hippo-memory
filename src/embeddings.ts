@@ -7,7 +7,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { createRequire } from 'module';
 import { MemoryEntry } from './memory.js';
 import { loadAllEntries } from './store.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
@@ -17,20 +16,10 @@ import {
 import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
+import { DEFAULT_EMBEDDING_MODEL } from './local-embedding.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { log } from './log.js';
 
-// Use createRequire for synchronous module resolution check in ESM
-const _require = createRequire(import.meta.url);
-
-// Cached availability check
-let _embeddingAvailable: boolean | null = null;
-
-// Lazy-loaded pipeline (expensive to initialize)
-const _pipelineInstances = new Map<string, unknown>();
-const _pipelineLoading = new Map<string, Promise<unknown>>();
-
-export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 export { EMBEDDING_MODEL_META_KEY };
 
 /**
@@ -86,170 +75,6 @@ export function embeddingIndexIdentity(providerId: string): string {
 export function embeddingInputText(entry: { content: string; tags: string[] }): string {
   const tags = entry.tags.filter((t) => !t.startsWith('path:'));
   return `${entry.content} ${tags.join(' ')}`.trim();
-}
-
-/**
- * Per-model pooling dispatch for Transformers.js's feature-extraction
- * pipeline. BGE family models were trained with CLS pooling (per BAAI's
- * official inference code in `FlagEmbedding`); MiniLM and most sentence-
- * transformers models use mean pooling. Unknown model ids default to mean
- * — that is the safe choice because most third-party models adopt the
- * sentence-transformers convention, and the alternative ('cls') silently
- * degrades vector quality for mean-pooling models.
- */
-export function poolingFor(model: string): 'cls' | 'mean' {
-  return /\bbge\b/i.test(model) ? 'cls' : 'mean';
-}
-
-/**
- * Per-model input-prefix dispatch. The intfloat/e5 family was trained with
- * asymmetric "query: " / "passage: " prefixes — the model only matches the
- * two halves correctly when each side carries its prefix at inference. BGE
- * also has prefix conventions for some downstream tasks, but symmetric use
- * without prefixes is the documented default for `bge-*-en-v1.5`, so we leave
- * BGE alone here. Symmetric models (MiniLM, BGE) and unknown models return
- * an empty prefix.
- *
- * `role` semantics:
- *   - 'query'   — the text is the user's question / search input.
- *   - 'passage' — the text is a document being indexed.
- *   - undefined or absent — symmetric path; no prefix is applied even for
- *     asymmetric models (preserves backwards compatibility with the legacy
- *     two-argument `getEmbedding(text, model)` API).
- */
-export type EmbeddingRole = 'query' | 'passage';
-
-export function prefixFor(model: string, role?: EmbeddingRole): string {
-  if (!role) return '';
-  if (/\be5\b/i.test(model)) {
-    return role === 'query' ? 'query: ' : 'passage: ';
-  }
-  return '';
-}
-
-// Use Function constructor to bypass TypeScript static module resolution
-// for optional peer dependencies that may not be installed.
-// SAFETY: `import(s)` always resolves to a module namespace object (or rejects);
-// Promise<object> names that honestly without claiming a specific module shape.
-const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<object>;
-
-/**
- * Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed.
- */
-export function isEmbeddingAvailable(): boolean {
-  if (_embeddingAvailable !== null) return _embeddingAvailable;
-
-  try {
-    _require.resolve('@xenova/transformers');
-    _embeddingAvailable = true;
-    return true;
-  } catch {
-    // fall through
-  }
-
-  try {
-    _require.resolve('@huggingface/transformers');
-    _embeddingAvailable = true;
-    return true;
-  } catch {
-    // fall through
-  }
-
-  _embeddingAvailable = false;
-  return false;
-}
-
-/**
- * Pick exactly one Transformers.js implementation before importing either.
- *
- * Importing both packages in one process loads incompatible native
- * onnxruntime-node versions (Xenova v2 uses ORT 1.14; Hugging Face v4 uses a
- * current ORT). Their finalizers can double-free an InferenceSession on exit.
- * Prefer the maintained package shipped by Hippo, with Xenova retained only as
- * a compatibility fallback for users who installed it themselves.
- */
-function resolveTransformersPackage(): string | null {
-  try {
-    _require.resolve('@huggingface/transformers');
-    return '@huggingface/transformers';
-  } catch {
-    // fall through
-  }
-  try {
-    _require.resolve('@xenova/transformers');
-    return '@xenova/transformers';
-  } catch {
-    return null; // neither optional package is installed; callers fall back to no local embeddings
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadPipeline(model: string): Promise<any> {
-  if (_pipelineInstances.has(model)) return _pipelineInstances.get(model);
-  if (_pipelineLoading.has(model)) return _pipelineLoading.get(model);
-
-  const loading = (async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pkg = resolveTransformersPackage();
-    if (!pkg) return null;
-
-    let pipelineFn: any = null;
-    try {
-      // SAFETY: the resolved module's shape is untyped by design (optional peer
-      // dependency); pipelineFn/mod.env are read defensively below and any
-      // failure to find a usable pipeline falls through to `return null`.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = await _dynImport(pkg) as any;
-      if (process.env.HIPPO_MODEL_CACHE) {
-        if (mod.env) {
-          mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-          mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-          mod.env.allowRemoteModels = false;
-        }
-      }
-      pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-    } catch (err) {
-      log.debug(`transformers import failed (${pkg}): ${err instanceof Error ? err.message : String(err)}`);
-      return null;
-    }
-
-    if (!pipelineFn) return null;
-
-    // The Qdrant-vendored bundle (used in egress-restricted sandboxes) ships
-    // only `onnx/model.onnx` (FP32). The HF default ships `model_quantized.onnx`
-    // too. When pointing at a local cache, pick the variant that's on disk.
-    const cacheRoot = process.env.HIPPO_MODEL_CACHE?.trim();
-    const quantized = !cacheRoot
-      || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
-
-    try {
-      const instance = await pipelineFn('feature-extraction', model, { quantized });
-      _pipelineInstances.set(model, instance);
-      return instance;
-    } catch (err) {
-      log.debug(`embedding pipeline load failed (${model}): ${err instanceof Error ? err.message : String(err)}`);
-      return null;
-    } finally {
-      _pipelineLoading.delete(model);
-    }
-  })();
-
-  _pipelineLoading.set(model, loading);
-  return loading;
-}
-
-export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string): string {
-  const direct = explicitModel?.trim();
-  if (direct) return direct;
-
-  try {
-    const configured = loadConfig(hippoRoot).embeddings.model?.trim();
-    if (configured) return configured;
-  } catch {
-    // Fall back to the default model when config cannot be read.
-  }
-
-  return DEFAULT_EMBEDDING_MODEL;
 }
 
 function loadStoredEmbeddingModel(hippoRoot: string): string | null {
@@ -346,43 +171,6 @@ function resetPhysicsFromIndex(
 /** A provider's `[]` row is a swallowed per-item failure; name the memory so the gap can be traced. */
 function noteSkippedEmbedding(id: string): void {
   log.warn('memory not embedded; the next embed run retries it', { id });
-}
-
-/**
- * Get an embedding vector for a piece of text.
- * Returns an empty array if transformers is not available or fails.
- *
- * Pass `role: 'query'` / `'passage'` to engage asymmetric prefixing for
- * model families that require it (currently intfloat/e5-*). Omitting `role`
- * keeps the legacy symmetric behavior (no prefix), so BGE / MiniLM callers
- * don't need to change.
- */
-export async function getEmbedding(
-  text: string,
-  model = DEFAULT_EMBEDDING_MODEL,
-  role?: EmbeddingRole,
-): Promise<number[]> {
-  if (!isEmbeddingAvailable()) return [];
-
-  try {
-    const pipe = await loadPipeline(model);
-    if (!pipe) return [];
-
-    const prefix = prefixFor(model, role);
-    const input = prefix ? `${prefix}${text}` : text;
-    // SAFETY: pipe() is a Transformers.js feature-extraction pipeline call;
-    // its untyped output is read defensively below (only `.data`, cast on
-    // the return line to the documented Float32Array tensor shape).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = await pipe(input, { pooling: poolingFor(model), normalize: true }) as any;
-    // SAFETY: output.data is a Float32Array per the feature-extraction
-    // pipeline's documented tensor output shape.
-    return Array.from(output.data as Float32Array);
-  } catch (err) {
-    // The caller sees `[]` and names the memory; the reason only shows at debug.
-    log.debug(`local embedding failed: ${err instanceof Error ? err.message : String(err)}`);
-    return [];
-  }
 }
 
 /**

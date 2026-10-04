@@ -99,7 +99,7 @@ describe('embedding model configuration', () => {
   it('resolves the configured embedding model when no explicit override is provided', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { resolveEmbeddingModel } = await import('../src/embeddings.js');
+    const { resolveEmbeddingModel } = await import('../src/local-embedding.js');
 
     expect(resolveEmbeddingModel(tmpDir)).toBe('custom/model');
   });

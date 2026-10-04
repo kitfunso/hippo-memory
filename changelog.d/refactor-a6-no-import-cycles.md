@@ -1,0 +1,3 @@
+### Changed
+
+- **`src/` has no runtime import cycles, and CI keeps it that way.** `scripts/check-import-cycles.mjs` builds the module graph from static imports and re-exports (type-only imports are skipped) and fails on any group of modules that import each other. Three cycles are gone: the summary dirty-mark moved to `summary-dirty.ts`, the local Transformers.js embedder to `local-embedding.ts`, and the transcript tail reader to `transcript-tail.ts`. The dashboard's cross-site and Host checks now come from `http-util.ts` instead of the server, so `hippo-memory/server` no longer exports `isCrossSite` or `LOOPBACK_HOST_HEADER`. Recall, capture and server behaviour are unchanged.

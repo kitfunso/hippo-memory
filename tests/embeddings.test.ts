@@ -46,7 +46,7 @@ describe('cosineSimilarity', () => {
 
 describe('isEmbeddingAvailable', () => {
   it('returns a boolean', async () => {
-    const { isEmbeddingAvailable } = await import('../src/embeddings.js');
+    const { isEmbeddingAvailable } = await import('../src/local-embedding.js');
     const available = await isEmbeddingAvailable();
     expect(available).toEqual(expect.any(Boolean));
     // We don't assert true/false since the test env may or may not have the lib
