@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { useImperativeHandle } from "react";
+import { useImperativeHandle, useRef } from "react";
 import { useVTable } from "./useVTable";
 
 /** One column: `width` is a CSS grid track (e.g. "100px" or "minmax(150px,1fr)"). */
@@ -51,7 +51,9 @@ export interface VTableProps {
 /** Virtual data grid: only the visible rows are in the DOM; the grid root holds focus (aria-activedescendant). */
 export function VTable(props: VTableProps) {
   const { id, label, columns, count, rowHeight, renderRow, rowState, onSort, sortKey, sortDir, empty } = props;
+  const headRef = useRef<HTMLDivElement>(null);
   const t = useVTable({
+    headRef,
     rowHeight,
     count,
     onActivate: props.onActivate,
@@ -96,12 +98,13 @@ export function VTable(props: VTableProps) {
       aria-activedescendant={t.active >= 0 ? `${id}-r${t.active}` : undefined}
       tabIndex={0}
       style={style}
+      onScroll={t.onScroll}
       onKeyDown={t.onRootKeyDown}
       onFocus={(e) => {
         if (e.target === e.currentTarget) t.onRootFocus();
       }}
     >
-      <div className="vt-head" role="row" aria-rowindex={1}>
+      <div ref={headRef} className="vt-head" role="row" aria-rowindex={1}>
         {columns.map((c) => {
           const on = sortKey === c.key;
           return (
@@ -125,10 +128,8 @@ export function VTable(props: VTableProps) {
           );
         })}
       </div>
-      <div ref={t.bodyRef} className="vt-body" tabIndex={-1} onScroll={t.onScroll}>
-        <div className="vt-sp" role="rowgroup" style={{ height: count * rowHeight }}>
-          {rows}
-        </div>
+      <div className="vt-sp" role="rowgroup" style={{ height: count * rowHeight }}>
+        {rows}
       </div>
       {count === 0 && <div className="vt-empty">{empty}</div>}
     </div>

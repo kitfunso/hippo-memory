@@ -40,7 +40,7 @@ export function ScatterCard(props: ScatterCardProps) {
         <h2 id={`${summaryId}-h`}>Age and strength</h2>
         <span className="spacer" />
         {ALL_LAYERS.map((layer, i) => (
-          <button key={layer} type="button" className="tog" aria-pressed={layerOn[i]} onClick={() => onLayer(i)}>
+          <button key={layer} type="button" className="tog layer" aria-pressed={layerOn[i]} onClick={() => onLayer(i)}>
             <LayerMark layer={layer} />
             {layer} <span className="n">{fmt(summary.layers[layer])}</span>
           </button>

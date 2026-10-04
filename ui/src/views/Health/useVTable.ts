@@ -15,12 +15,13 @@ export interface UseVTableOptions {
   onWindow?: (first: number, last: number) => void;
   /** Changing this value scrolls to the top and clears the active row (sort or filter changed). */
   resetKey?: unknown;
+  /** Sticky header inside the scroller; its height is not row space. */
+  headRef?: RefObject<HTMLElement | null>;
 }
 
 /** Windowing and keyboard state of a virtual list, ported from the mockup's VTable. */
 export interface VTableState {
   rootRef: RefObject<HTMLDivElement | null>;
-  bodyRef: RefObject<HTMLDivElement | null>;
   /** First and one-past-last row to render. */
   first: number;
   last: number;
@@ -33,28 +34,33 @@ export interface VTableState {
 
 /** Hook behind `VTable`; also usable by a card-list variant that renders its own rows. */
 export function useVTable(opts: UseVTableOptions): VTableState {
-  const { rowHeight, count, onActivate, onFocusRow, onWindow, resetKey } = opts;
+  const { rowHeight, count, onActivate, onFocusRow, onWindow, resetKey, headRef } = opts;
   const rootRef = useRef<HTMLDivElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ top: 0, height: FALLBACK_HEIGHT });
   const [active, setActiveState] = useState(-1);
   const frame = useRef(0);
 
+  // The root is the scroller, so the sticky header covers the top of its client box.
+  const rowsHeight = useCallback(() => {
+    const room = (rootRef.current?.clientHeight ?? 0) - (headRef?.current?.offsetHeight ?? 0);
+    return room > 0 ? room : FALLBACK_HEIGHT;
+  }, [headRef]);
+
   const measure = useCallback(() => {
-    const body = bodyRef.current;
-    if (!body) return;
+    const root = rootRef.current;
+    if (!root) return;
     setView((v) => {
-      const next = { top: body.scrollTop, height: body.clientHeight || FALLBACK_HEIGHT };
+      const next = { top: root.scrollTop, height: rowsHeight() };
       return v.top === next.top && v.height === next.height ? v : next;
     });
-  }, []);
+  }, [rowsHeight]);
 
   useLayoutEffect(() => {
     measure();
-    const body = bodyRef.current;
-    if (!body) return;
+    const root = rootRef.current;
+    if (!root) return;
     const ro = new ResizeObserver(measure);
-    ro.observe(body);
+    ro.observe(root);
     return () => ro.disconnect();
   }, [measure]);
 
@@ -69,7 +75,7 @@ export function useVTable(opts: UseVTableOptions): VTableState {
   useEffect(() => {
     if (firstResetKey.current === resetKey) return;
     firstResetKey.current = resetKey;
-    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+    if (rootRef.current) rootRef.current.scrollTop = 0;
     setActiveState(-1);
     measure();
   }, [resetKey, measure]);
@@ -88,16 +94,17 @@ export function useVTable(opts: UseVTableOptions): VTableState {
   const setActive = useCallback(
     (index: number, scroll: boolean) => {
       setActiveState(index);
-      const body = bodyRef.current;
-      if (scroll && body) {
+      const root = rootRef.current;
+      if (scroll && root) {
         const top = index * rowHeight;
-        if (top < body.scrollTop) body.scrollTop = top;
-        else if (top + rowHeight > body.scrollTop + body.clientHeight) body.scrollTop = top + rowHeight - body.clientHeight;
+        const room = rowsHeight();
+        if (top < root.scrollTop) root.scrollTop = top;
+        else if (top + rowHeight > root.scrollTop + room) root.scrollTop = top + rowHeight - room;
         measure();
       }
       onFocusRow?.(index);
     },
-    [rowHeight, measure, onFocusRow],
+    [rowHeight, measure, rowsHeight, onFocusRow],
   );
 
   const onScroll = useCallback(() => {
@@ -110,8 +117,7 @@ export function useVTable(opts: UseVTableOptions): VTableState {
 
   const onRootKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== rootRef.current) return;
-    const body = bodyRef.current;
-    const page = Math.max(1, Math.floor((body?.clientHeight || FALLBACK_HEIGHT) / rowHeight) - 1);
+    const page = Math.max(1, Math.floor(rowsHeight() / rowHeight) - 1);
     const moves = new Map([["ArrowDown", 1], ["ArrowUp", -1], ["PageDown", page], ["PageUp", -page], ["Home", -1e9], ["End", 1e9]]);
     const move = moves.get(e.key);
     if (move !== undefined && count > 0) {
@@ -127,5 +133,5 @@ export function useVTable(opts: UseVTableOptions): VTableState {
     if (active < 0 && count > 0) setActive(0, true);
   };
 
-  return { rootRef, bodyRef, first, last, active, setActive, onScroll, onRootKeyDown, onRootFocus };
+  return { rootRef, first, last, active, setActive, onScroll, onRootKeyDown, onRootFocus };
 }

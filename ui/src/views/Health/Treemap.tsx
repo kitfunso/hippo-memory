@@ -391,12 +391,13 @@ export function Treemap({ projects, hits, query, memory, tip, onOpen, ref }: Tre
     }
   };
 
-  const announceSel = () => {
+  // A pointer focus must not replace the tap tip: touch focuses the canvas after pointerup.
+  const announceSel = (showTip: boolean) => {
     const m = s.current;
     if (m.sel < 0 || m.sel >= m.tiles.length) return;
     const p = live.current.projects[m.tiles[m.sel].index];
     setAnnounce(`${p.name}, ${fmt(p.live)} memories, ${pct(p.share, 0)} at risk, ${plural(p.openConflicts, "open conflict")}`);
-    if (document.activeElement === cv.current) {
+    if (showTip) {
       const sc = tileScreen(m.tiles[m.sel], m.cam);
       const r = cv.current!.getBoundingClientRect();
       const x = r.left + clamp(sc.x + sc.w / 2, 10, m.W - 10);
@@ -435,7 +436,8 @@ export function Treemap({ projects, hits, query, memory, tip, onOpen, ref }: Tre
         if (sc.x < 0 || sc.y < 0 || sc.x + sc.w > m.W || sc.y + sc.h > m.H) {
           m.cam = clampCam({ ...m.cam, x: m.cam.x + m.W / 2 - (sc.x + sc.w / 2), y: m.cam.y + m.H / 2 - (sc.y + sc.h / 2) }, m.W, m.H);
         }
-        announceSel();
+        m.tipTarget = null;
+        announceSel(true);
         schedule();
       }
     } else if (e.key === "Enter" || e.key === " ") {
@@ -457,7 +459,7 @@ export function Treemap({ projects, hits, query, memory, tip, onOpen, ref }: Tre
       m.sel = 0;
       memory.current.selKey = m.tiles[0].key;
     }
-    announceSel();
+    announceSel(cv.current!.matches(":focus-visible"));
     schedule();
   };
 

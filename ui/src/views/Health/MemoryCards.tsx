@@ -129,15 +129,14 @@ export function MemoryCards({ pages, count, sortKey, sortDir, onSort, onToggleDi
         aria-label="Memories"
         aria-activedescendant={t.active >= 0 ? `mc-r${t.active}` : undefined}
         tabIndex={0}
+        onScroll={t.onScroll}
         onKeyDown={t.onRootKeyDown}
         onFocus={(e) => {
           if (e.target === e.currentTarget) t.onRootFocus();
         }}
       >
-        <div ref={t.bodyRef} className="vt-body" tabIndex={-1} onScroll={t.onScroll}>
-          <div className="vt-sp" style={{ height: count * height }}>
-            {rows}
-          </div>
+        <div className="vt-sp" style={{ height: count * height }}>
+          {rows}
         </div>
         {count === 0 && <div className="vt-empty mc-empty">{empty}</div>}
       </div>

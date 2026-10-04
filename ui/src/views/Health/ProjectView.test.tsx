@@ -371,3 +371,21 @@ describe("ProjectView: phone", () => {
     await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo"));
   });
 });
+
+describe("ProjectView: toggles and phone list structure", () => {
+  it("gives the strike-through style to layer toggles only, not to the Brush mode switch", async () => {
+    stubPhone();
+    openHippo(makeRows(2));
+    const brush = await screen.findByRole("button", { name: "Brush" });
+    expect(brush).not.toHaveClass("layer");
+    expect(screen.getByRole("button", { name: /^buffer/ })).toHaveClass("layer");
+  });
+
+  it("makes the memory listbox the scroller with the spacer as its only child", async () => {
+    stubPhone();
+    openHippo(makeRows(2));
+    const list = await screen.findByRole("listbox", { name: "Memories" });
+    expect(Array.from(list.children).map((c) => c.className)).toEqual(["vt-sp"]);
+    expect(list).toHaveAttribute("tabindex", "0");
+  });
+});
