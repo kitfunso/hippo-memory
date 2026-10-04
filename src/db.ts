@@ -31,7 +31,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 50;
+const CURRENT_SCHEMA_VERSION = 51;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2625,6 +2625,19 @@ const MIGRATIONS: Migration[] = [
           tokens       INTEGER,
           PRIMARY KEY (event_id, memory_id)
         ) WITHOUT ROWID;
+      `);
+    },
+  },
+  {
+    version: 51,
+    up: (db) => {
+      // Both indexes serve loadAmbientCandidates (src/store.ts); their WHERE text must match its SQL for the planner to pick them.
+      // The drift index stays empty on a healthy store, so the drift probe is one index seek instead of a tenant scan. Additive only.
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_memories_pinned
+          ON memories(tenant_id, created, id) WHERE pinned = 1;
+        CREATE INDEX IF NOT EXISTS idx_memories_created_drift
+          ON memories(tenant_id) WHERE superseded_by IS NULL AND (length(created) <> 24 OR created NOT LIKE '%Z');
       `);
     },
   },

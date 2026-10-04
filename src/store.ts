@@ -251,7 +251,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, origin_project, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
+export const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, origin_project, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
 // F1 (v1.7.0): qualified-and-aliased columns for the FTS join in
 // loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's
 // unqualified field reads keep working unchanged. The trailing
@@ -2337,6 +2337,13 @@ export interface AmbientLoadResult {
   recall?: MemoryEntry[];
 }
 
+const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
+/** Exported so the plan test runs the exact SQL; idx_memories_pinned (db.ts v51) serves it. */
+export const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
+/** Exported so the plan test runs the exact SQL; idx_memories_created_drift (db.ts v51) serves it. */
+export const AMBIENT_DRIFT_SQL =
+  `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
+
 // The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient
 // injection. One connection; `recall` piggybacks the Z1 FTS query on it too.
 export function loadAmbientCandidates(
@@ -2358,16 +2365,14 @@ export function loadAmbientCandidates(
       ).all(...params) as MemoryRow[]).map(rowToEntry);
 
     const byId = new Map<string, MemoryEntry>();
-    const scoped = 'superseded_by IS NULL AND tenant_id = ?';
-    for (const e of run(`pinned = 1 AND ${scoped} ORDER BY created ASC, id ASC`, [tenantId])) {
+    const scoped = AMBIENT_SCOPED;
+    for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
       if (admit(e)) byId.set(e.id, e);
     }
 
     if (needed > 0) {
       // Text order is chronological only for canonical UTC ISO (memory.ts).
-      const drifted = db.prepare(
-        `SELECT 1 FROM memories WHERE ${scoped} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`,
-      ).get(tenantId) !== undefined;
+      const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
       // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
       // cross-ingest-stable order: that would change what the hook injects.
       const window = Math.max(needed * 4, 32);
