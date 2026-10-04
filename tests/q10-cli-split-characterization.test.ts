@@ -21,7 +21,13 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-function run(...args: string[]): { status: number | null; stdout: string; stderr: string } {
+interface RunResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+function run(...args: string[]): RunResult {
   const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: root, env, encoding: 'utf8' });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
@@ -31,7 +37,7 @@ function remember(text: string, ...extra: string[]): string {
   expect(r.status, r.stderr).toBe(0);
   const id = /Remembered \[([^\]]+)\]/.exec(r.stdout)?.[1];
   expect(id).toBeTruthy();
-  return id as string;
+  return id ?? '';
 }
 
 describe('hippo remember output', () => {
@@ -68,7 +74,7 @@ describe('hippo trace <id>', () => {
 
   it('keeps the --json key order', () => {
     const id = remember('cod quotas stayed flat this year');
-    const out = JSON.parse(run('trace', id, '--json').stdout) as Record<string, unknown>;
+    const out: object = JSON.parse(run('trace', id, '--json').stdout);
     expect(Object.keys(out)).toEqual([
       'id', 'source', 'layer', 'confidence', 'aged_out', 'pinned', 'starred', 'tags', 'content', 'created',
       'age_days', 'last_retrieved', 'days_since_last_retrieval', 'retrieval_count', 'strength_now', 'half_life_days',
@@ -87,7 +93,7 @@ describe('hippo trace <id>', () => {
 describe('hippo explain', () => {
   it('keeps the --json shape and the text table', () => {
     remember('haddock fishing rules changed in spring');
-    const json = JSON.parse(run('explain', 'haddock', '--json').stdout) as { results: Record<string, unknown>[] };
+    const json: { results: object[] } = JSON.parse(run('explain', 'haddock', '--json').stdout);
     expect(Object.keys(json)).toEqual(['query', 'mode', 'candidates', 'returned', 'results']);
     expect(Object.keys(json.results[0])).toEqual([
       'rank', 'id', 'layer', 'confidence', 'aged_out', 'score', 'tokens', 'tags', 'content', 'breakdown',
