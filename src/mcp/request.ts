@@ -4,7 +4,7 @@ import { log } from '../log.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { resolveTenantId } from '../tenant.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, runWithRequestStores } from '../db.js';
 import { estimateTokens, recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
@@ -158,8 +158,12 @@ export async function handleMcpRequest(
           result: { content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }], isError: true },
         };
       }
-      const output = await executeTool(toolName, toolArgs, ctx);
-      recordMcpTokens(toolName, output, ctx);
+      // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
+      const output = await runWithRequestStores(async () => {
+        const text = await executeTool(toolName, toolArgs, ctx);
+        recordMcpTokens(toolName, text, ctx);
+        return text;
+      });
       return {
         jsonrpc: '2.0',
         id,

@@ -2,7 +2,7 @@ import { envPort, envRequireAuth, envV1Rps } from './env.js';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isSqliteBusy, openHippoDb, SERVER_DB_WAIT_MS, withBusyWait } from './db.js';
+import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isSqliteBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS } from './db.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
@@ -189,7 +189,23 @@ async function handleRequest(
 
   enforceRateLimit(req, path, limiter);
 
-  if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
+  const r: RouteRequest = { req, res, opts, query };
+  if (await runWithRequestStores(() => dispatchScopedRoute(r, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
+
+  // Outside the request scope: the stream's heartbeat timer outlives the request that opened it.
+  if (method === 'GET' && path === '/mcp/stream') {
+    await handleMcpStream(req, res, opts, streamSlots);
+    return;
+  }
+
+  res.writeHead(404, JSON_HEADERS);
+  res.end(JSON.stringify({ error: 'not found' }));
+}
+
+/** Every route that runs inside a request scope, so it opens each store once: the /v1 table, the webhooks and POST /mcp. */
+async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
+  if (await dispatchV1Route(r, method, path)) return true;
+  const { req, res, opts } = r;
 
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
     // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
@@ -198,7 +214,7 @@ async function handleRequest(
       throw new HttpError(401, 'auth required');
     }
     await handleSlackEventsWebhook({ req, res, opts });
-    return;
+    return true;
   }
 
   if (method === 'POST' && path === '/v1/connectors/github/events') {
@@ -206,21 +222,14 @@ async function handleRequest(
       throw new HttpError(401, 'auth required');
     }
     await handleGitHubEventsWebhook({ req, res, opts });
-    return;
+    return true;
   }
 
   if (method === 'POST' && path === '/mcp') {
     await handleMcpPost(req, res, opts);
-    return;
+    return true;
   }
-
-  if (method === 'GET' && path === '/mcp/stream') {
-    await handleMcpStream(req, res, opts, streamSlots);
-    return;
-  }
-
-  res.writeHead(404, JSON_HEADERS);
-  res.end(JSON.stringify({ error: 'not found' }));
+  return false;
 }
 
 function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
@@ -289,7 +298,8 @@ function createStoreHolder(hippoRoot: string): StoreHolder {
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      heldDb = openHippoDb(hippoRoot);
+      // The 'finish' listener can fire inside a request scope, which would close this connection with the request.
+      heldDb = outsideRequestStores(() => openHippoDb(hippoRoot));
     } catch (err) {
       stopHolding = true;
       log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
@@ -415,7 +425,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
-    withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, streamSlots, limiter)).catch(<E>(err: E) => {
+    handleRequest(req, res, opts, startedAt, streamSlots, limiter).catch(<E>(err: E) => {
       replyWithFailure(req, res, err, requestId);
     });
   });

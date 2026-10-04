@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { errorMessage } from '../log.js';
 import { loadConfig } from '../config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { namesFoldedInto } from '../project-merge.js';
 import { isGlobalStoreRoot, originInSql, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
@@ -211,7 +211,8 @@ function openTarget(target: string, hasItems: boolean, opts: SyncOptions): OpenS
 
 function emptyStandIn(global: boolean): OpenStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
-  const db = openHippoDb(root);
+  // Its folder is deleted at close, so a request scope must not keep the file open past that.
+  const db = outsideRequestStores(() => openHippoDb(root));
   return {
     db, root, global,
     close: () => {

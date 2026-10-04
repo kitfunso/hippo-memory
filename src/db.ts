@@ -10,8 +10,8 @@ export {
   noteStoreBusy,
   withSharedStoreHandles,
   SERVER_DB_WAIT_MS,
-  withBusyWait,
   openHippoDb,
   openHippoDbReadOnly,
   closeHippoDb,
 } from './db/open.js';
+export { RequestStores, runWithRequestStores, currentRequestStores, outsideRequestStores } from './db/request-stores.js';
