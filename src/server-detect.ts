@@ -66,7 +66,7 @@ function isLiveLoopbackTarget(info: ServerInfo): boolean {
   }
   return (
     probeUrl.protocol === 'http:' &&
-    PIDFILE_LOOPBACK_HOSTS.has(probeUrl.hostname) &&
+    PIDFILE_LOOPBACK_HOSTS.has(probeUrl.hostname.replace(/^\[(.*)\]$/, '$1')) &&
     probeUrl.port === String(info.port)
   );
 }

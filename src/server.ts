@@ -443,7 +443,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   }
   const addressInfo = address;
   const actualPort = addressInfo.port;
-  const url = `http://${host}:${actualPort}`;
+  const url = `http://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   store.hold();
