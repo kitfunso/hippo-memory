@@ -100,8 +100,10 @@ function toolPaths(name, input, work, opts) {
   return key && input[key] ? [{ token: String(input[key]), search: false, cwd: work }] : [];
 }
 
-// Errors that mean "this prefix does not resolve as given", so the walk takes the parent; any other is a runner fault.
-const UNRESOLVED = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP', 'EINVAL']);
+// Errors an agent-written path can raise, so the walk takes the parent; any other, such as EMFILE or ENOMEM, is a runner fault.
+const UNRESOLVED = new Set([
+  'ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP', 'EINVAL', 'ENAMETOOLONG', 'EBUSY', 'EIO', 'ENXIO', 'ENODEV', 'UNKNOWN', 'ERR_INVALID_ARG_VALUE',
+]);
 
 /** p with its deepest existing prefix resolved by the filesystem, so a short name or a link alias equals its target. */
 function canonical(p) {

@@ -1,9 +1,9 @@
 // Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { symlinkSync, writeFileSync, rmSync } from 'node:fs';
+import { symlinkSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
+import { resolveToken, foldPath } from '../scripts/token-eval/readcheck.mjs';
 import { __setSettleHook } from '../scripts/token-eval/runs.mjs';
 import { g1 } from '../scripts/token-eval/z0-gates.mjs';
 import { validateCorpus } from './fixtures/z0-contract.js';
@@ -91,6 +91,36 @@ describe('resolveToken', () => {
     expect(resolveToken('%USERPROFILE%/a', { ...opts, env: { HOME: 'D:/h' } })).toBe('D:/h/a');
     expect(resolveToken('$HOME/a', { platform: 'linux', env: { USERPROFILE: '/u' }, cwd: '/w' })).toBe('/w/$HOME/a');
   });
+});
+
+describe('paths realpath cannot take', () => {
+  afterEach(cleanup);
+  // Under the root, which is never a link (macOS links /tmp), so the expected fold is the input's.
+  const base = process.platform === 'win32' ? 'C:/z0-no-such-dir' : '/z0-no-such-dir';
+  const fold = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
+
+  it('fold to their deepest resolvable prefix instead of throwing', () => {
+    // ENAMETOOLONG: the whole path on Windows, any segment over 255 characters on Linux.
+    expect(foldPath(`${base}/${'c'.repeat(40000)}`)).toBe(fold(`${base}/${'c'.repeat(40000)}`));
+    expect(foldPath(`${base}/${'d'.repeat(300)}/x`)).toBe(fold(`${base}/${'d'.repeat(300)}/x`));
+    // ERR_INVALID_ARG_VALUE, a TypeError rather than a system error.
+    expect(foldPath(`${base}/a\0b`)).toBe(fold(`${base}/a\0b`));
+  });
+
+  it.skipIf(process.platform !== 'win32')('fold a file Windows keeps locked (EBUSY)', (t) => {
+    // Listed, though stat on it fails, so existsSync says false.
+    if (!readdirSync('C:/').includes('pagefile.sys')) t.skip();
+    expect(foldPath('C:/pagefile.sys')).toBe('c:/pagefile.sys');
+  });
+
+  it('an overlong path in a tool call is a plain token, never a run fault', async () => {
+    const { out } = isolate('long-path');
+    const r = makeRepo();
+    await run(spec(r, [], [task(r, 't1', `READ:/${'c'.repeat(40000)}\nBASH:echo /${'d'.repeat(40000)}`), plain(r, 't2')]), ['A1'], out);
+    const recs = readRecords(out);
+    expect(recs).toHaveLength(2);
+    expect(find(recs, 'A1', 't1')).toMatchObject({ invalid: null, void: null });
+  }, 300_000);
 });
 
 describe('resume hits: session 1 decides void, and only a teach\'s resume adds to it', () => {
