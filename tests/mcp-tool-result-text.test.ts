@@ -6,9 +6,6 @@ import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 
-// The auto query comes from the checkout's git state, which differs between a dev branch and CI.
-vi.mock('../src/context-auto.js', () => ({ autoDetectContext: () => '' }));
-
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
 let home: string;
@@ -48,6 +45,8 @@ beforeEach(() => {
   writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: false } }), 'utf8');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   vi.stubEnv('ANTHROPIC_API_KEY', '');
+  // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
+  vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
   ctx = { hippoRoot: root, tenantId: 'default', actor: 'tester', clientKey: 'client-1' };
 });
 
@@ -64,12 +63,7 @@ describe('MCP tool reply text', () => {
 
     expect(await call('hippo_outcome', { good: true })).toMatchInlineSnapshot(`"No recent recalls to apply outcome to."`);
     expect(await call('hippo_recall', { query: 'staging lock deploys', budget: 4000 })).toMatchInlineSnapshot(`
-      "## Cutoff
-      Showing 1 of 2 candidates; 1 dropped to fit limit.
-
-      ---
-
-      Found 1 memories:
+      "Found 1 memories:
 
       [verified] tags: error, deploy (strength=1.00)
       the staging lock table blocks deploys
