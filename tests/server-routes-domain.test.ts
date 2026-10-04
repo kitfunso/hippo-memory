@@ -1,18 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember as apiRemember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-routes-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets one of this file's routes under
@@ -29,8 +20,8 @@ describe('server HTTP routes — memories', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-routes');
+    globalHome = makeRoot('srv-routes');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -237,7 +228,7 @@ describe('server HTTP routes — auth + audit', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
+    home = makeRoot('srv-routes');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = home;
     handle = await serve({ hippoRoot: home, port: 0 });

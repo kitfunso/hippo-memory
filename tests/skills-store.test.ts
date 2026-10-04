@@ -18,10 +18,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { deleteEntry, writeEntry } from '../src/store.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
@@ -35,13 +33,8 @@ import {
   VALID_SKILL_STATES,
   MAX_SKILL_INSTRUCTIONS_LEN,
 } from '../src/skills.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }

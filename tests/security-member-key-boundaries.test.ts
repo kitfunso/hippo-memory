@@ -12,28 +12,20 @@
  * access. Real HTTP server on port 0, real SQLite, no mocks.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, listApiKeys } from '../src/auth.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import * as api from '../src/api.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';
 const PUBLIC_SCOPE = 'slack:public:CGENERAL';
 const PRIVATE_TEXT = 'zanzibar payroll migration happens friday in the private channel';
 const PUBLIC_TEXT = 'zanzibar release notes are posted in the general channel';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-member-bounds-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 
 function mintKey(home: string, role: 'admin' | 'member'): { plaintext: string; keyId: string } {
   const db = openHippoDb(home);
@@ -65,8 +57,8 @@ describe('member-key boundaries over HTTP', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('member-bounds');
+    globalHome = makeRoot('member-bounds');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     seedScopedMemories(home);
@@ -178,7 +170,7 @@ describe('member-key boundaries in the api layer (every surface goes through it)
   let home: string;
 
   beforeEach(() => {
-    home = makeRoot();
+    home = makeRoot('member-bounds');
     seedScopedMemories(home);
   });
 

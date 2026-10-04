@@ -12,10 +12,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, recall, type Context } from '../src/api.js';
 import { ingestEvent, type IngestEvent, type IngestResult } from '../src/connectors/github/ingest.js';
@@ -29,6 +27,7 @@ import type {
   GitHubPullRequestReviewCommentEvent,
 } from '../src/connectors/github/types.js';
 import { randomUUID } from 'node:crypto';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -209,13 +208,6 @@ function buildDeliveryStream(): GeneratedDelivery[] {
   return out;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-gh-smoke-200-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 const ctxFor = (root: string, tenantId = 'default'): Context => ({
   hippoRoot: root,
   tenantId,
@@ -243,7 +235,7 @@ function rawCount(root: string): number {
 describe('GitHub connector — 200-event smoke test', () => {
   let root: string;
   beforeEach(() => {
-    root = makeRoot();
+    root = makeRoot('gh-smoke-200');
   });
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });

@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import {
-  initStore,
   saveActiveTaskSnapshot,
   saveSessionHandoff,
   appendSessionEvent,
@@ -11,6 +8,7 @@ import {
 } from '../src/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -20,18 +18,11 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-cont-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 let home: string;
 let handle: ServerHandle;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-cont');
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 

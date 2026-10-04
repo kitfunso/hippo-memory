@@ -7,23 +7,16 @@
  * ambiguity-guarded, self-skipped, per-source capped, supersedes-pair-skipped). Real DB.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { deleteEntry } from '../src/store.js';
 import { saveDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
 import { loadEntities, loadRelations } from '../src/graph.js';
 import { extractGraph, MAX_REFERENCES_PER_OBJECT } from '../src/graph-extract.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-xobj-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 const T = 'default';
 /** All `references` edges in a tenant's graph. */
 function refs(home: string, tenant: string = T) {
@@ -35,7 +28,7 @@ function entByName(home: string, name: string) {
 
 describe('E3.1 cross-object references (Pass 3 name-match)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph-xobj'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('a decision whose text names a policy emits one references edge (decision -> policy), sourced from the decision memory', () => {

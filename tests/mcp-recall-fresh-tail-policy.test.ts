@@ -15,21 +15,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 type HippoRecallToolArgs = {
   query?: string;

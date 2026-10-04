@@ -19,21 +19,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry, saveActiveTaskSnapshot } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry, saveActiveTaskSnapshot } from '../src/store.js';
 import type { Context } from '../src/api.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall } from '../src/api.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function ctx(home: string): Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };

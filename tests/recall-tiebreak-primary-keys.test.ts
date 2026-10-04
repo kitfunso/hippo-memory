@@ -15,10 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall, type Context } from '../src/api.js';
@@ -26,6 +24,7 @@ import { estimateTokens, type SearchResult } from '../src/search.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 import { compareEntryIdentity, type EntryIdentity } from '../src/compare.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -36,12 +35,6 @@ function safeRmSync(p: string): void {
 // ---------------------------------------------------------------------------
 
 describe('api.ts:833 DAG substitution ordering', () => {
-  function makeRoot(prefix: string): string {
-    const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-    mkdirSync(join(root, '.hippo'), { recursive: true });
-    initStore(root);
-    return root;
-  }
   function ctxFor(root: string, tenantId: string = 'default'): Context {
     return { hippoRoot: root, tenantId, actor: { subject: 'test:tiebreak', role: 'admin' } };
   }
@@ -181,12 +174,6 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
 // ---------------------------------------------------------------------------
 
 describe('graph-recall.ts:248 graph-hop ordering', () => {
-  function makeRoot(): string {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-hop-tiebreak-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    initStore(home);
-    return home;
-  }
   function mem(home: string, tenant: string, text: string): MemoryEntry {
     const m = createMemory(text, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
     writeEntry(home, m, { actor: 'test' });
@@ -201,7 +188,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
 
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('hop-tiebreak'); });
   afterEach(() => safeRmSync(home));
 
   it('primary wins (hop distance) and the tail decides same-hop ties', () => {

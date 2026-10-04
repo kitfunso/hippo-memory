@@ -19,10 +19,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
@@ -31,13 +29,8 @@ import {
   closePrediction,
 } from '../src/predictions.js';
 import { recall, type Context } from '../src/api.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }

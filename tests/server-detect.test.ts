@@ -9,6 +9,7 @@ import { serve } from '../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
 // api.ts / store.ts convention. serve() and detectServer take it as-is.
+// Bare tmp dir on purpose: no `.hippo` and no store, detectServer takes the dir as-is.
 function makeRoot(): string {
   return mkdtempSync(join(tmpdir(), 'hippo-pidf-'));
 }

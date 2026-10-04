@@ -11,25 +11,17 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { deleteEntry, writeEntry } from '../src/store.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { extractGraph } from '../src/graph-extract.js';
 import { insertEntity, loadEntities, loadRelations } from '../src/graph.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-e2-prov-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 
 /** Write a memory and (optionally) force its kind. Returns its id. */
 function addMemory(home: string, kind: 'distilled' | 'superseded' | 'raw'): string {
@@ -83,7 +75,7 @@ function relationRows(home: string): RelationRow[] {
 
 describe('v38 E2-provenance (graph anchored to the authoritative E2 object)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph-e2-prov'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('extract: a policy + a decision that mentions it produce entities + a references arc', () => {

@@ -16,21 +16,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { Process } from '../src/processes.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-proc-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -38,7 +29,7 @@ let apiKey: CreateApiKeyResult;
 let apiKeyB: CreateApiKeyResult;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-proc');
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-proc', role: 'admin' });

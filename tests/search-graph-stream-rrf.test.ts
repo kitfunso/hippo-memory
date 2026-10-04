@@ -14,22 +14,15 @@
  * seedCount; the CLI/library default (10) targets realistic large pools.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { rrfFuse } from '../src/rrf.js';
 import { selectGraphSeeds, graphRankStream } from '../src/graph-stream.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-gstream-rrf-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -60,7 +53,7 @@ function fusedOrder(
 describe('L1 graph stream x RRF fusion (real SQLite)', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('gstream-rrf'); });
   afterEach(() => safeRmSync(home));
 
   it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', () => {

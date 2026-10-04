@@ -19,11 +19,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import {
-  initStore,
   loadIndex,
   saveIndex,
 } from '../src/store.js';
@@ -32,13 +29,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-out-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets POST /v1/outcome under test in
@@ -54,8 +45,8 @@ describe('POST /v1/outcome', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-out');
+    globalHome = makeRoot('srv-out');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });

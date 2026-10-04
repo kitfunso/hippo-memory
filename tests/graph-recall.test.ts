@@ -8,10 +8,8 @@
  * tenant isolation, base-dedup) and the new graph.ts read helpers.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { estimateTokens, type SearchResult } from '../src/search.js';
 import {
@@ -22,13 +20,8 @@ import {
   loadEntitiesByIds,
 } from '../src/graph.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graphrecall-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -51,7 +44,7 @@ function ent(home: string, tenant: string, m: MemoryEntry, name: string): number
 describe('E3.2 graph-recall engine', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graphrecall'); });
   afterEach(() => safeRmSync(home));
 
   it('1-hop surfaces a graph-linked neighbour the lexical search missed (loaded by id, not lexically gated)', () => {
@@ -201,7 +194,7 @@ describe('E3.2 graph-recall engine', () => {
   });
 
   it('expands the GLOBAL store too: a seed whose graph lives in globalRoot surfaces its neighbour (codex P2)', () => {
-    const glob = makeRoot();
+    const glob = makeRoot('graphrecall');
     try {
       // The seed + its graph live in the GLOBAL store; the local store has no entities.
       const seed = mem(glob, T, 'globally-stored seed decision');
@@ -267,7 +260,7 @@ describe('E3.2 graph-recall engine', () => {
 describe('E3.2 graph.ts read helpers', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graphrecall'); });
   afterEach(() => safeRmSync(home));
 
   it('loadEntitiesByMemoryId maps source memory ids to entities (hit + miss)', () => {

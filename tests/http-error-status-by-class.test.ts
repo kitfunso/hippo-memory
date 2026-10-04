@@ -3,13 +3,14 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/api-errors.js';
 import { BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE, mapApiError } from '../src/http-util.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type ReplyBody = Record<string, string>;
 
@@ -20,13 +21,6 @@ interface ProbeRequest {
   path: string;
   body?: Record<string, string | number>;
   headers?: Record<string, string>;
-}
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-error-class-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
 }
 
 async function call(handle: ServerHandle, r: ProbeRequest): Promise<Reply> {
@@ -70,7 +64,7 @@ describe('typed errors from real domain paths keep their status and message', ()
   let handle: ServerHandle;
 
   beforeAll(async () => {
-    home = makeRoot();
+    home = makeRoot('error-class');
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 

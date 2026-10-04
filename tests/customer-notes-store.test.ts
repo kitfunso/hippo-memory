@@ -17,10 +17,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { deleteEntry, writeEntry } from '../src/store.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
@@ -32,13 +30,8 @@ import {
   VALID_NOTE_STATES,
   MAX_NOTE_LEN,
 } from '../src/customer-notes.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }

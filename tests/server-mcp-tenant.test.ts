@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Regression: MCP-over-HTTP must thread the auth-resolved tenant into the
 // MCP dispatcher. Before the fix, executeTool resolved tenantId from
@@ -15,20 +13,13 @@ import { serve, type ServerHandle } from '../src/server.js';
 // from cwd. This test pins both: the per-test root is used (no env hacks)
 // AND the resulting memory carries tenant_id='alpha'.
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-tenant-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 describe('MCP-over-HTTP tenant context', () => {
   let home: string;
   let handle: ServerHandle;
   let prevTenant: string | undefined;
 
   beforeEach(async () => {
-    home = makeRoot();
+    home = makeRoot('mcp-tenant');
     // Explicitly clear HIPPO_TENANT so any leak from executeTool's old
     // resolveTenantId({}) path would surface as 'default' rather than
     // accidentally matching 'alpha'.

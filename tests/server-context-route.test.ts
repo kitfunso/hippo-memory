@@ -29,6 +29,7 @@ import { queryAuditEvents } from '../src/audit.js';
 import { remember } from '../src/api.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /**
  * Parses a fetch Response body as the shape `T` the caller asserts on.
@@ -42,13 +43,6 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-ctx-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 describe('GET /v1/context', () => {
   let home: string;
   let globalHome: string;
@@ -56,8 +50,8 @@ describe('GET /v1/context', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-ctx');
+    globalHome = makeRoot('srv-ctx');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -298,8 +292,8 @@ describe('GET /v1/context - ambientState field', () => {
   let handle: ServerHandle;
 
   async function startServer(ambientEnabled: boolean): Promise<void> {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-ctx');
+    globalHome = makeRoot('srv-ctx');
     writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;

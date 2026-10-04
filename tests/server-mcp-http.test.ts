@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -22,19 +20,12 @@ async function jsonAs<T>(res: Response): Promise<T> {
 // surface: synchronous JSON-RPC responses on POST, keepalive-only SSE on GET,
 // and the auth middleware reuse.
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-http-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 describe('MCP-over-HTTP transport', () => {
   let home: string;
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
+    home = makeRoot('mcp-http');
     // The HTTP transport now threads hippoRoot + auth-resolved tenant
     // through handleMcpRequest, so executeTool no longer walks cwd via
     // findHippoRoot() or reads HIPPO_TENANT from the env. No env hacks

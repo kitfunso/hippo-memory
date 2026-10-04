@@ -22,11 +22,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import {
-  initStore,
   deleteEntry,
   writeEntry,
 } from '../src/store.js';
@@ -43,13 +40,7 @@ import {
   resolveActiveIncidentIdByMemory,
   VALID_INCIDENT_STATES,
 } from '../src/incidents.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }

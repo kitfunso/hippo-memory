@@ -11,21 +11,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-sw-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function callTool(
   name: string,
@@ -56,7 +48,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
   let home: string;
 
   beforeEach(() => {
-    home = makeRoot();
+    home = makeRoot('mcp-sw');
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`alpha ${i}`, {
         layer: Layer.Buffer,

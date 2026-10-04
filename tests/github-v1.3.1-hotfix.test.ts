@@ -10,11 +10,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import type { Context } from '../src/api.js';
-import { initStore, writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
 import { compareSemver } from '../src/version.js';
@@ -22,13 +20,7 @@ import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
 import type { GitHubFetcher, GitHubBackfillPage } from '../src/connectors/github/octokit-client.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function ctx(home: string): Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };

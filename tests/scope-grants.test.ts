@@ -2,10 +2,10 @@
  *  only after an explicit grant. Real HTTP server, real SQLite, no mocks. */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, readEntry } from '../src/store.js';
+import { writeEntry, readEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, listScopeGrants } from '../src/auth.js';
 import { Layer } from '../src/memory.js';
@@ -15,6 +15,7 @@ import { refreshBrief } from '../src/project-briefs.js';
 import { extractGraph } from '../src/graph-extract.js';
 import * as api from '../src/api.js';
 import { consolidate } from '../src/consolidate.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -22,15 +23,9 @@ const PRIVATE_SCOPE = 'slack:private:C1';
 const OTHER_PRIVATE_SCOPE = 'slack:private:C2';
 const PRIVATE_TEXT = 'kowalski payroll rollout starts thursday in the private channel';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-scope-grants-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  // Seeded memories carry no origin_project; isolation would hide them from
-  // hippo_context regardless of scope grants, which is not what this suite tests.
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ contextProjectIsolation: false }));
-  return home;
-}
+// Seeded memories carry no origin_project; isolation would hide them from
+// hippo_context regardless of scope grants, which is not what this suite tests.
+const ISOLATION_OFF = { config: { contextProjectIsolation: false } };
 
 function mintKey(home: string, role: 'admin' | 'member', tenantId = 'default'): { plaintext: string; keyId: string } {
   const db = openHippoDb(home);
@@ -50,7 +45,7 @@ describe('scope grants over HTTP', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
+    home = makeRoot('scope-grants', ISOLATION_OFF);
     seedPrivateMemory(home);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
@@ -161,7 +156,7 @@ describe('authGrant / authUngrant validation (api layer)', () => {
   let home: string;
 
   beforeEach(() => {
-    home = makeRoot();
+    home = makeRoot('scope-grants', ISOLATION_OFF);
   });
 
   afterEach(() => {
@@ -237,7 +232,7 @@ describe('supersede keeps the old row\'s scope', () => {
   let home: string;
 
   beforeEach(() => {
-    home = makeRoot();
+    home = makeRoot('scope-grants', ISOLATION_OFF);
   });
 
   afterEach(() => {
@@ -280,7 +275,7 @@ describe('graph view carries no private receipt text (T4 withdrawn, T6 closes th
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
+    home = makeRoot('scope-grants', ISOLATION_OFF);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 

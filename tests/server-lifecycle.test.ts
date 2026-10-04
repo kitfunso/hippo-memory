@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
 
+// Not initStore'd on purpose: these tests start from an empty `.hippo` dir.
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });

@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 
-import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   apiKeyVerifyStats,
@@ -15,13 +12,7 @@ import {
 } from '../src/auth.js';
 import { authRevoke, authGrant, type Context } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-key-cache-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Scrypt runs and store lookups made by `fn` alone. */
 function counted<T>(fn: () => T) {
@@ -46,7 +37,7 @@ describe('verified API key cache', () => {
   const adminCtx = (): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } });
 
   beforeEach(() => {
-    home = makeRoot();
+    home = makeRoot('key-cache');
   });
 
   afterEach(() => {
@@ -135,7 +126,7 @@ describe('verified API key cache', () => {
   it('a key cached for one store does not authenticate against another', () => {
     const key = mint();
     expect(verifyApiKeyCached(home, key.plaintext)).not.toBeNull();
-    const other = makeRoot();
+    const other = makeRoot('key-cache');
     try {
       expect(verifyApiKeyCached(other, key.plaintext)).toBeNull();
     } finally {
@@ -175,8 +166,8 @@ describe('bearer requests through the server', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('key-cache');
+    globalHome = makeRoot('key-cache');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });

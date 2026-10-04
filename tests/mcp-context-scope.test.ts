@@ -1,17 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, readEntry, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { readEntry, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function callTool(
   reqId: number,

@@ -8,10 +8,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { deleteEntry, writeEntry } from '../src/store.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
@@ -25,13 +23,8 @@ import {
   markExtractionProcessed,
   MAX_ENTITY_NAME_LEN,
 } from '../src/graph.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -58,7 +51,7 @@ function countRows(home: string, table: string): number {
 
 describe('graph store (E3.3 graph-on-consolidated guard)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph'); });
   afterEach(() => safeRmSync(home));
 
   it('insertEntity from a distilled / superseded memory sets source_kind; insertRelation links them', () => {

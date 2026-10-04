@@ -1,27 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, revokeApiKey } from '../src/auth.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { serve, type ServerHandle, isLoopback } from '../src/server.js';
 import type { RememberResult } from '../src/api.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: T is pinned by each call site to the exact JSON envelope the
   // route handler (src/server.ts) returns for that request; every call
   // site asserts the specific fields it reads immediately after this call.
   return res.json() as Promise<T>;
-}
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-auth-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
 }
 
 describe('isLoopback helper', () => {
@@ -69,8 +60,8 @@ describe('server auth middleware', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-auth');
+    globalHome = makeRoot('srv-auth');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -232,8 +223,8 @@ describe('server auth middleware for a non-loopback peer', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-auth');
+    globalHome = makeRoot('srv-auth');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });

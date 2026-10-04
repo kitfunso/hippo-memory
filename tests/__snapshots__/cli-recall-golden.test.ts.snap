@@ -1,5 +1,828 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`cli recall and explain golden output > 'explain --include-superseded --classic' 1`] = `
+{
+  "status": 0,
+  "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
+",
+  "stdout": "Query: "deploy"
+Mode:  hybrid   candidates: 7   returned: 3
+
+Rank  Score   Strength  Age    Layer      ID                Preview
+----- ------- --------- ------ ---------- ----------------- ---------------------------------
+1     0.085   1.00      12d    episodic   mem_golden_plain  deploy pipeline uses blue green rollout for the 
+2     0.084   1.00      14d    episodic   mem_golden_scoped deploy checklist for team alpha runs smoke tests
+3     0.078   1.00      27d    episodic   mem_golden_pinned deploy freeze applies to the billing service on 
+
+[1] mem_golden_plain   composite=0.0848
+    mode:      bm25-only
+    BM25:      raw=0.092  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.0918
+    strength:  x0.989  (strength=1.000)
+    recency:   x0.934  (age=12d)
+    final:     0.0848
+
+[2] mem_golden_scoped   composite=0.0838
+    mode:      bm25-only
+    BM25:      raw=0.092  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.0918
+    strength:  x0.987  (strength=1.000)
+    recency:   x0.925  (age=14d)
+    final:     0.0838
+
+[3] mem_golden_pinned   composite=0.0783
+    mode:      bm25-only
+    BM25:      raw=0.089  normalized=0.969  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.969 + 0.00*0.000 = 0.0889
+    strength:  x1.000  (strength=1.000)
+    recency:   x0.881  (age=27d)
+    final:     0.0783
+
+Note: explain does not mark memories as retrieved (read-only).
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'explain --json' 1`] = `
+{
+  "status": 0,
+  "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
+",
+  "stdout": "{"query":"deploy","mode":"hybrid","candidates":6,"returned":6,"results":[{"rank":1,"id":"mem_golden_plain","layer":"episodic","confidence":"verified","aged_out":false,"score":0.09879838426791585,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","breakdown":{"mode":"bm25-only","normBm25":1,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.10697774792853908,"strengthMultiplier":0.9887346469740808,"recencyMultiplier":0.934064009207128,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.09879838426791585,"ageDays":12,"dagLevel":0,"descendantCount":0}},{"rank":2,"id":"mem_golden_scoped","layer":"episodic","confidence":"verified","aged_out":false,"score":0.09770043574193,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","breakdown":{"mode":"bm25-only","normBm25":1,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.10697774792853908,"strengthMultiplier":0.9868819207814039,"recencyMultiplier":0.9254178170546112,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.09770043574193,"ageDays":14,"dagLevel":0,"descendantCount":0}},{"rank":3,"id":"mem_golden_pinned","layer":"episodic","confidence":"verified","aged_out":false,"score":0.09140785725293225,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","breakdown":{"mode":"bm25-only","normBm25":0.9695259593679459,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.10371770369143914,"strengthMultiplier":1,"recencyMultiplier":0.8813139319481199,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.09140785725293225,"ageDays":27,"dagLevel":0,"descendantCount":0}},{"rank":4,"id":"mem_golden_trace","layer":"trace","confidence":"verified","aged_out":false,"score":0.07708147565165151,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","breakdown":{"mode":"bm25-only","normBm25":0.7710951526032316,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.08249002286410688,"strengthMultiplier":0.9905944233245032,"recencyMultiplier":0.9433062621147579,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.07708147565165151,"ageDays":10,"dagLevel":0,"descendantCount":0}},{"rank":5,"id":"mem_golden_new","layer":"episodic","confidence":"verified","aged_out":false,"score":0.07159376622565247,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","breakdown":{"mode":"bm25-only","normBm25":0.7029459901800329,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.07519957894485686,"strengthMultiplier":0.9933973656098114,"recencyMultiplier":0.9583779132673564,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.07159376622565247,"ageDays":7,"dagLevel":0,"descendantCount":0}},{"rank":6,"id":"mem_golden_goal","layer":"episodic","confidence":"verified","aged_out":false,"score":0.06758172472852353,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","breakdown":{"mode":"bm25-only","normBm25":0.6206647398843931,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.06639731609148487,"strengthMultiplier":1,"recencyMultiplier":0.9134827337594008,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1.1142391233933648,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.06758172472852353,"ageDays":17,"dagLevel":0,"descendantCount":0}}]}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'explain --scope private --json' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","mode":"hybrid","candidates":7,"returned":7,"results":[{"rank":1,"id":"mem_golden_plain","layer":"episodic","confidence":"verified","aged_out":false,"score":0.08475375478446243,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","breakdown":{"mode":"bm25-only","normBm25":1,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.09177038554337785,"strengthMultiplier":0.9887346469740808,"recencyMultiplier":0.934064009207128,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.08475375478446243,"ageDays":12,"dagLevel":0,"descendantCount":0}},{"rank":2,"id":"mem_golden_scoped","layer":"episodic","confidence":"verified","aged_out":false,"score":0.08381188452183724,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","breakdown":{"mode":"bm25-only","normBm25":1,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.09177038554337785,"strengthMultiplier":0.9868819207814039,"recencyMultiplier":0.9254178170546112,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.08381188452183724,"ageDays":14,"dagLevel":0,"descendantCount":0}},{"rank":3,"id":"mem_golden_pinned","layer":"episodic","confidence":"verified","aged_out":false,"score":0.07833593113742533,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","breakdown":{"mode":"bm25-only","normBm25":0.9685628742514971,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.08888538839306209,"strengthMultiplier":1,"recencyMultiplier":0.8813139319481199,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.07833593113742533,"ageDays":27,"dagLevel":0,"descendantCount":0}},{"rank":4,"id":"mem_golden_private","layer":"episodic","confidence":"verified","aged_out":false,"score":0.06815809053896957,"tokens":11,"tags":[],"content":"private deploy token rotation lives in slack","breakdown":{"mode":"bm25-only","normBm25":0.8087500000000002,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.07421929930820685,"strengthMultiplier":0.9878074042807896,"recencyMultiplier":0.929668868200302,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.06815809053896957,"ageDays":13,"dagLevel":0,"descendantCount":0}},{"rank":5,"id":"mem_golden_trace","layer":"trace","confidence":"verified","aged_out":false,"score":0.06589361614767751,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","breakdown":{"mode":"bm25-only","normBm25":0.7684085510688837,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.07051714898641981,"strengthMultiplier":0.9905944233245032,"recencyMultiplier":0.9433062621147579,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.06589361614767751,"ageDays":10,"dagLevel":0,"descendantCount":0}},{"rank":6,"id":"mem_golden_new","layer":"episodic","confidence":"verified","aged_out":false,"score":0.06104578047960344,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","breakdown":{"mode":"bm25-only","normBm25":0.6987041036717062,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.06412034497469273,"strengthMultiplier":0.9933973656098114,"recencyMultiplier":0.9583779132673564,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.06104578047960344,"ageDays":7,"dagLevel":0,"descendantCount":0}},{"rank":7,"id":"mem_golden_goal","layer":"episodic","confidence":"verified","aged_out":false,"score":0.05744732931571527,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","breakdown":{"mode":"bm25-only","normBm25":0.6150190114068441,"bm25Weight":1,"embeddingWeight":0,"cosine":0,"base":0.05644053179331319,"strengthMultiplier":1,"recencyMultiplier":0.9134827337594008,"decisionBoost":1,"pathBoost":1,"scopeBoost":1,"sourceBump":1,"outcomeBoost":1.1142391233933648,"churnStaleMultiplier":1,"matchedTerms":["deploy"],"final":0.05744732931571527,"ageDays":17,"dagLevel":0,"descendantCount":0}}]}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'explain default' 1`] = `
+{
+  "status": 0,
+  "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
+",
+  "stdout": "Query: "deploy"
+Mode:  hybrid   candidates: 6   returned: 6
+
+Rank  Score   Strength  Age    Layer      ID                Preview
+----- ------- --------- ------ ---------- ----------------- ---------------------------------
+1     0.099   1.00      12d    episodic   mem_golden_plain  deploy pipeline uses blue green rollout for the 
+2     0.098   1.00      14d    episodic   mem_golden_scoped deploy checklist for team alpha runs smoke tests
+3     0.091   1.00      27d    episodic   mem_golden_pinned deploy freeze applies to the billing service on 
+4     0.077   1.00      10d    trace      mem_golden_trace  deploy trace: ran the canary and promoted it
+5     0.072   1.00      7d     episodic   mem_golden_new    deploy target is the new staging cluster in eu w
+6     0.068   1.00      17d    episodic   mem_golden_goal   deploy goal work: migrate the rollout scripts to
+
+[1] mem_golden_plain   composite=0.0988
+    mode:      bm25-only
+    BM25:      raw=0.107  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.1070
+    strength:  x0.989  (strength=1.000)
+    recency:   x0.934  (age=12d)
+    final:     0.0988
+
+[2] mem_golden_scoped   composite=0.0977
+    mode:      bm25-only
+    BM25:      raw=0.107  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.1070
+    strength:  x0.987  (strength=1.000)
+    recency:   x0.925  (age=14d)
+    final:     0.0977
+
+[3] mem_golden_pinned   composite=0.0914
+    mode:      bm25-only
+    BM25:      raw=0.104  normalized=0.970  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.970 + 0.00*0.000 = 0.1037
+    strength:  x1.000  (strength=1.000)
+    recency:   x0.881  (age=27d)
+    final:     0.0914
+
+[4] mem_golden_trace   composite=0.0771
+    mode:      bm25-only
+    BM25:      raw=0.082  normalized=0.771  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.771 + 0.00*0.000 = 0.0825
+    strength:  x0.991  (strength=1.000)
+    recency:   x0.943  (age=10d)
+    final:     0.0771
+
+[5] mem_golden_new   composite=0.0716
+    mode:      bm25-only
+    BM25:      raw=0.075  normalized=0.703  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.703 + 0.00*0.000 = 0.0752
+    strength:  x0.993  (strength=1.000)
+    recency:   x0.958  (age=7d)
+    final:     0.0716
+
+[6] mem_golden_goal   composite=0.0676
+    mode:      bm25-only
+    BM25:      raw=0.066  normalized=0.621  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.621 + 0.00*0.000 = 0.0664
+    strength:  x1.000  (strength=1.000)
+    recency:   x0.913  (age=17d)
+    outcome:   x1.114  (user feedback: pos-neg = 2)
+    final:     0.0676
+
+Note: explain does not mark memories as retrieved (read-only).
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'explain global store' 1`] = `
+{
+  "status": 0,
+  "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
+",
+  "stdout": "Query: "deploy"
+Mode:  searchBothHybrid   candidates: 7   returned: 7
+
+Rank  Score   Strength  Age    Layer      ID                Preview
+----- ------- --------- ------ ---------- ----------------- ---------------------------------
+1     0.255   1.00      20d    episodic   mem_golden_global deploy notes from the global store about rollbac
+2     0.119   1.00      12d    episodic   mem_golden_plain  deploy pipeline uses blue green rollout for the 
+3     0.117   1.00      14d    episodic   mem_golden_scoped deploy checklist for team alpha runs smoke tests
+4     0.110   1.00      27d    episodic   mem_golden_pinned deploy freeze applies to the billing service on 
+5     0.092   1.00      10d    trace      mem_golden_trace  deploy trace: ran the canary and promoted it
+6     0.086   1.00      7d     episodic   mem_golden_new    deploy target is the new staging cluster in eu w
+7     0.081   1.00      17d    episodic   mem_golden_goal   deploy goal work: migrate the rollout scripts to
+
+[1] mem_golden_global   composite=0.2548
+    mode:      bm25-only
+    BM25:      raw=0.288  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.2877
+    strength:  x0.981  (strength=1.000)
+    recency:   x0.903  (age=20d)
+    final:     0.2548
+
+[2] mem_golden_plain   composite=0.1186
+    mode:      bm25-only
+    BM25:      raw=0.107  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.1070
+    strength:  x0.989  (strength=1.000)
+    recency:   x0.934  (age=12d)
+    source:    x1.20  (local priority bump over global)
+    final:     0.1186
+
+[3] mem_golden_scoped   composite=0.1172
+    mode:      bm25-only
+    BM25:      raw=0.107  normalized=1.000  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*1.000 + 0.00*0.000 = 0.1070
+    strength:  x0.987  (strength=1.000)
+    recency:   x0.925  (age=14d)
+    source:    x1.20  (local priority bump over global)
+    final:     0.1172
+
+[4] mem_golden_pinned   composite=0.1097
+    mode:      bm25-only
+    BM25:      raw=0.104  normalized=0.970  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.970 + 0.00*0.000 = 0.1037
+    strength:  x1.000  (strength=1.000)
+    recency:   x0.881  (age=27d)
+    source:    x1.20  (local priority bump over global)
+    final:     0.1097
+
+[5] mem_golden_trace   composite=0.0925
+    mode:      bm25-only
+    BM25:      raw=0.082  normalized=0.771  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.771 + 0.00*0.000 = 0.0825
+    strength:  x0.991  (strength=1.000)
+    recency:   x0.943  (age=10d)
+    source:    x1.20  (local priority bump over global)
+    final:     0.0925
+
+[6] mem_golden_new   composite=0.0859
+    mode:      bm25-only
+    BM25:      raw=0.075  normalized=0.703  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.703 + 0.00*0.000 = 0.0752
+    strength:  x0.993  (strength=1.000)
+    recency:   x0.958  (age=7d)
+    source:    x1.20  (local priority bump over global)
+    final:     0.0859
+
+[7] mem_golden_goal   composite=0.0811
+    mode:      bm25-only
+    BM25:      raw=0.066  normalized=0.621  weight=1.00  matched=[deploy]
+    embedding: cosine=0.000  weight=0.00
+    base:      1.00*0.621 + 0.00*0.000 = 0.0664
+    strength:  x1.000  (strength=1.000)
+    recency:   x0.913  (age=17d)
+    source:    x1.20  (local priority bump over global)
+    outcome:   x1.114  (user feedback: pos-neg = 2)
+    final:     0.0811
+
+Note: explain does not mark memories as retrieved (read-only).
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'explain no match' 1`] = `
+{
+  "status": 0,
+  "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
+",
+  "stdout": "No memories matched "zzqqxx" (scanned 7).
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --as-of' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_pinned","score":0.21424337079597675,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_old","score":0.17206844280822076,"strength":1,"tokens":11,"tags":[],"content":"deploy target was the old staging cluster","layer":"episodic","superseded":true,"superseded_by":"mem_golden_new"}],"total":2,"suppressionSummary":{"totalCandidates":7,"droppedPreRank":5,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --budget 120' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Cutoff: showing 1 of 6 candidates; 5 not shown (rank, budget or limit).
+
+Found 1 memories (110 tokens) for: "deploy"
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy pipeline uses blue green rollout for the api
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --classic' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --goal' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 6 memories (512 tokens) for: "deploy"
+
+--- mem_golden_goal [episodic] [verified] score=0.101 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+    ranking: base 0.068 -> goal x1.50 -> 0.101
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.098 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    scope: team-alpha
+    confidence: verified
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_golden_pinned [episodic] [verified] score=0.091 strength=1.00
+    [██████████] tags: deploy, billing | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_golden_trace [trace] [verified] score=0.077 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+    source: [local] | layer: [trace] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy trace: ran the canary and promoted it
+
+--- mem_golden_new [episodic] [verified] score=0.072 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy target is the new staging cluster in eu west
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --graph-stream' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 6 memories (269 tokens) for: "deploy"
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.098 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_golden_pinned [episodic] [verified] score=0.091 strength=1.00
+    [██████████] tags: deploy, billing | retrieved: 0x
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_golden_trace [trace] [verified] score=0.077 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+--- mem_golden_new [episodic] [verified] score=0.072 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy target is the new staging cluster in eu west
+
+--- mem_golden_goal [episodic] [verified] score=0.068 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --hops 1' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --include-superseded' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.08475375478446243,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.08381188452183724,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.07833593113742533,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.06589361614767751,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_old","score":0.06304092359984431,"strength":1,"tokens":11,"tags":[],"content":"deploy target was the old staging cluster","layer":"episodic","superseded":true,"superseded_by":"mem_golden_new"},{"id":"mem_golden_new","score":0.06104578047960344,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.05744732931571527,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":7,"suppressionSummary":{"totalCandidates":7,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --json' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --layer trace' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 1 memories (50 tokens) for: "deploy"
+
+--- mem_golden_trace [trace] [verified] score=0.077 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --limit 2' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 2 memories (97 tokens) for: "deploy"
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.098 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --multihop' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.060652801817536656,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --outcome success' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --physics' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":1,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.9888869789306626,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.9251958716759742,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.7801896379461666,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.7246451119231724,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.684036740370766,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --scope private' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.08475375478446243,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.08381188452183724,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.07833593113742533,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_private","score":0.06815809053896957,"strength":1,"tokens":11,"tags":[],"content":"private deploy token rotation lives in slack","layer":"episodic"},{"id":"mem_golden_trace","score":0.06589361614767751,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.06104578047960344,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.05744732931571527,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":7,"suppressionSummary":{"totalCandidates":7,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --scope tag' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 6 memories (269 tokens) for: "deploy"
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.098 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_golden_pinned [episodic] [verified] score=0.091 strength=1.00
+    [██████████] tags: deploy, billing | retrieved: 0x
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_golden_trace [trace] [verified] score=0.077 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+--- mem_golden_new [episodic] [verified] score=0.072 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy target is the new staging cluster in eu west
+
+--- mem_golden_goal [episodic] [verified] score=0.068 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --why --json' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10697774792853908,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10697774792853908,"cosine":0,"envelope":{"kind":"distilled","scope":"team-alpha","owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10371770369143914,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.08249002286410688,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.07519957894485686,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.06639731609148487,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall --why' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 6 memories (500 tokens) for: "deploy"
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.098 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    scope: team-alpha
+    confidence: verified
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_golden_pinned [episodic] [verified] score=0.091 strength=1.00
+    [██████████] tags: deploy, billing | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_golden_trace [trace] [verified] score=0.077 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+    source: [local] | layer: [trace] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy trace: ran the canary and promoted it
+
+--- mem_golden_new [episodic] [verified] score=0.072 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy target is the new staging cluster in eu west
+
+--- mem_golden_goal [episodic] [verified] score=0.068 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+    source: [local] | layer: [episodic] | confidence: [verified]
+    reason: BM25: matched terms [deploy]
+    kind: distilled
+    confidence: verified
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall default' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 6 memories (269 tokens) for: "deploy"
+
+--- mem_golden_plain [episodic] [verified] score=0.099 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.098 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_golden_pinned [episodic] [verified] score=0.091 strength=1.00
+    [██████████] tags: deploy, billing | retrieved: 0x
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_golden_trace [trace] [verified] score=0.077 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+--- mem_golden_new [episodic] [verified] score=0.072 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy target is the new staging cluster in eu west
+
+--- mem_golden_goal [episodic] [verified] score=0.068 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall global store --json --why' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_global","score":0.25484679415358286,"strength":1,"tokens":13,"tags":[],"content":"deploy notes from the global store about rollbacks","layer":"episodic","confidence":"verified","aged_out":false,"source":"global","reason":"BM25: matched terms [deploy]","bm25":0.28768207245178085,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_plain","score":0.11855806112149901,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10697774792853908,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_scoped","score":0.117240522890316,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10697774792853908,"cosine":0,"envelope":{"kind":"distilled","scope":"team-alpha","owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_pinned","score":0.10968942870351871,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10371770369143914,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_trace","score":0.0924977707819818,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.08249002286410688,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_new","score":0.08591251947078296,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.07519957894485686,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_goal","score":0.08109806967422824,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.06639731609148487,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}}],"total":7,"suppressionSummary":{"totalCandidates":7,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall global store' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Found 7 memories (313 tokens) for: "deploy"
+
+--- mem_golden_global [episodic] [verified] [global] score=0.255 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy notes from the global store about rollbacks
+
+--- mem_golden_plain [episodic] [verified] score=0.119 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_golden_scoped [episodic] [verified] score=0.117 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_golden_pinned [episodic] [verified] score=0.110 strength=1.00
+    [██████████] tags: deploy, billing | retrieved: 0x
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_golden_trace [trace] [verified] score=0.092 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+--- mem_golden_new [episodic] [verified] score=0.086 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy target is the new staging cluster in eu west
+
+--- mem_golden_goal [episodic] [verified] score=0.081 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall graph-stream note then invalid…' 1`] = `
+{
+  "status": 1,
+  "stderr": "[note] --graph-stream searches the local store only; global graph fusion is a follow-up.
+Invalid --layer: "bogus". Must be one of: buffer, episodic, semantic, trace.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --as-of' 1`] = `
+{
+  "status": 1,
+  "stderr": "Error: --as-of value "notadate" is not a valid ISO date (e.g. 2026-04-22 or <ts>).
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --graph-hops' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --graph-hops: "0". Must be an integer 1..3.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --graph-seeds' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --graph-seeds: "x". Must be a positive integer.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --hops' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --hops: "x". Must be an integer 0..3.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --layer' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --layer: "bogus". Must be one of: buffer, episodic, semantic, trace.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --max-neighbors' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --max-neighbors: "0". Must be an integer 1..200.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --outcome' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --outcome: "nope". Must be one of: success, failure, partial.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --reranker' 1`] = `
+{
+  "status": 1,
+  "stderr": "Error: Unknown reranker: bogus. Available: clef, clef-flash, cross-encoder, jev, llm
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall invalid --salience-threshold' 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --salience-threshold: "-1". Must be a positive number.
+",
+  "stdout": "",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall no match --json' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"zzqqxx","results":[],"total":0,"suppressionSummary":{"totalCandidates":7,"droppedPreRank":0,"droppedByBudget":7,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall no match' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "No memories found for: zzqqxx
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall pfc rerankers' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_goal","score":0.0739430737586906,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.05644053179331319,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"value","multiplier":1.289208274022745,"scoreBefore":0.05744732931571527,"scoreAfter":0.07406157227432952},{"stage":"utility","multiplier":0.9984,"scoreBefore":0.07406157227432952,"scoreAfter":0.0739430737586906}]},{"id":"mem_golden_plain","score":0.042321787451621316,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.09177038554337785,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"utility","multiplier":0.9987,"scoreBefore":0.08475375478446243,"scoreAfter":0.08464357490324263},{"stage":"retrieval-count-downweight","multiplier":0.5,"scoreBefore":0.08464357490324263,"scoreAfter":0.042321787451621316}]},{"id":"mem_golden_scoped","score":0.04184727394175334,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.09177038554337785,"cosine":0,"envelope":{"kind":"distilled","scope":"team-alpha","owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"utility","multiplier":0.9986,"scoreBefore":0.08381188452183724,"scoreAfter":0.08369454788350668},{"stage":"retrieval-count-downweight","multiplier":0.5,"scoreBefore":0.08369454788350668,"scoreAfter":0.04184727394175334}]},{"id":"mem_golden_pinned","score":0.03911313041691647,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.08888538839306209,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"utility","multiplier":0.9986,"scoreBefore":0.07833593113742533,"scoreAfter":0.07822626083383294},{"stage":"retrieval-count-downweight","multiplier":0.5,"scoreBefore":0.07822626083383294,"scoreAfter":0.03911313041691647}]},{"id":"mem_golden_trace","score":0.032910566584957536,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.07051714898641981,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"utility","multiplier":0.9989,"scoreBefore":0.06589361614767751,"scoreAfter":0.06582113316991507},{"stage":"retrieval-count-downweight","multiplier":0.5,"scoreBefore":0.06582113316991507,"scoreAfter":0.032910566584957536}]},{"id":"mem_golden_new","score":0.009144963144746993,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.06412034497469273,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"interference","multiplier":0.3,"scoreBefore":0.06104578047960344,"scoreAfter":0.01831373414388103},{"stage":"utility","multiplier":0.9987,"scoreBefore":0.01831373414388103,"scoreAfter":0.018289926289493986},{"stage":"retrieval-count-downweight","multiplier":0.5,"scoreBefore":0.018289926289493986,"scoreAfter":0.009144963144746993}]}],"total":6,"suppressionSummary":{"totalCandidates":7,"droppedPreRank":1,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
+exports[`cli recall and explain golden output > 'recall session goal stack' 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_goal","score":0.13516344945704706,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.06639731609148487,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"},"rerankTrace":[{"stage":"goal-boost","multiplier":2,"scoreBefore":0.06758172472852353,"scoreAfter":0.13516344945704706,"note":"goal-alpha"}]},{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10697774792853908,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10697774792853908,"cosine":0,"envelope":{"kind":"distilled","scope":"team-alpha","owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.10371770369143914,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.08249002286410688,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic","confidence":"verified","aged_out":false,"source":"local","reason":"BM25: matched terms [deploy]","bm25":0.07519957894485686,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":null,"artifact_ref":null,"session_id":null,"confidence":"verified"}}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+}
+`;
+
 exports[`cli recall and explain golden output > explain --include-superseded --classic 1`] = `
 {
   "status": 0,
