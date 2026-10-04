@@ -57,9 +57,9 @@ export function listGrades(out) {
 }
 
 /** What a done row was computed from: a change to any of it re-runs the cell. */
-export function inputsHash(entry, t, checkerShas, pass) {
+export function inputsHash(entry, t, checkers, pass) {
   const bundle = fs.existsSync(entry.bundle) ? fs.readFileSync(entry.bundle) : null;
-  const parts = [fs.readFileSync(entry.file, 'utf8'), bundle ? [bundle.length, sha256(bundle)] : 'absent', checkerShas, t.setup ?? null, t.test, pass];
+  const parts = [fs.readFileSync(entry.file, 'utf8'), bundle ? [bundle.length, sha256(bundle)] : 'absent', checkers, t.setup ?? null, t.test, t.fixRef ?? null, t.testFiles ?? null, pass];
   return sha256(JSON.stringify(parts));
 }
 
@@ -302,12 +302,14 @@ function passEnvOf(records, baseEnv) {
 function envKeyCheck(records, entries, out, baseEnv, passEnv) {
   const extra = new Set();
   for (const g of new Map(entries.map((e) => [`${e.grade.runName}|${e.grade.arm}|${e.grade.seed}`, e.grade])).values()) {
-    const rec = records.find((r) => r.sequence === g.runName && r.arm === g.arm && r.seed === g.seed && Array.isArray(r.envKeys));
+    // record.sequence is the sequence id, which a renamed run no longer shares with its runName.
+    const rec = records.find((r) => r.sequence === g.sequence && r.arm === g.arm && r.seed === g.seed && r.screen !== true && Array.isArray(r.envKeys));
     if (!rec) throw new Error(`no record of ${g.runName}/${g.arm}/seed${g.seed} names its envKeys; pass the runs file the run wrote`);
-    const now = Object.keys(armEnv(g.arm, scratchPaths(out, g), baseEnv, { passEnv }));
-    const lacking = rec.envKeys.filter((k) => !now.includes(k));
+    const now = armEnv(g.arm, scratchPaths(out, g), baseEnv, { passEnv });
+    const lacking = rec.envKeys.filter((k) => !hasKey(now, k));
     if (lacking.length) throw new Error(`the run's env for ${g.runName}/${g.arm}/seed${g.seed} had ${lacking.join(', ')}, which this env lacks; set them before the regrade`);
-    for (const k of now) if (!rec.envKeys.includes(k)) extra.add(k);
+    const had = Object.fromEntries(rec.envKeys.map((k) => [k, '']));
+    for (const k of Object.keys(now)) if (!hasKey(had, k)) extra.add(k);
   }
   return [...extra].sort();
 }
@@ -327,6 +329,7 @@ function regradeContext(opts, entries) {
 
 /** A cell whose regrade wrote under the run root stops the whole regrade: the evidence is no longer the run's (R23). */
 function guardedCell(ctx, entry, inputs) {
+  // SHORTCUT: guards only this cell's own run root; walk every run root if a checker could reach another cell's.
   const g = entry.grade;
   const root = path.join(ctx.out, 'runs', g.runName, g.arm, `seed${g.seed}`);
   const before = evidenceOf(root);
@@ -340,12 +343,12 @@ function guardedCell(ctx, entry, inputs) {
 export function runRegrade(opts) {
   const { out, pass, cells = [], log = () => {} } = opts;
   const all = listGrades(out);
-  const unknown = cells.filter((k) => !all.some((e) => e.key === k));
-  if (unknown.length) throw new Error(`--cell ${unknown.join(', ')}: no such cell under ${path.join(out, 'grading')}`);
-  const entries = all.filter((e) => cells.length === 0 || cells.includes(e.key)).map((e) => ({ ...e, t: taskOf(opts.spec, e.grade) }));
   // A missing grade.json refuses rather than counting as unreproducible, so deleting one can never drop a lesson.
   const orphans = [...new Set(opts.records.filter(isGraded).map(cellKey))].filter((k) => !all.some((e) => e.key === k));
   if (orphans.length) throw new Error(`no grade.json for ${orphans.length} valid cells in runs.jsonl: ${orphans.slice(0, 5).join(', ')}`);
+  const unknown = cells.filter((k) => !all.some((e) => e.key === k));
+  if (unknown.length) throw new Error(`--cell ${unknown.join(', ')}: no such cell under ${path.join(out, 'grading')}`);
+  const entries = all.filter((e) => cells.length === 0 || cells.includes(e.key)).map((e) => ({ ...e, t: taskOf(opts.spec, e.grade) }));
   const ctx = regradeContext(opts, entries);
   const file = rowsFile(out, pass);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -356,8 +359,9 @@ export function runRegrade(opts) {
   }
   const tally = { ran: 0, skipped: 0, errors: 0, regraded: null };
   for (const entry of entries) {
-    const shas = Object.fromEntries(Object.keys(entry.grade.checkers).sort().map((id) => [id, ctx.checkerSha(id)]));
-    const inputs = inputsHash(entry, entry.t, shas, pass);
+    // The whole invocation, args included, since the same script with other args can give another verdict.
+    const checkers = Object.fromEntries(Object.keys(entry.grade.checkers).sort().map((id) => [id, [ctx.checkerSha(id), ctx.lesson(id).check]]));
+    const inputs = inputsHash(entry, entry.t, checkers, pass);
     const last = rows.get(entry.key);
     if (last?.status === 'done' && last.inputsHash === inputs) {
       tally.skipped++;

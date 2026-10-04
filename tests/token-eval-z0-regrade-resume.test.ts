@@ -62,7 +62,14 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 1 cells (0 with errors), skipped 7 done ones\n' });
     expect(rowsOf(c.out).at(-1)!.key).toBe(keyOf('a2'));
 
+    // The checker's args and the hidden tests' fixRef and file list are inputs too: a change re-runs the cells that use them.
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
+    lessonOf(raw, 'f1-l1').check.args = ['--strict'];
+    taskOf(raw, 'a2').fixRef = `${taskOf(raw, 'a2').fixRef}^{commit}`;
+    taskOf(raw, 'n1').testFiles = [...taskOf(raw, 'n1').testFiles, ...taskOf(raw, 'n1').testFiles];
+    writeFileSync(c.tasks, JSON.stringify(raw));
+    expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 5 cells (0 with errors), skipped 3 done ones\n' });
+
     raw.families[0].lessons[0].check.script = join(dirname(raw.families[0].lessons[0].check.script), 'crash-on-toggle.mjs');
     writeFileSync(c.tasks, JSON.stringify(raw));
     expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 3 cells (3 with errors), skipped 5 done ones\n' });

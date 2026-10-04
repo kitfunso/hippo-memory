@@ -1,6 +1,6 @@
 // Z0 G5 (prereg 166): every saved check and acceptance test runs again on the saved commits; flips drop lessons, harness faults are error rows.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readFileSync, realpathSync, rmSync, writeFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { CHECKS, cleanup } from './fixtures/z0-harness.js';
@@ -136,6 +136,21 @@ describe('z0-regrade regrade and grading', () => {
     expect(lacking.code).toBe(1);
     expect(lacking.stderr).toContain('had CLAUDE_CODE_OAUTH_TOKEN');
     expect(rowsOf(c.out)).toEqual([]);
+  }, 300_000);
+
+  it('finds a cell\'s env record by sequence, not run name, and compares env keys case-blind on win32 (R27)', async () => {
+    const c = copyOut(shared);
+    renameSync(join(c.out, 'grading', 'seqF'), join(c.out, 'grading', 'seqF-r2'));
+    for (const id of ['t1', 't2', 'n1', 'a1', 't3', 'a2', 'a3', 'a4']) {
+      const file = join(c.out, 'grading', 'seqF-r2', 'A0', 'seed1', `${id}.grade.json`);
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), runName: 'seqF-r2' }));
+    }
+    expect(await regrade(c, ['--cell', keyOf('t1')])).toMatchObject({ code: 0, stderr: '' });
+    const runs = join(c.out, 'runs.jsonl');
+    const swap = (k: string) => (k.toUpperCase() === 'PATH' ? (k === 'PATH' ? 'Path' : 'PATH') : k);
+    const lines = readFileSync(runs, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    writeFileSync(runs, lines.map((r) => `${JSON.stringify(Array.isArray(r.envKeys) ? { ...r, envKeys: r.envKeys.map(swap) } : r)}\n`).join(''));
+    expect((await regrade(c, ['--cell', keyOf('t2')])).code).toBe(process.platform === 'win32' ? 0 : 1);
   }, 300_000);
 
   it('a test command that flips counts in acceptanceFlips and drops no lesson (11)', async () => {
