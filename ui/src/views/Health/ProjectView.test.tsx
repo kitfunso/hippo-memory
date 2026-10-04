@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { App } from "../../App";
 import { COARSE_QUERY } from "../../hooks/useMediaQuery";
 import { type Handler, fetchRouter, json, makeDetail, makeOverview, makeProject, stubMedia, stubPhone } from "../../testing/fixtures";
-import { makePage, makePointsDetail, makeRow, pageHandler } from "../../testing/memories";
+import { makeMemory, makePage, makePointsDetail, makeRow, pageHandler } from "../../testing/memories";
 import { makeRows, openHippo } from "../../testing/openHippo";
 import { maxLogFor, plotX, plotY } from "./canvas/scatter";
 
@@ -145,6 +145,20 @@ describe("ProjectView: table and drawer", () => {
     expect(calls.filter((c) => c.startsWith(`${MEMORIES}?`)).length).toBeGreaterThan(pagesBefore);
   });
 
+  it("View the other moves focus to the drawer title, so it never falls to the page while the other memory loads", async () => {
+    const other = { id: "m2", content: "memory m2", strength: 0.5, retrievals: 1 };
+    const m1 = makeMemory("m1", { conflicts: [{ id: 7, reason: "contradicts", score: 0.9, other }] });
+    openHippo(makeRows(2), { memoryId: "m1", extra: { "/api/memory/m1": () => json(m1) } });
+    const drawer = await screen.findByRole("dialog", { name: /Memory m1/ });
+
+    const view = await within(drawer).findByRole("button", { name: "View the other" });
+    // A real click focuses the button first; fireEvent.click alone does not.
+    view.focus();
+    fireEvent.click(view);
+    await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo/m/m2"));
+    expect(await screen.findByRole("heading", { level: 2, name: /Memory m2/ })).toHaveFocus();
+  });
+
   it("a dead memory link goes back to the project and toasts without Undo", async () => {
     openHippo(makeRows(2), { memoryId: "gone", extra: { "/api/memory/gone": () => json({ error: "not found" }, 404) } });
     await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo"));
@@ -155,6 +169,42 @@ describe("ProjectView: table and drawer", () => {
 });
 
 describe("ProjectView: search", () => {
+  function searchFor(q: string, nameMatches: { key: string; name: string; live: number }[], hits: Record<string, number>) {
+    const hippo = makeProject("hippo", { live: 3, atRisk: 0 });
+    const { stub, calls } = fetchRouter({
+      "/api/overview": () => json(makeOverview([hippo])),
+      "/api/search": () => json({ snapshotId: 1, q, total: 1, hits, nameMatches }),
+      "/api/projects/p%3Ahippo": () => json(makeDetail(hippo)),
+      [MEMORIES]: pageHandler(makeRows(1)),
+    });
+    vi.stubGlobal("fetch", stub);
+    render(<App />);
+    return calls;
+  }
+
+  async function pick(q: string, option: RegExp) {
+    await screen.findByText("Total memories");
+    fireEvent.change(screen.getByRole("combobox", { name: "Search memories" }), { target: { value: q } });
+    const results = within(await screen.findByRole("listbox", { name: "Search results" }));
+    fireEvent.mouseDown(await results.findByRole("option", { name: option }, { timeout: 2000 }));
+    expect(await screen.findByRole("heading", { level: 1, name: "hippo" })).toBeInTheDocument();
+  }
+
+  it("picking a project by its name opens it with the query cleared, so its memories are not filtered by the name", async () => {
+    const calls = searchFor("hipp", [{ key: "p:hippo", name: "hippo", live: 3 }], {});
+    await pick("hipp", /hippo/);
+    await waitFor(() => expect(calls.some((c) => c.startsWith(`${MEMORIES}?`))).toBe(true));
+    expect(calls.some((c) => c.startsWith(`${MEMORIES}?`) && c.includes("q="))).toBe(false);
+    expect(screen.queryByRole("button", { name: /^Clear search/ })).toBeNull();
+  });
+
+  it("picking a project by its memory hits keeps the query and filters its table", async () => {
+    const calls = searchFor("needle", [], { "p:hippo": 1 });
+    await pick("needle", /hippo/);
+    await waitFor(() => expect(calls.some((c) => c.startsWith(`${MEMORIES}?`) && c.includes("q=needle"))).toBe(true));
+    expect(screen.getByRole("button", { name: "Clear search needle" })).toBeInTheDocument();
+  });
+
   it("T11: a project ranked below the dropdown cut still filters its table by the query", async () => {
     const others = Array.from({ length: 7 }, (_, i) => makeProject(`other${i}`));
     const hippo = makeProject("hippo", { live: 3, atRisk: 0 });

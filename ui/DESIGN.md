@@ -57,7 +57,7 @@ Cells are the strength bands of a project: pinned, strong, fading, at risk. The 
 ## Layout
 
 - Header 64px: crumbs, search, range, view switch, Updated label, Refresh. Phone width (`max-width: 760px`) wraps it into two rows.
-- Health overview: KPI strip, then a map card (Map or Table) with a rail beside it. Below 1240px the rail drops under the map.
+- Health overview: KPI strip, then a map card (Map or Table) with a rail beside it. Below 1240px the rail narrows to 232px; at phone width it drops under the map.
 - Board: a 44px toolbar, then one column per status. A card opens a side panel; on phones it is a modal bottom sheet.
 - `main` holds one view at a time. Its first child is the `h1` (screen-reader only on the overview).
 

@@ -223,12 +223,12 @@ function serveSpa(res: http.ServerResponse, distUiDir: string, pathname: string)
   notBuilt(res);
 }
 
-/** Starts the dashboard on loopback; `opts.now` is the clock seam for tests and defaults to the eval clock. */
-export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { now?: () => number }): http.Server {
+/** Starts the dashboard on loopback; `opts.now` dates the projections (default: the eval clock) and `opts.cacheClock` ages the snapshot cache (default: the wall clock). */
+export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { now?: () => number; cacheClock?: () => number }): http.Server {
   const distUiDir = path.resolve(import.meta.dirname, '..', 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
   const now = opts?.now ?? ((): number => evalNow().getTime());
-  const snapshots = createSnapshotService(hippoRoot, now);
+  const snapshots = createSnapshotService(hippoRoot, now, opts?.cacheClock);
 
   const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const host = req.headers.host;

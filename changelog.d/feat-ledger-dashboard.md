@@ -1,6 +1,6 @@
 ### Added
 
-- **`hippo dashboard` opens on a new Health view.** It shows memory counts, strength bands, at-risk memories and open conflicts per origin project, with a treemap of projects, a strength-by-age scatter per project and a sortable memory table. You can pin, mark wrong, resolve a conflict or forget a memory from a side drawer; mark wrong, resolve and forget wait 6 seconds behind an Undo before anything is written. On a phone the view uses a card list and a bottom sheet, and nothing depends on hover.
+- **`hippo dashboard` opens on a new Health view.** It shows memory counts, strength bands, at-risk memories and open conflicts per origin project, with a treemap of projects, a strength-by-age scatter per project and a sortable memory table. You can pin, mark wrong, resolve a conflict or forget a memory from a side drawer; mark wrong, resolve and forget wait 6 seconds behind an Undo before anything is written, and starting another action writes the waiting one at once. On a phone the view uses a card list and a bottom sheet, and nothing depends on hover.
 
 ### Changed
 

@@ -190,7 +190,15 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
                     <button type="button" className="btn sm" onClick={() => actions.resolve(c.id, c.other.id, d.id, projectKey)}>
                       Keep the other
                     </button>
-                    <button type="button" className="btn sm quiet" onClick={() => navigate({ view: "health", projectKey, memoryId: c.other.id })}>
+                    <button
+                      type="button"
+                      className="btn sm quiet"
+                      onClick={() => {
+                        // This button unmounts while the other memory loads; the title stays, so focus stays in the drawer.
+                        title.current?.focus();
+                        navigate({ view: "health", projectKey, memoryId: c.other.id });
+                      }}
+                    >
                       View the other
                     </button>
                   </div>

@@ -371,8 +371,8 @@ function embeddingsKey(hippoRoot: string): string {
 // Keeps ids rising between two services created in the same millisecond of one process.
 let highestIssuedId = 0;
 
-/** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the snapshot cache; `now` is the clock seam. */
-export function createSnapshotService(hippoRoot: string, now: () => number): SnapshotService {
+/** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the snapshot cache; `now` dates the strength projections, `cacheClock` ages the cache. */
+export function createSnapshotService(hippoRoot: string, now: () => number, cacheClock: () => number = Date.now): SnapshotService {
   let db: DatabaseSyncLike | null = null;
   let cached: CachedSnapshot | null = null;
   // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
@@ -401,12 +401,14 @@ export function createSnapshotService(hippoRoot: string, now: () => number): Sna
   return {
     get(tenantId, fresh = false) {
       const nowMs = now();
+      // A frozen eval clock (HIPPO_FAKE_NOW) would never age the cache, so reuse is timed on its own clock.
+      const wallMs = cacheClock();
       // Read before the build, so a commit that lands during it shows on the next read.
       const dv = dataVersion();
       const emb = embeddingsKey(hippoRoot);
       const hit = cached;
       if (hit !== null && !fresh) {
-        const age = nowMs - hit.builtAtMs;
+        const age = wallMs - hit.builtAtMs;
         // An embeddings.json rewrite rides the same coalescing window as a commit: every remember rewrites it.
         const reusable = hit.snapshot.tenantId === tenantId
           && (hit.dataVersion !== null || dv === null)
@@ -415,7 +417,7 @@ export function createSnapshotService(hippoRoot: string, now: () => number): Sna
         if (reusable) return hit.snapshot;
       }
       const snapshot = build(tenantId, dv, nowMs);
-      cached = { snapshot, dataVersion: dv, embeddingsKey: emb, builtAtMs: nowMs };
+      cached = { snapshot, dataVersion: dv, embeddingsKey: emb, builtAtMs: wallMs };
       return snapshot;
     },
     invalidate() {

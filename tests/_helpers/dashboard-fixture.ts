@@ -68,7 +68,8 @@ export interface RunningDashboard {
 }
 
 export async function startDashboard(hippoRoot: string, now: () => number = () => NOW): Promise<RunningDashboard> {
-  const server = serveDashboard(hippoRoot, 0, { now });
+  // One test clock drives both the projections and the cache age.
+  const server = serveDashboard(hippoRoot, 0, { now, cacheClock: now });
   const port = await new Promise<number>((resolve) => {
     const done = (): void => {
       // SAFETY: serveDashboard binds a TCP port, so address() is an AddressInfo once listening.

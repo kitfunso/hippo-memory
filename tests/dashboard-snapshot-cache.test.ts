@@ -21,7 +21,7 @@ let service: SnapshotService;
 beforeEach(() => {
   store = makeStore('hippo-dash-cache');
   clock = NOW;
-  service = createSnapshotService(store.hippoRoot, () => clock);
+  service = createSnapshotService(store.hippoRoot, () => clock, () => clock);
 });
 
 afterEach(() => {
@@ -69,6 +69,23 @@ describe('snapshot reuse and rebuild', () => {
     expect(forced.facts).toHaveLength(3);
   });
 
+  it('ages the cache on its own clock, so a frozen eval clock still shows an outside write', () => {
+    let wall = NOW;
+    const frozen = createSnapshotService(store.hippoRoot, () => NOW, () => wall);
+    try {
+      seed(store.hippoRoot, 'first');
+      const first = frozen.get('default');
+      seed(store.hippoRoot, 'second');
+      wall += COALESCE_MS + 1;
+
+      const later = frozen.get('default');
+      expect(later.id).toBeGreaterThan(first.id);
+      expect(later.facts).toHaveLength(2);
+    } finally {
+      frozen.close();
+    }
+  });
+
   it('rebuilds after the TTL even with no write', () => {
     seed(store.hippoRoot, 'first');
     const first = service.get('default');
@@ -90,7 +107,7 @@ describe('snapshot reuse and rebuild', () => {
   it('serves an empty snapshot while hippo.db is missing, then picks the database up', () => {
     const emptyRoot = join(store.home, 'fresh', '.hippo');
     mkdirSync(emptyRoot, { recursive: true });
-    const early = createSnapshotService(emptyRoot, () => clock);
+    const early = createSnapshotService(emptyRoot, () => clock, () => clock);
     try {
       expect(early.get('default').facts).toHaveLength(0);
       seed(emptyRoot, 'now there is a row');

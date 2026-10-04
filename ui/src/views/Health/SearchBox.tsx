@@ -59,6 +59,8 @@ export function SearchBox() {
     if (!option) return;
     setOpen(false);
     input.current?.blur();
+    // A name match says nothing about the project's memories, so carrying the query in would show "No memories match".
+    if (option.kind === "Project") search.clear();
     navigate({ view: "health", projectKey: option.key, memoryId: null });
   };
 
