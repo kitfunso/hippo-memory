@@ -59,8 +59,9 @@ jobs:
       - name: Request-path timing at 10k memories
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
+      # The 100 ms gate is about 4x the p99 a CI runner measures at this size, so runner noise passes and a real regression fails.
       - name: p99 recall at 1k memories
-        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --queries 300 --gate-ms 250
+        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --queries 300 --gate-ms 100
       - name: Install the packed tarball
         run: npm run smoke:pack
       - name: Provenance gate
