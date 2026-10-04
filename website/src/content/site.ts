@@ -170,8 +170,6 @@ export const compare = {
 /** README.md's Comparison table, parsed at build by readme.ts, plus the site's own closing line. */
 export const comparison = {
   ...readmeComparison,
-  // The Sep 28 site read one README table; the README now splits facts from design bets, so rejoin them.
-  rows: [...readmeComparison.rows, ...readmeComparison.bets],
   closing:
     'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and stop repeating it."',
 } as const;

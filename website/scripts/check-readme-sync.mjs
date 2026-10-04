@@ -18,9 +18,9 @@ const missing = [];
 let parsed = '';
 try {
   const readmeLf = readme.replace(/\r\n/g, '\n');
-  const { systems, rows, bets } = parseComparison(readmeLf);
+  const { systems, rows } = parseComparison(readmeLf);
   const faq = parseFaq(readmeLf);
-  parsed = `${systems.length} systems x ${rows.length} fact rows and ${bets.length} design-bet rows, ${faq.length} FAQ answers`;
+  parsed = `${systems.length} systems x ${rows.length} comparison rows, ${faq.length} FAQ answers`;
   // FAQPage JSON-LD carries these answers as plain text, so no markdown may survive mdText.
   for (const { q, a } of faq) {
     if (/`|\]\(|\*\*|__/.test(mdText(a))) missing.push(`faq: markdown left in the JSON-LD answer to "${q}"`);
