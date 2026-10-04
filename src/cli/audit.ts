@@ -1,6 +1,7 @@
 // `hippo audit`: list and prune the audit log.
 
-import { deleteEntry, loadAllEntries, memoriesBackingObjects } from '../store.js';
+import { loadAllEntries } from '../store/entry-reads.js';
+import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../audit.js';
 import * as api from '../api.js';

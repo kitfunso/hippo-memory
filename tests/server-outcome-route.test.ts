@@ -20,10 +20,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import {
-  loadIndex,
-  saveIndex,
-} from '../src/store.js';
+import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import type { Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';

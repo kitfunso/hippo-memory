@@ -7,7 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { sanitizeCwd } from '../src/agent-memories/qwen-code.js';
 import { AGENT_MEMORY_TOOLS } from '../src/agent-memories/tools.js';
-import { initStore, isInitialized, loadAllEntries } from '../src/store.js';
+import { initStore, isInitialized } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
   assertFreshDist, closeWorld, codexSummary, distUrl, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, type World,
 } from './_helpers/agent-memories-world.js';

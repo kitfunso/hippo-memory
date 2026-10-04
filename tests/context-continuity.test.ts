@@ -4,12 +4,9 @@ import * as path from 'path';
 import * as os from 'os';
 import { cmdContext } from '../src/cli/context.js';
 import { runInProcess } from './_helpers/run-in-process.js';
-import {
-  initStore,
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  appendSessionEvent,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 
 let tmpDir: string;
 let hippoDir: string;

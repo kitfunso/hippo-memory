@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 

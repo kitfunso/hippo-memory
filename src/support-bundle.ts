@@ -5,7 +5,7 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { findHippoStoreDir, isGlobalStoreRoot, realpathOrResolve } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
-import { isInitialized } from './store.js';
+import { isInitialized } from './store/open.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTableRows, type DatabaseSyncLike } from './db.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';

@@ -2,15 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  initStore,
-  appendSessionEvent,
-  listSessionEvents,
-  saveSessionHandoff,
-  loadLatestHandoff,
-  loadHandoffById,
-  findPromotableSessions,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { appendSessionEvent, listSessionEvents, findPromotableSessions } from '../src/store/sessions.js';
+import { saveSessionHandoff, loadLatestHandoff, loadHandoffById } from '../src/store/handoffs.js';
 
 let tmpDir: string;
 beforeEach(() => {

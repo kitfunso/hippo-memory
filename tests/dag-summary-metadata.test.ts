@@ -13,7 +13,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry, loadAllEntries, loadEntriesByIds, loadChildrenOf } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, loadEntriesByIds, loadChildrenOf } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';

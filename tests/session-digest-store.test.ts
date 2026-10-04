@@ -9,7 +9,11 @@ import { storeExtractedFacts } from '../src/extract.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { autoShare, getGlobalRoot, neverAutoShareTags } from '../src/shared.js';
-import { initStore, listMemoryConflicts, loadAllEntries, saveSessionHandoff, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   SESSION_DIGEST_TAG,
   isSessionDigestRow,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 
 const mode = (p: string): number => statSync(p).mode & 0o777;

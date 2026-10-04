@@ -7,7 +7,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, Layer, MemoryEntry } from './memory.js';
-import { initStore, loadAllEntries, writeEntry } from './store.js';
+import { initStore } from './store/open.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries } from './store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
@@ -588,7 +590,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
 // ---------------------------------------------------------------------------
 
 /** Escape LIKE wildcards in operator-supplied text (mirror of
- *  src/project-briefs.ts:477 / src/store.ts:782, kept local since neither is
+ *  src/project-briefs.ts:477 / src/store/search-rows.ts, kept local since neither is
  *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
  *  loader prefix and archive another vault's rows. */
 function escapeLike(term: string): string {

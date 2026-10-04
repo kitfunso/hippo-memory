@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { readEntry } from '../src/store.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { queryAuditEvents } from '../src/audit.js';

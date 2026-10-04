@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore, writeEntry, batchWriteAndDelete, deleteEntry, loadIndex, saveIndex, rebuildIndex, type HippoIndex } from '../src/store.js';
+import { type HippoIndex } from '../src/store/rows.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
+import { loadIndex, saveIndex, rebuildIndex } from '../src/store/index-and-stats.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { rejectValue } from '../src/reject-flow.js';
 

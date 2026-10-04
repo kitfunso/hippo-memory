@@ -4,7 +4,9 @@ import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { detectSecret } from './secret-detect.js';
-import { auditRejectionRefusal, stampOriginProject, writeEntryDbOnly } from './store.js';
+import { auditRejectionRefusal } from './store/audit-event.js';
+import { stampOriginProject } from './store/entry-row.js';
+import { writeEntryDbOnly } from './store/entry-writes.js';
 
 export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
 

@@ -7,14 +7,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import {
-  initStore,
-  writeEntry,
-  readEntry,
-  listMemoryConflicts,
-  replaceDetectedConflicts,
-  resolveConflict,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */

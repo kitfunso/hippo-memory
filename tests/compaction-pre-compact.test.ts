@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { loadActiveTaskSnapshot } from '../src/store.js';
+import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
   compactionRows,
   initProject,

@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { getHippoDbPath, type DatabaseSyncLike } from '../src/db.js';
 import { serve, type ServerHandle } from '../src/server.js';
 

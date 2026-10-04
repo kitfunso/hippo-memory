@@ -24,7 +24,9 @@ import { fileURLToPath } from 'node:url';
 
 // hippo internals — use dist so we call production code paths
 import { createMemory } from '../dist/memory.js';
-import { writeEntry, loadAllEntries, initStore } from '../dist/store.js';
+import { initStore } from '../dist/store/open.js';
+import { writeEntry } from '../dist/store/entry-writes.js';
+import { loadAllEntries } from '../dist/store/entry-reads.js';
 import { embedMemory, loadEmbeddingIndex } from '../dist/embeddings.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/local-embedding.js';
 import { resetAllPhysicsState, loadPhysicsState } from '../dist/physics-state.js';

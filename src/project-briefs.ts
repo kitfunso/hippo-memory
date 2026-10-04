@@ -24,7 +24,7 @@
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
@@ -508,7 +508,7 @@ export function loadActiveBriefForRepo(
 // Refresh assembler (the distinguishing deliverable)
 // ---------------------------------------------------------------------------
 
-/** Escape LIKE wildcards in operator-supplied text (mirror of store.ts:782). */
+/** Escape LIKE wildcards in operator-supplied text (mirror of store/search-rows.ts). */
 function escapeLike(term: string): string {
   return term.replace(/[%_\\]/g, '\\$&');
 }

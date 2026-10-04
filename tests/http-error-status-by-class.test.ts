@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';

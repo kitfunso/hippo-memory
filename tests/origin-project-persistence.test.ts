@@ -3,15 +3,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-  serializeEntry,
-  deserializeEntry,
-  stampOriginProject,
-  batchWriteAndDelete,
-} from '../src/store.js';
+import { serializeEntry, deserializeEntry } from '../src/store/markdown.js';
+import { stampOriginProject } from '../src/store/entry-row.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 

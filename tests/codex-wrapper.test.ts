@@ -16,7 +16,8 @@ import {
   resolveCodexSessionTranscript,
   resolveCodexWrapperPaths,
 } from '../src/hooks.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 

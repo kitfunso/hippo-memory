@@ -1,11 +1,11 @@
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
+import { writeEntry } from './store/entry-writes.js';
 import {
-  writeEntry,
   loadAllDirtySummaries,
   loadChildrenOfSummary,
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
-} from './store.js';
+} from './store/summaries.js';
 import { RejectedValueError } from './rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
@@ -206,7 +206,7 @@ export async function buildDag(
       // The tombstone check itself is tenant-scoped for free: writeEntry ->
       // writeEntryDbOnly -> upsertEntryRow calls
       // checkRejectionGuard(db, entry.tenantId ?? 'default', ...)
-      // (store.ts:1172), reading tenantId off the entry being written. Now
+      // (store/entry-writes.ts), reading tenantId off the entry being written. Now
       // that summaryEntry carries factTenant instead of the implicit
       // 'default', the guard consults that tenant's tombstones — no
       // separate check needed here (unlike consolidate.ts's merge pass,
@@ -231,7 +231,7 @@ export async function buildDag(
         result.factsLinked++;
       }
       // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
-      // writeEntry calls (E2 hook on writeEntryDbOnly at store.ts:1214).
+      // writeEntry calls (E2 hook on writeEntryDbOnly in store/entry-writes.ts).
       // The summary we just built IS fresh, no rebuild needed. Without this,
       // E3 in the SAME sleep cycle would re-rebuild every new summary
       // (2x LLM cost). plan-eng-r1 HIGH must-fix.
@@ -317,7 +317,7 @@ export async function rebuildDirtySummaries(
         if (changed) result.zeroChildSkipped++;
         // changed=false → race lost / row vanished; silently skip. `refused`
         // is always false here — applyRebuildResult only checks the
-        // tombstone when bumpRebuildCount is true (store.ts:3398).
+        // tombstone when bumpRebuildCount is true (store/summaries.ts).
         continue;
       }
 
@@ -361,7 +361,7 @@ export async function rebuildDirtySummaries(
     } catch (err) {
       // Per-summary failure isolation — one throw doesn't abort the queue.
       // independent-review MED #2 fold: log enough to triage in production
-      // (audit() wraps its own writes try/catch per store.ts:2566, so a
+      // (audit() wraps its own writes try/catch per store/audit-event.ts, so a
       // throw here is exotic: SQLite I/O error, prepare failure, etc).
       result.failed++;
       log.error(

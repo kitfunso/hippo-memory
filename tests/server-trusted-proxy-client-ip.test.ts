@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { clientIpForRateLimit, serve, type ServerHandle } from '../src/server.js';
 
 const ENV_KEYS = ['HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_V1_RPS'] as const;

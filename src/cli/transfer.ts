@@ -3,7 +3,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { calculateStrength, deriveHalfLife, computeSchemaFit } from '../memory.js';
-import { isInitialized, writeEntry, readEntry, loadAllEntries, updateStats } from '../store.js';
+import { isInitialized } from '../store/open.js';
+import { writeEntry } from '../store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../rejection.js';
 import { embedAll, embedMemory } from '../embeddings.js';
 import { loadConfig } from '../config.js';

@@ -28,7 +28,7 @@ Every row in `memories` carries the canonical envelope as of schema v14 (A3) + v
 
 ## Footguns to avoid
 
-- **Do not use `INSERT OR REPLACE` on `memories`.** SQLite fires the `BEFORE DELETE` trigger during conflict resolution; on a `kind='raw'` row this aborts the upsert. Use `upsertEntryRow` (ON CONFLICT DO UPDATE) in `src/store.ts` or `archiveRawMemory` for raw rows.
+- **Do not use `INSERT OR REPLACE` on `memories`.** SQLite fires the `BEFORE DELETE` trigger during conflict resolution; on a `kind='raw'` row this aborts the upsert. Use `upsertEntryRow` (ON CONFLICT DO UPDATE) in `src/store/entry-row.ts` or `archiveRawMemory` for raw rows.
 - **Do not directly `DELETE FROM memories` for `kind='raw'`.** Always go through `archiveRawMemory(db, id, { reason, who })` so the audit trail in `raw_archive` is preserved. A cleanup pass that deletes rows (decay, dedup, the quality audit) must skip raw rows: one refused DELETE rolls back the whole batch, and the same row refuses it again on every later run.
 - **Ingestion code must declare `kind` explicitly** when writing genuinely raw transcripts. The default in `createMemory()` is `'distilled'`; current callers (`importers.ts` for ChatGPT/Claude/Cursor pastes, `capture.ts` for session capture) keep this default because their content is curated/processed, not raw transcript. When E1.x connectors land (Slack/Jira/Gmail), they MUST set `kind: 'raw'` explicitly.
 

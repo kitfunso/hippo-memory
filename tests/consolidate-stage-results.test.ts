@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { appendSessionEvent, initStore, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
 import { consolidate, type ConsolidationResult } from '../src/consolidate.js';
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');

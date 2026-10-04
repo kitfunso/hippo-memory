@@ -14,7 +14,8 @@
  */
 
 import { MemoryEntry, Layer } from './memory.js';
-import { loadAllEntries, readEntry, writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { log } from './log.js';

@@ -15,7 +15,9 @@ import { spawnSync } from 'node:child_process';
 import { extractFromText } from '../src/capture.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/compaction-record.js';
 import { lessonFromFailure, captureToolFailure, failureSignature } from '../src/capture-error.js';
-import { initStore, loadAllEntries, loadActiveTaskSnapshot, getHippoRoot } from '../src/store.js';
+import { initStore, getHippoRoot } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { installJsonHooks } from '../src/hooks.js';
 import { runDoctor } from '../src/doctor.js';
 

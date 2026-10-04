@@ -23,7 +23,13 @@ import {
 import { fitBudget } from '../search/finalize.js';
 import type { SearchResult } from '../search/types.js';
 import { evalNow } from '../ablation.js';
-import { loadStrengthRows, loadTextsHoldingWords, writeEntry, readEntry, initStore, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep, type SessionEvent, type TaskSnapshot } from '../store.js';
+import { type SessionEvent, type TaskSnapshot } from '../store/rows.js';
+import { initStore } from '../store/open.js';
+import { writeEntry } from '../store/entry-writes.js';
+import { readEntry } from '../store/entry-reads.js';
+import { loadStrengthRows, loadTextsHoldingWords } from '../store/candidates.js';
+import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
+import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';

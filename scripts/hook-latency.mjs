@@ -22,7 +22,8 @@ const CONTENTION = process.argv.includes('--contention');
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'memory.js')));
-const { initStore, writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store.js')));
+const { initStore } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'open.js')));
+const { writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'entry-writes.js')));
 
 // Same seed, vocabulary and prompts as scripts/z1-latency.mjs, so the context numbers compare.
 function mulberry32(seed) {

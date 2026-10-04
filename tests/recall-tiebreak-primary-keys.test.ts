@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall, type Context } from '../src/api.js';

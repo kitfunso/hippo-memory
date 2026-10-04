@@ -21,7 +21,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { initStore, loadIndex, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { remember, recall, getContext, type Context } from '../src/api.js';
@@ -306,7 +308,7 @@ describe('CLI cmdRecall — trace wiring', () => {
       expect(out).toContain('cli-trace-target');
 
       // The CLI's local store lives at `<cwd>/.hippo` (getHippoRoot,
-      // store.ts:261) — HIPPO_HOME only governs the separate global store.
+      // store/open.ts) — HIPPO_HOME only governs the separate global store.
       const localStore = join(hippoRoot, '.hippo');
       const traces = traceRows(localStore, 'cli');
       expect(traces).toHaveLength(1);

@@ -2,7 +2,7 @@ import { closeHippoDb } from './db.js';
 import { strengthSql } from './memory.js';
 import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
 import { SECRET_TAGS } from './secret-detect.js';
-import { openStore } from './store.js';
+import { openStore } from './store/open.js';
 import { isErrorTagged, type AmbientTallies } from './ambient.js';
 
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */

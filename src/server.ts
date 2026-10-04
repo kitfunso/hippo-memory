@@ -8,7 +8,7 @@ import { assembleCost, contextCost, drillCost } from './context-render.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, withBusyWait, SERVER_DB_WAIT_MS, STORE_BUSY_MESSAGE, type DatabaseSyncLike } from './db.js';
-import { updateStats } from './store.js';
+import { updateStats } from './store/index-and-stats.js';
 import {
   buildSessionKey,
   getOrCreateRing,

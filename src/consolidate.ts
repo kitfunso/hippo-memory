@@ -9,20 +9,12 @@
 
 import { evalNow, isRecallBoostAblated } from './ablation.js';
 import { MemoryEntry, Layer, calculateStrength, canAutoDelete, createMemory, markRetrieved, type DecayOptions } from './memory.js';
-import {
-  loadAllEntries,
-  writeEntry,
-  deleteEntry,
-  batchWriteAndDelete,
-  appendConsolidationRun,
-  replaceDetectedConflicts,
-  loadSessionDecayContext,
-  incrementSleepCount,
-  findPromotableSessions,
-  traceExistsForSession,
-  listSessionEvents,
-  memoriesBackingObjects,
-} from './store.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { deleteEntry, batchWriteAndDelete, memoriesBackingObjects } from './store/delete-and-batch.js';
+import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from './store/index-and-stats.js';
+import { findPromotableSessions, traceExistsForSession, listSessionEvents } from './store/sessions.js';
+import { replaceDetectedConflicts } from './store/conflicts.js';
 import { tokenize } from './tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from './compare.js';
@@ -772,7 +764,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');
-    const { loadAllL2Summaries } = await import('./store.js');
+    const { loadAllL2Summaries } = await import('./store/summaries.js');
     const l2Summaries = loadAllL2Summaries(run.hippoRoot);
     if (l2Summaries.length >= 2) {
       const profileResult = await buildEntityProfiles(run.hippoRoot, l2Summaries, { ...llmOpts, onError: llmError('dag profiles') });

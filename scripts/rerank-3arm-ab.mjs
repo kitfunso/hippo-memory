@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { hybridSearch } from '../dist/search/hybrid.js';
 import { buildCorpus } from '../dist/search/bm25.js';
-import { loadAllEntries } from '../dist/store.js';
+import { loadAllEntries } from '../dist/store/entry-reads.js';
 import { getReranker } from '../dist/rerankers/index.js';
 
 // Literal, not new Date(): a bare Date() drifted 26min between Lane 12/13 runs

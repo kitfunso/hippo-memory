@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
-import { isInitialized } from './store.js';
+import { isInitialized } from './store/open.js';
 import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';

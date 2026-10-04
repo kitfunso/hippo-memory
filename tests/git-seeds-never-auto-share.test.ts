@@ -12,7 +12,9 @@ import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { autoShare, getGlobalRoot, promoteToGlobal, shareMemory, transferScore } from '../src/shared.js';
-import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';

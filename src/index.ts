@@ -20,16 +20,13 @@ export { tokenize, textOverlap } from './tokenize.js';
 export { markRetrieved } from './memory.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';
+export { initStore } from './store/open.js';
+export { writeEntry } from './store/entry-writes.js';
+export { loadAllEntries, readEntry } from './store/entry-reads.js';
+export { deleteEntry } from './store/delete-and-batch.js';
+export { loadSearchEntries, loadRecallSearchEntries } from './store/search-rows.js';
+export { loadIndex, rebuildIndex, loadSessionDecayContext, SessionDecayContext } from './store/index-and-stats.js';
 export {
-  initStore,
-  loadAllEntries,
-  loadSearchEntries,
-  loadRecallSearchEntries,
-  writeEntry,
-  readEntry,
-  deleteEntry,
-  loadIndex,
-  rebuildIndex,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
@@ -38,17 +35,15 @@ export {
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
-  listMemoryConflicts,
-  replaceDetectedConflicts,
-  resolveConflict,
+} from './store/sessions.js';
+export { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from './store/conflicts.js';
+export {
   saveSessionHandoff,
   loadLatestHandoff,
   loadHandoffById,
   stampHandoffOutcome,
   writeSessionEndHandoff,
-  loadSessionDecayContext,
-  SessionDecayContext,
-} from './store.js';
+} from './store/handoffs.js';
 export {
   createCard,
   loadCard,

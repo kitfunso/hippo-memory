@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connect } from 'node:net';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 /** Sends headers that promise a 2 MB body plus a few bytes of it, never the rest, and resolves with the status line. */

@@ -8,7 +8,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { gatedWrite } from '../src/gated-write.js';
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
-import { loadAllEntries, openStore, readEntry, initStore } from '../src/store.js';
+import { openStore, initStore } from '../src/store/open.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from './_helpers/compaction-hooks.js';
 
 let s: Scratch;

@@ -2,16 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { initStore } from '../src/store/open.js';
 import {
-  initStore,
-  saveSessionHandoff,
-  loadLatestHandoff,
-  loadHandoffById,
   appendSessionEvent,
   listSessionEvents,
   loadActiveTaskSnapshot,
   saveActiveTaskSnapshot,
-} from '../src/store.js';
+} from '../src/store/sessions.js';
+import { saveSessionHandoff, loadLatestHandoff, loadHandoffById } from '../src/store/handoffs.js';
 import {
   openHippoDb,
   closeHippoDb,

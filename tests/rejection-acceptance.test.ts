@@ -20,7 +20,11 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { initStore, writeEntry, readEntry, loadAllEntries, rebuildIndex, appendSessionEvent } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { rebuildIndex } from '../src/store/index-and-stats.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/audit.js';

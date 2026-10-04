@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { Context } from '../src/api.js';
-import { writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
 import { compareSemver } from '../src/version.js';

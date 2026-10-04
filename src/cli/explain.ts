@@ -1,7 +1,9 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
 import { confidenceFacets } from '../memory.js';
-import { isInitialized, loadSearchEntries, loadIndex } from '../store.js';
+import { isInitialized } from '../store/open.js';
+import { loadSearchEntries } from '../store/search-rows.js';
+import { loadIndex } from '../store/index-and-stats.js';
 import type { SearchResult } from '../search/types.js';
 import { loadConfig } from '../config.js';
 import { dropHeldCopies } from '../same-text.js';

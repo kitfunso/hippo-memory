@@ -7,7 +7,7 @@
  */
 
 import { closeHippoDb } from './db.js';
-import { openStore } from './store.js';
+import { openStore } from './store/open.js';
 
 export const WM_MAX_ENTRIES = 20;
 

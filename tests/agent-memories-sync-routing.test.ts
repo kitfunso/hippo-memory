@@ -11,7 +11,9 @@ import type { ImportReport } from '../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { deriveOriginProject } from '../src/project-identity.js';
 import { autoShare, syncGlobalToLocal } from '../src/shared.js';
-import { initStore, isInitialized, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore, isInitialized } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
   agentRows, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, toolTally,
   userNotes, writeConfig, type World,

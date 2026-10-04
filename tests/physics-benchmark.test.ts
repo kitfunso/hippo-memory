@@ -16,11 +16,9 @@ import {
   type MemoryEntry
 } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import type { SearchResult } from '../src/search/types.js';

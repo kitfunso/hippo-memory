@@ -6,7 +6,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, loadIndex, saveIndex } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import { remember, getContext, sleep, outcomeForLastRecall, type Context } from '../src/api.js';
 
 describe('api result shapes on a real store', () => {

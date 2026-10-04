@@ -33,7 +33,7 @@
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';

@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../memory.js';
 import { cosineSimilarity, embeddingModelRequiresReindex, hasEmbeddings, loadStoredVectors } from '../embeddings.js';
-import { loadVectorCandidateEntries, type VectorCandidateSpec } from '../store.js';
+import { loadVectorCandidateEntries, type VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { log } from '../log.js';
 import { redactSecretsStrict } from '../secret-detect.js';

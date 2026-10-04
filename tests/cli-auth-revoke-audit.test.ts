@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { authCreate, adminActor } from '../src/api.js';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 

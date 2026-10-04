@@ -1,7 +1,8 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
 import * as path from 'path';
-import { readEntry, listMemoryConflicts, resolveConflict } from '../store.js';
+import { readEntry } from '../store/entry-reads.js';
+import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import { RejectedValueError } from '../rejection.js';
 import { loadConfig } from '../config.js';

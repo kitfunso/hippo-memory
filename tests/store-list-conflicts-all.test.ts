@@ -10,12 +10,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  initStore,
-  writeEntry,
-  listMemoryConflicts,
-  replaceDetectedConflicts,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 

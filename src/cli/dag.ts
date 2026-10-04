@@ -1,6 +1,6 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
-import { loadAllEntries } from '../store.js';
+import { loadAllEntries } from '../store/entry-reads.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';

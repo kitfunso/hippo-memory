@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore, writeEntry, loadAllEntries, loadChildrenOfSummary, loadAllL2Summaries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate.js';
 import { supersede, type Context } from '../src/api.js';
 

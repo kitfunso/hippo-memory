@@ -6,11 +6,8 @@ import {
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
-  saveSessionHandoff,
-  loadLatestHandoff,
-  loadHandoffById,
-  stampHandoffOutcome,
-} from '../store.js';
+} from '../store/sessions.js';
+import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOutcome } from '../store/handoffs.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../handoff.js';
 import { resolveTenantId } from '../tenant.js';
 import { wmPush, wmRead, wmClear, wmFlush } from '../working-memory.js';

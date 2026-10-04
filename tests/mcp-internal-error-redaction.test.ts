@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';

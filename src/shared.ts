@@ -11,17 +11,12 @@ import * as path from 'path';
 import * as os from 'os';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
-import {
-  initStore,
-  loadAllEntries,
-  loadIndex,
-  loadSearchEntries,
-  loadRecallSearchEntries,
-  tallySources,
-  recallScopeFilter,
-  writeEntry,
-  readEntry,
-} from './store.js';
+import { initStore } from './store/open.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries, readEntry } from './store/entry-reads.js';
+import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
+import { tallySources } from './store/candidates.js';
+import { loadIndex } from './store/index-and-stats.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
 import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';

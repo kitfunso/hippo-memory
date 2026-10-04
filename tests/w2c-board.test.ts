@@ -10,10 +10,8 @@ import { connect } from 'node:net';
 import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import {
-  initStore,
-  saveSessionHandoff,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   createCard,
   claimCard,

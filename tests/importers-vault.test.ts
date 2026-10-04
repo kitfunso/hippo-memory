@@ -20,7 +20,8 @@ import * as os from 'os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { importVault, type ImportOptions } from '../src/importers.js';
-import { loadAllEntries, initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, type Context } from '../src/api.js';
 

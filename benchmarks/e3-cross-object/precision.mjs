@@ -4,7 +4,7 @@
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
 import { saveDecision } from '../../dist/decisions.js';
 import { savePolicy } from '../../dist/policies.js';
 import { saveCustomerNote } from '../../dist/customer-notes.js';

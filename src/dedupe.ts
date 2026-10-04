@@ -22,7 +22,8 @@
  */
 
 import { textOverlap } from './tokenize.js';
-import { loadAllEntries, deleteEntry, memoriesBackingObjects } from './store.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { deleteEntry, memoriesBackingObjects } from './store/delete-and-batch.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';

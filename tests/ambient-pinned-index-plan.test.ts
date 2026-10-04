@@ -5,7 +5,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { initStore, writeEntry, loadAmbientCandidates, AMBIENT_PINNED_WHERE, AMBIENT_DRIFT_SQL, MEMORY_SELECT_COLUMNS } from '../src/store.js';
+import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAmbientCandidates, AMBIENT_PINNED_WHERE, AMBIENT_DRIFT_SQL } from '../src/store/candidates.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 

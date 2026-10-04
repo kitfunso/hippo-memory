@@ -10,14 +10,10 @@ import * as path from 'path';
 import * as os from 'os';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import {
-  initStore,
-  writeEntry,
-  readEntry,
-  listMemoryConflicts,
-  replaceDetectedConflicts,
-  resolveConflict,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import * as api from '../src/api.js';
@@ -243,7 +239,7 @@ describe('resolveConflict AT1 wiring', () => {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       // SAFETY: resolveConflict's conflict_resolve audit always writes
-      // metadata.removedIds as string[] (src/store.ts's conflictResolveMeta).
+      // metadata.removedIds as string[] (src/store/conflicts.ts's conflictResolveMeta).
       const removedIds = events[0]!.metadata.removedIds as string[];
       expect(removedIds.slice().sort()).toEqual([bId, dup.id].sort());
     } finally {

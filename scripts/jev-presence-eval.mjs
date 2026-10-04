@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { hybridSearch } from '../dist/search/hybrid.js';
 import { buildCorpus } from '../dist/search/bm25.js';
-import { loadAllEntries } from '../dist/store.js';
+import { loadAllEntries } from '../dist/store/entry-reads.js';
 import { getReranker } from '../dist/rerankers/index.js';
 
 const NOW = new Date('2026-09-18T14:31:52.073Z'); // same clock as Lane 15, see rerank-3arm-ab.mjs:15

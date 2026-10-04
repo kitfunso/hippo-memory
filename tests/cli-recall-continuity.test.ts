@@ -4,13 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { cmdRecall, __resetSessionRecallHistoryCli } from '../src/cli/recall.js';
 import { runInProcess } from './_helpers/run-in-process.js';
-import {
-  initStore,
-  writeEntry,
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  appendSessionEvent,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 let tmpDir: string;

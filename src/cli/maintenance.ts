@@ -1,6 +1,6 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
-import { loadAllEntries } from '../store.js';
+import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../dedupe.js';
 import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
 import { resolveEmbeddingModel } from '../local-embedding.js';

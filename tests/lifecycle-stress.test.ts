@@ -18,7 +18,9 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/embeddings.js';
 import { isEmbeddingAvailable } from '../src/local-embedding.js';

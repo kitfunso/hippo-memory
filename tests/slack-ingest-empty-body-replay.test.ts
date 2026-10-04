@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { adminActor } from '../src/api.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';

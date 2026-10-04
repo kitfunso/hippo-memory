@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { classifyOriginProject } from '../src/project-identity.js';
 import { syncGlobalToLocal } from '../src/shared.js';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import {
   compactionMemories,
   compactionRows,

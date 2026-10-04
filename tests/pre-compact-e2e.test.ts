@@ -4,14 +4,10 @@ import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  getHippoRoot,
-  loadActiveTaskSnapshot,
-  saveActiveTaskSnapshot,
-  appendSessionEvent,
-  loadAllEntries,
-  writeSessionEndHandoff,
-} from '../src/store.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { writeSessionEndHandoff } from '../src/store/handoffs.js';
 import { defaultSleepLogPath } from '../src/hooks.js';
 import {
   PRE_COMPACT_TASK_CAP,

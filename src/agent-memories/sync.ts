@@ -8,7 +8,11 @@ import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from '
 import type { MemoryEntry } from '../memory.js';
 import { deriveOriginProject, isGlobalStoreRoot, resolveGlobalRootDir } from '../project-identity.js';
 import { duplicateKey, heldTextKeys } from '../same-text.js';
-import { initStore, isInitialized, removeEntryMirrors, selectLiveEntriesBySourcePrefix, updateStats, writeEntryMirrors } from '../store.js';
+import { removeEntryMirrors } from '../store/mirrors.js';
+import { initStore, isInitialized } from '../store/open.js';
+import { writeEntryMirrors } from '../store/entry-writes.js';
+import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { updateStats } from '../store/index-and-stats.js';
 import { resolveTenantId } from '../tenant.js';
 import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
 import { claudeCodeAdapter, claudeTranscriptListing } from './claude-code.js';

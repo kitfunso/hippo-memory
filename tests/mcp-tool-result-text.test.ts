@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };

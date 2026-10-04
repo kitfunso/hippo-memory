@@ -3,12 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
-import {
-  initStore,
-  loadAllEntries,
-  appendSessionEvent,
-  listMemoryConflicts,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { Layer } from '../src/memory.js';
 

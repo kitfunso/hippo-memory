@@ -14,8 +14,8 @@
  * the schema level.
  *
  * Dual-write atomicity: `savePrediction` writes the memory + predictions
- * row inside `writeEntry`'s SAVEPOINT 'write_entry' (store.ts:1196). The
- * afterWrite hook (store.ts:1199-1201) runs inside the same SAVEPOINT, so
+ * row inside `writeEntry`'s SAVEPOINT 'write_entry' (store/entry-writes.ts). The
+ * afterWrite hook (store/entry-writes.ts) runs inside the same SAVEPOINT, so
  * a failure in either step rolls back both. Pattern matches supersede
  * (api.ts:1486) and the Slack/GitHub connectors.
  *
@@ -27,7 +27,7 @@
 
 import { BadRequestError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { createMemory, Layer, type MemoryKind } from './memory.js';
 import { appendAuditEvent } from './audit.js';

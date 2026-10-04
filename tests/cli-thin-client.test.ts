@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { boundPort } from './_helpers/listen.js';

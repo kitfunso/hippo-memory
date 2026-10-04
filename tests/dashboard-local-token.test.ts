@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request, type Server } from 'node:http';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 

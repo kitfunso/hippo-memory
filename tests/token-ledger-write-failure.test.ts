@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { adminActor, recordTokens } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';

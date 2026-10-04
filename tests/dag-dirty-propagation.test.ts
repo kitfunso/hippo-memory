@@ -10,13 +10,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  initStore,
-  writeEntry,
-  loadDirtySummaries,
-  deleteEntry,
-  batchWriteAndDelete,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
+import { loadDirtySummaries } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { archiveRawMemory } from '../src/raw-archive.js';

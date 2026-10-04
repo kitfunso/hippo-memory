@@ -8,7 +8,9 @@ import { CODEX_TRUST_LINE, installJsonHooks, uninstallJsonHooks } from '../src/h
 import { formatDoctor, runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/working-memory.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
-import { initStore, saveSessionHandoff, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

@@ -14,11 +14,9 @@ import * as os from 'os';
 import { Layer, calculateStrength } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/consolidate.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { sampleForReplay } from '../src/replay.js';

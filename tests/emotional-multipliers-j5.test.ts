@@ -37,7 +37,7 @@ import {
   _resetLossAversionRatioCacheForTests,
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
-import { writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { recall, type Context } from '../src/api.js';
 import { makeRoot } from './_helpers/make-root.js';
 

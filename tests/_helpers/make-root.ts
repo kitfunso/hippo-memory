@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../../src/store.js';
+import { initStore } from '../../src/store/open.js';
 
 export interface MakeRootOptions {
   /** Written to `<root>/config.json` (the store config, a sibling of `.hippo`). */

@@ -2,17 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
-  initStore,
   saveActiveTaskSnapshot,
-  saveSessionHandoff,
   appendSessionEvent,
   loadActiveTaskSnapshot,
-  loadLatestHandoff,
   listSessionEvents,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
+} from '../src/store/sessions.js';
+import { saveSessionHandoff, loadLatestHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
 import { buildCorrectionLatency } from '../src/correction-latency.js';

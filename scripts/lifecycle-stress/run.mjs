@@ -42,7 +42,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/memory.js';
-import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
+import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
 import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';

@@ -10,45 +10,38 @@
 import { openHippoDb, closeHippoDb, isSqliteBusy, type DatabaseSyncLike } from './db.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './api-errors.js';
 export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './api-errors.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT, type TaskSnapshot, type SessionEvent } from './store/rows.js';
+import { auditRejectionRefusal } from './store/audit-event.js';
+import { stampOriginProject } from './store/entry-row.js';
+import { removeEntryMirrors } from './store/mirrors.js';
+import { isInitialized } from './store/open.js';
+import { writeEntry, writeEntryDbOnly, strengthenRetrieved, writeEntryMirrors } from './store/entry-writes.js';
 import {
-  writeEntry,
-  writeEntryDbOnly,
-  strengthenRetrieved,
-  stampOriginProject,
-  writeEntryMirrors,
   readEntry,
-  deleteEntry,
-  loadSearchEntries,
-  loadRecallSearchEntries,
-  recallScopeFilter,
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
   loadSessionRawMemories,
   countSessionRawMemories,
-  DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  removeEntryMirrors,
-  loadActiveTaskSnapshot,
-  loadFreshActiveTaskSnapshot,
-  loadLatestHandoff,
-  listSessionEvents,
-  SNAPSHOT_AMBIENT_MAX_AGE_MS,
-  loadIndex,
-  saveIndex,
   loadAllEntries,
+} from './store/entry-reads.js';
+import { deleteEntry, memoriesBackingObjects } from './store/delete-and-batch.js';
+import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
+import {
   loadAmbientCandidates,
   loadContextCandidates,
   type ContextCandidateFilter,
   type AmbientRecallRequest,
   type AmbientLoadResult,
-  updateStats,
-  updateStatsUnlessBusy,
-  isInitialized,
-  auditRejectionRefusal,
-  type TaskSnapshot,
-  type SessionEvent,
-  memoriesBackingObjects,
-} from './store.js';
+} from './store/candidates.js';
+import { loadIndex, saveIndex, updateStats, updateStatsUnlessBusy } from './store/index-and-stats.js';
+import {
+  loadActiveTaskSnapshot,
+  loadFreshActiveTaskSnapshot,
+  listSessionEvents,
+  SNAPSHOT_AMBIENT_MAX_AGE_MS,
+} from './store/sessions.js';
+import { loadLatestHandoff } from './store/handoffs.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { RejectedValueError, type RejectedValueRow } from './rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore, batchWriteAndDelete, loadVectorCandidateEntries, recallScopeFilter } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
+import { loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, type CreateMemoryOptions } from '../src/memory.js';
 import { saveEmbeddingIndex } from '../src/embeddings.js';
 

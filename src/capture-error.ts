@@ -2,7 +2,8 @@
 // stored, because error memories decay slowly and would crowd out real lessons; what is stored stays `observed`
 // until outcome feedback confirms it. Every failure, stored or not, goes to the failure log (ROADMAP CD13).
 import { createMemory } from './memory.js';
-import { writeEntry, loadContentsWithTag } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadContentsWithTag } from './store/entry-reads.js';
 import { loadConfig } from './config.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { recordFailure, type FailureOutcome } from './failure-log.js';

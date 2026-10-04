@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { loadAllEntries } from '../src/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, recall, type Context } from '../src/api.js';
 import { ingestEvent, type IngestEvent, type IngestResult } from '../src/connectors/github/ingest.js';

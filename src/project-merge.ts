@@ -7,7 +7,9 @@ import { appendAuditEvent } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
 import { calculateStrength, type MemoryEntry } from './memory.js';
-import { deleteEntryRowInTx, removeEntryMirrors, selectAllEntries, writeEntryMirrors } from './store.js';
+import { removeEntryMirrors } from './store/mirrors.js';
+import { deleteEntryRowInTx, writeEntryMirrors } from './store/entry-writes.js';
+import { selectAllEntries } from './store/entry-reads.js';
 
 export interface ProjectSummary {
   /** '' is user-global, null is unknown; neither can be merged. */

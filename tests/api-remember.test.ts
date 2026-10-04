@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, readEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import { remember } from '../src/api.js';
 
 describe('api.remember', () => {

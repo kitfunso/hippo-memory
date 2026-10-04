@@ -6,10 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
-import {
-  initStore,
-  saveSessionHandoff,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   createCard,
   loadCard,

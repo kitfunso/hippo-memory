@@ -11,14 +11,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import {
-  initStore,
-  writeEntry,
   loadAllDirtySummaries,
   loadChildrenOfSummary,
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
-} from '../src/store.js';
+} from '../src/store/summaries.js';
 import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';

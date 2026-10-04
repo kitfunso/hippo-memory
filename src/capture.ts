@@ -14,17 +14,13 @@ import * as path from 'path';
 import { createMemory, Layer } from './memory.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isContentWorthStoring } from './audit.js';
-import {
-  isInitialized,
-  openStore,
-  stampOriginProject,
-  writeEntryMirrors,
-  loadAllEntries,
-  updateStats,
-  saveActiveTaskSnapshot,
-  loadActiveTaskSnapshot,
-  type TaskSnapshot,
-} from './store.js';
+import { type TaskSnapshot } from './store/rows.js';
+import { stampOriginProject } from './store/entry-row.js';
+import { isInitialized, openStore } from './store/open.js';
+import { writeEntryMirrors } from './store/entry-writes.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { updateStats } from './store/index-and-stats.js';
+import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from './store/sessions.js';
 import { gatedWrite } from './gated-write.js';
 import {
   PRE_COMPACT_INSTRUCTION,

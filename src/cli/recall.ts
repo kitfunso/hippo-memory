@@ -1,18 +1,12 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
 import { confidenceFacets, Layer } from '../memory.js';
-import {
-  isInitialized,
-  strengthenRetrieved,
-  loadIndex,
-  saveIndex,
-  updateStats,
-  loadActiveTaskSnapshot,
-  listSessionEvents,
-  loadLatestHandoff,
-  TaskSnapshot,
-  SessionEvent,
-} from '../store.js';
+import { TaskSnapshot, SessionEvent } from '../store/rows.js';
+import { isInitialized } from '../store/open.js';
+import { strengthenRetrieved } from '../store/entry-writes.js';
+import { loadIndex, saveIndex, updateStats } from '../store/index-and-stats.js';
+import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
+import { loadLatestHandoff } from '../store/handoffs.js';
 import type { SessionHandoff } from '../handoff.js';
 import { passesScopeFilterForRecall } from '../recall-scope.js';
 import { fitBudget } from '../search/finalize.js';

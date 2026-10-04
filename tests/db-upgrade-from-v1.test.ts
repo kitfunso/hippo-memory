@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion } from '../src/db.js';
-import { loadAllEntries, readEntry } from '../src/store.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { dumpSchema } from './_helpers/schema-dump.js';
 

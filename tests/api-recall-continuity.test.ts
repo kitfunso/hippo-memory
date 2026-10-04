@@ -2,13 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  initStore,
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  appendSessionEvent,
-  writeEntry,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall } from '../src/api.js';
 

@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { initStore, loadIndex, saveIndex } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, type DatabaseSyncLike } from '../src/db.js';
 import { remember, recall, outcome, outcomeForLastRecall, type Context } from '../src/api.js';
 

@@ -7,7 +7,9 @@ import { consolidate } from '../src/consolidate.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { NO_MERGE_TAGS } from '../src/shared.js';
-import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const PROBE = 'no-merge-probe';
 const BASE = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';

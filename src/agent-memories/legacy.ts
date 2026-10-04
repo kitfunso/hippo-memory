@@ -4,7 +4,7 @@ import type { DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { duplicateKey } from '../same-text.js';
 import { maskEmails } from '../secret-detect.js';
-import { selectLiveEntriesBySourcePrefix } from '../store.js';
+import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
 import { MIN_ITEM_CHARS, storedText } from './source.js';
 import type { Listing } from './types.js';

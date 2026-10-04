@@ -2,7 +2,7 @@
  * F1 (v1.7.0) — `MemoryEntry.bm25_score` populated on the FTS path of
  * `loadSearchEntries` and `undefined` everywhere else.
  *
- * loadSearchRows in src/store.ts has FOUR query paths:
+ * loadSearchRows in src/store/search-rows.ts has FOUR query paths:
  *   1. No-terms path (empty query)            → no FTS, score undefined
  *   2. FTS path (terms + FTS available)        → bm25_score populated
  *   3. LIKE fallback (terms + FTS unavailable) → no FTS, score undefined
@@ -15,7 +15,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry, loadSearchEntries } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadSearchEntries } from '../src/store/search-rows.js';
 import { withSharedStoreHandles } from '../src/db.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -93,7 +94,7 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
 
   it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry (v1.7.1 INFO #3 + P1)', async () => {
     // P1[5]: verify stamped `created` survives writeEntry → roundtrip read.
-    // upsertEntryRow (store.ts:860) passes entry.created straight through;
+    // upsertEntryRow (store/entry-row.ts) passes entry.created straight through;
     // a future normalizer would silently break this test. Anchor explicitly.
     const probe = makeRaw('roundtrip probe');
     probe.created = '2026-05-06T00:00:00.000Z';
@@ -106,7 +107,7 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     expect(reread.length).toBe(1);
     expect(reread[0]!.created).toBe('2026-05-06T00:00:00.000Z');
 
-    // Now the actual ORDER BY assertion: src/store.ts no-terms SQL is
+    // Now the actual ORDER BY assertion: src/store/search-rows.ts no-terms SQL is
     // `ORDER BY created ASC, id ASC LIMIT ?`. Existing test asserts row
     // count but not order. Pin chronological ordering.
     const created: string[] = [];

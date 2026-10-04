@@ -15,7 +15,11 @@ import { errorMessage } from './log.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
-import { SNAPSHOT_AMBIENT_MAX_AGE_MS, isInitialized, loadAllEntries, loadLatestHandoff, writeEntry } from './store.js';
+import { isInitialized } from './store/open.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
+import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
 import { readTranscriptTail } from './transcript-tail.js';
 

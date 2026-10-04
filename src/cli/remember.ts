@@ -13,7 +13,11 @@ import {
   Layer,
   ConfidenceLevel,
 } from '../memory.js';
-import { isInitialized, writeEntry, readEntry, loadAllEntries, updateStats, listMemoryConflicts } from '../store.js';
+import { isInitialized } from '../store/open.js';
+import { writeEntry } from '../store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { updateStats } from '../store/index-and-stats.js';
+import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../rejection.js';
 import { renderTraceContent, parseSteps } from '../trace.js';
 import { embedMemory } from '../embeddings.js';

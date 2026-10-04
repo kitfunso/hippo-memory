@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { deleteEntry } from '../src/store.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveCustomerNote } from '../src/customer-notes.js';

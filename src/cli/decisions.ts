@@ -1,7 +1,8 @@
 // First-class object verbs for predictions, decisions and incidents.
 
 import { MemoryEntry } from '../memory.js';
-import { writeEntry, readEntry } from '../store.js';
+import { writeEntry } from '../store/entry-writes.js';
+import { readEntry } from '../store/entry-reads.js';
 import { extractPathTags } from '../path-context.js';
 import * as predictionsModule from '../predictions.js';
 import * as decisionsModule from '../decisions.js';

@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import {
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  appendSessionEvent,
-  writeEntry,
-} from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';

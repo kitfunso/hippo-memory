@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { embedMemory, embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
 

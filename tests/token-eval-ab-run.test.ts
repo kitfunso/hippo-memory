@@ -10,7 +10,7 @@ import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
 import { validateCorpus, validateRecord } from './fixtures/z0-contract.js';
-import { loadAllEntries } from '../src/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;

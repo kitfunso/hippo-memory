@@ -451,7 +451,8 @@ describe('HIPPO_FAKE_NOW', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-abl-'));
     try {
       // Local-only store via the wrapper (global root nonexistent path).
-      const { initStore, writeEntry } = await import('../src/store.js');
+      const { initStore } = await import('../src/store/open.js');
+      const { writeEntry } = await import('../src/store/entry-writes.js');
       initStore(tmp);
       writeEntry(tmp, m);
       const results = await searchBothHybrid('wrapper clock consistency check', tmp, path.join(tmp, 'no-global'), {

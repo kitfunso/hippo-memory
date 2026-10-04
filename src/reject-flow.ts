@@ -16,15 +16,12 @@ import { closeHippoDb } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
-import {
-  openStore,
-  deleteEntryCore,
-  purgeMirrorBestEffort,
-  selectAllEntries,
-  stampOriginProject,
-  writeEntryDbOnly,
-  writeEntryMirrors,
-} from './store.js';
+import { stampOriginProject } from './store/entry-row.js';
+import { purgeMirrorBestEffort } from './store/mirrors.js';
+import { openStore } from './store/open.js';
+import { writeEntryDbOnly, writeEntryMirrors } from './store/entry-writes.js';
+import { selectAllEntries } from './store/entry-reads.js';
+import { deleteEntryCore } from './store/delete-and-batch.js';
 import type { MemoryEntry } from './memory.js';
 import { heldTexts } from './same-text.js';
 import { mergedSuccessor } from './merged-row.js';

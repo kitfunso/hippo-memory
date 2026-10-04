@@ -142,7 +142,7 @@ export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
   // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string
   // literals; widening the array (not the input) lets .includes() take any scope.
-  // `:private:` anywhere, any case, matches the store's SQL default-deny (store.ts:894) so JS never admits what SQL hides.
+  // `:private:` anywhere, any case, matches the store's SQL default-deny (store/search-rows.ts) so JS never admits what SQL hides.
   return isPrivateScope(scope) || /:private:/i.test(scope) || (RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope);
 }
 

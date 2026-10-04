@@ -2,14 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import {
-  initStore,
-  writeEntry,
-  loadIndex,
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  appendSessionEvent,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { getContext, adminActor } from '../src/api.js';
 import { autoDetectContext } from '../src/context-auto.js';

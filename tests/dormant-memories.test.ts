@@ -14,14 +14,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-  getExistingEntryMirrorPaths,
-  loadStats,
-  MEMORY_BACKED_TABLES,
-} from '../src/store.js';
+import { getExistingEntryMirrorPaths } from '../src/store/mirrors.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
+import { loadStats } from '../src/store/index-and-stats.js';
 import { saveDecision } from '../src/decisions.js';
 import { saveIncident } from '../src/incidents.js';
 import { saveProcess } from '../src/processes.js';

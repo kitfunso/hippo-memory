@@ -24,10 +24,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import {
-  deleteEntry,
-  writeEntry,
-} from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -91,7 +89,7 @@ describe('processes store (E2 first-class object)', () => {
       expect(memRow!.content).toContain('Description: the npm release ritual');
       expect(memRow!.source).toBe('process');
       // SAFETY: tags_json is always written as a JSON array of strings (see
-      // src/store.ts writeEntry serialization); never any other JSON shape.
+      // src/store/entry-writes.ts writeEntry serialization); never any other JSON shape.
       expect((JSON.parse(memRow!.tags_json) as string[])).toContain('process');
 
       // SAFETY: metadata_json for a process_create audit row is always a JSON

@@ -17,7 +17,7 @@ import {
   resolveOpencodePluginPath,
   type JsonHookTarget,
 } from '../hooks.js';
-import { isInitialized } from '../store.js';
+import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../shared.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';

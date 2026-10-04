@@ -4,7 +4,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore, writeEntry, readEntry, strengthenRetrieved } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
 
 const roots: string[] = [];
 

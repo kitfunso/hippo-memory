@@ -12,8 +12,9 @@ let hippoLib = null;
 export async function loadHippo() {
   if (hippoLib) return hippoLib;
   try {
-    const [{ installJsonHooks }, { openHippoDb, closeHippoDb }, { tokensBySession }, { loadAllEntries, isInitialized }] = await Promise.all([
-      import('../../dist/hooks.js'), import('../../dist/db.js'), import('../../dist/token-ledger.js'), import('../../dist/store.js'),
+    const [{ installJsonHooks }, { openHippoDb, closeHippoDb }, { tokensBySession }, { loadAllEntries }, { isInitialized }] = await Promise.all([
+      import('../../dist/hooks.js'), import('../../dist/db.js'), import('../../dist/token-ledger.js'), import('../../dist/store/entry-reads.js'),
+      import('../../dist/store/open.js'),
     ]);
     hippoLib = { installJsonHooks, openHippoDb, closeHippoDb, tokensBySession, loadAllEntries, isInitialized };
   } catch (err) {

@@ -9,15 +9,15 @@ import {
   resolveCodexWrapperPaths,
   type CodexWrapperMetadata,
 } from '../hooks.js';
+import { SessionEvent } from '../store/rows.js';
+import { isInitialized } from '../store/open.js';
 import {
-  isInitialized,
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
   closeTaskSnapshotsForSession,
   listSessionEvents,
-  writeSessionEndHandoff,
-  SessionEvent,
-} from '../store.js';
+} from '../store/sessions.js';
+import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readSessionScan, recordSessionDigest } from '../session-digest.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { captureToolFailure } from '../capture-error.js';

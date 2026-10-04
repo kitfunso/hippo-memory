@@ -41,7 +41,9 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, Layer } from '../../dist/memory.js';
-import { writeEntry, initStore, loadAllEntries } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
+import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { estimateTokens } from '../../dist/token-ledger.js';

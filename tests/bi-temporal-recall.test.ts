@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
-import { loadAllEntries } from '../src/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { markRetrieved } from '../src/memory.js';
 

@@ -10,7 +10,10 @@ import { insertDormantRow } from '../src/dormant.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { deriveOriginProject } from '../src/project-identity.js';
-import { deleteEntryRowInTx, isInitialized, loadAllEntries, readEntry, removeEntryMirrors, writeEntry } from '../src/store.js';
+import { removeEntryMirrors } from '../src/store/mirrors.js';
+import { isInitialized } from '../src/store/open.js';
+import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import {
   agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
   tally, toolTally, withDb, type World,

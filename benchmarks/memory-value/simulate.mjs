@@ -59,7 +59,8 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyOutcome } from '../../dist/memory.js';
-import { writeEntry, loadAllEntries, readEntry } from '../../dist/store.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../../dist/store/entry-reads.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { buildCorpus } from '../../dist/search/bm25.js';
 import { markRetrieved } from '../../dist/memory.js';

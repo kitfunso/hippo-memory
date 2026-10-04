@@ -4,7 +4,8 @@ import * as path from 'path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getHippoRoot, loadActiveTaskSnapshot } from '../src/store.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
 // real store, no mocks, same idiom as tests/pre-compact-e2e.test.ts.

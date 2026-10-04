@@ -20,13 +20,13 @@
  *
  * Dual-write atomicity: `saveDecision` writes the memory + decisions row (and,
  * when superseding, the old row's UPDATE) inside writeEntry's SAVEPOINT
- * 'write_entry' (store.ts:1196) via the afterWrite hook, so a failure in any
+ * 'write_entry' (store/entry-writes.ts) via the afterWrite hook, so a failure in any
  * step rolls all of them back. Pattern matches savePrediction (predictions.ts).
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer } from './memory.js';

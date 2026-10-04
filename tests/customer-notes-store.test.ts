@@ -18,7 +18,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { deleteEntry, writeEntry } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
@@ -50,7 +51,7 @@ function memTags(home: string, memoryId: string): string[] {
     // it exists and its tags_json column is always a JSON array string.
     const r = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(memoryId) as { tags_json: string };
     // SAFETY: tags_json is always written as a JSON array of strings (see
-    // src/store.ts writeEntry serialization); never any other JSON shape.
+    // src/store/entry-writes.ts writeEntry serialization); never any other JSON shape.
     return JSON.parse(r.tags_json) as string[];
   } finally { closeHippoDb(db); }
 }

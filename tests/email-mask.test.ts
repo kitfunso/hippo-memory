@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cmdCapture, transcriptWorkingState } from '../src/capture.js';
 import { maskEmails } from '../src/secret-detect.js';
 import { writeSessionDigest } from '../src/session-digest.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const EMAIL = 'alice@example.com';
 const REPLY = `Updated ${EMAIL} in customer.ts because the export failed.`;

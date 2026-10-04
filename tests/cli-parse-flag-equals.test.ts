@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
-import { loadAllEntries } from '../src/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 

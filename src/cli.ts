@@ -38,7 +38,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks.js';
-import { getHippoRoot } from './store.js';
+import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
 import type { CommandContext } from './cli/shared.js';

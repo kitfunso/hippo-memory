@@ -21,11 +21,9 @@ import {
   Layer,
   type MemoryEntry,
 } from '../src/memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
 import { estimateTokens } from '../src/token-ledger.js';
 import { markRetrieved } from '../src/memory.js';

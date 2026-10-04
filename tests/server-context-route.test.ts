@@ -22,7 +22,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
@@ -183,7 +185,7 @@ describe('GET /v1/context', () => {
     remember(ctx, { content: 'unpinned-1' });
     remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
-    const { writeEntry } = await import('../src/store.js');
+    const { writeEntry } = await import('../src/store/entry-writes.js');
     const { Layer } = await import('../src/memory.js');
     const pinnedEntry = createMemory('pinned-canary', {
       layer: Layer.Episodic,

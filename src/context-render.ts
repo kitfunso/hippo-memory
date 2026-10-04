@@ -4,7 +4,7 @@ import { evalNow } from './ablation.js';
 import { estimateTokens } from './token-ledger.js';
 import { renderAmbientSummary, type AmbientState } from './ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
-import type { SessionEvent, TaskSnapshot } from './store.js';
+import type { SessionEvent, TaskSnapshot } from './store/rows.js';
 import type {
   AssembleCost, AssembleResult, AssembledContextItem, ContextCost, ContextResultEntry, DrillDownChild, DrillDownCost,
   DrillDownResult, DrillDownSummary,

@@ -36,7 +36,7 @@
  * No graph writes (only SELECTs via graph.ts read helpers + store reads), so the E3.3
  * check-graph-writes lint permits this module living outside graph.ts.
  */
-import { loadEntriesByIds } from './store.js';
+import { loadEntriesByIds } from './store/entry-reads.js';
 import type { MemoryEntry } from './memory.js';
 import type { ResultCost, SearchResult } from './search/types.js';
 import { estimateTokens } from './token-ledger.js';

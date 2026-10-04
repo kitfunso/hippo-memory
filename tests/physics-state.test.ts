@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import {
   float32ToBuffer,
   bufferToFloat32,

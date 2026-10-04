@@ -26,7 +26,8 @@ process.chdir(tmp);
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const load = (rel) => import(pathToFileURL(path.join(REPO, 'dist', rel)).href);
 const { createMemory } = await load('memory.js');
-const { initStore, writeEntryDbOnly } = await load('store.js');
+const { initStore } = await load('store/open.js');
+const { writeEntryDbOnly } = await load('store/entry-writes.js');
 const { loadAmbientTallies } = await load('ambient-store.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
 const { getContext, adminActor } = await load('api.js');

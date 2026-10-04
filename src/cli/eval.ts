@@ -3,7 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../memory.js';
-import { loadAllEntries } from '../store.js';
+import { loadAllEntries } from '../store/entry-reads.js';
 import { loadConfig } from '../config.js';
 import { getGlobalRoot } from '../shared.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval.js';
