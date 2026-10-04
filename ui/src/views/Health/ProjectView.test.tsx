@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../../App";
-import { type Handler, fetchRouter, json, makeDetail, makeOverview, makeProject, stubPhone } from "../../testing/fixtures";
+import { COARSE_QUERY } from "../../hooks/useMediaQuery";
+import { type Handler, fetchRouter, json, makeDetail, makeOverview, makeProject, stubMedia, stubPhone } from "../../testing/fixtures";
 import { makePage, makePointsDetail, makeRow, pageHandler } from "../../testing/memories";
 import { makeRows, openHippo } from "../../testing/openHippo";
 import { maxLogFor, plotX, plotY } from "./canvas/scatter";
@@ -113,6 +114,37 @@ describe("ProjectView: table and drawer", () => {
     expect(screen.queryByText("memory stale1")).toBeNull();
   });
 
+  it("Escape after arrowing to another row returns focus to that row, not the one that opened the drawer", async () => {
+    openHippo(makeRows(4));
+    fireEvent.click(await rowOf("memory m1"));
+    await screen.findByRole("dialog", { name: /Memory m1/ });
+    const grid = screen.getByRole("grid", { name: "Memories" });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo/m/m3"));
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo"));
+    expect(grid).toHaveFocus();
+    expect(grid.getAttribute("aria-activedescendant")).toBe((await rowOf("memory m3")).id);
+  });
+
+  it("refetches the table and shows the new rows when a refresh reports a newer snapshot", async () => {
+    let snap = 1;
+    const first = makeRows(3);
+    const second = [makeRow("m1", { content: "memory m1 edited" }), ...first.slice(1)];
+    const handler: Handler = (url) => pageHandler(snap === 1 ? first : second, () => snap)(url);
+    const { calls } = openHippo(first, { snapshot: () => snap, extra: { [MEMORIES]: handler } });
+    await rowOf("memory m1");
+    const pagesBefore = calls.filter((c) => c.startsWith(`${MEMORIES}?`)).length;
+
+    snap = 2;
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("memory m1 edited")).toBeInTheDocument();
+    expect(calls.filter((c) => c.startsWith(`${MEMORIES}?`)).length).toBeGreaterThan(pagesBefore);
+  });
+
   it("a dead memory link goes back to the project and toasts without Undo", async () => {
     openHippo(makeRows(2), { memoryId: "gone", extra: { "/api/memory/gone": () => json({ error: "not found" }, 404) } });
     await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo"));
@@ -195,6 +227,45 @@ describe("ProjectView: scatter", () => {
     await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
   });
 
+  it("N selected counts the rows before the chip and keeps its value while a page loads", async () => {
+    stubRect();
+    const all = makeRows(7);
+    let releasePinned: (() => void) | null = null;
+    const handler: Handler = (url) => {
+      if (url.searchParams.get("chip") !== "pinned") return json(makePage(all, 0, 100));
+      return new Promise<Response>((resolve) => {
+        releasePinned = () => resolve(json({ ...makePage(all, 0, 100), total: 1, rows: all.slice(0, 1) }));
+      });
+    };
+    const drawn: string[] = [];
+    const saved = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, "getContext");
+    const real: (this: HTMLCanvasElement, id: string) => CanvasRenderingContext2D = saved?.value;
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value(this: HTMLCanvasElement, id: string) {
+        const ctx = real.call(this, id);
+        return Object.assign(Object.create(ctx), { fillText: (text: string) => void drawn.push(text) });
+      },
+    });
+    const lastSelected = () => drawn.filter((t) => t.endsWith(" selected")).at(-1);
+    try {
+      openHippo(all, { extra: { [MEMORIES]: handler } });
+      await screen.findByText("memory m1");
+      fireEvent.click(screen.getByText("Filter by age and strength"));
+      fireEvent.change(screen.getByLabelText("Age from, days"), { target: { value: "5" } });
+      await waitFor(() => expect(lastSelected()).toBe("7 selected"));
+
+      fireEvent.click(screen.getByRole("button", { name: /^Pinned/ }));
+      await waitFor(() => expect(releasePinned).not.toBeNull());
+      expect(lastSelected()).toBe("7 selected");
+      await act(async () => releasePinned?.());
+      await waitFor(() => expect(screen.queryByText("memory m2")).toBeNull());
+      expect(lastSelected()).toBe("7 selected");
+    } finally {
+      if (saved) Object.defineProperty(HTMLCanvasElement.prototype, "getContext", saved);
+    }
+  });
+
   it("describes the scatter for screen readers and binds the number inputs to the filter", async () => {
     stubRect();
     const { calls } = openHippo(makeRows(2));
@@ -208,7 +279,62 @@ describe("ProjectView: scatter", () => {
   });
 });
 
+describe("ProjectView: touch input at desktop width", () => {
+  it("shows the Brush toggle when a coarse pointer is attached, keeping the desktop table", async () => {
+    stubMedia(COARSE_QUERY);
+    openHippo(makeRows(2));
+    expect(await screen.findByRole("button", { name: "Brush" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("grid", { name: "Memories" })).toBeInTheDocument();
+  });
+
+  it("has no Brush toggle with only a mouse", async () => {
+    openHippo(makeRows(2));
+    await screen.findByRole("img", { name: "Memory age against strength" });
+    expect(screen.queryByRole("button", { name: "Brush" })).toBeNull();
+  });
+});
+
 describe("ProjectView: phone", () => {
+  it("recomputes the card height from the root font size when the window resizes", async () => {
+    stubPhone();
+    openHippo(makeRows(2));
+    const list = await screen.findByRole("listbox", { name: "Memories" });
+    const card = async () => (await within(list).findAllByRole("option"))[0];
+    expect((await card()).style.height).toBe("76px");
+
+    document.documentElement.style.fontSize = "20px";
+    try {
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      await waitFor(async () => expect((await card()).style.height).toBe("95px"));
+    } finally {
+      document.documentElement.style.fontSize = "";
+    }
+  });
+
+  it("traps Tab inside the modal sheet and releases the body scroll lock when it closes", async () => {
+    stubPhone();
+    openHippo(makeRows(2));
+    const list = await screen.findByRole("listbox", { name: "Memories" });
+    fireEvent.click((await within(list).findAllByRole("option"))[0]);
+    const sheet = await screen.findByRole("dialog", { name: /Memory m1/ });
+    await within(sheet).findByRole("button", { name: "Forget" });
+    expect(document.body.style.overflow).toBe("hidden");
+
+    const items = Array.from(sheet.querySelectorAll<HTMLElement>("button:not([disabled])"));
+    const [first, last] = [items[0], items[items.length - 1]];
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(window.location.hash).toBe("#/p/p%3Ahippo"));
+    expect(document.body.style.overflow).toBe("");
+  });
+
   it("renders a card list with Sort by, a direction toggle, the Brush toggle and crumbs as the first line", async () => {
     stubPhone();
     openHippo(makeRows(3));

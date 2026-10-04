@@ -7,13 +7,13 @@ import type { Kpi } from "../../types";
 import { OverviewTable, sortProjects } from "./OverviewTable";
 import { deltaLine, rangeSeries } from "./Kpis";
 
-const ramp = Array.from({ length: 90 }, (_, i) => 100 + i);
+const ramp = Array.from({ length: 91 }, (_, i) => 100 + i);
 const total: Kpi = { id: "total", label: "Total memories", value: 189, delta: "server text", series: ramp };
 
 describe("KPI series", () => {
   it("slices the last N days plus today", () => {
-    expect(rangeSeries(ramp, 7)).toEqual(ramp.slice(82));
-    expect(rangeSeries(ramp, 90)).toHaveLength(90);
+    expect(rangeSeries(ramp, 7)).toEqual(ramp.slice(83));
+    expect(rangeSeries(ramp, 90)).toHaveLength(91);
   });
 
   it("returns null for a missing or one-point series", () => {
@@ -24,6 +24,12 @@ describe("KPI series", () => {
   it("computes the total and project deltas from the sliced series", () => {
     expect(deltaLine(total, 30)).toBe("+30 created in the last 30d");
     expect(deltaLine({ ...total, id: "projects" }, 7)).toBe("+7 new in 7d");
+  });
+
+  it("counts the whole 90 day window: the 90d gain is the last point minus the base point", () => {
+    const bumpy = ramp.map((v, i) => v + (i > 60 ? i * 2 : 0));
+    expect(deltaLine({ ...total, series: bumpy }, 90)).toBe(`+${bumpy[90] - bumpy[0]} created in the last 90d`);
+    expect(rangeSeries(bumpy, 90)?.[0]).toBe(bumpy[0]);
   });
 
   it("never shows a negative gain", () => {

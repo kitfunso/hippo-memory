@@ -7,7 +7,7 @@ import { RangeSelect } from "./RangeSelect";
 const SPARK_W = 84;
 const SPARK_H = 30;
 
-/** The slice of a 90-point series that the range control selects, or null when there is nothing to draw. */
+/** The slice of a 91-point series that the range control selects, or null when there is nothing to draw. */
 export function rangeSeries(series: number[] | null, range: number): number[] | null {
   if (!series || series.length < 2) return null;
   return series.slice(Math.max(0, series.length - 1 - range));

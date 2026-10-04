@@ -11,8 +11,8 @@ export function makeRows(n: number): MemoryRow[] {
 }
 
 /** Stubs fetch with the hippo routes, points the hash at the project (or a memory in it) and renders the app. */
-export function openHippo(rows: readonly MemoryRow[], opts: { memoryId?: string; extra?: Record<string, Handler> } = {}) {
-  const routes = hippoRoutes(rows, opts.extra);
+export function openHippo(rows: readonly MemoryRow[], opts: { memoryId?: string; extra?: Record<string, Handler>; snapshot?: () => number } = {}) {
+  const routes = hippoRoutes(rows, opts.extra, opts.snapshot);
   vi.stubGlobal("fetch", routes.stub);
   const suffix = opts.memoryId ? `/m/${opts.memoryId}` : "";
   window.history.replaceState(null, "", `#/p/p%3Ahippo${suffix}`);

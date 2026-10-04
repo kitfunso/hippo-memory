@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { ALL_LAYERS } from "../../api/client";
-import { useIsPhone } from "../../hooks/useMediaQuery";
+import { useHasTouch } from "../../hooks/useMediaQuery";
 import type { ProjectDetail } from "../../types";
 import { BrushFields } from "./BrushFields";
 import { type Brush, densityRgb, scatterSummary } from "./canvas/scatter";
@@ -32,7 +32,7 @@ export function ScatterCard(props: ScatterCardProps) {
   const { detail, layerOn, onLayer, brush, brushRev, onDragBrush, onFieldBrush, selected, openId, onOpen } = props;
   const { summary, scatter } = detail;
   const [brushOn, setBrushOn] = useState(false);
-  const phone = useIsPhone();
+  const touch = useHasTouch();
   const summaryId = useId();
   return (
     <section className="card" aria-labelledby={`${summaryId}-h`}>
@@ -45,7 +45,7 @@ export function ScatterCard(props: ScatterCardProps) {
             {layer} <span className="n">{fmt(summary.layers[layer])}</span>
           </button>
         ))}
-        {phone && (
+        {touch && (
           <button type="button" className="tog" aria-pressed={brushOn} onClick={() => setBrushOn(!brushOn)}>
             Brush
           </button>

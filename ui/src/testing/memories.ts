@@ -35,9 +35,9 @@ export function makePage(all: readonly MemoryRow[], offset: number, limit: numbe
   };
 }
 
-/** A route handler that pages `all` by the request's offset and limit. */
-export function pageHandler(all: readonly MemoryRow[], snapshotId = 1): Handler {
-  return (url) => json(makePage(all, Number(url.searchParams.get("offset") ?? 0), Number(url.searchParams.get("limit") ?? 100), snapshotId));
+/** A route handler that pages `all` by the request's offset and limit; `snapshotId` may move between requests. */
+export function pageHandler(all: readonly MemoryRow[], snapshotId: () => number = () => 1): Handler {
+  return (url) => json(makePage(all, Number(url.searchParams.get("offset") ?? 0), Number(url.searchParams.get("limit") ?? 100), snapshotId()));
 }
 
 /** A drawer detail for a row. */
@@ -79,14 +79,14 @@ export function makePointsDetail(summary: ProjectSummary, points: ScatterPoints[
   return { snapshotId: 1, summary, scatter: { mode: "points", maxAgeDays: 90, points, ids } };
 }
 
-/** The hippo project served from `rows`, with a drawer detail per row; `extra` adds or replaces routes. */
-export function hippoRoutes(rows: readonly MemoryRow[], extra: Record<string, Handler> = {}) {
+/** The hippo project served from `rows`, with a drawer detail per row; `extra` adds or replaces routes and `snapshot` is the id every read answers with. */
+export function hippoRoutes(rows: readonly MemoryRow[], extra: Record<string, Handler> = {}, snapshot: () => number = () => 1) {
   const hippo = makeProject("hippo", { live: rows.length, atRisk: 0 });
-  const details = Object.fromEntries(rows.map((r) => [`/api/memory/${r.id}`, () => json(makeMemory(r.id))] as const));
+  const details = Object.fromEntries(rows.map((r) => [`/api/memory/${r.id}`, () => json(makeMemory(r.id, { snapshotId: snapshot() }))] as const));
   return fetchRouter({
-    "/api/overview": () => json(makeOverview([hippo])),
-    "/api/projects/p%3Ahippo": () => json(makeDetail(hippo)),
-    "/api/projects/p%3Ahippo/memories": pageHandler(rows),
+    "/api/overview": () => json(makeOverview([hippo], { snapshotId: snapshot() })),
+    "/api/projects/p%3Ahippo": () => json(makeDetail(hippo, snapshot())),
+    "/api/projects/p%3Ahippo/memories": pageHandler(rows, snapshot),
     ...details,
     ...extra,
   });

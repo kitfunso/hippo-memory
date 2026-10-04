@@ -41,7 +41,7 @@ export function ProjectView({ projectKey, memoryId }: { projectKey: string; memo
   const detail = useProjectDetail(projectKey);
   const phone = useIsPhone();
   const table = useRef<VTableHandle>(null);
-  const opener = useRef<number | null>(null);
+  const opener = useRef<{ index: number; id: string } | null>(null);
   const [firstChip] = useState<Chip>(() => (intent.current?.key === projectKey ? intent.current.chip : "all"));
   const [chip, setChip] = useState<Chip>(firstChip);
   const [layerOn, setLayerOn] = useState<readonly boolean[]>(() => ALL_LAYERS.map(() => true));
@@ -64,6 +64,11 @@ export function ProjectView({ projectKey, memoryId }: { projectKey: string; memo
     q: q === "" ? undefined : q,
   };
   const pages = useMemoryPages(projectKey, filters, clock);
+
+  // Rows the brush selects, before the chip; the last value stays while a new query loads.
+  const [selected, setSelected] = useState(0);
+  const allCount = pages.counts?.all;
+  if (allCount !== undefined && allCount !== selected) setSelected(allCount);
 
   const summary = detail.data?.summary;
   const name = summary ? projectLabel(summary) : keyLabel(projectKey);
@@ -93,9 +98,13 @@ export function ProjectView({ projectKey, memoryId }: { projectKey: string; memo
   const show = (id: string | null, replace: boolean) => navigate({ view: "health", projectKey, memoryId: id }, { replace });
   const close = useCallback(() => {
     navigate({ view: "health", projectKey, memoryId: null });
-    if (opener.current !== null) table.current?.setActive(opener.current, false);
+    const from = opener.current;
+    if (from !== null) {
+      const slot = pages.rowAt(from.index);
+      if (slot.state === "ready" && slot.row.id === from.id) table.current?.setActive(from.index, false);
+    }
     table.current?.focus();
-  }, [projectKey]);
+  }, [projectKey, pages.rowAt]);
 
   const empty =
     pages.total !== null ? (
@@ -148,7 +157,7 @@ export function ProjectView({ projectKey, memoryId }: { projectKey: string; memo
             brushRev={brushRev}
             onDragBrush={dragBrush}
             onFieldBrush={setBrush}
-            selected={pages.total ?? 0}
+            selected={selected}
             openId={memoryId}
             onOpen={(id) => {
               opener.current = null;
@@ -206,10 +215,11 @@ export function ProjectView({ projectKey, memoryId }: { projectKey: string; memo
             resetKey={`${projectKey}${memoryPageQueryString(filters)}`}
             activeId={memoryId}
             onOpen={(index, id) => {
-              opener.current = index;
+              opener.current = { index, id };
               show(id, false);
             }}
-            onPreview={(_, id) => {
+            onPreview={(index, id) => {
+              opener.current = { index, id };
               if (!phone && drawerIsOpen()) show(id, true);
             }}
             empty={empty}

@@ -1,4 +1,4 @@
-import { PHONE_QUERY } from "../hooks/useMediaQuery";
+import { COARSE_QUERY, PHONE_QUERY } from "../hooks/useMediaQuery";
 import type { Kpi, Overview, ProjectDetail, ProjectSummary } from "../types";
 
 /** Test builders and a path-routed fetch stub for the Health view; not imported by app code. */
@@ -26,7 +26,7 @@ function kpi(id: Kpi["id"], label: string, value: number, series: number[] | nul
   return { id, label, value, delta, series };
 }
 
-const RAMP = Array.from({ length: 90 }, (_, i) => 100 + i);
+const RAMP = Array.from({ length: 91 }, (_, i) => 100 + i);
 
 export function makeOverview(projects: ProjectSummary[], over: Partial<Overview> = {}): Overview {
   const total = projects.reduce((s, p) => s + p.live, 0);
@@ -73,11 +73,16 @@ export function fetchRouter(routes: Record<string, Handler>) {
   return { stub, calls };
 }
 
-/** Makes `matchMedia` report the phone width; remove it again with `Reflect.deleteProperty(window, "matchMedia")`. */
-export function stubPhone(): void {
+/** Makes `matchMedia` match exactly these queries; remove it again with `Reflect.deleteProperty(window, "matchMedia")`. */
+export function stubMedia(...matching: string[]): void {
   window.matchMedia = (query: string) => {
-    const list: Partial<MediaQueryList> = { matches: query === PHONE_QUERY, media: query, addEventListener() {}, removeEventListener() {} };
+    const list: Partial<MediaQueryList> = { matches: matching.includes(query), media: query, addEventListener() {}, removeEventListener() {} };
     // SAFETY: the app reads only matches and the two listener methods.
     return list as MediaQueryList;
   };
+}
+
+/** Makes `matchMedia` report the phone width, which is also a touch screen. */
+export function stubPhone(): void {
+  stubMedia(PHONE_QUERY, COARSE_QUERY);
 }

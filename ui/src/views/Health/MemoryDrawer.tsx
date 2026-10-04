@@ -78,13 +78,19 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
     });
   const panel = usePanelCore<MemoryDetail>(clock, load, `memory:${memoryId}`, open);
   const missing = panel.error !== null && open && dead.current === memoryId;
-  const { notify } = actions;
+  const { notify, bindDrawer, release } = actions;
+  const { accept } = panel;
 
   useEffect(() => {
     if (!missing) return;
     navigate({ view: "health", projectKey, memoryId: null }, { replace: true });
     notify(DEAD_MEMORY_NOTICE);
   }, [missing, projectKey, notify]);
+
+  useEffect(() => {
+    bindDrawer(open && memoryId !== null ? { id: memoryId, accept } : null);
+  }, [open, memoryId, accept, bindDrawer]);
+  useEffect(() => () => bindDrawer(null), [bindDrawer]);
 
   useEffect(() => {
     if (open && !wasOpen.current) title.current?.focus();
@@ -109,6 +115,11 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
   const ov = d ? actions.overlay.get(d.id) : undefined;
   const pinned = d ? (ov?.pinned ?? d.pinned) : false;
   const wrong = d ? d.wrong || ov?.wrong === true : false;
+  const settled = ov?.settled;
+
+  useEffect(() => {
+    if (d && settled !== undefined && d.snapshotId >= settled) release(d.id, d.snapshotId);
+  }, [d, settled, release]);
 
   return (
     <aside ref={sheet} className={open ? "drawer open" : "drawer"} role="dialog" aria-modal={phone && open} aria-labelledby={titleId} aria-hidden={!open} inert={!open}>

@@ -1,5 +1,5 @@
 import { type ReactNode, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { type Controller, type RowOverlay, type ToastState, createController } from "./actionController";
+import { type Controller, type OverlayEntry, type RowOverlay, type ToastState, createController, mergeOverlay } from "./actionController";
 import { useHealth } from "./HealthContext";
 
 /** The controller's methods plus what views read: the row overlay and the toast. */
@@ -25,9 +25,9 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     latest.current = health;
   });
-  const [overlay, setOverlay] = useState<ReadonlyMap<string, RowOverlay>>(() => new Map());
+  const [entries, setEntries] = useState<readonly OverlayEntry[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [ctl] = useState(() => createController({ setOverlay, setToast, health: () => latest.current }));
+  const [ctl] = useState(() => createController({ setEntries, setToast, health: () => latest.current }));
 
   useEffect(() => {
     const onHide = () => ctl.commitPending(true);
@@ -36,15 +36,21 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
       e.preventDefault();
       ctl.undo();
     };
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) ctl.restored();
+    };
     window.addEventListener("pagehide", onHide);
+    window.addEventListener("pageshow", onShow);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("pageshow", onShow);
       window.removeEventListener("keydown", onKey);
       ctl.dispose();
     };
   }, [ctl]);
 
+  const overlay = useMemo(() => mergeOverlay(entries), [entries]);
   const value = useMemo<ActionsValue>(() => ({ ...ctl, overlay, toast }), [ctl, overlay, toast]);
   return <ActionsContext.Provider value={value}>{children}</ActionsContext.Provider>;
 }

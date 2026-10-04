@@ -1,4 +1,4 @@
-import { type ReactNode, useImperativeHandle, useState } from "react";
+import { type ReactNode, useEffect, useImperativeHandle, useState } from "react";
 import { useActions } from "./actions";
 import { LayerMark } from "./LayerMark";
 import type { TableProps } from "./MemoryTable";
@@ -15,10 +15,21 @@ function cardHeight(): number {
   return Math.round(CARD_REM * (root > 0 ? root : FALLBACK_PX));
 }
 
+/** The card height, recomputed on resize because browser text zoom fires it. */
+function useCardHeight(): number {
+  const [height, setHeight] = useState(cardHeight);
+  useEffect(() => {
+    const onResize = () => setHeight(cardHeight());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return height;
+}
+
 /** Phone memory list: one tall card per memory, a "Sort by" select and a direction toggle in place of column headers. */
 export function MemoryCards({ pages, count, sortKey, sortDir, onSort, onToggleDir, resetKey, activeId, onOpen, onPreview, empty, ref }: TableProps) {
   const { overlay } = useActions();
-  const [height] = useState(cardHeight);
+  const height = useCardHeight();
   const t = useVTable({
     rowHeight: height,
     count,

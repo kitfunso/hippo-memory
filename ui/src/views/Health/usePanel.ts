@@ -39,8 +39,8 @@ export interface Panel<T> {
   loading: boolean;
   /** Refetch now, whatever the snapshot says (Retry, visibility refetch). */
   reload: () => void;
-  /** Take a response fetched elsewhere (Refresh). */
-  accept: (data: T) => void;
+  /** Take a response fetched elsewhere (Refresh, an action's answer); false when it is older than data already seen. */
+  accept: (data: T) => boolean;
   /** Wall-clock ms when `data` last arrived, or 0. */
   fetchedAt: number;
 }
@@ -102,9 +102,10 @@ export function usePanelCore<T extends { snapshotId: number }>(
   }, []);
   const accept = useCallback(
     (data: T) => {
-      if (!report(data.snapshotId)) return;
+      if (!report(data.snapshotId)) return false;
       held.current = { key: depsKey, id: data.snapshotId };
       setState({ data, error: null, loading: false, key: depsKey, fetchedAt: Date.now() });
+      return true;
     },
     [report, depsKey],
   );
