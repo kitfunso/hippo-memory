@@ -32,6 +32,7 @@ import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { log } from './log.js';
+import type { DatabaseSyncLike } from './db.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 function logEmbedAllFailure<E>(caller: string, err: E): void {
@@ -69,7 +70,7 @@ export function initGlobal(): void {
 export function promoteToGlobal(
   localRoot: string,
   id: string,
-  opts?: { actor?: string; tenantId?: string },
+  opts?: { actor?: string; tenantId?: string; afterWrite?: (db: DatabaseSyncLike, globalId: string) => void },
 ): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
@@ -102,7 +103,7 @@ export function promoteToGlobal(
     origin_project: entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot))),
   };
 
-  writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
+  writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: opts?.afterWrite });
 
   // Fire-and-forget: embedMemory gates on availability and never rejects.
   void embedMemory(globalRoot, globalEntry);

@@ -1,4 +1,4 @@
-// The thin client rides out a busy-store 503 on remember, the one write that commits nothing before a busy error.
+// The thin client rides out a busy-store 503 on its routed writes, then surfaces it once the ~5 s budget is spent.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -54,9 +54,9 @@ describe('thin client under a busy store', () => {
     expect(elapsed).toBeLessThan(7_000);
   }, 15_000);
 
-  it('forget does not replay a busy 503, since its busy error can follow a committed delete', async () => {
+  it('forget retries a busy 503 too, since a routed write commits nothing before it answers busy', async () => {
     const fake = await startFake(1);
-    await expect(forget(fake.url, undefined, 'm1')).rejects.toMatchObject({ status: 503 });
-    expect(fake.hits()).toBe(1);
-  });
+    await expect(forget(fake.url, undefined, 'm1')).resolves.toEqual({ ok: true, id: 'm1' });
+    expect(fake.hits()).toBe(2);
+  }, 15_000);
 });

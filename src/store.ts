@@ -17,6 +17,7 @@ import {
   isFtsAvailable,
   pruneConsolidationRuns,
   getHippoDbPath,
+  isSqliteBusy,
   type DatabaseSyncLike,
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, HandoffEvidence, HandoffOutcome, isHandoffOutcome } from './handoff.js';
@@ -2022,7 +2023,15 @@ export function deleteEntry(
 ): boolean {
   const db = openStore(hippoRoot);
   try {
-    const result = deleteEntryCore(db, id, opts);
+    db.exec('BEGIN IMMEDIATE');
+    let result: ReturnType<typeof deleteEntryCore>;
+    try {
+      result = deleteEntryCore(db, id, opts);
+      db.exec('COMMIT');
+    } catch (err) {
+      if (db.isTransaction !== false) db.exec('ROLLBACK');
+      throw err;
+    }
     if (!result) return false;
 
     purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
@@ -2695,6 +2704,15 @@ export function updateStats(
     writeStatsMirror(hippoRoot, buildStatsFromDb(db));
   } finally {
     closeHippoDb(db);
+  }
+}
+
+export function updateStatsUnlessBusy(hippoRoot: string, delta: Parameters<typeof updateStats>[1], committed: string): void {
+  try {
+    updateStats(hippoRoot, delta);
+  } catch (err) {
+    if (!isSqliteBusy(err)) throw err;
+    log.warnThenDebug('stats-busy', `${committed}, but the store was busy, so the stats counters were not updated`);
   }
 }
 

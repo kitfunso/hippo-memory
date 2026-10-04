@@ -6,7 +6,7 @@ import { resolveProjectIdentity } from './project-identity.js';
 import { assembleCost, contextCost, drillCost } from './context-render.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, withBusyWait, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, withBusyWait, SERVER_DB_WAIT_MS, STORE_BUSY_MESSAGE, type DatabaseSyncLike } from './db.js';
 import { updateStats } from './store.js';
 import {
   buildSessionKey,
@@ -340,8 +340,6 @@ function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string, s
   if (status >= 500) log.error(line, { requestId, status, ...errorFields(err) });
   else log.info(line, { requestId, status });
 }
-
-const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
 
 /** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
 function replyFor<E>(err: E): { status: number; message: string } {

@@ -28,6 +28,11 @@ function isStoreBusy(res: Response): boolean {
   return res.status === 503 && res.headers.has('retry-after');
 }
 
+/** Replaying is safe because each routed write commits in one transaction and anything after it is best-effort, so a busy 503 means nothing landed. */
+function sendWrite(url: string, init: RequestInit): Promise<Response> {
+  return fetchWithRetry(url, init, { timeoutMs: SERVER_TIMEOUT_MS, attempts: STORE_BUSY_ATTEMPTS, retryOn: isStoreBusy });
+}
+
 function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   const headers: Record<string, string> = {};
   if (withBody) headers['content-type'] = 'application/json';
@@ -73,13 +78,11 @@ export async function remember(
   apiKey: string | undefined,
   opts: RememberOpts,
 ): Promise<RememberResult> {
-  // Only remember retries: api.remember is one SAVEPOINT with no later write, while forget, archive and promote
-  // write again after their commit, so their busy 503 can follow a committed change and a replay would repeat it.
-  const res = await fetchWithRetry(
-    `${serverUrl}/v1/memories`,
-    { method: 'POST', headers: buildHeaders(apiKey, true), body: JSON.stringify(opts) },
-    { timeoutMs: SERVER_TIMEOUT_MS, attempts: STORE_BUSY_ATTEMPTS, retryOn: isStoreBusy },
-  );
+  const res = await sendWrite(`${serverUrl}/v1/memories`, {
+    method: 'POST',
+    headers: buildHeaders(apiKey, true),
+    body: JSON.stringify(opts),
+  });
   if (!res.ok) await throwForStatus(res);
   const result: RememberResult = await res.json();
   return result;
@@ -90,10 +93,9 @@ export async function forget(
   apiKey: string | undefined,
   id: string,
 ): Promise<{ ok: true; id: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: buildHeaders(apiKey, false),
-    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
   });
   if (!res.ok) await throwForStatus(res);
   const result: { ok: true; id: string } = await res.json();
@@ -105,10 +107,9 @@ export async function promote(
   apiKey: string | undefined,
   id: string,
 ): Promise<{ ok: true; sourceId: string; globalId: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/promote`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/promote`, {
     method: 'POST',
     headers: buildHeaders(apiKey, false),
-    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
   });
   if (!res.ok) await throwForStatus(res);
   const result: { ok: true; sourceId: string; globalId: string } = await res.json();
@@ -121,10 +122,9 @@ export async function archiveRaw(
   id: string,
   reason: string,
 ): Promise<{ ok: true; archivedAt: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/archive`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/archive`, {
     method: 'POST',
     headers: buildHeaders(apiKey, true),
-    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) await throwForStatus(res);

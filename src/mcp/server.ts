@@ -57,7 +57,7 @@ const sessionRecallHistoryMcp = new Map<string, RingBuffer>();
 export function __resetSessionRecallHistoryMcp(): void {
   sessionRecallHistoryMcp.clear();
 }
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, STORE_BUSY_MESSAGE } from '../db.js';
 import { recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs, type ToolInputSchema } from './tool-args.js';
@@ -96,6 +96,7 @@ interface McpResponse {
 
 /** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered generically. */
 export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = randomUUID()): McpResponse {
+  if (isSqliteBusy(err)) return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_BUSY_MESSAGE } };
   const { status, message } = mapApiError(err);
   if (status !== 500) return { jsonrpc: '2.0', id, error: { code: -32603, message } };
   log.error(`mcp request failed: ${err instanceof Error ? err.message : String(err)}`, { requestId });

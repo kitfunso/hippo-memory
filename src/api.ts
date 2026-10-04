@@ -7,7 +7,7 @@
  * in exactly one place.
  */
 
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, type DatabaseSyncLike } from './db.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './api-errors.js';
 export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './api-errors.js';
 import {
@@ -42,6 +42,7 @@ import {
   type AmbientRecallRequest,
   type AmbientLoadResult,
   updateStats,
+  updateStatsUnlessBusy,
   isInitialized,
   auditRejectionRefusal,
   type TaskSnapshot,
@@ -1972,7 +1973,7 @@ export function forget(ctx: Context, id: string): ForgetResult {
   // Counted here, not in the CLI: both callers of this function (cmdForget and
   // the HTTP route) are the two paths of one user command, so neither can miss
   // it. api.remember cannot take the same move; see the server route.
-  updateStats(ctx.hippoRoot, { forgotten: 1 });
+  updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
   return { ok: true, id };
 }
 
@@ -2114,24 +2115,18 @@ export function promote(
     closeHippoDb(ownerDb);
   }
 
-  // promoteToGlobal threads ctx.actor.subject into the writeEntry call on the global
-  // db, which emits a 'remember' audit row. We then add the user-facing
-  // 'promote' event on the global db so the audit trail keeps the intent
-  // distinct from the underlying upsert.
-  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, { actor: ctx.actor.subject, tenantId: ctx.tenantId });
-
-  const db = openHippoDb(getGlobalRoot());
-  try {
-    appendAuditEvent(db, {
+  // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole promote.
+  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, {
+    actor: ctx.actor.subject,
+    tenantId: ctx.tenantId,
+    afterWrite: (db, globalId) => appendAuditEvent(db, {
       tenantId: ctx.tenantId,
       actor: ctx.actor.subject,
       op: 'promote',
-      targetId: globalEntry.id,
+      targetId: globalId,
       metadata: { sourceId: id },
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+    }),
+  });
 
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
@@ -2323,17 +2318,22 @@ export function archiveRaw(
     if (mirrorOk) {
       // Stamp mirror_cleaned_at now so the next openHippoDb reaper SELECT
       // returns empty for this row. NULL stays untouched on failure -> retry.
-      db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-        new Date().toISOString(),
-        id,
-      );
+      try {
+        db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+          new Date().toISOString(),
+          id,
+        );
+      } catch (err) {
+        if (!isSqliteBusy(err)) throw err;
+        log.warnThenDebug('archive-mirror-stamp-busy', `archived ${id}; the store was busy, so the mirror reaper will re-check it on the next open`);
+      }
     }
   } finally {
     closeHippoDb(db);
   }
   // Counted here rather than in the CLI: the HTTP archive route calls this too,
   // so a routed archive would otherwise never reach the forgotten counter.
-  updateStats(ctx.hippoRoot, { forgotten: 1 });
+  updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond
   // of the actual write, fine for a server response shape.
@@ -3525,7 +3525,7 @@ export function forgetDormant(ctx: Context, id: string): void {
     closeHippoDb(db);
   }
   // Counted like every other permanent removal (forget, archiveRaw).
-  updateStats(ctx.hippoRoot, { forgotten: 1 });
+  updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
 }
 
 /** Whether the tenant holds a dormant memory with this id (for "not found" hints). */
