@@ -233,7 +233,6 @@ import {
   runViaServerIfAvailable,
   fmt,
   printAgentImport,
-  hippoBlock,
   installCodexMemoryHooks,
   setupDailySchedule,
   type CommandContext,
@@ -249,12 +248,11 @@ import {
   hookStoreRoot,
   withLedgerDb,
   learnFromRepo,
-  HOOK_MARKERS,
-  HOOKS,
   resolveAuthRoot,
   runHookWithStores,
   inPilotHoldout,
 } from './cli/shared.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock } from './cli/hook-blocks.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
