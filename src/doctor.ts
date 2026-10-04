@@ -16,7 +16,7 @@ import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.
 import { isEmbeddingAvailable } from './local-embedding.js';
 import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
 import type { JsonValue } from './working-memory.js';
-import { planUserGlobalRepair } from './project-merge.js';
+import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
@@ -167,16 +167,20 @@ function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
-/** Merged rows older sleep saved as user-global, counted by the repair's own dry run so a truly user-global merge never warns. */
+/** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
 function projectsCheck(globalRoot: string): DoctorCheck {
   let db: DatabaseSyncLike | null = null;
   try {
     db = openHippoDbReadOnly(globalRoot);
-    const r = planUserGlobalRepair(db, resolveTenantId({}));
-    const n = r.toProject.length + r.setAside.length;
-    return n === 0
-      ? { id: 'projects', status: 'pass', detail: 'no merged memories in the global store are tagged user-global by mistake' }
-      : { id: 'projects', status: 'warn', detail: `${n} merged memories in the global store are tagged user-global, so every project's context can show them`, fix: 'hippo projects repair --global   (dry run; add --apply to write)' };
+    const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
+    const found = [
+      r.copies.length > 0 ? `${r.copies.length} imported notes copied under a project name` : '',
+      r.folds.length > 0 ? `${r.folds.length} old project names that now resolve to another project` : '',
+      r.toProject.length + r.setAside.length > 0 ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global` : '',
+    ].filter((s) => s !== '');
+    return found.length === 0
+      ? { id: 'projects', status: 'pass', detail: 'no duplicate or out-of-date project tags in the global store' }
+      : { id: 'projects', status: 'warn', detail: `global store: ${found.join('; ')}`, fix: 'hippo projects repair --global   (dry run; add --apply to write)' };
   } catch (err) {
     return { id: 'projects', status: 'info', detail: `project tags not checked (${err instanceof Error ? err.message : String(err)})` };
   } finally {

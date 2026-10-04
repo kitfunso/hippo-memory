@@ -544,7 +544,7 @@ database to `.hippo/backups/` first and logs every id it touched in the audit lo
 ```bash
 hippo projects --global                        # names, counts, live worktrees of this repo
 hippo projects merge hippo-wt-fix hippo --global   # fold an old worktree name into its repo
-hippo projects repair --global                 # re-tag user-global merges by their parents
+hippo projects repair --global                 # set aside note copies, fold old worktree names, re-tag merges
 ```
 
 **See what memory costs in tokens.** Every block of memory text hippo hands an agent (the

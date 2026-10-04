@@ -1,12 +1,13 @@
-// `hippo projects`: list the project names a store holds, fold one into another, and re-tag sleep's old user-global merges.
+// `hippo projects`: list the project names a store holds, fold one into another, and repair old tags in one reversible pass.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setAsideRow } from './agent-memories/apply.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS } from './agent-memories/tools.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
 import { calculateStrength, type MemoryEntry } from './memory.js';
+import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { removeEntryMirrors } from './store/mirrors.js';
 import { deleteEntryRowInTx, writeEntryMirrors } from './store/entry-writes.js';
 import { selectAllEntries } from './store/entry-reads.js';
@@ -32,7 +33,16 @@ export interface MergeResult {
   readonly backup: string | null;
 }
 
+export interface ProjectFold {
+  readonly from: string;
+  readonly into: string;
+}
+
 export interface RepairResult {
+  /** Imported notes under a project name whose text a user-global import already holds, so every project sees it: set aside. */
+  readonly copies: readonly string[];
+  /** Names whose recorded session folders all resolve to one other project today, folded as `merge` would. */
+  readonly folds: readonly ProjectFold[];
   readonly toProject: ReadonlyArray<{ readonly id: string; readonly origin: string }>;
   /** Parents in two projects: the merged text blends them, so it goes dormant and the parents re-merge per project. */
   readonly setAside: readonly string[];
@@ -111,37 +121,68 @@ export function mergeProjects(
   const { tenantId, from, into, dryRun } = opts;
   const backup = dryRun ? null : backupStore(db, hippoRoot, 'before-merge');
   const result = inTransaction(db, dryRun, () => {
-    const rows = selectAllEntries(db, tenantId).filter((e) => e.origin_project === from);
-    const setAside: string[] = [];
-    for (const row of rows) {
-      const tag = toolTag(row.source);
-      if (!isImport(row) || row.superseded_by || row.kind === 'raw' || tag === null) continue;
-      if (setAsideRow(db, tag, { ...row, origin_project: into }, 'project-merge').kind === 'dormant') setAside.push(row.id);
-    }
-    const gone = new Set(setAside);
-    const restamped = rows.filter((e) => !gone.has(e.id)).map((e) => e.id);
-    db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`)
-      .run(into, tenantId, from);
-    const dormantRestamped: string[] = [];
-    for (const snap of listDormantSnapshots(db, tenantId)) {
-      if (snap.entry.origin_project !== from || gone.has(snap.entry.id)) continue;
-      replaceDormantEntry(db, tenantId, snap.entry.id, { ...snap.entry, origin_project: into });
-      dormantRestamped.push(snap.entry.id);
-    }
-    const compactions = Number(db.prepare(`UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`)
-      .run(into, tenantId, from).changes ?? 0);
-    appendAuditEvent(db, {
-      tenantId, actor: ACTOR, op: 'project_merge',
-      metadata: { from, into, backup, setAside, restamped, dormantRestamped, compactions },
-    });
-    return { from, into, setAside, restamped, dormantRestamped, compactions, backup };
+    const folded = foldInTx(db, tenantId, from, into);
+    appendAuditEvent(db, { tenantId, actor: ACTOR, op: 'project_merge', metadata: { from, into, backup, ...folded } });
+    return { from, into, ...folded, backup };
   });
   if (!dryRun) refreshMirrors(db, hippoRoot, tenantId, result.restamped, result.setAside);
   return result;
 }
 
-/** Reads only, so doctor can call it on a read-only handle: what the repair would do to each user-global merged row. */
-export function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string): Omit<RepairResult, 'backup'> {
+function foldInTx(db: DatabaseSyncLike, tenantId: string, from: string, into: string): Omit<MergeResult, 'from' | 'into' | 'backup'> {
+  const rows = selectAllEntries(db, tenantId).filter((e) => e.origin_project === from);
+  const setAside: string[] = [];
+  for (const row of rows) {
+    const tag = toolTag(row.source);
+    if (!isImport(row) || row.superseded_by || row.kind === 'raw' || tag === null) continue;
+    if (setAsideRow(db, tag, { ...row, origin_project: into }, 'project-merge').kind === 'dormant') setAside.push(row.id);
+  }
+  const gone = new Set(setAside);
+  const restamped = rows.filter((e) => !gone.has(e.id)).map((e) => e.id);
+  db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`)
+    .run(into, tenantId, from);
+  const dormantRestamped: string[] = [];
+  for (const snap of listDormantSnapshots(db, tenantId)) {
+    if (snap.entry.origin_project !== from || gone.has(snap.entry.id)) continue;
+    replaceDormantEntry(db, tenantId, snap.entry.id, { ...snap.entry, origin_project: into });
+    dormantRestamped.push(snap.entry.id);
+  }
+  const compactions = Number(db.prepare(`UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`)
+    .run(into, tenantId, from).changes ?? 0);
+  return { setAside, restamped, dormantRestamped, compactions };
+}
+
+/** Live imports under a project name whose exact text a user-global import holds: a session folder's notes stamped with the folder it ended in. */
+function importCopies(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
+  const live = selectAllEntries(db, tenantId).filter((e) => !e.superseded_by && isImport(e));
+  const userGlobal = new Set(live.filter((e) => e.origin_project === '').map((e) => e.content));
+  return live.filter((e) => e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null && userGlobal.has(e.content));
+}
+
+/** Global store only, where a compaction's name came from its cwd: a name whose every cwd still on disk resolves to one other project today. */
+function planFolds(db: DatabaseSyncLike, tenantId: string): ProjectFold[] {
+  // SAFETY: the SELECT names the two columns of the row type.
+  const rows = db.prepare(`SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' AND cwd IS NOT NULL`)
+    .all(tenantId) as Array<{ origin: string; cwd: string }>;
+  const today = new Map<string, Set<string>>();
+  for (const { origin, cwd } of rows) {
+    if (fs.existsSync(cwd)) today.set(origin, (today.get(origin) ?? new Set<string>()).add(deriveOriginProject(cwd)));
+  }
+  // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
+  const chosen = new Set(queryAuditEvents(db, { tenantId, op: 'project_merge', limit: 10000 }).map((e) => e.metadata.into));
+  return [...today].flatMap(([from, names]) => {
+    const [into] = names;
+    return names.size === 1 && into !== '' && into !== from && !chosen.has(from) ? [{ from, into }] : [];
+  });
+}
+
+/** Reads only, so doctor can call it on a read-only handle; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */
+export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): Omit<RepairResult, 'backup'> {
+  const folds = isGlobalStoreRoot(hippoRoot) ? planFolds(db, tenantId) : [];
+  return { copies: importCopies(db, tenantId).map((e) => e.id), folds, ...planUserGlobalRepair(db, tenantId) };
+}
+
+function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
   const all = selectAllEntries(db, tenantId);
   const origins = new Map<string, string | null>(listDormantSnapshots(db, tenantId).map((s) => [s.entry.id, s.entry.origin_project ?? null]));
   for (const e of all) origins.set(e.id, e.origin_project ?? null);
@@ -160,14 +201,18 @@ export function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string): Om
   return { toProject, setAside, untraced };
 }
 
-/** Re-tags sleep's merged rows saved as user-global before the fix, by the projects of their parents. */
-export function repairUserGlobalMerges(
+/** Sets aside the copies, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges by their parents; a dry run rolls back. */
+export function repairProjects(
   db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; dryRun: boolean },
 ): RepairResult {
   const { tenantId, dryRun } = opts;
-  if (dryRun) return { ...planUserGlobalRepair(db, tenantId), backup: null };
-  const backup = backupStore(db, hippoRoot, 'before-repair');
-  const result = inTransaction(db, false, () => {
+  const backup = dryRun ? null : backupStore(db, hippoRoot, 'before-repair');
+  const { result, rewrite, purge } = inTransaction(db, dryRun, () => {
+    const copies = importCopies(db, tenantId)
+      .filter((row) => setAsideRow(db, toolTag(row.source) ?? '', row, 'project-repair').kind === 'dormant')
+      .map((row) => row.id);
+    const folds = isGlobalStoreRoot(hippoRoot) ? planFolds(db, tenantId) : [];
+    const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
     const plan = planUserGlobalRepair(db, tenantId);
     const stamp = db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`);
     for (const { id, origin } of plan.toProject) stamp.run(origin, tenantId, id);
@@ -177,10 +222,14 @@ export function repairUserGlobalMerges(
       insertDormantRow(db, { entry: row, strength: calculateStrength(row, now), reason: 'project-repair', dormantAt: now.toISOString() });
       deleteEntryRowInTx(db, row, ACTOR);
     }
-    appendAuditEvent(db, { tenantId, actor: ACTOR, op: 'project_repair', metadata: { backup, ...plan } });
-    return { ...plan, backup };
+    appendAuditEvent(db, { tenantId, actor: ACTOR, op: 'project_repair', metadata: { backup, copies, folds, folded, ...plan } });
+    return {
+      result: { copies, folds, ...plan, backup },
+      rewrite: [...plan.toProject.map((r) => r.id), ...folded.flatMap((f) => f.restamped)],
+      purge: [...copies, ...plan.setAside, ...folded.flatMap((f) => f.setAside)],
+    };
   });
-  refreshMirrors(db, hippoRoot, tenantId, result.toProject.map((r) => r.id), result.setAside);
+  if (!dryRun) refreshMirrors(db, hippoRoot, tenantId, rewrite, purge);
   return result;
 }
 

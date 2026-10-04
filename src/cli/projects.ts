@@ -1,9 +1,9 @@
-// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo, repair sleep's user-global merges.
+// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo, repair old tags in one pass.
 
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { closeHippoDb, openHippoDb } from '../db.js';
-import { listProjects, mergeProjects, repairUserGlobalMerges, type ProjectSummary } from '../project-merge.js';
+import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../project-merge.js';
 import { resolveTenantId } from '../tenant.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
@@ -70,13 +70,15 @@ export function cmdProjects(hippoRoot: string, args: string[], flags: Flags): vo
       return;
     }
     if (sub === 'repair') {
-      const r = repairUserGlobalMerges(db, root, { tenantId, dryRun: !apply });
+      const r = repairProjects(db, root, { tenantId, dryRun: !apply });
       if (flags['json']) {
         console.log(JSON.stringify(r, null, 2));
         return;
       }
-      console.log(`${apply ? 'Repaired' : 'Dry run: would repair'} sleep's user-global merged rows:`);
-      console.log(`  ${r.toProject.length} re-tagged to their parents' project`);
+      console.log(`${apply ? 'Repaired' : 'Dry run: would repair'} ${root}:`);
+      console.log(`  ${count(r.copies.length, 'imported note copy', 'imported note copies')} set aside (the user-global copy stays, shown in every project)`);
+      for (const f of r.folds) console.log(`  ${f.from} folded into ${f.into} (its sessions' folders resolve there now)`);
+      console.log(`  sleep's user-global merged rows: ${r.toProject.length} re-tagged to their parents' project`);
       console.log(`  ${r.setAside.length} set aside (parents in two projects; sleep re-merges them per project)`);
       console.log(`  ${r.untraced.length} left as they are (no parent left to show which project; check them with hippo inspect <id>)`);
       console.log(apply ? `Backup: ${r.backup}\nEvery id is in the audit log: hippo audit list --op project_repair` : 'Nothing written. Add --apply to run it.');

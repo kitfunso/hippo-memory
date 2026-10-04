@@ -13,7 +13,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
 import { startCompaction } from '../src/compaction-record.js';
-import { repairUserGlobalMerges } from '../src/project-merge.js';
+import { repairProjects } from '../src/project-merge.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
 
 function sha256(file: string): string {
@@ -211,7 +211,7 @@ describe('hippo doctor', () => {
 
     const db = openHippoDb(global);
     try {
-      repairUserGlobalMerges(db, global, { tenantId: 'default', dryRun: false });
+      repairProjects(db, global, { tenantId: 'default', dryRun: false });
     } finally {
       closeHippoDb(db);
     }

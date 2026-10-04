@@ -1,7 +1,7 @@
-/** `hippo projects merge` and `repair`: fold an old worktree name into its repo, and re-tag sleep's user-global merges, reversibly. */
+/** `hippo projects` merge and repair: fold an old worktree name into its repo, set aside copies, re-tag sleep's user-global merges, reversibly. */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -11,7 +11,7 @@ import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { listDormantSnapshots } from '../src/dormant.js';
-import { listProjects, mergeProjects, repairUserGlobalMerges } from '../src/project-merge.js';
+import { listProjects, mergeProjects, repairProjects } from '../src/project-merge.js';
 
 let home: string;
 let db: DatabaseSyncLike;
@@ -110,10 +110,10 @@ describe('hippo projects repair', () => {
     const global = merged([g1.id]);
     open();
 
-    expect(repairUserGlobalMerges(db, home, { tenantId: T, dryRun: true }).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
+    expect(repairProjects(db, home, { tenantId: T, dryRun: true }).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
     expect(byId().get(one.id)!.origin_project).toBe('');
 
-    const r = repairUserGlobalMerges(db, home, { tenantId: T, dryRun: false });
+    const r = repairProjects(db, home, { tenantId: T, dryRun: false });
     const rows = byId();
     expect(rows.get(one.id)!.origin_project).toBe('proj-b');
     expect(rows.has(two.id)).toBe(false);
@@ -123,6 +123,61 @@ describe('hippo projects repair', () => {
     expect(rows.get(global.id)!.origin_project).toBe('');
     expect(mirror(one.id)).toContain('origin_project: proj-b');
     expect(mirror(two.id)).toBeNull();
+  });
+
+  it('sets aside a project-tagged import whose text a user-global import holds, and nothing else', () => {
+    note('the home folder note every session can see', '');
+    const copy = note('the home folder note every session can see', 'repo-wt-a');
+    const own = note('a note only this worktree imported', 'repo-wt-a');
+    const saved = row('the home folder note every session can see', 'repo-wt-a');
+    open();
+
+    expect(repairProjects(db, home, { tenantId: T, dryRun: true }).copies).toEqual([copy.id]);
+    expect(byId().has(copy.id)).toBe(true);
+
+    const r = repairProjects(db, home, { tenantId: T, dryRun: false });
+    const rows = byId();
+    expect(r.copies).toEqual([copy.id]);
+    expect([rows.has(copy.id), rows.has(own.id), rows.has(saved.id)]).toEqual([false, true, true]);
+    expect(listDormantSnapshots(db, T).map((s) => s.entry.id)).toEqual([copy.id]);
+    expect(mirror(copy.id)).toBeNull();
+  });
+
+  it('in the global store, folds a name whose every recorded folder still on disk resolves to one other project', () => {
+    const saved = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = home;
+    try {
+      const repo = join(home, 'work', 'repo');
+      mkdirSync(join(repo, '.git'), { recursive: true });
+      const lesson = row('a lesson saved while the folder had its old name', 'old-name');
+      const kept = row('a lesson under a name with no folder left', 'gone-name');
+      open();
+      const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
+      compaction.run(T, 'c1', 'old-name', repo, new Date().toISOString());
+      compaction.run(T, 'c2', 'old-name', join(home, 'removed'), new Date().toISOString());
+      compaction.run(T, 'c3', 'gone-name', join(home, 'removed'), new Date().toISOString());
+      compaction.run(T, 'c4', 'repo', repo, new Date().toISOString());
+      compaction.run(T, 'c5', 'hand-name', repo, new Date().toISOString());
+      mergeProjects(db, home, { tenantId: T, from: 'repo-wt-b', into: 'hand-name', dryRun: false });
+
+      const r = repairProjects(db, home, { tenantId: T, dryRun: false });
+      expect(r.folds).toEqual([{ from: 'old-name', into: 'repo' }]);
+      expect(byId().get(lesson.id)!.origin_project).toBe('repo');
+      expect(byId().get(kept.id)!.origin_project).toBe('gone-name');
+      expect(mirror(lesson.id)).toContain('origin_project: repo');
+    } finally {
+      if (saved === undefined) delete process.env.HIPPO_HOME;
+      else process.env.HIPPO_HOME = saved;
+    }
+  });
+
+  it('folds nothing in a project store, whose names never came from a cwd', () => {
+    const repo = join(home, 'work', 'repo');
+    mkdirSync(join(repo, '.git'), { recursive: true });
+    open();
+    db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'old-name', 'auto', ?, ?)`)
+      .run(T, repo, new Date().toISOString());
+    expect(repairProjects(db, home, { tenantId: T, dryRun: true }).folds).toEqual([]);
   });
 });
 
