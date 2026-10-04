@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, deleteEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/embeddings.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, topVectorMatches } from '../src/vector-store.js';
@@ -48,8 +48,8 @@ const vectorRows = (): Array<{ memory_id: string; model: string; dim: number }> 
 
 describe('embeddings.json import at schema v52', () => {
   it('moves every usable vector into the table, keeps the file as a backup, and a second open changes nothing', () => {
-    const a = createMemory('alpha note', { tenantId: 'default' });
-    const b = createMemory('beta note', { tenantId: 'default' });
+    const a = createMemory('alpha note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const b = createMemory('beta note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, a);
     writeEntry(root, b);
     downgradeToV51();
@@ -69,7 +69,7 @@ describe('embeddings.json import at schema v52', () => {
   });
 
   it('a file written later by an older binary imports on the next open', () => {
-    const a = createMemory('alpha note', { tenantId: 'default' });
+    const a = createMemory('alpha note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, a);
     fs.writeFileSync(path.join(root, 'embeddings.json'), JSON.stringify({ [a.id]: [0, 1] }), 'utf8');
 
@@ -80,8 +80,8 @@ describe('embeddings.json import at schema v52', () => {
 
 describe('memory_vectors upkeep', () => {
   it('deleting a memory drops its vector', () => {
-    const a = createMemory('alpha note', { tenantId: 'default' });
-    const b = createMemory('beta note', { tenantId: 'default' });
+    const a = createMemory('alpha note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const b = createMemory('beta note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, a);
     writeEntry(root, b);
     saveEmbeddingIndex(root, { [a.id]: [1, 0], [b.id]: [0, 1] });
@@ -91,7 +91,7 @@ describe('memory_vectors upkeep', () => {
   });
 
   it('pruning removes only vectors whose memory is gone', () => {
-    const a = createMemory('alpha note', { tenantId: 'default' });
+    const a = createMemory('alpha note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, a);
     saveEmbeddingIndex(root, { [a.id]: [1, 0], mem_gone: [0, 1] });
 
@@ -107,7 +107,7 @@ describe('memory_vectors upkeep', () => {
   });
 
   it('the nearest-vector scan breaks ties by id and returns nothing for a zero query', () => {
-    const rows = ['c', 'a', 'b'].map((t) => createMemory(`${t} note`, { tenantId: 'default' }));
+    const rows = ['c', 'a', 'b'].map((t) => createMemory(`${t} note`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     for (const r of rows) writeEntry(root, r);
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r) => [r.id, [1, 0]])));
     const ids = rows.map((r) => r.id).sort();

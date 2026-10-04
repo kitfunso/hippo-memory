@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, batchWriteAndDelete, loadVectorCandidateEntries, recallScopeFilter } from '../src/store.js';
-import { createMemory, type MemoryEntry, type CreateMemoryOptions } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, type CreateMemoryOptions } from '../src/memory.js';
 import { saveEmbeddingIndex } from '../src/embeddings.js';
 
 const QUERY = [1, 0, 0];
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 function seed(rows: ReadonlyArray<{ content: string; vector: number[]; opts?: Partial<CreateMemoryOptions>; supersededBy?: string }>): MemoryEntry[] {
-  const entries = rows.map((r) => ({ ...createMemory(r.content, { tenantId: 'default', ...r.opts }), superseded_by: r.supersededBy ?? null }));
+  const entries = rows.map((r) => ({ ...createMemory(r.content, { tenantId: 'default', ...r.opts, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), superseded_by: r.supersededBy ?? null }));
   batchWriteAndDelete(root, entries, []);
   saveEmbeddingIndex(root, Object.fromEntries(entries.map((e, i) => [e.id, rows[i]!.vector])));
   return entries;

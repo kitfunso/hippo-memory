@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, batchWriteAndDelete } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { searchBothHybrid } from '../src/shared.js';
@@ -37,7 +37,7 @@ describe('hybrid recall at 10k rows', () => {
     initStore(home);
     initStore(global);
     const entries = Array.from({ length: ROWS }, (_, i) =>
-      createMemory(`note ${i} about ${i % 50 === 0 ? 'deploy pipeline' : 'topic'} ${i % 97}`, { tenantId: 'default' }));
+      createMemory(`note ${i} about ${i % 50 === 0 ? 'deploy pipeline' : 'topic'} ${i % 97}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     batchWriteAndDelete(home, entries, []);
     saveEmbeddingIndex(home, Object.fromEntries(entries.map((e, i) => [e.id, vector(i + 1)])));
     process.env.OPENAI_API_KEY = 'sk-test';
