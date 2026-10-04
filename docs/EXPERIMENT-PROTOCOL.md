@@ -3088,3 +3088,60 @@ Jev presence is closed as an abstain cut on this evidence. It stays on record as
 Jev score beat the best free score on something other than ranking. The pinned rule applies: another run on
 this query set is a run of the same kind and is not justified. Reopening needs a new input (the clean
 no-answer set) and Keith's yes on the spend.
+
+---
+
+# LANE 22 PRE-REGISTRATION (ROADMAP CLF4): does free CLEF rank like the paid reranker? Declared 2026-10-04, before any scored call
+
+## Why this is a new input, not a rerun
+
+Lanes 15 and 21 closed what Jev can do on this query set. CLEF (`@cf/cloudflare/clef-flash`, shipped as
+`--reranker clef-flash` in 1.59.0) is a different model reached through a different transport, and it costs
+nothing inside the Workers AI free allocation. The question is new: does a free model reproduce the ranking
+win that only a paid model has shown here. One shape check ran before this was written: one sizing call on
+one query (5,962 input tokens, 40 of 40 answers, 39 distinct scores). It decided the split below and was
+not scored.
+
+## Design
+
+- `scripts/rerank-3arm-ab.mjs` with `RERANK_ARM=clef-flash`: arms base, repaired cross-encoder and
+  clef-flash on one shared candidate set per query, depth 40, NOW pinned to `2026-09-18T14:31:52.073Z`.
+- Corpus: a frozen copy of `~/.hippo` taken 2026-10-04T07:25Z (`VACUUM INTO` plus `embeddings.json` and
+  `config.json`), 6,826 entries, passed as `RERANK_HIPPO_ROOT`. The live store is never read.
+- Queries: the 303 paraphrase queries, 283 usable on this corpus (20 targets gone).
+- Spend: 0 USD. clef-flash costs 8,182 neurons per million input tokens and the free allocation is 10,000
+  neurons a day. The 283 requests measure 8.4M characters, about 1.67M tokens or 13,700 neurons, so the run
+  is split over two UTC days: `RERANK_MAX_CALLS=142` on day 1, the rest on day 2, answers cached per query in
+  `RERANK_CACHE_DIR`. A fallback is never cached. No verdict prints until all 283 are scored.
+- Transport: Workers AI with the wrangler OAuth login, which carries `ai:write`.
+
+## Metrics and decision rule
+
+Paired bootstrap over queries, 2,000 draws, seed 4242, one contrast for the verdict at alpha 0.0125
+(98.75% interval), as in Lane 15.
+
+- **Primary, the verdict:** clef-flash minus cross-encoder on R@1.
+  - CLEF RANKS: the interval excludes zero upward.
+  - CROSS-ENCODER RANKS: the interval excludes zero downward.
+  - TIE: the interval holds zero; a tie goes to the local model.
+- **Declared secondaries, reported, never the verdict:** clef-flash minus cross-encoder on recall@budget
+  (the product metric, Lane 15) and on memories needed to reach a 60% hit rate (the Amendment 4 depth
+  read, computed from the saved ranks).
+- **Void:** any query that falls back, or a degenerate arm, voids the run (the script's own checks).
+- Jev is not re-run (paid). Lane 15's +0.2033 and Lane 21's Jev R@1 0.5886 were measured on stores of under
+  2,100 entries, so they are context only and cannot enter a contrast.
+
+## Predictions, declared now
+
+1. clef-flash beats the cross-encoder on R@1, with a point delta between +0.10 and +0.25.
+2. recall@budget ties (interval holds zero), as it did for Jev.
+
+## What a verdict does and does not do
+
+No default changes on this lane. CLEF RANKS earns a task-level lane (does the answer reach the model), the
+ROADMAP's adoption bar; TIE or CROSS-ENCODER RANKS closes clef-flash as a ranking upgrade on this store.
+
+## Trial ledger
+
+One new verdict contrast on a query set already used by Lanes 9a, 12, 13, 15, 19 and 21. N = 21. Not
+independent of those lanes.
