@@ -14,7 +14,7 @@ import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, seale
 
 const win = process.platform === 'win32';
 const ARM_WORD = /\b(A0|A1|A2|A4|A5|X1|X2|X3|X4)\b/;
-interface KeyPair { file: string; pairId: string; key: string; arm: string; verdict: string; stratum: string }
+interface KeyPair { file: string; pairId: string; key: string; lessonId: string; arm: string; verdict: string; stratum: string }
 const cells = (arm: string, verdicts: Verdict[], from = 0): Cell[] => verdicts.map((first, i) => ({ arm, position: from + i, first }));
 const many = (v: Verdict, k: number): Verdict[] => Array.from({ length: k }, () => v);
 const draw = (out: string, tasks: string, extra: string[] = []) => cli(['reader', '--out', out, '--tasks', tasks, '--seed', '7', ...extra]);
@@ -137,6 +137,18 @@ describe('reader sample draw', () => {
     expect(sealedKey(s.out, 'reader-r1.key.json')).toMatchObject({ unblindable: 1, pairs: [{ pairId: `${listGrades(s.out)[0].key}:first` }] });
   });
 
+  it('refuses a pair that names an arm or a seed as a standalone word, and keeps code words that only contain one (25c)', () => {
+    const plain = (line: string) => `diff --git a/lib.js b/lib.js\n+${line}\n`;
+    const s = synthOut([
+      { arm: 'A0', position: 0, commands: ['npm test', 'echo A2 seed1'] },
+      { arm: 'A0', position: 1, diff: plain('// tuned for X4') },
+      { arm: 'A0', position: 2, diff: plain('// Seed12 case') },
+      { arm: 'A0', position: 3, diff: plain('const x1 = seeds.A0x; // a1b2 seedling') },
+    ]);
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 0 });
+    expect(sealedKey(s.out, 'reader-r1.key.json')).toMatchObject({ unblindable: 3, pairs: [{ pairId: `${listGrades(s.out)[3].key}:first` }] });
+  });
+
   it('replaces a pair whose blinded text still names the memory tool from its own stratum (25)', () => {
     const s = synthOut(cells('A0', many('pass', 4)));
     const first = seededOrder(7, listGrades(s.out).map((e) => `${e.key}:first`))[0];
@@ -167,6 +179,43 @@ describe('reader sample draw', () => {
     rmSync(join(b.dir, 't0.bundle'));
     expect(draw(b.out, b.tasks)).toMatchObject({ code: 0, stdout: expect.stringContaining('1 ineligible') });
     expect(sealedKey(b.out, 'reader-r1.key.json')).toMatchObject({ eligible: 0, ineligible: 1, pairs: [] });
+  });
+});
+
+/** A link to `target`: a junction on Windows, a symlink elsewhere, like macOS /var to /private/var. */
+function linkTo(target: string) {
+  const link = join(tmp('z0-g5-link-'), 'out');
+  symlinkSync(target, link, win ? 'junction' : 'dir');
+  return link;
+}
+
+describe('reader sample exclusions and path aliases', () => {
+  afterEach(cleanup);
+
+  it('leaves out the lessons an error row drops: refused by default, excluded under --flip-errors as grading does (27c)', () => {
+    const s = synthOut(cells('A0', many('pass', 4)));
+    const entries = listGrades(s.out);
+    for (const e of entries.slice(2)) writeFileSync(e.file, JSON.stringify({ ...e.grade, lessonId: 'f1-l2', checkers: { 'f1-l2': 'x' } }));
+    const l2 = listGrades(s.out).slice(2).map((e) => e.grade);
+    const done = (g: typeof l2[number]) => ({ ...rowOf(g), lessonId: 'f1-l2', checks: rowOf(g).checks.map((c) => ({ ...c, lessonId: 'f1-l2' })) });
+    const error = { ...done(l2[0]), status: 'error', error: { stage: 'git', message: 'broken' }, checks: [], acceptance: null };
+    writeRows(s.out, [...entries.slice(0, 2).map((e) => rowOf(e.grade)), error, done(l2[1])]);
+    const spec = readJson(s.tasks);
+    spec.families[0].lessons.push({ id: 'f1-l2', rule: 'Write the second file', keyPhrase: 'zq-f1-l2' });
+    writeFileSync(s.tasks, JSON.stringify(spec));
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 1, stderr: expect.stringContaining('1 cells have error rows') });
+    expect(draw(s.out, s.tasks, ['--flip-errors'])).toMatchObject({ code: 0 });
+    expect(sealedKey(s.out, 'reader-r1.key.json')).toMatchObject({ eligible: 2 });
+    expect(pairsOf(s.out).map((p) => p.lessonId)).toEqual(['f1-l1', 'f1-l1']);
+  });
+
+  it('blinds run paths spelled through a link to --out the same as their real spelling (28b, macOS /var)', () => {
+    const s = synthOut([{ arm: 'A0', position: 0 }]);
+    const link = linkTo(s.out);
+    writeFileSync(join(gradeDir(s.out, 'A0'), 't0.first.diff'), `diff --git a/lib.js b/lib.js\n+// ${runRoot(link, 'A0')}/work/lib.js\n`);
+    expect(draw(link, s.tasks)).toMatchObject({ code: 0 });
+    expect(sealedKey(s.out, 'reader-r1.key.json')).toMatchObject({ unblindable: 0 });
+    expect(readFileSync(join(s.out, 'g5', 'reader-r1', 'p01.md'), 'utf8')).toContain('<run>/work/lib.js');
   });
 });
 
@@ -254,9 +303,10 @@ describe('reader sample labels and scoring', () => {
 describe('stored sample (179)', () => {
   afterEach(cleanup);
 
-  /** 15 judged yes and 15 judged no, plus one cut, one empty and one hidden-hit unit. */
-  function storedOut() {
+  /** 15 judged yes and 15 judged no, plus one cut, one empty and one hidden-hit unit; `viaLink` spells every path through a link. */
+  function storedOut(viaLink = false) {
     const s = synthOut([{ arm: 'A0', position: 100 }]);
+    const out = viaLink ? linkTo(s.out) : s.out;
     const records = [];
     const surfaces = (arm: string, seed: number, position: number, text: string) => {
       mkdirSync(gradeDir(s.out, arm, seed), { recursive: true });
@@ -266,7 +316,7 @@ describe('stored sample (179)', () => {
     for (let i = 0; i < 33; i++) {
       const [arm, seed, position] = [i % 2 ? 'A1' : 'A0', 1 + (i % 2), i];
       const yes = i < 15 || i === 32;
-      const root = runRoot(s.out, arm, seed);
+      const root = runRoot(out, arm, seed);
       records.push(storedRecord(arm, seed, position, yes));
       let text = `=== ${root}\\work\\CLAUDE.md\nSee ${root}\\work\\lib.js. hippo keeps ${yes ? PHRASE : 'nothing'}.\n=== ${root}\\.hippo\\hippo.db#12\nan entry\n`;
       if (i === 30) text = `=== CLAUDE.md\n${'x'.repeat(10)}\n[cut at 65536 chars]\n`;
@@ -276,8 +326,14 @@ describe('stored sample (179)', () => {
     }
     writeFileSync(join(s.out, 'runs.jsonl'), records.map((r) => `${JSON.stringify(r)}\n`).join(''));
     writeFileSync(s.tasks, JSON.stringify({ families: [{ id: 'f1', lessons: [{ id: 'f1-l1', rule: 'Write the lesson file', keyPhrase: PHRASE }] }], sequences: [{ id: SEQ, tasks: [] }] }));
-    return s;
+    return { ...s, out };
   }
+
+  it('blinds surface texts spelled through a link to --out, as the run spells them on macOS (28c)', () => {
+    const s = storedOut(true);
+    expect(cli(['stored', '--out', s.out, '--tasks', s.tasks, '--seed', '3'])).toMatchObject({ code: 0 });
+    expect(sealedKey(s.out, 'stored.key.json')).toMatchObject({ eligible: 30, unblindable: 0 });
+  });
 
   it('excludes cut, empty and hidden-hit texts, blinds the rest, and scores agreement, Wilson and kappa (28, R15, R16)', () => {
     const s = storedOut();

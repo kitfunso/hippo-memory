@@ -6,7 +6,8 @@ import { agentGit } from './checks.mjs';
 import { readerDiff } from './grading.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { listGrades, readRows, rowsFile } from './regrade.mjs';
-import { FORBIDDEN, isHiddenCommand, equalShares, fenced, fillStrata, labelsTemplate, leakScan, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
+import { flipsOf } from './g5-flips.mjs';
+import { FORBIDDEN, isHiddenCommand, blindLeaks, equalShares, fenced, fillStrata, labelsTemplate, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
 
 const VERDICTS = ['pass', 'fail', 'na'];
 const sealed = (out, name) => path.join(out, 'g5', 'sealed', name);
@@ -45,15 +46,8 @@ export function forbiddenFor(grades, extra = FORBIDDEN) {
   return [...names];
 }
 
-/** Every spelling of the out dir and each run root becomes `<run>`; run roots first, so no arm path survives. */
-export const outRedactor = (out, grades) => redactor([...new Set(grades.map((g) => path.join(out, 'runs', g.runName, g.arm, `seed${g.seed}`))), out]);
-
-/** Lesson ids with any flip in either pass: they are dropped anyway, so they are never sampled. */
-export function flippedIn(out) {
-  const flipped = new Set();
-  for (const pass of ['repro', 'postfix']) for (const row of readRows(rowsFile(out, pass)).rows.values()) for (const c of row.checks) if (c.flip) flipped.add(c.lessonId);
-  return flipped;
-}
+/** Every spelling of each out dir name (the real one and the one given) and of each run root under it becomes `<run>`. */
+export const outRedactor = (outs, grades) => redactor([...new Set(outs.flatMap((out) => [out, ...grades.map((g) => path.join(out, 'runs', g.runName, g.arm, `seed${g.seed}`))]))]);
 
 export const readerRounds = (out) => (fs.existsSync(sealed(out, ''))
   ? fs.readdirSync(sealed(out, '')).map((f) => /^reader-r(\d+)\.key\.json$/.exec(f)?.[1]).filter(Boolean).map(Number).sort((a, b) => a - b) : []);
@@ -61,11 +55,12 @@ export const readerRounds = (out) => (fs.existsSync(sealed(out, ''))
 const diffFile = (e, which) => path.join(path.dirname(e.file), `${e.grade.taskId}.${which}.diff`);
 
 /** Each done teach or apply's main-lesson pairs with the round's verdict (saved in round 1, post-fix later); no diff and no bundle is ineligible. */
-export function readerPairs(out, round) {
+export function readerPairs(out, round, flipErrors = false) {
   const pass = round === 1 ? 'repro' : 'postfix';
   const rows = readRows(rowsFile(out, pass)).rows;
   if (rows.size === 0) throw new Error(`reader round ${round} needs ${pass} rows; run regrade${pass === 'postfix' ? ' --post-fix' : ''} first`);
-  const flipped = flippedIn(out);
+  // The lessons grading drops, by the same function, so the sample never judges a lesson G5 leaves out.
+  const flipped = flipsOf(out, listGrades(out), flipErrors).flipped;
   const eligible = [];
   let ineligible = 0;
   for (const e of listGrades(out)) {
@@ -148,19 +143,19 @@ function existingDraw(out, round, args) {
 }
 
 /** Draw round K: pair files and labels.tsv for the reader, the key and per-stratum counts under sealed/ (R9). */
-export function drawReader(out, { tasksFile, seed, n = 30, round = 1 }) {
+export function drawReader(out, { tasksFile, seed, n = 30, round = 1, flipErrors = false, aliases = [] }) {
   if (fs.existsSync(keyFile(out, round))) return existingDraw(out, round, { seed, n });
   if (round > 1) assertNewRound(out, round);
   const earlier = new Set(readerRounds(out).flatMap((k) => readJson(keyFile(out, k)).pairs.map((p) => p.pairId)));
-  const { eligible, ineligible } = readerPairs(out, round);
+  const { eligible, ineligible } = readerPairs(out, round, flipErrors);
   const pool = eligible.filter((p) => !earlier.has(p.pairId));
   const grades = listGrades(out).map((e) => e.grade);
-  const ctx = { out, text: taskText(tasksFile), redact: outRedactor(out, grades) };
+  const ctx = { out, text: taskText(tasksFile), redact: outRedactor([out, ...aliases], grades) };
   const forbidden = forbiddenFor(grades);
   const bodies = new Map();
   const accept = (p) => {
     const r = renderPair(ctx, p);
-    if (leakScan(r.text, forbidden).length) return false;
+    if (blindLeaks(r.text, forbidden).length) return false;
     bodies.set(p.pairId, r);
     return true;
   };

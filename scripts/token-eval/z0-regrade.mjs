@@ -13,13 +13,13 @@ import { drawStored, scoreStored, storedSummary } from './stored-sample.mjs';
 
 const USAGE = [
   'usage: z0-regrade.mjs regrade --out DIR --tasks FILE [--runs FILE] [--post-fix] [--cell KEY]...',
-  '       z0-regrade.mjs reader --out DIR (--tasks FILE --seed N [--n N] [--round K] | [--round K] --labels FILE)',
+  '       z0-regrade.mjs reader --out DIR (--tasks FILE --seed N [--n N] [--round K] [--flip-errors] | [--round K] --labels FILE)',
   '       z0-regrade.mjs stored --out DIR (--tasks FILE --seed N [--n N] [--runs FILE] | --labels FILE)',
   '       z0-regrade.mjs grading --out DIR [--flip-errors]',
 ].join('\n');
 const MODES = {
   regrade: { values: ['--out', '--tasks', '--runs'], multi: ['--cell'], flags: ['--post-fix'], required: ['--out', '--tasks'] },
-  reader: { values: ['--out', '--tasks', '--seed', '--n', '--round', '--labels'], multi: [], flags: [], required: ['--out'] },
+  reader: { values: ['--out', '--tasks', '--seed', '--n', '--round', '--labels'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
   stored: { values: ['--out', '--tasks', '--runs', '--seed', '--n', '--labels'], multi: [], flags: [], required: ['--out'] },
   grading: { values: ['--out'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
 };
@@ -123,13 +123,13 @@ function sampleArgs(args, cwd, drawFlags) {
 function readerMode(args, out, cwd) {
   const round = count(args.round, '--round', 1) ?? 1;
   const a = sampleArgs(args, cwd, ['--tasks', '--seed', '--n']);
-  return a.labels ? scoreReader(out, round, a.labels) : drawReader(out, { ...a, round });
+  return a.labels ? scoreReader(out, round, a.labels) : drawReader(out, { ...a, round, flipErrors: args.flipErrors === true, aliases: [args.given] });
 }
 
 function storedMode(args, out, cwd) {
   const a = sampleArgs(args, cwd, ['--tasks', '--seed', '--n', '--runs']);
   if (a.labels) return scoreStored(out, a.labels);
-  return drawStored(out, { ...a, runsFile: args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl') });
+  return drawStored(out, { ...a, aliases: [args.given], runsFile: args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl') });
 }
 
 function gradingMode(args, out) {
@@ -150,7 +150,8 @@ export function runCli(argv, cwd = process.cwd()) {
     if (!fs.existsSync(given)) throw new Error(`--out ${args.out}: no such folder`);
     // One realpath for every alias of the out dir (a junction, another case), so rows and the lock are shared (test 31).
     const out = fs.realpathSync.native(given);
-    const stdout = withLock(out, () => RUN[args.mode](args, out, cwd, (m) => notes.push(m)));
+    // The spelling given too, since the run wrote its paths in that one and a realpath may differ (macOS /var).
+    const stdout = withLock(out, () => RUN[args.mode]({ ...args, given }, out, cwd, (m) => notes.push(m)));
     return { code: 0, stdout, stderr: notes.map((n) => `${n}\n`).join('') };
   } catch (err) {
     return { code: 1, stdout: '', stderr: [...notes, err.message].map((n) => `${n}\n`).join('') };

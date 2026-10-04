@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './regrade.mjs';
 import { READER_HIDDEN } from './workspace.mjs';
+import { ALL_ARMS } from './z0-records.mjs';
 
 const win = process.platform === 'win32';
 const Z95 = 1.959963984540054;
@@ -12,6 +13,9 @@ const HIDDEN_WORDS = ['hippo', 'memory/', 'claude-config', 'codex-home', ...READ
 // Strings that name a memory tool, a home or a hidden marker: any of them left in a blinded file could show the arm.
 export const FORBIDDEN = [...HIDDEN_WORDS, '.hippo', 'hippo-home', '[command hidden]', '[tool]'];
 export const isHiddenCommand = (command) => leakScan(command, HIDDEN_WORDS).length > 0;
+// An arm or seed named as its own word shows the arm as plainly as a path; arms keep their case, so code like x1 survives.
+const ARM_WORD = new RegExp(`\\b(?:${ALL_ARMS.join('|')})\\b`, 'g');
+const SEED_WORD = /\bseed\d+\b/gi;
 
 /** Items in sha256(`${seed}:${salt}${id}`) order: a pure function of the seed and the set, never of the listing order. */
 export function seededOrder(seed, items, idOf = (x) => x, salt = '') {
@@ -118,6 +122,9 @@ export function leakScan(text, forbidden) {
   const folded = text.toLowerCase().replace(/\\/g, '/');
   return forbidden.filter((f) => folded.includes(f.toLowerCase().replace(/\\/g, '/')));
 }
+
+/** The forbidden strings, then the standalone arm and seed words, a blinded text still holds. */
+export const blindLeaks = (text, forbidden) => [...leakScan(text, forbidden), ...(text.match(ARM_WORD) ?? []), ...(text.match(SEED_WORD) ?? [])];
 
 /** A label TSV (`id<TAB>label<TAB>note`): BOM, CRLF, `#` lines and blank lines accepted; any other fault names its line. */
 export function parseLabels(text, ids, allowed) {

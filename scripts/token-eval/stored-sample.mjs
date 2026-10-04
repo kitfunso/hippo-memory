@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { holds } from './leaks.mjs';
 import { cellKey, isBool, isInvalid, isLeak, parseZ0Records } from './z0-records.mjs';
 import { listGrades } from './regrade.mjs';
-import { FORBIDDEN, fenced, fillStrata, kappa, labelsTemplate, leakScan, parseLabels, seededOrder, wilson } from './g5-draw.mjs';
+import { FORBIDDEN, blindLeaks, fenced, fillStrata, kappa, labelsTemplate, parseLabels, seededOrder, wilson } from './g5-draw.mjs';
 import { fileIds, forbiddenFor, outRedactor, taskText } from './reader-sample.mjs';
 
 const CUT = /\[cut at \d+ chars\]\n?$/;
@@ -53,7 +53,7 @@ const unitText = (u) => [
 ].join('\n');
 
 /** Draw the stored sample: n/2 judged yes and n/2 judged no, a shortfall moved to the other, each in seeded order. */
-export function drawStored(out, { tasksFile, runsFile, seed, n = 30 }) {
+export function drawStored(out, { tasksFile, runsFile, seed, n = 30, aliases = [] }) {
   if (fs.existsSync(keyFile(out))) {
     const key = readJson(keyFile(out));
     if (key.seed !== seed || key.n !== n) throw new Error(`the stored sample was drawn with --seed ${key.seed} --n ${key.n}; it is drawn once`);
@@ -62,10 +62,10 @@ export function drawStored(out, { tasksFile, runsFile, seed, n = 30 }) {
   const { records } = parseZ0Records(fs.readFileSync(runsFile, 'utf8'), runsFile);
   // Every record's run root too, since a unit's text can name a run with no saved grade.json.
   const cells = [...listGrades(out).map((e) => e.grade), ...records.map((r) => ({ runName: r.sequence, arm: r.arm, seed: r.seed }))];
-  const { units, excluded } = storedUnits(out, records, taskText(tasksFile), outRedactor(out, cells));
+  const { units, excluded } = storedUnits(out, records, taskText(tasksFile), outRedactor([out, ...aliases], cells));
   // `[tool]` is this sample's own stand-in for the tool name, so only the reader sample scans for it.
   const forbidden = forbiddenFor(cells, FORBIDDEN.filter((f) => f !== '[tool]'));
-  const accept = (u) => leakScan(unitText(u), forbidden).length === 0;
+  const accept = (u) => blindLeaks(unitText(u), forbidden).length === 0;
   const stratum = (j) => ({ quota: j === 'yes' ? Math.ceil(n / 2) : Math.floor(n / 2), items: seededOrder(seed, units.filter((u) => u.judged === j), (u) => u.key) });
   const { taken, rejected } = fillStrata([{ share: n, strata: YES_NO.map(stratum) }], n, accept);
   const ordered = seededOrder(seed, taken, (u) => u.key, 'order:');
