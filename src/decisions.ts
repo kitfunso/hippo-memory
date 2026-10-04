@@ -28,7 +28,7 @@ import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
+import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';

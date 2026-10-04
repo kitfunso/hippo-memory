@@ -9,7 +9,8 @@ import { consolidate } from '../consolidate.js';
 import { loadConfig } from '../config.js';
 import { deduplicateStore } from '../dedupe.js';
 import { computeAmbientState, type AmbientState } from '../ambient.js';
-import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../graph.js';
+import { loadPendingExtractionTenants } from '../graph/read.js';
+import { markPendingProcessedUpTo } from '../graph/write.js';
 import { extractGraph } from '../graph-extract.js';
 import type { Context } from './types.js';
 

@@ -13,7 +13,7 @@ import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
-import { loadEntities, loadRelations } from '../src/graph.js';
+import { loadEntities, loadRelations } from '../src/graph/read.js';
 import { extractGraph } from '../src/graph-extract.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { makeRoot } from './_helpers/make-root.js';

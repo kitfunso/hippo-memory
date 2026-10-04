@@ -11,7 +11,7 @@ import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../src/token-ledger.js';
 import type { SearchResult } from '../src/search/types.js';
-import { insertEntity, insertRelation } from '../src/graph.js';
+import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

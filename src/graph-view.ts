@@ -16,11 +16,13 @@ import {
   loadNeighborRelations,
   loadRelationsAmong,
   withGraphReadSnapshot,
+} from './graph/read.js';
+import {
   type Entity,
   type Relation,
   type EntityType,
   type RelationType,
-} from './graph.js';
+} from './graph/types.js';
 
 export interface GraphNode {
   id: number;

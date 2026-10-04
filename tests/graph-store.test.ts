@@ -16,14 +16,16 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   insertEntity,
   insertRelation,
+  enqueueExtraction,
+  markExtractionProcessed,
+} from '../src/graph/write.js';
+import {
   loadEntityById,
   loadEntities,
   loadRelations,
-  enqueueExtraction,
   loadExtractionQueue,
-  markExtractionProcessed,
-  MAX_ENTITY_NAME_LEN,
-} from '../src/graph.js';
+} from '../src/graph/read.js';
+import { MAX_ENTITY_NAME_LEN } from '../src/graph/types.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

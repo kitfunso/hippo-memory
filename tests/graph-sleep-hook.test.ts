@@ -24,10 +24,8 @@ import {
   loadEntities,
   loadRelations,
   loadPendingExtractionTenants,
-  markGraphDirty,
-  runGraphRebuildTransaction,
-  insertEntity,
-} from '../src/graph.js';
+} from '../src/graph/read.js';
+import { markGraphDirty, runGraphRebuildTransaction, insertEntity } from '../src/graph/write.js';
 import { extractGraph as realExtractGraph } from '../src/graph-extract.js';
 import {
   sleep,

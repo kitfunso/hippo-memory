@@ -2,7 +2,7 @@
 import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, sleep, supersede } from '../../api.js';
 import type { MemoryKind } from '../../memory.js';
 import { buildGraphModel } from '../../graph-view.js';
-import { MAX_ENTITY_NAME_LEN } from '../../graph.js';
+import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
 import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import type { RouteRequest } from '../types.js';

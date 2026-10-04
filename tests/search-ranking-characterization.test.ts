@@ -8,7 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../src/memory.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import { insertEntity, insertRelation } from '../src/graph.js';
+import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { savePhysicsState } from '../src/physics-state.js';
 import { search } from '../src/search/bm25-search.js';

@@ -21,7 +21,8 @@
  * `hippo sleep` enqueue-hook.
  */
 
-import { clearGraph, insertEntity, insertRelation, runGraphRebuildTransaction, MAX_ENTITY_NAME_LEN, type EntityType, type GraphTxDb, type SourceObjectType, type SourceObjectRef } from './graph.js';
+import { clearGraph, insertEntity, insertRelation, runGraphRebuildTransaction } from './graph/write.js';
+import { MAX_ENTITY_NAME_LEN, type EntityType, type GraphTxDb, type SourceObjectType, type SourceObjectRef } from './graph/types.js';
 import { loadDecisions } from './decisions.js';
 import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
