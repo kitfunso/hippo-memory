@@ -38,7 +38,6 @@ import {
   loadAllEntries,
   loadAmbientCandidates,
   loadContextCandidates,
-  loadAmbientTallies,
   type ContextCandidateFilter,
   type AmbientRecallRequest,
   type AmbientLoadResult,
@@ -128,6 +127,7 @@ import { detectSecret, vetSecrets } from './secret-detect.js';
 import { isSessionDigestRow } from './session-digest.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, addAmbientTallies, ambientStateFromTallies, type AmbientState } from './ambient.js';
+import { loadAmbientTallies } from './ambient-store.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
 import { extractGraph } from './graph-extract.js';
 import {
