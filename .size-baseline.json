@@ -1,12 +1,6 @@
 {
   "files": {},
   "functions": {
-    "src/api/assemble.ts:assemble": 135,
-    "src/api/context.ts:getContext": 617,
-    "src/api/drill-down.ts:drillDown": 102,
-    "src/api/promote.ts:supersede": 99,
-    "src/api/recall.ts:recallFrom": 487,
-    "src/api/sleep.ts:sleep": 278,
     "src/compaction-record.ts:saveItems": 81,
     "src/config.ts:loadConfig": 127,
     "src/customer-notes.ts:saveCustomerNote": 123,
