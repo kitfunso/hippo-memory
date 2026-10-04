@@ -201,9 +201,9 @@ describe('hippo doctor', () => {
     const global = join(cwd, 'global');
     process.env.HIPPO_HOME = global;
     initStore(global);
-    const parent = { ...createMemory('the proj-b deploy needs the staging VPN'), origin_project: 'proj-b' };
+    const parent = { ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-b' };
     writeEntry(global, parent);
-    writeEntry(global, { ...createMemory('merged: the proj-b deploy needs the VPN'), source: 'consolidation', parents: [parent.id], origin_project: '' });
+    writeEntry(global, { ...createMemory('merged: the proj-b deploy needs the VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), source: 'consolidation', parents: [parent.id], origin_project: '' });
 
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'))
       .toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
