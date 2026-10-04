@@ -21,40 +21,36 @@ const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   let cliText: string;
+  let recordText: string;
 
-  it('reads the recall verb module (anchor for the rest of the tests)', () => {
+  it('reads the recall verb module and the recall record module (anchor for the rest of the tests)', () => {
     cliText = readFileSync(join(repoRoot, 'src/cli/recall.ts'), 'utf8');
+    recordText = readFileSync(join(repoRoot, 'src/api/recall-record.ts'), 'utf8');
     expect(cliText.length).toBeGreaterThan(0);
+    expect(recordText.length).toBeGreaterThan(0);
   });
 
-  it('imports the J1 helpers from recall-history', () => {
+  it('imports the detector from recall-history and the ring from recall-record', () => {
     expect(cliText).toContain("from '../recall-history.js'");
     expect(cliText).toContain('detectAnchoring');
     expect(cliText).toContain('hashQueryText');
-    expect(cliText).toContain('buildSessionKey');
-    expect(cliText).toContain('getOrCreateRing');
-    expect(cliText).toContain('appendRecall');
     expect(cliText).toContain('snapshotRing');
+    expect(cliText).toContain("from '../api/recall-record.js'");
   });
 
-  it('declares a module-level recall-history Map for the CLI pipeline', () => {
-    expect(cliText).toMatch(/const sessionRecallHistoryCli\s*=\s*new Map<string, RingBuffer>\(\)/);
+  it('keys the CLI ring by surface, tenant and session', () => {
+    expect(cliText).toMatch(/sessionRing\('cli',\s*tenantId,\s*sessionId\)/);
   });
 
   it('exports __resetSessionRecallHistoryCli for test isolation', () => {
     expect(cliText).toMatch(/export function __resetSessionRecallHistoryCli\s*\(/);
   });
 
-  it('gates the detector behind HIPPO_ANCHORING env knob (zero-work when off)', () => {
-    // Lock that the env check happens BEFORE the ring lookup so the
-    // off path truly costs zero work.
-    expect(cliText).toContain("biasHintEnabled('anchoring')");
-  });
-
-  it('uses buildSessionKey (not colon string-concat) for the ring key', () => {
-    // Plan v3 explicit fix: no `${tenantId}:${sessionId}` colon concat
-    // anywhere — must call buildSessionKey for collision safety.
-    expect(cliText).toMatch(/buildSessionKey\(tenantId,\s*sessionId\)/);
+  it('gates the ring behind HIPPO_ANCHORING before any lookup, keyed with buildSessionKey', () => {
+    const ringFn = recordText.slice(recordText.indexOf('export function sessionRing('), recordText.indexOf('export function peekSessionRing('));
+    expect(ringFn.indexOf("biasHintEnabled('anchoring')")).toBeGreaterThan(-1);
+    expect(ringFn.indexOf("biasHintEnabled('anchoring')")).toBeLessThan(ringFn.indexOf('getOrCreateRing('));
+    expect(ringFn).toMatch(/buildSessionKey\(tenantId,\s*sessionId\)/);
   });
 
   it('bumps cmdSuppressionSummary.suppressedByInterference on R2', () => {
@@ -66,11 +62,12 @@ describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
     expect(cliText.indexOf('[anchored_on: ${h.anchoring.memoryId}]')).toBeLessThan(cliText.indexOf('console.log(recallHeading('));
   });
 
-  it('appends to the ring AFTER detect with anchoredOn from the hint (cooldown feed)', () => {
-    expect(cliText).toMatch(/appendRecall\(anchorRing,\s*queryHash,\s*results\[0\]\?\.entry\.id \?\? null,\s*cmdAnchoringHint\?\.memoryId\)/);
+  it('feeds the ring after the final detect, with anchoredOn from the shown hint (cooldown feed)', () => {
+    expect(cliText).toMatch(/recordShownRecall\(who,\s*\{\s*query,\s*ring:\s*fit\.anchorRing,\s*topId:\s*results\[0\]\?\.entry\.id \?\? null,\s*anchoring:\s*hints\.anchoring/);
+    expect(recordText).toMatch(/noteRecall\(shown\.ring,\s*shown\.query,\s*shown\.topId,\s*shown\.anchoring\?\.memoryId\)/);
   });
 
   it('emits recall_anchor_skipped_no_session telemetry when sessionId absent', () => {
-    expect(cliText).toContain("'recall_anchor_skipped_no_session'");
+    expect(recordText).toContain("'recall_anchor_skipped_no_session'");
   });
 });

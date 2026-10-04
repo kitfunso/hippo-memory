@@ -16,10 +16,10 @@ When a change closes a difference, update its entry and the goldens in the same 
 ## Side effects
 
 - **D7 Strengthening and stats.** CLI strengthens the rows it shows, in the local and global stores, and adds them to `total_recalled`. HTTP strengthens every row it returns and adds them to `total_recalled`. MCP strengthens the rows it shows and never updates `total_recalled`.
-- **D8 Audit count.** The CLI and HTTP `recall` audit rows count the rows returned. The MCP row counts the 50-row band, not the rows the budget let it show.
+- **D8 Audit count.** Closed. Every surface's `recall` audit row counts the rows it returns or shows. MCP used to count its 50-row band.
 - **D9 Audit order and actor.** CLI writes `recall_anchor_skipped_no_session` before `recall`, as actor `cli`. HTTP writes them in the same order, as the key's subject. MCP writes `recall` first, as `mcp`.
 - **D10 Trace and token ledger.** CLI traces with pipeline `cli`, MCP with `mcp` and HTTP with `api`. The ledger surfaces are `recall`, `mcp_recall` and `http_recall`; the MCP row records 0 items.
-- **D11 Session ring.** Each surface keeps its own anchoring ring per tenant and session, so a repeat on one surface is a first recall on another. CLI and MCP create the ring before ranking and judge the hint against the list they show. HTTP creates the ring only after a successful recall and judges the hint against the first returned row.
+- **D11 Session ring.** The rings and the hint audit rows live in one module, `src/api/recall-record.ts`, keyed by surface, tenant and session. Each surface still keeps its own rings, so a repeat on one surface is a first recall on another. CLI and MCP create the ring before ranking and judge the hint against the list they show. HTTP creates the ring only after a successful recall and judges the hint against the first returned row.
 
 ## Validation, MCP against HTTP
 

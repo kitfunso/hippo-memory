@@ -12,7 +12,7 @@ import { loadLatestHandoff } from '../store/handoffs.js';
 import { estimateTokens } from '../token-ledger.js';
 import { formatHandoffEvidenceLine } from '../handoff.js';
 import type { MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields } from '../audit.js';
+import { appendAuditEvent } from '../audit.js';
 import { writeRecallTrace, writeRecallTraceAtRoot } from '../recall-trace.js';
 import { applyGoalStackBoost } from '../goals.js';
 import { hybridSearch } from '../search/hybrid.js';
@@ -29,6 +29,7 @@ import { detectAvailabilityBias, type AvailabilityHint } from '../availability.j
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, isRestrictedScope } from '../recall-scope.js';
 import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultItem, ContinuityBlock } from './recall-types.js';
 import { type Context, RecallContractError } from './types.js';
+import { appendRecallAudit, auditAnchoring, auditAvailability, recallAuditMetadata, type RecallAuditor } from './recall-record.js';
 
 /**
  * Shared construction helper for `RecallSuppressionSummary`. Used by
@@ -134,11 +135,12 @@ async function retrieveFromStore(
     }
   }
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
-  const result = recallFrom(ctx, { ...opts, suppressRecallTrace: true }, windowSize, window);
+  const result = recallFrom(ctx, { ...opts, suppressRecallTrace: true }, windowSize, window, false);
   // Rows the vector arm added count as candidates too.
   const inPool = new Set(pool.map((e) => e.id));
   const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
   const shown = show({ ranked, pool: candidates, droppedByScope: loaded.length - pool.length }, result);
+  appendRecallAudit(auditorOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shown.length));
   strengthenRetrieved(ctx.hippoRoot, shown, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
   if (!opts.suppressRecallTrace) {
     const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
@@ -216,7 +218,8 @@ interface AnchoringOutcome {
 type ScoredEntry = { entry: MemoryEntry; score: number };
 type SummaryDecoration = { entry: MemoryEntry; childIds: string[] };
 
-function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: MemoryEntry[]): RecallResult {
+// auditBand false: the caller shows a cut of the band and audits the rows it shows.
+function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: MemoryEntry[], auditBand = true): RecallResult {
   const limit = opts.limit ?? 10;
   const window = admitCandidates(opts, all, limit);
 
@@ -225,7 +228,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   let bands: RankedBands;
   try {
     bands = rankBands(db, ctx, opts, window, limit);
-    auditAndTraceRecall(db, ctx, opts, bands.rankedOut);
+    auditAndTraceRecall(db, ctx, opts, bands.rankedOut, auditBand);
   } finally {
     closeHippoDb(db);
   }
@@ -444,18 +447,16 @@ function freshTailBand(
   return freshRanked;
 }
 
-// The audit row stores a hash of the query, never its text, so an archived memory's words cannot persist there.
 // The trace sits beside it as observability, not retrieval state; a caller that traces its own result set suppresses it.
-function auditAndTraceRecall(db: DatabaseSyncLike, ctx: Context, opts: RecallOpts, rankedOut: RecallResultItem[]): void {
-  appendAuditEvent(db, {
-    tenantId: ctx.tenantId,
-    actor: ctx.actor.subject,
-    op: 'recall',
-    metadata: {
-      ...auditQueryFields(opts.query),
-      results: rankedOut.length,
-    },
-  });
+function auditAndTraceRecall(db: DatabaseSyncLike, ctx: Context, opts: RecallOpts, rankedOut: RecallResultItem[], audit: boolean): void {
+  if (audit) {
+    appendAuditEvent(db, {
+      tenantId: ctx.tenantId,
+      actor: ctx.actor.subject,
+      op: 'recall',
+      metadata: recallAuditMetadata(opts.query, rankedOut.length),
+    });
+  }
   if (!opts.suppressRecallTrace) {
     writeRecallTrace(db, {
       tenantId: ctx.tenantId,
@@ -518,14 +519,8 @@ function continuityTokensOf(c: ContinuityBlock): number {
     c.recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
 }
 
-/** One audit row on its own short-lived handle, as each bias detector writes it. */
-function appendRecallAudit(ctx: Context, event: Omit<Parameters<typeof appendAuditEvent>[1], 'tenantId' | 'actor'>): void {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    appendAuditEvent(db, { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...event });
-  } finally {
-    closeHippoDb(db);
-  }
+function auditorOf(ctx: Context): RecallAuditor {
+  return { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject };
 }
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect
@@ -538,25 +533,8 @@ function detectRecallAnchoring(
   if (!biasHintEnabled('anchoring') || !opts.recallHistory) return { anchoringHint: null, suppressedByInterference: 0 };
   const queryHash = hashQueryText(opts.query);
   const anchoringHint = detectAnchoring(opts.recallHistory, queryHash, topMemoryId);
-  if (anchoringHint?.reason === 'memory_dominance') {
-    appendRecallAudit(ctx, {
-      op: 'recall_anchor_detected_memory_dominance',
-      targetId: anchoringHint.memoryId,
-      metadata: {
-        memory_id: anchoringHint.memoryId,
-        query_count: anchoringHint.queryCount ?? null,
-      },
-    });
-    return { anchoringHint, suppressedByInterference: 1 };
-  }
-  if (anchoringHint?.reason === 'query_repeat') {
-    appendRecallAudit(ctx, {
-      op: 'recall_anchor_detected_query_repeat',
-      targetId: anchoringHint.memoryId,
-      metadata: { memory_id: anchoringHint.memoryId },
-    });
-  }
-  return { anchoringHint, suppressedByInterference: 0 };
+  auditAnchoring(auditorOf(ctx), anchoringHint);
+  return { anchoringHint, suppressedByInterference: anchoringHint?.reason === 'memory_dominance' ? 1 : 0 };
 }
 
 // Compares the returned top-K's ages with the scope-filtered pool it came from, never `all`, whose hidden rows would
@@ -572,16 +550,7 @@ function detectRecallAvailability(
     topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
     pool: entries.map((e) => ({ id: e.id, created: e.created })),
   });
-  if (availabilityHint) {
-    appendRecallAudit(ctx, {
-      op: 'recall_availability_detected',
-      metadata: {
-        recent_fraction: availabilityHint.recentFraction,
-        older_passed_over: availabilityHint.olderCandidatesPassedOver,
-        returned_count: availabilityHint.returnedCount,
-      },
-    });
-  }
+  auditAvailability(auditorOf(ctx), availabilityHint);
   return availabilityHint;
 }
 

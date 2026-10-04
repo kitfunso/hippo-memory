@@ -1585,9 +1585,9 @@ exports[`recall surface parity goldens > http: recall with a session that has an
 }
 `;
 
-exports[`recall surface parity goldens > mcp audit counts the window band, not the rows shown 1`] = `
+exports[`recall surface parity goldens > mcp audit counts the rows shown 1`] = `
 {
-  "auditResults": 12,
+  "auditResults": 2,
   "shownHeading": "Found 2 memories",
 }
 `;

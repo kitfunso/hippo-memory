@@ -2,74 +2,27 @@
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from '../../project-identity.js';
 import { assembleCost, contextCost, drillCost } from '../../context-render.js';
-import { closeHippoDb, openHippoDb } from '../../db.js';
 import { updateStats } from '../../store/index-and-stats.js';
-import { appendRecall, biasHintEnabled, buildSessionKey, getOrCreateRing, hashQueryText, RingBuffer, snapshotRing } from '../../recall-history.js';
-import { appendAuditEvent, auditQueryFields } from '../../audit.js';
+import { biasHintEnabled, type RecallHistorySnapshot } from '../../recall-history.js';
 import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
+import { auditAnchorSkipped, noteRecall, peekSessionRing, resetSessionRings, sessionRing } from '../../api/recall-record.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { validateIdSegment } from '../validation.js';
 
-// Module-level per-(tenant, session) recall-history ring map
-// for the HTTP pipeline. Separate from CLI/MCP rings (per-
-// pipeline rings; no IPC). HTTP is the only caller that threads its
-// snapshot through opts.recallHistory to api.recall — api.recall's
-// anchoringHint on the returned RecallResult IS the user-visible hint
-// here (no separate compute needed).
-const sessionRecallHistoryHttp = new Map<string, RingBuffer>();
-
-/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+/** Test-only: reset the HTTP recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryHttp(): void {
-  sessionRecallHistoryHttp.clear();
+  resetSessionRings('http');
 }
 
-interface SessionRing {
-  httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
-  httpRingKey: string | undefined;
-}
-
-// HTTP per-pipeline anchoring detector. HTTP threads its
-// ring snapshot via opts.recallHistory so api.recall's own
-// anchoringHint compute path activates. Unlike CLI (which computes
-// its own hint separately because cmdRecall runs its own physics/
-// hybrid pipeline outside api.recall), HTTP's /v1/memories response
-// body IS api.recall's result directly. So the api.recall-computed
-// hint flows through. HIPPO_ANCHORING=off short-circuits.
-function snapshotSessionRing(ctx: Context, hippoRoot: string, q: string, sessionId: string | undefined): SessionRing {
-  let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
-  let httpRingKey: string | undefined;
-  if (biasHintEnabled('anchoring')) {
-    if (sessionId) {
-      // Do NOT mutate sessionRecallHistoryHttp before recall() preflight: a request
-      // that 400s would otherwise create-or-touch a ring and LRU-evict valid sessions.
-      httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
-      const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
-      httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
-    } else {
-      // Telemetry: caller had no session_id so ring tracking skipped.
-      // Per the normal recall-audit convention (api.ts:854 stores
-      // SHA-256/16 hash of the query, NOT raw text), avoid retaining
-      // prompts in audit_log here too — query content can contain
-      // secrets, PII, or RTBF-restricted material. hashQueryText is a 32-bit
-      // FNV-1a, NOT a privacy hash, so use the recall audit's SHA-256/16 truncation.
-      const dbForAudit = openHippoDb(hippoRoot);
-      try {
-        appendAuditEvent(dbForAudit, {
-          tenantId: ctx.tenantId,
-          actor: ctx.actor.subject,
-          op: 'recall_anchor_skipped_no_session',
-          targetId: undefined,
-          metadata: auditQueryFields(q),
-        });
-      } finally {
-        closeHippoDb(dbForAudit);
-      }
-    }
-  }
-  return { httpRecallHistory, httpRingKey };
+// HTTP threads the ring through opts.recallHistory, so the hint retrieve() returns is the one the caller sees.
+function recallHistoryFor(ctx: Context, hippoRoot: string, q: string, sessionId: string | undefined): RecallHistorySnapshot | undefined {
+  if (!biasHintEnabled('anchoring')) return undefined;
+  if (sessionId) return peekSessionRing('http', ctx.tenantId, sessionId);
+  auditAnchorSkipped({ hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, q);
+  return undefined;
 }
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
@@ -78,17 +31,12 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const { query: q, includeContinuity, sessionId } = recallOpts;
   const ctx = await buildContextWithAuth(req, opts);
 
-  const { httpRecallHistory, httpRingKey } = snapshotSessionRing(ctx, opts.hippoRoot, q, sessionId);
+  const recallHistory = recallHistoryFor(ctx, opts.hippoRoot, q, sessionId);
+  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory });
 
-  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory: httpRecallHistory });
-
-  // Append only after recall succeeds, so a 400 cannot LRU-evict valid sessions;
-  // anchoredOn feeds the cooldown logic for the NEXT recall on this session.
-  if (httpRingKey) {
-    const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
-    const topId = result.results[0]?.id ?? null;
-    appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
-  }
+  // The ring is created only after recall succeeds, so a 400 cannot LRU-evict a live session.
+  const ring = sessionRing('http', ctx.tenantId, sessionId);
+  if (ring) noteRecall(ring, q, result.results[0]?.id ?? null, result.anchoringHint?.memoryId);
 
   // Each recall surface counts its own hits; api.recall is no chokepoint,
   // since the CLI never calls it and MCP shows the user a different band.

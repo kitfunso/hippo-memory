@@ -7,23 +7,12 @@ import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';
 import { resolveProjectIdentity } from '../project-identity.js';
-import { appendAuditEvent, auditQueryFields } from '../audit.js';
-import {
-  detectAnchoring,
-  hashQueryText,
-  biasHintEnabled,
-  buildSessionKey,
-  getOrCreateRing,
-  appendRecall,
-  snapshotRing,
-  RingBuffer,
-} from '../recall-history.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { estimateTokens } from '../token-ledger.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
 import { mcpActor, type ToolCall } from './protocol.js';
-import { sessionRecallHistoryMcp, lastRecalledIds, resolveClientKey } from './session-state.js';
+import { lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
   formatContinuityBlock,
   formatMemories,
@@ -40,6 +29,7 @@ import {
 } from './format.js';
 import { isJsonString } from '../json.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
+import { recordShownRecall, sessionRing } from '../api/recall-record.js';
 
 // Named shapes for the optional fields each api.* call only wants to pass
 // when the caller actually supplied them. Built via `const extra: T = {};
@@ -134,69 +124,6 @@ function recallPresenter(
   };
 }
 
-function appendRecallAudit(hippoRoot: string, event: Parameters<typeof appendAuditEvent>[1]): void {
-  const dbForAudit = openHippoDb(hippoRoot);
-  try {
-    appendAuditEvent(dbForAudit, event);
-  } finally {
-    closeHippoDb(dbForAudit);
-  }
-}
-
-function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer | null, queryHash: number, rendered: RenderedRecall): void {
-  const { hippoRoot, tenantId, ctx } = call;
-  const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown } = rendered;
-  if (biasHintEnabled('anchoring')) {
-    if (anchorRing) {
-      // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
-      appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);
-      if (mcpAnchoringHint?.reason === 'memory_dominance') {
-        appendRecallAudit(hippoRoot, {
-          tenantId,
-          actor: ctx?.actor ?? 'mcp',
-          op: 'recall_anchor_detected_memory_dominance',
-          targetId: mcpAnchoringHint.memoryId,
-          metadata: {
-            memory_id: mcpAnchoringHint.memoryId,
-            query_count: mcpAnchoringHint.queryCount ?? null,
-          },
-        });
-      } else if (mcpAnchoringHint?.reason === 'query_repeat') {
-        appendRecallAudit(hippoRoot, {
-          tenantId,
-          actor: ctx?.actor ?? 'mcp',
-          op: 'recall_anchor_detected_query_repeat',
-          targetId: mcpAnchoringHint.memoryId,
-          metadata: { memory_id: mcpAnchoringHint.memoryId },
-        });
-      }
-    } else {
-      // No sessionId, so no ring. Hash the prompt with SHA-256/16 as the recall audit does (api.ts:854):
-      // hashQueryText is FNV-1a 32-bit, trivial to brute-force on low-entropy queries.
-      appendRecallAudit(hippoRoot, {
-        tenantId,
-        actor: ctx?.actor ?? 'mcp',
-        op: 'recall_anchor_skipped_no_session',
-        targetId: undefined,
-        metadata: auditQueryFields(query),
-      });
-    }
-  }
-
-  if (mcpAvailabilityHint) {
-    appendRecallAudit(hippoRoot, {
-      tenantId,
-      actor: ctx?.actor ?? 'mcp',
-      op: 'recall_availability_detected',
-      metadata: {
-        recent_fraction: mcpAvailabilityHint.recentFraction,
-        older_passed_over: mcpAvailabilityHint.olderCandidatesPassedOver,
-        returned_count: mcpAvailabilityHint.returnedCount,
-      },
-    });
-  }
-}
-
 export async function runRecallTool(call: ToolCall): Promise<string> {
   const { ctx, hippoRoot, config, tenantId, args } = call;
   // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
@@ -208,9 +135,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     tenantId,
     actor: mcpActor(ctx),
   };
-  const anchorRing = biasHintEnabled('anchoring') && sessionId
-    ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
-    : null;
+  const anchorRing = sessionRing('mcp', tenantId, sessionId);
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
   // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
@@ -225,7 +150,9 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   });
   if (!out.rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
   lastRecalledIds.set(resolveClientKey(ctx), out.rendered.list.map((r) => r.entry.id));
-  auditRecallHints(call, query, anchorRing, queryHash, out.rendered);
+  const { anchoring, availability, list } = out.rendered;
+  const who = { hippoRoot, tenantId, actor: ctx?.actor ?? 'mcp' };
+  recordShownRecall(who, { query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability });
   return out.rendered.text;
 }
 

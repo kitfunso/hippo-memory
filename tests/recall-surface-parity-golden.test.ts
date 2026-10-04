@@ -297,16 +297,16 @@ describe('recall surface parity goldens', () => {
     expect(got).toMatchSnapshot();
   }, 120_000);
 
-  // D8: MCP's 'recall' audit row counts the window band, not the rows the budget let it show.
-  it('mcp audit counts the window band, not the rows shown', async () => {
+  // D8: MCP's 'recall' audit row counts the rows the budget let it show, as CLI and HTTP count the rows they return.
+  it('mcp audit counts the rows shown', async () => {
     const got = await onFreshStore('local', async (s) => {
       const r = await viaMcp(s, { query: 'deploy', budget: 80 });
       const recallRow = auditOps(s.root).find((a) => a.op === 'recall');
-      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall.ts).
+      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall-record.ts).
       const metadata = JSON.parse(recallRow!.metadata_json) as { results: number };
       return { shownHeading: /Found \d+ memor[a-z]*/.exec(r.output)?.[0] ?? null, auditResults: metadata.results };
     });
-    expect(got.auditResults).toBeGreaterThan(Number(/\d+/.exec(got.shownHeading ?? '0')![0]));
+    expect(got.auditResults).toBe(Number(/\d+/.exec(got.shownHeading ?? '0')![0]));
     expect(got).toMatchSnapshot();
   }, 60_000);
 
