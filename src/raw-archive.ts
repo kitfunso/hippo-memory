@@ -3,7 +3,6 @@ import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { log } from './log.js';
 
 export interface ArchiveOpts {
   reason: string;
@@ -58,15 +57,8 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
   db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
   db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
-  // No FK cascade reaches the FTS5 table, and archived text must stop being searchable now, not at the next sleep.
-  if (isFtsAvailable(db)) {
-    try {
-      db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
-    } catch (err) {
-      // The memories DELETE already landed; the next sleep re-syncs the index, so say so instead of failing the archive.
-      log.warn(`archive ${id}: full-text row not purged, the next hippo sleep removes it (${err instanceof Error ? err.message : String(err)})`);
-    }
-  }
+  // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the whole archive.
+  if (isFtsAvailable(db)) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
 }
 
 // Emit the archive_raw audit event inside the SAVEPOINT so the audit row is
