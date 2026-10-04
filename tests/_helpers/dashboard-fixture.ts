@@ -7,7 +7,8 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { initStore, writeEntry } from '../../src/store.js';
-import { createMemory, type MemoryEntry } from '../../src/memory.js';
+import type { MemoryEntry } from '../../src/memory.js';
+import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/dashboard.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');

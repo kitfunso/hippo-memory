@@ -7,7 +7,7 @@ import { listMemoryConflicts, readEntry, replaceDetectedConflicts } from '../src
 import { quarantineScopeFor } from '../src/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard-types.js';
 import {
-  NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
+  NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 
 const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
@@ -59,7 +59,8 @@ describe('pin', () => {
 
   it('answers 400 for a body that is not {"pinned": boolean}', async () => {
     const target = seed(store.hippoRoot, 'a row');
-    for (const payload of [{}, { pinned: 'yes' }, [], 'true']) {
+    const payloads: Json[] = [{}, { pinned: 'yes' }, [], 'true'];
+    for (const payload of payloads) {
       expect((await postJson(dash.port, `/api/memory/${target.id}/pin`, payload)).status).toBe(400);
     }
   });
