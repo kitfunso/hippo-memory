@@ -148,15 +148,8 @@ async function renderContext(
     requireInit(hippoRoot);
   }
 
-  // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId();
-  // absent both, api.getContext applies the pure freshness bound.
-  const payload = readHookPayload(stdinText);
-  let payloadSessionId = payload.sessionId;
-  const currentSessionId = payloadSessionId ?? hostSessionId();
-  // A sub-agent's payload and env both carry its parent's session id, so it books no session and never skips a block.
-  const subagent = isSubagentPayload(stdinText);
-  const ledgerSessionId = subagent ? undefined : currentSessionId;
-  if (subagent) payloadSessionId = undefined;
+  const session = resolveContextSession(stdinText);
+  const { currentSessionId, ledgerSessionId, payloadSessionId } = session;
 
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
   const resolvedTenant = resolveTenantId({});
@@ -177,44 +170,17 @@ async function renderContext(
     query = autoDetectContext();
   }
 
-  // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const ctxActiveScope = ctxExplicitScope || detectScope();
-
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolvedTenant,
     actor: api.adminActor('cli'),
   };
-  // --cross-project re-includes other-project memories, rendered under their own section.
-  const crossProject = flags['cross-project'] === true;
-
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
-
-  const opts: api.ContextOpts = {
-    q: query,
-    budget,
-    limit: parseLimitFlag(flags['limit']),
-    pinnedOnly,
-    scope: ctxActiveScope ?? undefined,
-    includeRecent: parseCountFlag(flags['include-recent']),
-    crossProject,
-    currentSessionId,
-    prompt: payload.prompt,
-    // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
-    cost: contextCost(format === 'additional-context' ? 'additional-context' : 'markdown', framing),
-    deliveryObserver: rec ?? undefined,
-  };
+  const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
 
   const result = await api.getContext(ctx, opts);
-
-  const hasContextData =
-    result.entries.length > 0 ||
-    result.activeSnapshot ||
-    result.sessionHandoff ||
-    (result.recentEvents && result.recentEvents.length > 0);
-  if (!hasContextData) {
+  if (!hasContextData(result)) {
     rec?.delivered({ state: 'empty' });
     return;
   }
@@ -227,6 +193,67 @@ async function renderContext(
   } else {
     renderContextMarkdown(view);
   }
+}
+
+interface ContextSession {
+  readonly currentSessionId: string | undefined;
+  readonly ledgerSessionId: string | undefined;
+  readonly payloadSessionId: string | undefined;
+  readonly prompt: string | undefined;
+}
+
+function resolveContextSession(stdinText: string | undefined): ContextSession {
+  // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId();
+  // absent both, api.getContext applies the pure freshness bound.
+  const payload = readHookPayload(stdinText);
+  let payloadSessionId = payload.sessionId;
+  const currentSessionId = payloadSessionId ?? hostSessionId();
+  // A sub-agent's payload and env both carry its parent's session id, so it books no session and never skips a block.
+  const subagent = isSubagentPayload(stdinText);
+  const ledgerSessionId = subagent ? undefined : currentSessionId;
+  if (subagent) payloadSessionId = undefined;
+  return { currentSessionId, ledgerSessionId, payloadSessionId, prompt: payload.prompt };
+}
+
+interface ContextOptsInput {
+  readonly query: string;
+  readonly budget: number;
+  readonly pinnedOnly: boolean;
+  readonly format: string;
+  readonly framing: string;
+  readonly session: ContextSession;
+  readonly rec: DeliveryRecorder | null;
+}
+
+function buildContextOpts(flags: Record<string, string | boolean | string[]>, input: ContextOptsInput): api.ContextOpts {
+  // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
+  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxActiveScope = ctxExplicitScope || detectScope();
+  // --cross-project re-includes other-project memories, rendered under their own section.
+  const crossProject = flags['cross-project'] === true;
+  return {
+    q: input.query,
+    budget: input.budget,
+    limit: parseLimitFlag(flags['limit']),
+    pinnedOnly: input.pinnedOnly,
+    scope: ctxActiveScope ?? undefined,
+    includeRecent: parseCountFlag(flags['include-recent']),
+    crossProject,
+    currentSessionId: input.session.currentSessionId,
+    prompt: input.session.prompt,
+    // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
+    cost: contextCost(input.format === 'additional-context' ? 'additional-context' : 'markdown', input.framing),
+    deliveryObserver: input.rec ?? undefined,
+  };
+}
+
+function hasContextData(result: api.ContextResult): boolean {
+  return Boolean(
+    result.entries.length > 0 ||
+    result.activeSnapshot ||
+    result.sessionHandoff ||
+    (result.recentEvents && result.recentEvents.length > 0),
+  );
 }
 
 type RenderItem = { entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean };

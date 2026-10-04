@@ -35,7 +35,7 @@ import * as api from '../api.js';
 import * as client from '../client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { requireInit, runViaServerIfAvailable, fmt, type CommandContext, learnFromRepo } from './shared.js';
+import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Watch command
@@ -151,16 +151,7 @@ export function cmdImport(
 
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
-  if (flags['agents']) {
-    const opts = { machine: currentMachine(), dryRun };
-    // A folder without a store of its own imports as session end would there, so its notes are not hidden.
-    const report = useGlobal || isInitialized(hippoRoot)
-      ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
-      : importAtSessionEnd(process.cwd(), undefined, opts);
-    for (const line of detailLines(report, dryRun)) console.log(line);
-    for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
-    return;
-  }
+  if (flags['agents']) return importAgentMemories(hippoRoot, useGlobal, dryRun);
 
   if (useGlobal) {
     initGlobal();
@@ -181,90 +172,39 @@ export function cmdImport(
   // It writes through api.remember/archiveRaw which are tenant-scoped, so we
   // resolve the tenant and pass it through. --global is not supported for
   // vault import (the connector raw-archive path is tenant-local).
-  if (flags['vault']) {
-    const folderPath = String(flags['vault']);
-    if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
-      printError(`Vault folder not found (or not a directory): ${folderPath}`);
-      process.exit(1);
-    }
-    if (useGlobal) {
-      printError('hippo import --vault does not support --global (raw rows are tenant-local).');
-      process.exit(1);
-    }
-    if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
-      // --name is the vault identity key for the destructive source-deletion sync;
-      // inferring it from the folder basename let same-basename vaults collide and
-      // clobber each other (codex R10 P2). A valueless `--name` parses as boolean
-      // true, and String(true) === "true" would silently import under vault:true:*
-      // - reject a non-string so it fails fast instead (codex R11 P2).
-      printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
-      process.exit(1);
-    }
-    if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
-      // Same valueless-flag trap: a bare `--scope` must not become scope "true".
-      // Example uses the source-prefixed private form, since a bare `private` scope
-      // is NOT treated as private by recall and importVault rejects it (R13 P2).
-      printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
-      process.exit(1);
-    }
-    const tenantId = resolveTenantId({});
-    const vaultOptions: ImportOptions = {
-      ...importOptions,
-      tenantId,
-      name: flags['name'] ? String(flags['name']) : undefined,
-      scope: flags['scope'] ? String(flags['scope']) : undefined,
-    };
-    const vaultResult = importVault(folderPath, vaultOptions);
-    console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
-    console.log(`  Notes found:           ${vaultResult.total}`);
-    console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
-    console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
-    if ((vaultResult.rejected ?? 0) > 0) {
-      console.log(`  Rejected (tombstoned): ${vaultResult.rejected}`);
-    }
-    warnRedacted(vaultResult.redacted);
-    console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
-    console.log(`  Store:                 ${hippoRoot}`);
-    // Batch producer, same contract as the single-file import below: vault rows
-    // write through api.remember (which never embeds), so backfill them here.
-    // Floating promise is deliberate; see the comment at the single-file site.
-    if (!dryRun && vaultResult.imported >= 1) {
-      void embedAll(hippoRoot).catch(() => {});
-    }
-    return;
-  }
+  if (flags['vault']) return importVaultFolder(hippoRoot, flags, importOptions, useGlobal, dryRun);
+  importFromFile(targetRoot, args, flags, importOptions, useGlobal, dryRun);
+}
 
-  // Determine which importer to use based on flag
-  let filePath: string | undefined;
-  let importer: ((fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>) | undefined;
-  let importerName = '';
+type FileImporter = (fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>;
 
-  if (flags['chatgpt']) {
-    filePath = String(flags['chatgpt']);
-    importer = importChatGPT;
-    importerName = 'ChatGPT';
-  } else if (flags['claude']) {
-    filePath = String(flags['claude']);
-    importer = importClaude;
-    importerName = 'Claude';
-  } else if (flags['cursor']) {
-    filePath = String(flags['cursor']);
-    importer = importCursor;
-    importerName = 'Cursor';
-  } else if (flags['file']) {
-    filePath = String(flags['file']);
-    importer = importGenericFile;
-    importerName = 'File';
-  } else if (flags['markdown']) {
-    filePath = String(flags['markdown']);
-    importer = importMarkdown;
-    importerName = 'Markdown';
-  } else if (args[0]) {
-    // Positional: try to auto-detect from extension
-    filePath = args[0];
-    importer = importGenericFile;
-    importerName = 'File';
-  }
+interface PickedImporter {
+  filePath: string | undefined;
+  importer: FileImporter | undefined;
+  importerName: string;
+}
+
+// Determine which importer to use based on flag
+function pickImporter(args: string[], flags: CliFlags): PickedImporter {
+  if (flags['chatgpt']) return { filePath: String(flags['chatgpt']), importer: importChatGPT, importerName: 'ChatGPT' };
+  if (flags['claude']) return { filePath: String(flags['claude']), importer: importClaude, importerName: 'Claude' };
+  if (flags['cursor']) return { filePath: String(flags['cursor']), importer: importCursor, importerName: 'Cursor' };
+  if (flags['file']) return { filePath: String(flags['file']), importer: importGenericFile, importerName: 'File' };
+  if (flags['markdown']) return { filePath: String(flags['markdown']), importer: importMarkdown, importerName: 'Markdown' };
+  // Positional: try to auto-detect from extension
+  if (args[0]) return { filePath: args[0], importer: importGenericFile, importerName: 'File' };
+  return { filePath: undefined, importer: undefined, importerName: '' };
+}
+
+function importFromFile(
+  targetRoot: string,
+  args: string[],
+  flags: CliFlags,
+  importOptions: ImportOptions,
+  useGlobal: boolean,
+  dryRun: boolean,
+): void {
+  const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
     printError('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
@@ -311,6 +251,72 @@ export function cmdImport(
     }
   } else {
     console.log(`  Store:                 ${storeLabel}`);
+  }
+}
+
+function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: boolean): void {
+  const opts = { machine: currentMachine(), dryRun };
+  // A folder without a store of its own imports as session end would there, so its notes are not hidden.
+  const report = useGlobal || isInitialized(hippoRoot)
+    ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
+    : importAtSessionEnd(process.cwd(), undefined, opts);
+  for (const line of detailLines(report, dryRun)) console.log(line);
+  for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
+}
+
+function importVaultFolder(
+  hippoRoot: string,
+  flags: CliFlags,
+  importOptions: ImportOptions,
+  useGlobal: boolean,
+  dryRun: boolean,
+): void {
+  const folderPath = String(flags['vault']);
+  if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
+    printError(`Vault folder not found (or not a directory): ${folderPath}`);
+    process.exit(1);
+  }
+  if (useGlobal) {
+    printError('hippo import --vault does not support --global (raw rows are tenant-local).');
+    process.exit(1);
+  }
+  if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
+    // --name is the vault identity key for the destructive source-deletion sync; inferring it from the folder basename let
+    // same-basename vaults collide and clobber each other (codex R10 P2). A valueless `--name` parses as boolean true, and
+    // String(true) === "true" would silently import under vault:true:* - reject a non-string so it fails fast instead (codex R11 P2).
+    printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
+    process.exit(1);
+  }
+  if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+    // Same valueless-flag trap: a bare `--scope` must not become scope "true".
+    // Example uses the source-prefixed private form, since a bare `private` scope
+    // is NOT treated as private by recall and importVault rejects it (R13 P2).
+    printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
+    process.exit(1);
+  }
+  const tenantId = resolveTenantId({});
+  const vaultOptions: ImportOptions = {
+    ...importOptions,
+    tenantId,
+    name: flags['name'] ? String(flags['name']) : undefined,
+    scope: flags['scope'] ? String(flags['scope']) : undefined,
+  };
+  const vaultResult = importVault(folderPath, vaultOptions);
+  console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
+  console.log(`  Notes found:           ${vaultResult.total}`);
+  console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
+  console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
+  if ((vaultResult.rejected ?? 0) > 0) {
+    console.log(`  Rejected (tombstoned): ${vaultResult.rejected}`);
+  }
+  warnRedacted(vaultResult.redacted);
+  console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
+  console.log(`  Store:                 ${hippoRoot}`);
+  // Batch producer, same contract as the single-file import below: vault rows
+  // write through api.remember (which never embeds), so backfill them here.
+  // Floating promise is deliberate; see the comment at the single-file site.
+  if (!dryRun && vaultResult.imported >= 1) {
+    void embedAll(hippoRoot).catch(() => {});
   }
 }
 

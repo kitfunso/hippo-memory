@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer } from '../memory.js';
+import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../memory.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
@@ -42,38 +42,7 @@ export function cmdStatus(hippoRoot: string): void {
   const entries = loadAllEntries(hippoRoot);
   const stats = loadStats(hippoRoot);
   const now = evalNow();
-
-  const byLayer = {
-    [Layer.Buffer]: 0,
-    [Layer.Episodic]: 0,
-    [Layer.Semantic]: 0,
-    [Layer.Trace]: 0,
-  };
-
-  const byConfidence: Record<string, number> = {
-    verified: 0,
-    observed: 0,
-    inferred: 0,
-    stale: 0,
-  };
-
-  let totalStrength = 0;
-  let pinned = 0;
-  let atRisk = 0; // strength < 0.2
-  let agedOut = 0;
-
-  for (const e of entries) {
-    const s = calculateStrength(e, now);
-    byLayer[e.layer] = (byLayer[e.layer] ?? 0) + 1;
-    totalStrength += s;
-    if (e.pinned) pinned++;
-    if (s < 0.2) atRisk++;
-    const facets = confidenceFacets(e, now);
-    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
-    if (facets.agedOut) agedOut++;
-  }
-
-  const avgStrength = entries.length > 0 ? totalStrength / entries.length : 0;
+  const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = tallyStatus(entries, now);
 
   console.log('Hippo Status');
   console.log('---------------------------');
@@ -108,7 +77,47 @@ export function cmdStatus(hippoRoot: string): void {
     console.log(`Last sleep:        never`);
   }
 
-  // Embedding status (provider-aware)
+  printEmbeddingStatus(hippoRoot, entries);
+  printPhysicsStatus(hippoRoot);
+}
+
+function tallyStatus(entries: MemoryEntry[], now: Date) {
+  const byLayer = {
+    [Layer.Buffer]: 0,
+    [Layer.Episodic]: 0,
+    [Layer.Semantic]: 0,
+    [Layer.Trace]: 0,
+  };
+
+  const byConfidence: Record<string, number> = {
+    verified: 0,
+    observed: 0,
+    inferred: 0,
+    stale: 0,
+  };
+
+  let totalStrength = 0;
+  let pinned = 0;
+  let atRisk = 0; // strength < 0.2
+  let agedOut = 0;
+
+  for (const e of entries) {
+    const s = calculateStrength(e, now);
+    byLayer[e.layer] = (byLayer[e.layer] ?? 0) + 1;
+    totalStrength += s;
+    if (e.pinned) pinned++;
+    if (s < 0.2) atRisk++;
+    const facets = confidenceFacets(e, now);
+    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
+    if (facets.agedOut) agedOut++;
+  }
+
+  const avgStrength = entries.length > 0 ? totalStrength / entries.length : 0;
+  return { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength };
+}
+
+// Embedding status (provider-aware)
+function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
   const embedProvider = (() => {
     try {
       return resolveEmbeddingProvider(hippoRoot);
@@ -120,37 +129,38 @@ export function cmdStatus(hippoRoot: string): void {
   console.log('');
   if (!embedProvider) {
     console.log(`Embeddings:        misconfigured (check embeddings.provider / apiBaseUrl), BM25 only`);
-  } else {
-    const embeddingsDisabled = loadConfig(hippoRoot).embeddings.enabled === false;
-    const embAvail = embedProvider.isAvailable();
-    if (embeddingsDisabled) {
-      console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
-    } else if (embedProvider.kind === 'local') {
-      console.log(`Embeddings:        ${embAvail ? `available [${embedProvider.id}]` : 'not installed (BM25 only)'}`);
-    } else if (embAvail) {
-      console.log(`Embeddings:        ${embedProvider.kind} api [${embedProvider.id}]`);
-    } else {
-      console.log(`Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`);
-    }
-    // Show cached counts whenever vectors exist on disk (even when disabled or
-    // the key was removed), so the user still sees what is already indexed.
-    const embIndex = loadEmbeddingIndex(hippoRoot);
-    if (embAvail || Object.keys(embIndex).length > 0) {
-      const activeIds = new Set(entries.map((e) => e.id));
-      const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-      const orphaned = Object.keys(embIndex).length - activeEmbedded;
-      const dims = Object.values(embIndex)[0]?.length;
-      let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
-      if (dims) line += ` (${dims}-dim)`;
-      if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
-      console.log(line);
-      if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id, embIndex)) {
-        console.log(`                   model changed, run \`hippo embed\` to reindex`);
-      }
-    }
+    return;
   }
+  const embeddingsDisabled = loadConfig(hippoRoot).embeddings.enabled === false;
+  const embAvail = embedProvider.isAvailable();
+  if (embeddingsDisabled) {
+    console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
+  } else if (embedProvider.kind === 'local') {
+    console.log(`Embeddings:        ${embAvail ? `available [${embedProvider.id}]` : 'not installed (BM25 only)'}`);
+  } else if (embAvail) {
+    console.log(`Embeddings:        ${embedProvider.kind} api [${embedProvider.id}]`);
+  } else {
+    console.log(`Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`);
+  }
+  // Show cached counts whenever vectors exist on disk (even when disabled or
+  // the key was removed), so the user still sees what is already indexed.
+  const embIndex = loadEmbeddingIndex(hippoRoot);
+  if (!embAvail && Object.keys(embIndex).length === 0) return;
+  const activeIds = new Set(entries.map((e) => e.id));
+  const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
+  const orphaned = Object.keys(embIndex).length - activeEmbedded;
+  const dims = Object.values(embIndex)[0]?.length;
+  let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
+  if (dims) line += ` (${dims}-dim)`;
+  if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
+  console.log(line);
+  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id, embIndex)) {
+    console.log(`                   model changed, run \`hippo embed\` to reindex`);
+  }
+}
 
-  // Physics status
+// Physics status
+function printPhysicsStatus(hippoRoot: string): void {
   try {
     const db = openHippoDb(hippoRoot);
     try {

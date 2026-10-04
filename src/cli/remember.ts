@@ -13,6 +13,7 @@ import {
   computeSchemaFit,
   Layer,
   ConfidenceLevel,
+  type MemoryEntry,
 } from '../memory.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
@@ -22,7 +23,7 @@ import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../rejection.js';
 import { renderTraceContent, parseSteps } from '../trace.js';
 import { embedMemory } from '../embeddings.js';
-import { loadConfig } from '../config.js';
+import { loadConfig, type HippoConfig } from '../config.js';
 import { extractPathTags } from '../path-context.js';
 import { detectScope } from '../scope.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
@@ -32,7 +33,7 @@ import { resolveTenantId } from '../tenant.js';
 import { computeSalience } from '../salience.js';
 import { validateOwner, isStrictOwnerEnv } from '../owner-validation.js';
 import { printError } from './output.js';
-import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CommandContext } from './shared.js';
+import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext } from './shared.js';
 
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
 interface RememberTags {
@@ -60,6 +61,55 @@ function rememberTags(
   return { requested, all };
 }
 
+// Resolve explicit confidence flag (default: 'verified' for manual remember)
+function rememberConfidence(flags: CliFlags): ConfidenceLevel {
+  let confidence: ConfidenceLevel = 'verified';
+  if (flags['observed']) confidence = 'observed';
+  if (flags['inferred']) confidence = 'inferred';
+  if (flags['verified']) confidence = 'verified';
+  return confidence;
+}
+
+function parseKindFlag(flags: CliFlags): string | undefined {
+  const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
+  const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
+  // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
+  // (E1.x: Slack/Jira/Gmail) that route deletions through archiveRawMemory. Existing
+  // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
+  // trigger, so exposing --kind raw here would create unforgettable memories.
+  // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
+  const userVisibleKinds = ['distilled', 'superseded'] as const;
+  if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
+    printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
+    printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
+    process.exit(1);
+  }
+  return kindFlag;
+}
+
+interface RememberEnvelope {
+  kind: string | undefined;
+  owner: string | null;
+  artifactRef: string | null;
+  scope: string | null;
+}
+
+// A3 envelope flags
+function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
+  const kind = parseKindFlag(flags);
+  const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
+  if (!ownerCheck.ok) {
+    printError(ownerCheck.message);
+    process.exit(1);
+  }
+  if (ownerCheck.message) printError(ownerCheck.message);
+  const owner = ownerCheck.value ?? null;
+  const artifactRef = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
+  const scope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
+  return { kind, owner, artifactRef, scope };
+}
+
 async function cmdRemember(
   hippoRoot: string,
   text: string,
@@ -75,41 +125,12 @@ async function cmdRemember(
   }
 
   const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
-
-  // Resolve explicit confidence flag (default: 'verified' for manual remember)
-  let confidence: ConfidenceLevel = 'verified';
-  if (flags['observed']) confidence = 'observed';
-  if (flags['inferred']) confidence = 'inferred';
-  if (flags['verified']) confidence = 'verified';
+  const confidence = rememberConfidence(flags);
 
   // Schema fit needs the store, which the routed request has no access to, so it stays here.
   const existing = loadAllEntries(targetRoot, resolveTenantId({}));
   const schemaFit = computeSchemaFit(text, requestedTags, existing);
-
-  // A3 envelope flags
-  const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
-  const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
-  // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
-  // (E1.x: Slack/Jira/Gmail) that route deletions through archiveRawMemory. Existing
-  // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
-  // trigger, so exposing --kind raw here would create unforgettable memories.
-  // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
-  const userVisibleKinds = ['distilled', 'superseded'] as const;
-  if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
-    printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
-    printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
-    process.exit(1);
-  }
-  const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
-  const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
-  if (!ownerCheck.ok) {
-    printError(ownerCheck.message);
-    process.exit(1);
-  }
-  if (ownerCheck.message) printError(ownerCheck.message);
-  const ownerFlag = ownerCheck.value ?? null;
-  const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
-  const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
+  const envelope = parseRememberEnvelope(flags);
 
   // A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation
   // can filter on this row. Default tenant 'default' for unauthenticated CLI.
@@ -123,45 +144,61 @@ async function cmdRemember(
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
     schema_fit: schemaFit,
-    kind: kindFlag as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
-    scope: scopeForEnvelope,
-    owner: ownerFlag,
-    artifact_ref: artifactRefFlag,
+    kind: envelope.kind as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
+    scope: envelope.scope,
+    owner: envelope.owner,
+    artifact_ref: envelope.artifactRef,
     tenantId,
     baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
   });
 
-  // Salience gate: decide if this memory is worth storing
-  if (rememberConfig.salience.enabled && !Boolean(flags['pin']) && !Boolean(flags['force'])) {
-    const salienceResult = computeSalience(text, entry.tags, existing, {
-      recentWindow: rememberConfig.salience.recentWindow,
-      overlapThreshold: rememberConfig.salience.overlapThreshold,
-      minContentLength: rememberConfig.salience.minContentLength,
-      maxRepeatErrors: rememberConfig.salience.maxRepeatErrors,
-    });
-    if (salienceResult.decision === 'skip') {
-      console.log(`Skipped (salience: ${salienceResult.reason}, score ${salienceResult.score.toFixed(2)})`);
-      return;
-    }
-    if (salienceResult.decision === 'start_weak') {
-      entry.strength = salienceResult.score;
-      entry.half_life_days = Math.max(1, entry.half_life_days * 0.5);
-      console.log(`Weakened (salience: ${salienceResult.reason}, strength ${salienceResult.score.toFixed(2)})`);
-    }
-  }
+  if (!passesSalienceGate(entry, text, existing, rememberConfig, flags)) return;
 
   writeEntry(targetRoot, entry);
   updateStats(targetRoot, { remembered: 1 });
+  printRemembered(entry, useGlobal);
 
+  void embedMemory(targetRoot, entry);
+  await extractRememberFacts(targetRoot, entry, flags);
+}
+
+/** False when the gate skips the write; a start_weak verdict weakens `entry` in place. */
+function passesSalienceGate(
+  entry: MemoryEntry,
+  text: string,
+  existing: MemoryEntry[],
+  rememberConfig: HippoConfig,
+  flags: CliFlags,
+): boolean {
+  if (!rememberConfig.salience.enabled || Boolean(flags['pin']) || Boolean(flags['force'])) return true;
+  const salienceResult = computeSalience(text, entry.tags, existing, {
+    recentWindow: rememberConfig.salience.recentWindow,
+    overlapThreshold: rememberConfig.salience.overlapThreshold,
+    minContentLength: rememberConfig.salience.minContentLength,
+    maxRepeatErrors: rememberConfig.salience.maxRepeatErrors,
+  });
+  if (salienceResult.decision === 'skip') {
+    console.log(`Skipped (salience: ${salienceResult.reason}, score ${salienceResult.score.toFixed(2)})`);
+    return false;
+  }
+  if (salienceResult.decision === 'start_weak') {
+    entry.strength = salienceResult.score;
+    entry.half_life_days = Math.max(1, entry.half_life_days * 0.5);
+    console.log(`Weakened (salience: ${salienceResult.reason}, strength ${salienceResult.score.toFixed(2)})`);
+  }
+  return true;
+}
+
+function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
   console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | Confidence: ${entry.confidence}`);
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
   for (const w of vetSecrets(entry.content, entry.tags, false).warnings) printError(`Warning: ${w}`);
+}
 
-  void embedMemory(targetRoot, entry);
-
+async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flags: CliFlags): Promise<void> {
   const config = loadConfig(targetRoot);
   const shouldExtract = flags['extract'] || config.extraction.enabled === true;
   const apiKey = envAnthropicApiKey() ?? '';
@@ -326,6 +363,25 @@ function cmdTrace(
     process.exit(1);
   }
 
+  const t: TraceView = {
+    entry, id, sourceLabel,
+    ...traceStats(entry),
+    ...traceLineage(hippoRoot, globalRoot, entry, id, tenantId),
+  };
+  if (asJson) {
+    printTraceJson(t);
+    return;
+  }
+  printTraceText(t);
+}
+
+type TraceView = ReturnType<typeof traceStats> & ReturnType<typeof traceLineage> & {
+  entry: MemoryEntry;
+  id: string;
+  sourceLabel: 'local' | 'global';
+};
+
+function traceStats(entry: MemoryEntry) {
   const now = evalNow();
   const strength = calculateStrength(entry, now);
   const halfLife = entry.half_life_days;
@@ -341,7 +397,10 @@ function cmdTrace(
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
     calculateStrength(entry, new Date(now.getTime() + days * 86_400_000));
+  return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
+}
 
+function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const parentPreviews = parents.map((pid) => {
@@ -355,37 +414,42 @@ function cmdTrace(
     ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open', tenantId) : []),
   ];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
+  return { parentPreviews, myConflicts };
+}
 
-  if (asJson) {
-    console.log(JSON.stringify({
-      id: entry.id,
-      source: sourceLabel,
-      layer: entry.layer,
-      confidence: facets.tier,
-      aged_out: facets.agedOut,
-      pinned: entry.pinned,
-      starred: entry.starred,
-      tags: entry.tags,
-      content: entry.content,
-      created: entry.created,
-      age_days: ageDays,
-      last_retrieved: entry.last_retrieved,
-      days_since_last_retrieval: sinceLast,
-      retrieval_count: entry.retrieval_count,
-      strength_now: strength,
-      half_life_days: halfLife,
-      reward_factor: rewardFactor,
-      effective_half_life_days: effHalfLife,
-      projected_strength_30d: projectedAt(30),
-      projected_strength_90d: projectedAt(90),
-      outcome_positive: entry.outcome_positive,
-      outcome_negative: entry.outcome_negative,
-      parents: parentPreviews,
-      open_conflicts: myConflicts,
-    }, null, 2));
-    return;
-  }
+function printTraceJson(t: TraceView): void {
+  const { entry, facets } = t;
+  console.log(JSON.stringify({
+    id: entry.id,
+    source: t.sourceLabel,
+    layer: entry.layer,
+    confidence: facets.tier,
+    aged_out: facets.agedOut,
+    pinned: entry.pinned,
+    starred: entry.starred,
+    tags: entry.tags,
+    content: entry.content,
+    created: entry.created,
+    age_days: t.ageDays,
+    last_retrieved: entry.last_retrieved,
+    days_since_last_retrieval: t.sinceLast,
+    retrieval_count: entry.retrieval_count,
+    strength_now: t.strength,
+    half_life_days: t.halfLife,
+    reward_factor: t.rewardFactor,
+    effective_half_life_days: t.effHalfLife,
+    projected_strength_30d: t.projectedAt(30),
+    projected_strength_90d: t.projectedAt(90),
+    outcome_positive: entry.outcome_positive,
+    outcome_negative: entry.outcome_negative,
+    parents: t.parentPreviews,
+    open_conflicts: t.myConflicts,
+  }, null, 2));
+}
 
+function printTraceText(t: TraceView): void {
+  const { entry, id, sourceLabel, conf, ageDays, strength, projectedAt, halfLife, rewardFactor, effHalfLife, sinceLast } = t;
+  const { parentPreviews, myConflicts } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
   console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, 160)}${entry.content.length > 160 ? '...' : ''}`);

@@ -129,65 +129,16 @@ export async function cmdEmbed(
   // when no provider key is present (e.g. embedded earlier with a key that was
   // later removed). The provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
-    const entries = loadAllEntries(root);
-    const embIndex = loadEmbeddingIndex(root);
-    const db = openHippoDb(root);
-    try {
-      const count = resetAllPhysicsState(db, entries, embIndex);
-      console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
-    } finally {
-      closeHippoDb(db);
-    }
+    resetPhysics(root);
     return;
   }
 
   if (flags['status']) {
-    const entries = loadAllEntries(root);
-    const embIndex = loadEmbeddingIndex(root);
-    const activeIds = new Set(entries.map((e) => e.id));
-    const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-    const orphaned = Object.keys(embIndex).length - activeEmbedded;
-    console.log(`Embedding status: ${activeEmbedded}/${entries.length} memories embedded`);
-    if (orphaned > 0) {
-      console.log(`  ${orphaned} orphaned embeddings (run \`hippo embed\` to prune)`);
-    }
-    const missing = entries.filter((e) => !embIndex[e.id]);
-    if (missing.length > 0) {
-      console.log(`  ${missing.length} memories need embedding (run \`hippo embed\` to embed them)`);
-    }
+    printEmbedStatus(root);
     return;
   }
 
-  // Embedding (unlike status/reset) needs an available provider.
-  const embedProvider = (() => {
-    try {
-      return resolveEmbeddingProvider(root);
-    } catch (err) {
-      printError(err instanceof Error ? err.message : String(err));
-      return null;
-    }
-  })();
-  if (!embedProvider) {
-    process.exitCode = 1;
-    return;
-  }
-  if (!embedProvider.isAvailable()) {
-    if (loadConfig(root).embeddings.enabled === false) {
-      console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
-      return;
-    }
-    if (embedProvider.kind === 'local') {
-      console.log('Embeddings not available. Install @huggingface/transformers to enable:');
-      console.log('  npm install @huggingface/transformers');
-    } else {
-      printError(
-        `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
-      );
-      printError(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
-      process.exitCode = 1;
-    }
-    return;
-  }
+  if (!embedProviderReady(root)) return;
 
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
@@ -205,4 +156,65 @@ export async function cmdEmbed(
   const entriesAfter = loadAllEntries(root);
   const embIndexAfter = loadEmbeddingIndex(root);
   console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);
+}
+
+function resetPhysics(root: string): void {
+  const entries = loadAllEntries(root);
+  const embIndex = loadEmbeddingIndex(root);
+  const db = openHippoDb(root);
+  try {
+    const count = resetAllPhysicsState(db, entries, embIndex);
+    console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function printEmbedStatus(root: string): void {
+  const entries = loadAllEntries(root);
+  const embIndex = loadEmbeddingIndex(root);
+  const activeIds = new Set(entries.map((e) => e.id));
+  const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
+  const orphaned = Object.keys(embIndex).length - activeEmbedded;
+  console.log(`Embedding status: ${activeEmbedded}/${entries.length} memories embedded`);
+  if (orphaned > 0) {
+    console.log(`  ${orphaned} orphaned embeddings (run \`hippo embed\` to prune)`);
+  }
+  const missing = entries.filter((e) => !embIndex[e.id]);
+  if (missing.length > 0) {
+    console.log(`  ${missing.length} memories need embedding (run \`hippo embed\` to embed them)`);
+  }
+}
+
+/** False, after saying why, when no usable provider exists. */
+function embedProviderReady(root: string): boolean {
+  // Embedding (unlike status/reset) needs an available provider.
+  const embedProvider = (() => {
+    try {
+      return resolveEmbeddingProvider(root);
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  })();
+  if (!embedProvider) {
+    process.exitCode = 1;
+    return false;
+  }
+  if (embedProvider.isAvailable()) return true;
+  if (loadConfig(root).embeddings.enabled === false) {
+    console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
+    return false;
+  }
+  if (embedProvider.kind === 'local') {
+    console.log('Embeddings not available. Install @huggingface/transformers to enable:');
+    console.log('  npm install @huggingface/transformers');
+  } else {
+    printError(
+      `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
+    );
+    printError(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
+    process.exitCode = 1;
+  }
+  return false;
 }

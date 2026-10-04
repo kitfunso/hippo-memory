@@ -542,41 +542,42 @@ export async function handleForget({ hippoRoot, args, flags }: CommandContext): 
   cmdForget(hippoRoot, id, flags);
 }
 
+function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContext['flags']): void {
+  if (args[0] || flags['id'] !== undefined) {
+    printError('Usage: hippo invalidate --churn [--dry-run]');
+    printError('--churn takes no pattern or --id.');
+    process.exit(1);
+  }
+  if (!isGitRepo(process.cwd())) {
+    printError('hippo invalidate --churn must run inside a git repository.');
+    process.exit(1);
+  }
+  const churnDryRun = flags['dry-run'] === true;
+  let churnFailed = false;
+  for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
+    if (result.error) {
+      printError(`Churn-staleness check failed for ${root}: ${result.error}`);
+      churnFailed = true;
+      continue;
+    }
+    if (result.preview.length === 0) {
+      console.log(`No churn-stale candidates in ${root}.`);
+    } else if (churnDryRun) {
+      console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
+    } else {
+      console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
+    }
+    result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
+    if (result.skippedPinned.length > 0) {
+      console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
+    }
+  }
+  if (churnFailed) process.exit(1);
+}
+
 export function handleInvalidate({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  if (flags['churn'] === true) {
-    if (args[0] || flags['id'] !== undefined) {
-      printError('Usage: hippo invalidate --churn [--dry-run]');
-      printError('--churn takes no pattern or --id.');
-      process.exit(1);
-    }
-    if (!isGitRepo(process.cwd())) {
-      printError('hippo invalidate --churn must run inside a git repository.');
-      process.exit(1);
-    }
-    const churnDryRun = flags['dry-run'] === true;
-    let churnFailed = false;
-    for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
-      if (result.error) {
-        printError(`Churn-staleness check failed for ${root}: ${result.error}`);
-        churnFailed = true;
-        continue;
-      }
-      if (result.preview.length === 0) {
-        console.log(`No churn-stale candidates in ${root}.`);
-      } else if (churnDryRun) {
-        console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
-      } else {
-        console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
-      }
-      result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
-      if (result.skippedPinned.length > 0) {
-        console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
-      }
-    }
-    if (churnFailed) process.exit(1);
-    return;
-  }
+  if (flags['churn'] === true) return invalidateChurn(hippoRoot, args, flags);
   const target = args[0];
   if (flags['id'] === true) {
     // Value-less --id must never silently fall through to pattern mode

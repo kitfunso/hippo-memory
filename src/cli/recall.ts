@@ -507,9 +507,7 @@ function auditRecall(hippoRoot: string, globalRoot: string, query: string, fit: 
 /** Traces the recall, books retrieval for a non-empty list, then prints JSON or the fitted block. */
 function writeRecallResult(hippoRoot: string, query: string, o: RecallOptions, fit: FittedRecall, localIndex: RankedRecall['localIndex']): void {
   const { tenantId, sessionId, showWhy, asJson, includeContinuity } = o;
-  const { results, recallText, cmdPlanningFallacyHint, cmdPlanningFallacyWatching, continuityTokens } = fit;
-  const { activeSnapshot, sessionHandoff, recentSessionEvents } = fit.continuity;
-  const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = fit.hints;
+  const { results, recallText } = fit;
   // The token ledger books the block this recall prints, on whichever exit it takes.
   const emit = (text: string): void => {
     withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
@@ -533,31 +531,8 @@ function writeRecallResult(hippoRoot: string, query: string, o: RecallOptions, f
       explainMode: showWhy,
       results: [],
     });
-
-    if (asJson) {
-      const out: Record<string, unknown> = {
-        query,
-        results: [],
-        total: 0,
-        suppressionSummary: cmdSuppressionSummary,
-        // HTTP and MCP surface the hint whatever matched, so the zero-result JSON keeps it for parity.
-        ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
-        ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
-        ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
-        ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
-      };
-      if (includeContinuity) {
-        out.continuity = {
-          activeSnapshot,
-          sessionHandoff,
-          recentSessionEvents,
-        };
-        out.continuityTokens = continuityTokens;
-      }
-      emit(JSON.stringify(out));
-      return;
-    }
-    emit(recallText);
+    // HTTP and MCP surface the hint whatever matched, so the zero-result JSON keeps it for parity.
+    emit(asJson ? JSON.stringify({ query, results: [], total: 0, ...recallJsonTail(fit, includeContinuity) }) : recallText);
     return;
   }
 
@@ -565,29 +540,39 @@ function writeRecallResult(hippoRoot: string, query: string, o: RecallOptions, f
 
   if (asJson) {
     const output = results.map((r) => recallJsonRow(r, query, showWhy, o.primaryIsGlobal || (isInitialized(o.globalRoot) && !localIndex.entries[r.entry.id])));
-    const jsonOut: Record<string, unknown> = {
+    emit(JSON.stringify({
       query,
       budget: o.budget,
       results: output,
       total: output.length,
-      suppressionSummary: cmdSuppressionSummary,
-      ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
-      ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
-      ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
-      ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
-    };
-    if (includeContinuity) {
-      jsonOut.continuity = {
-        activeSnapshot,
-        sessionHandoff,
-        recentSessionEvents,
-      };
-      jsonOut.continuityTokens = continuityTokens;
-    }
-    emit(JSON.stringify(jsonOut));
+      ...recallJsonTail(fit, includeContinuity),
+    }));
     return;
   }
   emit(recallText);
+}
+
+/** The JSON keys after the result list: suppression summary, any bias hints, then continuity when asked for. */
+function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined) {
+  const { cmdPlanningFallacyHint, cmdPlanningFallacyWatching, continuityTokens } = fit;
+  const { activeSnapshot, sessionHandoff, recentSessionEvents } = fit.continuity;
+  const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = fit.hints;
+  const tail: Record<string, unknown> = {
+    suppressionSummary: cmdSuppressionSummary,
+    ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
+    ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
+    ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
+    ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
+  };
+  if (includeContinuity) {
+    tail.continuity = {
+      activeSnapshot,
+      sessionHandoff,
+      recentSessionEvents,
+    };
+    tail.continuityTokens = continuityTokens;
+  }
+  return tail;
 }
 
 /** Strengthens the returned rows and persists last_retrieval_ids and last_trace_id in one saveIndex call. */
