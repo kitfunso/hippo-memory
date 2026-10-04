@@ -125,21 +125,23 @@ describe('hippo projects repair', () => {
     expect(mirror(two.id)).toBeNull();
   });
 
-  it('sets aside a project-tagged import whose text a user-global import holds, and nothing else', () => {
+  it('sets aside a project-tagged import whose text, spacing aside, a user-global import holds, and nothing else', () => {
     note('the home folder note every session can see', '');
     const copy = note('the home folder note every session can see', 'repo-wt-a');
     const own = note('a note only this worktree imported', 'repo-wt-a');
+    note('a home note\nreflowed since', '');
+    const reflowed = note('a home note reflowed  since', 'repo-wt-a');
     const saved = row('the home folder note every session can see', 'repo-wt-a');
     open();
 
-    expect(repairProjects(db, home, { tenantId: T, dryRun: true }).copies).toEqual([copy.id]);
+    expect([...repairProjects(db, home, { tenantId: T, dryRun: true }).copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect(byId().has(copy.id)).toBe(true);
 
     const r = repairProjects(db, home, { tenantId: T, dryRun: false });
     const rows = byId();
-    expect(r.copies).toEqual([copy.id]);
+    expect([...r.copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect([rows.has(copy.id), rows.has(own.id), rows.has(saved.id)]).toEqual([false, true, true]);
-    expect(listDormantSnapshots(db, T).map((s) => s.entry.id)).toEqual([copy.id]);
+    expect(listDormantSnapshots(db, T).map((s) => s.entry.id).sort()).toEqual([copy.id, reflowed.id].sort());
     expect(mirror(copy.id)).toBeNull();
   });
 

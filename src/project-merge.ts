@@ -11,6 +11,7 @@ import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './d
 import { processEnv } from './env.js';
 import { calculateStrength, type MemoryEntry } from './memory.js';
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
+import { duplicateKey } from './same-text.js';
 import { removeEntryMirrors } from './store/mirrors.js';
 import { deleteEntryRowInTx, writeEntryMirrors } from './store/entry-writes.js';
 import { selectAllEntries, selectLiveEntriesBySourcePrefix } from './store/entry-reads.js';
@@ -73,7 +74,8 @@ export function listProjects(db: DatabaseSyncLike, tenantId: string): ProjectSum
   for (const e of live) {
     const origin = e.origin_project ?? null;
     byOrigin.set(origin, [...(byOrigin.get(origin) ?? []), e]);
-    if (isImport(e)) holders.set(e.content, (holders.get(e.content) ?? new Set<string | null>()).add(origin));
+    const key = duplicateKey(e.content);
+    if (isImport(e)) holders.set(key, (holders.get(key) ?? new Set<string | null>()).add(origin));
   }
   return [...byOrigin].map(([origin, rows]) => {
     const imports = rows.filter(isImport);
@@ -82,7 +84,7 @@ export function listProjects(db: DatabaseSyncLike, tenantId: string): ProjectSum
       live: rows.length,
       imported: imports.length,
       newest: rows.reduce((max, e) => (e.created > max ? e.created : max), ''),
-      copiesElsewhere: imports.filter((e) => (holders.get(e.content)?.size ?? 0) > 1).length,
+      copiesElsewhere: imports.filter((e) => (holders.get(duplicateKey(e.content))?.size ?? 0) > 1).length,
     };
   }).sort((a, b) => b.newest.localeCompare(a.newest));
 }
@@ -158,8 +160,8 @@ function foldInTx(db: DatabaseSyncLike, tenantId: string, from: string, into: st
 /** Live imports under a project name whose exact text a user-global import holds: a session folder's notes stamped with the folder it ended in. */
 function importCopies(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
   const live = selectAllEntries(db, tenantId).filter((e) => !e.superseded_by && isImport(e));
-  const userGlobal = new Set(live.filter((e) => e.origin_project === '').map((e) => e.content));
-  return live.filter((e) => e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null && userGlobal.has(e.content));
+  const userGlobal = new Set(live.filter((e) => e.origin_project === '').map((e) => duplicateKey(e.content)));
+  return live.filter((e) => e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null && userGlobal.has(duplicateKey(e.content)));
 }
 
 /** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its notes under any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
