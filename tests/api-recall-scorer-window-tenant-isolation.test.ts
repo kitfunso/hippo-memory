@@ -13,7 +13,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -30,6 +30,7 @@ function ctxFor(root: string, tenantId: string): Context {
 }
 function makeRaw(text: string, tenantId: string): MemoryEntry {
   return createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',

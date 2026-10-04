@@ -23,6 +23,7 @@ import {
   createMemory,
   applyOutcome,
   type MemoryEntry,
+  DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
 import {
   initStore,
@@ -223,7 +224,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
   // For static mode: pre-load all lessons
   if (mode === 'static') {
     for (const cat of TRAP_CATEGORIES) {
-      const entry = createMemory(cat.lesson, { tags: cat.tags });
+      const entry = createMemory(cat.lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: cat.tags });
       writeEntry(tmpDir, entry);
     }
   }
@@ -274,6 +275,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
       // For hippo mode: learn from the mistake
       if (mode === 'hippo') {
         const lesson = createMemory(cat.lesson, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           tags: [...cat.tags, 'error'],
           emotional_valence: 'negative',
         });

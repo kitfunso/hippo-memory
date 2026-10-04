@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 import {
   hashQueryText,
@@ -42,6 +42,7 @@ function ctxFor(root: string, subject: string = 'cli'): Context {
 
 function seedQueryMatchingMemory(root: string, content: string): string {
   const mem = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',

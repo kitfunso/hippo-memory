@@ -20,7 +20,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { consolidate } from '../src/consolidate.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
@@ -52,8 +52,8 @@ describe('T3: consolidateDb lazy open', () => {
 
       const shortText = 'renew the expiring vpn certificate before the weekend';
       const longText = 'renew the expiring vpn certificate before the weekend and alert the network team';
-      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
-      const e2 = createMemory(longText, { layer: Layer.Episodic });
+      const e1 = { ...createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
+      const e2 = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
@@ -96,8 +96,8 @@ describe('T3: consolidateDb lazy open', () => {
 
       const shortText = 'back up the primary database before the migration';
       const longText = 'back up the primary database before the migration and verify checksums';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic });
-      const e2 = createMemory(longText, { layer: Layer.Episodic });
+      const e1 = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+      const e2 = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
       writeEntry(home, e1);
       writeEntry(home, e2);
 

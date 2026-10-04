@@ -18,7 +18,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../src/recall-history.js';
 
@@ -31,6 +31,7 @@ function makeRoot(): string {
 
 function seed(root: string, content: string): string {
   const m = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',

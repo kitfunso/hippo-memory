@@ -21,7 +21,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -108,8 +108,8 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
   it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', () => {
     const globalDir = env.HIPPO_HOME;
     initStore(globalDir);
-    writeEntry(globalDir, createMemory('global clean deploykey note'));
-    writeEntry(globalDir, createMemory('global private deploykey note', { scope: 'slack:private:CG' }));
+    writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
 
     const out = hippo(home, env, 'recall', 'deploykey', '--limit', '10');
     expect(out).toContain('global clean deploykey note');
@@ -122,8 +122,8 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     // covered on the local-only path.
     const globalDir = env.HIPPO_HOME;
     initStore(globalDir);
-    writeEntry(globalDir, createMemory('global clean deploykey note'));
-    writeEntry(globalDir, createMemory('global private deploykey note', { scope: 'slack:private:CG' }));
+    writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
 
     const out = hippo(home, env, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
     expect(out).toContain('global private deploykey note');
@@ -140,9 +140,9 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     // NOT LIKE '%:private:%' exclusion keeps the window for admitted rows.
     const hippoDir = join(home, '.hippo');
     for (let i = 0; i < 220; i++) {
-      writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { scope: 'slack:private:Cbulk' }));
+      writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:Cbulk' }));
     }
-    writeEntry(hippoDir, createMemory('windowstarve admitted public row'));
+    writeEntry(hippoDir, createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', undefined, 'default');
     const contents = entries.map((e) => e.content);

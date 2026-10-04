@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { Readable } from 'node:stream';
+import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
 import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
@@ -50,7 +51,7 @@ async function pickFreePort(): Promise<number> {
 }
 
 interface SpawnedServer {
-  child: ChildProcessWithoutNullStreams;
+  child: ChildProcessByStdio<null, Readable, Readable>;
   port: number;
   url: string;
   stop: () => Promise<void>;

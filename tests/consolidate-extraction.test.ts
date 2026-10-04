@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
 import { initStore, writeEntry, loadAllEntries, listMemoryConflicts } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 let tmpDir: string;
 
@@ -21,11 +21,13 @@ describe('Extracted fact protection', () => {
     initStore(tmpDir);
 
     const fact1 = createMemory('the deployment uses kubernetes pods on port 8080', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['extracted'],
       extracted_from: 'source-memory-1',
     });
     const fact2 = createMemory('the deployment uses kubernetes pods on port 8080 with nginx', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['extracted'],
       extracted_from: 'source-memory-2',
@@ -51,9 +53,9 @@ describe('Extracted fact protection', () => {
     initStore(tmpDir);
 
     const base = 'the server crashed due to memory overflow in the worker process';
-    const ep1 = createMemory(base, { layer: Layer.Episodic });
-    const ep2 = createMemory(base + ' again today', { layer: Layer.Episodic });
-    const ep3 = createMemory(base + ' once more', { layer: Layer.Episodic });
+    const ep1 = createMemory(base, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const ep2 = createMemory(base + ' again today', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const ep3 = createMemory(base + ' once more', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
 
     writeEntry(tmpDir, ep1);
     writeEntry(tmpDir, ep2);
@@ -68,11 +70,13 @@ describe('Extracted fact protection', () => {
     initStore(tmpDir);
 
     const fact1 = createMemory('always use port 3000 for the dev server', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       tags: ['extracted'],
       extracted_from: 'source-memory-1',
     });
     const fact2 = createMemory('never use port 3000 for the dev server', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       tags: ['extracted'],
       extracted_from: 'source-memory-2',

@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry } from '../src/memory.js';
+import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
@@ -28,7 +28,7 @@ function seed(
   content: string,
   over: Partial<MemoryEntry> = {},
 ): MemoryEntry {
-  const e = { ...createMemory(content, { tags: ['facets'] }), ...over } as MemoryEntry;
+  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }), ...over } as MemoryEntry;
   writeEntry(root, e);
   return e;
 }

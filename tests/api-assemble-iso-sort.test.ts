@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
 
 /**
@@ -91,6 +91,7 @@ describe('assemble ISO sort (F4) — integration', () => {
     ];
     for (const i of fixtureOrder) {
       const e: MemoryEntry = createMemory(`row ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         confidence: 'observed',
         kind: 'raw',

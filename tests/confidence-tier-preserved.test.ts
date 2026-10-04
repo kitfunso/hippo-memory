@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory, resolveConfidence, type MemoryEntry } from '../src/memory.js';
+import { createMemory, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { markRetrieved } from '../src/memory.js';
 import { sampleForReplay } from '../src/replay.js';
 
@@ -24,7 +24,7 @@ afterEach(() => {
 function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['confidence'] }): MemoryEntry {
   const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
   return {
-    ...createMemory('an aged memory used to probe the confidence tier', { confidence: overrides.confidence }),
+    ...createMemory('an aged memory used to probe the confidence tier', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, confidence: overrides.confidence }),
     last_retrieved: old,
     half_life_days: 3650, // survives DECAY_THRESHOLD so it stays a survivor
     ...overrides,

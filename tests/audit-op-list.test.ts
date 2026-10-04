@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -23,7 +23,7 @@ describe('audit op filter', () => {
     hippoRoot = join(home, '.hippo');
     initStore(hippoRoot);
     // writeEntry appends a 'remember' audit row, so an accepted op has a row to return.
-    writeEntry(hippoRoot, createMemory('audit op filter seed'));
+    writeEntry(hippoRoot, createMemory('audit op filter seed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
   });

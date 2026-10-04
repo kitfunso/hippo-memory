@@ -13,7 +13,7 @@ import {
   writeEntry,
   loadAllEntries,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
 import { buildCorrectionLatency } from '../src/correction-latency.js';
 import { estimateTokens } from '../src/search.js';
@@ -273,6 +273,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     writeEntry(
       tmpDir,
       createMemory('slack message from keith about the brand voice', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
         artifact_ref: 'slack://team/eng/1714500000.001',
@@ -282,6 +283,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     writeEntry(
       tmpDir,
       createMemory('github PR body for the envelope migration', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'agent:hippo',
         artifact_ref: 'gh://hippo/hippo-memory/pull/42',
@@ -291,6 +293,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     writeEntry(
       tmpDir,
       createMemory('legacy distilled memory predating the envelope work', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'distilled',
         source: 'cli',
       }),
@@ -298,6 +301,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     writeEntry(
       tmpDir,
       createMemory('raw row from a misconfigured connector with no envelope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         source: 'broken-connector',
       }),
@@ -324,6 +328,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     writeEntry(
       tmpDir,
       createMemory('slack message ingest with full envelope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
         artifact_ref: 'slack://team/eng/1714500001.002',
@@ -333,6 +338,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     writeEntry(
       tmpDir,
       createMemory('github PR body with full envelope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'agent:hippo',
         artifact_ref: 'gh://hippo/hippo-memory/pull/43',
@@ -350,7 +356,7 @@ describe('Company Brain provenance coverage scorecard', () => {
 
 describe('Company Brain correction-latency scorecard', () => {
   it('returns an empty report when no supersessions exist', () => {
-    const a = createMemory('belief: pricing tier is 100', {});
+    const a = createMemory('belief: pricing tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const report = buildCorrectionLatency([a]);
     expect(report.count).toBe(0);
     expect(report.manualCount).toBe(0);
@@ -362,9 +368,9 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('flags direct supersedes as manual with zero measurable latency', () => {
-    const oldEntry = createMemory('belief: tier is 100', {});
+    const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldEntry.created = '2026-04-01T00:00:00.000Z';
-    const newEntry = createMemory('belief: tier is 120', {});
+    const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     newEntry.created = '2026-04-02T00:00:00.000Z';
     oldEntry.superseded_by = newEntry.id;
 
@@ -380,16 +386,18 @@ describe('Company Brain correction-latency scorecard', () => {
 
   it('measures extraction-driven latency from receipt to supersession', () => {
     const rawReceipt = createMemory('slack: pricing tier moved to 120 today', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       kind: 'raw',
       owner: 'user:keith',
       artifact_ref: 'slack://team/eng/1714600100.001',
     });
     rawReceipt.created = '2026-04-01T10:00:00.000Z';
 
-    const oldFact = createMemory('belief: tier is 100', {});
+    const oldFact = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldFact.created = '2026-03-15T00:00:00.000Z';
 
     const newFact = createMemory('belief: tier is 120', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       extracted_from: rawReceipt.id,
     });
     newFact.created = '2026-04-01T10:30:00.000Z';
@@ -407,9 +415,9 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('skips pairs with malformed timestamps so NaN never reaches percentiles', () => {
-    const oldEntry = createMemory('belief: tier is 100', {});
+    const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldEntry.created = '2026-04-01T00:00:00.000Z';
-    const newEntry = createMemory('belief: tier is 120', {});
+    const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     newEntry.created = 'not-a-date';
     oldEntry.superseded_by = newEntry.id;
 
@@ -419,7 +427,7 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('handles dangling superseded_by pointers without throwing', () => {
-    const oldEntry = createMemory('belief points at a missing successor', {});
+    const oldEntry = createMemory('belief points at a missing successor', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldEntry.superseded_by = 'mem-does-not-exist';
 
     const report = buildCorrectionLatency([oldEntry]);
@@ -428,22 +436,23 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('computes p50/p95/max across multiple extraction-driven corrections', () => {
-    const entries = [];
+    const entries: MemoryEntry[] = [];
     const baseRaw = '2026-04-01T00:00:00.000Z';
     const lagsMin = [5, 10, 15, 20, 25, 30, 60, 120, 300, 600];
 
     lagsMin.forEach((lagMin, i) => {
       const raw = createMemory(`raw receipt ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
         artifact_ref: `slack://team/eng/${i}`,
       });
       raw.created = baseRaw;
 
-      const oldFact = createMemory(`belief ${i} v1`, {});
+      const oldFact = createMemory(`belief ${i} v1`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       oldFact.created = '2026-03-01T00:00:00.000Z';
 
-      const newFact = createMemory(`belief ${i} v2`, { extracted_from: raw.id });
+      const newFact = createMemory(`belief ${i} v2`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extracted_from: raw.id });
       newFact.created = new Date(
         new Date(baseRaw).getTime() + lagMin * 60 * 1000,
       ).toISOString();

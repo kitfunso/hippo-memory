@@ -10,7 +10,7 @@ import {
   detectChurnStale,
 } from '../src/invalidation.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory, CHURN_STALE_TAG } from '../src/memory.js';
+import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { search, hybridSearch, physicsSearch, CHURN_STALE_RANK_MULTIPLIER } from '../src/search.js';
 import { openHippoDb } from '../src/db.js';
 import { savePhysicsState } from '../src/physics-state.js';
@@ -110,7 +110,7 @@ describe('detectChurnStale', () => {
   });
 
   function storeMemory(content: string, opts: { created?: string; pinned?: boolean; origin?: string | null } = {}): ReturnType<typeof createMemory> {
-    const mem = createMemory(content, { tags: [], pinned: opts.pinned });
+    const mem = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], pinned: opts.pinned });
     if (opts.created) mem.created = opts.created;
     mem.origin_project = opts.origin === undefined ? project : opts.origin;
     writeEntry(hippoRoot, mem);
@@ -411,7 +411,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   it('drops the churn-stale tag on good=true', () => {
-    const mem = createMemory('some tagged content', { tags: [CHURN_STALE_TAG] });
+    const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
@@ -421,7 +421,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   it('keeps the churn-stale tag on good=false', () => {
-    const mem = createMemory('some tagged content', { tags: [CHURN_STALE_TAG] });
+    const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
@@ -431,7 +431,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   it('a good outcome on an untagged memory is a no-op for tags', () => {
-    const mem = createMemory('plain content', { tags: ['other'] });
+    const mem = createMemory('plain content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['other'] });
     writeEntry(hippoRoot, mem);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
@@ -447,8 +447,8 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
 
 describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   it('halves the sync search() score for a churn-stale entry vs an otherwise-identical one', () => {
-    const plain = createMemory('widget factory configuration details here', { tags: ['sometag'] });
-    const stale = createMemory('widget factory configuration details here', { tags: ['sometag', CHURN_STALE_TAG] });
+    const plain = createMemory('widget factory configuration details here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['sometag'] });
+    const stale = createMemory('widget factory configuration details here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['sometag', CHURN_STALE_TAG] });
 
     const results = search('widget factory configuration', [plain, stale]);
     const plainResult = results.find((r) => r.entry.id === plain.id)!;
@@ -457,14 +457,14 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('applies CHURN_STALE_RANK_MULTIPLIER in the hybrid explain breakdown', async () => {
-    const stale = createMemory('gadget assembly line documentation notes', { tags: [CHURN_STALE_TAG] });
+    const stale = createMemory('gadget assembly line documentation notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     const [result] = await hybridSearch('gadget assembly line', [stale], { explain: true });
     expect(result.breakdown!.churnStaleMultiplier).toBe(CHURN_STALE_RANK_MULTIPLIER);
   });
 
   it('ranks a churn-stale entry below an identical untagged one in hybridSearch', async () => {
-    const plain = createMemory('sprocket calibration procedure notes', { tags: [] });
-    const stale = createMemory('sprocket calibration procedure notes', { tags: [CHURN_STALE_TAG] });
+    const plain = createMemory('sprocket calibration procedure notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+    const stale = createMemory('sprocket calibration procedure notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     const results = await hybridSearch('sprocket calibration', [stale, plain]);
     expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
   });
@@ -473,8 +473,8 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-physics-'));
     try {
       initStore(hippoRoot);
-      const plain = createMemory('flywheel torque limits', { tags: [] });
-      const stale = createMemory('flywheel torque limits', { tags: [CHURN_STALE_TAG] });
+      const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+      const stale = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
       writeEntry(hippoRoot, plain);
       writeEntry(hippoRoot, stale);
       const particle = (id: string): PhysicsParticle => ({
@@ -501,8 +501,8 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-pool-'));
     try {
       initStore(hippoRoot);
-      const plain = createMemory('flywheel torque limits', { tags: [] });
-      const stale = createMemory('flywheel torque limits', { tags: [CHURN_STALE_TAG] });
+      const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+      const stale = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
       writeEntry(hippoRoot, plain);
       writeEntry(hippoRoot, stale);
       const db = openHippoDb(hippoRoot);
@@ -524,8 +524,8 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('penalises a churn-stale child injected by DAG drill-down (sync and hybrid)', async () => {
-    const parent = createMemory('quasar ledger overview', { tags: ['dag-summary'] });
-    const child = createMemory('unrelated detail text', { tags: [CHURN_STALE_TAG] });
+    const parent = createMemory('quasar ledger overview', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['dag-summary'] });
+    const child = createMemory('unrelated detail text', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     child.dag_parent_id = parent.id;
     for (const results of [search('quasar ledger', [parent, child]), await hybridSearch('quasar ledger', [parent, child])]) {
       const p = results.find((r) => r.entry.id === parent.id)!;
@@ -538,9 +538,9 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-recall-'));
     try {
       initStore(hippoRoot);
-      const stale = createMemory('zephyr zephyr zephyr gearbox', { tags: [CHURN_STALE_TAG] });
-      const b = createMemory('zephyr gearbox notes with a few more words', { tags: [] });
-      const c = createMemory('zephyr gearbox notes with many many more padding words here', { tags: [] });
+      const stale = createMemory('zephyr zephyr zephyr gearbox', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+      const b = createMemory('zephyr gearbox notes with a few more words', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+      const c = createMemory('zephyr gearbox notes with many many more padding words here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       for (const m of [stale, b, c]) writeEntry(hippoRoot, m);
       const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
       const ids = api.recall(ctx, { query: 'zephyr' }).results.map((r) => r.id);
@@ -552,7 +552,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('records churnStaleMultiplier as 1.0 for a non-tagged entry', async () => {
-    const plain = createMemory('gadget assembly line documentation notes', { tags: [] });
+    const plain = createMemory('gadget assembly line documentation notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     const [result] = await hybridSearch('gadget assembly line', [plain], { explain: true });
     expect(result.breakdown!.churnStaleMultiplier).toBe(1.0);
   });
@@ -660,7 +660,7 @@ describe('hippo invalidate --churn (CLI)', () => {
 
   it('dry-run previews the tag without writing, then a live run tags it', () => {
     const hippoRoot = path.join(repoDir, '.hippo');
-    const mem = createMemory('see k.ts for the setup', { tags: [] });
+    const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.origin_project = path.basename(repoDir).toLowerCase();
     writeEntry(hippoRoot, mem);
@@ -679,7 +679,7 @@ describe('hippo invalidate --churn (CLI)', () => {
 
   it('also tags this repo\'s memories in the global store', () => {
     initStore(globalRoot);
-    const mem = createMemory('see k.ts for the setup', { tags: [] });
+    const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.origin_project = path.basename(repoDir).toLowerCase();
     writeEntry(globalRoot, mem);
@@ -691,7 +691,7 @@ describe('hippo invalidate --churn (CLI)', () => {
   });
 
   it('exits non-zero when the git read fails', () => {
-    const mem = createMemory('see k.ts for the setup', { tags: [] });
+    const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.origin_project = path.basename(repoDir).toLowerCase();
     writeEntry(path.join(repoDir, '.hippo'), mem);
@@ -723,7 +723,7 @@ describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
   });
 
   function setupChurnMemory(hippoRoot: string): string {
-    const mem = createMemory('see m.ts for the setup', { tags: [] });
+    const mem = createMemory('see m.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.origin_project = path.basename(repoDir).toLowerCase();
     writeEntry(hippoRoot, mem);

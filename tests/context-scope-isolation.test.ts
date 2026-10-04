@@ -16,7 +16,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 
@@ -46,10 +46,10 @@ beforeEach(() => {
   process.env.HIPPO_HOME = globalStore;
   clearProjectIdentityCache();
 
-  writeEntry(projA, createMemory(ALPHA, { pinned: true }));
-  writeEntry(globalStore, { ...createMemory(GLOBAL_PREF, { pinned: true }), origin_project: '' });
-  writeEntry(globalStore, { ...createMemory(BRAVO, { pinned: true }), origin_project: 'proj-b' });
-  writeEntry(globalStore, { ...createMemory(LEGACY, { pinned: true }), origin_project: 'placeholder' });
+  writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
+  writeEntry(globalStore, { ...createMemory(GLOBAL_PREF, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: '' });
+  writeEntry(globalStore, { ...createMemory(BRAVO, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: 'proj-b' });
+  writeEntry(globalStore, { ...createMemory(LEGACY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: 'placeholder' });
   const db = openHippoDb(globalStore);
   try {
     db.prepare(`UPDATE memories SET origin_project = NULL WHERE content = ?`).run(LEGACY);
@@ -141,7 +141,7 @@ describe('getContext origin partition (project A session)', () => {
     // A large cross-project row that matches the query strongly; the small
     // in-scope rows must still fill the (tiny) budget after it is excluded.
     writeEntry(globalStore, {
-      ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40)),
+      ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       origin_project: 'proj-b',
     });
     const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
@@ -152,15 +152,15 @@ describe('getContext origin partition (project A session)', () => {
 
   it('an excluded duplicate cannot shadow its admitted copy in query mode (admission runs before dedupe)', async () => {
     const DUP = 'deploykey duplicated fact shared to global';
-    writeEntry(projA, { ...createMemory(DUP, { scope: 'github:private:x' }) }); // excluded (private scope)
-    writeEntry(globalStore, { ...createMemory(DUP), origin_project: '' });      // admitted (user-global)
+    writeEntry(projA, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'github:private:x' }) }); // excluded (private scope)
+    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: '' });      // admitted (user-global)
     const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey duplicated' });
     expect(contents(result.entries)).toContain(DUP);
   });
 
   it('private-scope rows never ambient-inject even from the local store (S2 parity)', async () => {
     const secret = 'PRIVATE-SCOPED deploykey row that must not inject';
-    writeEntry(projA, { ...createMemory(secret, { pinned: true, scope: 'github:private:repo-x' }) });
+    writeEntry(projA, { ...createMemory(secret, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, scope: 'github:private:repo-x' }) });
     const result = await getContext(ctx, { ...base, pinnedOnly: true });
     expect(contents(result.entries)).not.toContain(secret);
   });

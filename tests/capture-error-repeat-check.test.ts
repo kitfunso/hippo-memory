@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'module';
 import { initStore, writeEntry, loadContentsWithTag } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { captureToolFailure } from '../src/capture-error.js';
 import type { DatabaseSyncLike } from '../src/db.js';
 
@@ -59,6 +59,7 @@ describe('capture-error repeat check does not read every memory', () => {
 
   it('a tag that merely contains the substring "auto-captured" is not treated as auto-captured', () => {
     const entry = createMemory('a memory whose tag looks like the auto-captured marker but is not', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['x"auto-captured'],
       tenantId: 'default',
     });

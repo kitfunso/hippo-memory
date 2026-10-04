@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { consolidate } from '../src/consolidate.js';
 
 describe('DAG construction during consolidation', () => {
@@ -21,6 +21,7 @@ describe('DAG construction during consolidation', () => {
   it('reports dagCandidateClusters in consolidation result', async () => {
     for (let i = 0; i < 4; i++) {
       const fact = createMemory(`John basketball fact ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Semantic,
         tags: ['extracted', 'speaker:John', 'topic:basketball'],
         extracted_from: `source-${i}`,
@@ -35,6 +36,7 @@ describe('DAG construction during consolidation', () => {
 
   it('dagCandidateClusters is 0 when no extracted facts exist', async () => {
     const entry = createMemory('plain memory with no extraction', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
     writeEntry(hippoRoot, entry);

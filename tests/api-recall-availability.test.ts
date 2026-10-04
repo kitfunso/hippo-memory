@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -50,6 +50,7 @@ function countAuditOps(root: string, op: string): number {
  *  last_retrieved stays recent so the row is not decayed out of recall. */
 function seedAged(root: string, content: string, ageDays: number, scope?: string): string {
   const options: Parameters<typeof createMemory>[1] = {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',

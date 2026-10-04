@@ -30,7 +30,7 @@ import { search, estimateTokens } from '../src/search.js';
 import { markRetrieved } from '../src/memory.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,7 +47,7 @@ function daysAgo(n: number): string {
 function seed(
   label: string,
   content: string,
-  opts: Parameters<typeof createMemory>[1] = {}
+  opts: Partial<Parameters<typeof createMemory>[1]> = {}
 ): MemoryEntry {
   const entry = createMemory7(content, opts);
   // Use label as a deterministic ID fragment so tests are readable

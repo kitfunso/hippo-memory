@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, MemoryEntry } from '../src/memory.js';
+import { createMemory, MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -52,7 +52,7 @@ function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
 describe('hippo correction-latency CLI', () => {
   it('reports the empty case when no supersessions exist', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('a single belief, never corrected', {}));
+    writeEntry(hippoDir, createMemory('a single belief, never corrected', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const r = runHippo(['correction-latency']);
     expect(r.status).toBe(0);
@@ -64,6 +64,7 @@ describe('hippo correction-latency CLI', () => {
 
     const raw = withCreated(
       createMemory('slack: tier moved to 120', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
         artifact_ref: 'slack://team/eng/1714600200.001',
@@ -73,11 +74,11 @@ describe('hippo correction-latency CLI', () => {
     writeEntry(hippoDir, raw);
 
     const oldFact = withCreated(
-      createMemory('belief: tier is 100', {}),
+      createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       '2026-03-15T00:00:00.000Z',
     );
     const newFact = withCreated(
-      createMemory('belief: tier is 120', { extracted_from: raw.id }),
+      createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extracted_from: raw.id }),
       '2026-04-01T10:30:00.000Z',
     );
     oldFact.superseded_by = newFact.id;
@@ -101,11 +102,11 @@ describe('hippo correction-latency CLI', () => {
     initStore(hippoDir);
 
     const oldFact = withCreated(
-      createMemory('belief: tier is 100', {}),
+      createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       '2026-03-15T00:00:00.000Z',
     );
     const newFact = withCreated(
-      createMemory('belief: tier is 120', {}),
+      createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       '2026-04-01T10:30:00.000Z',
     );
     oldFact.superseded_by = newFact.id;

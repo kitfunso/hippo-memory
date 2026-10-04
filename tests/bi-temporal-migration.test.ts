@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 describe('bi-temporal schema v11', () => {
   it('new entries have valid_from defaulting to created and superseded_by null', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-bt-'));
     initStore(home);
-    const e = createMemory('test bi-temporal', { layer: Layer.Episodic });
+    const e = createMemory('test bi-temporal', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     writeEntry(home, e);
     const read = readEntry(home, e.id);
     expect(read).not.toBeNull();
@@ -22,7 +22,7 @@ describe('bi-temporal schema v11', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-bt-'));
     initStore(home);
     const pastDate = '2025-01-01T00:00:00.000Z';
-    const e = createMemory('historical fact', { layer: Layer.Episodic, valid_from: pastDate });
+    const e = createMemory('historical fact', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, valid_from: pastDate });
     expect(e.valid_from).toBe(pastDate);
     writeEntry(home, e);
     const read = readEntry(home, e.id);

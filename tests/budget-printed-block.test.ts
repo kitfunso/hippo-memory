@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore, writeEntry, loadIndex } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { estimateTokens } from '../src/search.js';
 import { assemble, drillDown, type Context } from '../src/api.js';
@@ -34,7 +34,7 @@ function noteText(i: number): string {
 }
 
 function seed(content: string, extra: Partial<MemoryEntry> = {}): string {
-  const e = { ...createMemory(content, { tags: TAGS }), ...extra };
+  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: TAGS }), ...extra };
   writeEntry(hippoDir, e);
   return e.id;
 }
@@ -69,7 +69,8 @@ function shownNotes(text: string): string[] {
 function ledger(): LedgerRow[] {
   const db = openHippoDb(hippoDir);
   try {
-    return db.prepare('SELECT surface, tokens FROM token_ledger ORDER BY id').all()
+    // SAFETY: the SELECT names exactly these two token_ledger columns.
+    return (db.prepare('SELECT surface, tokens FROM token_ledger ORDER BY id').all() as Array<{ surface: string; tokens: number }>)
       .map((r) => ({ surface: String(r.surface), tokens: Number(r.tokens) }));
   } finally {
     closeHippoDb(db);
@@ -234,7 +235,7 @@ describe('assemble and drill', () => {
 
   function seedSession(n: number): string[] {
     return Array.from({ length: n }, (_, i) => {
-      const e = createMemory(line(i), { layer: Layer.Buffer, kind: 'raw', source_session_id: sid, tags: TAGS });
+      const e = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, kind: 'raw', source_session_id: sid, tags: TAGS });
       e.created = new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
       writeEntry(hippoDir, e);
       return e.id;
@@ -242,11 +243,11 @@ describe('assemble and drill', () => {
   }
 
   function seedSummary(children: number): string {
-    const s = createMemory('Rollup of the rollback runbook thread', { layer: Layer.Semantic, dag_level: 2, tags: ['dag-summary'] });
+    const s = createMemory('Rollup of the rollback runbook thread', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2, tags: ['dag-summary'] });
     s.descendant_count = children;
     writeEntry(hippoDir, s);
     for (let i = 0; i < children; i++) {
-      const c = createMemory(line(i), { dag_level: 1, dag_parent_id: s.id, tags: TAGS });
+      const c = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dag_level: 1, dag_parent_id: s.id, tags: TAGS });
       c.created = new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
       writeEntry(hippoDir, c);
     }

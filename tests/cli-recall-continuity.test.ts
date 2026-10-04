@@ -10,7 +10,7 @@ import {
   saveSessionHandoff,
   appendSessionEvent,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -74,7 +74,7 @@ function seedContinuity(): void {
 describe('hippo recall --continuity', () => {
   it('JSON: returns continuity alongside memories', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('memory about deploys', {}));
+    writeEntry(hippoDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
     const r = runHippo(['recall', 'deploys', '--continuity', '--json']);
@@ -90,7 +90,7 @@ describe('hippo recall --continuity', () => {
 
   it('text: prints snapshot/handoff/trail headings above the memory list', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('another deploy memo', {}));
+    writeEntry(hippoDir, createMemory('another deploy memo', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
     const r = runHippo(['recall', 'deploy', '--continuity']);
@@ -106,7 +106,7 @@ describe('hippo recall --continuity', () => {
 
   it('does not include continuity when flag is absent (hot path)', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('hot path memory', {}));
+    writeEntry(hippoDir, createMemory('hot path memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
     const r = runHippo(['recall', 'hot', '--json']);
@@ -119,7 +119,7 @@ describe('hippo recall --continuity', () => {
   // codex round 2 P1: zero-result regression must surface continuity.
   it('zero-result JSON: continuity still present when no memories match', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('nothing relevant', {}));
+    writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
     const r = runHippo(['recall', 'totallyabsent_xyzzy', '--continuity', '--json']);
@@ -132,7 +132,7 @@ describe('hippo recall --continuity', () => {
 
   it('zero-result text: prints continuity instead of bare "No memories found"', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('nothing relevant', {}));
+    writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
     const r = runHippo(['recall', 'totallyabsent_xyzzy', '--continuity']);
@@ -145,7 +145,7 @@ describe('hippo recall --continuity', () => {
 
   it('zero-result without --continuity still prints "No memories found"', () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('nothing relevant', {}));
+    writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     seedContinuity();
 
     const r = runHippo(['recall', 'totallyabsent_xyzzy']);

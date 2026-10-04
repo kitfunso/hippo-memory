@@ -9,7 +9,7 @@ import {
   appendSessionEvent,
   writeEntry,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall } from '../src/api.js';
 
 let tmpDir: string;
@@ -23,7 +23,7 @@ afterEach(() => {
 describe('api.recall continuity flag', () => {
   it('defaults to no continuity block (hot path)', () => {
     initStore(tmpDir);
-    writeEntry(tmpDir, createMemory('test memory about widgets', {}));
+    writeEntry(tmpDir, createMemory('test memory about widgets', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const result = recall(
       { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
@@ -35,7 +35,7 @@ describe('api.recall continuity flag', () => {
 
   it('includes snapshot, handoff, and recent events when includeContinuity=true', () => {
     initStore(tmpDir);
-    writeEntry(tmpDir, createMemory('memory about deploys', {}));
+    writeEntry(tmpDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship the recall continuity slice',
       summary: 'Plan reviewed, implementation in progress.',
@@ -70,7 +70,7 @@ describe('api.recall continuity flag', () => {
 
   it('returns continuity block with nulls/empty when no continuity state exists', () => {
     initStore(tmpDir);
-    writeEntry(tmpDir, createMemory('lonely memory', {}));
+    writeEntry(tmpDir, createMemory('lonely memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
     const result = recall(
       { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { loadAllEntries } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { markRetrieved } from '../src/memory.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
@@ -55,7 +55,7 @@ describe('recall with bi-temporal filter', () => {
   });
 
   it('markRetrieved is no-op for superseded memories', () => {
-    const entry = createMemory('old fact here', { layer: Layer.Episodic });
+    const entry = createMemory('old fact here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     entry.superseded_by = 'mem_successor';
     const origCount = entry.retrieval_count;
     const origHalfLife = entry.half_life_days;

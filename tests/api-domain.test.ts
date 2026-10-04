@@ -16,6 +16,7 @@ import {
   authList,
   authRevoke,
   auditList,
+  type Context,
 } from '../src/api.js';
 import { appendAuditEvent } from '../src/audit.js';
 
@@ -242,8 +243,8 @@ describe('api domain — archive_raw / auth / audit', () => {
   });
 
   it('authCreate + authList + authRevoke flow with cross-tenant guard', () => {
-    const ctxA = { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
-    const ctxB = { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
+    const ctxA: Context = { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
+    const ctxB: Context = { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
 
     const k1 = authCreate(ctxA, { label: 'first' });
     expect(k1.keyId).toMatch(/^hk_/);

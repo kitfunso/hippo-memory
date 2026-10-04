@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
@@ -86,10 +86,12 @@ describe('CLI tenant-scoping (v1.11.0 residue)', () => {
 
   it('cmdTrace local store: HIPPO_TENANT=tenant_b hides a tenant_a memory', () => {
     const a = createMemory('A content (local)', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tenantId: 'tenant_a',
       tags: ['x'],
     });
     const b = createMemory('B content (local)', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tenantId: 'tenant_b',
       tags: ['x'],
     });
@@ -148,7 +150,7 @@ describe('CLI tenant-scoping (v1.11.0 residue)', () => {
   }, 30_000);
 
   function seed(tenantId: string, content: string): string {
-    const entry = createMemory(content, { tenantId, tags: ['x'] });
+    const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, tags: ['x'] });
     writeEntry(hippoRoot, entry);
     return entry.id;
   }

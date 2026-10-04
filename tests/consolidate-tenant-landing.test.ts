@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadAllEntries, appendSessionEvent } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { consolidate } from '../src/consolidate.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
 
@@ -46,10 +46,10 @@ describe('T1 (a): merge pass partitions by tenant before clustering', () => {
       const shortText = 'rotate the staging tls certificates before expiry';
       const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
 
-      const aShort = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
-      const aLong = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
-      const bShort = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-b' });
-      const bLong = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-b' });
+      const aShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const aLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const bShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
+      const bLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
       writeEntry(home, aShort);
       writeEntry(home, aLong);
       writeEntry(home, bShort);
@@ -144,6 +144,7 @@ describe('T1 executor check: extract.ts storeExtractedFacts has the same defect,
     try {
       initStore(home);
       const source = createMemory('Alice prefers dark mode and vim keybindings', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         tenantId: 'tenant-extract',
       });
