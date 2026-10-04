@@ -16,7 +16,7 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Prediction } from '../src/predictions/store.js';
+import { closePrediction, savePrediction, type Prediction } from '../src/predictions/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
@@ -94,6 +94,16 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
     expect(body.predictions.length).toBe(2);
     expect(body.predictions.every((p) => p.classTag === 'list-test')).toBe(true);
     expect(body.predictions.every((p) => p.closureState === 'open')).toBe(true);
+  });
+
+  it('GET /v1/predictions with no class and no status lists closed predictions too', async () => {
+    const open = savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
+    const done = savePrediction(home, 'default', { classTag: 'migrate', claimText: 'the migration takes two days', estimateValue: 2 });
+    closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
+    const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await jsonAs<{ predictions: Prediction[] }>(res);
+    expect(body.predictions.map((p) => [p.id, p.closureState]).sort()).toEqual([[open.id, 'open'], [done.id, 'closed']].sort());
   });
 
   it('GET /v1/predictions/:id returns single + 404 on missing', async () => {

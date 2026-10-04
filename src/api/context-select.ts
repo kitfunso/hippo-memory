@@ -14,7 +14,7 @@ import type { HybridVectorCandidates } from '../search/vector.js';
 import type { SearchResult } from '../search/types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
-import { loadConfig, type HippoConfig } from '../config.js';
+import { type HippoConfig } from '../config.js';
 import {
   promptTokens,
   contentTokens,
@@ -104,16 +104,13 @@ interface PromptCandidate {
 
 /** Pins plus the prompt-recall or recent-N backfill; null means the block is empty. */
 export function selectPinned(
-  ctx: Context,
   opts: ContextOpts,
   plan: ContextPlan,
   left: number,
   pools: ContextPools,
   admission: ContextAdmission,
 ): ContextResultEntry[] | null {
-  const { obs, primaryIsGlobal } = plan;
-  // loadConfig is safe even when local isn't initialised — returns defaults.
-  const pinnedCfg = loadConfig(ctx.hippoRoot);
+  const { obs, primaryIsGlobal, config: pinnedCfg } = plan;
   if (!pinnedCfg.pinnedInject.enabled) {
     return null;
   }
@@ -412,8 +409,7 @@ async function searchLocalRows(
   localEntries: MemoryEntry[],
   admit: (e: MemoryEntry) => boolean,
 ): Promise<ContextResultEntry[]> {
-  const { cost, price, primaryIsGlobal, query } = plan;
-  const ctxConfig = loadConfig(ctx.hippoRoot);
+  const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);

@@ -15,7 +15,7 @@ import { loadPolicies, savePolicy } from '../src/policies.js';
 import { loadSkills, saveSkill } from '../src/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../src/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../src/customer-notes.js';
-import { loadOpenPredictions, savePrediction } from '../src/predictions/store.js';
+import { loadAllPredictions, savePrediction } from '../src/predictions/store.js';
 import { isJsonObjectRecord, type JsonValue } from '../src/http-util.js';
 import { isJsonString } from '../src/server/validation.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -157,7 +157,7 @@ describe('no paging params: the body a small store got before cursors existed', 
   // Each reference is the store call the route made before paging, with the same arguments.
   const before = new Map<string, () => JsonValue>([
     ['/v1/quarantine', () => json(api.quarantineList(ctx(), { status: 'pending' }))],
-    ['/v1/predictions', () => json(loadOpenPredictions(home, 'default', { limit: 100 }))],
+    ['/v1/predictions', () => json(loadAllPredictions(home, 'default', { limit: 100 }))],
     ['/v1/decisions', () => json(loadDecisions(home, 'default', { limit: 100 }))],
     ['/v1/incidents', () => json(loadIncidents(home, 'default', { limit: 100 }))],
     ['/v1/processes', () => json(loadProcesses(home, 'default', { limit: 100 }))],

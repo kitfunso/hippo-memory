@@ -14,11 +14,12 @@ export function resolveRequestId(header: string | string[] | undefined): string 
   return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
 }
 
-/** One line per failed request; 4xx is the caller's mistake, so it stays below the default level and skips the stack. */
+/** One line per failed request; 4xx is the caller's mistake and a busy 503 is back-pressure the client retries, so neither logs as an error. */
 export function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string, status: number): void {
   const message = err instanceof Error ? err.message : String(err);
   const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
-  if (status >= 500) log.error(line, { requestId, status, ...errorFields(err) });
+  if (isSqliteBusy(err)) log.warn(line, { requestId, status });
+  else if (status >= 500) log.error(line, { requestId, status, ...errorFields(err) });
   else log.info(line, { requestId, status });
 }
 

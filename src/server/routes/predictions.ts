@@ -1,5 +1,5 @@
 // /v1/predictions routes.
-import { closePrediction, computePredictionBaserate, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
+import { closePrediction, computePredictionBaserate, loadAllPredictions, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
@@ -71,11 +71,9 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   const ctx = await buildContextWithAuth(req, opts);
   let predictions;
   if (status === 'all') {
-    if (classTag) {
-      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit: limit + 1, after });
-    } else {
-      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
-    }
+    predictions = classTag
+      ? loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit: limit + 1, after })
+      : loadAllPredictions(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else if (status === 'open') {
     predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, {
       classTag: classTag || undefined,

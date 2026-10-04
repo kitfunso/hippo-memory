@@ -95,35 +95,7 @@ export interface SleepResult {
   details?: string[];
 }
 
-/**
- * Run the pure-storage consolidation pipeline.
- *
- * Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in
- * it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI
- * maintenance op invoked by the operator. Episode B (v1.11.4) exposed this
- * over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard
- * in the handler plus serve()'s boot-time host check). The TODOS.md
- * per-tenant scoping follow-up remains open for the day non-loopback
- * serving lands — at that point the route will need an admin-role gate OR
- * api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
- *
- * Dedup and audit deletes each log a `forget` row with the ctx actor and a
- * `metadata.reason`. Pinned, raw, kept and object-backing rows are never auto-deleted (AUTOMATIC_DELETE_SQL).
- * dryRun previews consolidate, dedup and audit, then returns before share/ambient.
- */
-/**
- * v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies.
- *
- * Each field defaults to the real production implementation imported at the
- * top of this file. Test files pass a `Partial<SleepPhases>` override via
- * `SleepOpts.__phases` (note the `__` prefix — internal-only) to inject
- * deterministic throws for mid-phase failure-path coverage (the
- * `partial: true` + `errorMessage` audit-row branch at line ~2098).
- *
- * Production callers MUST NOT use `__phases`. The field exists solely so
- * `tests/api-sleep-phase-faults.test.ts` can force each phase boundary to
- * throw without depending on store-corruption fragility.
- */
+/** Test-only seam: `SleepOpts.__phases` forces a phase to throw into emitSleepAudit's `partial: true` row; production never sets it. */
 export interface SleepPhases {
   consolidate: typeof consolidate;
   deduplicateStore: typeof deduplicateStore;
@@ -166,6 +138,7 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
+/** Sleeps the WHOLE hippoRoot, every tenant, so /v1/sleep stays loopback-only; never auto-deletes pinned, raw, kept or object-backing rows. */
 export async function sleep(
   ctx: Context,
   opts: SleepOpts = {},

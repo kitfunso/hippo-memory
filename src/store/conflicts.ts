@@ -150,7 +150,7 @@ function resolveStaleOpenConflicts(
     const key = `${row.memory_a_id}::${row.memory_b_id}`;
     const stale = !detectedKeys.has(key);
     // v1.11.0 residue: auto-resolve any open cross-tenant row. The insert
-    // loop below (line 2089) and the refMap rebuild (line 2117) skip
+    // loop in upsertDetectedConflicts and the refMap rebuild skip
     // cross-tenant pairs, but the resolve-stale loop previously left
     // re-detected cross-tenant rows lingering status='open'. The
     // sameTenant() helper is already built one block up; no extra query.

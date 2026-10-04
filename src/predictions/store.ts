@@ -419,6 +419,32 @@ export function loadPredictionsByClass(
   }
 }
 
+/** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
+export function loadAllPredictions(
+  hippoRoot: string,
+  tenantId: string,
+  opts: { limit?: number; after?: KeysetPosition } = {},
+): Prediction[] {
+  assertTenantId('loadAllPredictions', tenantId);
+  const after = keysetAfter('created_at', 'id', opts.after);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows' shape matches the columns named in the SELECT.
+    const rows = db.prepare(`
+      SELECT id, memory_id, tenant_id, class_tag, claim_text,
+             estimate_value, estimate_unit, target_date,
+             actual_value, closure_state, closed_at, closure_note, created_at
+      FROM predictions
+      WHERE tenant_id = ?${after.sql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, ...after.params, opts.limit ?? 100) as PredictionRow[];
+    return rows.map(rowToPrediction);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // v0.31 / J3 — reference-class / planning-fallacy detector
 // ---------------------------------------------------------------------------

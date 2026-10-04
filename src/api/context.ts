@@ -166,7 +166,7 @@ export async function getContext(
   }
 
   const picked = plan.pinnedOnly
-    ? selectPinned(ctx, opts, plan, sections.left, pools, admission)
+    ? selectPinned(opts, plan, sections.left, pools, admission)
     : plan.query === '*'
       ? selectStrongest(plan, sections.left, pools)
       : await selectBySearch(ctx, plan, sections.left, pools, admission);

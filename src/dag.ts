@@ -141,7 +141,7 @@ export interface DagBuildResult {
 // LLM-synthesized summary. Map preserves insertion order, so
 // single-tenant stores (every row 'default') get exactly one partition
 // and iterate in the same order as before this fix — byte-identical
-// behavior there.
+// behavior there. buildEntityProfiles partitions its L2s with this same key.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
@@ -434,24 +434,6 @@ export interface EntityProfilesBuildResult {
   rejected: number;
 }
 
-// independent-review HIGH #1 fold: cluster ONLY within-tenant.
-// clusterFacts has no tenant awareness; without this partition step a
-// multi-tenant host could form a cluster spanning tenants and produce
-// a single L3 with tenantId='default' that doesn't belong to either
-// child tenant. Fix: bucket by tenantId, run clusterFacts per-tenant,
-// pass tenantId to createMemory.
-function partitionL2sByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
-  const byTenant = new Map<string, MemoryEntry[]>();
-  for (const l2 of unparented) {
-    const tid = l2.tenantId ?? 'default';
-    const key = derivationPartitionKey(tid, l2.scope, l2.origin_project);
-    const list = byTenant.get(key) ?? [];
-    list.push(l2);
-    byTenant.set(key, list);
-  }
-  return byTenant;
-}
-
 /** The L3 profile entry for one cluster of L2 summaries. */
 function createProfileEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
@@ -554,9 +536,9 @@ export async function buildEntityProfiles(
     (s) => s.dag_level === 2 && !s.dag_parent_id,
   );
 
-  for (const [, tenantL2s] of partitionL2sByTenant(unparented)) {
+  for (const [, tenantL2s] of partitionFactsByTenant(unparented)) {
     const home: PartitionHome = {
-      tenantId: tenantL2s[0].tenantId ?? 'default',
+      tenantId: tenantL2s[0].tenantId,
       scope: derivationScope(tenantL2s[0].scope),
       originProject: tenantL2s[0].origin_project,
       baseHalfLifeDays,

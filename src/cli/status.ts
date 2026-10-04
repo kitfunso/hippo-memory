@@ -170,12 +170,7 @@ function printPhysicsStatus(hippoRoot: string): void {
         const physConfig = loadConfig(hippoRoot);
         const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
         let sumVelMag = 0;
-        let maxVelMag = 0;
-        for (const p of particles) {
-          const mag = vecNorm(p.velocity);
-          sumVelMag += mag;
-          if (mag > maxVelMag) maxVelMag = mag;
-        }
+        for (const p of particles) sumVelMag += vecNorm(p.velocity);
         const avgVelMag = sumVelMag / particles.length;
         console.log('');
         console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);

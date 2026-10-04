@@ -79,11 +79,11 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * if the underlying DAG accidentally linked across scopes.
  *
  * Returns a discriminated `DrillDownOutcome`: `DrillDownResult` on success,
- * or `{failure: '...'}` for `not_found` (covers genuinely-missing AND wrong-
- * tenant, intentionally indistinguishable), `not_drillable` (id is a leaf
- * row), or `scope_blocked` (caller has no scope grant for the row's scope).
+ * or `{failure: '...'}` for `not_found` (covers genuinely-missing, wrong-
+ * tenant and scope-blocked, intentionally indistinguishable) or
+ * `not_drillable` (id is a leaf row).
  *
- * Pre-v1.6.4 returned null for all four cases. JS callers migrate via
+ * Pre-v1.6.4 returned null for all three cases. JS callers migrate via
  * `'failure' in result` checks; HTTP route maps `not_drillable` to 422.
  */
 export function drillDown(

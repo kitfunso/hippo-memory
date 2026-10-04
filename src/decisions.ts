@@ -197,7 +197,7 @@ function supersedeDecisionRow(
     WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
   `).run(decisionId, now, supersedesId, tenantId, decisionId);
   if (sup.changes === 0) {
-    throw new BadRequestError(
+    throw new ConflictError(
       `saveDecision: decision ${supersedesId} could not be superseded (no longer active or self-reference).`,
     );
   }

@@ -91,38 +91,12 @@ export function splitSentences(text: string): string[] {
     .filter((s) => s.length > 5);
 }
 
-/**
- * T2 (DF2): bound a keyword+content capture to its clause instead of a fixed
- * character count. `full` is `keywordPrefix + content` (already concatenated
- * so the 200-char ceiling below applies to the whole stored string, not just
- * the part after the keyword); `searchFrom` is `keywordPrefix.length`, so the
- * clause/terminator scan only ever looks INSIDE `content` — several keywords
- * end in their own colon ("error:", "rule:", "decision:") which must never
- * be mistaken for a clause boundary in the prose that follows.
- *
- * Stops at the first `,`/`;`/`:` followed by whitespace, or at a sentence
- * terminator `[.!?]` followed by whitespace or end-of-string — whichever
- * comes first — and never past `maxLen` chars total.
- *
- * The whitespace requirement on the terminator is load-bearing: a bare
- * `[.!?]` would split inside a token like `.env` / `capture.ts` / `v1.35.0`,
- * turning a full clause into a fragment that then fails the write gate and
- * is silently dropped (measured in the plan). The `maxLen` ceiling is also
- * load-bearing: without it, a clause-free span can run past the 500-char
- * gate in `extractFromPatterns` and the whole match is dropped, where today
- * it is truncated and stored.
- */
-/**
- * Does a plausible CLOSING single quote appear after `from`? Mirror of the
- * opener rule in `boundToClause`: a closer sits tight against the literal it
- * ends (non-whitespace before) and is followed by whitespace, punctuation, or
- * end-of-string - never by a letter, which is what makes "user's" an
- * apostrophe rather than a partner.
- */
 function isLetterOrDigit(ch: string | undefined): boolean {
   return ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 }
 
+/** The last plausible CLOSING single quote, or -1. Mirror of the opener rule in `boundToClause`: a closer sits tight
+ * against its literal and is never followed by a letter, which is what makes "user's" an apostrophe. */
 function lastCloserIndex(full: string): number {
   // ONE pass, not one per apostrophe. The previous shape rescanned the whole
   // remaining suffix at every boundary apostrophe, so a transcript full of
@@ -175,9 +149,9 @@ function lastCloserIndex(full: string): number {
   return -1;
 }
 
+/** Cuts `full` (keyword + content) at the first prose `,;:` or `[.!?]` followed by whitespace, scanning from `searchFrom` so a keyword's
+ * own colon never counts; the whitespace rule keeps `.env` whole and `maxLen` truncates a long span the 500-char gate would drop. */
 function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
-  // Scan for the first PROSE clause boundary after `searchFrom`.
-  //
   // Depth-awareness is not a nicety here: hippo memories are full of code, and
   // a naive scan reintroduces the exact fragment defect this whole change
   // exists to remove. Measured before this guard existed:

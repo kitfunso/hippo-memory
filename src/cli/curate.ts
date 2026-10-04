@@ -586,12 +586,6 @@ export function handleInvalidate({ hippoRoot, args, flags }: CommandContext): vo
     process.exit(1);
   }
   const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
-  if (typeof flags['dry-run'] === 'string') {
-    // Dead: the earlier global BOOLEAN_FLAGS guard now exits first on any --dry-run=<v>.
-    // Kept as defence in depth on a destructive command.
-    printError('--dry-run takes no value');
-    process.exit(1);
-  }
   const dryRun = flags['dry-run'] === true;
   if ((target && onlyId) || (!target && !onlyId)) {
     printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');

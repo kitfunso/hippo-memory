@@ -418,7 +418,7 @@ export const COMMANDS = {
     usage: VERB_USAGE.context,
   },
   hook: {
-    run: async ({ args, flags }) => { (await import('./cli/setup.js')).cmdHook(args, flags); },
+    run: async ({ args }) => { (await import('./cli/setup.js')).cmdHook(args); },
     usage: VERB_USAGE.hook,
   },
   setup: {

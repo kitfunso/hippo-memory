@@ -432,7 +432,7 @@ export function cardStringFlag(flags: Record<string, string | boolean | string[]
 
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
 export function hostSessionId(): string | undefined {
-  return envHippoSessionId()?.trim() || envClaudeCodeSessionId()?.trim() || undefined;
+  return envHippoSessionId() ?? envClaudeCodeSessionId();
 }
 
 /**

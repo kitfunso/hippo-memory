@@ -113,7 +113,7 @@ async function loadPipeline(model: string): Promise<any> {
     if (!pipelineFn) return null;
 
     // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
-    const cacheRoot = envModelCache()?.trim();
+    const cacheRoot = envModelCache();
     const quantized = !cacheRoot
       || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
 

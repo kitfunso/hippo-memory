@@ -73,14 +73,9 @@ function loadPredictionList(hippoRoot: string, tenantId: string, status: string,
     });
   }
   if (status === 'all') {
-    // No closure-state filter; pull both via loadPredictionsByClass if class given
-    if (classTag) {
-      return predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, { limit });
-    }
-    // No class filter + status=all = pull open + closed across all classes
-    // (kept simple: report open via loadOpenPredictions; closed via two
-    // class scans isn't symmetrical. v1 callers typically pass --class.)
-    return predictionsModule.loadOpenPredictions(hippoRoot, tenantId, { limit });
+    return classTag
+      ? predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, { limit })
+      : predictionsModule.loadAllPredictions(hippoRoot, tenantId, { limit });
   }
   if (!predictionsModule.VALID_CLOSURE_STATES.has(status as predictionsModule.ClosureState)) {
     printError(`Invalid --status: "${status}". Must be one of: open | closed | closed-unknown | all.`);

@@ -26,10 +26,7 @@ import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
 // Hook install/uninstall
 // ---------------------------------------------------------------------------
 
-export function cmdHook(
-  args: string[],
-  flags: Record<string, string | boolean | string[]>
-): void {
+export function cmdHook(args: string[]): void {
   const subcommand = args[0];
   const target = args[1];
   if (subcommand === 'list') return hookList();
@@ -88,7 +85,6 @@ function patchAgentFile(hook: HookSpec, target: string): void {
   const filepath = path.resolve(process.cwd(), hook.file);
 
   const block = `${HOOK_MARKERS.start}\n${hook.content}\n${HOOK_MARKERS.end}`;
-  let agentFileTouched = false;
 
   if (fs.existsSync(filepath)) {
     const existing = fs.readFileSync(filepath, 'utf8');
@@ -108,7 +104,6 @@ function patchAgentFile(hook: HookSpec, target: string): void {
       fs.writeFileSync(filepath, existing + sep + block + '\n', 'utf8');
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
-    agentFileTouched = true;
   } else {
     // Do not create a new agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories that don't already have one —
     // avoids polluting cwd with files the user didn't ask for. The settings.json hook below is still installed for

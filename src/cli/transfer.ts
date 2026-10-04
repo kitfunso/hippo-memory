@@ -312,7 +312,7 @@ function importVaultFolder(
   warnRedacted(vaultResult.redacted);
   console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
   console.log(`  Store:                 ${hippoRoot}`);
-  // Batch producer, same contract as the single-file import below: vault rows
+  // Batch producer, same contract as the single-file import above: vault rows
   // write through api.remember (which never embeds), so backfill them here.
   // Floating promise is deliberate; see the comment at the single-file site.
   if (!dryRun && vaultResult.imported >= 1) {

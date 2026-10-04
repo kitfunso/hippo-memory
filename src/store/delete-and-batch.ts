@@ -168,8 +168,7 @@ export function batchWriteAndDelete(
     const deletableIds: string[] = [];
     if (toDeleteIds.length > 0) {
       // A row pinned after the caller decided to delete it survives.
-      const placeholders = toDeleteIds.map(() => '?').join(',');
-      for (const row of selectAutoDeletableRows(db, placeholders, toDeleteIds, dirty)) deletableIds.push(row.id);
+      for (const row of selectAutoDeletableRows(db, toDeleteIds, dirty)) deletableIds.push(row.id);
     }
     // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new
     // memories from ambient context). A row queued twice keeps only its last version, the one the merge compares.
@@ -216,8 +215,7 @@ function moveDormantAndDelete(
   const movable: DormantMove[] = [];
   if (dormantMoves.length > 0) {
     const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
-    const placeholders = dormantMoves.map(() => '?').join(',');
-    for (const row of selectAutoDeletableRows(db, placeholders, [...byId.keys()], dirty)) movable.push(byId.get(row.id)!);
+    for (const row of selectAutoDeletableRows(db, [...byId.keys()], dirty)) movable.push(byId.get(row.id)!);
   }
   for (const move of movable) {
     insertDormantRow(db, move);
@@ -236,16 +234,15 @@ interface DirtyParents {
   tenantById: Map<string, string>;
 }
 
-/** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. */
+/** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. Placeholders come from `ids` itself. */
 function selectAutoDeletableRows(
   db: DatabaseSyncLike,
-  placeholders: string,
   ids: string[],
   dirty: DirtyParents,
 ): Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }> {
   // SAFETY: rows' shape matches the three columns named in the SELECT.
   const rows = db.prepare(
-    `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTOMATIC_DELETE_SQL}`,
+    `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${ids.map(() => '?').join(',')}) AND ${AUTOMATIC_DELETE_SQL}`,
   ).all(...ids) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
   for (const row of rows) {
     if (row.dag_parent_id) {
