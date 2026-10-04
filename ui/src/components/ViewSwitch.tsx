@@ -1,8 +1,8 @@
 /** The dashboard's two views. */
-export type View = "map" | "board";
+export type View = "health" | "board";
 
 const VIEWS = [
-  { key: "map", label: "map", aria: "Memory map" },
+  { key: "health", label: "health", aria: "Memory health" },
   { key: "board", label: "board", aria: "Card board" },
 ] as const;
 
@@ -13,16 +13,16 @@ interface ViewSwitchProps {
   autoFocus?: boolean;
 }
 
-/** Map/board radiogroup: a two-way roving-tabindex switch, arrow keys toggle. */
+/** Health/board radiogroup: a two-way roving-tabindex switch, arrow keys toggle. */
 export function ViewSwitch({ view, onChange, autoFocus }: ViewSwitchProps) {
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
-    onChange(view === "map" ? "board" : "map");
+    onChange(view === "health" ? "board" : "health");
   }
 
   return (
-    <div role="radiogroup" aria-label="Dashboard view" onKeyDown={handleKeyDown} style={segmentedGroup}>
+    <div role="radiogroup" aria-label="Dashboard view" onKeyDown={handleKeyDown} className="seg txt view-switch">
       {VIEWS.map(({ key, label, aria }) => {
         const checked = view === key;
         return (
@@ -37,13 +37,6 @@ export function ViewSwitch({ view, onChange, autoFocus }: ViewSwitchProps) {
             onClick={() => {
               if (!checked) onChange(key);
             }}
-            style={{
-              ...segmentBtn,
-              background: checked ? "rgba(196, 92, 60, 0.10)" : "transparent",
-              color: checked ? "var(--accent)" : "var(--dim)",
-              borderColor: checked ? "var(--accent)" : "var(--glass-border)",
-              fontWeight: checked ? 500 : 400,
-            }}
           >
             {label}
           </button>
@@ -52,18 +45,3 @@ export function ViewSwitch({ view, onChange, autoFocus }: ViewSwitchProps) {
     </div>
   );
 }
-
-const segmentedGroup: React.CSSProperties = {
-  display: "flex",
-  gap: 4,
-};
-
-const segmentBtn: React.CSSProperties = {
-  fontSize: 10,
-  fontFamily: "var(--font-mono)",
-  padding: "2px 8px",
-  borderRadius: 3,
-  cursor: "pointer",
-  transition: "color 150ms ease, border-color 150ms ease, background 150ms ease",
-  border: "1px solid",
-};
