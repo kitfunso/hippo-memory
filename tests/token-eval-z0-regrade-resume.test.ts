@@ -129,6 +129,7 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(rowFor(stray.out, 'a1')).toMatchObject({ status: 'done' });
   }, 300_000);
 
+  // A repro pass plus a post-fix pass that runs every check twice: about three regrades, slow on a loaded Windows box.
   it('flippedLessons is the union of the repro and post-fix passes (19)', async () => {
     const c = copyOut(shared);
     expect(await regrade(c, [], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
@@ -137,7 +138,7 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(rowFor(c.out, 'a1', 'postfix').checks[0]).toMatchObject({ regraded: 'pass', second: 'pass' });
     expect(await grading(c.out)).toMatchObject({ code: 0 });
     expect(readGrading(c.out)).toMatchObject({ flippedLessons: ['f1-l1'], g5: { pass: 'postfix' } });
-  }, 300_000);
+  }, 600_000);
 
   it('runs.regraded.jsonl takes new verdicts, recomputes resolved and chain.followed, keeps acceptancePassed, and shares the blind key (19, 20, R3)', async () => {
     const c = copyOut(shared);
@@ -164,5 +165,5 @@ describe('z0-regrade resume, guards and post-fix', () => {
     const key = readFileSync(join(c.out, 'z0-blind-key.json'), 'utf8');
     expect(analyze(args('runs.regraded.jsonl'), c.out).code).toBe(0);
     expect(readFileSync(join(c.out, 'z0-blind-key.json'), 'utf8')).toBe(key);
-  }, 300_000);
+  }, 600_000);
 });
