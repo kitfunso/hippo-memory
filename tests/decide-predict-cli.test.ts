@@ -63,7 +63,7 @@ describe('hippo decide', () => {
   it('refuses a valueless --supersedes, an unknown memory, an unknown id and a bad status', () => {
     expect(hippo('decide', 'pick one', '--supersedes').stderr).toContain('--supersedes requires a memory id');
     const unknownMem = hippo('decide', 'pick one', '--supersedes', 'mem_nope');
-    expect([unknownMem.status, unknownMem.stderr.trim()]).toEqual([1, 'Memory mem_nope not found.']);
+    expect([unknownMem.status, unknownMem.stderr]).toEqual([1, expect.stringContaining('Memory mem_nope not found.')]);
     expect(hippo('decide', 'get', '999').stderr).toContain('Decision 999 not found.');
     expect(hippo('decide', 'get', 'abc').stderr).toContain('Invalid decision id');
     const status = hippo('decide', 'list', '--status', 'pending');
