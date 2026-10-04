@@ -225,46 +225,6 @@ export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, numb
   withVectorDb(hippoRoot, (db) => replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, '')));
 }
 
-interface EmbeddingIdsCacheEntry {
-  mtimeMs: number;
-  size: number;
-  ids: Set<string> | null;
-  /** Set when stat itself failed, so the same failure code logs once instead of on every read. */
-  statErrorCode?: string;
-}
-const embeddingIdsCache = new Map<string, EmbeddingIdsCacheEntry>();
-
-/** Ids that have a vector, read with no rename or write; empty set if the file is missing, null if unreadable or corrupt. Cached on mtime and size, so do not mutate it. */
-export function readEmbeddingIdsReadOnly(hippoRoot: string): Set<string> | null {
-  const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(fp);
-  } catch (err) {
-    if (isErrnoCode(err, 'ENOENT')) {
-      embeddingIdsCache.delete(fp);
-      return new Set();
-    }
-    const code = err instanceof Error && 'code' in err ? String(err.code) : 'unknown';
-    if (embeddingIdsCache.get(fp)?.statErrorCode === code) return null;
-    embeddingIdsCache.set(fp, { mtimeMs: Number.NaN, size: Number.NaN, ids: null, statErrorCode: code });
-    log.warn(`could not stat ${EMBEDDINGS_FILE}; embedding coverage is unknown (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
-    return null;
-  }
-  const hit = embeddingIdsCache.get(fp);
-  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) return hit.ids;
-  let ids: Set<string> | null = null;
-  try {
-    const index = parseEmbeddingIndex(fs.readFileSync(fp, 'utf8'));
-    if (index) ids = new Set(Object.keys(index));
-    else log.warn(`${EMBEDDINGS_FILE} could not be parsed; embedding coverage is unknown`, { hippoRoot });
-  } catch (err) {
-    log.warn(`could not read ${EMBEDDINGS_FILE}; embedding coverage is unknown (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
-  }
-  embeddingIdsCache.set(fp, { mtimeMs: stat.mtimeMs, size: stat.size, ids });
-  return ids;
-}
-
 const EMBED_LOCK_FILE = 'embeddings.lock';
 const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_OWNER = `${process.pid}:${randomUUID()}`;

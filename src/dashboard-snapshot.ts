@@ -2,12 +2,11 @@
 // Pure build functions plus one cache; the queries over it live in dashboard-queries.ts.
 
 import * as fs from 'fs';
-import * as path from 'path';
 import { calculateStrength, confidenceFacets, netWrong, Layer as MemoryLayer, type MemoryEntry } from './memory.js';
 import { isQuarantineScope } from './quarantine.js';
 import { listMemoryConflicts, loadAllEntries, type MemoryConflict } from './store.js';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from './db.js';
-import { readEmbeddingIdsReadOnly } from './embeddings.js';
+import { storedVectorIds } from './vector-store.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
 
 export const DAY_MS = 86_400_000;
@@ -179,7 +178,7 @@ export interface Snapshot {
   projects: ProjectAgg[];
   byKey: Map<string, ProjectAgg>;
   excluded: { superseded: number; archived: number; quarantined: number };
-  /** Embedded share of live memories, or null when embeddings.json could not be read. */
+  /** Embedded share of live memories, or null when the store has no vector table yet. */
   embeddingCoverage: number | null;
   /** Open conflicts with both members live, each counted once. */
   openConflicts: number;
@@ -343,7 +342,6 @@ function countOpenConflicts(
 interface CachedSnapshot {
   snapshot: Snapshot;
   dataVersion: number | null;
-  embeddingsKey: string;
   builtAtMs: number;
 }
 
@@ -354,18 +352,9 @@ export interface SnapshotService {
   invalidate(): void;
   /** Id of the most recent build, which is what a client holding the last response still has. */
   currentId(): number;
-  /** Ids with a vector as of the last build (a direct read before any build), so a detail read never re-parses embeddings.json. */
+  /** Ids with a vector as of the last build (a direct read before any build), so a detail read never rescans the vector table. */
   embeddedIds(): ReadonlySet<string> | null;
   close(): void;
-}
-
-function embeddingsKey(hippoRoot: string): string {
-  try {
-    const stat = fs.statSync(path.join(hippoRoot, 'embeddings.json'));
-    return `${stat.mtimeMs}:${stat.size}`;
-  } catch (err) {
-    return err instanceof Error && 'code' in err && err.code === 'ENOENT' ? 'none' : 'unreadable';
-  }
 }
 
 // Keeps ids rising between two services created in the same millisecond of one process.
@@ -389,12 +378,21 @@ export function createSnapshotService(hippoRoot: string, now: () => number, cach
     return row.data_version;
   };
 
+  // No database means no vectors; a store not yet on schema v52 has no table to count, so coverage is unknown.
+  const readEmbeddedIds = (): ReadonlySet<string> | null => {
+    if (db === null) return new Set();
+    // SAFETY: sqlite_master rows carry a text name; the query only tests presence.
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory_vectors'").get() as { name: string } | undefined;
+    return table === undefined ? null : storedVectorIds(db);
+  };
+
   const build = (tenantId: string, dv: number | null, nowMs: number): Snapshot => {
     const entries = dv === null ? [] : loadAllEntries(hippoRoot, tenantId);
     const openConflicts = dv === null ? [] : listMemoryConflicts(hippoRoot, 'open', tenantId);
     lastId += 1;
     highestIssuedId = Math.max(highestIssuedId, lastId);
-    lastEmbeddedIds = readEmbeddingIdsReadOnly(hippoRoot);
+    // After loadAllEntries, whose writable open has run any pending migration and legacy embeddings.json import.
+    lastEmbeddedIds = readEmbeddedIds();
     return buildSnapshot({ id: lastId, tenantId, nowMs, entries, openConflicts, embeddedIds: lastEmbeddedIds });
   };
 
@@ -405,19 +403,17 @@ export function createSnapshotService(hippoRoot: string, now: () => number, cach
       const wallMs = cacheClock();
       // Read before the build, so a commit that lands during it shows on the next read.
       const dv = dataVersion();
-      const emb = embeddingsKey(hippoRoot);
       const hit = cached;
       if (hit !== null && !fresh) {
         const age = wallMs - hit.builtAtMs;
-        // An embeddings.json rewrite rides the same coalescing window as a commit: every remember rewrites it.
         const reusable = hit.snapshot.tenantId === tenantId
           && (hit.dataVersion !== null || dv === null)
           && age < TTL_MS
-          && ((hit.dataVersion === dv && hit.embeddingsKey === emb) || age < COALESCE_MS);
+          && (hit.dataVersion === dv || age < COALESCE_MS);
         if (reusable) return hit.snapshot;
       }
       const snapshot = build(tenantId, dv, nowMs);
-      cached = { snapshot, dataVersion: dv, embeddingsKey: emb, builtAtMs: wallMs };
+      cached = { snapshot, dataVersion: dv, builtAtMs: wallMs };
       return snapshot;
     },
     invalidate() {
@@ -427,7 +423,9 @@ export function createSnapshotService(hippoRoot: string, now: () => number, cach
       return lastId;
     },
     embeddedIds() {
-      return lastEmbeddedIds === undefined ? readEmbeddingIdsReadOnly(hippoRoot) : lastEmbeddedIds;
+      if (lastEmbeddedIds !== undefined) return lastEmbeddedIds;
+      dataVersion();
+      return readEmbeddedIds();
     },
     close() {
       if (db !== null) closeHippoDb(db);

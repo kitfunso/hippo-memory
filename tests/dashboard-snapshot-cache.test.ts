@@ -1,16 +1,14 @@
 // The snapshot cache: when a read reuses it, when an outside commit, a dashboard write, the TTL or ?fresh=1 rebuilds it, and what it never writes.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer } from '../src/memory.js';
-import { closeHippoDb, getMeta, openHippoDb } from '../src/db.js';
-import { EMBEDDING_MODEL_META_KEY } from '../src/embeddings.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
 import { COALESCE_MS, TTL_MS, createSnapshotService, type SnapshotService } from '../src/dashboard-snapshot.js';
 import { buildOverview } from '../src/dashboard-queries.js';
 import {
-  NOW, call, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
+  NOW, call, embed, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import type { MemoryDetail, Overview } from '../src/dashboard-types.js';
 
@@ -137,46 +135,33 @@ describe('live population', () => {
   });
 });
 
-describe('embeddings.json handling', () => {
-  const dbMeta = (): string => {
-    const db = openHippoDb(store.hippoRoot);
-    try {
-      return getMeta(db, EMBEDDING_MODEL_META_KEY, '(unset)');
-    } finally {
-      closeHippoDb(db);
-    }
-  };
-
-  it('answers null coverage for a corrupt file and leaves the file and the DB meta alone', () => {
-    seed(store.hippoRoot, 'a row');
-    const file = join(store.hippoRoot, 'embeddings.json');
-    writeFileSync(file, '{not json');
-    const metaBefore = dbMeta();
+describe('vector coverage', () => {
+  it('imports a legacy embeddings.json on the build and counts it in that same build', () => {
+    const row = seed(store.hippoRoot, 'a row');
+    writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [row.id]: [0.1, 0.2] }));
 
     const snap = service.get('default');
 
-    expect(snap.embeddingCoverage).toBeNull();
-    expect(readdirSync(store.hippoRoot).filter((name) => name.includes('.corrupt-'))).toEqual([]);
-    expect(existsSync(file)).toBe(true);
-    expect(dbMeta()).toBe(metaBefore);
+    expect(snap.embeddingCoverage).toBe(1);
+    expect(existsSync(join(store.hippoRoot, 'embeddings.json'))).toBe(false);
   });
 
-  it('answers null coverage for an unreadable file (a directory) and does not fail the snapshot', () => {
+  it('counts no coverage for a corrupt legacy file and still builds the snapshot', () => {
     seed(store.hippoRoot, 'a row');
-    mkdirSync(join(store.hippoRoot, 'embeddings.json'));
+    writeFileSync(join(store.hippoRoot, 'embeddings.json'), '{not json');
 
     const snap = service.get('default');
 
     expect(snap.facts).toHaveLength(1);
-    expect(snap.embeddingCoverage).toBeNull();
+    expect(snap.embeddingCoverage).toBe(0);
   });
 
-  it('rewriting embeddings.json with no DB commit changes coverage once the coalescing window has passed, not before', () => {
+  it('shows a vector write once the coalescing window has passed, not before', () => {
     const row = seed(store.hippoRoot, 'a row');
     const first = service.get('default');
     expect(first.embeddingCoverage).toBe(0);
 
-    writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [row.id]: [0.1, 0.2] }));
+    embed(store.hippoRoot, [row.id]);
     clock += COALESCE_MS - 1;
     const inside = service.get('default');
     expect(inside.id).toBe(first.id);
@@ -227,10 +212,10 @@ describe('through the server', () => {
     expect(parse<Overview>(await get(dash.port, '/api/overview')).snapshotId).toBe(first.snapshotId);
   });
 
-  it('takes the detail embedded flag from the snapshot, so a rewritten embeddings.json shows after the window', async () => {
+  it('takes the detail embedded flag from the snapshot, so a new vector shows after the window', async () => {
     const target = seed(store.hippoRoot, 'embed me');
     await get(dash.port, '/api/overview?fresh=1');
-    writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [target.id]: [0.1] }));
+    embed(store.hippoRoot, [target.id]);
 
     const inside = parse<MemoryDetail>(await get(dash.port, `/api/memory/${target.id}`));
     clock += COALESCE_MS + 1;

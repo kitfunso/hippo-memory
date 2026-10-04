@@ -4,6 +4,6 @@
 
 ### Changed
 
-- **The dashboard server now computes its summaries itself and sends pages, not the whole store.** The browser no longer receives raw embedding vectors, which cuts the payload on large stores. Memories are grouped by their `origin_project`. The read path never renames or rewrites `embeddings.json`. The old `/api/memories`, `/api/embeddings`, `/api/stats`, `/api/conflicts`, `/api/peers`, `/api/config` and `/api/star/:id` routes are gone; scripts that called them should use `/api/overview`, `/api/projects/:key/memories` and `/api/memory/:id`.
+- **The dashboard server now computes its summaries itself and sends pages, not the whole store.** The browser no longer receives raw embedding vectors, which cuts the payload on large stores. Memories are grouped by their `origin_project`. Embedding coverage counts the rows in `memory_vectors`. The old `/api/memories`, `/api/embeddings`, `/api/stats`, `/api/conflicts`, `/api/peers`, `/api/config` and `/api/star/:id` routes are gone; scripts that called them should use `/api/overview`, `/api/projects/:key/memories` and `/api/memory/:id`.
 - **The Board view moved onto the new shared header and colours.** Its cards and dialog work as before; on a phone the card dialog opens as a bottom sheet.
 - **Removed the 3D Living Map view and its `three` and `d3-force` dependencies.** The Health view replaces it.

@@ -7,6 +7,8 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { initStore, writeEntry } from '../../src/store.js';
+import { closeHippoDb, openHippoDb } from '../../src/db.js';
+import { upsertVectors } from '../../src/vector-store.js';
 import type { MemoryEntry } from '../../src/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/dashboard.js';
@@ -59,6 +61,16 @@ export function seed(hippoRoot: string, content: string, over: Partial<MemoryEnt
   };
   writeEntry(hippoRoot, entry);
   return entry;
+}
+
+/** Stores a small vector for each id in memory_vectors, as an embed run would. */
+export function embed(hippoRoot: string, ids: readonly string[]): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    upsertVectors(db, ids.map((id) => [id, [0.1, 0.2]] as const), 'test-model');
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 export interface RunningDashboard {

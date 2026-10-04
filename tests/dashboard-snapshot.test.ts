@@ -1,14 +1,12 @@
 // The snapshot groups live memories by origin project and counts bands, layers, conflicts and embeddings over that one population.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { Layer } from '../src/memory.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
 import { createSnapshotService } from '../src/dashboard-snapshot.js';
 import { buildOverview } from '../src/dashboard-queries.js';
-import { isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
+import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
 
 let store: TmpStore;
 
@@ -104,12 +102,12 @@ describe('dashboard snapshot', () => {
     expect(snap.facts.find((f) => f.id === q.id)).toBeUndefined();
   });
 
-  it('counts embedded memories from embeddings.json and reports coverage over live memories', () => {
+  it('counts embedded memories from memory_vectors and reports coverage over live memories', () => {
     const one = seed(store.hippoRoot, 'embedded one');
     const two = seed(store.hippoRoot, 'embedded two');
     seed(store.hippoRoot, 'not embedded');
     seed(store.hippoRoot, 'also not embedded');
-    writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [one.id]: [0.1], [two.id]: [0.2] }));
+    embed(store.hippoRoot, [one.id, two.id]);
 
     const snap = snapshot();
 
