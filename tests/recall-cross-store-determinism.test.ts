@@ -23,7 +23,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../src/search.js';
 import { searchBothHybrid } from '../src/shared.js';
 

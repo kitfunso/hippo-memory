@@ -10,7 +10,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 type DrillArgs = { summary_id: string; depth?: number };

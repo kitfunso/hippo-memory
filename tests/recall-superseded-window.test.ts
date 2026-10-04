@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
 import { assemble, recall, supersede, type Context } from '../src/api.js';
 

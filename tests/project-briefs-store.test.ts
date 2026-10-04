@@ -26,7 +26,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   saveProjectBrief,
@@ -186,8 +187,8 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
   it('ON DELETE SET NULL: forgetting the memory orphans the brief; old versions loadable', () => {
     const v1 = saveProjectBrief(home, 'default', { repo: 'd', summary: 'a' });
     const v2 = saveProjectBrief(home, 'default', { repo: 'd', summary: 'b', supersedesBriefId: v1.id });
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     expect(loadProjectBriefById(home, 'default', v1.id)!.memoryId).toBeNull();
     expect(loadProjectBriefById(home, 'default', v1.id)!.status).toBe('superseded');
     expect(loadProjectBriefById(home, 'default', v2.id)!.status).toBe('active');

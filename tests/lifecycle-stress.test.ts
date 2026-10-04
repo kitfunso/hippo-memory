@@ -19,12 +19,13 @@ import os from 'node:os';
 import fs from 'node:fs';
 
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory, isEmbeddingAvailable } from '../src/embeddings.js';
 import { physicsSearch } from '../src/search.js';
 import { consolidate } from '../src/consolidate.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
 
+// @ts-expect-error - .mjs harness modules have no type declarations
 import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
@@ -75,7 +76,7 @@ describe('lifecycle-stress injector', () => {
     for (const lab of labels) {
       // Fact membership is identified by the answer token in content (eval tags are
       // not written to the store, to avoid an embedded oracle signal).
-      const members = memories.filter((m) => m.content.includes(lab.answerToken));
+      const members = memories.filter((m: { content: string }) => m.content.includes(lab.answerToken));
       expect(members.length).toBe(3);
       for (const m of members) {
         const firstLine120 = (m.content.split('\n')[0] || '').slice(0, 120);
@@ -83,7 +84,7 @@ describe('lifecycle-stress injector', () => {
       }
     }
     // answer tokens are distinct across facts (no cross-fact collision)
-    const toks = labels.map((l) => l.answerToken);
+    const toks = labels.map((l: { answerToken: string }) => l.answerToken);
     expect(new Set(toks).size).toBe(toks.length);
   });
 });

@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntry, readEntry, initStore } from '../src/store.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 

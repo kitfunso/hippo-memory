@@ -15,7 +15,7 @@ import {
 } from '../src/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import type { MemoryEntry } from '../src/memory.js';
-import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,24 +76,12 @@ function insertMemoryRow(db: DatabaseSyncLike, id: string, opts?: Partial<{
 
 function makeMemoryEntry(id: string, overrides?: Partial<MemoryEntry>): MemoryEntry {
   return {
+    ...createMemory(`test content for ${id}`),
     id,
     created: NOW.toISOString(),
     last_retrieved: NOW.toISOString(),
-    retrieval_count: 0,
-    strength: 1.0,
     half_life_days: 7,
-    layer: Layer.Episodic,
-    tags: [],
-    emotional_valence: 'neutral',
-    schema_fit: 0.5,
     source: 'test',
-    outcome_score: null,
-    outcome_positive: 0,
-    outcome_negative: 0,
-    conflicts_with: [],
-    pinned: false,
-    confidence: 'verified',
-    content: `test content for ${id}`,
     ...overrides,
   };
 }

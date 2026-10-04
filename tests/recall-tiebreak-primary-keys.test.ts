@@ -19,7 +19,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall, type Context } from '../src/api.js';
 import { estimateTokens, type SearchResult } from '../src/search.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
@@ -50,7 +51,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
       tags: opts.tags ?? [],
       confidence: 'observed',
       dag_level: opts.dag_level ?? 0,
-      dag_parent_id: opts.dag_parent_id,
+      dag_parent_id: opts.dag_parent_id ?? undefined,
       tenantId: opts.tenantId ?? 'default',
       kind: opts.kind ?? 'distilled',
     });

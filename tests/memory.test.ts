@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, calculateRewardFactor, createMemory, applyOutcome, Layer, type TraceOutcome } from '../src/memory.js';
+import { calculateStrength, calculateRewardFactor, applyOutcome, Layer, type TraceOutcome} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

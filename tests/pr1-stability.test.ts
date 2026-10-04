@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { initStore, writeEntry, batchWriteAndDelete, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let tmpDir: string;
 

@@ -50,9 +50,10 @@ import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { computeSchemaFit } from '../dist/memory.js';
 
+import type { MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
 
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
@@ -166,7 +167,7 @@ describe('memory-value harness (real stores)', () => {
       const gold = jsonFile<{ memories: Array<{ id: string }> }>(goldPathFor(q.question_id));
       const { turns } = computeGold(q);
 
-      const entriesSoFar: Array<{ tags: string[]; content: string }> = [];
+      const entriesSoFar: MemoryEntry[] = [];
       let memIdx = 0;
       for (const t of turns) {
         const content = (t.content ?? '').trim();
@@ -176,7 +177,7 @@ describe('memory-value harness (real stores)', () => {
         const row = rowById.get(memId);
         expect(row, `no features row for ${memId}`).toBeDefined();
         expect(row!.features.schema_fit).toBeCloseTo(expectedFit, 10);
-        entriesSoFar.push({ tags: [], content });
+        entriesSoFar.push(createMemory(content));
         memIdx++;
       }
 

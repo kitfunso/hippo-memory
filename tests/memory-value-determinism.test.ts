@@ -39,7 +39,6 @@ import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 import { evaluateAll } from '../benchmarks/memory-value/evaluate.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { _resetAblationCacheForTests } from '../dist/ablation.js';
 
 import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';

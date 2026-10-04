@@ -26,11 +26,11 @@ function makeRoot(): string {
   return home;
 }
 
-interface HippoRecallToolArgs {
+type HippoRecallToolArgs = {
   query: string;
   budget?: number;
   session_id?: string;
-}
+};
 
 function callTool(
   name: string,

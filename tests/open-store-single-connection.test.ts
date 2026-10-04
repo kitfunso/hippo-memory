@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'module';
 import { initStore, writeEntry, loadAllEntries, loadAmbientCandidates } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import type { DatabaseSyncLike } from '../src/db.js';
 
 const require = createRequire(import.meta.url);

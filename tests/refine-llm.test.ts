@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { refineSemanticMemory, refineStore } from '../src/refine-llm.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
 import * as fs from 'fs';
 import * as os from 'os';

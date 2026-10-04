@@ -28,7 +28,6 @@ import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 import { metaPathFor } from '../benchmarks/memory-value/common.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { readJson } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { _resetAblationCacheForTests } from '../dist/ablation.js';
 
 // HIPPO_MV_SCRATCH_ROOT is included here (not just the ablation vars) so the

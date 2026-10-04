@@ -15,7 +15,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
@@ -25,10 +26,10 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
-interface RecallToolArgs {
+type RecallToolArgs = {
   query: string;
   session_id?: string;
-}
+};
 
 function callTool(
   reqId: number,

@@ -26,7 +26,8 @@ import {
   deleteEntry,
   writeEntry,
 } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   savePrediction,
@@ -228,7 +229,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
 
     // Forget the backing memory via deleteEntry (one of the 4 deletion paths
     // round-1 CRIT identified)
-    deleteEntry(home, pred.memoryId!, 'default');
+    deleteEntry(home, pred.memoryId!);
 
     // Prediction row still exists, memory_id is now NULL
     const reloaded = loadPredictionById(home, 'default', pred.id);

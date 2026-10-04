@@ -265,6 +265,7 @@ describe('rowToSessionHandoff', () => {
       outcome: null,
       target_runtime: null,
       card_id: null,
+      scope: null,
     };
 
     const handoff = rowToSessionHandoff(row);
@@ -293,6 +294,7 @@ describe('rowToSessionHandoff', () => {
       outcome: null,
       target_runtime: null,
       card_id: null,
+      scope: null,
     };
 
     const handoff = rowToSessionHandoff(row);
@@ -317,6 +319,7 @@ describe('rowToSessionHandoff', () => {
       outcome: null,
       target_runtime: null,
       card_id: null,
+      scope: null,
     };
 
     const handoff = rowToSessionHandoff(row);

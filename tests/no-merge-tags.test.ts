@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { consolidate } from '../src/consolidate.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { NO_MERGE_TAGS } from '../src/shared.js';
 import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
 

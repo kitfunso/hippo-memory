@@ -9,7 +9,7 @@ import {
   appendSessionEvent,
   writeEntry,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
@@ -19,11 +19,11 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
-interface HippoRecallArgs {
+type HippoRecallArgs = {
   query: string;
   include_continuity?: boolean;
   scope?: string;
-}
+};
 
 function callTool(
   reqId: number,

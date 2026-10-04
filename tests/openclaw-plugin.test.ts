@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type ExecFileSyncOpts = { cwd?: string; encoding?: string; timeout?: number; stdio?: string[] };
-type ExecFileSyncArgs = string[];
+import type { HippoPluginDeps } from '../extensions/openclaw-plugin/index.js';
 
-const execFileSyncMock = vi.fn<(cmd: string, args: ExecFileSyncArgs, opts?: ExecFileSyncOpts) => string>();
+type ToolCtx = { workspaceDir?: string; agentId?: string; sessionId?: string; sessionKey?: string };
+
+const execFileSyncMock = vi.fn<HippoPluginDeps['execFileSync']>();
 const spawnUnrefMock = vi.fn();
 const spawnMock = vi.fn(() => ({
   unref: spawnUnrefMock,
@@ -15,7 +16,7 @@ const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 // test always calls through real function references and only the
 // execFileSync/spawn/existsSync implementations are swapped.
 async function loadPlugin() {
-  const mod = await import('../extensions/openclaw-plugin/index.ts');
+  const mod = await import('../extensions/openclaw-plugin/index.js');
   mod.__setHippoPluginDeps({
     execFileSync: execFileSyncMock,
     spawn: spawnMock,
@@ -67,13 +68,13 @@ type HippoPluginConfig = {
 /** Distinguishes a registered ToolDef factory from an already-built ToolDef: only the
  *  factory form is callable, and only the built form carries `execute` directly. */
 function isToolFactory(
-  registration: ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef),
-): registration is (ctx: { workspaceDir?: string }) => ToolDef {
+  registration: ToolDef | ((ctx: ToolCtx) => ToolDef),
+): registration is (ctx: ToolCtx) => ToolDef {
   return !('execute' in registration);
 }
 
 function makeApi(config: HippoPluginConfig) {
-  const toolRegistrations: Array<ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef)> = [];
+  const toolRegistrations: Array<ToolDef | ((ctx: ToolCtx) => ToolDef)> = [];
   const hooks = new Map<string, HookHandler | VoidHookHandler>();
 
   return {
@@ -86,11 +87,11 @@ function makeApi(config: HippoPluginConfig) {
         debug: vi.fn(),
       },
       registerTool: vi.fn(
-        (tool: ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef)) => toolRegistrations.push(tool),
+        (tool: ToolDef | ((ctx: ToolCtx) => ToolDef)) => toolRegistrations.push(tool),
       ),
       on: vi.fn((event: string, handler: HookHandler | VoidHookHandler) => hooks.set(event, handler)),
     },
-    getTool(name: string, ctx: { workspaceDir?: string } = {}) {
+    getTool(name: string, ctx: ToolCtx = {}) {
       for (const registration of toolRegistrations) {
         const tool = isToolFactory(registration) ? registration(ctx) : registration;
         if (tool.name === name) {
@@ -252,7 +253,7 @@ describe('openclaw hippo plugin', () => {
     const register = await loadPlugin();
     const harness = makeApi(hippoConfig({ autoSleep: true }));
 
-    execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => {
+    execFileSyncMock.mockImplementation((_cmd: string, args: readonly string[]) => {
       if (args?.[0] === 'remember') return 'Remembered [mem-123]';
       return 'Memory context from hippo';
     });

@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'module';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { getContext, type Context } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import type { DatabaseSyncLike } from '../src/db.js';

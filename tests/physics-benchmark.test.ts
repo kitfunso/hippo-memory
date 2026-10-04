@@ -13,9 +13,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
-  createMemory,
-  type MemoryEntry,
+  type MemoryEntry
 } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   initStore,
   writeEntry,

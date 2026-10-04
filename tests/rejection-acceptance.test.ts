@@ -21,7 +21,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
 import { initStore, writeEntry, readEntry, loadAllEntries, rebuildIndex, appendSessionEvent } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
   RejectedValueError,

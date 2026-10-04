@@ -10,7 +10,7 @@ import {
   saveSessionHandoff,
   appendSessionEvent,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { getContext, adminActor } from '../src/api.js';
 import { autoDetectContext } from '../src/context-auto.js';
 import { resolveProjectIdentity } from '../src/project-identity.js';

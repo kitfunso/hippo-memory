@@ -23,9 +23,9 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
-interface ToolArgs {
+type ToolArgs = {
   class_tag?: string;
-}
+};
 
 function callTool(
   reqId: number,

@@ -25,9 +25,9 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
-interface HippoRecallToolArgs {
+type HippoRecallToolArgs = {
   query: string;
-}
+};
 
 function callTool(
   reqId: number,

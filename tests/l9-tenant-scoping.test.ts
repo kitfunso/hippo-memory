@@ -152,9 +152,9 @@ describe('L9: per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(aOnly[0].content.startsWith('[Consolidated from')).toBe(true);
 
     let refineCallSources: number | undefined;
-    const fetcher = async (_url: string, init?: { body?: string }): Promise<Response> => {
+    const fetcher = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       // Capture how many sources were sent to the LLM
-      const body = init?.body ? JSON.parse(init.body) : {};
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
       const userMsg = body.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
       refineCallSources = (userMsg.match(/Source \d/g) ?? []).length;
       return new Response(

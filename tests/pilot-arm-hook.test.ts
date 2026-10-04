@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { initStore, writeEntry, saveActiveTaskSnapshot } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { hashArm } from '../src/pilot-arm.js';
 

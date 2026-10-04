@@ -1,5 +1,6 @@
 // tools/jaccard-overlap.test.ts
 import { describe, it, expect } from 'vitest';
+// @ts-expect-error - .mjs harness modules have no type declarations
 import { tokenize, jaccard, stem } from '../tools/jaccard-overlap.mjs';
 
 describe('jaccard-overlap', () => {

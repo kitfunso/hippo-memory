@@ -23,7 +23,8 @@ import {
   loadSessionDecayContext,
   batchWriteAndDelete,
 } from '../src/store.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions } from '../src/memory.js';
+import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents, type AuditEvent } from '../src/audit.js';

@@ -31,7 +31,8 @@ import {
   deleteEntry,
   writeEntry,
 } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   saveProcess,
@@ -280,8 +281,8 @@ describe('processes store (E2 first-class object)', () => {
     const v1 = saveProcess(home, 'default', { processName: 'Durable', steps: ['a'] });
     const v2 = saveProcess(home, 'default', { processName: 'Durable', steps: ['a', 'b'], supersedesProcessId: v1.id });
     // Forget both versions' memory mirrors; the canonical rows must survive.
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     const reV1 = loadProcessById(home, 'default', v1.id);
     const reV2 = loadProcessById(home, 'default', v2.id);
     expect(reV1).not.toBeNull();
@@ -323,9 +324,7 @@ describe('processes store (E2 first-class object)', () => {
   });
 
   it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', () => {
-    // @ts-expect-error — runtime validation test
     expect(() => validateProcessSteps('not an array')).toThrow(/must be an array/);
-    // @ts-expect-error — runtime validation test
     expect(() => validateProcessSteps([1, 2])).toThrow(/not a string/);
     expect(() => validateProcessSteps(['ok', '   '])).toThrow(/is empty/);
     expect(() => validateProcessSteps(Array(MAX_PROCESS_STEPS + 1).fill('x'))).toThrow(/step cap/);

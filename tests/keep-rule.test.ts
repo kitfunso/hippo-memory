@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/agent-memories/tools.js';
 import {
-  AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, createMemory, type MemoryEntry,
+  AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
 } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   batchWriteAndDelete, deleteEntry, initStore, listMemoryConflicts, loadAllEntries, readEntry, writeEntry,
 } from '../src/store.js';

@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../src/memory.js';
 import { invalidateMatching } from '../src/invalidation.js';
 import { remember, getContext } from '../src/api.js';

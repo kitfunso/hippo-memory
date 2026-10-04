@@ -30,7 +30,8 @@ import {
   deleteEntry,
   writeEntry,
 } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveIncident,
@@ -279,7 +280,7 @@ describe('incidents store (E2 first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the incident', () => {
     const inc = saveIncident(home, 'default', { incidentText: 'survives memory decay' });
     expect(inc.memoryId).not.toBeNull();
-    deleteEntry(home, inc.memoryId!, 'default');
+    deleteEntry(home, inc.memoryId!);
     const reloaded = loadIncidentById(home, 'default', inc.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();

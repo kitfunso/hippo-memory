@@ -2,6 +2,7 @@
  *  needs the right maint-<major>.<minor> tag. */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+// @ts-expect-error - .mjs harness modules have no type declarations
 import { distTagFor, fetchLatest } from '../scripts/publish-dist-tag.mjs';
 
 describe('distTagFor', () => {
