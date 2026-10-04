@@ -22,7 +22,7 @@ import { detectAvailabilityBias } from '../availability.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { estimateTokens } from '../token-ledger.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
-import { mcpActor, isJsonBoolean, type ToolCall } from './protocol.js';
+import { mcpActor, type ToolCall } from './protocol.js';
 import { sessionRecallHistoryMcp, lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
   formatContinuityBlock,
@@ -38,22 +38,14 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './format.js';
-import { type JsonValue, isJsonString } from '../json.js';
-import { MAX_ID_LEN } from '../http-util.js';
+import { isJsonString } from '../json.js';
+import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
 
 // Named shapes for the optional fields each api.* call only wants to pass
 // when the caller actually supplied them. Built via `const extra: T = {};
 // if (cond) extra.field = value;` then spread once, unconditionally — keeps
 // the same per-field omission semantics as a conditional spread without the
 // `...(cond ? { field } : {})` pattern.
-interface RecallExtraOpts {
-  freshTailCount?: number;
-  freshTailSessionId?: string;
-  summarizeOverflow?: boolean;
-  scorerWindow?: number;
-  sessionId?: string;
-}
-
 interface AssembleExtraOpts {
   budget?: number;
   freshTailCount?: number;
@@ -64,50 +56,6 @@ interface DrillDownExtraOpts {
   limit?: number;
   budget?: number;
   depth?: number;
-}
-
-interface RecallToolArgs {
-  query: string;
-  budget: number;
-  includeContinuity: boolean;
-  explicitScope: string | undefined;
-  sessionId: string | undefined;
-  recallExtra: RecallExtraOpts;
-}
-
-function parseRecallArgs(args: Record<string, JsonValue>, defaultBudget: number): RecallToolArgs {
-  const query = String(args.query || '');
-  const budget = Number(args.budget) || defaultBudget;
-  const includeContinuity = Boolean(args.include_continuity);
-  const explicitScope = isJsonString(args.scope) && args.scope.length > 0
-    ? args.scope
-    : undefined;
-  const freshTailCountArg = Number(args.fresh_tail_count);
-  const freshTailCount = Number.isFinite(freshTailCountArg) && freshTailCountArg > 0
-    ? freshTailCountArg
-    : undefined;
-  const freshTailSessionId = isJsonString(args.fresh_tail_session_id) && args.fresh_tail_session_id.length > 0
-    ? args.fresh_tail_session_id
-    : undefined;
-  const summarizeOverflow = isJsonBoolean(args.summarize_overflow)
-    ? args.summarize_overflow
-    : undefined;
-  // Number-coerce, never typeof-check: "abc" must reach api.retrieve and fail as invalid_scorer_window, the same code HTTP returns.
-  const scorerWindow = args.scorer_window === undefined
-    ? undefined
-    : Number(args.scorer_window);
-  // session_id drives the goal-stack boost inside api.retrieve; same trim and MAX_ID_LEN cap as fresh_tail_session_id.
-  const sessionIdRaw = isJsonString(args.session_id) ? args.session_id.trim() : '';
-  const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= MAX_ID_LEN
-    ? sessionIdRaw
-    : undefined;
-  const recallExtra: RecallExtraOpts = {};
-  if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
-  if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
-  if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
-  if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
-  if (sessionId !== undefined) recallExtra.sessionId = sessionId;
-  return { query, budget, includeContinuity, explicitScope, sessionId, recallExtra };
 }
 
 /** Builds the showRanked callback that renders the list MCP shows and parks the render in `out`. */
@@ -250,8 +198,11 @@ function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer 
 }
 
 export async function runRecallTool(call: ToolCall): Promise<string> {
-  const { ctx, hippoRoot, config, tenantId } = call;
-  const { query, budget, includeContinuity, explicitScope, sessionId, recallExtra } = parseRecallArgs(call.args, config.defaultBudget);
+  const { ctx, hippoRoot, config, tenantId, args } = call;
+  // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
+  const { opts: recallOpts } = parseRecallRequest(toolParams(args));
+  const { query, includeContinuity, sessionId } = recallOpts;
+  const budget = Number(args.budget) || config.defaultBudget;
   const apiCtx: ApiContext = {
     hippoRoot,
     tenantId,
@@ -264,15 +215,12 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   const out: RenderSlot = {};
   // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
   await apiRetrieve(apiCtx, {
-    query,
+    ...recallOpts,
     limit: 50,
-    scope: explicitScope,
-    includeContinuity,
     mode: config.physics?.enabled !== false ? 'physics' : 'hybrid',
     // The hint is computed below over the list MCP shows; the window band's copy would emit its audit row twice.
     suppressAvailabilityHint: true,
     keepHeldCopies: true,
-    ...recallExtra,
     showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out),
   });
   if (!out.rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
@@ -336,15 +284,10 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
 }
 
 export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
-  const budget = args.budget === undefined
-    ? config.defaultContextBudget
-    : Number(args.budget);
-  if (!Number.isFinite(budget) || budget < 0) return 'budget must be a non-negative number.';
+  const { budget: budgetArg, scope: exactScope } = parseContextRequest(toolParams(args));
+  const budget = budgetArg ?? config.defaultContextBudget;
   if (budget === 0) return '';
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
-  const exactScope = isJsonString(args.scope) && args.scope.length > 0
-    ? args.scope
-    : undefined;
   // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
   const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   const result = await apiGetContext(

@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { estimateTokens, recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
+import { RecallRequestError } from '../api/recall-request.js';
 import { findHippoRoot, isJsonObjectRecord, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
@@ -106,6 +107,15 @@ async function executeTool(
 
 // ── Request handling ──
 
+// The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
+function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly string[]): McpResponse {
+  return {
+    jsonrpc: '2.0',
+    id,
+    result: { content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }], isError: true },
+  };
+}
+
 /**
  * Transport-agnostic MCP dispatcher. Both the stdio loop (below) and the
  * HTTP/SSE transport in src/server.ts route every incoming JSON-RPC message
@@ -149,16 +159,15 @@ export async function handleMcpRequest(
         return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
       }
       const toolArgs = isJsonObjectRecord(argumentsValue) ? argumentsValue : {};
-      // The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
       const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
-      if (problems.length > 0) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: { content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }], isError: true },
-        };
+      if (problems.length > 0) return invalidArgs(id, toolName, problems);
+      let output: string;
+      try {
+        output = await executeTool(toolName, toolArgs, ctx);
+      } catch (err) {
+        if (!(err instanceof RecallRequestError)) throw err;
+        return invalidArgs(id, toolName, [err.message]);
       }
-      const output = await executeTool(toolName, toolArgs, ctx);
       recordMcpTokens(toolName, output, ctx);
       return {
         jsonrpc: '2.0',
