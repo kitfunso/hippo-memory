@@ -3145,3 +3145,13 @@ ROADMAP's adoption bar; TIE or CROSS-ENCODER RANKS closes clef-flash as a rankin
 
 One new verdict contrast on a query set already used by Lanes 9a, 12, 13, 15, 19 and 21. N = 21. Not
 independent of those lanes.
+
+## Run log
+
+- Day 1, 2026-10-04: 142 calls, 846,604 input tokens (about 6,930 neurons), 142 answers cached, 0 fallbacks
+  cached. The cross-encoder arm did not load in that run: the fresh worktree lacked the optional
+  `@xenova/transformers`, and the warm-up guard watched `console.warn` while the logger writes to stderr, so
+  it missed the fallback. The CLEF answers do not depend on that arm. Fixed before any verdict: version
+  2.17.2 installed (the one earlier lanes used), and the guard now checks the scores the warm-up returns.
+  Checked both ways: with the package hidden the run stops; with it present a zero-call run loads the model
+  in 2.5 s and resumes 142 cached answers.

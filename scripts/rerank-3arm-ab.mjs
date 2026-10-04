@@ -48,7 +48,9 @@ const quantile = (xs, p) => { const c = [...xs].sort((a, b) => a - b); return c[
 // A frozen copy keeps a run split across days on one corpus; the live store grows between halves.
 const hippoRoot = process.env.RERANK_HIPPO_ROOT?.trim() || join(homedir(), '.hippo');
 // Workers AI's free allocation is per day, so a hosted run caps its calls and resumes from cached answers.
-const MAX_CALLS = Number(process.env.RERANK_MAX_CALLS) > 0 ? Number(process.env.RERANK_MAX_CALLS) : Infinity;
+const rawMax = process.env.RERANK_MAX_CALLS?.trim();
+const MAX_CALLS = rawMax ? Number(rawMax) : Infinity;
+if (!(Number.isInteger(MAX_CALLS) && MAX_CALLS >= 0) && MAX_CALLS !== Infinity) { console.error(`RERANK_MAX_CALLS must be a whole number, not ${rawMax}.`); process.exit(1); }
 const CACHE_DIR = process.env.RERANK_CACHE_DIR?.trim() || null;
 const dir = process.env.RERANK_QUERIES_DIR || 'evals/paraphrase';
 const queries = [];
@@ -103,26 +105,22 @@ async function runPool(items, worker, concurrency) {
 const ceReranker = getReranker('cross-encoder');
 const jevReranker = getReranker(ARM);
 
-// crossEncoderReranker fails OPEN (identity order + a console.warn) rather than
-// throwing, so a silent fallback would look like a real result without this spy.
-let fallbackWarning = null;
-const realWarn = console.warn;
-console.warn = (...a) => { fallbackWarning = a.join(' '); realWarn(...a); };
-const warmup = [{ entry: { id: '__warmup__', content: 'warm up the cross encoder model before timing real queries' }, score: 1, tokens: 10 }];
+// crossEncoderReranker fails OPEN, copying each input score into rerankScore. Its warning goes to
+// stderr through the logger, which a console.warn spy cannot see, so check the scores it returns.
+const warmup = [{ entry: { id: '__warmup__', content: 'warm up the cross encoder model before timing real queries' }, score: 0.123456, tokens: 10 }];
 let modelLoadMs = null;
+let warmOut;
 try {
   const t0 = performance.now();
-  await ceReranker('warm up query', warmup, { topK: 1 });
+  warmOut = await ceReranker('warm up query', warmup, { topK: 1 });
   modelLoadMs = performance.now() - t0;
 } catch (err) {
   console.error('CROSS-ENCODER FAILED TO LOAD: threw during the warmup call.');
   console.error(err?.stack ?? String(err));
   process.exit(1);
 }
-console.warn = realWarn;
-if (fallbackWarning) {
+if (warmOut.every((r, i) => r.rerankScore === warmup[i].score)) {
   console.error('CROSS-ENCODER UNAVAILABLE: reranker fell back to identity ordering, not a real model call.');
-  console.error('Captured warning:', fallbackWarning);
   process.exit(1);
 }
 console.error(`cross-encoder model load ok: ${modelLoadMs.toFixed(1)}ms (warmup excluded from per-query timings)\n`);
