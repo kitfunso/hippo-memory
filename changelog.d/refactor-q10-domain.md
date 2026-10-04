@@ -1,3 +1,0 @@
-### Changed
-
-- **The 18 longest functions in the domain modules are split into named stages, with no change in behaviour.** The save paths for decisions, customer notes, policies, processes, skills, project briefs and incidents now hand their in-transaction work to small per-module helpers. The DAG build and rebuild passes, the goal-stack boost and the brief digest get the same treatment. The longest of these functions is now 63 lines, down from 139. A new characterization test pins the brief budget cut and every retrieval-policy branch of the goal boost. `.size-baseline.json` drops these 18 entries plus the 3 dashboard entries the Health dashboard rewrite already shortened.

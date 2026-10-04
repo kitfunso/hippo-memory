@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.62.0 - 2026-10-04
+
+### Changed
+
+- **`hippo projects repair` now clears old damage in one reversible pass.** In the global store it sets aside every Claude Code note imported from a recorded session folder under the wrong project, edited since or not; anywhere, it sets aside an imported note under a project name when a user-global import holds the same text. It also folds an old name into the project its recorded folders resolve to today, so old worktree names join their repo without a merge command each. A name you merged into by hand is never folded back, and a fold into a name that itself folds waits for the next run. A dry run only reads, so it never blocks a hook. One backup, one audit event, and `hippo doctor` counts all three kinds. Names whose folders are all gone still need `hippo projects merge`.
+- **The 25 longest remaining functions in `src/cli/` are split into named stage helpers, each under 80 lines.** Subcommand verbs such as `decide`, `incident`, `predict`, `policy`, `process`, `skill`, `project-brief`, `customer-note`, `session`, `handoff`, `wm` and `hook` now dispatch to one helper per subcommand. `remember`, `trace`, `explain`, `embed`, `status`, `import`, `setup`, `compact-resume` and the session-end worker are cut along their stages. Output text, JSON key order, exit codes and flag parsing are unchanged, and a new characterization test pins the verbs that had thin coverage.
+- **The 18 longest functions in the domain modules are split into named stages, with no change in behaviour.** The save paths for decisions, customer notes, policies, processes, skills, project briefs and incidents now hand their in-transaction work to small per-module helpers. The DAG build and rebuild passes, the goal-stack boost and the brief digest get the same treatment. The longest of these functions is now 63 lines, down from 139. A new characterization test pins the brief budget cut and every retrieval-policy branch of the goal boost. `.size-baseline.json` drops these 18 entries plus the 3 dashboard entries the Health dashboard rewrite already shortened.
+
+### Fixed
+
+- **A session's own notes folder is imported under the project it belongs to, not the folder the session ended in.** A session launched in the home folder that ended or compacted inside a repo or worktree imported the home notes again under that repo's name, so every project showed them twice. One store held 2,641 such copies. The notes now take the project of the folder the session started in, read from the transcript's first line, without a git call; home notes stay user-global. Notes from another repo, met inside a project store, go to the global store instead of being dropped.
+
 ## 1.61.0 - 2026-10-04
 
 ### Added
