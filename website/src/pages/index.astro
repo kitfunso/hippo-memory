@@ -17,7 +17,7 @@ import { faqPick } from '../content/site';
 // "open-source", "local-first" and "MCP server". The shared site.description (JSON-LD
 // and every other page) and the visible hero copy are left unchanged on purpose.
 const metaDescription =
-  'Open-source, local-first memory for AI agents, with an MCP server. A memory marked wrong drops out of the top results, and hippo supersede takes an old fact out of recall.';
+  'Open-source, local-first memory for AI agents, with an MCP server. A memory marked wrong drops out of the top results, and newer facts supersede old ones.';
 
 // The home FAQ is a sample; /faq/ holds every question and the FAQPage markup.
 const homeFaq = faqPick([
@@ -34,10 +34,10 @@ const homeFaq = faqPick([
   <Nav />
   <main id="main">
     <Hero />
-    <GetStarted />
-    <LocalFirst />
     <Problem />
     <HowItWorks />
+    <GetStarted />
+    <LocalFirst />
     <Receipts />
     <Compare />
     <Faq items={homeFaq} moreHref="/faq/" />

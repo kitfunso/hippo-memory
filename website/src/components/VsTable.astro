@@ -1,5 +1,5 @@
 ---
-// Hippo against one system, every row of both README comparison tables, so a vs page cannot drift from them.
+// Hippo against one system, every row of the README comparison table, so a vs page cannot drift from it.
 import { comparison } from '../content/site';
 import { mdInline } from '../content/readme';
 
@@ -10,51 +10,35 @@ const { system } = Astro.props;
 const col = comparison.systems.findIndex((s) => s.name === system);
 if (col < 0) throw new Error(`README comparison has no "${system}" column`);
 const them = comparison.systems[col];
-const pick = (rows: typeof comparison.rows) => rows.map((r) => ({ feature: r.feature, hippo: r.cells[0], them: r.cells[col] }));
-const tables = [
-  { caption: `hippo and ${them.name}: what each tool is, from the README`, head: 'Feature', rows: pick(comparison.rows) },
-  { caption: `hippo and ${them.name}: design bets, choices rather than measured results`, head: 'Design bet', rows: pick(comparison.bets) },
-];
+const rows = comparison.rows.map((r) => ({ feature: r.feature, hippo: r.cells[0], them: r.cells[col] }));
 // Show a footnote only when a cell on this page carries its mark (* or **).
-const marks = new Set(tables.flatMap((t) => t.rows).flatMap((r) => [r.hippo, r.them]).flatMap((c) => c.match(/\*+/g) ?? []));
+const marks = new Set(rows.flatMap((r) => [r.hippo, r.them]).flatMap((c) => c.match(/\*+/g) ?? []));
 const footnotes = comparison.footnotes.filter((f) => marks.has((f.match(/^(?:\\\*)+/)?.[0] ?? '').replace(/\\/g, '')));
 ---
 
-{tables.map((t, i) => (
-  <Fragment>
-    {i > 0 && (
-      <Fragment>
-        <h3 class="mt-10 text-base font-medium text-zinc-100">Design bets</h3>
-        <p class="mt-1 text-sm text-zinc-400">Choices each tool made, not results it measured.</p>
-      </Fragment>
-    )}
-    <div class:list={['overflow-hidden rounded-2xl border border-white/8', i > 0 && 'mt-4']}>
-      <!-- Fixed equal columns: the rival's column is the point of a vs page, so it never scrolls off a phone. -->
-      <table class="w-full table-fixed text-left text-[13px] leading-snug sm:text-sm">
-        <caption class="sr-only">{t.caption}</caption>
-        <colgroup><col class="w-[30%]" /><col class="w-[35%]" /><col class="w-[35%]" /></colgroup>
-        <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
-          <tr>
-            <th scope="col" class="px-3 py-3 font-medium sm:px-5">{t.head}</th>
-            <th scope="col" class="px-3 py-3 font-medium text-zinc-200 sm:px-5">hippo</th>
-            <th scope="col" class="px-3 py-3 font-medium [overflow-wrap:anywhere] sm:px-5">{them.name}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-white/5">
-          {t.rows.map((r) => (
-            <tr class="align-top text-zinc-300">
-              <th scope="row" class="px-3 py-3 text-left font-normal text-zinc-400 hyphens-auto [overflow-wrap:anywhere] sm:px-5">{r.feature}</th>
-              <td class="px-3 py-3 font-medium text-zinc-100 [overflow-wrap:anywhere] sm:px-5">{r.hippo}</td>
-              <td class="px-3 py-3 [overflow-wrap:anywhere] sm:px-5">{r.them}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    {i === 0 && (
-      <div class="mt-4 space-y-2">
-        {footnotes.map((f) => <p class="copy text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
-      </div>
-    )}
-  </Fragment>
-))}
+<div class="overflow-hidden rounded-2xl border border-white/8">
+  <!-- Fixed equal columns: the rival's column is the point of a vs page, so it never scrolls off a phone. -->
+  <table class="w-full table-fixed text-left text-[13px] leading-snug sm:text-sm">
+    <caption class="sr-only">hippo and {them.name}, row by row from the README comparison table</caption>
+    <colgroup><col class="w-[30%]" /><col class="w-[35%]" /><col class="w-[35%]" /></colgroup>
+    <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+      <tr>
+        <th scope="col" class="px-3 py-3 font-medium sm:px-5">Feature</th>
+        <th scope="col" class="px-3 py-3 font-medium text-zinc-200 sm:px-5">hippo</th>
+        <th scope="col" class="px-3 py-3 font-medium [overflow-wrap:anywhere] sm:px-5">{them.name}</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-white/5">
+      {rows.map((r) => (
+        <tr class="align-top text-zinc-300">
+          <th scope="row" class="px-3 py-3 text-left font-normal text-zinc-400 hyphens-auto [overflow-wrap:anywhere] sm:px-5">{r.feature}</th>
+          <td class="px-3 py-3 font-medium text-zinc-100 [overflow-wrap:anywhere] sm:px-5">{r.hippo}</td>
+          <td class="px-3 py-3 [overflow-wrap:anywhere] sm:px-5">{r.them}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+<div class="mt-4 space-y-2">
+  {footnotes.map((f) => <p class="copy text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
+</div>

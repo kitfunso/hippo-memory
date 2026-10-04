@@ -30,7 +30,7 @@ const mechanisms = [
   },
   {
     name: 'Outcome marks',
-    body: `\`hippo outcome --good\` or \`--bad\` marks the memories from the last recall. After 5 good marks and no bad ones, a memory's effective half-life is about 42% longer; after 3 bad marks and no good ones, it decays 1.6 times as fast and its strength is cut to an eighth. On the synthetic E1 test, where every mark is correct, plain BM25 plus the outcome mark cut how often a marked-bad memory stayed in the top five from 71.9% to 0.0% ([mechanism audit, round 2](${audit})). Real marks are noisier, because \`--bad\` marks the whole recall batch.`,
+    body: `\`hippo outcome --good\` or \`--bad\` marks the memories from the last recall. After 5 good marks and no bad ones, a memory's effective half-life is about 42% longer; after 3 bad marks and no good ones, it decays nearly twice as fast. On the synthetic E1 test, where every mark is correct, plain BM25 plus the outcome mark cut how often a marked-bad memory stayed in the top five from 71.9% to 0.0% ([mechanism audit, round 2](${audit})). Real marks are noisier, because \`--bad\` marks the whole recall batch.`,
   },
   {
     name: 'Supersession and invalidation',
@@ -42,11 +42,11 @@ const mechanisms = [
   },
   {
     name: 'Sleep and dormant memories',
-    body: `\`hippo sleep\` merges two or more related episodes into one memory, and the originals decay. It keeps the store tidy but has not been shown to improve recall: in round 2 of the mechanism audit, a slept LongMemEval store scored 3.6 points lower at hit@5 than the same store never slept. A memory that fades below the threshold goes dormant instead of being deleted. \`hippo dormant restore <id>\` brings it back, and a dormant memory nobody restores is deleted after 180 days by default.`,
+    body: `\`hippo sleep\` merges three or more related episodes into one pattern, and the originals decay. It keeps the store tidy but has not been shown to improve recall: in round 2 of the mechanism audit, a slept LongMemEval store scored 3.6 points lower at hit@5 than the same store never slept. A memory that fades below the threshold goes dormant instead of being deleted. \`hippo dormant restore <id>\` brings it back, and a dormant memory nobody restores is deleted after 180 days by default.`,
   },
   {
     name: 'Confidence',
-    body: 'Each memory is `verified`, `observed`, `inferred` or `stale`, and `hippo context` shows the level beside each memory. A memory not recalled for 30 days is shown as aged when it is read, and recalling it clears that. Nothing in the store changes.',
+    body: 'Each memory is `verified`, `observed`, `inferred` or `stale`, and `hippo context` shows the level beside each memory. A memory unretrieved for 30 days or more is marked stale at the next sleep, and a recall wakes it back to observed.',
   },
 ];
 ---

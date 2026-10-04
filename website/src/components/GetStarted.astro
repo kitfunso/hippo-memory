@@ -5,7 +5,7 @@ import CopyCommand from './CopyCommand.astro';
 
 <section id="get-started" class="relative border-t border-white/5 bg-white/[0.02]">
   <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
-    <!-- On wide screens the commands sit under the intro so the left column is not half empty; on phones the change list still comes first. -->
+    <!-- On wide screens the commands sit under the intro so the left column is not half empty; on phones the install card still comes first. -->
     <div class="grid grid-cols-1 gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-16 lg:gap-y-8">
       <div class="lg:col-start-1 lg:row-start-1">
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{getStarted.kicker}</p>
@@ -16,10 +16,13 @@ import CopyCommand from './CopyCommand.astro';
 
       <div class="lg:col-start-2 lg:row-span-2 lg:row-start-1" data-reveal>
         <div class="rounded-2xl glass p-5 break-words">
-          <ul class="list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-300">
-            {getStarted.changes.map((c) => <li>{c}</li>)}
+          <p class="text-sm font-medium text-zinc-200">{getStarted.autoInstall.heading}</p>
+          <ul class="mt-3 flex flex-wrap gap-2">
+            {getStarted.autoInstall.frameworks.map((f) => (
+              <li class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-xs text-zinc-300">{f}</li>
+            ))}
           </ul>
-          <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.skip}</p>
+          <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.autoInstall.note}</p>
         </div>
       </div>
 
@@ -32,6 +35,10 @@ import CopyCommand from './CopyCommand.astro';
             </li>
           ))}
         </ol>
+        <p class="mt-4 pl-11 text-sm leading-relaxed text-zinc-400">
+          Then <code class="font-mono text-zinc-300">hippo sleep</code> tidies the store when a Claude Code
+          session ends, and a daily run at 6:15am learns from the day's commits in every registered project.
+        </p>
       </div>
     </div>
   </div>

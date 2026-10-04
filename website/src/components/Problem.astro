@@ -15,7 +15,7 @@ import { problem } from '../content/site';
         </div>
       </div>
 
-      <!-- A repeated failure is stored once, as the capture-error hook does; the motif shows the mechanism, not a later run succeeding. -->
+      <!-- the "saw it four times" motif: repeated faded failures, one finally remembered -->
       <div class="flex min-w-0 items-center" data-reveal>
         <div class="w-full min-w-0 space-y-3 font-mono text-sm" aria-hidden="true">
           {[1, 2, 3].map((n) => (
@@ -26,9 +26,9 @@ import { problem } from '../content/site';
             </div>
           ))}
           <div class="ring-grad flex items-center gap-3 rounded-lg bg-white/[0.03] px-4 py-3 text-zinc-200">
-            <span class="text-emerald-400">+</span>
-            <span class="min-w-0 flex-1">stored once as an error memory</span>
-            <span class="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">[observed]</span>
+            <span class="text-emerald-400">✓</span>
+            <span class="min-w-0 flex-1">remembered · surfaced before run #4</span>
+            <span class="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">[verified]</span>
           </div>
         </div>
       </div>

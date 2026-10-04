@@ -11,16 +11,16 @@ function cellTone(v: string): string {
   return 'text-zinc-300';
 }
 
-// Home shows 6 fact rows x 4 systems of the README's first table, including rows where others are stronger;
-// the design bets stay on GitHub. A cell shows its short verdict, the README cell minus its parenthetical, keeping footnote marks.
+// Home shows 6 rows x 4 systems of the README table; the GitHub link carries readers to all 10.
+// A cell shows its short verdict, the README cell minus its parenthetical, keeping footnote marks.
 const shortVerdict = (cell: string) => cell.replace(/\s*\(([^)]*)\)/g, (_, inner: string) => inner.match(/\*+/)?.[0] ?? '');
 const homeSystems = ['Hippo', 'Mem0', 'gbrain', 'Zep'];
 const homeFeatures = [
-  'Where your data lives',
-  'Needs an account or model key',
-  'License',
-  'Managed multi-user service',
-  'Graph or entity relations',
+  'Decay by default',
+  'Retrieval strengthening',
+  'Cross-tool import (ChatGPT/Claude/Cursor)',
+  'Auto-hook install',
+  'Runtime',
   'LongMemEval (published)',
 ];
 // A README rename must fail the build here, not drop a column or row from the page.

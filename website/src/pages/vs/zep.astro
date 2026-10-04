@@ -19,11 +19,11 @@ const qa = [
   },
   {
     q: 'Is hippo a Zep alternative?',
-    a: 'Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, stores memories in SQLite in your project, needs no account, graph database or model, and `hippo init` installs hooks for Claude Code and OpenCode, adds 2 hooks to `hooks.json` for Codex when Codex is installed, and adds instructions to an existing `AGENTS.md` for Codex, Cursor, OpenClaw and Pi. Zep fits when you want a managed service that builds a knowledge graph from business data, documents and conversations.',
+    a: 'Yes, if the memory is for coding agents on your own machine. Hippo is MIT-licensed, stores memories in SQLite in your project, needs no account, graph database or model, and `hippo init` wires it into Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi. Zep fits when you want a managed service that builds a knowledge graph from business data, documents and conversations.',
   },
   {
-    q: "Is Zep's 90.2% on LongMemEval comparable to hippo's 85.6%?",
-    a: "No. Zep's homepage reports 90.2% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, `hippo recall` on a default install put an answer session in its top five results 85.6% of the time, inside its 4,000-token budget. With the budget lifted it scores 96.8%, and the benchmark scripts' best of five settings reach 98.0%. Different metrics, so neither number beats the other.",
+    q: "Is Zep's 90.2% on LongMemEval comparable to hippo's 98.0%?",
+    a: "No. Zep's homepage reports 90.2% accuracy on LongMemEval, which scores whether answers were right. Hippo's figure is retrieval: on LongMemEval-S with a per-question haystack, using the benchmark scripts and a free local embedder rather than `hippo recall`, an answer session was in the top five results 98.0% of the time. Different metrics, so neither number beats the other.",
   },
 ];
 ---
@@ -36,9 +36,7 @@ const qa = [
       <p>
         Zep is a managed context service for agents, built on Graphiti, its open-source temporal knowledge graph. Its
         self-hosted Community Edition is deprecated, so Zep today means Zep Cloud, or your own cloud on the Enterprise
-        plan. Hippo runs on your machine with no account. It installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's
-        <code>hooks.json</code> when Codex is installed, and adds instructions to an existing <code>AGENTS.md</code> for
-        Codex, Cursor, OpenClaw and Pi.
+        plan. Hippo runs on your machine with no account, and wires itself into the coding agents it finds.
       </p>
       <p>
         Both keep an old fact when a newer one replaces it. Graphiti gives facts validity windows and invalidates old ones
@@ -48,7 +46,7 @@ const qa = [
     </PageIntro>
 
     <Section title="Feature by feature" alt>
-      <p>Every row of the README's two comparison tables, hippo against Zep: what each tool is, then design bets.</p>
+      <p>Every row of the README comparison table, hippo against Zep.</p>
       <VsTable system="Zep" />
     </Section>
 

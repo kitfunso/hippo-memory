@@ -36,7 +36,7 @@ const cards = [
   },
   {
     name: 'hippo',
-    body: 'Lessons your agent saves with hippo remember, plus tool errors hippo stores on its own: what failed, what fixed it, which facts changed. Recalled when they match the task, marked wrong or superseded when they stop being true, and shared with Codex, Cursor and your other agents.',
+    body: 'Lessons that pile up as you work: what failed, what fixed it, which facts changed. Recalled when they match the task, marked wrong or superseded when they stop being true, and shared with Codex, Cursor and your other agents.',
   },
 ];
 ---
@@ -96,8 +96,8 @@ const cards = [
       <Cmd lines={['# preview first, then import', 'hippo import --claude CLAUDE.md --dry-run', 'hippo import --claude CLAUDE.md']} />
       <p>
         The import skips hippo's own block and any duplicates. After that, <code>hippo sleep</code> at the end of each
-        session also imports new entries from the project's Claude Code auto memory, so its notes reach the store your
-        other agents read. <code>hippo init</code> adds a short block to <code>CLAUDE.md</code> telling Claude
+        session also imports new entries from Claude Code's <code>MEMORY.md</code> files, so auto memory notes reach the
+        store your other agents read. <code>hippo init</code> adds a short block to <code>CLAUDE.md</code> telling Claude
         to run <code>hippo context --auto</code> when a session starts, and leaves the rest of the file alone. The
         <a class="link" href="/claude-code/">Claude Code page</a> covers the hooks.
       </p>

@@ -6,13 +6,13 @@ import { getStarted, site } from '../content/site';
 
 const title = 'hippo quickstart: memory for Claude Code, Cursor and MCP';
 const description =
-  'Install hippo and initialize one project, then complete your agent’s setup and required trust. Automatic capture and compaction coverage depend on the integration.';
+  'Install hippo in two commands: persistent local memory for Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, plus an MCP server for other clients.';
 
 // What hippo init patches per agent: README "Framework Integrations".
 const integrations = [
-  { name: 'Claude Code', href: '/claude-code/', note: 'A block in CLAUDE.md plus hooks: pinned memories plus up to 5 that match the prompt each turn, sleep on exit, a snapshot and the memories a compaction lists, failed tool calls stored as errors.' },
+  { name: 'Claude Code', href: '/claude-code/', note: 'A block in CLAUDE.md plus hooks: pinned memories each turn, sleep on exit, a snapshot before compaction, failed tool calls stored as errors.' },
   { name: 'Cursor', href: '/cursor/', note: "A block in the project's AGENTS.md, which Cursor reads; the MCP server gives the agent the memory tools." },
-  { name: 'Codex', href: '/codex/', note: 'A block in AGENTS.md plus a hook that sends pinned memories plus up to 5 that match the prompt with each prompt, once you trust it in /hooks. hippo hook install codex wraps the Codex launcher to capture sessions.' },
+  { name: 'Codex', href: '/codex/', note: 'A block in AGENTS.md. hippo hook install codex wraps the Codex launcher to capture sessions.' },
   { name: 'OpenClaw', note: 'A native plugin that injects context and, with autoSleep on, runs sleep when the session ends.' },
   { name: 'OpenCode', note: 'A block in AGENTS.md plus a TypeScript plugin that runs when a session starts and goes idle.' },
   { name: 'Pi', note: 'A block in AGENTS.md; copy the Pi extension from the repo for session hooks.' },
@@ -23,14 +23,14 @@ const integrations = [
 const heroSteps = [
   { n: '01', label: 'Install', cmd: site.installCmd, prompt: true },
   { n: '02', label: 'Initialize', cmd: 'hippo init', prompt: true },
-  { n: '03', label: 'Use the loop', cmd: 'remember, recall, outcome, sleep', prompt: false },
+  { n: '03', label: 'Use the loop', cmd: 'remember · recall · outcome · sleep', prompt: false },
 ];
 
 const loop = [
   { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Store a memory. Errors get a longer half-life and stick.' },
-  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget that counts the whole printed block, ranked by relevance and strength.' },
+  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget, ranked by relevance and strength.' },
   { cmd: 'hippo outcome --good', note: 'Tell hippo the recall helped. Useful memories decay slower.' },
-  { cmd: 'hippo sleep', note: 'Merge related episodes, decay the unused, flag conflicts.' },
+  { cmd: 'hippo sleep', note: 'Consolidate repeats into patterns, decay the unused, flag conflicts.' },
 ];
 
 const howTo = {
@@ -39,7 +39,7 @@ const howTo = {
   description,
   step: [
     { '@type': 'HowToStep', name: 'Install', text: site.installCmd },
-    { '@type': 'HowToStep', name: 'Initialize', text: "Run hippo init in one project. It creates the project's .hippo store and adds hippo's instructions to the CLAUDE.md or AGENTS.md already there. On your machine it adds Claude Code hooks or the OpenCode plugin when the project uses them, and a daily 6:15am run." },
+    { '@type': 'HowToStep', name: 'Initialize', text: "Run hippo init in a project. It creates the project's .hippo store and adds hippo's instructions to the agent files it finds there, such as CLAUDE.md and AGENTS.md." },
     { '@type': 'HowToStep', name: 'Use the loop', text: 'hippo remember, hippo recall, hippo outcome and hippo sleep form the memory loop.' },
   ],
 };
@@ -56,13 +56,13 @@ const howTo = {
             Add memory in <span class="text-gradient">two commands</span>.
           </h1>
           <p class="mt-5 leading-relaxed text-zinc-400">
-            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run <code>hippo init</code> in a project, and it installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's <code>hooks.json</code> when Codex is installed, and adds instructions to an existing <code>AGENTS.md</code> for Codex, Cursor, OpenClaw and Pi.
+            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, run <code>hippo init</code> in a project, and it wires itself into the agents that project uses.
           </p>
           <p class="mt-4 text-sm leading-relaxed text-zinc-400">{getStarted.notice} <a class="link" href="/faq/#does-installation-automatically-save-before-compaction">Automatic-save coverage</a></p>
         </div>
         <!-- Setup-at-a-glance card fills the hero's right side on wide viewports. -->
-        <aside class="hidden w-[19rem] shrink-0 rounded-2xl border border-white/8 bg-term-bg p-5 lg:block" aria-label="Setup at a glance: install, initialize and try the memory loop">
-          <p class="border-b border-white/5 pb-3 font-mono text-xs uppercase tracking-wider text-acc-cyan">Setup at a glance</p>
+        <aside class="hidden w-[19rem] shrink-0 rounded-2xl border border-white/8 bg-term-bg p-5 lg:block" aria-label="Setup at a glance: 3 steps, about 2 minutes">
+          <p class="border-b border-white/5 pb-3 font-mono text-xs uppercase tracking-wider text-acc-cyan">3 steps &middot; ~2 minutes</p>
           <ol class="mt-4 space-y-3.5">
             {heroSteps.map((step) => (
               <li class="grid grid-cols-[1.5rem_1fr] gap-x-2">
@@ -79,13 +79,10 @@ const howTo = {
     <section class="relative border-t border-white/5 bg-white/[0.02]">
       <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
         <h2 class="text-3xl leading-tight sm:text-4xl">Install</h2>
-        <p class="mt-4 text-sm leading-relaxed text-zinc-400">
-          Run <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> inside one project. It creates a <code>.hippo/</code> store there, seeded on the first run from the last 30 days of git history and the project's Claude Code auto memory, and adds hippo's instructions to the <code>CLAUDE.md</code> or <code>AGENTS.md</code> already there (Codex, Cursor, OpenClaw, OpenCode and Pi read <code>AGENTS.md</code>); it never creates either file. On your machine it adds 7 Claude Code hook entries to <code>~/.claude/settings.json</code>, or the OpenCode plugin, when the project uses them; 2 hook entries in Codex's <code>hooks.json</code> when the project has <code>AGENTS.md</code> or a <code>.codex</code> folder and Codex is installed, which Codex runs once you trust them in <code>/hooks</code>; and a daily 6:15am run: a crontab line on Linux and macOS, a scheduled task on Windows. <code>--no-hooks</code>, <code>--no-schedule</code> and <code>--no-learn</code> leave those parts out; <a class="link" href={`${site.links.repo}#what-hippo-init-changes`}>What hippo init changes</a> has the full list.
-        </p>
         <pre class="mt-6 overflow-x-auto rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg" data-scroll-x><code><span class="text-term-prompt">$</span> {site.installCmd}
-<span class="text-term-prompt">$</span> {site.initCmd}</code></pre>
+<span class="text-term-prompt">$</span> hippo init</code></pre>
         <p class="mt-4 text-sm leading-relaxed text-zinc-400">
-          Setting up many repos at once is a second step, so know what it changes first. Every git repo in your home folder and up to three levels below it gets a store of its own, seeded from a year of its commits, plus the same user-level hooks and daily run; no <code>CLAUDE.md</code> or <code>AGENTS.md</code> is patched. The command is <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">{site.scanCmd}</code>.
+          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">hippo init</code> creates a <code>.hippo/</code> store in the project and adds hippo's instructions to the agent files it finds there, such as <code>CLAUDE.md</code> and <code>AGENTS.md</code> (which Codex, Cursor, OpenClaw, OpenCode and Pi read), plus Claude Code's session hooks. To register every git repo under a folder at once, run <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">{site.initCmd}</code>, which gives each repo a store seeded from its git history.
         </p>
         <p class="mt-3 text-sm leading-relaxed text-zinc-400">
           Memories are stored in SQLite with markdown mirrors, and recall makes no network call by default. No account.
