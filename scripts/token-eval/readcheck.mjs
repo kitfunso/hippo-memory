@@ -107,7 +107,7 @@ const UNRESOLVED = new Set([
 ]);
 
 /** p with its deepest existing prefix resolved by the filesystem, so a short name or a link alias equals its target. */
-function canonical(p) {
+function realPath(p) {
   const tail = [];
   for (let cur = path.resolve(p); ; cur = path.dirname(cur)) {
     try {
@@ -122,9 +122,9 @@ function canonical(p) {
 
 const WIN = process.platform === 'win32';
 
-/** A path as every G1 comparison sees it: canonical, forward slashes, no trailing slash, lower case on win32. */
+/** A path as every G1 comparison sees it: links resolved, forward slashes, no trailing slash, lower case on win32. */
 export function foldPath(p) {
-  const s = canonical(p).replaceAll('\\', '/');
+  const s = realPath(p).replaceAll('\\', '/');
   return (WIN ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
 }
 
