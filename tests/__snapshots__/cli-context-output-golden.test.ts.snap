@@ -17,12 +17,12 @@ renderContext split by stage
 ### Next step
 run the goldens
 
-## Project Memory (2 entries, 134 tokens)
+## Project Memory (2 entries, 138 tokens)
 
 - **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
 - **[verified] always run the migration dry run before deploying** [deploy] (100%)
 
-Memory state: 3 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength.
+Memory state: 2 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength, narrow focus.
 
 --- stderr
 
@@ -42,17 +42,17 @@ renderContext split by stage
 ### Next step
 run the goldens
 
-## Project Memory (1 entries, 113 tokens)
+## Project Memory (1 entries, 117 tokens)
 
 - **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
 
-Memory state: 3 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength.
+Memory state: 2 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength, narrow focus.
 
 --- stderr
 
 $ context json -> 0
 --- stdout
-{"query":"deploy","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[{"id":"mem_ctx_deploy","score":0.6350,"strength":1,"tags":["deploy"],"confidence":"verified","content":"the deploy pipeline uses blue green rollout for the api","global":false,"origin":"","category":"user-global"},{"id":"mem_ctx_pinned","score":0.4777,"strength":1,"tags":["deploy"],"confidence":"verified","content":"always run the migration dry run before deploying","global":false,"origin":"","category":"user-global"}],"tokens":44}
+{"query":"deploy","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[{"id":"mem_ctx_deploy","score":0.2523,"strength":1,"tags":["deploy"],"confidence":"verified","content":"the deploy pipeline uses blue green rollout for the api","global":false,"origin":"","category":"user-global"},{"id":"mem_ctx_pinned","score":0.1909,"strength":1,"tags":["deploy"],"confidence":"verified","content":"always run the migration dry run before deploying","global":false,"origin":"","category":"user-global"}],"tokens":44}
 
 --- stderr
 
@@ -106,7 +106,7 @@ run the goldens
 
 $ context malformed stdin -> 0
 --- stdout
-{"query":"deploy","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[{"id":"mem_ctx_deploy","score":0.6350,"strength":1,"tags":["deploy"],"confidence":"verified","content":"the deploy pipeline uses blue green rollout for the api","global":false,"origin":"","category":"user-global"},{"id":"mem_ctx_pinned","score":0.4777,"strength":1,"tags":["deploy"],"confidence":"verified","content":"always run the migration dry run before deploying","global":false,"origin":"","category":"user-global"}],"tokens":44}
+{"query":"deploy","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[{"id":"mem_ctx_deploy","score":0.2523,"strength":1,"tags":["deploy"],"confidence":"verified","content":"the deploy pipeline uses blue green rollout for the api","global":false,"origin":"","category":"user-global"},{"id":"mem_ctx_pinned","score":0.1909,"strength":1,"tags":["deploy"],"confidence":"verified","content":"always run the migration dry run before deploying","global":false,"origin":"","category":"user-global"}],"tokens":44}
 
 --- stderr
 "
