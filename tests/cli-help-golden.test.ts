@@ -89,6 +89,7 @@ describe('built CLI help output is byte-identical', () => {
   );
 
   it('hippo --version prints the package version', async () => {
+    // SAFETY: package.json always carries a string version.
     const { version } = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string };
     expect(await run(['--version'])).toEqual({ status: 0, stdout: `${version}\n`, stderr: '' });
   });

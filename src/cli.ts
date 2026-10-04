@@ -7881,13 +7881,661 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
   process.exit(1);
 }
 
-export function usageText(): string {
-  return `
-Hippo - memory for AI agents that learns what is wrong and ranks it down
+interface CommandContext {
+  readonly hippoRoot: string;
+  readonly args: string[];
+  readonly flags: CliFlags;
+}
 
-Usage: hippo <command> [options]
+interface CommandSpec {
+  readonly run: (ctx: CommandContext) => void | Promise<void>;
+  readonly aliases?: readonly string[];
+  // Each block opens with a newline so the full listing is their concatenation.
+  readonly usage: readonly string[];
+}
 
-Commands:
+async function handleRemember({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  let text: string;
+  if (args.length === 1 && args[0] === '-') {
+    text = fs.readFileSync(0, 'utf-8').trim();
+  } else {
+    text = args.join(' ').trim();
+  }
+  if (!text || text.length < 3) {
+    printError('Memory content too short (minimum 3 characters).');
+    process.exit(1);
+  }
+  // Thin-client routing. When a server is up, simple `remember` calls go
+  // over HTTP so the daemon stays single-writer (footgun #2). Rich CLI
+  // flags (--pin, --layer, --extract, --global) still need the direct
+  // path; we only intercept the minimal envelope. The salience gate is
+  // NOT in richFlag and the route does not apply it, so a routed remember
+  // stores what a direct one would skip. Measured 2026-09-07, tracked in
+  // TODOS.md; do not read this list as covering salience.
+  const richFlag =
+    flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
+    flags['observed'] || flags['inferred'] || flags['verified'] ||
+    flags['layer'] !== undefined;
+  if (!richFlag) {
+    const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
+    const rememberKindAllowed = ['distilled', 'superseded'] as const;
+    if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
+      const tags = rememberTags(flags, process.cwd()).all;
+      // B2 v1.12.6 — validate --owner on the thin-client path too.
+      // Failure on this path exits early so the user gets the same
+      // validation experience whether or not a server is up.
+      const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
+      const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
+      if (!thinOwnerCheck.ok) {
+        printError(thinOwnerCheck.message);
+        process.exit(1);
+      }
+      if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
+      const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+        const result = await client.remember(info.url, apiKey, {
+          content: text,
+          kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
+          scope: typeof flags['scope'] === 'string' ? (flags['scope'] as string) : undefined,
+          owner: thinOwnerCheck.value,
+          artifactRef: typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : undefined,
+          tags,
+        });
+        console.log(`Remembered [${result.id}] (via ${info.url})`);
+        console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
+        for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
+      });
+      if (remembered) return;
+    }
+  }
+  await cmdRemember(hippoRoot, text, flags);
+}
+
+async function handleRecall({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  const query = args.join(' ').trim();
+  if (!query) {
+    printError('Please provide a search query.');
+    process.exit(1);
+  }
+  await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
+}
+
+function handleDrill({ hippoRoot, args, flags }: CommandContext): void {
+  const summaryId = args[0];
+  if (!summaryId) {
+    printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
+    process.exit(1);
+  }
+  cmdDrillDown(hippoRoot, summaryId, flags);
+}
+
+function handleAssemble({ hippoRoot, args, flags }: CommandContext): void {
+  const sessionId = typeof flags['session'] === 'string' ? (flags['session'] as string) : args[0];
+  if (!sessionId) {
+    printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
+    process.exit(1);
+  }
+  cmdAssemble(hippoRoot, sessionId, flags);
+}
+
+function handleSupersede({ hippoRoot, args, flags }: CommandContext): void {
+  const oldId = args[0];
+  const newContent = args.slice(1).join(' ').trim();
+  if (!oldId || !newContent) {
+    printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
+    process.exit(1);
+  }
+  cmdSupersede(hippoRoot, oldId, newContent, flags);
+}
+
+async function handleExplain({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  const query = args.join(' ').trim();
+  if (!query) {
+    printError('Please provide a search query.');
+    process.exit(1);
+  }
+  await cmdExplain(hippoRoot, query, flags);
+}
+
+async function handleEval({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  const corpusPath = args[0] ? String(args[0]) : null;
+  await cmdEval(hippoRoot, corpusPath, flags);
+}
+
+function handleTrace({ hippoRoot, args, flags }: CommandContext): void {
+  const sub = args[0] ? String(args[0]) : '';
+  if (sub === 'record') {
+    cmdTraceRecord(hippoRoot, flags);
+    return;
+  }
+  if (!sub) {
+    printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
+    process.exit(1);
+  }
+  cmdTrace(hippoRoot, sub, flags);
+}
+
+async function handlePreCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
+  // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
+  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  await runHookWithStores(async () => {
+    resetHookInjection(hippoRoot, stdinText, null);
+    await cmdPreCompact(hookStoreRoot(hippoRoot), {
+      stdinText,
+      stdinTimedOut,
+      logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+    });
+  });
+}
+
+async function handlePostCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
+  // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
+  const { text } = await readStdinBounded();
+  const logFlag = flags['log-file'];
+  const store = hookStoreRoot(hippoRoot);
+  const line = await runHookWithStores(() => cmdPostCompact(store, {
+    stdinText: text,
+    logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
+    // Passed in, since capture.ts importing the sync would close an import cycle.
+    afterSave: (transcriptPath, originProject, log) => {
+      const report = importAtCompaction(store, transcriptPath, originProject, { machine: currentMachine(), busyWaitMs: COMPACTION_DB_WAIT_MS });
+      const summary = summaryLine(report);
+      if (summary !== null) log(summary);
+      for (const warning of report.warnings) log(`agent memories: ${warning}`);
+    },
+  }));
+  if (line !== null && line !== undefined) console.log(line);
+}
+
+async function handleCaptureError({ hippoRoot }: CommandContext): Promise<void> {
+  // PostToolUseFailure hook: every path exits 0, and nothing is created
+  // when no store exists (the hook fires in every directory).
+  const { text } = await readStdinBounded();
+  try {
+    const root = hookStoreRoot(hippoRoot);
+    const payload = (text ?? '').trim();
+    if (isInitialized(root) && payload) {
+      // SAFETY: JSON.parse returns a JSON value by definition.
+      const failure = JSON.parse(payload) as JsonValue;
+      await runHookWithStores(() => captureToolFailure(root, resolveTenantId({}), failure));
+    }
+  } catch {
+    // A malformed payload or store error must never fail the agent's tool call.
+  }
+}
+
+async function handleCompactResume({ hippoRoot }: CommandContext): Promise<void> {
+  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  await runHookWithStores(() => {
+    resetHookInjection(hippoRoot, stdinText, 'compact');
+    cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
+  });
+}
+
+function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
+  // `audit list` and `audit prune` -> A5 audit-log subcommands.
+  // Other forms (no sub, --fix) keep the existing memory-quality auditor
+  // for backwards compatibility.
+  if (args[0] === 'list' || args[0] === 'prune') {
+    cmdAuditLog(hippoRoot, args, flags);
+    return;
+  }
+  requireInit(hippoRoot);
+  const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const result = auditMemories(entries, memoriesBackingObjects(hippoRoot));
+  const shouldFix = Boolean(flags['fix']);
+
+  if (result.issues.length === 0) {
+    console.log(`All ${result.total} memories passed quality checks.`);
+  } else {
+    console.log(`Audited ${result.total} memories: ${result.clean} clean, ${result.issues.length} issues\n`);
+    for (const issue of result.issues) {
+      const icon = issue.severity === 'error' ? 'ERR' : 'WARN';
+      console.log(`  [${icon}] ${issue.memoryId}: ${issue.reason}`);
+      console.log(`         "${issue.content.slice(0, 80)}${issue.content.length > 80 ? '...' : ''}"`);
+    }
+    if (shouldFix) {
+      const errors = result.issues.filter(i => i.severity === 'error');
+      if (errors.length > 0 && flags['dry-run'] === true) {
+        console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
+        console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
+      } else if (errors.length > 0) {
+        const removedCount = errors.filter((issue) =>
+          deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}`, automatic: true })).length;
+        console.log(`\nRemoved ${removedCount} error-severity memories.`);
+        console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
+      } else {
+        console.log(`\nNo error-severity issues. Warnings require manual review.`);
+      }
+    } else {
+      console.log(`\nRun with --fix to auto-remove error-severity issues.`);
+    }
+  }
+}
+
+function handleCorrectionLatency({ hippoRoot, flags }: CommandContext): void {
+  requireInit(hippoRoot);
+  const entries = loadAllEntries(hippoRoot);
+  const report = buildCorrectionLatency(entries);
+  if (flags['json']) {
+    console.log(JSON.stringify(report, null, 2));
+  } else if (report.count === 0) {
+    console.log('No supersessions found. Correction latency is undefined.');
+  } else {
+    const fmt = (ms: number | null) => {
+      if (ms === null) return 'n/a';
+      if (ms < 1000) return `${ms}ms`;
+      if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+      if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)}m`;
+      return `${(ms / 3_600_000).toFixed(1)}h`;
+    };
+    console.log(`Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`);
+    console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);
+    if (report.extractionCount === 0 && report.manualCount > 0) {
+      console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
+      console.log(`To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`);
+    }
+  }
+}
+
+function handleProvenance({ hippoRoot, flags }: CommandContext): void {
+  requireInit(hippoRoot);
+  const entries = loadAllEntries(hippoRoot);
+  const coverage = buildProvenanceCoverage(entries);
+  if (flags['json']) {
+    console.log(JSON.stringify(coverage, null, 2));
+  } else if (coverage.rawTotal === 0) {
+    console.log('No kind=raw memories present. Coverage gate trivially satisfied.');
+  } else {
+    const pct = (coverage.coverage * 100).toFixed(1);
+    console.log(`Provenance coverage: ${coverage.rawWithEnvelope}/${coverage.rawTotal} raw rows envelope-complete (${pct}%)`);
+    if (coverage.gaps.length > 0) {
+      console.log(`\nGaps:`);
+      for (const g of coverage.gaps) {
+        console.log(`  ${g.id}: missing ${g.missing.join(', ')}`);
+      }
+    }
+  }
+  if (flags['strict'] && coverage.coverage < 1) {
+    process.exit(1);
+  }
+}
+
+function handleDoctor({ flags }: CommandContext): void {
+  // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
+  const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf-8')) as { version: string };
+  const report = runDoctor({ version: pkg.version });
+  console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
+  if (!report.ok) process.exit(1);
+}
+
+function handleSupportBundle({ flags }: CommandContext): void {
+  const outFlag = cardStringFlag(flags, 'out');
+  if (outFlag === '') {
+    printError('--out requires a file path.');
+    process.exit(1);
+  }
+  const includeLogs = flags['include-logs'] === true;
+  const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
+  const now = new Date();
+  const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);
+  const json = JSON.stringify(bundle, null, 2);
+  try {
+    fs.writeFileSync(file, `${json}\n`, { flag: 'wx', mode: 0o600 });
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
+      printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
+    } else {
+      printError(err instanceof Error ? err.message : String(err));
+    }
+    process.exit(1);
+  }
+  const kb = Math.round(Buffer.byteLength(json) / 1024);
+  console.log(`Wrote ${file} (${kb} KB).`);
+  console.log(includeLogs
+    ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.`
+    : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
+}
+
+async function handleForget({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  const id = args[0];
+  if (!id) {
+    printError('Please provide a memory ID.');
+    process.exit(1);
+  }
+  // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
+  // both branches the same way the direct path does.
+  const archive = flags['archive'] === true;
+  const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
+  if (archive && !reason) {
+    printError(ARCHIVE_REASON_REQUIRED);
+    process.exit(1);
+  }
+  if (flags['dry-run'] === true) {
+    previewForget(hippoRoot, id, archive);
+    return;
+  }
+  const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+    try {
+      if (archive) {
+        await client.archiveRaw(info.url, apiKey, id, reason!);
+        console.log(`Archived ${id}`);
+      } else {
+        await client.forget(info.url, apiKey, id);
+        console.log(`Forgot ${id}`);
+      }
+    } catch (err) {
+      // A server that died after the health probe is the caller's transport
+      // fallback to handle, not an error to report to the user.
+      if (client.classifyTransportFailure(err) !== 'none') throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      printError(archive ? `Could not archive ${id}: ${msg}` : msg);
+      process.exit(1);
+    }
+  });
+  if (routed) return;
+  cmdForget(hippoRoot, id, flags);
+}
+
+function handleInspect({ hippoRoot, args }: CommandContext): void {
+  const id = args[0];
+  if (!id) {
+    printError('Please provide a memory ID.');
+    process.exit(1);
+  }
+  cmdInspect(hippoRoot, id);
+}
+
+async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
+  // the hot stdin path and a manual run share this one command.
+  const { text: stdinText } = await readStdinBounded();
+  await runHookWithStores(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
+}
+
+async function handleWatch({ hippoRoot, args }: CommandContext): Promise<void> {
+  const watchCmd = args.join(' ').trim();
+  await cmdWatch(watchCmd, hippoRoot);
+}
+
+async function handlePromote({ hippoRoot, args }: CommandContext): Promise<void> {
+  const id = args[0];
+  if (!id) {
+    printError('Please provide a memory ID.');
+    process.exit(1);
+  }
+  const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+    try {
+      const result = await client.promote(info.url, apiKey, id);
+      console.log(`Promoted ${id} to global store as ${result.globalId}`);
+    } catch (err) {
+      printError(`Failed to promote: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+  if (promoted) return;
+  cmdPromote(hippoRoot, id);
+}
+
+function handleShare({ hippoRoot, args, flags }: CommandContext): void {
+  const shareId = args[0];
+  if (shareId === '--auto' || flags['auto']) {
+    // Auto-share mode
+    requireInit(hippoRoot);
+    const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
+    const dryRun = Boolean(flags['dry-run']);
+    const results = autoShare(hippoRoot, { minScore, dryRun, tenantId: resolveTenantId({}) });
+    if (results.length === 0) {
+      console.log('No memories meet the sharing threshold.');
+    } else if (dryRun) {
+      console.log(`Would share ${results.length} memories:\n`);
+      for (const e of results) {
+        const score = transferScore(e);
+        console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, 80)}...`);
+      }
+    } else {
+      console.log(`Shared ${results.length} memories to global store.`);
+      for (const e of results) {
+        console.log(`  ${e.id} <- ${e.source}`);
+      }
+    }
+  } else if (shareId) {
+    requireInit(hippoRoot);
+    const force = Boolean(flags['force']);
+    const tenantId = resolveTenantId({});
+    const result = shareMemory(hippoRoot, shareId, { force, tenantId });
+    if (result) {
+      console.log(`Shared [${result.id}] to global store.`);
+      console.log(`  Source: ${result.source}`);
+    } else {
+      const entry = readEntry(hippoRoot, shareId, tenantId);
+      if (entry) {
+        const score = transferScore(entry);
+        console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
+        console.log('Use --force to share anyway.');
+      } else {
+        printError(`Memory not found: ${shareId}`);
+        process.exit(1);
+      }
+    }
+  } else {
+    printError('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
+    process.exit(1);
+  }
+}
+
+function handlePeers({ flags }: CommandContext): void {
+  // D4 v1.12.10: tenant-scoped by default. --all-tenants restores the
+  // pre-D4 host-wide view for the rare operator who genuinely wants
+  // cross-tenant peer discovery.
+  const allTenants = flags['all-tenants'] === true;
+  const tenantScope = allTenants ? undefined : resolveTenantId({});
+  const peers = listPeers(undefined, tenantScope);
+  if (peers.length === 0) {
+    console.log('No peers found. Share memories with: hippo share <id>');
+  } else {
+    const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
+    console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to ${scopeLabel}:\n`);
+    for (const p of peers) {
+      console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, 10)})`);
+    }
+  }
+}
+
+function handleExport({ hippoRoot, args, flags }: CommandContext): void {
+  requireInit(hippoRoot);
+  const format = (flags['format'] as string) || 'json';
+  const outputPath = args[0] || null;
+  const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
+
+  let output: string;
+  if (format === 'markdown' || format === 'md') {
+    output = entries.map(e => {
+      const meta = [
+        `id: ${e.id}`,
+        `created: ${e.created}`,
+        `tags: ${e.tags.join(', ')}`,
+        `confidence: ${e.confidence}`,
+        `half_life: ${e.half_life_days}d`,
+        `strength: ${e.strength.toFixed(2)}`,
+      ].join(' | ');
+      return `### ${e.id}\n\n${e.content}\n\n_${meta}_`;
+    }).join('\n\n---\n\n');
+  } else {
+    output = JSON.stringify(entries, null, 2);
+  }
+
+  if (outputPath) {
+    fs.writeFileSync(outputPath, output, 'utf8');
+    console.log(`Exported ${entries.length} memories to ${outputPath}`);
+  } else {
+    console.log(output);
+  }
+}
+
+async function handleCapture({ hippoRoot, flags }: CommandContext): Promise<void> {
+  let captureSource: CaptureOptions['source'] | null = null;
+  let captureFile: string | undefined;
+  let transcriptPath: string | undefined;
+
+  if (flags['stdin']) { captureSource = 'stdin'; }
+  else if (flags['file']) { captureSource = 'file'; captureFile = String(flags['file']); }
+  else if (flags['last-session']) { captureSource = 'last-session'; }
+
+  if (flags['transcript']) {
+    transcriptPath = String(flags['transcript']);
+    if (!captureSource) captureSource = 'last-session';
+  }
+
+  if (!captureSource) {
+    printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
+    process.exit(1);
+  }
+
+  // Bounded, and only when last-session has no explicit path: the
+  // --stdin source keeps its own blocking read in capture.ts by design.
+  const bounded = captureSource === 'last-session' && !transcriptPath
+    ? await readStdinBounded()
+    : { text: undefined, timedOut: false };
+
+  cmdCapture(hippoRoot, {
+    source: captureSource,
+    filePath: captureFile,
+    transcriptPath,
+    stdinText: bounded.text,
+    stdinTimedOut: bounded.timedOut,
+    logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+    dryRun: Boolean(flags['dry-run']),
+    global: Boolean(flags['global']),
+    tenantId: resolveTenantId({}),
+  });
+}
+
+async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
+  requireInit(hippoRoot);
+  const port = parseInt(String(flags['port'] ?? '3333'), 10);
+  const { serveDashboard } = await import('./dashboard.js');
+  serveDashboard(hippoRoot, port);
+  await new Promise(() => {}); // run until Ctrl+C
+}
+
+async function handleMcp(): Promise<void> {
+  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the
+  // dispatcher itself is transport-agnostic, so we explicitly attach the
+  // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
+  // imports the same module without triggering stdin handlers.)
+  const mod = await import('./mcp/server.js');
+  mod.startStdioLoop();
+  // Server runs until stdin closes, so we never reach here
+  await new Promise(() => {}); // hang forever
+}
+
+async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
+  requireInit(hippoRoot);
+  const portRaw = flags['port'] ?? process.env['HIPPO_PORT'] ?? '6789';
+  const port = Number(portRaw);
+  if (!Number.isFinite(port) || port < 0) {
+    printError(`Invalid --port: ${String(portRaw)}`);
+    process.exit(1);
+  }
+  const host = typeof flags['host'] === 'string' ? (flags['host'] as string) : '127.0.0.1';
+  const { serve } = await import('./server.js');
+  const handle = await serve({ hippoRoot, port, host, handleSignals: true });
+  console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
+  console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
+  console.log('press Ctrl+C to stop');
+  // The SIGINT/SIGTERM handlers stop the server and exit. Hang until then.
+  await new Promise(() => {});
+}
+
+function handleInvalidate({ hippoRoot, args, flags }: CommandContext): void {
+  requireInit(hippoRoot);
+  if (flags['churn'] === true) {
+    if (args[0] || flags['id'] !== undefined) {
+      printError('Usage: hippo invalidate --churn [--dry-run]');
+      printError('--churn takes no pattern or --id.');
+      process.exit(1);
+    }
+    if (!isGitRepo(process.cwd())) {
+      printError('hippo invalidate --churn must run inside a git repository.');
+      process.exit(1);
+    }
+    const churnDryRun = flags['dry-run'] === true;
+    let churnFailed = false;
+    for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
+      if (result.error) {
+        printError(`Churn-staleness check failed for ${root}: ${result.error}`);
+        churnFailed = true;
+        continue;
+      }
+      if (result.preview.length === 0) {
+        console.log(`No churn-stale candidates in ${root}.`);
+      } else if (churnDryRun) {
+        console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
+      } else {
+        console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
+      }
+      result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
+      if (result.skippedPinned.length > 0) {
+        console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
+      }
+    }
+    if (churnFailed) process.exit(1);
+    return;
+  }
+  const target = args[0];
+  if (flags['id'] === true) {
+    // Value-less --id must never silently fall through to pattern mode
+    // (pattern mode writes broadly; an ignored --id reverses user intent).
+    printError('--id requires a memory id');
+    process.exit(1);
+  }
+  const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
+  if (typeof flags['dry-run'] === 'string') {
+    // Dead: the earlier global BOOLEAN_FLAGS guard now exits first on any --dry-run=<v>.
+    // Kept as defence in depth on a destructive command.
+    printError('--dry-run takes no value');
+    process.exit(1);
+  }
+  const dryRun = flags['dry-run'] === true;
+  if ((target && onlyId) || (!target && !onlyId)) {
+    printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
+    printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
+    printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
+    process.exit(1);
+  }
+  const reason = flags['reason'] as string || null;
+  const invTarget: InvalidationTarget = {
+    from: target ?? `id:${onlyId}`,
+    to: reason,
+    type: 'migration',
+  };
+  const result = invalidateMatching(hippoRoot, invTarget, resolveTenantId({}), { dryRun, onlyId });
+  const label = target ? `"${target}"` : `--id ${onlyId}`;
+  if (result.dryRun) {
+    if (result.invalidated === 0) {
+      console.log(`DRY RUN - no memories would match ${label}.`);
+    } else {
+      console.log(`DRY RUN - ${result.invalidated} memories WOULD be invalidated:`);
+      result.preview.forEach(p => console.log(`   ${p.id}  ${p.headline}`));
+    }
+  } else if (result.invalidated === 0) {
+    console.log(`No memories matched ${label}.`);
+  } else {
+    console.log(`Invalidated ${result.invalidated} memories referencing ${label}.`);
+    result.targets.forEach(id => console.log(`   ${id}`));
+  }
+  if (result.skippedPinned.length > 0) {
+    console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
+  }
+}
+
+/** Every verb main() dispatches, keyed by name, with its handler, aliases and help blocks. */
+export const COMMANDS = {
+  init: {
+    run: ({ hippoRoot, flags }) => { cmdInit(hippoRoot, flags); },
+    usage: [`
   init                     Create .hippo/ structure in current directory
     --scan [dir]           Find all git repos under dir (default: ~) and init each
     --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
@@ -7896,7 +8544,11 @@ Commands:
                            (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
     --no-schedule          Skip auto-creating the machine-level daily runner
     --no-learn             Skip seeding memories from git history and importing
-                           coding agents' own memories (every init imports those)
+                           coding agents' own memories (every init imports those)`],
+  },
+  remember: {
+    run: handleRemember,
+    usage: [`
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
@@ -7904,11 +8556,11 @@ Commands:
     --verified             Set confidence: verified (default)
     --observed             Set confidence: observed
     --inferred             Set confidence: inferred
-    --global               Store in global store ($HIPPO_HOME or ~/.hippo/)
-  supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
-    --layer <layer>        Layer for the new memory (default: the old memory's layer)
-    --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
-    --pin                  Pin the new memory (default: pinned if the old one was)
+    --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
+  },
+  recall: {
+    run: handleRecall,
+    usage: [`
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget for the whole printed block (default: 4000)
     --min-results <n>      Minimum results regardless of budget (default: 1)
@@ -7993,24 +8645,48 @@ Commands:
                            where you left off in one call. Anchored on the
                            active snapshot's session_id; no anchor = no
                            handoff/events (use 'hippo session resume' for
-                           the explicit handoff-without-snapshot path).
+                           the explicit handoff-without-snapshot path).`],
+  },
+  drill: {
+    run: handleDrill,
+    usage: [`
+  drill <summary-id>       Walk down a DAG level-2 summary to its children
+    --limit N              Cap children list (default 50)
+    --budget N             Token budget for the printed children (≈ chars/4)
+    --json                 Output as JSON`],
+  },
+  assemble: {
+    run: handleAssemble,
+    usage: [`
+  assemble --session <id>  Build a session's chronological context window
+    --budget N             Token budget for the printed window (default 4000)
+    --fresh-tail N         Recent rows always kept verbatim (default 10)
+    --no-summarize-older   Disable older-row summary substitution
+    --scope <s>            Restrict to exact scope (default: deny *:private:*)
+    --json                 Output as JSON`],
+  },
+  supersede: {
+    run: handleSupersede,
+    usage: [`
+  supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
+    --layer <layer>        Layer for the new memory (default: the old memory's layer)
+    --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
+    --pin                  Pin the new memory (default: pinned if the old one was)`],
+  },
+  explain: {
+    run: handleExplain,
+    usage: [`
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget, counted as recall prints (default: 4000)
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
     --no-mmr               Disable MMR diversity re-ranking
-    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
-  trace <id>               Memory dossier: content, decay trajectory, retrievals,
-                           outcomes, consolidation parents, open conflicts
-    --json                 Output as JSON
-  refine                   Rewrite consolidated semantic memories with Claude
-    --limit <n>            Cap the number of memories processed this run
-    --all                  Ignore \`llm-refined\` tag and re-refine everything
-    --dry-run              Call the API but don't write results back
-    --model <id>           Override the default model (claude-sonnet-4-6)
-    --json                 Output summary as JSON
-    (requires ANTHROPIC_API_KEY in env)
+    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)`],
+  },
+  eval: {
+    run: handleEval,
+    usage: [`
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
     --out <path>           With --bootstrap, write to file instead of stdout
@@ -8023,34 +8699,150 @@ Commands:
     --local-bump <f>       Local-over-global priority multiplier (default: 1.2)
     --equal-sources        Shortcut for --local-bump 1.0
     --min-mrr <f>          Exit non-zero if mean MRR falls below this
-    --json                 Output full summary as JSON
-  context                  Smart context injection for AI agents
-    --auto                 Auto-detect task from git state
-    --budget <n>           Token budget for the whole printed block (default: 1500)
-    --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
-    --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
-    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
-    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
-    --framing <mode>       Framing: observe (default), suggest, assert
+    --json                 Output full summary as JSON`],
+  },
+  trace: {
+    run: handleTrace,
+    usage: [`
+  trace <id>               Memory dossier: content, decay trajectory, retrievals,
+                           outcomes, consolidation parents, open conflicts
+    --json                 Output as JSON`],
+  },
+  refine: {
+    run: async ({ hippoRoot, flags }) => { await cmdRefine(hippoRoot, flags); },
+    usage: [`
+  refine                   Rewrite consolidated semantic memories with Claude
+    --limit <n>            Cap the number of memories processed this run
+    --all                  Ignore \`llm-refined\` tag and re-refine everything
+    --dry-run              Call the API but don't write results back
+    --model <id>           Override the default model (claude-sonnet-4-6)
+    --json                 Output summary as JSON
+    (requires ANTHROPIC_API_KEY in env)`],
+  },
+  sleep: {
+    run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
+    usage: [`
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
                            Runs at Claude Code and OpenCode session end and in the daily job.
                            With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
                            fact extraction; {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
-    --no-share             Skip auto-sharing to global store
-  daily-runner             Sweep registered workspaces and run daily learn+sleep
+    --no-share             Skip auto-sharing to global store`],
+  },
+  'last-sleep': {
+    run: ({ flags }) => { cmdLastSleep(flags); },
+    usage: [`
+  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+    --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
+    --keep                 Print without clearing`],
+  },
+  'session-end': {
+    run: async ({ hippoRoot, flags }) => { await cmdSessionEnd(hippoRoot, flags); },
+    usage: [`
+  session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
+                           capture from the session's last 20 user and 10 assistant messages,
+                           in a detached worker
+    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')`],
+  },
+  '__session-end-worker': {
+    run: async ({ hippoRoot, flags }) => { await cmdSessionEndWorker(hippoRoot, flags); },
+    usage: [],
+  },
+  'pre-compact': {
+    run: handlePreCompact,
+    usage: [`
+  pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
+                           ask the summariser to end with a "Memories for hippo" list
+    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)`],
+  },
+  'post-compact': {
+    run: handlePostCompact,
+    usage: [`
+  post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
+                           the next hippo sleep) and print one line saying how many
+    --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`],
+  },
+  'capture-error': {
+    run: handleCaptureError,
+    usage: [`
+  capture-error            Store a failed tool call as an error memory (reads the Claude Code
+                           PostToolUseFailure hook payload on stdin; skips routine failures)`],
+  },
+  'compact-resume': {
+    run: handleCompactResume,
+    usage: [`
+  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`],
+  },
+  'codex-run': {
+    run: ({ hippoRoot, args }) => { cmdCodexRun(hippoRoot, args); },
+    usage: [`
+  codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper`],
+  },
+  '__codex-session-end-worker': {
+    run: async ({ hippoRoot, flags }) => { await cmdCodexSessionEndWorker(hippoRoot, flags); },
+    usage: [],
+  },
+  dedup: {
+    run: ({ hippoRoot, flags }) => { cmdDedup(hippoRoot, flags); },
+    usage: [`
   dedup                    Remove duplicate memories (keeps stronger copy)
     --dry-run              Preview without removing
-    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing
-  status                   Show memory health stats
-  audit [--fix]            Check memory quality (--fix removes junk)
-  github                   GitHub connector subcommands (backfill, dlq)
-    backfill --repo <owner/name> [--since ISO] [--max <N>]
-                           Paginated backfill of issues + comments
-    dlq list               List DLQ entries for the active tenant
-    dlq replay <id> [--force]
-                           Re-ingest a DLQ entry (--force skips sig check)
+    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing`],
+  },
+  dag: {
+    run: ({ hippoRoot, flags }) => { cmdDag(hippoRoot, flags); },
+    usage: [`
+  dag                      Show the summary tree: entity profiles, topic summaries, facts
+    --stats                Count memories per DAG level instead`],
+  },
+  auth: {
+    run: ({ hippoRoot, args, flags }) => { cmdAuth(hippoRoot, args, flags); },
+    usage: [`
+  auth <sub>               Manage API keys (A5 stub auth)
+    auth create            Mint a new API key (plaintext shown ONCE)
+      --label <s>          Optional human label
+      --role <r>           admin | member (default: admin; member blocked from /v1/sleep)
+      --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth list              List API keys (active by default)
+      --all                Include revoked keys
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth revoke <key_id>   Revoke an API key (subsequent validate fails)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth grant <key_id> <scope>    Let a member key read one restricted scope
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth ungrant <key_id> <scope>  Remove a scope grant
+      --json               Output as JSON
+      --global             Operate on the global store`],
+  },
+  goal: {
+    run: ({ hippoRoot, args, flags }) => { cmdGoal(hippoRoot, args, flags); },
+    usage: [`
+  goal <sub>               dlPFC goal stack (B3) — scoped per session
+    goal push <name>       Push a new active goal; prints the new goal id
+      --policy <type>      schema-fit-biased | error-prioritized |
+                           recency-first | hybrid
+      --success "<cond>"   Optional success condition text
+      --level <n>          Goal level (default: 0)
+      --parent <goalId>    Parent goal id (for sub-goals)
+      --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
+      --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)
+    goal list              Show active goals as a table
+      --all                Include suspended/completed goals
+    goal complete <id>     Mark a goal completed
+      --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
+      --no-propagate       Close the goal without applying strength side-effects
+    goal suspend <id>      Move an active goal to suspended
+    goal resume <id>       Move a suspended goal back to active (depth-capped)`],
+  },
+  slack: {
+    run: ({ hippoRoot, args, flags }) => { cmdSlack(hippoRoot, args, flags); },
+    usage: [`
   slack                    Slack connector subcommands (backfill, dlq, workspaces)
     backfill --channel <id> [--since ISO]
                            Backfill a channel's history (needs SLACK_BOT_TOKEN)
@@ -8058,53 +8850,109 @@ Commands:
     dlq replay <id> [--force]
                            Re-ingest a DLQ entry (--force skips sig check)
     workspaces <add|list|remove>
-                           Map Slack workspaces (team ids) to tenants
+                           Map Slack workspaces (team ids) to tenants`],
+  },
+  github: {
+    run: async ({ hippoRoot, args, flags }) => { await cmdGithub(hippoRoot, args, flags); },
+    usage: [`
+  github                   GitHub connector subcommands (backfill, dlq)
+    backfill --repo <owner/name> [--since ISO] [--max <N>]
+                           Paginated backfill of issues + comments
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)`],
+  },
+  audit: {
+    run: handleAudit,
+    usage: [`
+  audit [--fix]            Check memory quality (--fix removes junk)`, `
+  audit <sub>              Query the append-only audit log (A5 stub auth)
+    audit list             List audit events for the active tenant
+      --op <op>            Filter by op (remember | recall | promote |
+                           supersede | forget | archive_raw | auth_revoke)
+      --since <iso>        Lower bound on ts (ISO timestamp)
+      --limit <n>          Max events (default: 100, max: 10000)
+      --json               Output as JSON
+      --global             Operate on the global store`],
+  },
+  'correction-latency': {
+    run: handleCorrectionLatency,
+    usage: [`
+  correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
+    --json                 Output as JSON`],
+  },
+  provenance: {
+    run: handleProvenance,
+    usage: [`
   provenance               Provenance coverage gate for kind='raw' rows
     --json                 Output as JSON
-    --strict               Exit non-zero when coverage < 100%
-  dag                      Show the summary tree: entity profiles, topic summaries, facts
-    --stats                Count memories per DAG level instead
-  drill <summary-id>       Walk down a DAG level-2 summary to its children
-    --limit N              Cap children list (default 50)
-    --budget N             Token budget for the printed children (≈ chars/4)
-    --json                 Output as JSON
-  assemble --session <id>  Build a session's chronological context window
-    --budget N             Token budget for the printed window (default 4000)
-    --fresh-tail N         Recent rows always kept verbatim (default 10)
-    --no-summarize-older   Disable older-row summary substitution
-    --scope <s>            Restrict to exact scope (default: deny *:private:*)
-    --json                 Output as JSON
-  correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
-    --json                 Output as JSON
+    --strict               Exit non-zero when coverage < 100%`],
+  },
+  status: {
+    run: ({ hippoRoot }) => { cmdStatus(hippoRoot); },
+    usage: [`
+  status                   Show memory health stats`],
+  },
+  outcome: {
+    run: ({ hippoRoot, flags }) => { cmdOutcome(hippoRoot, flags); },
+    usage: [`
   outcome                  Apply feedback to last recall
     --good                 Memories were helpful
     --bad                  Memories were irrelevant
-    --id <id>              Target a specific memory
+    --id <id>              Target a specific memory`],
+  },
+  conflicts: {
+    run: ({ hippoRoot, flags }) => { cmdConflicts(hippoRoot, flags); },
+    usage: [`
   conflicts                List detected open memory conflicts
     --status <status>      Filter by status (default: open)
-    --json                 Output as JSON
+    --json                 Output as JSON`],
+  },
+  resolve: {
+    run: ({ hippoRoot, args, flags }) => { cmdResolve(hippoRoot, args, flags); },
+    usage: [`
   resolve <conflict_id>    Resolve a memory conflict
     --keep <memory_id>     Memory to keep (required)
     --forget               Delete the losing memory (default: halve half-life)
     --reject-loser         Tombstone the loser's value too (implies removal)
-    --reason "<why>"       Reason for --reject-loser (default: conflict context)
+    --reason "<why>"       Reason for --reject-loser (default: conflict context)`],
+  },
+  reject: {
+    run: ({ hippoRoot, args, flags }) => { cmdReject(hippoRoot, args, flags); },
+    usage: [`
   reject <memory-id>       Tombstone a value so it refuses re-ingestion
     reject --value "<t>"   Pre-emptive form: tombstone a value not (currently) stored
     --reason "<why>"       Required. The tombstone stores no content — this
                            is its only human-readable identity.
-    --global               Reject in the global store
+    --global               Reject in the global store`],
+  },
+  rejections: {
+    run: ({ hippoRoot, flags }) => { cmdRejections(hippoRoot, flags); },
+    usage: [`
   rejections               List rejected-value tombstones for the active tenant
     --json                 Output as JSON
-    --global               Operate on the global store
+    --global               Operate on the global store`],
+  },
+  unreject: {
+    run: ({ hippoRoot, args, flags }) => { cmdUnreject(hippoRoot, args, flags); },
+    usage: [`
   unreject <digest-prefix> Delete a tombstone (the only escape hatch)
-    --global               Operate on the global store
+    --global               Operate on the global store`],
+  },
+  dormant: {
+    run: ({ hippoRoot, args, flags }) => { cmdDormant(hippoRoot, args, flags); },
+    usage: [`
   dormant [<query>]        List faded memories sleep kept instead of deleting
                            (on by default; "dormant": {"enabled": false} deletes instead)
     --limit <n>            Max rows, newest first (default: 20)
     --json                 Output as JSON
     --global               Operate on the global store
     dormant restore <id>   Bring a dormant memory back to active memory
-    dormant forget <id>    Delete a dormant memory permanently
+    dormant forget <id>    Delete a dormant memory permanently`],
+  },
+  projects: {
+    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/projects.js')).cmdProjects(hippoRoot, args, flags); },
+    usage: [`
   projects [list]          List the project names in a store, with a hint for old worktree names
     --json                 Output as JSON
     --global               Operate on the global store
@@ -8113,21 +8961,21 @@ Commands:
                            writes a backup and one audit event first)
     projects repair [--apply]
                            Re-tag merged rows older versions of sleep saved as user-global,
-                           by their parents' project (dry run unless --apply)
+                           by their parents' project (dry run unless --apply)`],
+  },
+  quarantine: {
+    run: ({ hippoRoot, args, flags }) => { cmdQuarantine(hippoRoot, args, flags); },
+    usage: [`
   quarantine [list]       List memories a connector flagged as an instruction attempt, pending review
     --all                  Include approved and rejected rows too (default: pending only)
     --json                 Output as JSON
     --global               Operate on the global store
     quarantine approve <id> Restore a quarantined memory to its original scope
-    quarantine reject <id>  Keep a quarantined memory hidden for good
-  capture-error            Store a failed tool call as an error memory (reads the Claude Code
-                           PostToolUseFailure hook payload on stdin; skips routine failures)
-  doctor                   Check the install: Node, store, schema, sleep, agent hooks
-    --json                 Machine-readable report (exit code 1 on any failure)
-  support-bundle           Write a redacted JSON file for a support ticket: versions, doctor,
-                           config without secrets, store counts, log names; never memory text
-    --out <file>           Where to write it (default: hippo-support-<time>.json here)
-    --include-logs         Add the last ${TAIL_MAX_LINES} lines of each hippo log, known secret shapes removed
+    quarantine reject <id>  Keep a quarantined memory hidden for good`],
+  },
+  tokens: {
+    run: ({ hippoRoot, flags }) => { cmdTokens(hippoRoot, flags); },
+    usage: [`
   tokens                   Tokens of memory text hippo handed agents, per surface
                            (hook, compact-resume, context, recall, MCP, HTTP), what
                            skipping unchanged hook blocks saved, and how much of the
@@ -8135,12 +8983,34 @@ Commands:
                            counted when a session ends. Estimates (characters / 4)
     --days <n>             Window in days (default: 30)
     --json                 Output as JSON
-    --global               Operate on the global store
+    --global               Operate on the global store`],
+  },
+  failures: {
+    run: ({ hippoRoot, flags }) => { cmdFailures(hippoRoot, flags); },
+    usage: [`
   failures                 Failed tool calls capture-error saw, by outcome, and how
                            many errors first happened in another session
     --days <n>             Window in days (default: 30)
     --json                 Output as JSON
-    --global               Operate on the global store
+    --global               Operate on the global store`],
+  },
+  doctor: {
+    run: handleDoctor,
+    usage: [`
+  doctor                   Check the install: Node, store, schema, sleep, agent hooks
+    --json                 Machine-readable report (exit code 1 on any failure)`],
+  },
+  'support-bundle': {
+    run: handleSupportBundle,
+    usage: [`
+  support-bundle           Write a redacted JSON file for a support ticket: versions, doctor,
+                           config without secrets, store counts, log names; never memory text
+    --out <file>           Where to write it (default: hippo-support-<time>.json here)
+    --include-logs         Add the last ${TAIL_MAX_LINES} lines of each hippo log, known secret shapes removed`],
+  },
+  snapshot: {
+    run: ({ hippoRoot, args, flags }) => { cmdSnapshot(hippoRoot, args, flags); },
+    usage: [`
   snapshot <sub>           Persist or inspect the current active task
     snapshot save          Save active task state
       --task <task>
@@ -8151,7 +9021,11 @@ Commands:
     snapshot show          Show the active task snapshot
       --json               Output as JSON
     snapshot clear         Clear the active task snapshot
-      --status <status>    Mark final status (default: cleared)
+      --status <status>    Mark final status (default: cleared)`],
+  },
+  session: {
+    run: ({ hippoRoot, args, flags }) => { cmdSession(hippoRoot, args, flags); },
+    usage: [`
   session <sub>            Append or inspect short-term session history
     session log            Append a structured session event
       --id <session-id>
@@ -8168,7 +9042,11 @@ Commands:
       --id <session-id>   Filter by session
       --json               Output as JSON
     session resume         Re-inject latest handoff as context output
-      --id <session-id>   Filter by session
+      --id <session-id>   Filter by session`],
+  },
+  handoff: {
+    run: ({ hippoRoot, args, flags }) => { cmdHandoff(hippoRoot, args, flags); },
+    usage: [`
   handoff <sub>            Manage session handoffs for continuity
     handoff create         Create a new session handoff
       --summary <text>     Handoff summary (required)
@@ -8184,7 +9062,11 @@ Commands:
     handoff latest         Show the most recent handoff
       --session <id>       Filter by session
       --json               Output as JSON
-    handoff show <id>      Show a specific handoff by ID
+    handoff show <id>      Show a specific handoff by ID`],
+  },
+  card: {
+    run: ({ hippoRoot, args, flags }) => { cmdCard(hippoRoot, args, flags); },
+    usage: [`
   card <sub>                Manage claimable work-queue cards
     card create             Create a new card
       --title <text>        Card title (required)
@@ -8212,29 +9094,134 @@ Commands:
     card reclaim              Return every running card whose lease has expired to ready
     card comment <id>         Add a comment to a card
       --body <text>          Comment body (required)
-      --author <name>       Comment author (default: cli)
+      --author <name>       Comment author (default: cli)`],
+  },
+  predict: {
+    run: ({ hippoRoot, args, flags }) => { cmdPredict(hippoRoot, args, flags); },
+    usage: [`
+  predict "<claim>"        Record a prediction to score against the actual outcome later
+    --class <c>            Reference class (required)
+    --estimate <v>         Numeric estimate
+    --unit <u>             Unit of the estimate
+    --target <YYYY-MM-DD>  When the outcome is due
+  predict close <id>       Close a prediction
+    --state <s>            closed | closed-unknown (required)
+    --actual <v>           The actual value
+    --note "<text>"        Closure note
+  predict list [--class <c>] [--status open|closed|closed-unknown|all] [--limit N]
+                           List predictions (closed and closed-unknown need --class)
+  predict show <id>        Show one prediction
+  predict baserate --class <c>
+                           How past estimates in a class compared with the actuals`],
+  },
+  current: {
+    run: ({ hippoRoot, args, flags }) => { cmdCurrent(hippoRoot, args, flags); },
+    usage: [`
   current <sub>            Show compact current state for agent injection
     current show           Active task + recent session events (default)
-      --json               Output as JSON
+      --json               Output as JSON`],
+  },
+  forget: {
+    run: handleForget,
+    usage: [`
   forget <id>              Force remove a memory
     --archive              Archive a raw (append-only) memory instead of deleting
-    --reason "<why>"       Reason recorded on the archive (required with --archive)
-  inspect <id>             Show full memory detail
+    --reason "<why>"       Reason recorded on the archive (required with --archive)`],
+  },
+  inspect: {
+    run: handleInspect,
+    usage: [`
+  inspect <id>             Show full memory detail`],
+  },
+  context: {
+    run: handleContext,
+    usage: [`
+  context                  Smart context injection for AI agents
+    --auto                 Auto-detect task from git state
+    --budget <n>           Token budget for the whole printed block (default: 1500)
+    --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
+    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
+    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
+    --framing <mode>       Framing: observe (default), suggest, assert`],
+  },
+  hook: {
+    run: ({ args, flags }) => { cmdHook(args, flags); },
+    usage: [`
+  hook <sub> [target]      Manage framework integrations
+    hook list              Show available hooks
+    hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
+                           claude-code adds 7 hooks to ~/.claude/settings.json;
+                           opencode installs a plugin; codex adds 2 hooks to
+                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           wraps the detected launcher in place; all but claude-code
+                           also patch an existing AGENTS.md
+    hook uninstall <target> Remove hook`],
+  },
+  setup: {
+    run: ({ flags }) => { cmdSetup(flags); },
+    usage: [`
+  setup                    One-shot: detect installed AI tools and install their hooks:
+                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
+                           a plugin, codex 2 hooks in its hooks.json plus a launcher
+                           wrapper; other tools get a hint. Then imports each agent's
+                           user-level memories into the global store
+    --all                  Install for every JSON-hook tool, even if not detected
+    --dry-run              Show what would be installed without writing
+    --no-schedule          Skip installing or repairing the daily runner
+    --no-learn             Skip the agent memory import`],
+  },
+  'daily-runner': {
+    run: () => { cmdDailyRunner(); },
+    usage: [`
+  daily-runner             Sweep registered workspaces and run daily learn+sleep`],
+  },
+  embed: {
+    run: async ({ hippoRoot, flags }) => { await cmdEmbed(hippoRoot, flags); },
+    usage: [`
   embed                    Embed all memories for semantic search
-    --status               Show embedding coverage
-  watch "<command>"        Run command, auto-learn from failures
+    --status               Show embedding coverage`],
+  },
+  watch: {
+    run: handleWatch,
+    usage: [`
+  watch "<command>"        Run command, auto-learn from failures`],
+  },
+  learn: {
+    run: ({ hippoRoot, flags }) => { cmdLearn(hippoRoot, flags); },
+    usage: [`
   learn                    Learn lessons from repository history
     --git                  Scan recent git commits for lessons
     --days <n>             Scan this many days back (default: 7)
-    --repos <paths>        Comma-separated repo paths to scan
-  promote <id>             Copy a local memory to the global store
+    --repos <paths>        Comma-separated repo paths to scan`],
+  },
+  promote: {
+    run: handlePromote,
+    usage: [`
+  promote <id>             Copy a local memory to the global store`],
+  },
+  sync: {
+    run: ({ hippoRoot, flags }) => { cmdSync(hippoRoot, flags); },
+    usage: [`
+  sync                     Pull global memories into local project`],
+  },
+  share: {
+    run: handleShare,
+    usage: [`
   share <id>               Share a memory with attribution + transfer scoring
     --force                Share even if transfer score is low
     --auto                 Auto-share all high-transfer-score memories
     --dry-run              Preview what would be shared
-    --min-score <n>        Minimum transfer score (default: 0.6)
-  peers                    List projects contributing to global store
-  sync                     Pull global memories into local project
+    --min-score <n>        Minimum transfer score (default: 0.6)`],
+  },
+  peers: {
+    run: handlePeers,
+    usage: [`
+  peers                    List projects contributing to global store`],
+  },
+  import: {
+    run: ({ hippoRoot, args, flags }) => { cmdImport(hippoRoot, args, flags); },
+    usage: [`
   import                   Import memories from other AI tools
     --chatgpt <path>       Import from ChatGPT memory export (JSON or txt)
     --claude <path>        Import from CLAUDE.md or Claude memory.json
@@ -8251,9 +9238,17 @@ Commands:
                              picks the tools; "none" or [] turns the import off
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
-    --tag <tag>            Add extra tag (repeatable)
+    --tag <tag>            Add extra tag (repeatable)`],
+  },
+  export: {
+    run: handleExport,
+    usage: [`
   export [file]            Export all memories (default: stdout)
-    --format <fmt>         Output format: json (default) or markdown
+    --format <fmt>         Output format: json (default) or markdown`],
+  },
+  capture: {
+    run: handleCapture,
+    usage: [`
   capture                  Extract memories from conversation text
     --stdin                Read from piped input
     --file <path>          Read from a file
@@ -8262,144 +9257,17 @@ Commands:
     --transcript <path>    Explicit transcript path (implies --last-session)
     --log-file <path>      Tee output to a log file (paired with 'hippo last-sleep')
     --dry-run              Preview without writing
-    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
-  setup                    One-shot: detect installed AI tools and install their hooks:
-                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
-                           a plugin, codex 2 hooks in its hooks.json plus a launcher
-                           wrapper; other tools get a hint. Then imports each agent's
-                           user-level memories into the global store
-    --all                  Install for every JSON-hook tool, even if not detected
-    --dry-run              Show what would be installed without writing
-    --no-schedule          Skip installing or repairing the daily runner
-    --no-learn             Skip the agent memory import
-  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
-    --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
-    --keep                 Print without clearing
-  session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
-                           capture from the session's last 20 user and 10 assistant messages,
-                           in a detached worker
-    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
-  pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
-                           ask the summariser to end with a "Memories for hippo" list
-    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
-  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old
-  post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
-                           the next hippo sleep) and print one line saying how many
-    --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)
-  codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper
-  hook <sub> [target]      Manage framework integrations
-    hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code adds 7 hooks to ~/.claude/settings.json;
-                           opencode installs a plugin; codex adds 2 hooks to
-                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
-                           wraps the detected launcher in place; all but claude-code
-                           also patch an existing AGENTS.md
-    hook uninstall <target> Remove hook
-  predict "<claim>"        Record a prediction to score against the actual outcome later
-    --class <c>            Reference class (required)
-    --estimate <v>         Numeric estimate
-    --unit <u>             Unit of the estimate
-    --target <YYYY-MM-DD>  When the outcome is due
-  predict close <id>       Close a prediction
-    --state <s>            closed | closed-unknown (required)
-    --actual <v>           The actual value
-    --note "<text>"        Closure note
-  predict list [--class <c>] [--status open|closed|closed-unknown|all] [--limit N]
-                           List predictions (closed and closed-unknown need --class)
-  predict show <id>        Show one prediction
-  predict baserate --class <c>
-                           How past estimates in a class compared with the actuals
-  decide "<decision>"      Record a decision (first-class object + memory mirror)
-    --context "<why>"      Why this decision was made
-    --supersedes <mem-id>  Supersede the decision backed by this memory id
-  decide list [--status active|superseded|closed|all] [--limit N]
-                           List decisions (table is authoritative, survives decay)
-  decide get <id>          Show a decision by its table id
-  decide close <id>        Retire (close) an active decision by its table id
-  incident "<incident>"    Record an incident (first-class object + memory mirror)
-    --context "<details>"  What happened / surrounding detail
-    --link <mem-id>        Link a memory as evidence (repeatable)
-  incident list [--status open|resolved|closed|all] [--limit N]
-                           List incidents (table is authoritative, survives decay)
-  incident get <id>        Show an incident by its table id
-  incident resolve <id>    Resolve an open incident (open -> resolved)
-    --resolution "<text>"  How it was resolved (required)
-  incident close <id>      Retire (close) an open or resolved incident by its table id
-  process new "<name>"     Record a process map (first-class object + memory mirror)
-    --step "<text>"        An ordered step (repeatable)
-    --description "<text>" Optional summary of the process
-  process list [--status active|superseded|closed|all] [--limit N]
-                           List processes (table is authoritative, survives decay)
-  process get <id>         Show a process (with its steps) by its table id
-  process supersede <id>   Record a new version that supersedes an active process
-    --step "<text>"        A step of the new version (repeatable, required)
-    --change "<summary>"   What changed in this version (the delta note)
-    --description "<text>" Optional summary of the new version
-  process close <id>       Retire (close) an active process by its table id
-  policy new "<name>"      Record a policy (bi-temporal first-class object + mirror)
-    --text "<rule>"        The policy rule/statement (required)
-    --from "<iso>"         Effective-from date (default: now)
-    --to "<iso>"           Effective-to date (optional; open-ended if omitted)
-  policy list [--status active|superseded|closed|all] [--limit N]
-                           List policies (table is authoritative, survives decay)
-  policy get <id>          Show a policy by its table id
-  policy asof "<iso-date>" Show active policies in force at a valid-time
-    --name "<policy>"      Filter to one policy by name
-  policy supersede <id>    Record a new version that supersedes an active policy
-    --text "<rule>"        The new rule (required)
-    --from "<iso>"         New effective-from (default: now)
-    --to "<iso>"           New effective-to (optional)
-    --change "<summary>"   What changed in this version (the delta note)
-  policy close <id>        Retire (close) an active policy by its table id
-  skill new "<name>"       Record a skill (reusable agent-followable capability)
-    --instructions "<txt>" The skill body (required)
-    --trigger "<when>"     Optional: when to apply this skill
-  skill list [--status active|superseded|closed|all] [--limit N]
-                           List skills (table is authoritative, survives decay)
-  skill get <id>           Show a skill by its table id
-  skill export             Render active skills as an AGENTS.md/CLAUDE.md markdown block
-  skill supersede <id>     Record a new version that supersedes an active skill
-    --instructions "<txt>" The new skill body (required)
-    --trigger "<when>"     Optional new trigger
-    --change "<summary>"   What changed in this version (the delta note)
-  skill close <id>         Retire (close) an active skill by its table id
-  brief new "<repo>"       Record a repo-scoped project brief
-    --summary "<text>"     The brief body (required)
-  brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
-                           List project briefs (table is authoritative, survives decay)
-  brief get <id>           Show a project brief by its table id
-  brief supersede <id>     Record a new version that supersedes an active brief
-    --summary "<text>"     The new brief body (required)
-    --change "<summary>"   What changed in this version (the delta note)
-  brief close <id>         Retire (close) an active project brief by its table id
-  brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
-    --dry-run              Print the assembled brief without writing it
-  note new "<customer>"    Record a customer/account-scoped note
-    --text "<note>"        The note body (required)
-  note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
-                           List customer notes (table is authoritative, survives decay)
-  note get <id>            Show a customer note by its table id
-  note supersede <id>      Record a new version that supersedes an active note
-    --text "<note>"        The new note body (required)
-    --change "<summary>"   What changed in this version (the delta note)
-  note close <id>          Retire (close) an active customer note by its table id
-  graph extract            Rebuild the entity/relation graph from consolidated objects
-                           (decisions/policies/customer-notes/project-briefs); idempotent
-  invalidate "<pattern>"   Actively weaken memories matching an old pattern
-                           (content overlap, or a tag EXACTLY equal to the
-                           full pattern - never token-level tag matching)
-    --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
-    --dry-run              Preview what would be hit; writes nothing
-                           Note: a pattern equal to the system tag
-                           'invalidated' re-weakens previously invalidated
-                           memories - preview with --dry-run first
-    --reason "<why>"       Optional: what replaced it
-  invalidate --churn       FE2: tag memories 'churn-stale' whose named file
-                           changed or was deleted, or whose named symbol or
-                           npm script was removed, in this repo's git history
-                           since the memory was stored or confirmed
-    --dry-run              Preview what would be tagged; writes nothing
+    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)`],
+  },
+  dashboard: {
+    run: handleDashboard,
+    usage: [`
+  dashboard                Open web dashboard for memory health
+    --port <n>             Port to serve on (default: 3333)`],
+  },
+  wm: {
+    run: ({ hippoRoot, args, flags }) => { cmdWm(hippoRoot, args, flags); },
+    usage: [`
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry
       --scope <scope>      Scope name (default: default)
@@ -8417,57 +9285,176 @@ Commands:
       --session <id>       Filter by session
     wm flush               Same as clear; nothing runs it at session end
       --scope <scope>      Filter by scope
-      --session <id>       Filter by session
-  dashboard                Open web dashboard for memory health
-    --port <n>             Port to serve on (default: 3333)
-  mcp                      Start MCP server (stdio transport)
+      --session <id>       Filter by session`],
+  },
+  mcp: {
+    run: handleMcp,
+    usage: [`
+  mcp                      Start MCP server (stdio transport)`],
+  },
+  serve: {
+    run: handleServe,
+    usage: [`
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
-    --host <host>          Address to bind (default: 127.0.0.1)
-  goal <sub>               dlPFC goal stack (B3) — scoped per session
-    goal push <name>       Push a new active goal; prints the new goal id
-      --policy <type>      schema-fit-biased | error-prioritized |
-                           recency-first | hybrid
-      --success "<cond>"   Optional success condition text
-      --level <n>          Goal level (default: 0)
-      --parent <goalId>    Parent goal id (for sub-goals)
-      --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
-      --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)
-    goal list              Show active goals as a table
-      --all                Include suspended/completed goals
-    goal complete <id>     Mark a goal completed
-      --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
-      --no-propagate       Close the goal without applying strength side-effects
-    goal suspend <id>      Move an active goal to suspended
-    goal resume <id>       Move a suspended goal back to active (depth-capped)
-  auth <sub>               Manage API keys (A5 stub auth)
-    auth create            Mint a new API key (plaintext shown ONCE)
-      --label <s>          Optional human label
-      --role <r>           admin | member (default: admin; member blocked from /v1/sleep)
-      --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
-      --json               Output as JSON
-      --global             Operate on the global store
-    auth list              List API keys (active by default)
-      --all                Include revoked keys
-      --json               Output as JSON
-      --global             Operate on the global store
-    auth revoke <key_id>   Revoke an API key (subsequent validate fails)
-      --json               Output as JSON
-      --global             Operate on the global store
-    auth grant <key_id> <scope>    Let a member key read one restricted scope
-      --json               Output as JSON
-      --global             Operate on the global store
-    auth ungrant <key_id> <scope>  Remove a scope grant
-      --json               Output as JSON
-      --global             Operate on the global store
-  audit <sub>              Query the append-only audit log (A5 stub auth)
-    audit list             List audit events for the active tenant
-      --op <op>            Filter by op (remember | recall | promote |
-                           supersede | forget | archive_raw | auth_revoke)
-      --since <iso>        Lower bound on ts (ISO timestamp)
-      --limit <n>          Max events (default: 100, max: 10000)
-      --json               Output as JSON
-      --global             Operate on the global store
+    --host <host>          Address to bind (default: 127.0.0.1)`],
+  },
+  invalidate: {
+    run: handleInvalidate,
+    usage: [`
+  invalidate "<pattern>"   Actively weaken memories matching an old pattern
+                           (content overlap, or a tag EXACTLY equal to the
+                           full pattern - never token-level tag matching)
+    --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
+    --dry-run              Preview what would be hit; writes nothing
+                           Note: a pattern equal to the system tag
+                           'invalidated' re-weakens previously invalidated
+                           memories - preview with --dry-run first
+    --reason "<why>"       Optional: what replaced it
+  invalidate --churn       FE2: tag memories 'churn-stale' whose named file
+                           changed or was deleted, or whose named symbol or
+                           npm script was removed, in this repo's git history
+                           since the memory was stored or confirmed
+    --dry-run              Preview what would be tagged; writes nothing`],
+  },
+  decide: {
+    run: ({ hippoRoot, args, flags }) => { cmdDecide(hippoRoot, args, flags); },
+    usage: [`
+  decide "<decision>"      Record a decision (first-class object + memory mirror)
+    --context "<why>"      Why this decision was made
+    --supersedes <mem-id>  Supersede the decision backed by this memory id
+  decide list [--status active|superseded|closed|all] [--limit N]
+                           List decisions (table is authoritative, survives decay)
+  decide get <id>          Show a decision by its table id
+  decide close <id>        Retire (close) an active decision by its table id`],
+  },
+  incident: {
+    run: ({ hippoRoot, args, flags }) => { cmdIncident(hippoRoot, args, flags); },
+    usage: [`
+  incident "<incident>"    Record an incident (first-class object + memory mirror)
+    --context "<details>"  What happened / surrounding detail
+    --link <mem-id>        Link a memory as evidence (repeatable)
+  incident list [--status open|resolved|closed|all] [--limit N]
+                           List incidents (table is authoritative, survives decay)
+  incident get <id>        Show an incident by its table id
+  incident resolve <id>    Resolve an open incident (open -> resolved)
+    --resolution "<text>"  How it was resolved (required)
+  incident close <id>      Retire (close) an open or resolved incident by its table id`],
+  },
+  process: {
+    run: ({ hippoRoot, args, flags }) => { cmdProcess(hippoRoot, args, flags); },
+    usage: [`
+  process new "<name>"     Record a process map (first-class object + memory mirror)
+    --step "<text>"        An ordered step (repeatable)
+    --description "<text>" Optional summary of the process
+  process list [--status active|superseded|closed|all] [--limit N]
+                           List processes (table is authoritative, survives decay)
+  process get <id>         Show a process (with its steps) by its table id
+  process supersede <id>   Record a new version that supersedes an active process
+    --step "<text>"        A step of the new version (repeatable, required)
+    --change "<summary>"   What changed in this version (the delta note)
+    --description "<text>" Optional summary of the new version
+  process close <id>       Retire (close) an active process by its table id`],
+  },
+  policy: {
+    run: ({ hippoRoot, args, flags }) => { cmdPolicy(hippoRoot, args, flags); },
+    usage: [`
+  policy new "<name>"      Record a policy (bi-temporal first-class object + mirror)
+    --text "<rule>"        The policy rule/statement (required)
+    --from "<iso>"         Effective-from date (default: now)
+    --to "<iso>"           Effective-to date (optional; open-ended if omitted)
+  policy list [--status active|superseded|closed|all] [--limit N]
+                           List policies (table is authoritative, survives decay)
+  policy get <id>          Show a policy by its table id
+  policy asof "<iso-date>" Show active policies in force at a valid-time
+    --name "<policy>"      Filter to one policy by name
+  policy supersede <id>    Record a new version that supersedes an active policy
+    --text "<rule>"        The new rule (required)
+    --from "<iso>"         New effective-from (default: now)
+    --to "<iso>"           New effective-to (optional)
+    --change "<summary>"   What changed in this version (the delta note)
+  policy close <id>        Retire (close) an active policy by its table id`],
+  },
+  skill: {
+    run: ({ hippoRoot, args, flags }) => { cmdSkill(hippoRoot, args, flags); },
+    usage: [`
+  skill new "<name>"       Record a skill (reusable agent-followable capability)
+    --instructions "<txt>" The skill body (required)
+    --trigger "<when>"     Optional: when to apply this skill
+  skill list [--status active|superseded|closed|all] [--limit N]
+                           List skills (table is authoritative, survives decay)
+  skill get <id>           Show a skill by its table id
+  skill export             Render active skills as an AGENTS.md/CLAUDE.md markdown block
+  skill supersede <id>     Record a new version that supersedes an active skill
+    --instructions "<txt>" The new skill body (required)
+    --trigger "<when>"     Optional new trigger
+    --change "<summary>"   What changed in this version (the delta note)
+  skill close <id>         Retire (close) an active skill by its table id`],
+  },
+  brief: {
+    run: ({ hippoRoot, args, flags }) => { cmdProjectBrief(hippoRoot, args, flags); },
+    aliases: ['project-brief'],
+    usage: [`
+  brief new "<repo>"       Record a repo-scoped project brief
+    --summary "<text>"     The brief body (required)
+  brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
+                           List project briefs (table is authoritative, survives decay)
+  brief get <id>           Show a project brief by its table id
+  brief supersede <id>     Record a new version that supersedes an active brief
+    --summary "<text>"     The new brief body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  brief close <id>         Retire (close) an active project brief by its table id
+  brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
+    --dry-run              Print the assembled brief without writing it`],
+  },
+  note: {
+    run: ({ hippoRoot, args, flags }) => { cmdCustomerNote(hippoRoot, args, flags); },
+    aliases: ['customer-note'],
+    usage: [`
+  note new "<customer>"    Record a customer/account-scoped note
+    --text "<note>"        The note body (required)
+  note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
+                           List customer notes (table is authoritative, survives decay)
+  note get <id>            Show a customer note by its table id
+  note supersede <id>      Record a new version that supersedes an active note
+    --text "<note>"        The new note body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  note close <id>          Retire (close) an active customer note by its table id`],
+  },
+  graph: {
+    run: ({ hippoRoot, args, flags }) => { cmdGraph(hippoRoot, args, flags); },
+    usage: [`
+  graph extract            Rebuild the entity/relation graph from consolidated objects
+                           (decisions/policies/customer-notes/project-briefs); idempotent`],
+  },
+} satisfies Record<string, CommandSpec>;
+
+const COMMAND_INDEX: ReadonlyMap<string, CommandSpec> = new Map(
+  Object.entries<CommandSpec>(COMMANDS).flatMap(([verb, spec]) =>
+    [verb, ...(spec.aliases ?? [])].map((name): [string, CommandSpec] => [name, spec])),
+);
+
+// The full listing order; a verb listed twice prints its next help block.
+const USAGE_ORDER: readonly (keyof typeof COMMANDS)[] = [
+  'init', 'remember', 'supersede', 'recall', 'explain', 'trace', 'refine', 'eval', 'context', 'sleep',
+  'daily-runner', 'dedup', 'status', 'audit', 'github', 'slack', 'provenance', 'dag', 'drill', 'assemble',
+  'correction-latency', 'outcome', 'conflicts', 'resolve', 'reject', 'rejections', 'unreject', 'dormant',
+  'projects', 'quarantine', 'capture-error', 'doctor', 'support-bundle', 'tokens', 'failures', 'snapshot',
+  'session', 'handoff', 'card', 'current', 'forget', 'inspect', 'embed', 'watch', 'learn', 'promote',
+  'share', 'peers', 'sync', 'import', 'export', 'capture', 'setup', 'last-sleep', 'session-end',
+  'pre-compact', 'compact-resume', 'post-compact', 'codex-run', 'hook', 'predict', 'decide', 'incident',
+  'process', 'policy', 'skill', 'brief', 'note', 'graph', 'invalidate', 'wm', 'dashboard', 'mcp', 'serve',
+  'goal', 'auth', 'audit',
+];
+
+const USAGE_HEADER = `
+Hippo - memory for AI agents that learns what is wrong and ranks it down
+
+Usage: hippo <command> [options]
+
+Commands:`;
+
+const USAGE_EXAMPLES = `
 
 Examples:
   hippo init
@@ -8522,25 +9509,25 @@ Examples:
   hippo outcome --good
   hippo status
 `;
+
+export function usageText(): string {
+  const printed = new Map<string, number>();
+  const blocks = USAGE_ORDER.map((verb) => {
+    const index = printed.get(verb) ?? 0;
+    printed.set(verb, index + 1);
+    return COMMANDS[verb].usage[index];
+  });
+  return USAGE_HEADER + blocks.join('') + USAGE_EXAMPLES;
 }
 
 function printUsage(): void {
   console.log(usageText());
 }
 
-const USAGE_ALIASES: ReadonlyMap<string, string> = new Map([['project-brief', 'brief'], ['customer-note', 'note']]);
-
-// Cut from usageText() so a verb's help can never drift from the full listing.
+/** One verb's help blocks as `hippo <verb> --help` prints them, or null for a verb with none. */
 export function verbUsage(verb: string): string | null {
-  const name = USAGE_ALIASES.get(verb) ?? verb;
-  const block: string[] = [];
-  let inBlock = false;
-  for (const line of usageText().split('\n')) {
-    if (/^ {2}\S/.test(line)) inBlock = line.trimStart().split(' ', 1)[0] === name;
-    else if (!line.startsWith('    ')) inBlock = false;
-    if (inBlock) block.push(line);
-  }
-  return block.length > 0 ? block.join('\n') : null;
+  const usage = COMMAND_INDEX.get(verb)?.usage ?? [];
+  return usage.length > 0 ? usage.join('').slice(1) : null;
 }
 
 // These sub-commands have fuller usage text than their lines in usageText().
@@ -8633,873 +9620,13 @@ async function main(
     printError(refusal);
     process.exit(2);
   }
-  switch (command) {
-    case 'init':
-      cmdInit(hippoRoot, flags);
-      break;
-
-    case 'remember': {
-      let text: string;
-      if (args.length === 1 && args[0] === '-') {
-        text = fs.readFileSync(0, 'utf-8').trim();
-      } else {
-        text = args.join(' ').trim();
-      }
-      if (!text || text.length < 3) {
-        printError('Memory content too short (minimum 3 characters).');
-        process.exit(1);
-      }
-      // Thin-client routing. When a server is up, simple `remember` calls go
-      // over HTTP so the daemon stays single-writer (footgun #2). Rich CLI
-      // flags (--pin, --layer, --extract, --global) still need the direct
-      // path; we only intercept the minimal envelope. The salience gate is
-      // NOT in richFlag and the route does not apply it, so a routed remember
-      // stores what a direct one would skip. Measured 2026-09-07, tracked in
-      // TODOS.md; do not read this list as covering salience.
-      const richFlag =
-        flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
-        flags['observed'] || flags['inferred'] || flags['verified'] ||
-        flags['layer'] !== undefined;
-      if (!richFlag) {
-        const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
-        const rememberKindAllowed = ['distilled', 'superseded'] as const;
-        if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
-          const tags = rememberTags(flags, process.cwd()).all;
-          // B2 v1.12.6 — validate --owner on the thin-client path too.
-          // Failure on this path exits early so the user gets the same
-          // validation experience whether or not a server is up.
-          const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
-          const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
-          if (!thinOwnerCheck.ok) {
-            printError(thinOwnerCheck.message);
-            process.exit(1);
-          }
-          if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
-          const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-            const result = await client.remember(info.url, apiKey, {
-              content: text,
-              kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
-              scope: typeof flags['scope'] === 'string' ? (flags['scope'] as string) : undefined,
-              owner: thinOwnerCheck.value,
-              artifactRef: typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : undefined,
-              tags,
-            });
-            console.log(`Remembered [${result.id}] (via ${info.url})`);
-            console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
-            for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
-          });
-          if (remembered) break;
-        }
-      }
-      await cmdRemember(hippoRoot, text, flags);
-      break;
-    }
-
-    case 'recall': {
-      const query = args.join(' ').trim();
-      if (!query) {
-        printError('Please provide a search query.');
-        process.exit(1);
-      }
-      await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
-      break;
-    }
-
-    case 'drill': {
-      const summaryId = args[0];
-      if (!summaryId) {
-        printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
-        process.exit(1);
-      }
-      cmdDrillDown(hippoRoot, summaryId, flags);
-      break;
-    }
-
-    case 'assemble': {
-      const sessionId = typeof flags['session'] === 'string' ? (flags['session'] as string) : args[0];
-      if (!sessionId) {
-        printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
-        process.exit(1);
-      }
-      cmdAssemble(hippoRoot, sessionId, flags);
-      break;
-    }
-
-    case 'supersede': {
-      const oldId = args[0];
-      const newContent = args.slice(1).join(' ').trim();
-      if (!oldId || !newContent) {
-        printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
-        process.exit(1);
-      }
-      cmdSupersede(hippoRoot, oldId, newContent, flags);
-      break;
-    }
-
-    case 'explain': {
-      const query = args.join(' ').trim();
-      if (!query) {
-        printError('Please provide a search query.');
-        process.exit(1);
-      }
-      await cmdExplain(hippoRoot, query, flags);
-      break;
-    }
-
-    case 'eval': {
-      const corpusPath = args[0] ? String(args[0]) : null;
-      await cmdEval(hippoRoot, corpusPath, flags);
-      break;
-    }
-
-    case 'trace': {
-      const sub = args[0] ? String(args[0]) : '';
-      if (sub === 'record') {
-        cmdTraceRecord(hippoRoot, flags);
-        break;
-      }
-      if (!sub) {
-        printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
-        process.exit(1);
-      }
-      cmdTrace(hippoRoot, sub, flags);
-      break;
-    }
-
-    case 'refine':
-      await cmdRefine(hippoRoot, flags);
-      break;
-
-    case 'sleep':
-      await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags);
-      break;
-
-    case 'last-sleep':
-      cmdLastSleep(flags);
-      break;
-
-    case 'session-end':
-      await cmdSessionEnd(hippoRoot, flags);
-      break;
-
-    case '__session-end-worker':
-      await cmdSessionEndWorker(hippoRoot, flags);
-      break;
-
-    case 'pre-compact': {
-      // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
-      const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
-      await runHookWithStores(async () => {
-        resetHookInjection(hippoRoot, stdinText, null);
-        await cmdPreCompact(hookStoreRoot(hippoRoot), {
-          stdinText,
-          stdinTimedOut,
-          logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
-        });
-      });
-      break;
-    }
-
-    case 'post-compact': {
-      // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
-      const { text } = await readStdinBounded();
-      const logFlag = flags['log-file'];
-      const store = hookStoreRoot(hippoRoot);
-      const line = await runHookWithStores(() => cmdPostCompact(store, {
-        stdinText: text,
-        logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
-        // Passed in, since capture.ts importing the sync would close an import cycle.
-        afterSave: (transcriptPath, originProject, log) => {
-          const report = importAtCompaction(store, transcriptPath, originProject, { machine: currentMachine(), busyWaitMs: COMPACTION_DB_WAIT_MS });
-          const summary = summaryLine(report);
-          if (summary !== null) log(summary);
-          for (const warning of report.warnings) log(`agent memories: ${warning}`);
-        },
-      }));
-      if (line !== null && line !== undefined) console.log(line);
-      break;
-    }
-
-    case 'capture-error': {
-      // PostToolUseFailure hook: every path exits 0, and nothing is created
-      // when no store exists (the hook fires in every directory).
-      const { text } = await readStdinBounded();
-      try {
-        const root = hookStoreRoot(hippoRoot);
-        const payload = (text ?? '').trim();
-        if (isInitialized(root) && payload) {
-          // SAFETY: JSON.parse returns a JSON value by definition.
-          const failure = JSON.parse(payload) as JsonValue;
-          await runHookWithStores(() => captureToolFailure(root, resolveTenantId({}), failure));
-        }
-      } catch {
-        // A malformed payload or store error must never fail the agent's tool call.
-      }
-      break;
-    }
-
-    case 'compact-resume': {
-      const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
-      await runHookWithStores(() => {
-        resetHookInjection(hippoRoot, stdinText, 'compact');
-        cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
-      });
-      break;
-    }
-
-    case 'codex-run':
-      cmdCodexRun(hippoRoot, args);
-      break;
-
-    case '__codex-session-end-worker':
-      await cmdCodexSessionEndWorker(hippoRoot, flags);
-      break;
-
-    case 'dedup':
-      cmdDedup(hippoRoot, flags);
-      break;
-
-    case 'dag':
-      cmdDag(hippoRoot, flags);
-      break;
-
-    case 'auth':
-      cmdAuth(hippoRoot, args, flags);
-      break;
-
-    case 'goal':
-      cmdGoal(hippoRoot, args, flags);
-      break;
-
-    case 'slack':
-      cmdSlack(hippoRoot, args, flags);
-      break;
-
-    case 'github':
-      await cmdGithub(hippoRoot, args, flags);
-      break;
-
-    case 'audit': {
-      // `audit list` and `audit prune` -> A5 audit-log subcommands.
-      // Other forms (no sub, --fix) keep the existing memory-quality auditor
-      // for backwards compatibility.
-      if (args[0] === 'list' || args[0] === 'prune') {
-        cmdAuditLog(hippoRoot, args, flags);
-        break;
-      }
-      requireInit(hippoRoot);
-      const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
-      const result = auditMemories(entries, memoriesBackingObjects(hippoRoot));
-      const shouldFix = Boolean(flags['fix']);
-
-      if (result.issues.length === 0) {
-        console.log(`All ${result.total} memories passed quality checks.`);
-      } else {
-        console.log(`Audited ${result.total} memories: ${result.clean} clean, ${result.issues.length} issues\n`);
-        for (const issue of result.issues) {
-          const icon = issue.severity === 'error' ? 'ERR' : 'WARN';
-          console.log(`  [${icon}] ${issue.memoryId}: ${issue.reason}`);
-          console.log(`         "${issue.content.slice(0, 80)}${issue.content.length > 80 ? '...' : ''}"`);
-        }
-        if (shouldFix) {
-          const errors = result.issues.filter(i => i.severity === 'error');
-          if (errors.length > 0 && flags['dry-run'] === true) {
-            console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
-            console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
-          } else if (errors.length > 0) {
-            const removedCount = errors.filter((issue) =>
-              deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}`, automatic: true })).length;
-            console.log(`\nRemoved ${removedCount} error-severity memories.`);
-            console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
-          } else {
-            console.log(`\nNo error-severity issues. Warnings require manual review.`);
-          }
-        } else {
-          console.log(`\nRun with --fix to auto-remove error-severity issues.`);
-        }
-      }
-      break;
-    }
-
-    case 'correction-latency': {
-      requireInit(hippoRoot);
-      const entries = loadAllEntries(hippoRoot);
-      const report = buildCorrectionLatency(entries);
-      if (flags['json']) {
-        console.log(JSON.stringify(report, null, 2));
-      } else if (report.count === 0) {
-        console.log('No supersessions found. Correction latency is undefined.');
-      } else {
-        const fmt = (ms: number | null) => {
-          if (ms === null) return 'n/a';
-          if (ms < 1000) return `${ms}ms`;
-          if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-          if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)}m`;
-          return `${(ms / 3_600_000).toFixed(1)}h`;
-        };
-        console.log(`Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`);
-        console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);
-        if (report.extractionCount === 0 && report.manualCount > 0) {
-          console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
-          console.log(`To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`);
-        }
-      }
-      break;
-    }
-
-    case 'provenance': {
-      requireInit(hippoRoot);
-      const entries = loadAllEntries(hippoRoot);
-      const coverage = buildProvenanceCoverage(entries);
-      if (flags['json']) {
-        console.log(JSON.stringify(coverage, null, 2));
-      } else if (coverage.rawTotal === 0) {
-        console.log('No kind=raw memories present. Coverage gate trivially satisfied.');
-      } else {
-        const pct = (coverage.coverage * 100).toFixed(1);
-        console.log(`Provenance coverage: ${coverage.rawWithEnvelope}/${coverage.rawTotal} raw rows envelope-complete (${pct}%)`);
-        if (coverage.gaps.length > 0) {
-          console.log(`\nGaps:`);
-          for (const g of coverage.gaps) {
-            console.log(`  ${g.id}: missing ${g.missing.join(', ')}`);
-          }
-        }
-      }
-      if (flags['strict'] && coverage.coverage < 1) {
-        process.exit(1);
-      }
-      break;
-    }
-
-    case 'status':
-      cmdStatus(hippoRoot);
-      break;
-
-    case 'outcome':
-      cmdOutcome(hippoRoot, flags);
-      break;
-
-    case 'conflicts':
-      cmdConflicts(hippoRoot, flags);
-      break;
-
-    case 'resolve':
-      cmdResolve(hippoRoot, args, flags);
-      break;
-
-    case 'reject':
-      cmdReject(hippoRoot, args, flags);
-      break;
-
-    case 'rejections':
-      cmdRejections(hippoRoot, flags);
-      break;
-
-    case 'unreject':
-      cmdUnreject(hippoRoot, args, flags);
-      break;
-
-    case 'dormant':
-      cmdDormant(hippoRoot, args, flags);
-      break;
-
-    case 'projects':
-      (await import('./cli/projects.js')).cmdProjects(hippoRoot, args, flags);
-      break;
-
-    case 'quarantine':
-      cmdQuarantine(hippoRoot, args, flags);
-      break;
-
-    case 'tokens':
-      cmdTokens(hippoRoot, flags);
-      break;
-
-    case 'failures':
-      cmdFailures(hippoRoot, flags);
-      break;
-
-    case 'doctor': {
-      // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
-      const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf-8')) as { version: string };
-      const report = runDoctor({ version: pkg.version });
-      console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
-      if (!report.ok) process.exit(1);
-      break;
-    }
-
-    case 'support-bundle': {
-      const outFlag = cardStringFlag(flags, 'out');
-      if (outFlag === '') {
-        printError('--out requires a file path.');
-        process.exit(1);
-      }
-      const includeLogs = flags['include-logs'] === true;
-      const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
-      const now = new Date();
-      const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
-      const stamp = now.toISOString().replace(/[:.]/g, '-');
-      const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);
-      const json = JSON.stringify(bundle, null, 2);
-      try {
-        fs.writeFileSync(file, `${json}\n`, { flag: 'wx', mode: 0o600 });
-      } catch (err) {
-        if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
-          printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
-        } else {
-          printError(err instanceof Error ? err.message : String(err));
-        }
-        process.exit(1);
-      }
-      const kb = Math.round(Buffer.byteLength(json) / 1024);
-      console.log(`Wrote ${file} (${kb} KB).`);
-      console.log(includeLogs
-        ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.`
-        : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
-      break;
-    }
-
-    case 'snapshot':
-      cmdSnapshot(hippoRoot, args, flags);
-      break;
-
-    case 'session':
-      cmdSession(hippoRoot, args, flags);
-      break;
-
-    case 'handoff':
-      cmdHandoff(hippoRoot, args, flags);
-      break;
-
-    case 'card':
-      cmdCard(hippoRoot, args, flags);
-      break;
-
-    case 'predict':
-      cmdPredict(hippoRoot, args, flags);
-      break;
-
-    case 'current':
-      cmdCurrent(hippoRoot, args, flags);
-      break;
-
-    case 'forget': {
-      const id = args[0];
-      if (!id) {
-        printError('Please provide a memory ID.');
-        process.exit(1);
-      }
-      // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
-      // both branches the same way the direct path does.
-      const archive = flags['archive'] === true;
-      const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
-      if (archive && !reason) {
-        printError(ARCHIVE_REASON_REQUIRED);
-        process.exit(1);
-      }
-      if (flags['dry-run'] === true) {
-        previewForget(hippoRoot, id, archive);
-        break;
-      }
-      const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-        try {
-          if (archive) {
-            await client.archiveRaw(info.url, apiKey, id, reason!);
-            console.log(`Archived ${id}`);
-          } else {
-            await client.forget(info.url, apiKey, id);
-            console.log(`Forgot ${id}`);
-          }
-        } catch (err) {
-          // A server that died after the health probe is the caller's transport
-          // fallback to handle, not an error to report to the user.
-          if (client.classifyTransportFailure(err) !== 'none') throw err;
-          const msg = err instanceof Error ? err.message : String(err);
-          printError(archive ? `Could not archive ${id}: ${msg}` : msg);
-          process.exit(1);
-        }
-      });
-      if (routed) break;
-      cmdForget(hippoRoot, id, flags);
-      break;
-    }
-
-    case 'inspect': {
-      const id = args[0];
-      if (!id) {
-        printError('Please provide a memory ID.');
-        process.exit(1);
-      }
-      cmdInspect(hippoRoot, id);
-      break;
-    }
-
-    case 'context': {
-      // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
-      // the hot stdin path and a manual run share this one command.
-      const { text: stdinText } = await readStdinBounded();
-      await runHookWithStores(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
-      break;
-    }
-
-    case 'hook':
-      cmdHook(args, flags);
-      break;
-
-    case 'setup':
-      cmdSetup(flags);
-      break;
-
-    case 'daily-runner':
-      cmdDailyRunner();
-      break;
-
-    case 'embed':
-      await cmdEmbed(hippoRoot, flags);
-      break;
-
-    case 'watch': {
-      const watchCmd = args.join(' ').trim();
-      await cmdWatch(watchCmd, hippoRoot);
-      break;
-    }
-
-    case 'learn':
-      cmdLearn(hippoRoot, flags);
-      break;
-
-    case 'promote': {
-      const id = args[0];
-      if (!id) {
-        printError('Please provide a memory ID.');
-        process.exit(1);
-      }
-      const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-        try {
-          const result = await client.promote(info.url, apiKey, id);
-          console.log(`Promoted ${id} to global store as ${result.globalId}`);
-        } catch (err) {
-          printError(`Failed to promote: ${(err as Error).message}`);
-          process.exit(1);
-        }
-      });
-      if (promoted) break;
-      cmdPromote(hippoRoot, id);
-      break;
-    }
-
-    case 'sync':
-      cmdSync(hippoRoot, flags);
-      break;
-
-    case 'share': {
-      const shareId = args[0];
-      if (shareId === '--auto' || flags['auto']) {
-        // Auto-share mode
-        requireInit(hippoRoot);
-        const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
-        const dryRun = Boolean(flags['dry-run']);
-        const results = autoShare(hippoRoot, { minScore, dryRun, tenantId: resolveTenantId({}) });
-        if (results.length === 0) {
-          console.log('No memories meet the sharing threshold.');
-        } else if (dryRun) {
-          console.log(`Would share ${results.length} memories:\n`);
-          for (const e of results) {
-            const score = transferScore(e);
-            console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, 80)}...`);
-          }
-        } else {
-          console.log(`Shared ${results.length} memories to global store.`);
-          for (const e of results) {
-            console.log(`  ${e.id} <- ${e.source}`);
-          }
-        }
-      } else if (shareId) {
-        requireInit(hippoRoot);
-        const force = Boolean(flags['force']);
-        const tenantId = resolveTenantId({});
-        const result = shareMemory(hippoRoot, shareId, { force, tenantId });
-        if (result) {
-          console.log(`Shared [${result.id}] to global store.`);
-          console.log(`  Source: ${result.source}`);
-        } else {
-          const entry = readEntry(hippoRoot, shareId, tenantId);
-          if (entry) {
-            const score = transferScore(entry);
-            console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
-            console.log('Use --force to share anyway.');
-          } else {
-            printError(`Memory not found: ${shareId}`);
-            process.exit(1);
-          }
-        }
-      } else {
-        printError('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
-        process.exit(1);
-      }
-      break;
-    }
-
-    case 'peers': {
-      // D4 v1.12.10: tenant-scoped by default. --all-tenants restores the
-      // pre-D4 host-wide view for the rare operator who genuinely wants
-      // cross-tenant peer discovery.
-      const allTenants = flags['all-tenants'] === true;
-      const tenantScope = allTenants ? undefined : resolveTenantId({});
-      const peers = listPeers(undefined, tenantScope);
-      if (peers.length === 0) {
-        console.log('No peers found. Share memories with: hippo share <id>');
-      } else {
-        const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
-        console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to ${scopeLabel}:\n`);
-        for (const p of peers) {
-          console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, 10)})`);
-        }
-      }
-      break;
-    }
-
-    case 'import':
-      cmdImport(hippoRoot, args, flags);
-      break;
-
-    case 'export': {
-      requireInit(hippoRoot);
-      const format = (flags['format'] as string) || 'json';
-      const outputPath = args[0] || null;
-      const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
-
-      let output: string;
-      if (format === 'markdown' || format === 'md') {
-        output = entries.map(e => {
-          const meta = [
-            `id: ${e.id}`,
-            `created: ${e.created}`,
-            `tags: ${e.tags.join(', ')}`,
-            `confidence: ${e.confidence}`,
-            `half_life: ${e.half_life_days}d`,
-            `strength: ${e.strength.toFixed(2)}`,
-          ].join(' | ');
-          return `### ${e.id}\n\n${e.content}\n\n_${meta}_`;
-        }).join('\n\n---\n\n');
-      } else {
-        output = JSON.stringify(entries, null, 2);
-      }
-
-      if (outputPath) {
-        fs.writeFileSync(outputPath, output, 'utf8');
-        console.log(`Exported ${entries.length} memories to ${outputPath}`);
-      } else {
-        console.log(output);
-      }
-      break;
-    }
-
-    case 'capture': {
-      let captureSource: CaptureOptions['source'] | null = null;
-      let captureFile: string | undefined;
-      let transcriptPath: string | undefined;
-
-      if (flags['stdin']) { captureSource = 'stdin'; }
-      else if (flags['file']) { captureSource = 'file'; captureFile = String(flags['file']); }
-      else if (flags['last-session']) { captureSource = 'last-session'; }
-
-      if (flags['transcript']) {
-        transcriptPath = String(flags['transcript']);
-        if (!captureSource) captureSource = 'last-session';
-      }
-
-      if (!captureSource) {
-        printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
-        process.exit(1);
-      }
-
-      // Bounded, and only when last-session has no explicit path: the
-      // --stdin source keeps its own blocking read in capture.ts by design.
-      const bounded = captureSource === 'last-session' && !transcriptPath
-        ? await readStdinBounded()
-        : { text: undefined, timedOut: false };
-
-      cmdCapture(hippoRoot, {
-        source: captureSource,
-        filePath: captureFile,
-        transcriptPath,
-        stdinText: bounded.text,
-        stdinTimedOut: bounded.timedOut,
-        logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
-        dryRun: Boolean(flags['dry-run']),
-        global: Boolean(flags['global']),
-        tenantId: resolveTenantId({}),
-      });
-      break;
-    }
-
-    case 'dashboard': {
-      requireInit(hippoRoot);
-      const port = parseInt(String(flags['port'] ?? '3333'), 10);
-      const { serveDashboard } = await import('./dashboard.js');
-      serveDashboard(hippoRoot, port);
-      await new Promise(() => {}); // run until Ctrl+C
-      break;
-    }
-
-    case 'wm':
-      cmdWm(hippoRoot, args, flags);
-      break;
-
-    case 'mcp': {
-      // Start MCP server over stdio. Dynamic import keeps main CLI lean; the
-      // dispatcher itself is transport-agnostic, so we explicitly attach the
-      // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
-      // imports the same module without triggering stdin handlers.)
-      const mod = await import('./mcp/server.js');
-      mod.startStdioLoop();
-      // Server runs until stdin closes, so we never reach here
-      await new Promise(() => {}); // hang forever
-      break;
-    }
-
-    case 'serve': {
-      requireInit(hippoRoot);
-      const portRaw = flags['port'] ?? process.env['HIPPO_PORT'] ?? '6789';
-      const port = Number(portRaw);
-      if (!Number.isFinite(port) || port < 0) {
-        printError(`Invalid --port: ${String(portRaw)}`);
-        process.exit(1);
-      }
-      const host = typeof flags['host'] === 'string' ? (flags['host'] as string) : '127.0.0.1';
-      const { serve } = await import('./server.js');
-      const handle = await serve({ hippoRoot, port, host, handleSignals: true });
-      console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
-      console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
-      console.log('press Ctrl+C to stop');
-      // The SIGINT/SIGTERM handlers stop the server and exit. Hang until then.
-      await new Promise(() => {});
-      break;
-    }
-
-    case 'invalidate': {
-      requireInit(hippoRoot);
-      if (flags['churn'] === true) {
-        if (args[0] || flags['id'] !== undefined) {
-          printError('Usage: hippo invalidate --churn [--dry-run]');
-          printError('--churn takes no pattern or --id.');
-          process.exit(1);
-        }
-        if (!isGitRepo(process.cwd())) {
-          printError('hippo invalidate --churn must run inside a git repository.');
-          process.exit(1);
-        }
-        const churnDryRun = flags['dry-run'] === true;
-        let churnFailed = false;
-        for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
-          if (result.error) {
-            printError(`Churn-staleness check failed for ${root}: ${result.error}`);
-            churnFailed = true;
-            continue;
-          }
-          if (result.preview.length === 0) {
-            console.log(`No churn-stale candidates in ${root}.`);
-          } else if (churnDryRun) {
-            console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
-          } else {
-            console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
-          }
-          result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
-          if (result.skippedPinned.length > 0) {
-            console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
-          }
-        }
-        if (churnFailed) process.exit(1);
-        break;
-      }
-      const target = args[0];
-      if (flags['id'] === true) {
-        // Value-less --id must never silently fall through to pattern mode
-        // (pattern mode writes broadly; an ignored --id reverses user intent).
-        printError('--id requires a memory id');
-        process.exit(1);
-      }
-      const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
-      if (typeof flags['dry-run'] === 'string') {
-        // Dead: the earlier global BOOLEAN_FLAGS guard now exits first on any --dry-run=<v>.
-        // Kept as defence in depth on a destructive command.
-        printError('--dry-run takes no value');
-        process.exit(1);
-      }
-      const dryRun = flags['dry-run'] === true;
-      if ((target && onlyId) || (!target && !onlyId)) {
-        printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
-        printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
-        printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
-        process.exit(1);
-      }
-      const reason = flags['reason'] as string || null;
-      const invTarget: InvalidationTarget = {
-        from: target ?? `id:${onlyId}`,
-        to: reason,
-        type: 'migration',
-      };
-      const result = invalidateMatching(hippoRoot, invTarget, resolveTenantId({}), { dryRun, onlyId });
-      const label = target ? `"${target}"` : `--id ${onlyId}`;
-      if (result.dryRun) {
-        if (result.invalidated === 0) {
-          console.log(`DRY RUN - no memories would match ${label}.`);
-        } else {
-          console.log(`DRY RUN - ${result.invalidated} memories WOULD be invalidated:`);
-          result.preview.forEach(p => console.log(`   ${p.id}  ${p.headline}`));
-        }
-      } else if (result.invalidated === 0) {
-        console.log(`No memories matched ${label}.`);
-      } else {
-        console.log(`Invalidated ${result.invalidated} memories referencing ${label}.`);
-        result.targets.forEach(id => console.log(`   ${id}`));
-      }
-      if (result.skippedPinned.length > 0) {
-        console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
-      }
-      break;
-    }
-
-    case 'decide':
-      cmdDecide(hippoRoot, args, flags);
-      break;
-
-    case 'incident':
-      cmdIncident(hippoRoot, args, flags);
-      break;
-
-    case 'process':
-      cmdProcess(hippoRoot, args, flags);
-      break;
-
-    case 'policy':
-      cmdPolicy(hippoRoot, args, flags);
-      break;
-
-    case 'skill':
-      cmdSkill(hippoRoot, args, flags);
-      break;
-
-    case 'brief':
-    case 'project-brief':
-      cmdProjectBrief(hippoRoot, args, flags);
-      break;
-
-    case 'note':
-    case 'customer-note':
-      cmdCustomerNote(hippoRoot, args, flags);
-      break;
-
-    case 'graph':
-      cmdGraph(hippoRoot, args, flags);
-      break;
-
-    default:
-      printError(`Unknown command: ${command}`);
-      printUsage();
-      process.exit(1);
+  const spec = COMMAND_INDEX.get(command);
+  if (!spec) {
+    printError(`Unknown command: ${command}`);
+    printUsage();
+    process.exit(1);
   }
+  await spec.run({ hippoRoot, args, flags });
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
