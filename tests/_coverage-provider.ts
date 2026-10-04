@@ -48,6 +48,7 @@ interface V8Internals {
 const hasInternals = <T extends object>(p: T): p is T & V8Internals =>
   'remapCoverage' in p && typeof p.remapCoverage === 'function' && 'getUntestedFiles' in p && typeof p.getUntestedFiles === 'function';
 
+// vitest.config.ts imports this natively (server.deps.external): --merge-reports stubs any vite-loaded module a blob lists.
 const mod: CoverageProviderModule = {
   ...v8,
   async getProvider() {
