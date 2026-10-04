@@ -26,8 +26,79 @@ export interface AmbientState {
   totalMemories: number;
 }
 
+/** Row counts and sums an AmbientState is derived from; two stores' tallies add with addAmbientTallies. */
+export interface AmbientTallies {
+  total: number;
+  strengthSum: number;
+  fresh: number;
+  negative: number;
+  highSchemaFit: number;
+  errors: number;
+  semantic: number;
+  episodic: number;
+  conflicts: number;
+  extracted: number;
+  maxDagLevel: number;
+  tagCounts: Map<string, number>;
+}
+
+/** The tallies of two disjoint row sets taken together. */
+export function addAmbientTallies(a: AmbientTallies, b: AmbientTallies): AmbientTallies {
+  const tagCounts = new Map(a.tagCounts);
+  for (const [tag, count] of b.tagCounts) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + count);
+  return {
+    total: a.total + b.total,
+    strengthSum: a.strengthSum + b.strengthSum,
+    fresh: a.fresh + b.fresh,
+    negative: a.negative + b.negative,
+    highSchemaFit: a.highSchemaFit + b.highSchemaFit,
+    errors: a.errors + b.errors,
+    semantic: a.semantic + b.semantic,
+    episodic: a.episodic + b.episodic,
+    conflicts: a.conflicts + b.conflicts,
+    extracted: a.extracted + b.extracted,
+    maxDagLevel: Math.max(a.maxDagLevel, b.maxDagLevel),
+    tagCounts,
+  };
+}
+
+/** Whether a tag list marks its memory as an error for errorDensity. */
+export function isErrorTagged(tags: readonly string[]): boolean {
+  return tags.some(tag => tag === 'error' || tag === 'critical' || tag.startsWith('error:'));
+}
+
+/** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
+export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
+  const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
+  const sevenDaysAgo = currentTime.getTime() - 7 * 86400000;
+  const t: AmbientTallies = {
+    total: entries.length, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
+    semantic: 0, episodic: 0, conflicts: 0, extracted: 0, maxDagLevel: 0, tagCounts: new Map(),
+  };
+  for (const entry of entries) {
+    if (entry.superseded_by) continue;
+    for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
+    t.strengthSum += calculateStrength(entry, currentTime);
+    if (new Date(entry.created).getTime() > sevenDaysAgo) t.fresh++;
+    if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') t.negative++;
+    if (isErrorTagged(entry.tags)) t.errors++;
+    if (entry.schema_fit > 0.7) t.highSchemaFit++;
+    if (entry.layer === Layer.Semantic) t.semantic++;
+    if (entry.layer === Layer.Episodic) t.episodic++;
+    t.conflicts += entry.conflicts_with.length;
+    if (entry.extracted_from) t.extracted++;
+    if (entry.dag_level > t.maxDagLevel) t.maxDagLevel = entry.dag_level;
+  }
+  return t;
+}
+
 export function computeAmbientState(entries: MemoryEntry[], now?: Date): AmbientState {
-  const n = entries.length;
+  return ambientStateFromTallies(tallyAmbientEntries(entries, now));
+}
+
+/** The ambient state of a row set from its tallies, however they were counted. */
+export function ambientStateFromTallies(t: AmbientTallies): AmbientState {
+  const n = t.total;
   if (n === 0) {
     return {
       tagEntropy: 0, avgStrength: 0, recencyFreshness: 0,
@@ -37,61 +108,17 @@ export function computeAmbientState(entries: MemoryEntry[], now?: Date): Ambient
     };
   }
 
-  const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
-
-  const tagCounts = new Map<string, number>();
-  let strengthSum = 0;
-  let freshCount = 0;
-  let negativeCount = 0;
-  let highSchemaCount = 0;
-  let errorCount = 0;
-  let semanticCount = 0;
-  let episodicCount = 0;
-  let conflictSum = 0;
-  let extractedCount = 0;
-  let maxDagLevel = 0;
-
-  const sevenDaysAgo = currentTime.getTime() - 7 * 86400000;
-
-  for (const entry of entries) {
-    if (entry.superseded_by) continue;
-
-    for (const tag of entry.tags) {
-      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-    }
-
-    const strength = calculateStrength(entry, currentTime);
-    strengthSum += strength;
-
-    if (new Date(entry.created).getTime() > sevenDaysAgo) freshCount++;
-
-    if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') {
-      negativeCount++;
-    }
-    if (entry.tags.some(t => t === 'error' || t === 'critical' || t.startsWith('error:'))) {
-      errorCount++;
-    }
-    if (entry.schema_fit > 0.7) highSchemaCount++;
-
-    if (entry.layer === Layer.Semantic) semanticCount++;
-    if (entry.layer === Layer.Episodic) episodicCount++;
-
-    conflictSum += entry.conflicts_with.length;
-
-    if (entry.extracted_from) extractedCount++;
-    if (entry.dag_level > maxDagLevel) maxDagLevel = entry.dag_level;
-  }
-
-  const tagEntropy = shannonEntropy(tagCounts, n);
-  const avgStrength = strengthSum / n;
-  const recencyFreshness = freshCount / n;
-  const emotionalSkew = (negativeCount / n) * 2 - 0.5;
-  const schemaFitRatio = highSchemaCount / n;
-  const errorDensity = errorCount / n;
-  const totalLayered = semanticCount + episodicCount;
-  const consolidationRatio = totalLayered > 0 ? semanticCount / totalLayered : 0;
-  const conflictIntensity = conflictSum / (n * 2);
-  const extractionCoverage = episodicCount > 0 ? extractedCount / episodicCount : 0;
+  const tagEntropy = shannonEntropy(t.tagCounts, n);
+  const avgStrength = t.strengthSum / n;
+  const recencyFreshness = t.fresh / n;
+  const emotionalSkew = (t.negative / n) * 2 - 0.5;
+  const schemaFitRatio = t.highSchemaFit / n;
+  const errorDensity = t.errors / n;
+  const totalLayered = t.semantic + t.episodic;
+  const consolidationRatio = totalLayered > 0 ? t.semantic / totalLayered : 0;
+  const conflictIntensity = t.conflicts / (n * 2);
+  const extractionCoverage = t.episodic > 0 ? t.extracted / t.episodic : 0;
+  const maxDagLevel = t.maxDagLevel;
 
   return {
     tagEntropy,

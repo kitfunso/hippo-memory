@@ -396,6 +396,32 @@ export function calculateStrength(
   return Number.isFinite(clamped) ? clamped * wrongPenalty : 0.0;
 }
 
+/** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in step.
+ *  An unparseable date scores NULL here and 0 in JS, so sums agree. */
+export function strengthSql(now: Date): string {
+  const num = (n: number): string => (Number.isInteger(n) ? n.toFixed(1) : String(n));
+  const pos = 'COALESCE(outcome_positive, 0)';
+  const neg = 'COALESCE(outcome_negative, 0)';
+  const wrong = isOutcomeSlowAblated() || isDecayAblated() ? '0' : `MAX(0, ${neg} - ${pos})`;
+  const reward = isOutcomeSlowAblated()
+    ? '1.0'
+    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + 0.5 * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
+  const halfLife = `(COALESCE(half_life_days, 7) * ${reward})`;
+  const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
+  const nowJulian = num(now.getTime() / 86400000 + 2440587.5);
+  const decay = isDecayAblated() ? '1.0' : `pow(0.5, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;
+  const boost = isRecallBoostAblated()
+    ? '1.0'
+    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + 0.1 * log2(COALESCE(retrieval_count, 0) + 1) END)`;
+  const valences = /* SAFETY: a Record keyed by EmotionalValence */ Object.keys(EMOTIONAL_MULTIPLIERS) as EmotionalValence[];
+  const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
+    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v]))}`)
+    .join(' ')} ELSE 1.0 END)`;
+  const penalty = `pow(0.5, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
+  return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
+    ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
+}
+
 /**
  * Derive half-life based on signals, as per PLAN.md table.
  */

@@ -25,7 +25,8 @@ export interface SecretDetection {
   reason: string | null;
 }
 
-const SECRET_TAGS = new Set([
+/** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before the lookup. */
+export const SECRET_TAGS: ReadonlySet<string> = new Set([
   'secret', 'api-key', 'apikey', 'credential', 'credentials',
   'token', 'password', 'private-key',
 ]);

@@ -3,17 +3,17 @@
 exports[`request-path output on a fixed store > getContext: local-only query ranks the local FTS window 1`] = `
 {
   "ambientState": {
-    "avgStrength": 0.946137197,
+    "avgStrength": 0.698687376,
     "conflictIntensity": 0,
-    "consolidationRatio": 0.296296296,
+    "consolidationRatio": 0.339285714,
     "dagDepth": 0,
-    "emotionalSkew": -0.203703704,
-    "errorDensity": 0,
+    "emotionalSkew": -0.214285714,
+    "errorDensity": 0.178571429,
     "extractionCoverage": 0,
-    "recencyFreshness": 0.259259259,
+    "recencyFreshness": 0.214285714,
     "schemaFitRatio": 0,
-    "tagEntropy": 0.8174654,
-    "totalMemories": 27,
+    "tagEntropy": 0.932536016,
+    "totalMemories": 56,
   },
   "entries": [
     {

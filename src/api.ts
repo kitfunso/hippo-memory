@@ -38,6 +38,7 @@ import {
   loadAllEntries,
   loadAmbientCandidates,
   loadContextCandidates,
+  loadAmbientTallies,
   type ContextCandidateFilter,
   type AmbientRecallRequest,
   type AmbientLoadResult,
@@ -126,7 +127,7 @@ import {
 import { detectSecret, vetSecrets } from './secret-detect.js';
 import { isSessionDigestRow } from './session-digest.js';
 import { deduplicateStore } from './dedupe.js';
-import { computeAmbientState, type AmbientState } from './ambient.js';
+import { computeAmbientState, addAmbientTallies, ambientStateFromTallies, type AmbientState } from './ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
 import { extractGraph } from './graph-extract.js';
 import {
@@ -2683,9 +2684,8 @@ export interface ContextResult {
   activeSnapshot?: TaskSnapshot | null;
   sessionHandoff?: SessionHandoff | null;
   recentEvents?: SessionEvent[];
-  /** The ambient landscape summary over the admitted entries. Present only
-   *  when the store's ambient config is on, the caller is not pinned-only,
-   *  and at least one entry was admitted. */
+  /** The ambient landscape summary over every live row the read may see in the local and global stores,
+   *  not just the rows loaded. Present only when ambient config is on, the caller is not pinned-only, and an entry was returned. */
   ambientState?: AmbientState;
 }
 
@@ -2845,11 +2845,12 @@ export async function getContext(
 
   // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
   const searchesLocalRows = query !== '*' && !(hasGlobal && !primaryIsGlobal);
+  const originProject = includeCrossProject || currentProjectName === '' ? undefined : currentProjectName;
   const window: ContextCandidateFilter | ContextQueryWindow = searchesLocalRows && !pinnedOnly
     ? { query, exactScope }
     : {
         exactScope,
-        project: includeCrossProject || currentProjectName === '' ? undefined : currentProjectName,
+        project: originProject,
         cap: CONTEXT_CANDIDATE_CAP,
         now: evalNow(),
       };
@@ -3306,15 +3307,13 @@ export async function getContext(
       entry: updatedEntries.find((u) => u.id === s.entry.id) ?? s.entry,
     }));
 
-    // Overlay by id (no re-read) so avgStrength reflects post-retrieval strength.
+    // Read after strengthenRetrieved commits, so the rows just retrieved count at their new strength.
     if (config.ambient.enabled) {
-      const updatedById = new Map(updatedEntries.map((u) => [u.id, u]));
-      const overlaid = [...localEntries, ...globalEntries].map(
-        (e) => updatedById.get(e.id) ?? e,
-      );
-      if (overlaid.length > 0) {
-        ambientState = computeAmbientState(overlaid);
-      }
+      const filter = { exactScope, project: originProject, currentProject: currentProjectName, now: evalNow() };
+      const roots = [...(hasLocal ? [ctx.hippoRoot] : []), ...(hasGlobal && !primaryIsGlobal ? [globalRoot] : [])];
+      const tallies = roots.map((root) => loadAmbientTallies(root, ctx.tenantId, filter));
+      const total = tallies.length > 0 ? tallies.reduce(addAmbientTallies) : undefined;
+      if (total && total.total > 0) ambientState = ambientStateFromTallies(total);
     }
   }
 

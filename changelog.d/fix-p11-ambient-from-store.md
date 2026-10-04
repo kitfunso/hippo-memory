@@ -1,0 +1,3 @@
+### Fixed
+
+- **The `Memory state:` line under `hippo context` describes the whole store, not just the rows a bounded read loads.** A context query reads only its full-text window, and a no-query read stops at 2,000 rows per store, so the line had counted only those rows: a 3-memory store where a query matched 2 printed "2 memories ... narrow focus". The line now comes from one aggregate SQL pass over each store the read can see, local and global. It applies the same tenant, superseded, archived, scope, project and secret-tag rules as the read. Strength uses the same decay formula, computed in SQL for every row, not a sample. Which memories a context read returns, and their order, do not change. On a 10,000-memory store the summary takes about 25 ms.

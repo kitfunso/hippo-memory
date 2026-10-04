@@ -17,12 +17,12 @@ renderContext split by stage
 ### Next step
 run the goldens
 
-## Project Memory (2 entries, 138 tokens)
+## Project Memory (2 entries, 134 tokens)
 
 - **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
 - **[verified] always run the migration dry run before deploying** [deploy] (100%)
 
-Memory state: 2 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength, narrow focus.
+Memory state: 3 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength.
 
 --- stderr
 
@@ -42,11 +42,11 @@ renderContext split by stage
 ### Next step
 run the goldens
 
-## Project Memory (1 entries, 117 tokens)
+## Project Memory (1 entries, 113 tokens)
 
 - **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
 
-Memory state: 2 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength, narrow focus.
+Memory state: 3 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength.
 
 --- stderr
 
