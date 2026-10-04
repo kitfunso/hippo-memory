@@ -130,6 +130,17 @@ describe('agent memory sync: routing and sharing', () => {
     expect(liveTexts(w.local)).toEqual([]);
   });
 
+  it('a project store that opts out of imports keeps another repo\'s session notes out of the global store too', () => {
+    const x = join(w.dir, 'repox');
+    mkdirSync(join(x, '.git'), { recursive: true });
+    const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
+    writeFileSync(transcript, `${JSON.stringify({ cwd: x })}\n`, 'utf8');
+    writeConfig(w.local, []);
+
+    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(isInitialized(w.global)).toBe(false);
+  });
+
   it('repair sets aside a home note filed under a project and edited since, and the next compaction does not bring it back', () => {
     const HOME_NOTE = 'A note the session filed under the folder it began in.';
     const notes = projectNotes(w, w.dir);

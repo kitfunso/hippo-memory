@@ -8,6 +8,7 @@ import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
+import { processEnv } from './env.js';
 import { calculateStrength, type MemoryEntry } from './memory.js';
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { removeEntryMirrors } from './store/mirrors.js';
@@ -165,13 +166,14 @@ function importCopies(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
 function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): MemoryEntry[] {
   const copies = importCopies(db, tenantId);
   if (!isGlobalStoreRoot(hippoRoot)) return copies;
-  const platform = process.platform;
+  const machine = { platform: process.platform, env: processEnv() };
+  const { platform } = machine;
   // SAFETY: the SELECT names the two columns of the row type.
   const sessions = db.prepare(`SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path IS NOT NULL`)
     .all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
   const owners = new Map<string, Set<string>>();
   for (const { transcript, cwd } of sessions) {
-    const origin = transcriptNotesOrigin(transcript, cwd, platform);
+    const origin = transcriptNotesOrigin(transcript, cwd, machine);
     const dir = path.join(path.dirname(transcript), 'memory');
     if (origin !== null) owners.set(dir, (owners.get(dir) ?? new Set<string>()).add(origin));
   }
@@ -213,13 +215,16 @@ function planFolds(db: DatabaseSyncLike, tenantId: string): ProjectFold[] {
 /** Reads only, so doctor and a dry run take no write lock; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */
 export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): Omit<RepairResult, 'backup'> {
   const folds = isGlobalStoreRoot(hippoRoot) ? planFolds(db, tenantId) : [];
-  return { copies: strayImports(db, hippoRoot, tenantId).map((e) => e.id), folds, ...planUserGlobalRepair(db, tenantId) };
+  return { copies: strayImports(db, hippoRoot, tenantId).map((e) => e.id), folds, ...planUserGlobalRepair(db, tenantId, folds) };
 }
 
-function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
+/** Parents read with `folds` already applied, so a plan matches what apply does after folding. */
+function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string, folds: readonly ProjectFold[]): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
   const all = selectAllEntries(db, tenantId);
-  const origins = new Map<string, string | null>(listDormantSnapshots(db, tenantId).map((s) => [s.entry.id, s.entry.origin_project ?? null]));
-  for (const e of all) origins.set(e.id, e.origin_project ?? null);
+  const renamed = new Map(folds.map((f) => [f.from, f.into]));
+  const after = (origin: string | null | undefined) => (origin ? renamed.get(origin) ?? origin : origin ?? null);
+  const origins = new Map<string, string | null>(listDormantSnapshots(db, tenantId).map((s) => [s.entry.id, after(s.entry.origin_project)]));
+  for (const e of all) origins.set(e.id, after(e.origin_project));
   const toProject: Array<{ id: string; origin: string }> = [];
   const setAside: string[] = [];
   const untraced: string[] = [];
@@ -250,7 +255,7 @@ export function repairProjects(
     }
     const folds = isGlobalStoreRoot(hippoRoot) ? planFolds(db, tenantId) : [];
     const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
-    const plan = planUserGlobalRepair(db, tenantId);
+    const plan = planUserGlobalRepair(db, tenantId, []);
     const stamp = db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`);
     for (const { id, origin } of plan.toProject) stamp.run(origin, tenantId, id);
     const aside = new Set(plan.setAside);

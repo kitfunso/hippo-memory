@@ -56,10 +56,17 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
 }
 
 /** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder, else cwd or a parent; null when none matches. */
-export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null, platform: NodeJS.Platform): string | null {
-  const fold = (name: string) => (platform === 'win32' ? name.toLowerCase() : name);
+export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): string | null {
+  const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
-  for (const from of [transcriptStartCwd(transcriptPath), cwd]) {
+  const start = transcriptStartCwd(transcriptPath);
+  const pinned = pinnedProjectDirName(machine.env);
+  if (pinned !== null && fold(pinned) === folder) {
+    // A pinned name stands for whatever project the session ran in, so its start folder decides.
+    const from = start ?? cwd;
+    return from !== null && fs.existsSync(from) ? deriveOriginProject(from) : null;
+  }
+  for (const from of [start, cwd]) {
     for (let dir = from === null ? null : path.resolve(from); dir !== null; dir = path.dirname(dir) === dir ? null : path.dirname(dir)) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
       if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return fs.existsSync(dir) ? deriveOriginProject(dir) : null;
@@ -93,10 +100,15 @@ function transcriptStartCwd(transcriptPath: string): string | null {
 function projectFolders(ctx: AdapterContext, config: string): string[] {
   const projects = path.join(config, 'projects');
   const names = ctx.projectRoot === undefined ? [] : [...claudeMemoryFolderNames(ctx.projectRoot, ctx.platform)];
-  const pinned = ctx.env.CLAUDE_CODE_PROJECT_DIR_NAME;
-  // Claude reads the pinned name only alongside a pinned config folder.
-  if (ctx.env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned)) names.push(pinned);
+  const pinned = pinnedProjectDirName(ctx.env);
+  if (pinned !== null) names.push(pinned);
   return names.map((name) => path.join(projects, name, 'memory'));
+}
+
+function pinnedProjectDirName(env: AdapterContext['env']): string | null {
+  const pinned = env.CLAUDE_CODE_PROJECT_DIR_NAME;
+  // Claude reads the pinned name only alongside a pinned config folder.
+  return env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned) ? pinned : null;
 }
 
 function userFolders(ctx: AdapterContext, config: string, warnings: string[]): string[] {

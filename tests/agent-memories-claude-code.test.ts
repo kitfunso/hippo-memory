@@ -245,10 +245,10 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
     const transcriptOf = (dir: string) => path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
 
-    expect(transcriptNotesOrigin(transcriptOf(launch), repo, process.platform)).toBe('');
-    expect(transcriptNotesOrigin(transcriptOf(repo), path.join(repo, 'src'), process.platform)).toBe('repo');
-    expect(transcriptNotesOrigin(transcriptOf(repo), tmp(), process.platform)).toBeNull();
-    expect(transcriptNotesOrigin(transcriptOf(repo), null, process.platform)).toBeNull();
+    expect(transcriptNotesOrigin(transcriptOf(launch), repo, { platform: process.platform, env: {} })).toBe('');
+    expect(transcriptNotesOrigin(transcriptOf(repo), path.join(repo, 'src'), { platform: process.platform, env: {} })).toBe('repo');
+    expect(transcriptNotesOrigin(transcriptOf(repo), tmp(), { platform: process.platform, env: {} })).toBeNull();
+    expect(transcriptNotesOrigin(transcriptOf(repo), null, { platform: process.platform, env: {} })).toBeNull();
   });
 
   it('reads the start folder from the transcript, which the lossy folder name cannot give back, and decides nothing for a folder gone from disk', () => {
@@ -260,8 +260,19 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const gone = path.join(launch, 'gone');
     const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
 
-    expect(transcriptNotesOrigin(transcript, dash, process.platform)).toBe('my_repo');
-    expect(transcriptNotesOrigin(goneTranscript, path.join(gone, 'src'), process.platform)).toBeNull();
+    expect(transcriptNotesOrigin(transcript, dash, { platform: process.platform, env: {} })).toBe('my_repo');
+    expect(transcriptNotesOrigin(goneTranscript, path.join(gone, 'src'), { platform: process.platform, env: {} })).toBeNull();
+  });
+
+  it('gives a pinned session folder the project the session started in', () => {
+    const repo = path.join(tmp(), 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    const transcript = path.join(tmp(), 'projects', 'pinned-name', 't.jsonl');
+    writeIn(path.dirname(transcript), 't.jsonl', `${JSON.stringify({ cwd: repo })}\n`);
+    const env = { CLAUDE_CONFIG_DIR: tmp(), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-name' };
+
+    expect(transcriptNotesOrigin(transcript, tmp(), { platform: process.platform, env })).toBe('repo');
+    expect(transcriptNotesOrigin(transcript, tmp(), { platform: process.platform, env: {} })).toBeNull();
   });
 
   it('lists nothing for a project scope without a project root or name', () => {

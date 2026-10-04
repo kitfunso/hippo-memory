@@ -182,8 +182,12 @@ describe('hippo projects repair', () => {
       compaction.run(T, 'c1', 'a', join(home, 'work', 'b'), new Date().toISOString());
       compaction.run(T, 'c2', 'b', join(home, 'work', 'c'), new Date().toISOString());
 
-      expect(repairProjects(db, home, { tenantId: T, dryRun: true }).folds).toEqual([{ from: 'b', into: 'c' }]);
-      repairProjects(db, home, { tenantId: T, dryRun: false });
+      const merged = row('merged from c and a soon-folded b parent', '', { source: 'consolidation', parents: [row('parent under b', 'b').id, row('parent under c', 'c').id] });
+      const dry = repairProjects(db, home, { tenantId: T, dryRun: true });
+      expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
+      // Planned against the folded names, as apply sees them: both parents are under c.
+      expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
+      expect(repairProjects(db, home, { tenantId: T, dryRun: false }).toProject).toEqual(dry.toProject);
       expect(byId().get(lesson.id)!.origin_project).toBe('a');
     } finally {
       if (saved === undefined) delete process.env.HIPPO_HOME;
