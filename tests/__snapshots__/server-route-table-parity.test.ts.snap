@@ -876,8 +876,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "customer is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -924,8 +924,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "note is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -948,8 +948,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "text is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -996,8 +996,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "text is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1020,8 +1020,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "text is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1068,8 +1068,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "resolutionText is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1092,8 +1092,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "content is required",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1116,8 +1116,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "reason is required",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1164,8 +1164,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "content is required",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1188,8 +1188,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "good is required (boolean)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1212,8 +1212,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "policyName is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1260,8 +1260,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "policyText is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1284,8 +1284,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "claim is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1308,8 +1308,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "state is required and must be one of: closed | closed-unknown",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1332,8 +1332,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "processName is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1380,8 +1380,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "steps is required (at least one step) for a supersession",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1404,8 +1404,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "repo is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1452,8 +1452,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "summary is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1476,8 +1476,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "repo is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1548,8 +1548,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "skillName is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1596,8 +1596,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "instructions are required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
