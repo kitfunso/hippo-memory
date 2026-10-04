@@ -1,3 +1,0 @@
-### Changed
-
-- **The CLI's `auth`, `goal` and `learn` verbs and MCP `hippo_learn` now run through the api layer.** `hippo auth revoke|grant|ungrant` look up a key's tenant through `api.authKeyTenant` instead of their own SQL, `hippo goal` calls the new `api.goalPush`, `goalList`, `goalComplete`, `goalSuspend` and `goalResume`, and `hippo learn --git`, init, sleep and `hippo_learn` share one `api.learn` that keeps the host-admin check. The id-to-tenant queries the api used for keys and memories live in `src/store/tenant-lookup.ts`. Output, exit codes, written rows and audit rows are unchanged; new parity tests pin them.
