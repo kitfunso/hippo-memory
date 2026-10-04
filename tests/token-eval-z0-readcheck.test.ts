@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
 import { validateCorpus } from './fixtures/z0-contract';
-import { cleanup, tmp, isolate, makeRepo, task, plain, spec, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness';
+import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness';
 
 const classes = (r: RunRecord) => (r.voidHits ?? []).map((h) => h.class);
 
@@ -24,6 +24,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     subagent: 'SUBAGENT\nREAD:{OUT}/runs/seqF/A2/seed1/work/lib.js',
     own: 'READ:lib.js\nREAD:{RUN}/claude-config/CLAUDE.md\nGREP:.\nBASH:cat $CLAUDE_CONFIG_DIR/projects/x/memory/MEMORY.md',
     cache: 'READ:{OUT}/repo-cache/seqF/HEAD',
+    quotedHome: 'BASH:cat "$HOME"/.claude/projects/p/s.jsonl',
+    sessionIdOnly: 'ECHO:{"type":"delivery","sessionId":"not-a-transcript-line"}',
   };
 
   beforeAll(async () => {
@@ -32,7 +34,7 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     await run(spec(r, [], [...Object.entries(reads).map(([id, prompt]) => task(r, id, prompt)), plain(r, 'after')]), ['A1'], out);
     recs = readRecords(out);
     expect(validateCorpus(recs, readPlan(out))).toEqual([]);
-  }, 300_000);
+  }, 600_000);
   afterAll(cleanup);
 
   const expectRead = (id: string, cls: string) => {
@@ -63,6 +65,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     expect(find(recs, 'A1', 'own').voidHits).toBeUndefined();
   });
   it('reading the repo cache, which holds every fix ref, voids as other-arm', () => expectRead('cache', 'other-arm'));
+  it('a quoted env form joined to a bare path is one shell word', () => expectRead('quotedHome', 'operator'));
+  it('a sessionId in output that is not a transcript line does not void', () => expect(find(recs, 'A1', 'sessionIdOnly').void).toBeNull());
 });
 
 describe('resolveToken', () => {
@@ -73,6 +77,48 @@ describe('resolveToken', () => {
     expect(resolveToken('~/x', { platform: 'linux', env: { HOME: '/home/u' }, cwd: '/w' })).toBe('/home/u/x');
     expect(resolveToken('../y', { platform: 'linux', env: {}, cwd: '/w/a' })).toBe('/w/y');
   });
+
+  it('on win32 HOME and USERPROFILE stand in for each other in every env form', () => {
+    const opts = { platform: 'win32', cwd: 'C:/w' };
+    expect(resolveToken('$HOME/a', { ...opts, env: { USERPROFILE: 'D:/u' } })).toBe('D:/u/a');
+    expect(resolveToken('${HOME}/a', { ...opts, env: { USERPROFILE: 'D:/u' } })).toBe('D:/u/a');
+    expect(resolveToken('~/a', { ...opts, env: { USERPROFILE: 'D:/u' } })).toBe('D:/u/a');
+    expect(resolveToken('%USERPROFILE%/a', { ...opts, env: { HOME: 'D:/h' } })).toBe('D:/h/a');
+    expect(resolveToken('$HOME/a', { platform: 'linux', env: { USERPROFILE: '/u' }, cwd: '/w' })).toBe('/w/$HOME/a');
+  });
+});
+
+describe('resume hits: session 1 decides void, and only a teach\'s resume adds to it', () => {
+  afterEach(cleanup);
+  const other = 'READ:{OUT}/runs/seqF/A2/seed1/claude-config/x';
+
+  it('a resume read voids a teach; on an apply it is only kept, while the same read in session 1 voids', async () => {
+    const { out } = isolate('resume-reads');
+    const r = makeRepo();
+    await run(oneLesson(r, { t1: `LESSON_BAD\nRESUME_${other}`, a1: `LESSON_BAD\nRESUME_${other}`, a2: `LESSON_BAD\n${other}` }), ['A1'], out);
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 't1')).toMatchObject({ invalid: null, void: 'read' });
+    const a1 = find(recs, 'A1', 'a1');
+    expect(a1).toMatchObject({ invalid: null, void: null, correctionTurns: 1 });
+    expect(a1.voidHits).toBeUndefined();
+    expect((a1.resumeVoidHits ?? []).map((h) => h.class)).toEqual(['other-run']);
+    expect(find(recs, 'A1', 'a2')).toMatchObject({ invalid: null, void: 'read' });
+    expect(validateCorpus(recs, readPlan(out))).toEqual([]);
+  }, 300_000);
+
+  it('memory session 1 writes reaches the resume, so it voids a teach', async () => {
+    const { out } = isolate('resume-delivery-teach');
+    await run(oneLesson(makeRepo(), { t1: 'LESSON_BAD\nUSERMEM:a user rule' }), ['A0'], out);
+    expect(find(readRecords(out), 'A0', 't1')).toMatchObject({ invalid: null, void: 'user-instructions' });
+  }, 300_000);
+
+  it('memory session 1 writes that reaches an apply\'s resume is kept, never voiding it', async () => {
+    const { out } = isolate('resume-delivery-apply');
+    await run(oneLesson(makeRepo(), { a1: 'LESSON_BAD\nUSERMEM:a user rule' }), ['A0'], out);
+    const a1 = find(readRecords(out), 'A0', 'a1');
+    expect(a1).toMatchObject({ invalid: null, void: null });
+    expect((a1.resumeVoidHits ?? []).map((h) => h.reason)).toEqual(['user-instructions']);
+  }, 300_000);
 });
 
 describe('delivery voids and the worktree read', () => {
@@ -153,7 +199,7 @@ describe('delivery voids and the worktree read', () => {
     try {
       symlinkSync(out, alias, 'junction');
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'EPERM') t.skip();
+      if (err instanceof Error && 'code' in err && err.code === 'EPERM') t.skip();
       throw err;
     }
     await run(spec(r, [], [task(r, 't1', `READ:${alias}/runs/seqF/A2/seed1/claude-config/x`), task(r, 't2', `READ:${alias}/runs/seqF/A1/seed1/work/lib.js`)]), ['A1'], out);

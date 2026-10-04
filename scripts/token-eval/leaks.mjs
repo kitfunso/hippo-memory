@@ -52,12 +52,25 @@ function workspaceFiles(work, pre, phrase) {
   }).split('\0').filter(Boolean).map((p) => p.slice(pre.length + 1));
 }
 
+/** An entry's files as `{e, abs}`; a link to a directory gives every file under its target, as the agent reads through it. */
+function entryFiles(root, e) {
+  const abs = path.join(root, e.path);
+  if (!e.link || !fs.statSync(abs, { throwIfNoEntry: false })?.isDirectory()) return [{ e, abs }];
+  return fs.readdirSync(abs, { recursive: true, withFileTypes: true }).filter((d) => d.isFile()).map((d) => {
+    const file = path.join(d.parentPath, d.name);
+    return { e: { ...e, path: `${e.path}/${path.relative(abs, file).split(path.sep).join('/')}` }, abs: file };
+  });
+}
+
 /** Each surface entry's bytes as `{key, e, bytes}`, skipping entries the snapshot could not read and files gone since. */
 export function* surfaceBytes(root, surfaces, keys) {
   for (const key of keys) {
-    for (const e of surfaces[key] ?? []) {
-      const bytes = e.error ? null : readOrNull(path.join(root, e.path));
-      if (bytes) yield { key, e, bytes };
+    for (const entry of surfaces[key] ?? []) {
+      if (entry.error) continue;
+      for (const { e, abs } of entryFiles(root, entry)) {
+        const bytes = readOrNull(abs);
+        if (bytes) yield { key, e, bytes };
+      }
     }
   }
 }

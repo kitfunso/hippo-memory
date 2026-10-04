@@ -129,6 +129,16 @@ function bulletEntries(byContent, bullet) {
   return [...byContent].filter(([k]) => k.startsWith(head)).flatMap(([, es]) => es);
 }
 
+/** The bullet a part opens with: the longest blank-line-bounded prefix that parses, since a memory may hold blank lines itself. */
+function wholeBullet(part) {
+  const cuts = [...part.matchAll(/\n\n/g)].map((m) => m.index).reverse();
+  for (const end of [part.length, ...cuts]) {
+    const head = part.slice(0, end).trim();
+    if (BULLET.test(head)) return head;
+  }
+  return part.split('\n\n')[0].trim();
+}
+
 /** Hippo rows in hook-added texts, matched by content to `entries` (each with `global`); every repeat counts, as it is paid again (prereg 93). */
 export function injectedRows(texts, entries) {
   const byContent = new Map();
@@ -137,7 +147,7 @@ export function injectedRows(texts, entries) {
   const rows = [];
   for (const part of texts.flatMap((t) => t.split(/\n(?=- \*\*\[)/))) {
     if (!part.startsWith('- **[')) continue;
-    const bullet = part.split('\n\n')[0].trim();
+    const bullet = wholeBullet(part);
     counts.rows++;
     counts.chars += bullet.length;
     const hits = bulletEntries(byContent, bullet);

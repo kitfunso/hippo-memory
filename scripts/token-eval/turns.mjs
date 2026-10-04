@@ -73,8 +73,9 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
     };
     const projects = path.join(run.dirs.claudeConfig, 'projects');
     const main = findTranscript(projects, sessionId);
-    // What a resume with no result is priced from: the main transcript past these bytes, and files new since.
-    const before = { bytesBefore: (main && snap.transcripts.get(main)?.length) || 0, filesBefore: new Set(listTranscripts(projects)) };
+    // Where session 1 ends in every file it wrote, subagents included, since a resume can append to any of them.
+    const sizesBefore = new Map([...snap.transcripts].map(([f, bytes]) => [f, bytes.length]));
+    const before = { bytesBefore: (main && sizesBefore.get(main)) || 0, sizesBefore, filesBefore: new Set(listTranscripts(projects)) };
     return { ...(await untilNotLimited(ctx, run, t, { args: () => args, input: message, rawName: 'resume-limit', reset })), ...before };
   } finally {
     if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });

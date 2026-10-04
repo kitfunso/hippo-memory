@@ -1,7 +1,7 @@
 // Z0 session timeouts with the fake Claude Code (prereg 165): a graded record priced from its transcript, never a plan limit.
 // Costs nothing; each HANG waits out a short session timeout.
 import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { transcriptUsage, assistantTurns } from '../scripts/token-eval/records.mjs';
 import { validateCorpus } from './fixtures/z0-contract';
@@ -13,6 +13,16 @@ afterEach(cleanup);
 
 const TIMEOUT = { sessionTimeoutMs: 5000 };
 const ZERO = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'ESRCH') return false;
+    throw err;
+  }
+}
 
 describe('transcript pricing', () => {
   it('takes the largest value per bucket per message id, then sums over ids; a byte range prices one turn', () => {
@@ -67,6 +77,15 @@ describe('a session that runs out of time (prereg 165)', () => {
     expect(rawResult(out, 'A4', 'n1.json').files['CLAUDE.md']).toContain('- Write the lesson file, because');
   }, 120_000);
 
+  it('a resume that bills into a subagent file session 1 wrote prices those bytes as the resume\'s', async () => {
+    const { out } = isolate('hang-resume-sub');
+    const r = makeRepo();
+    await run(oneLesson(r, { t1: 'LESSON_BAD HANG_ON_RESUME RESUME_SUBAGENT_USAGE\nSUBAGENT_CMD echo hi' }), ['A4'], out, TIMEOUT);
+    const t1 = find(readRecords(out), 'A4', 't1');
+    expect(t1).toMatchObject({ invalid: null, timedOut: true, turnsSource: 'transcript' });
+    expect(t1.usage!.extra).toEqual({ inputTokens: 13, cacheWriteTokens: 40, cacheReadTokens: 200, outputTokens: 1047 });
+  }, 300_000);
+
   it('a hung session whose stderr says overloaded_error is a timeout, never a plan-limit wait', async () => {
     const { out } = isolate('hang-overload');
     const r = makeRepo();
@@ -84,9 +103,15 @@ describe('a session that runs out of time (prereg 165)', () => {
     expect(Date.now() - started).toBeLessThan(90_000);
     const tick = join(out, 'tick.txt');
     expect(existsSync(tick)).toBe(true);
-    const before = statSync(tick).size;
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(statSync(tick).size).toBe(before);
+    const pid = Number(readFileSync(join(out, 'grandchild.pid'), 'utf8'));
+    try {
+      const before = statSync(tick).size;
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      expect(statSync(tick).size).toBe(before);
+      expect(alive(pid)).toBe(false);
+    } finally {
+      if (alive(pid)) process.kill(pid, 'SIGKILL');
+    }
   }, 110_000);
 
   it('a timeout with no transcript stays invalid: no-transcript', async () => {

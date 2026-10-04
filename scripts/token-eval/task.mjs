@@ -16,7 +16,7 @@ import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, Worksp
 import { saveGrading, surfaceText } from './grading.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
-import { deliveryHits, sessionVoid, foldPath, under } from './readcheck.mjs';
+import { deliveryHits, sessionVoid, byPrecedence, foldPath, under } from './readcheck.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const NOT_STAGED = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
@@ -156,12 +156,16 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   };
   // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session never (reading 4).
   const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null, ...saved() };
+  // Rechecked after grading on every graded cell, so a file a checker left voids the cell whatever its verdict.
+  if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
   if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
   await settle(ctx, run, t.id, 'pre-resume');
-  // Rechecked after grading: a checker or anything else the runner ran since the first scan could have left one.
+  // Again after the hooks settle, since one could write above work/ before the resume reads it.
   if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
   const preResume = snapshotSurfaces(ctx, run, 'pre-resume', step);
+  // Memory session 1 wrote reaches the resume; a rerun restores to this snapshot, so the verdict holds for it too.
+  stage.resumeDelivery = newHits(deliveryHits(run, preResume, instructionSnapshot(run.dirs.work)), stage.delivery);
   // A file a cut-off attempt left above work/ voids the cell, so the rerun never spends plan usage and A4 is never taught from it.
   const afterReset = () => {
     stage.restores.push(restoreSurfaces(ctx, run, preResume, 'resume-restore', step));
@@ -185,6 +189,8 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   return { lesson, first, final, staleFollow, checkerError: c.error, resume, delivered, form: teach ? form : null, ...saved() };
 }
 
+const newHits = (hits, known) => hits.filter((h) => !known.some((k) => JSON.stringify(k) === JSON.stringify(h)));
+
 const sum = (a, b) => (a === null || a === undefined ? null : a + (b ?? 0));
 
 /** Why the cell is invalid, in precedence order, or null. */
@@ -206,29 +212,45 @@ function agentError(session, turns) {
   return say(session.cc, session.result, '') ?? resumed;
 }
 
+/** Session 1's and the resume's share of the transcripts: each file session 1 wrote, subagents included, splits where session 1 ended. */
+function turnSegments(run, sessionIds, resume) {
+  const own = transcriptsOf(run, sessionIds.slice(0, 1));
+  if (!resume) return { first: own.map((file) => ({ file })), extra: [] };
+  const at = (file) => resume.sizesBefore.get(file);
+  const first = own.filter((file) => at(file) !== undefined).map((file) => ({ file, toBytes: at(file) }));
+  const extra = own.map((file) => (at(file) === undefined ? { file } : { file, fromBytes: at(file) }));
+  return { first, extra: [...extra, ...transcriptsOf(run, sessionIds.slice(1)).map((file) => ({ file }))] };
+}
+
+const mainsOnly = (segments) => segments.filter((s) => path.basename(path.dirname(s.file)) !== 'subagents');
+
 /** Usage, cost and turns per turn: the result's, or for a turn killed before its result (prereg 165) its share of the transcripts. */
 function pricing(run, session, resume, sessionIds) {
   const r = session.result;
   const rr = resume?.result ?? null;
-  const projects = projectsOf(run);
-  const main = findTranscript(projects, sessionIds[0]);
-  const subs = sessionFiles(projects, sessionIds[0]).filter((f) => f !== main);
-  const whole = (files) => files.map((file) => ({ file }));
-  // Turns count the main transcripts only; usage takes subagent files too, each on the side of the resume it appeared.
-  const first = [{ file: main, toBytes: resume?.bytesBefore }];
-  const extra = [{ file: main, fromBytes: resume?.bytesBefore }, ...whole(sessionIds.slice(1).map((id) => findTranscript(projects, id)))];
-  const firstFiles = [...first, ...whole(subs.filter((f) => !resume || resume.filesBefore.has(f)))];
-  const extraFiles = [extra[0], ...whole(subs.filter((f) => resume && !resume.filesBefore.has(f))), ...whole(transcriptsOf(run, sessionIds.slice(1)))];
+  const { first, extra } = turnSegments(run, sessionIds, resume);
   const priced = Boolean(r) && (!resume || Boolean(rr));
   return {
     usage: {
-      firstSession: r ? usageFromResult(r) : transcriptUsage(firstFiles),
-      extra: !resume ? ZERO_USAGE : (rr ? usageFromResult(rr) : transcriptUsage(extraFiles)),
+      firstSession: r ? usageFromResult(r) : transcriptUsage(first),
+      extra: !resume ? ZERO_USAGE : (rr ? usageFromResult(rr) : transcriptUsage(extra)),
     },
     costUsd: priced ? sum(r.total_cost_usd ?? null, rr?.total_cost_usd) : null,
-    turns: (r ? r.num_turns ?? 0 : assistantTurns(first)) + (!resume ? 0 : (rr ? rr.num_turns ?? 0 : assistantTurns(extra))),
+    // Turns count the main transcripts only; usage takes subagent files too.
+    turns: (r ? r.num_turns ?? 0 : assistantTurns(mainsOnly(first))) + (!resume ? 0 : (rr ? rr.num_turns ?? 0 : assistantTurns(mainsOnly(extra)))),
     turnsSource: priced ? 'result' : 'transcript',
   };
+}
+
+/** G1 over session 1, plus the resume: every teach resumes, so its resume hits void; only a failing apply does, so its are only kept. */
+function resumeAwareVoid(ctx, run, step, stage, sessionIds, resume) {
+  const { first, extra } = turnSegments(run, sessionIds, resume);
+  const g1 = sessionVoid(ctx, run, step, { files: first, ownIds: sessionIds, delivery: stage.delivery });
+  if (!resume) return g1;
+  const g2 = sessionVoid(ctx, run, step, { files: extra, ownIds: sessionIds, delivery: stage.resumeDelivery ?? [] });
+  if (step.role.kind !== 'teach') return { ...g1, resumeVoidHits: g2.voidHits.length ? g2.voidHits : undefined };
+  const hits = byPrecedence([...g1.voidHits, ...g2.voidHits]);
+  return { void: hits[0]?.reason ?? null, voidHits: hits };
 }
 
 /** The record for a cell whose session ran. */
@@ -239,9 +261,9 @@ function sessionRecord(ctx, run, step, parts) {
   const found = sessionIds.length > 0 && sessionIds.every((id) => findTranscript(projects, id));
   const resume = turns?.resume ?? null;
   const resumeId = resume?.result?.session_id ?? (resume?.cc.timedOut ? sessionIds.at(-1) : null);
-  const g1 = sessionVoid(ctx, run, step, { files: transcriptsOf(run, sessionIds), ownIds: sessionIds, delivery: stage.delivery });
+  const g1 = resumeAwareVoid(ctx, run, step, stage, sessionIds, resume);
   const shared = {
-    void: g1.void, voidHits: g1.void ? g1.voidHits : undefined,
+    void: g1.void, voidHits: g1.void ? g1.voidHits : undefined, resumeVoidHits: g1.resumeVoidHits,
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,

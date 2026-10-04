@@ -41,13 +41,20 @@ export function listTranscripts(projectsDir) {
     .map((e) => path.join(e.parentPath, e.name));
 }
 
-/** Parsed lines of each `{file, fromBytes, toBytes}` segment, one turn's share of a file; a missing file has none. */
+/** A `{file, fromBytes, toBytes}` segment, one turn's share of a file; a bare path is the whole file. */
+export const asSegment = (item) => (item.file === undefined ? { file: item } : item);
+
+export function segmentText(seg) {
+  const { file, fromBytes = 0, toBytes } = asSegment(seg);
+  const bytes = fs.readFileSync(file);
+  return bytes.subarray(fromBytes, toBytes ?? bytes.length).toString('utf8');
+}
+
+/** Parsed lines of each segment; a missing file has none. */
 function* segmentLines(segments) {
   for (const seg of segments) {
-    const { file, fromBytes = 0, toBytes } = seg;
-    if (!file || !fs.existsSync(file)) continue;
-    const bytes = fs.readFileSync(file);
-    for (const line of bytes.subarray(fromBytes, toBytes ?? bytes.length).toString('utf8').split('\n')) {
+    if (!seg.file || !fs.existsSync(seg.file)) continue;
+    for (const line of segmentText(seg).split('\n')) {
       const o = parseLine(line);
       if (o) yield o;
     }
@@ -103,12 +110,24 @@ function parseLine(line) {
   }
 }
 
-/** Parsed lines of each transcript file, each file once, as `{file, o}`. */
-function* fileLines(files) {
-  for (const file of uniqueFiles(files)) {
-    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+/** Each path or segment once, its path resolved. */
+function uniqueSegments(items) {
+  const seen = new Map();
+  for (const item of (items ?? []).filter(Boolean)) {
+    const seg = asSegment(item);
+    const file = path.resolve(seg.file);
+    const key = `${file}|${seg.fromBytes ?? 0}|${seg.toBytes ?? ''}`;
+    if (!seen.has(key)) seen.set(key, { ...seg, file });
+  }
+  return [...seen.values()];
+}
+
+/** Parsed lines of each transcript file or segment, each once, as `{file, o}`. */
+function* fileLines(items) {
+  for (const seg of uniqueSegments(items)) {
+    for (const line of segmentText(seg).split('\n')) {
       const o = parseLine(line);
-      if (o) yield { file, o };
+      if (o) yield { file: seg.file, o };
     }
   }
 }

@@ -120,9 +120,9 @@ const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'h
 const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
 
 /** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT. */
-function probes() {
+function probes(text = prompt) {
   const lines = [];
-  for (const m of prompt.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT)$/gm)) {
+  for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT)$/gm)) {
     const [kind, ...rest] = m[1].split(':');
     const arg = fill(rest.join(':'));
     if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
@@ -130,7 +130,7 @@ function probes() {
     else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
     else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg }));
     else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));
-    else lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${JSON.stringify({ type: 'user', sessionId: randomUUID(), message: { content: 'old' } })}\n`));
+    else lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${JSON.stringify({ type: 'user', uuid: randomUUID(), sessionId: randomUUID(), message: { content: 'old' } })}\n`));
   }
   return lines;
 }
@@ -144,7 +144,8 @@ function hang(tag) {
     { type: 'user', message: { role: 'user', content: input } },
     said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
   ]);
-  const tick = `const fs=require('fs');const end=Date.now()+20000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  // Outlives any run, so only the runner's tree kill can stop it; a test that finds it alive kills it itself.
+  const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
   fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
   log(`hang ${tag}`);
@@ -259,6 +260,11 @@ function resumeTurn() {
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
   for (const m of prompt.matchAll(/MEMWRITE_ON_RESUME:([^\n]+)/g)) memWrite(m[1].trim());
   cutOff();
+  // RESUME_SUBAGENT_USAGE: the resume bills 1000 output tokens into a subagent file session 1 wrote.
+  if (prompt.includes('RESUME_SUBAGENT_USAGE')) {
+    const usage = { input_tokens: 0, output_tokens: 1000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    fs.appendFileSync(path.join(path.dirname(transcript), sessionId, 'subagents', 'agent-a1.jsonl'), `\n${JSON.stringify({ type: 'assistant', message: { id: 'm-sub-r', usage } })}`);
+  }
   if (/\bHANG_ON_RESUME\b/.test(prompt)) hang('r');
   if (prompt.includes('NO_RESULT_ON_RESUME')) process.exit(0);
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
@@ -266,7 +272,9 @@ function resumeTurn() {
   if (lessonState() && input.startsWith('No:')) fs.writeFileSync('lesson.txt', 'ok\n');
   // CAPTURE_TEACH: the agent saves the teach message to hippo itself.
   if (prompt.includes('CAPTURE_TEACH')) sh(`hippo remember "${input.replaceAll('"', '')}"`);
-  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` })]);
+  // RESUME_<probe> lines are probes only the resume makes.
+  const later = [...prompt.matchAll(/^RESUME_(\S.*)$/gm)].map((m) => m[1]).join('\n');
+  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` }), ...probes(later)]);
 }
 
 log(`${resumeId ? 'resume' : 'session'} ${sessionId}`);
