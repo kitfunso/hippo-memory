@@ -421,10 +421,18 @@ function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
 }
 
-function quoteCmdArg(arg: string): string {
+/** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */
+export function quoteCmdArg(arg: string): string {
   if (arg.length === 0) return '""';
-  if (!/[ \t"&()^<>|]/.test(arg)) return arg;
-  return `"${arg.replace(/"/g, '""')}"`;
+  if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
+  return `"${arg.replace(/"/g, '""').replace(/%/g, '"^%"')}"`;
+}
+
+/** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered verbatim. */
+export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): string[] {
+  const command = `"${shimPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
+  // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
+  return ['/d', '/v:off', '/s', '/c', `"${command}"`];
 }
 
 function spawnRealCodex(
@@ -443,11 +451,9 @@ function spawnRealCodex(
   }
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
-    const command = `"${realCodexPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
-    // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
     return spawn(
       'cmd.exe',
-      ['/d', '/s', '/c', `"${command}"`],
+      cmdShimArgs(realCodexPath, forwardArgs),
       { cwd, stdio: 'inherit', windowsHide: false, windowsVerbatimArguments: true },
     );
   }

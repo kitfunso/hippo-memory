@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { BlockList, isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from './project-identity.js';
 import { assembleCost, contextCost, drillCost } from './context-render.js';
@@ -350,7 +351,8 @@ function sendError(res: ServerResponse, status: number, message: string): void {
   sendJson(res, status, { error: message });
 }
 
-async function parseJsonBody(req: IncomingMessage): Promise<Record<string, JsonValue>> {
+/** `_authed` is proof the caller passed auth: an unauthenticated request must never make the server read its body. */
+async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
   const raw = await readBody(req);
   if (raw.length === 0) return {};
   try {
@@ -526,17 +528,57 @@ function buildMcpClientKey(req: IncomingMessage): string {
  * Only set this when a trusted proxy fronts EVERY request: a directly
  * reachable server honoring the header would let clients mint a fresh
  * bucket per request and bypass the limiter entirely.
+ *
+ * HIPPO_TRUSTED_PROXIES (comma-separated IPs or CIDRs) pins which peers count
+ * as that proxy: the header is read only when the socket peer is listed, and
+ * listed hops are skipped. In a comma-joined chain (X-Forwarded-For) the key is
+ * the rightmost hop no trusted proxy added; entries to its left are whatever
+ * the client sent, so they never pick the bucket.
  */
 export function clientIpForRateLimit(req: IncomingMessage): string {
-  const header = process.env.HIPPO_CLIENT_IP_HEADER?.toLowerCase();
-  if (header) {
-    const raw = req.headers[header];
-    const first = Array.isArray(raw) ? raw[0] : raw;
-    // Take the first entry of a comma-joined list (proxy chains append).
-    const ip = first?.split(',')[0]?.trim();
-    if (ip) return ip;
+  const socketIp = req.socket.remoteAddress ?? 'unknown';
+  const header = process.env.HIPPO_CLIENT_IP_HEADER?.trim().toLowerCase();
+  if (!header) return socketIp;
+  const trusted = trustedProxyList(process.env.HIPPO_TRUSTED_PROXIES);
+  if (trusted && !isTrustedProxy(trusted, socketIp)) return socketIp;
+  const raw = req.headers[header];
+  const hops = (Array.isArray(raw) ? raw.join(',') : raw ?? '')
+    .split(',')
+    .map((hop) => hop.trim())
+    .filter((hop) => hop.length > 0);
+  for (let i = hops.length - 1; i >= 0; i--) {
+    if (!trusted || !isTrustedProxy(trusted, hops[i]!)) return hops[i]!;
   }
-  return req.socket.remoteAddress ?? 'unknown';
+  return hops[0] ?? socketIp;
+}
+
+let trustedProxyCache: { raw: string; list: BlockList | undefined } | undefined;
+
+/** Parses HIPPO_TRUSTED_PROXIES once per distinct value; undefined when unset, so any peer may set the header. */
+function trustedProxyList(raw: string | undefined): BlockList | undefined {
+  if (!raw?.trim()) return undefined;
+  if (trustedProxyCache?.raw === raw) return trustedProxyCache.list;
+  const list = new BlockList();
+  for (const entry of raw.split(',').map((e) => e.trim()).filter((e) => e.length > 0)) {
+    const [addr = '', prefix] = entry.split('/');
+    const family = isIP(addr) === 6 ? 'ipv6' : 'ipv4';
+    const bits = prefix === undefined ? undefined : Number(prefix);
+    const maxBits = family === 'ipv6' ? 128 : 32;
+    if (isIP(addr) === 0 || (bits !== undefined && (!Number.isInteger(bits) || bits < 0 || bits > maxBits))) {
+      log.warn(`HIPPO_TRUSTED_PROXIES: ignoring '${entry}', not an IP address or CIDR`);
+      continue;
+    }
+    if (bits === undefined) list.addAddress(addr, family);
+    else list.addSubnet(addr, bits, family);
+  }
+  trustedProxyCache = { raw, list };
+  return list;
+}
+
+function isTrustedProxy(list: BlockList, ip: string): boolean {
+  const bare = ip.startsWith('::ffff:') && isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
+  const family = isIP(bare);
+  return family !== 0 && list.check(bare, family === 6 ? 'ipv6' : 'ipv4');
 }
 
 type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs'>;
@@ -770,7 +812,8 @@ type Route =
 
 // POST /v1/memories
 async function handleCreateMemory({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content');
   if (!content) {
     throw new HttpError(400, 'content is required');
@@ -779,7 +822,6 @@ async function handleCreateMemory({ req, res, opts }: RouteRequest): Promise<voi
   if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
     throw new HttpError(400, `invalid kind: ${kindRaw}`);
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const result = remember(ctx, {
     content,
     kind: kindRaw,
@@ -1058,12 +1100,12 @@ async function handleDrillRecall({ req, res, opts, query }: RouteRequest, drillM
 // /v1/memories/:id/* and DELETE /v1/memories/:id
 async function handleArchiveMemory({ req, res, opts }: RouteRequest, archiveMatch: Record<string, string>): Promise<void> {
   validateIdSegment(archiveMatch.id!, 'memory id');
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const reason = getString(body, 'reason');
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const result = archiveRaw(ctx, archiveMatch.id!, reason);
   sendJson(res, 200, result);
   return;
@@ -1071,12 +1113,12 @@ async function handleArchiveMemory({ req, res, opts }: RouteRequest, archiveMatc
 
 async function handleSupersedeMemory({ req, res, opts }: RouteRequest, supersedeMatch: Record<string, string>): Promise<void> {
   validateIdSegment(supersedeMatch.id!, 'memory id');
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content');
   if (!content) {
     throw new HttpError(400, 'content is required');
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const result = supersede(ctx, supersedeMatch.id!, content);
   sendJson(res, 200, result);
   return;
@@ -1105,7 +1147,8 @@ async function handleForgetMemory({ req, res, opts }: RouteRequest, idMatch: Rec
 // recall" from "all ids skipped". Each applied id writes one audit_log
 // row (op='outcome', actor from Bearer).
 async function handleApplyOutcome({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const good = body['good'];
   if (!isJsonBoolean(good)) {
     throw new HttpError(400, 'good is required (boolean)');
@@ -1129,7 +1172,6 @@ async function handleApplyOutcome({ req, res, opts }: RouteRequest): Promise<voi
     }
     ids = idsRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   if (ids !== undefined) {
     const { applied } = outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
@@ -1235,7 +1277,7 @@ async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
   const sleepCtx = await buildContextWithAuth(req, opts);
   // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
   assertCrossTenantAdmin(sleepCtx, '/v1/sleep');
-  const body = await parseJsonBody(req);
+  const body = await parseJsonBody(req, sleepCtx);
   const dryRunRaw = body['dry_run'];
   if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
     throw new HttpError(400, 'dry_run must be a boolean');
@@ -1257,7 +1299,8 @@ async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
 // body (Task 8): the HTTP layer hands it to the client; the user-facing
 // "store this somewhere safe" warning belongs in the CLI client, not here.
 async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const labelRaw = body['label'];
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {
     throw new HttpError(400, 'label must be a string');
@@ -1277,7 +1320,6 @@ async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<vo
   // bound to the caller's authenticated tenant (ctx.tenantId, resolved
   // from the Bearer token). Forwarding body.tenantId here would let
   // tenant A mint a key for tenant B — see authCreate doc comment.
-  const ctx = await buildContextWithAuth(req, opts);
   const result = authCreate(ctx, {
     label: labelRaw,
     role,
@@ -1400,7 +1442,8 @@ async function handleListAudit({ req, res, opts, query }: RouteRequest): Promise
 // validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
 // (4096 chars) + closureNote (2048 chars) per v1.11.4 pattern.
 async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const claim = body['claim'];
   if (!isJsonString(claim) || claim.length === 0) {
     throw new HttpError(400, 'claim is required (non-empty string)');
@@ -1436,7 +1479,6 @@ async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise
     }
     targetDateValue = targetDate;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const prediction = savePrediction(opts.hippoRoot, ctx.tenantId, {
     classTag,
     claimText: claim,
@@ -1512,7 +1554,8 @@ async function handleGetPrediction({ req, res, opts }: RouteRequest, predictionB
 
 async function handleClosePrediction({ req, res, opts }: RouteRequest, predictionCloseMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(predictionCloseMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const state = body['state'];
   if (!isJsonString(state) || !isSetMember(VALID_CLOSURE_STATES, state) || state === 'open') {
     throw new HttpError(400, 'state is required and must be one of: closed | closed-unknown');
@@ -1536,7 +1579,6 @@ async function handleClosePrediction({ req, res, opts }: RouteRequest, predictio
     }
     closureNote = note;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
     closureState: state,
     actualValue,
@@ -1557,7 +1599,8 @@ async function handleClosePrediction({ req, res, opts }: RouteRequest, predictio
 // new (no legacy --supersedes <memory-id> constraint), so it supersedes by
 // table id and never weakens a memory mirror.
 async function handleCreateDecision({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const text = body['text'];
   if (!isJsonString(text) || text.length === 0) {
     throw new HttpError(400, 'text is required (non-empty string)');
@@ -1584,7 +1627,6 @@ async function handleCreateDecision({ req, res, opts }: RouteRequest): Promise<v
     }
     supersedesDecisionId = supRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   try {
     const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
       decisionText: text,
@@ -1622,7 +1664,8 @@ async function handleListDecisions({ req, res, opts, query }: RouteRequest): Pro
 
 async function handleSupersedeDecision({ req, res, opts }: RouteRequest, decisionSupersedeMatch: RegExpMatchArray): Promise<void> {
   const oldId = parseInt(decisionSupersedeMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const text = body['text'];
   if (!isJsonString(text) || text.length === 0) {
     throw new HttpError(400, 'text is required (non-empty string)');
@@ -1641,7 +1684,6 @@ async function handleSupersedeDecision({ req, res, opts }: RouteRequest, decisio
     }
     context = contextRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
     decisionText: text,
     context,
@@ -1682,7 +1724,8 @@ async function handleGetDecision({ req, res, opts }: RouteRequest, decisionByIdM
 // open->resolved->closed (no supersede), so linkedMemoryIds replaces
 // supersedesDecisionId on create.
 async function handleCreateIncident({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const text = body['text'];
   if (!isJsonString(text) || text.length === 0) {
     throw new HttpError(400, 'text is required (non-empty string)');
@@ -1717,7 +1760,6 @@ async function handleCreateIncident({ req, res, opts }: RouteRequest): Promise<v
     }
     linkedMemoryIds = linkedRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   try {
     const incident = saveIncident(opts.hippoRoot, ctx.tenantId, {
       incidentText: text,
@@ -1755,7 +1797,8 @@ async function handleListIncidents({ req, res, opts, query }: RouteRequest): Pro
 
 async function handleResolveIncident({ req, res, opts }: RouteRequest, incidentResolveMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(incidentResolveMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const resolutionText = body['resolutionText'];
   if (!isJsonString(resolutionText) || resolutionText.trim().length === 0) {
     throw new HttpError(400, 'resolutionText is required (non-empty string)');
@@ -1763,7 +1806,6 @@ async function handleResolveIncident({ req, res, opts }: RouteRequest, incidentR
   if (resolutionText.length > 4096) {
     throw new HttpError(400, 'resolutionText exceeds 4096-character cap');
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
   sendJson(res, 200, { incident });
   return;
@@ -1800,7 +1842,8 @@ async function handleGetIncident({ req, res, opts }: RouteRequest, incidentByIdM
 // (validateProcessStepsBody). Mirrors /v1/decisions; the delta lifecycle is the
 // decision supersede path.
 async function handleCreateProcess({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const processName = body['processName'];
   if (!isJsonString(processName) || processName.trim().length === 0) {
     throw new HttpError(400, 'processName is required (non-empty string)');
@@ -1820,7 +1863,6 @@ async function handleCreateProcess({ req, res, opts }: RouteRequest): Promise<vo
     }
     description = descriptionRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
     processName,
     steps,
@@ -1852,7 +1894,8 @@ async function handleListProcesses({ req, res, opts, query }: RouteRequest): Pro
 
 async function handleSupersedeProcess({ req, res, opts }: RouteRequest, processSupersedeMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(processSupersedeMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const steps = validateProcessStepsBody(body['steps']);
   if (steps.length === 0) {
     throw new HttpError(400, 'steps is required (at least one step) for a supersession');
@@ -1879,7 +1922,6 @@ async function handleSupersedeProcess({ req, res, opts }: RouteRequest, processS
     }
     description = descRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   // A supersession is a new version of the SAME process: reuse the
   // predecessor's name. 404 if the target does not exist; saveProcess's
   // in-SAVEPOINT preflight is the authoritative active-state check (409).
@@ -1927,7 +1969,8 @@ async function handleGetProcess({ req, res, opts }: RouteRequest, processByIdMat
 // Date inputs are normalized + range-validated in the store; an invalid/inverted
 // date throws -> 400. DoS caps: policyName/policyText/changeSummary 4096.
 async function handleCreatePolicy({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const policyName = body['policyName'];
   if (!isJsonString(policyName) || policyName.trim().length === 0) {
     throw new HttpError(400, 'policyName is required (non-empty string)');
@@ -1944,7 +1987,6 @@ async function handleCreatePolicy({ req, res, opts }: RouteRequest): Promise<voi
   }
   const validFrom = optionalDateField(body['validFrom'], 'validFrom');
   const validTo = optionalDateField(body['validTo'], 'validTo');
-  const ctx = await buildContextWithAuth(req, opts);
   const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
     policyName,
     policyText,
@@ -1991,7 +2033,8 @@ async function handlePoliciesAsOf({ req, res, opts, query }: RouteRequest): Prom
 
 async function handleSupersedePolicy({ req, res, opts }: RouteRequest, policySupersedeMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(policySupersedeMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const policyText = body['policyText'];
   if (!isJsonString(policyText) || policyText.trim().length === 0) {
     throw new HttpError(400, 'policyText is required (non-empty string)');
@@ -2012,7 +2055,6 @@ async function handleSupersedePolicy({ req, res, opts }: RouteRequest, policySup
     }
     changeSummary = changeRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const existing = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
   if (!existing) {
     throw new HttpError(404, `policy ${id} not found`);
@@ -2061,7 +2103,8 @@ async function handleGetPolicy({ req, res, opts }: RouteRequest, policyByIdMatch
 // not-active -> 409. Mirrors /v1/processes; "executable" = exportable
 // instruction (no code exec).
 async function handleCreateSkill({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const skillName = body['skillName'];
   if (!isJsonString(skillName) || skillName.trim().length === 0) {
     throw new HttpError(400, 'skillName is required (non-empty string)');
@@ -2087,7 +2130,6 @@ async function handleCreateSkill({ req, res, opts }: RouteRequest): Promise<void
     }
     trigger = triggerRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
     skillName,
     instructions,
@@ -2128,7 +2170,8 @@ async function handleExportSkills({ req, res, opts }: RouteRequest): Promise<voi
 
 async function handleSupersedeSkill({ req, res, opts }: RouteRequest, skillSupersedeMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(skillSupersedeMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const instructions = body['instructions'];
   if (!isJsonString(instructions) || instructions.trim().length === 0) {
     throw new HttpError(400, 'instructions are required (non-empty string)');
@@ -2158,7 +2201,6 @@ async function handleSupersedeSkill({ req, res, opts }: RouteRequest, skillSuper
     }
     changeSummary = changeRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const existing = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
   if (!existing) {
     throw new HttpError(404, `skill ${id} not found`);
@@ -2212,7 +2254,8 @@ interface ProjectBriefListOpts {
 // changeSummary 4096. The store validates + throws; the boundary maps validation
 // -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
 async function handleCreateProjectBrief({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const repo = body['repo'];
   if (!isJsonString(repo) || repo.trim().length === 0) {
     throw new HttpError(400, 'repo is required (non-empty string)');
@@ -2227,7 +2270,6 @@ async function handleCreateProjectBrief({ req, res, opts }: RouteRequest): Promi
   if (summary.length > 8192) {
     throw new HttpError(400, 'summary exceeds 8192-character cap');
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
     repo,
     summary,
@@ -2259,7 +2301,8 @@ async function handleListProjectBriefs({ req, res, opts, query }: RouteRequest):
 // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
 // so the /(\d+)/ routes would not match it, but order it first).
 async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const repo = body['repo'];
   if (!isJsonString(repo) || repo.trim().length === 0) {
     throw new HttpError(400, 'repo is required (non-empty string)');
@@ -2268,7 +2311,6 @@ async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Prom
     throw new HttpError(400, 'repo exceeds 256-character cap');
   }
   const dryRun = body['dryRun'] === true;
-  const ctx = await buildContextWithAuth(req, opts);
   if (dryRun) {
     const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
     sendJson(res, 200, { markdown, receiptCount });
@@ -2281,7 +2323,8 @@ async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Prom
 
 async function handleSupersedeProjectBrief({ req, res, opts }: RouteRequest, briefSupersedeMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(briefSupersedeMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const summary = body['summary'];
   if (!isJsonString(summary) || summary.trim().length === 0) {
     throw new HttpError(400, 'summary is required (non-empty string)');
@@ -2300,7 +2343,6 @@ async function handleSupersedeProjectBrief({ req, res, opts }: RouteRequest, bri
     }
     changeSummary = changeRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const existing = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
   if (!existing) {
     throw new HttpError(404, `project brief ${id} not found`);
@@ -2343,7 +2385,8 @@ async function handleGetProjectBrief({ req, res, opts }: RouteRequest, briefById
 // changeSummary 4096. The store validates + throws; the boundary maps validation ->
 // 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
 async function handleCreateCustomerNote({ req, res, opts }: RouteRequest): Promise<void> {
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const customer = body['customer'];
   if (!isJsonString(customer) || customer.trim().length === 0) {
     throw new HttpError(400, 'customer is required (non-empty string)');
@@ -2358,7 +2401,6 @@ async function handleCreateCustomerNote({ req, res, opts }: RouteRequest): Promi
   if (note.length > 8192) {
     throw new HttpError(400, 'note exceeds 8192-character cap');
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
     customer,
     note,
@@ -2398,7 +2440,8 @@ async function handleListCustomerNotes({ req, res, opts, query }: RouteRequest):
 
 async function handleSupersedeCustomerNote({ req, res, opts }: RouteRequest, noteSupersedeMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(noteSupersedeMatch[1], 10);
-  const body = await parseJsonBody(req);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
   const note = body['note'];
   if (!isJsonString(note) || note.trim().length === 0) {
     throw new HttpError(400, 'note is required (non-empty string)');
@@ -2417,7 +2460,6 @@ async function handleSupersedeCustomerNote({ req, res, opts }: RouteRequest, not
     }
     changeSummary = changeRaw;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const existing = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
   if (!existing) {
     throw new HttpError(404, `customer note ${id} not found`);
@@ -2550,6 +2592,7 @@ async function handleRequest(
   res: ServerResponse,
   opts: ServeOpts,
   startedAt: string,
+  streamSlots: Map<string, number>,
   limiter?: RateLimiter,
 ): Promise<void> {
   // v1.6.4: pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
@@ -2591,7 +2634,7 @@ async function handleRequest(
   }
 
   if (method === 'GET' && path === '/mcp/stream') {
-    await handleMcpStream(req, res, opts);
+    await handleMcpStream(req, res, opts, streamSlots);
     return;
   }
 
@@ -2701,10 +2744,41 @@ async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: Se
   sendJson(res, 200, mcpRes);
 }
 
-async function handleMcpStream(req: IncomingMessage, res: ServerResponse, opts: ServeOpts): Promise<void> {
+// Each open stream holds a socket and a timer, so one key (or one IP when keyless) gets a bounded number.
+const DEFAULT_MAX_STREAMS_PER_CLIENT = 8;
+
+/** The bucket a stream counts against: a hash of the bearer token, else the client IP. */
+function streamSlotKey(req: IncomingMessage): string {
+  const auth = readAuthHeader(req);
+  if (auth.kind === 'bearer') return `key:${createHash('sha256').update(auth.token).digest('hex').slice(0, 16)}`;
+  return `ip:${clientIpForRateLimit(req)}`;
+}
+
+/** Takes a stream slot or throws 429; the slot is released once, when the response closes. */
+function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map<string, number>): void {
+  const configured = parseInt(process.env.MCP_SSE_MAX_STREAMS ?? '', 10);
+  const max = configured > 0 ? configured : DEFAULT_MAX_STREAMS_PER_CLIENT;
+  const key = streamSlotKey(req);
+  const open = slots.get(key) ?? 0;
+  if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`);
+  slots.set(key, open + 1);
+  res.once('close', () => {
+    const left = (slots.get(key) ?? 1) - 1;
+    if (left > 0) slots.set(key, left);
+    else slots.delete(key);
+  });
+}
+
+async function handleMcpStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  opts: ServeOpts,
+  streamSlots: Map<string, number>,
+): Promise<void> {
   await requireAuth(req, opts);
   // An async resolver can outlive the client; 'close' has already fired, so no timer may start.
   if (req.destroyed || res.destroyed || req.socket.destroyed) return;
+  acquireStreamSlot(req, res, streamSlots);
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-cache',
@@ -2859,6 +2933,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
       : undefined;
 
+  // Open /mcp/stream count per client key, so the cap is per server rather than per process.
+  const streamSlots = new Map<string, number>();
+
   // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
   // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
   let heldDb: DatabaseSyncLike | undefined;
@@ -2881,7 +2958,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
-    withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, limiter)).catch(<E>(err: E) => {
+    withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, streamSlots, limiter)).catch(<E>(err: E) => {
       const mapped = replyFor(err);
       logRequestFailure(req, err, requestId, mapped.status);
       if (res.headersSent) {

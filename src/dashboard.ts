@@ -9,6 +9,8 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import type { AddressInfo } from 'net';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { extractPathTags } from './path-context.js';
 import { loadAllEntries, listMemoryConflicts, readEntry, writeEntry } from './store.js';
 import { listCards } from './store-cards.js';
@@ -221,7 +223,31 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
   }
 }
 
-export function serveDashboard(hippoRoot: string, port: number = 3333): http.Server {
+function sameToken(given: string | undefined, token: string): boolean {
+  if (given === undefined) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function cookieValue(header: string | undefined, name: string): string | undefined {
+  for (const part of (header ?? '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return undefined;
+}
+
+/**
+ * Serve the dashboard on 127.0.0.1. Loopback alone still lets any local process or user read every
+ * memory, so each start mints `token` (pass one only in tests): the printed URL carries it as
+ * `?token=`, and a request with it gets an HttpOnly SameSite=Strict cookie for the rest of the session.
+ */
+export function serveDashboard(
+  hippoRoot: string,
+  port: number = 3333,
+  token: string = randomBytes(32).toString('base64url'),
+): http.Server {
   const distUiDir = path.resolve(import.meta.dirname, '..', 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
 
@@ -234,6 +260,16 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): http.Ser
     }
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const pathname = url.pathname;
+
+    // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
+    const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
+    if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
+      res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
+      res.writeHead(401, { 'Content-Type': 'text/plain' });
+      res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
+      return;
+    }
 
     // --- API routes ---
     if (pathname.startsWith('/api/')) {
@@ -325,8 +361,10 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): http.Ser
   });
 
   server.listen(port, '127.0.0.1', () => {
+    // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.
+    const boundPort = (server.address() as AddressInfo).port;
     // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
-    console.log(`Hippo Dashboard running at http://localhost:${port}`);
+    console.log(`Hippo Dashboard running at http://localhost:${boundPort}/?token=${token}`);
     if (hasDistUi) console.log(`Serving React UI from ${distUiDir}`);
     console.log('Press Ctrl+C to stop.');
   });

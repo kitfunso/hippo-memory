@@ -18,13 +18,15 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 
+const DASHBOARD_TOKEN = 'test-dashboard-token';
+
 function post(
   port: number,
   path: string,
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method: 'POST' },
+      { host: '127.0.0.1', port, path, method: 'POST', headers: { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -83,7 +85,7 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
 
     // Run the dashboard under HIPPO_TENANT=tenant_b on an ephemeral port.
     process.env.HIPPO_TENANT = 'tenant_b';
-    server = serveDashboard(hippoRoot, 0);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 
     // POST /api/star/<tenant_a memory id> under HIPPO_TENANT=tenant_b → 404.

@@ -16,6 +16,8 @@ import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 
+const DASHBOARD_TOKEN = 'test-dashboard-token';
+
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 const NOW = new Date('2026-09-07T12:00:00.000Z');
 const DAY = 86_400_000;
@@ -47,7 +49,7 @@ function runCli(cwd: string, args: string[]): string {
 
 function get(port: number, path: string): Promise<string> {
   return new Promise((res, rej) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET' }, (r) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } }, (r) => {
       let body = '';
       r.setEncoding('utf8');
       r.on('data', (c) => { body += c; });
@@ -235,7 +237,7 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    server = serveDashboard(hippoRoot, 0);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 
     const memories = JSON.parse(await get(port, '/api/memories')) as Array<{

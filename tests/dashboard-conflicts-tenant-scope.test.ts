@@ -10,9 +10,11 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 
+const DASHBOARD_TOKEN = 'test-dashboard-token';
+
 function get(port: number, path: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET' }, (res) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (c) => {
@@ -68,7 +70,7 @@ describe('dashboard conflicts are tenant-scoped', () => {
     ]);
 
     process.env.HIPPO_TENANT = 'tenant_a';
-    server = serveDashboard(hippoRoot, 0);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 
     const conflicts = await get(port, '/api/conflicts');

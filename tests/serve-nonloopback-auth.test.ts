@@ -158,14 +158,14 @@ describe('clientIpForRateLimit', () => {
     expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('203.0.113.7');
   });
 
-  it('takes the first entry of a comma-joined proxy chain', () => {
+  it('takes the rightmost entry of a comma-joined proxy chain, since the client writes the left', () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '203.0.113.7, 198.51.100.2' }))).toBe('203.0.113.7');
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '203.0.113.7, 198.51.100.2' }))).toBe('198.51.100.2');
   });
 
-  it('takes the first value of a repeated header', () => {
+  it('reads a repeated header as one chain and takes its rightmost entry', () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': ['203.0.113.7', '198.51.100.2'] }))).toBe('203.0.113.7');
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': ['203.0.113.7', '198.51.100.2'] }))).toBe('198.51.100.2');
   });
 
   it('falls back to the socket address when the header is absent or empty', () => {
