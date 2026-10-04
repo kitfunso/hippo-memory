@@ -11,7 +11,7 @@ import { printError } from './output.js';
 import { requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
 
 // ---------------------------------------------------------------------------
-// Audit log subcommands (A5 stub auth — `hippo audit list`)
+// Audit log subcommands (`hippo audit list`)
 // ---------------------------------------------------------------------------
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
@@ -29,8 +29,7 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
 
   const opFlag = typeof flags['op'] === 'string' ? (flags['op'] as string) : undefined;
   if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
-    // Regenerate from Set to prevent future drift (v1.11.5: pre-v1.11.5 message
-    // was hand-maintained and had drifted — missed 'auth_revoke' and 'outcome').
+    // Built from the Set so the message cannot drift from the valid ops.
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     printError(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
     process.exit(1);
@@ -130,7 +129,7 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
 }
 
 export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
-  // `audit list` and `audit prune` -> A5 audit-log subcommands.
+  // `audit list` and `audit prune` -> audit-log subcommands.
   // Other forms (no sub, --fix) keep the existing memory-quality auditor
   // for backwards compatibility.
   if (args[0] === 'list' || args[0] === 'prune') {

@@ -26,21 +26,14 @@ export interface DeletionResult {
 /**
  * Handle GitHub `issue_comment.deleted` and `pull_request_review_comment.deleted`.
  *
- * Codex round 1 P0 #5: filter by tenant_id + kind='raw'. Multi-row archive:
+ * Filter by tenant_id + kind='raw'. Multi-row archive:
  * GitHub edits keep the same artifact_ref, so multiple active raw rows can
  * match a single deletion event. Archive ALL of them.
  *
- * Claude round 2 P0 #2 (v1.3.1 hotfix): the v1.3.0 implementation called
- * archiveRaw N times in a loop, each opening its own DB handle and SAVEPOINT.
- * The first archive's afterArchive committed the idempotency mark. If archive
- * 2..N threw, idempotency was already committed and retry returned 'duplicate'
- * with archivedCount=0 — survivors stayed searchable, leaking private bodies.
- *
- * v1.3.1 fix: ONE shared DB handle wrapping ALL archives + the idempotency
- * mark in a single outer SAVEPOINT. Any per-row failure rolls back the entire
- * batch (including idempotency), so retry re-attempts cleanly. archiveRawMemory
- * (the lower-level function from raw-archive.js) runs its own inner SAVEPOINT
- * which nests safely inside the outer one.
+ * ONE shared DB handle wraps ALL archives + the idempotency mark in a single
+ * outer SAVEPOINT: a per-row failure rolls back the whole batch, idempotency
+ * included, so a retry re-attempts cleanly instead of leaving searchable
+ * survivors. archiveRawMemory's own inner SAVEPOINT nests safely inside it.
  *
  * Tenant scope and kind='raw' filtering are load-bearing: without them a
  * deletion event from tenant A could archive tenant B's row sharing the same

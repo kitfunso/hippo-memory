@@ -231,9 +231,9 @@ function cmdInspect(hippoRoot: string, id: string): void {
 }
 
 /**
- * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger
- * (ROADMAP TE0). Tokens of memory text handed to agents per surface, blocks
- * the per-prompt hook skipped as unchanged (TE2) and the tokens that saved,
+ * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger.
+ * Tokens of memory text handed to agents per surface, blocks
+ * the per-prompt hook skipped as unchanged and the tokens that saved,
  * and the hook blocks' tokens later model calls re-read, counted when each session ends.
  * Counts are estimates (characters / 4), the same estimate every budget uses.
  */
@@ -282,7 +282,7 @@ export function cmdTokens(
   console.log("  Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.");
 }
 
-/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13). */
+/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
 export function cmdFailures(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>,
@@ -320,7 +320,7 @@ export function cmdFailures(
   for (const [label, count, note] of rows) {
     console.log(`  ${label.padEnd(13)}${String(count).padStart(6)}  ${note}`.trimEnd());
   }
-  // Counts, not a rate: a share means little without a holdout arm to compare against (CD11).
+  // Counts, not a rate: a share means little without a holdout arm to compare against.
   if (summary.rated > 0) {
     const noSession = errors - summary.rated;
     const unrated = noSession > 0 ? ` ${noSession} more had no session id.` : '';

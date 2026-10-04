@@ -1,17 +1,16 @@
 /**
- * E2 customer_note first-class object - the LAST E2 object
- * (docs/plans/2026-06-01-e2-customer-note-object.md).
+ * customer_note first-class object.
  *
  * A `customer_note` is a discrete note recorded against an account/customer entity:
  * a `note` body scoped to a `customer`, evolving via the supersede delta lifecycle.
- * Entity-scoping is a free-form `customer` column (the `entities` table is unbuilt -
- * E3.1 planned - so an FK is deferred). Unlike project_brief's one-summary-per-repo,
+ * Entity-scoping is a free-form `customer` column (the `entities` table is unbuilt,
+ * so an FK is deferred). Unlike project_brief's one-summary-per-repo,
  * a customer accrues MANY discrete notes over time, each with its own supersede chain
  * (correct a note -> a new version preserving history; close retires it).
  *
  * Reuses the project_brief/skill supersede machinery verbatim (superseded_by self-FK
  * + CAS + INSERT-preflight + server-derived version + change_summary + supersede
- * tenant-match trigger). It has NO assembler/renderer (the simplest E2 object): the
+ * tenant-match trigger). It has NO assembler/renderer (the simplest first-class object): the
  * contribution is purely the entity-scoping dimension.
  *
  * The `customer_notes` table is the source of truth (survives memory decay); the
@@ -190,7 +189,6 @@ interface NoteWrite {
 // Preflight the supersede target BEFORE inserting the new row (so the new
 // autoincrement id can never be its own supersede target); read the
 // predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
 function preflightNoteSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: SELECT projects exactly status, version; .get() returns that
   // shape for the matching row, or undefined when no note/tenant pair matches.
@@ -288,8 +286,7 @@ function writeNoteRow(db: DatabaseSyncLike, memoryId: string, w: NoteWrite): Cus
  * the new version = predecessor.version + 1 (server-derived).
  *
  * The memory mirror carries a `customer:<lc>` tag (in addition to ['customer_note']
- * + caller extraTags) so scope-aware recall treats the note as entity-local - the
- * project_brief codex-P2 recall-locality lesson applied to entity scoping. There is
+ * + caller extraTags) so scope-aware recall treats the note as entity-local. There is
  * no self-recursion path (customer_note has no receipt-query/refresh).
  */
 export function saveCustomerNote(
@@ -390,7 +387,7 @@ export function closeCustomerNote(
       // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
       // not only via an enqueued rebuild whose queue item is lost if the mirror is later
       // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
+      // object stale and could block that forget. Still enqueue when a mirror exists
       // so a concurrent rebuild re-derives consistently (harmless if it also runs).
       removeGraphEntitiesForObject(hippoRoot, tenantId, 'customer', closed.id);
       if (closed.memoryId) {

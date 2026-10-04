@@ -72,34 +72,33 @@ export interface HippoConfig {
     enabled: boolean;
     budget: number;
     /** Skip a block identical to the one already injected this session
-     *  (ROADMAP TE2). Default true. Needs a session id from the hook payload. */
+     *  Default true. Needs a session id from the hook payload. */
     skipUnchanged: boolean;
     /** Resend an unchanged block after this many consecutive skips, so long
      *  sessions still see pinned rules near the latest turn. Default 10; 0
      *  never resends an unchanged block. */
     refreshTurns: number;
-    /** Z1: gate the hook's backfill on the prompt's own content instead of
-     *  the five newest memories. Default true since 1.55.0: overlap tied but median
-     *  tokens fell 847 to 533 (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+    /** Gate the hook's backfill on the prompt's own content instead of the five
+     *  newest memories. Default true: the same overlap for fewer tokens. */
     promptRecall: boolean;
-    /** Z1: overlap metric for the prompt-recall gate. Default 'jaccard' (tuned, docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+    /** Overlap metric for the prompt-recall gate. Default 'jaccard' (tuned). */
     promptRecallMetric: PromptRecallMetric;
-    /** Z1: minimum overlap score to admit a candidate. Default 0.04 (tuned). */
+    /** Minimum overlap score to admit a candidate. Default 0.04 (tuned). */
     promptRecallThreshold: number;
-    /** Z1: minimum shared tokens to admit a candidate. Default 2. */
+    /** Minimum shared tokens to admit a candidate. Default 2. */
     promptRecallMinShared: number;
-    /** Z1: max prompt-recall entries injected per prompt. Default 5 (tuned). */
+    /** Max prompt-recall entries injected per prompt. Default 5 (tuned). */
     promptRecallMaxItems: number;
-    /** Z1: FTS candidate pool size per store before gating. Default 100. */
+    /** FTS candidate pool size per store before gating. Default 100. */
     promptRecallCandidates: number;
   };
-  /** Memory scope isolation (v39): when true (default), ambient context
+  /** Memory scope isolation: when true (default), ambient context
    *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
    *  hippo_context) excludes memories owned by OTHER projects; explicit
    *  recall is unaffected. Set false to disable the ORIGIN PARTITION only -
    *  the secret veto is unconditional for ambient surfaces and no config or
    *  flag re-includes secret-flagged rows (explicit recall still returns
-   *  them). See docs/plans/2026-07-01-memory-scope-isolation.md. */
+   *  them). */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
@@ -118,11 +117,8 @@ export interface HippoConfig {
   ambient: {
     enabled: boolean;
   };
-  /** LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass
-   *  (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen
-   *  E2 weights (src/memory-value-weights.ts) only run when explicitly
-   *  enabled; no other knobs in v1 (the rescue budget is a code constant
-   *  tied to E2 evidence, not user-tunable). */
+  /** Opt-in learned memory-value rescue veto on the sleep decay pass. Default OFF: the frozen weights
+   *  (src/memory-value-weights.ts) only run when enabled; the rescue budget is a code constant, not user-tunable. */
   memoryValue: {
     enabled: boolean;
   };
@@ -139,8 +135,8 @@ export interface HippoConfig {
      *  Default 180. 0 keeps dormant memories forever. */
     retentionDays: number;
   };
-  /** FE2: tags a memory `churn-stale` when its named file/symbol/script
-   *  changed since storage. Default OFF - FE3 measures before it flips. */
+  /** Tags a memory `churn-stale` when its named file/symbol/script
+   *  changed since storage. Default OFF until a measurement justifies the flip. */
   churnStaleness: {
     enabled: boolean;
   };
@@ -310,13 +306,8 @@ function agentMemoryTools(value: string[] | null | undefined): string[] | null {
 }
 
 function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['memoryValue']> {
-  // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
-  // silently no-ops when raw.memoryValue is a non-object (e.g. the user
-  // wrote {"memoryValue": true}) — spreading a boolean/primitive/array
-  // contributes no enumerable own properties, so `enabled` stays at the
-  // default `false` with zero indication anything was wrong. This
-  // feature's whole point is "never silently off": warn loudly and fall
-  // back to defaults instead of merging garbage.
+  // Spreading a non-object raw.memoryValue (e.g. {"memoryValue": true}) silently leaves `enabled` false;
+  // this feature must never be silently off, so warn loudly and fall back to defaults instead.
   const memoryValueRaw = raw.memoryValue;
   const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
   if (!validMemoryValueConfig) {

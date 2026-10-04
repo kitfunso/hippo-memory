@@ -342,7 +342,7 @@ export async function embedMemory(
       const identity = provider.id;
 
       if (embeddingModelRequiresReindex(hippoRoot, identity)) {
-        // L9: host-wide rebuild. The embedding index is keyed by entry.id
+        // Host-wide rebuild. The embedding index is keyed by entry.id
         // (which is tenant-scoped) but the index itself is one per hippoRoot.
         // Cross-tenant content equivalence is visible at the vector level.
         // Per-tenant indices would be a larger architecture change.
@@ -464,7 +464,7 @@ export async function embedAll(
 
   return withEmbedLock(hippoRoot, async () => {
     const identity = provider.id;
-    // L9: host-wide by design. embedAll backfills vectors for all tenants'
+    // Host-wide by design. embedAll backfills vectors for all tenants'
     // entries into the per-host embedding index. Per-tenant filtering would
     // produce partial indices and break recall.
     const entries = loadAllEntries(hippoRoot);

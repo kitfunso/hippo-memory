@@ -1,7 +1,7 @@
 /**
  * Per-key token-bucket rate limiter for inbound /v1/* requests.
  *
- * Bounds api-key-id enumeration (the v0.40 follow-up noted in auth.ts): a
+ * Bounds api-key-id enumeration: a
  * client that drains its bucket is denied until it refills. Dependency-free
  * and unit-testable in isolation via the injectable `now`.
  */

@@ -5,19 +5,17 @@ import { detectForwardClaim, type ForwardClaimMatch } from '../forward-claim-det
 import { computePredictionBaserate } from './store.js';
 
 // ---------------------------------------------------------------------------
-// J3.2 — auto-injection of reference-class baserate on recall
+// Auto-injection of reference-class baserate on recall
 // ---------------------------------------------------------------------------
 
 /**
- * J3.2 surface delivered on `RecallResult.planningFallacyHint` when an
+ * Surface delivered on `RecallResult.planningFallacyHint` when an
  * agent's recall query carries a forward-prediction phrase AND the closest
  * matching prediction class has closed historical data.
  *
  * The agent sees its track record at the moment of forecasting, anchoring
  * on the outside view (Lovallo-Kahneman 2003) rather than the inside-view
  * inside the planning fallacy.
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md.
  */
 export interface PlanningFallacyHint {
   classTag: string;
@@ -36,13 +34,11 @@ export interface PlanningFallacyHint {
 }
 
 /**
- * v1.13.4 / J3.2 follow-up — "watching" variant emitted when the
- * forward-claim regex matched but no PlanningFallacyHint baserate was
- * returned. Dogfood diary (docs/dogfood/2026-05-27-track-j-warnings.md)
- * Trial 2a confirmed the pre-v1.13.4 silent paths were the most common
- * real-world J3.2 failure mode: a natural-language query carries a
+ * "Watching" variant emitted when the forward-claim regex matched but no
+ * PlanningFallacyHint baserate was returned. Silence was the most common
+ * real-world failure: a natural-language query carries a
  * forward-claim phrase but its non-stopword tokens don't overlap with
- * any prediction class tag, so hippo silently emitted nothing despite
+ * any prediction class tag, so hippo emitted nothing despite
  * the regex match. The watching variant surfaces the detection event
  * + a one-line suggestion so the agent can either re-tag the prediction
  * or pass the suggestion through to the user.
@@ -60,7 +56,7 @@ export interface PlanningFallacyWatching {
 }
 
 /**
- * v1.13.4 / J3.2 follow-up — richer return type for
+ * Richer return type for
  * `computePlanningFallacyOutput`. Carries EITHER `hint` (baserate
  * available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
  * no queryText, no regex match, or nClosed=0 silent path). Never both.
@@ -102,8 +98,8 @@ interface ClassResolution {
  * Indexed via idx_predictions_tenant_class (db.ts:1015) → O(log n) seek
  * plus a small DISTINCT scan over the per-tenant class-tag set.
  *
- * Scope behaviour (v1 design choice, independent-review-critic round 1
- * MED): class_tag selection is TENANT-GLOBAL, NOT scope-filtered against
+ * Scope behaviour (deliberate): class_tag selection is TENANT-GLOBAL,
+ * NOT scope-filtered against
  * the recall's opts.scope. The class_tag is an aggregator label across
  * historical predictions in the class, not a per-memory scope-bound
  * property. A no-scope recall CAN surface a class_tag from a privately-
@@ -166,7 +162,7 @@ function resolveClassFromTokens(
 }
 
 /**
- * J3.2 orchestrator.
+ * Planning-fallacy orchestrator.
  *
  * Composes the forward-claim detector + class resolver + baserate compute,
  * with telemetry-grade audit emission at every decision point (success,
@@ -178,7 +174,7 @@ function resolveClassFromTokens(
  *   - no forward-claim regex match
  *   - resolved class has nClosed=0 (no historical data yet; silent)
  *
- * Returns `{ watching: ... }` on (v1.13.4 NEW — was silent null pre-1.13.4):
+ * Returns `{ watching: ... }` on:
  *   - resolver returns no class (no overlap ≥ 1; emits no_class_match audit)
  *   - resolver returns tiebreak (≥2 classes tied at best; emits tiebreak audit)
  *
@@ -188,8 +184,7 @@ function resolveClassFromTokens(
  * audit carries n_closed + mean_ratio in metadata so no telemetry is lost),
  * then emits recall_autodebias_hint audit + returns the hint.
  *
- * Latency budget (plan §Latency): ~50us regex-only on miss; ~750-850us
- * on full match+resolve+baserate path. Well under 50ms target.
+ * Latency budget: well under 50ms; a miss pays only the regex.
  */
 export function computePlanningFallacyOutput(
   hippoRoot: string,
@@ -212,19 +207,14 @@ export function computePlanningFallacyOutput(
 
   const resolution = resolveClassFromTokens(hippoRoot, tenantId, match.classQueryTokens);
   if (resolution.tiebreak) {
-    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap.
-    // v1.13.4: now ALSO returns a watching variant so the caller surface
-    // can render a "watching but no baserate (tiebreak)" line. Audit emission
-    // unchanged (the audit channel is the telemetry-grade source of truth).
+    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets the
+    // caller render "watching but no baserate (tiebreak)"; the audit channel stays the source of truth.
     return watchingWithAudit(hippoRoot, tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
   }
   if (!resolution.classTag) {
-    // Telemetry: forward-claim detected, no class scored ≥ 1.
-    // This is the channel that drives the embedding-fallback decision
-    // for J3.3 — high volume here = regex+token-overlap is missing
-    // legitimate forward-claims that have NO obvious class signal.
-    // v1.13.4: now ALSO returns a watching variant so the caller surface
-    // can render a "watching but no baserate (no class match)" line.
+    // Telemetry: forward-claim detected, no class scored ≥ 1. High volume here means regex+token-overlap
+    // misses real forward-claims with no class signal, the case for an embedding fallback.
+    // The watching variant lets the caller render "watching but no baserate (no class match)".
     return watchingWithAudit(hippoRoot, tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
   }
 

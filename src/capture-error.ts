@@ -1,6 +1,6 @@
 // `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not
 // stored, because error memories decay slowly and would crowd out real lessons; what is stored stays `observed`
-// until outcome feedback confirms it. Every failure, stored or not, goes to the failure log (ROADMAP CD13).
+// until outcome feedback confirms it. Every failure, stored or not, goes to the failure log.
 import { createMemory } from './memory.js';
 import { writeEntry } from './store/entry-writes.js';
 import { loadContentsWithTag } from './store/entry-reads.js';

@@ -16,8 +16,8 @@ import type { Context } from './types.js';
 export interface AuthCreateOpts {
   label?: string;
   /**
-   * v1.12.3: authorization role for the new key. Defaults to `'admin'` for
-   * back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also
+   * Authorization role for the new key. Defaults to `'admin'` for
+   * back-compat with keys minted before roles existed (the api_keys.role column DEFAULT also
    * resolves to 'admin' if omitted from the INSERT). Member keys are
    * 403-blocked from admin-gated routes (e.g. `POST /v1/sleep`).
    */
@@ -28,7 +28,7 @@ export interface AuthCreateResult {
   keyId: string;
   plaintext: string;
   tenantId: string;
-  /** v1.12.3: the role bound to the new key (admin | member). */
+  /** The role bound to the new key (admin | member). */
   role: 'admin' | 'member';
 }
 
@@ -54,10 +54,8 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
   try {
     const role = opts.role ?? (ctx.actor.viaAuthResolver ? 'member' : 'admin');
     const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label, role });
-    // v1.12.4: audit emit (closes the gap v1.12.3 CHANGELOG flagged as deferred).
-    // Mirrors the auth_revoke pattern at authRevoke — same try/catch so audit
-    // failure can't crash a successful mint. The plaintext is NEVER logged;
-    // metadata carries label + role + the keyId (which is non-secret).
+    // Same try/catch as authRevoke so audit failure can't crash a successful mint.
+    // The plaintext is NEVER logged; metadata carries label + role, keyId is non-secret.
     try {
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,
@@ -85,7 +83,7 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
  * Divergence from `cmdAuthList` in src/cli.ts: the CLI today returns ALL keys
  * regardless of tenant (single-tenant deployments). The API surface is tenant-
  * scoped because future multi-tenant deployments will share a hippoRoot, and
- * tenant A must not see tenant B's keys. Read-only — no audit emit (matches A5).
+ * tenant A must not see tenant B's keys. Read-only, so no audit emit.
  */
 export function authList(
   ctx: Context,
@@ -115,7 +113,7 @@ export function authListRows(
  * revoke only its own key (checked first), so no caller can probe other key_ids.
  *
  * Audit: emits 'auth_revoke' with `tenantId` set to the KEY ROW's tenant_id
- * (M1 fix from A5 review, mirrors src/cli.ts:cmdAuthRevoke). Skipped on no-op
+ * (mirrors src/cli.ts:cmdAuthRevoke). Skipped on no-op
  * revoke (already revoked) so re-running doesn't pad the audit log.
  */
 export interface AuthRevokeResult {
@@ -153,7 +151,7 @@ export function authRevoke(
     if (!alreadyRevoked) {
       try {
         appendAuditEvent(db, {
-          tenantId: row.tenantId, // M1: KEY's tenant, not ctx.tenantId.
+          tenantId: row.tenantId, // KEY's tenant, not ctx.tenantId.
           actor: ctx.actor.subject,
           op: 'auth_revoke',
           targetId: keyId,
@@ -191,7 +189,7 @@ export interface AuthGrantResult {
   ok: true;
 }
 
-/** Grant `keyId` read access to one restricted `scope` (ROADMAP Part VIII EI2). Admin only. */
+/** Grant `keyId` read access to one restricted `scope`. Admin only. */
 export function authGrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
   return changeScopeGrant(ctx, keyId, scope, 'auth_grant');
 }

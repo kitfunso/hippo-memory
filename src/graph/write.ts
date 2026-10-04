@@ -1,6 +1,5 @@
 /**
- * E3.3 graph layer over consolidated state - the graph-on-consolidated guard.
- * (docs/plans/2026-06-01-e3-graph-guard.md).
+ * Graph layer over consolidated state - the graph-on-consolidated guard.
  *
  * A graph of canonical `entities` (person/project/customer/system/policy/decision) and
  * `relations` (owns/supersedes/depends-on/blocked-by/references) sits ON TOP OF
@@ -11,11 +10,6 @@
  * actual kind and enforce tenant-match - relations also reject cross-tenant edges), so
  * the forbidden state is unrepresentable regardless of code path. These helpers
  * surface the same guard as clear throws BEFORE hitting the trigger backstop.
- *
- * Scope (E3.3 first slice): the substrate + the guard + a thin insert/load/enqueue
- * API. The `graph_extraction_queue` is the interface the deferred `hippo sleep`
- * enqueue-hook + E3.1 entity extraction will call. No operator surface (CLI/HTTP/SDK)
- * until E3.2 multi-hop recall.
  */
 
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -24,7 +18,7 @@ import { log } from '../log.js';
 import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts } from './types.js';
 import { type EntityRow, type RelationRow, type QueueRow, rowToEntity, rowToRelation, rowToQueueItem, ENTITY_COLS, RELATION_COLS, QUEUE_COLS, type DbLike } from './rows.js';
 
-/** source_object_type -> its E2 table, for the object-path validation 4-way branch.
+/** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
 interface SourceObjectTableMap {
   decision: string;
@@ -45,8 +39,8 @@ const SOURCE_OBJECT_TABLE: SourceObjectTableMap = {
  * trigger is the unbypassable backstop). Two paths:
  *  - MEMORY path (`memoryId` not null): the memory must exist, be same-tenant, and be
  *    consolidated (distilled/superseded); raw is rejected. Returns its kind.
- *  - OBJECT path (`memoryId` null, `sourceObject` set): the E2 row must exist, be
- *    same-tenant, and have status active|superseded (4-way per E2 table). E2 objects are
+ *  - OBJECT path (`memoryId` null, `sourceObject` set): the object row must exist, be
+ *    same-tenant, and have status active|superseded (4-way per object table). Objects are
  *    consolidated BY CONSTRUCTION, so this returns 'distilled'.
  * All-null (no memory AND no source object) is rejected.
  */
@@ -71,9 +65,9 @@ function resolveConsolidatedSource(
       | undefined;
     if (!row) {
       // Stale / forgotten mirror. Tolerate it IFF a valid source object provides provenance:
-      // graph-extract reads E2 rows then inserts, and a mirror forgotten/pruned in that window
-      // must NOT roll back the whole tenant rebuild - the active E2 object survives mirror loss
-      // (v38 contract; codex round-4 race). Anchor to the object; drop the dead memory pointer.
+      // graph-extract reads object rows then inserts, and a mirror forgotten/pruned in that window
+      // must NOT roll back the whole tenant rebuild - the active object survives mirror loss.
+      // Anchor to the object; drop the dead memory pointer.
       if (sourceObject == null) {
         throw new Error(`${label}: source memory ${memoryId} not found`);
       }
@@ -89,8 +83,8 @@ function resolveConsolidatedSource(
     }
   }
 
-  // Validate the object pointer WHENEVER it is provided - not only when memory is null
-  // (codex review): a dual-set row whose object is wrong/closed/cross-tenant would become
+  // Validate the object pointer WHENEVER it is provided, not only when memory is null:
+  // a dual-set row whose object is wrong/closed/cross-tenant would become
   // the active provenance after ON DELETE SET NULL and could then block the memory delete.
   if (sourceObject != null) {
     const table = SOURCE_OBJECT_TABLE[sourceObject.type];
@@ -113,7 +107,7 @@ function resolveConsolidatedSource(
   }
 
   // source_kind is the memory's kind when a memory is present, else 'distilled' for an
-  // object-only row (E2 objects are consolidated by construction). All-null is rejected.
+  // object-only row (objects are consolidated by construction). All-null is rejected.
   if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
   if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
   throw new Error(`${label}: graph row needs a memory or a source object`);
@@ -208,13 +202,12 @@ export function insertRelation(
 }
 
 // ---------------------------------------------------------------------------
-// Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
+// Extraction queue
 // ---------------------------------------------------------------------------
 
 /**
  * Enqueue a consolidated memory for later graph extraction. Rejects a raw / missing /
- * cross-tenant memory (the DB trigger is the backstop). The producer hook in
- * `hippo sleep` is deferred (E3.1); this is the API it will call.
+ * cross-tenant memory (the DB trigger is the backstop).
  */
 export function enqueueExtraction(
   hippoRoot: string,
@@ -286,7 +279,7 @@ export function markExtractionProcessed(
  * the number of entities deleted. The rebuild primitive for graph extraction: the
  * deterministic graph is a pure derived function of the consolidated objects, so an
  * extract clears then re-derives. Lives in graph.ts (the sole sanctioned graph
- * writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Does NOT touch
+ * writer), so the CI lint permits this `DELETE FROM entities`. Does NOT touch
  * graph_extraction_queue (the enqueue-hook's domain).
  */
 export function clearGraph(hippoRoot: string, tenantId: string, txDb?: GraphTxDb): number {
@@ -336,15 +329,15 @@ export function runGraphRebuildTransaction<T>(
 }
 
 // ---------------------------------------------------------------------------
-// E3 sleep enqueue-hook — producer helper + drain support
+// Sleep enqueue-hook: producer helper + drain support
 // ---------------------------------------------------------------------------
 
 /**
  * Fail-soft producer hook: mark a tenant dirty for graph re-extraction by
  * enqueuing its consolidated mirror memory. NEVER throws into the caller — a
- * graph-dirty signal failing must not abort a core E2 write. Graph staleness is
+ * graph-dirty signal failing must not abort a core object write. Graph staleness is
  * recoverable (next sleep / manual `graph extract`); a broken `hippo decide` is
- * not. Called POST-COMMIT from the E2 graph-source save/close mutations of
+ * not. Called POST-COMMIT from the graph-source save/close mutations of
  * decision, policy, customer_note and project_brief. A null memoryId (a
  * forgotten mirror) is a no-op.
  */
@@ -354,7 +347,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
     enqueueExtraction(hippoRoot, tenantId, memoryId);
   } catch (err) {
     // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
-    // swallowed so the already-committed E2 write is never rolled back.
+    // swallowed so the already-committed object write is never rolled back.
     log.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -362,11 +355,11 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
 }
 
 /**
- * Remove the graph rows sourced from one E2 object, by its (type, id). Used when a
+ * Remove the graph rows sourced from one first-class object, by its (type, id). Used when a
  * MIRRORLESS object is closed: it has no mirror memory, so `markGraphDirty` cannot
  * enqueue a rebuild (the queue is memory-keyed). Closing must still drop the object's
  * now-stale entity + edges from the graph, so we remove them directly here. Fail-soft
- * like `markGraphDirty` (never throws into the E2 close caller; graph staleness is
+ * like `markGraphDirty` (never throws into the object close caller; graph staleness is
  * recoverable). Deleting the entity cascade-deletes any relation where it is an endpoint
  * (relations FK entities ON DELETE CASCADE); the explicit relations DELETE also covers a
  * relation whose OWN provenance is this object (defensive — every such edge has the object

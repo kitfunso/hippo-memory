@@ -19,8 +19,8 @@ export interface AuditListOpts {
 }
 
 /**
- * Read audit events scoped to `ctx.tenantId`. Read-only — no audit emit (matches
- * A5: cmdAuditList does not record a 'recall'-style read event).
+ * Read audit events scoped to `ctx.tenantId`. Read-only, no audit emit (matches
+ * cmdAuditList, which does not record a 'recall'-style read event).
  */
 export function auditList(ctx: Context, opts: AuditListOpts): AuditEvent[] {
   const db = openHippoDb(ctx.hippoRoot);

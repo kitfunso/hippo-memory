@@ -48,8 +48,7 @@ export function forget(ctx: Context, id: string): ForgetResult {
 }
 
 // ---------------------------------------------------------------------------
-// AT1: reject / unreject / listRejections
-// docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+// reject / unreject / listRejections
 //
 // Context-based, tenant-checked, so HTTP/MCP reject-administration endpoints
 // can be added later without touching store internals (the write-path guard

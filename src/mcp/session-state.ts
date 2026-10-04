@@ -2,9 +2,8 @@
 
 import type { RingBuffer } from '../recall-history.js';
 
-// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
-// for the MCP pipeline. Separate from CLI/HTTP rings per plan v3
-// architecture (per-pipeline rings; no IPC).
+// Per-(tenant, session) recall-history rings for the MCP pipeline, kept apart from
+// the CLI/HTTP rings: each pipeline owns its rings, with no IPC between them.
 export const sessionRecallHistoryMcp = new Map<string, RingBuffer>();
 
 /** Test-only: reset the module-level recall-history Map. Call from beforeEach. */

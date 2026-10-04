@@ -4,13 +4,13 @@
  * Fuses N ranked candidate lists into a single ordering by summing
  * weighted 1/(k + rank) contributions per candidate. The constant K is
  * the canonical 60 from the original paper and the value already in use
- * across hippo's `hybridSearch` since v1.0. Do NOT tune K without an
+ * across hippo's `hybridSearch`. Do NOT tune K without an
  * explicit cross-corpus eval — it is calibrated against IR benchmarks
  * and works robustly across BM25/dense/cross-encoder rank-list shapes.
  *
  * Generic over the candidate id type so this helper can be shared by
  * `src/search.ts::hybridSearch` (T = number, idx into MemoryEntry[]) and
- * the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
+ * the LongMemEval hybrid retrieve benchmark (T = string, session_id).
  *
  * Behaviour MUST stay byte-identical to the inline implementation that
  * lived in `src/search.ts:354-374` before extraction (commit ab6c5eb).

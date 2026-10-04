@@ -19,7 +19,7 @@ const MAX_AUDIT_LIMIT = 10000;
 const MAX_AUTH_KEYS_PAGE = 1000;
 
 // POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
-// body (Task 8): the HTTP layer hands it to the client; the user-facing
+// body: the HTTP layer hands it to the client; the user-facing
 // "store this somewhere safe" warning belongs in the CLI client, not here.
 export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
@@ -28,7 +28,7 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {
     throw new HttpError(400, 'label must be a string');
   }
-  // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
+  // Optional body.role mirrors the --role CLI flag. Validated
   // strictly — anything other than 'admin'|'member' is a 400 (no silent
   // fallback to admin). authCreate refuses a member caller with a 403.
   const roleRaw = body['role'];
@@ -82,7 +82,7 @@ export async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyM
   return;
 }
 
-// GET /v1/quarantine?status=&limit=&cursor=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
+// GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no role gate itself, so it's checked here.
 export async function handleListQuarantine({ req, res, opts, query }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   if (ctx.actor.role !== 'admin') {

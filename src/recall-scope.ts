@@ -1,8 +1,7 @@
 /**
- * v1.25.0 — recall-side scope predicates, extracted from api.ts into a leaf
- * module so shared.ts (which api.ts imports) can apply the same default-deny
- * rule to searchBothHybrid's internal candidate loads without an import
- * cycle. Mirrors the v39 `project-identity.ts` precedent. api.ts imports
+ * Recall-side scope predicates, in a leaf module so shared.ts (which api.ts
+ * imports) can apply the same default-deny rule to searchBothHybrid's internal
+ * candidate loads without an import cycle. api.ts imports
  * these for its own call sites AND re-exports them for back-compat
  * (`api.isPrivateScope`, test imports of `passesScopeFilterForRecall`).
  */
@@ -42,7 +41,7 @@ export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
 assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
 /**
- * v1.2.1: source-agnostic private-scope detector. A scope string is treated
+ * Source-agnostic private-scope detector. A scope string is treated
  * as private when it has the shape `<lowercase-source>:private:<rest>`.
  *
  * Examples that match:
@@ -77,7 +76,7 @@ export function isPrivateScope(scope: string | null | undefined): boolean {
  *   `<source>:private:*` scope and on the `RECALL_DEFAULT_DENY_SCOPES`
  *   quarantine buckets. `null` and public scopes pass.
  *
- * @internal v1.7.2 — exported for test parity with
+ * @internal Exported for test parity with
  * `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification). NOT part
  * of the public API surface; not re-exported from `src/index.ts`. Subject to
  * change without semver bump.
@@ -93,7 +92,7 @@ export function passesScopeFilterForRecall(
 }
 
 /**
- * v1.25.0 — the CLI `--scope` variant of the recall filter (JS half of the
+ * The CLI `--scope` variant of the recall filter (JS half of the
  * SQL 'default-deny-or-exact' mode in loadSearchRows).
  *
  * The CLI flag predates the envelope column as a TAG-boost ranking hint
@@ -159,7 +158,7 @@ export function canReadScope(actor: ScopeActor, scope: string): boolean {
   return (actor.scopes ?? []).includes(scope);
 }
 
-/** Authorize an explicitly requested scope before any read honours it (ROADMAP Part VIII EI2: member scope grants). */
+/** Authorize an explicitly requested scope before any read honours it (member scope grants). */
 export function assertScopeRequestAllowed(actor: ScopeActor, requested: string | undefined): void {
   if (requested === undefined || requested === '') return;
   if (canReadScope(actor, requested)) return;

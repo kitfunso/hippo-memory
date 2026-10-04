@@ -23,8 +23,8 @@
  *
  * 2. Plugin install (OpenCode only). OpenCode does NOT share Claude Code's
  *    JSON-hook schema — its config has `additionalProperties: false` and no
- *    `hooks` key, so v1.10.x-v1.11.1's JSON-hook installer broke opencode
- *    launch (issue #24). Hippo now installs a TypeScript plugin at
+ *    `hooks` key, so a JSON-hook install breaks opencode launch. Hippo
+ *    installs a TypeScript plugin at
  *    `~/.config/opencode/plugins/hippo.ts` subscribing to opencode's
  *    `session.idle` (→ `hippo session-end`) and `session.created` (→
  *    `hippo last-sleep`) events. See OPENCODE_PLUGIN_SOURCE below for the
@@ -118,7 +118,7 @@ function migratePinnedInjectRecentCommands(hookArray: JsonValue | undefined): bo
 
 /**
  * Returns true when `hooks.SessionEnd` still contains either of the legacy
- * v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`)
+ * split entries (bare `hippo sleep` / `hippo capture --last-session`)
  * without the current consolidated `hippo session-end` entry.
  */
 function hasLegacySplitSessionEnd(hookArray: JsonValue | undefined): boolean {

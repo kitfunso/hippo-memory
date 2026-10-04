@@ -15,7 +15,7 @@ import { extractGraph } from '../graph-extract.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
-// sleep (extracted from cmdSleepCore Phase 2-6 — Task 4 of the api.ts refactor)
+// sleep
 // ---------------------------------------------------------------------------
 
 /**
@@ -71,22 +71,21 @@ export interface SleepResult {
   audit?: { errorsRemoved: number; warningCount: number };
   shared?: number;
   /**
-   * v1.25.0: count of memories the auto-share secret veto withheld this sleep
+   * Count of memories the auto-share secret veto withheld this sleep
    * — rows that passed every other admission gate (transfer score,
    * not-already-global) and were blocked solely by `detectSecret`. Absent
    * when 0 or when auto-share did not run.
    */
   secretSkipped?: number;
   /**
-   * AT1: count of auto-share candidates the GLOBAL store's rejection
-   * tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
-   * plan §3 — copy paths must not let one rejected candidate abort the
-   * batch). Absent when 0 or when auto-share did not run.
+   * Count of auto-share candidates the GLOBAL store's rejection
+   * tombstone refused this sleep; copy paths must not let one rejected
+   * candidate abort the batch. Absent when 0 or when auto-share did not run.
    */
   rejectedSkipped?: number;
   ambient?: AmbientState | null;
   /**
-   * E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt
+   * Graph re-extraction totals across the tenants rebuilt
    * this sleep. Absent when no tenant was dirty, and under dryRun (the graph
    * phase runs only on a real sleep). Cross-tenant aggregate, one reason
    * /v1/sleep stays loopback-only.
@@ -145,11 +144,11 @@ export async function sleep(
 ): Promise<SleepResult> {
   const dryRun = Boolean(opts.dryRun);
 
-  // v1.12.2: resolve phase dependencies, allowing test-only `__phases`
+  // Resolve phase dependencies, allowing test-only `__phases`
   // override to inject deterministic throws for mid-phase failure coverage.
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...(opts.__phases ?? {}) };
 
-  // v1.11.5: phase counters for the consolidate audit emit (in finally).
+  // Phase counters for the consolidate audit emit (in finally).
   // Accumulated as each phase completes so partial-failure paths still report
   // accurate "what got done before the failure" data.
   const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };

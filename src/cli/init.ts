@@ -254,7 +254,7 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
 /** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
-    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in (issue #133).
+    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
     if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
       console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }

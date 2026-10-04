@@ -1,6 +1,6 @@
 /**
- * E3 graph observability + visualization — READ-ONLY over the entity/relation
- * graph (docs/plans/2026-06-02-graph-observability.md).
+ * Graph observability and visualization, READ-ONLY over the entity/relation
+ * graph.
  *
  * This module only READS the graph (`loadEntities` / `loadRelations`) and renders
  * view-models; it issues no INSERT/UPDATE/DELETE, so `scripts/check-graph-writes.mjs`
@@ -60,7 +60,7 @@ export function buildGraphModel(
 
   // All reads run inside ONE read snapshot so a concurrent `graph extract` /
   // sleep-drain rebuild can't make the model mix old entity ids with new relation
-  // ids (codex P2). Every load* call below is passed the snapshot connection `db`.
+  // ids. Every load* call below is passed the snapshot connection `db`.
   return withGraphReadSnapshot(hippoRoot, (db) => {
     let nodeEntities: Entity[];
     let relations: Relation[];
@@ -72,7 +72,7 @@ export function buildGraphModel(
       // (2) A name can map to MANY entities (e.g. many notes for one customer), so
       // cap the focus matches. (3) Discover 1-hop neighbours and cap the UNION to
       // `limit` nodes. (4) Load ALL edges AMONG the union so neighbour-to-neighbour
-      // edges that don't touch the focus are included too. (codex P2s.)
+      // edges that don't touch the focus are included too.
       const focus = loadEntitiesByName(hippoRoot, tenantId, opts.entity, { limit }, db);
       if (focus.length === 0) return { nodes: [], edges: [], truncated: false };
       const focusIds = focus.map((e) => e.id);
@@ -91,12 +91,12 @@ export function buildGraphModel(
       nodeEntities = loadEntitiesByIds(hippoRoot, tenantId, unionIds, db);
       // Edges AMONG the union (BOTH endpoints in the set): includes
       // neighbour-to-neighbour edges, and the LIMIT can never drop a valid in-union
-      // edge in favour of out-of-union rows (codex P2).
+      // edge in favour of out-of-union rows.
       relations = loadRelationsAmong(hippoRoot, tenantId, unionIds, { limit }, db);
       truncated =
         focus.length >= limit ||
-        hop.length >= limit || // neighbour scan capped -> a 1-hop neighbour may be omitted (codex P2)
-        neighboursCapped || // node cap filled before all neighbours were consumed (codex P2)
+        hop.length >= limit || // neighbour scan capped -> a 1-hop neighbour may be omitted
+        neighboursCapped || // node cap filled before all neighbours were consumed
         union.size > unionIds.length ||
         relations.length >= limit;
     } else {

@@ -8,14 +8,10 @@
  * read their key from a conventional env var. The provider is selected by
  * `config.embeddings.provider` (default `'local'`).
  *
- * Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
- *   - Local provider `id` is the BARE model string. (Historical note: this
- *     originally guaranteed NO identity change on upgrade; since the
- *     embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`,
- *     `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED
- *     identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one
- *     forced reindex on their next embed-touching operation — deliberate,
- *     because their vectors were computed over path-contaminated text.)
+ * Design contract:
+ *   - Local provider `id` is the BARE model string; the STORED identity adds a `#t<N>`
+ *     embed-text-format suffix (`embeddingIndexIdentity`), so older stores reindex once:
+ *     their vectors were computed over path-contaminated text.
  *   - API provider `id` is `${kind}:${model}`; switching to/from an API embedder
  *     (or a dimension change) flips the identity and triggers the existing
  *     reindex-on-change path.

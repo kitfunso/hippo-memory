@@ -32,7 +32,7 @@ export function audit(
 }
 
 /**
- * Refusal audit for the AT1 rejection guard (plan §3). Written by the
+ * Refusal audit for the rejected-value guard. Written by the
  * transaction OWNER post-rollback — writeEntry's catch (no outer tx exists
  * there, so this lands in a fresh implicit transaction) and api.supersede's
  * catch (after its own ROLLBACK) — never inside a scope the caller's own

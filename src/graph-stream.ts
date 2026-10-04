@@ -1,9 +1,8 @@
 /**
- * L1 — graph-retrieval ranked-list stream for RRF fusion
- * (docs/plans/2026-06-02-l1-graph-rrf-stream.md).
+ * Graph-retrieval ranked-list stream for RRF fusion.
  *
- * READ-ONLY consumer of the E3 graph substrate (entities/relations built by E3.1,
- * guarded by E3.3). Produces a ranked list of `entries[]` indices ordered by graph
+ * READ-ONLY consumer of the entity/relation graph. Produces a ranked list of
+ * `entries[]` indices ordered by graph
  * proximity to the strong lexical seeds, for use as a 3rd fusion input to `rrfFuse`
  * beside BM25 + dense (src/search.ts hybridSearch, scoring:'rrf').
  *
@@ -13,10 +12,10 @@
  * themselves are never scored (they already rank via BM25/dense; scoring them would
  * double-count and dilute the orthogonal graph signal).
  *
- * Reuses the E3.2 BFS traversal shape from graph-recall.ts (loadEntitiesByMemoryId
+ * Reuses the BFS traversal shape from graph-recall.ts (loadEntitiesByMemoryId
  * seeds -> loadNeighborRelations BFS both directions, per-hop fanout cap, visited set
  * -> loadEntitiesByIds to resolve reached -> memoryId). Expands across the local AND
- * global stores. Pure reads (SELECTs only via graph.ts helpers), so the E3.3
+ * global stores. Pure reads (SELECTs only via graph.ts helpers), so the
  * check-graph-writes lint permits this module living outside graph.ts.
  *
  * The graph stream's score scale (1/lexRank seed strength x decay^hops) only sets the
@@ -88,7 +87,7 @@ export function selectGraphSeeds(
 }
 
 // Pass 1: accumulate the STRONGEST reaching-seed strength per new neighbour across ALL
-// relations at this depth BEFORE committing any to `visited` (codex P2). Marking a node
+// relations at this depth BEFORE committing any to `visited`. Marking a node
 // visited mid-loop would lock it to whichever relation SQLite returned first, so a later
 // edge from a STRONGER lexical seed would be dropped and the neighbour mis-scored. A node
 // already in `visited` was committed at an earlier (shorter) depth and keeps that score.
@@ -244,7 +243,7 @@ export function graphRankStream(
     );
   }
 
-  // Seed-exclusion guard (plan-eng-critic MED): graphScore is keyed by entryIndex
+  // Seed-exclusion guard: graphScore is keyed by entryIndex
   // GLOBALLY across roots, but each root's BFS visited-set is per-root, so a memory that
   // is a seed in one store could be reached as a neighbour in the other store and pick up
   // a score via max(). Drop every seed index so the "seeds are never scored by the graph

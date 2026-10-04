@@ -6,7 +6,7 @@ export interface VerifyOpts {
   signature: string;
   signingSecret: string;
   /**
-   * Previous signing secret during a rotation. v0.39 commit 3: deploy with
+   * Previous signing secret during a rotation. Deploy with
    * both `SLACK_SIGNING_SECRET` (new) and `SLACK_SIGNING_SECRET_PREVIOUS` (old)
    * set, verify both work, drop previous after rollover. The verifier tries
    * `signingSecret` first, then `previousSecret` if that fails.

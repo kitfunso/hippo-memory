@@ -23,7 +23,7 @@ export const AMBIENT_DRIFT_SQL =
   `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
 
 // The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient
-// injection. One connection; `recall` piggybacks the Z1 FTS query on it too.
+// injection. One connection; `recall` piggybacks the prompt-recall FTS query on it too.
 export function loadAmbientCandidates(
   hippoRoot: string,
   tenantId: string,

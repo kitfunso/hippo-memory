@@ -103,8 +103,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): Tas
 }
 
 /**
- * Default freshness bound for AMBIENT active-task-snapshot reads (DF1,
- * docs/plans/2026-08-23-df1-snapshot-lifecycle.md): 72h, chosen over 48h so
+ * Default freshness bound for AMBIENT active-task-snapshot reads: 72h, chosen over 48h so
  * a Friday-evening orphan still offers continuity on Monday morning.
  * Exported so callers can override via `loadFreshActiveTaskSnapshot`'s
  * `opts.maxAgeMs`; deliberately no env knob (Simplicity First).
@@ -120,7 +119,7 @@ function isNonEmptySessionId(value: string | null | undefined): value is string 
 
 /**
  * Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit
- * hook context, MCP recall block) — the never-expires fix for DF1. A
+ * hook context, MCP recall block), so snapshots expire. A
  * snapshot written by `hippo pre-compact` has no death path tied to the
  * session that owns it, so an orphaned row would otherwise inject into
  * every prompt of every later session forever. Wraps `loadActiveTaskSnapshot`
@@ -183,8 +182,8 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
 }
 
 /**
- * Close the `active` task snapshot(s) owned by `sessionId`, for the T3
- * session-end death path (DF1, docs/plans/2026-08-23-df1-snapshot-lifecycle.md).
+ * Close the `active` task snapshot(s) owned by `sessionId`, for the
+ * session-end death path.
  * Only one `active` row exists per tenant in practice (supersession happens
  * at save), but the WHERE clause scopes on `session_id` too — not just
  * `status='active' AND tenant_id=?` — so an ending session can never close a
@@ -228,7 +227,7 @@ export function appendSessionEvent(
   const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
-  // v1.2: scope is wired through. Default-deny in api.recall + cmdRecall
+  // Scope is stored as given; default-deny in api.recall + cmdRecall
   // continuity reads applies to slack:private:* and 'unknown:legacy' rows.
   try {
     const result = db.prepare(`

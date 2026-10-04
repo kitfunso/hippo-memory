@@ -122,11 +122,9 @@ const CHARGE_MAP = {
 } satisfies Record<EmotionalValence, number>;
 
 export function computeMass(strength: number, retrievalCount: number): number {
-  // EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag, particle
-  // mass must not scale with retrieval history either - query gravity ranks by
-  // mass, so prior retrieval counts would leak strengthening into the ablated
-  // arm's physics-pool rankings (codex P2). Covers both the init and refresh
-  // callers in physics-state.ts.
+  // EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag mass ignores retrieval history, since
+  // query gravity ranks by mass and prior counts would leak strengthening into the ablated arm's
+  // physics-pool rankings. Covers both the init and refresh callers in physics-state.ts.
   const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
   return Math.max(0.01, strength * (1 + 0.1 * Math.log2(effectiveCount + 1)));
 }
@@ -144,7 +142,7 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
 // ---------------------------------------------------------------------------
 
 /**
- * F1: Query gravity (retrieval-time, virtual — does not update position).
+ * Query gravity (retrieval-time, virtual — does not update position).
  * Returns scalar force magnitude for ranking.
  *
  * F_query(i) = G_Q * mass(i) * max(0, cosine(pos_i, query))^2
@@ -175,7 +173,7 @@ export function velocityAlignmentBonus(
 }
 
 /**
- * F2: Inter-memory attraction force vector (consolidation-time).
+ * Inter-memory attraction force vector (consolidation-time).
  * Attractive force from particle j on particle i.
  *
  * F_attract(i,j) = G_M * m_i * m_j * max(0, cosine(i,j))^3 * direction(j→i in embedding space)
@@ -198,7 +196,7 @@ export function attractionForce(
 }
 
 /**
- * F3: Conflict repulsion force vector (consolidation-time).
+ * Conflict repulsion force vector (consolidation-time).
  * Repulsive force pushing i away from j.
  *
  * F_repel(i,j) = K_R * m_i * m_j / max(0.01, cosine_distance(i,j))^2
@@ -218,7 +216,7 @@ export function repulsionForce(
 }
 
 /**
- * F4: Drag force vector (consolidation-time).
+ * Drag force vector (consolidation-time).
  * F_drag(i) = -drag * velocity(i) / max(1, effective_half_life(i))
  *
  * effectiveHalfLife should be passed in from the memory's current half_life_days.

@@ -1,6 +1,5 @@
 /**
- * E2 project_brief first-class object
- * (docs/plans/2026-05-30-e2-project-brief-object.md).
+ * Project_brief first-class object.
  *
  * A `project_brief` is the living, repo-scoped summary of a repository's state: a
  * `summary` body scoped to a `repo`, evolving via the supersede delta lifecycle.
@@ -222,7 +221,7 @@ interface BriefWrite {
 // Preflight the supersede target BEFORE inserting the new row (so the new
 // autoincrement id can never be its own supersede target); read the
 // predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
+// Mirrors saveSkill / saveProcess.
 function preflightBriefSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: SELECT projects exactly status, version; .get() returns that
   // shape for the matching row, or undefined when no brief/tenant pair matches.
@@ -433,7 +432,7 @@ export function closeProjectBrief(
       // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
       // not only via an enqueued rebuild whose queue item is lost if the mirror is later
       // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
+      // object stale and could block that forget. Still enqueue when a mirror exists
       // so a concurrent rebuild re-derives consistently (harmless if it also runs).
       removeGraphEntitiesForObject(hippoRoot, tenantId, 'project', closed.id);
       if (closed.memoryId) {
@@ -516,7 +515,7 @@ export function loadProjectBriefs(
 /**
  * The repo's CURRENT active brief, or null. By convention there is one active brief
  * per (tenant, repo); if an operator created more than one (the DB does not prevent
- * it, consistent with every other E2 object), the MOST-RECENT active row wins.
+ * it, consistent with every other first-class object), the MOST-RECENT active row wins.
  */
 export function loadActiveBriefForRepo(
   hippoRoot: string,
@@ -582,9 +581,9 @@ function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: 
 // NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id
 // (e.g. `sem_<hex>`), NOT chronological — within the same `created` timestamp the
 // order is stable-but-arbitrary, not insertion order. `created DESC` is the real
-// recency ordering. (plan-eng-critic 2026-05-30, med.)
+// recency ordering.
 //
-// Budget-aware assembly (codex-review-critic 2026-05-30, P2): the digest is the
+// Budget-aware assembly: the digest is the
 // brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The
 // receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the
 // store then REJECTS, breaking refresh for inputs within the advertised caps. So
@@ -704,8 +703,8 @@ export function refreshBrief(
       supersedesBriefId: active ? active.id : undefined,
       refreshReceiptCount: receiptCount,
       // Tag the refreshed brief's mirror as repo-local so path-aware recall boosts
-      // it like the manual `brief new`/`supersede` paths do (codex-review 2026-05-30,
-      // P2). Safe vs self-recursion: assembleBriefFromReceipts excludes
+      // it like the manual `brief new`/`supersede` paths do.
+      // Safe vs self-recursion: assembleBriefFromReceipts excludes
       // source='project_brief', so the brief never becomes its own receipt.
       extraTags: [`path:${normalizedRepo.toLowerCase()}`],
     },

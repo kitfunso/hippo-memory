@@ -6,7 +6,7 @@ import { type JsonValue, isJsonString } from '../../json.js';
 /**
  * Build a SlackHistoryFetcher that pages `conversations.history` over real
  * HTTP. Wraps `fetchWithRetry` so 429 and 5xx handling is automatic. The returned
- * fetcher is the one Task 13's `backfillChannel` consumes.
+ * fetcher is the one `backfillChannel` consumes.
  *
  * Slack omits `channel` from messages in the history response, so we stamp
  * the request channel id onto each parsed message — downstream ingest needs

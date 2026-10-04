@@ -1,5 +1,5 @@
 /**
- * E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
+ * Decision first-class object.
  *
  * `hippo decide` used to write only a tagged memory (tags ['decision'], source
  * 'decision') with a 90-day half-life, so an in-force decision decayed out of
@@ -16,7 +16,7 @@
  * Tenant scoping: every helper requires tenantId. BEFORE INSERT/UPDATE triggers
  * enforce decisions.tenant_id == the referenced memory's tenant_id, and a
  * superseded_by same-tenant trigger makes cross-tenant supersession
- * unrepresentable. Mirrors the v0.31 predictions pattern (src/predictions.ts).
+ * unrepresentable. Mirrors the predictions pattern (src/predictions.ts).
  *
  * Dual-write atomicity: `saveDecision` writes the memory + decisions row (and,
  * when superseding, the old row's UPDATE) inside writeEntry's SAVEPOINT
@@ -145,7 +145,7 @@ function buildDecisionMemory(hippoRoot: string, tenantId: string, opts: SaveDeci
 // supersedesDecisionId (e.g. superseding id 1 on an empty store, where the
 // INSERT below would itself become id 1), making the row supersede itself.
 // Validating first means the new row is never a candidate for its own
-// supersede UPDATE. codex review 2026-05-28 (P1).
+// supersede UPDATE.
 function preflightDecisionSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): void {
   // SAFETY: row shape matches the single `status` column named in the SELECT below.
   const pred = db.prepare(
@@ -284,7 +284,7 @@ export function saveDecision(
     },
     // Post-commit hook: mark the tenant's graph dirty AFTER the DB row commits
     // but BEFORE the markdown mirrors are written, so a mirror-write failure can
-    // never leave a committed save unflagged (codex). markGraphDirty is fail-soft.
+    // never leave a committed save unflagged. markGraphDirty is fail-soft.
     afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });
 
@@ -351,7 +351,7 @@ export function closeDecision(
       // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
       // not only via an enqueued rebuild whose queue item is lost if the mirror is later
       // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
+      // object stale and could block that forget. Still enqueue when a mirror exists
       // so a concurrent rebuild re-derives consistently (harmless if it also runs).
       removeGraphEntitiesForObject(hippoRoot, tenantId, 'decision', closed.id);
       if (closed.memoryId) {

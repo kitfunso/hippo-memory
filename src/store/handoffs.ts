@@ -13,8 +13,6 @@ import type { TaskSnapshot } from './rows.js';
 import { openStore } from './open.js';
 import { loadActiveTaskSnapshot } from './sessions.js';
 
-// W1: the nine-column SELECT was cloned four times (plan rule 8); one
-// definition so a sixth caller can't drift from the other five.
 /** Column list shared by every session_handoffs SELECT; store-cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id';
 
@@ -30,8 +28,8 @@ export function saveSessionHandoff(
   const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
-  // v1.2: scope is wired through. Read-side default-deny in api.recall +
-  // cmdRecall continuity excludes slack:private:* and 'unknown:legacy'.
+  // Scope is stored as given; read-side default-deny in api.recall + cmdRecall
+  // continuity excludes slack:private:* and 'unknown:legacy'.
   try {
     const result = db.prepare(`
       INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id)
@@ -93,7 +91,7 @@ export function loadLatestHandoff(
       params.push(opts.excludeSessionId);
     }
     if (opts.unfinishedOnly) {
-      // codex P2: restrict to each session's newest revision first — stampHandoffOutcome
+      // Restrict to each session's newest revision first: stampHandoffOutcome
       // only stamps the newest row, so an older null-outcome revision must not resurrect.
       conditions.push(`id IN (SELECT MAX(id) FROM session_handoffs WHERE tenant_id = ? GROUP BY session_id)`);
       params.push(tenantId);
@@ -104,7 +102,7 @@ export function loadLatestHandoff(
       params.push(new Date(Date.now() - opts.maxAgeMs).toISOString());
     }
     if (opts.scopeFilter === 'default-deny') {
-      // codex P2: admit scope before LIMIT 1, else a newer denied row hides an older eligible one.
+      // Admit scope before LIMIT 1, else a newer denied row hides an older eligible one.
       const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
       conditions.push(`(scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%'))`);
       params.push(...RECALL_DEFAULT_DENY_SCOPES);
@@ -166,7 +164,7 @@ export function stampHandoffOutcome(hippoRoot: string, tenantId: string, session
   }
 }
 
-/** Auto-write a handoff at session-end (DF1 T3) from the session's active snapshot, else from `derived`, its transcript state.
+/** Auto-write a handoff at session-end from the session's active snapshot, else from `derived`, its transcript state.
  * @param evidence best-effort git state; outcome comes from the newest session_complete event.
  * @returns null when neither source is the session's, a newer handoff covers the snapshot, or the session's latest handoff was not read off its transcript. */
 export function writeSessionEndHandoff(
@@ -206,9 +204,8 @@ export function writeSessionEndHandoff(
     closeHippoDb(db);
   }
 
-  // codex P2: same-task refresh carries forward envelope fields nobody cleared,
-  // rather than dropping them when the snapshot rewrite has no opinion on them.
-  // codex P1: a scope mismatch must not leak private metadata into an unscoped envelope.
+  // A same-task refresh carries forward envelope fields nobody cleared; a scope
+  // mismatch must not leak private metadata into an unscoped envelope.
   const carryForward = existing != null && existing.taskId === snapshot.task
     && (existing.scope ?? null) === (snapshot.scope ?? null);
 

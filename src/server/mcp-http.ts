@@ -30,7 +30,7 @@ function buildMcpClientKey(req: IncomingMessage): string {
   return `http:${tokenHash}:${addr}`;
 }
 
-// ── MCP-over-HTTP/SSE transport (Task 11) ──
+// ── MCP-over-HTTP/SSE transport ──
 //
 // Two routes implement an MCP HTTP transport alongside the stdio one. Both
 // dispatch to the same `handleMcpRequest` as the stdio loop in src/mcp/server.ts.
@@ -75,7 +75,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
     mcpRes = await handleMcpRequest(rpcReq, {
       hippoRoot: ctx.hippoRoot,
       tenantId: ctx.tenantId,
-      // v1.12.0: McpContext.actor stays string; extract subject at the boundary.
+      // McpContext.actor stays string; extract subject at the boundary.
       actor: ctx.actor.subject,
       // The caller's real role: MCP tools must not run a member key as admin.
       role: ctx.actor.role,
@@ -139,7 +139,7 @@ export async function handleMcpStream(
   // waiting for the first keepalive interval.
   res.write(': ping\n\n');
 
-  // v0.39 SSE hardening:
+  // SSE hardening:
   //   - Heartbeat re-validates the bearer (default 60s). If the key was
   //     revoked or rotated, close the stream with reason='auth_revoked'.
   //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close

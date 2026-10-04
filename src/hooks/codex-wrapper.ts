@@ -356,7 +356,7 @@ export function isCodexWrapperInstalled(): boolean {
  * opt-in record. Never performs a first install. Replacing another vendor's
  * binary must stay behind the explicit `hippo hook install codex` command;
  * doing it from postinstall or routine commands is a consent violation and
- * reads as binary hijacking to security scanners (issue #133).
+ * reads as binary hijacking to security scanners.
  */
 export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
   if (readCodexWrapperMetadata() === null) {

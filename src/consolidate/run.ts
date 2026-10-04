@@ -17,14 +17,13 @@ export interface ConsolidationResult {
   semanticCreated: number;
   replayed: number;
   promotedTraces: number;
-  /** T7: sessions skipped because their events span two derivation scopes. */
+  /** Sessions skipped because their events span two derivation scopes. */
   tracesSkippedMixedScope: number;
   extractionCandidates: number;
   extracted: number;
   dagCandidateClusters: number;
   dagSummariesCreated: number;
-  // v0.30 / E3 — rebuild phase observability. Failed and zero-child counts
-  // are first-class so downstream callers (CLI eval, HTTP /v1/sleep response)
+  // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep)
   // see structured data, not a parsed details string.
   summariesRebuilt: number;
   summariesRebuildFailed: number;
@@ -34,7 +33,6 @@ export interface ConsolidationResult {
   // still cleared - counters only; see applyRebuildResult's return contract).
   summariesRebuildRefused: number;
   summariesRebuildCapped: boolean;
-  // v0.30 / E5 — L3 entity-profile build count
   entityProfilesCreated: number;
   dryRun: boolean;
   details: string[];
@@ -55,28 +53,9 @@ interface LazyDb {
   close: () => void;
 }
 
-// AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-// covers BOTH the auto-promote pass (1.4) and the merge
-// pass (3) — both build deterministic content that
-// batchWriteAndDelete writes through the guard's bypass, so both need a
-// producer-side tombstone check before pushing to pendingWrites.
-//
-// T3 fix (2026-08-15 hardening pass, perf hygiene): memoized lazy getter,
-// not an eager open. The handle only serves these two tombstone checks —
-// a sleep with zero promotable sessions and zero merge clusters never
-// reaches either use site, so opening it unconditionally on every
-// non-dry-run sleep paid a db-open cost for nothing. dryRun still never
-// opens (getConsolidateDb short-circuits before touching the handle).
-// consolidateDbOpened (not just a truthy handle check) is the
-// single source of truth for "was this ever opened", so the finally
-// closes it exactly once and never double-opens.
-//
-// AT1 P2 fix (codex, handle-leak restructure): the getter's lifetime must
-// start IMMEDIATELY before the try whose finally closes it, covering every
-// phase that can touch it — not just the merge pass. An exception thrown by
-// auto-promote (1.4), replay (1.5), batch extraction (1.6), the DAG
-// passes (1.7-1.9), or physics (2) would otherwise propagate past an open handle
-// with nothing to close it.
+// Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both
+// need this tombstone check. Lazy so a sleep reaching neither never opens it; call it IMMEDIATELY
+// before the try whose finally closes it, so a throw in any phase cannot leak the handle.
 export function lazyConsolidateDb(hippoRoot: string, dryRun: boolean): LazyDb {
   let consolidateDbHandle: DatabaseSyncLike | null = null;
   let consolidateDbOpened = false;

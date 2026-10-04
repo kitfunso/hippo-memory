@@ -115,7 +115,7 @@ export function partitionLessons(lessons: string[]): { kept: string[]; dropped: 
  * Check if a substantially similar memory already exists.
  * Returns true if overlap > threshold (default 0.7).
  *
- * L9: `tenantId` is opt-in. Only takes effect when the first argument is a
+ * `tenantId` is opt-in. Only takes effect when the first argument is a
  * root string (string-overload path). When the first argument is a
  * pre-loaded MemoryEntry[], the caller has already scoped — tenantId is
  * ignored on that path.

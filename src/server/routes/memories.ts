@@ -44,7 +44,7 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
 export async function handleGetGraph({ req, res, opts, query }: RouteRequest): Promise<void> {
   const entityRaw = query.get('entity');
   // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
-  // long decision/policy name remains focusable over HTTP (codex P2).
+  // long decision/policy name remains focusable over HTTP.
   if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
     throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
   }
@@ -124,7 +124,7 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
     }
-    // v1.11.5: DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
+    // DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
     // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
     // to sub-second wall time on SQLite hot path. Cap BEFORE buildContextWithAuth
     // so attack traffic doesn't pay the api-key lookup cost.
@@ -152,8 +152,7 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
 // Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
 // on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
 // The loopback-only guard is the trust boundary today. Future non-loopback
-// serving must also zero the cross-tenant counters for other tenants
-// (D1 in docs/decisions/2026-05-24-blocked-items.md).
+// serving must also zero the cross-tenant counters for other tenants.
 export async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
   // Defensive per-request loopback guard. Uses the canonical isLoopback()
   // helper above so any future extension (additional mapped/IPv6 forms,
@@ -162,7 +161,7 @@ export async function handleSleep({ req, res, opts }: RouteRequest): Promise<voi
   if (!isLoopback(req.socket.remoteAddress)) {
     throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
   }
-  // v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today
+  // Admin-role gate. Forward-defensive: exists today
   // under loopback-only enforcement (loopback fallback is admin by default;
   // any Bearer-authed caller now carries an explicit role from the api_keys
   // row). When non-loopback serving lands, this gate is the actual auth
@@ -179,7 +178,7 @@ export async function handleSleep({ req, res, opts }: RouteRequest): Promise<voi
   if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
     throw new HttpError(400, 'no_share must be a boolean');
   }
-  // v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
+  // sleepCtx already built above for the admin-role gate; reuse.
   const result = await sleep(sleepCtx, {
     dryRun: dryRunRaw === true,
     noShare: noShareRaw === true,

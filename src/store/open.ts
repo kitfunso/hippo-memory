@@ -19,13 +19,8 @@ export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectI
 }
 
 export function isInitialized(hippoRoot: string): boolean {
-  // A bare .hippo directory is not enough — autoInstallHooks /
-  // setupDailySchedule can create it without ever calling initStore,
-  // leaving a partial directory (integrations/, logs/, runs/) with no
-  // hippo.db. Returning true in that state caused `hippo init` to skip
-  // initStore and `hippo recall` to silently fall back to an empty store
-  // (incident 2026-04-26: ingest_direct.py against a bare .hippo).
-  // Treat the store as initialized only if hippo.db actually exists.
+  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting
+  // that as initialized makes `hippo init` skip initStore, so only hippo.db counts.
   return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 
@@ -78,15 +73,8 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
   const memoryCount = Number(countRow?.count ?? 0);
   if (memoryCount > 0) return false;
-  // AT1 P2 fix: memoryCount alone is not a reliable "already bootstrapped"
-  // signal once the rejection guard exists. If EVERY legacy mirror row is
-  // rejected, memories stays at 0 rows even after a successful bootstrap
-  // pass, so the memoryCount>0 gate above never trips — every subsequent
-  // initStore() call would re-run this whole function: re-scan the legacy
-  // mirrors, re-attempt (and re-refuse, re-auditing) every row, and
-  // re-INSERT the legacy consolidation_runs rows with no dedup, duplicating
-  // them on each open. A dedicated meta flag marks bootstrap as
-  // attempted-and-settled regardless of how many rows actually landed.
+  // memoryCount misses an all-rejected bootstrap (memories stays empty), which would re-run the
+  // import on every open and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
 
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
@@ -97,8 +85,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
     importLegacyEntries(db, hippoRoot, legacyEntries);
     importLegacyIndexAndStats(db, hippoRoot);
 
-    // AT1 P2 fix: stamp completion regardless of how many rows actually
-    // landed (all-rejected included) — see the gate comment above.
+    // Stamp completion even when every row was rejected; see the gate above.
     setMeta(db, 'legacy_bootstrap_completed', '1');
     db.exec('COMMIT');
   } catch (error) {
@@ -109,14 +96,8 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
 }
 
 function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntries: MemoryEntry[]): void {
-  // AT1 (plan §3, round-3 redesign): run the guard LIVE per row rather
-  // than bypassing it. bootstrapLegacyStore is exactly the channel through
-  // which a stale/never-purged markdown mirror could resurrect a rejected
-  // value; a skip-and-count here closes that structurally, independent of
-  // mirror state. The refusal audit is written INLINE inside this
-  // still-open loop transaction (plain audit() — nothing is rolled back
-  // on a per-row skip, so the post-rollback auditRejectionRefusal helper
-  // is the wrong tool here).
+  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit()
+  // inline, because nothing rolls back on a per-row skip.
   let rejectedCount = 0;
   for (const entry of legacyEntries) {
     // v39: legacy markdown carries no origin_project; stamp from the store
@@ -141,11 +122,8 @@ function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntr
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
   const legacyIndex = loadLegacyIndexFile(hippoRoot);
   setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
-  // LC1: legacy index.json predates last_trace_id, so this is '' for every
-  // pre-v40 store — harmless, matches the ensureMetaDefaults default.
-  // Coerce like its neighbors below coerce theirs (independent-review-critic
-  // LOW finding): accept only a clean digit string, else fall back to ''
-  // rather than trusting whatever a hand-edited/corrupt index.json carries.
+  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit
+  // string rather than trusting a hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
   setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 

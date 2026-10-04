@@ -46,10 +46,9 @@ export interface CaptureOptions {
   dryRun: boolean;
   global: boolean;
   /**
-   * L9: tenant scope for the dedup read in `cmdCaptureCore`. When provided
+   * Tenant scope for the dedup read in `cmdCaptureCore`. When provided
    * AND `global` is false, the dedup check only considers this tenant's
-   * existing memories. Undefined preserves pre-1.12.1 host-wide dedup
-   * behaviour. Ignored when `global: true` (global captures are host-wide).
+   * existing memories. Undefined means host-wide dedup. Ignored when `global: true` (global captures are host-wide).
    */
   tenantId?: string;
   originProject?: string;
@@ -171,7 +170,7 @@ function cmdCaptureCore(
     return;
   }
 
-  // Dedup only against rows this capture's reader sees: another tenant's rows (L9), or another
+  // Dedup only against rows this capture's reader sees: another tenant's rows, or another
   // project's, are hidden from it, so they must not stop its own copy.
   const stored = loadAllEntries(targetRoot, useGlobal ? undefined : options.tenantId);
   const origin = options.originProject;
@@ -247,13 +246,8 @@ function captureExtractedItems(
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
 
-  // AT1 P2 fix (dry-run parity, docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-  // dry-run used to skip the guarded write branch ENTIRELY, so a tombstoned
-  // extraction printed as `[capture]` and counted toward `captured` — the
-  // preview lied about what a real run would do. Mirrors importers.ts's
-  // importEntries dry-run probe (commit 6146e82): open a read-only handle
-  // once, run the same checkRejectionGuard the real write path uses via
-  // writeEntry, never write anything.
+  // Dry run probes the same checkRejectionGuard the real write uses, on a read-only handle,
+  // so a tombstoned item previews as rejected rather than captured.
   const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
   const writeDb = options.dryRun ? null : openStore(targetRoot);
   try {
@@ -277,16 +271,8 @@ function captureExtractedItems(
 
 function captureEntry(item: ExtractedItem, options: CaptureOptions, baseHalfLifeDays: number): MemoryEntry {
   const useGlobal = options.global;
-  // A3: kind defaults to 'distilled'. capture.ts extracts curated items from
-  // session output (not raw transcript chunks), so distilled is correct. If a
-  // future variant captures full raw session text, it MUST set kind: 'raw'
-  // and route deletions through archiveRawMemory(). See MEMORY_ENVELOPE.md.
-  // L9: the dedup read above is scoped by options.tenantId — the WRITE
-  // must match, or scoped-dedup-passes-then-default-tenant-write breaks
-  // the per-tenant contract. Mirror the dedup-read guard: when
-  // global: true, the global store is host-wide and tenant is irrelevant
-  // (createMemory's default 'default' applies). When global: false,
-  // options.tenantId scopes the write to the same tenant as the dedup.
+  // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
+  // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
   const created = createMemory(item.content, {
     layer: Layer.Episodic,
     tags: item.tags,
@@ -323,8 +309,7 @@ function captureOne(ctx: CaptureWriteContext, item: ExtractedItem, entry: Memory
     }
     console.log(`  [capture] (${item.category}) ${item.content}`);
   } else if (writeDb !== null) {
-    // AT1 (plan §3 containment): one rejected item must not abort the
-    // rest of this capture's items.
+    // One rejected item must not abort the rest of this capture's items.
     const stamped = stampOriginProject(targetRoot, entry);
     const outcome = gatedWrite(writeDb, targetRoot, stamped);
     if (outcome === 'skipped:rejected') return 'rejected';

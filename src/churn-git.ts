@@ -1,4 +1,4 @@
-/** Git subprocess helpers for FE2 churn-staleness (src/invalidation.ts). */
+/** Git subprocess helpers for churn-staleness (src/invalidation.ts). */
 
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';

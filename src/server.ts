@@ -70,7 +70,6 @@ function isAddressInfo(
 // HTTP /health response uses this; reading package.json synchronously here
 // would couple the daemon to its on-disk install path, which we want to
 // avoid for tests that mkdtemp a hippoRoot.
-// v1.3.1: source from src/version.ts so /health no longer reports stale 0.39.0.
 const VERSION = PACKAGE_VERSION;
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -177,7 +176,7 @@ async function handleRequest(
   streamSlots: Map<string, number>,
   limiter?: RateLimiter,
 ): Promise<void> {
-  // v1.6.4: pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
+  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
   // Node's URL parser collapses them and they slip past the route table.
   rejectEncodedSlash(req.url ?? '/');
 
@@ -253,7 +252,7 @@ function assertBindable(host: string): void {
 }
 
 async function assertNoLiveServer(hippoRoot: string): Promise<void> {
-  // H3: refuse to start if a live hippo server already serves this hippoRoot.
+  // Refuse to start if a live hippo server already serves this hippoRoot.
   // detectServer probes the recorded /health — a stale pidfile is unlinked and
   // ignored, but a live peer means a concurrent `hippo serve` would race for
   // the port and clobber the pidfile.
@@ -267,7 +266,7 @@ async function assertNoLiveServer(hippoRoot: string): Promise<void> {
 }
 
 function bootRateLimiter(): RateLimiter | undefined {
-  // E3: per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
+  // Per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
   // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
   // set the rate before serve(). A non-positive or non-finite value disables
   // limiting (the opt-out knob).
@@ -323,25 +322,13 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     return;
   }
   sendError(res, mapped.status, mapped.message);
-  // M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
+  // readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
   if (err instanceof BodyTooLargeError) req.destroy();
 }
 
 function setKeepAliveTimeouts(server: Server): void {
-  // T3b capture (v1.26.2): tests/server-concurrency.test.ts's ECONNRESET flake
-  // traced to a chunk-boundary reuse race — a kept-alive socket idled through
-  // a prior response chunk gets closed by the server's default 5s
-  // keepAliveTimeout just as a client reuses it for the next request. Raising
-  // both timeouts shrinks that idle-close/reuse window ~13x. Keep
-  // headersTimeout ABOVE the EFFECTIVE keep-alive expiry, which is
-  // keepAliveTimeout + keepAliveTimeoutBuffer (the buffer defaults to
-  // 1,000ms on Node 22.19+/24.6+ — verified 1,000 on node 24.13, so the
-  // effective expiry here is 66s; codex review caught that a 66s
-  // headersTimeout would sit exactly ON that boundary and recreate the
-  // race). The headers timer also runs while a kept-alive socket waits for
-  // its next request, so a value at or below the effective expiry would
-  // itself close idle reused sockets, and Node would not flag it (no error
-  // or warning at listen time — verified empirically).
+  // The default 5s keepAliveTimeout closes idle sockets just as clients reuse them (ECONNRESET).
+  // headersTimeout must stay ABOVE keepAliveTimeout + keepAliveTimeoutBuffer (1s), or it closes idle reused sockets itself.
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 70_000;
 }
@@ -383,8 +370,8 @@ function installSignalHandlers(stop: () => Promise<void>): void {
 /**
  * Boot the HTTP daemon on host:port and write the pidfile under hippoRoot.
  *
- * Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless
- * HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth /
+ * Refuses non-loopback hosts at boot unless
+ * HIPPO_REQUIRE_AUTH=1 is set. The auth middleware (buildContextWithAuth /
  * requireAuth) has shipped and every route checks it except GET /health
  * (public by design for platform health checks) and the two connector
  * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
@@ -454,7 +441,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     stopping = true;
     // Remove the pidfile only if it still names this server. A newer server
     // may have started on this hippoRoot and rewritten the pidfile; an
-    // unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
+    // unconditional unlink here would orphan it.
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
     store.release();

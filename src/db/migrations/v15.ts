@@ -3,8 +3,7 @@ import type { Migration } from './types.js';
 export const v15: Migration = {
     version: 15,
     up: (db) => {
-      // A3 hardening (post-review): close the NULL-kind bypass and add raw_archive
-      // dedup safety. Both findings landed in /review on commits 41b1f4d..6456e7d.
+      // Close the NULL-kind bypass and add raw_archive dedup safety.
       //
       // (1) Original v14 triggers used `WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN (...)`.
       //     A direct INSERT/UPDATE setting kind=NULL bypassed the CHECK substitute. Replace

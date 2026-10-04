@@ -39,10 +39,8 @@ export async function consolidate(
   const result = newConsolidationResult(dryRun);
   const halfLife = migrateHalfLives(hippoRoot, dryRun, result);
 
-  // L9: host-wide by design. Consolidation runs across all tenants in one
-  // pass — per-tenant filtering would create N consolidation runs per host
-  // with no cross-tenant dedup. The api.sleep audit row tags this with the
-  // admin synthetic actor; see api.ts:2050 for the rationale.
+  // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
+  // The api.sleep audit row tags this with the admin synthetic actor.
   const all = loadAllEntries(hippoRoot);
   if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
   const backingObjects = memoriesBackingObjects(hippoRoot);
@@ -165,24 +163,14 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
   if (decay.rescuedEntries.length > 0) auditRescues(run, decay);
 }
 
-// One audit row per rescue (attributability, D1). Written here, AFTER
-// batchWriteAndDelete has committed this cycle's writes/deletes
-// (and after conflict detection + run logging), not inline in the decay
-// pass — same durability posture as api.ts's top-level 'consolidate'
-// summary audit row (written only once the whole sleep has completed).
-// Writing it earlier would assert rescues for a cycle whose effects
-// never landed if a later phase threw. Real writes only — dry-run
-// previews the decision (details line above) but persists nothing.
+// One audit row per rescue, written only after batchWriteAndDelete commits: writing earlier
+// would assert rescues for a cycle whose effects never landed if a later phase threw.
 function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): void {
   const { result } = run;
   try {
     const auditDb = openHippoDb(run.hippoRoot);
     try {
-      // Review-round F5: per-row try/catch, not one try/catch around the
-      // whole loop — a single failed appendAuditEvent must not silently
-      // drop every remaining row. Mirrors the physics pass's
-      // skipped-warning precedent: count losses, keep
-      // the overall fail-soft posture, tell the operator via details.
+      // Per-row try/catch: one failed appendAuditEvent must not silently drop every remaining row.
       let auditFailures = 0;
       for (const entry of rescuedEntries) {
         try {

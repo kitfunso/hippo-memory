@@ -1,6 +1,5 @@
 /**
- * AT1 rejected-value tombstone — shared reject/unreject/list flow.
- * docs/plans/2026-08-15-at1-rejected-value-tombstone.md (T2, plan §4).
+ * Rejected-value tombstone: shared reject/unreject/list flow.
  *
  * The CLI (`hippo reject`/`rejections`/`unreject`) and the Context-based
  * `api.reject`/`api.unreject`/`api.listRejections` surfaces both need the
@@ -47,12 +46,12 @@ export interface RejectFlowOpts {
 
 export interface RejectFlowResult {
   digest: string;
-  /** The rejected content, for the CLI's at-reject-time echo (plan §2: the
+  /** The rejected content, for the CLI's at-reject-time echo (the
    *  tombstone itself stores no content — this is the only place it's seen
    *  again after this call returns). */
   content: string;
   /** Every row removed this call, live or dormant: all whose normalized digest matched (not just the id
-   *  passed, per the K1/R7 duplicate lesson), and each sleep-merged row holding the value, whose other
+   *  passed, since duplicates share a digest), and each sleep-merged row holding the value, whose other
    *  texts move to a new row: listed in successorIds when it was live, dormantSuccessorIds when dormant. */
   removedIds: string[];
   /** Subset of removedIds that were kind='raw' (archived, not deleted). */
@@ -69,10 +68,8 @@ function assertRejectOpts(opts: RejectFlowOpts): void {
     throw new Error('reject requires either a memory id or --value.');
   }
   if (opts.memoryId !== undefined && opts.value !== undefined) {
-    // P2 fix: the CLI's flag parser already refuses both forms together;
-    // the shared flow itself didn't enforce it, so a direct api caller
-    // passing both silently got the memoryId path with `value` ignored —
-    // surprising for a caller who thought they were rejecting `value`.
+    // Enforced here, not only in the CLI parser, so a direct api caller passing both
+    // is refused instead of silently getting the memoryId path with `value` ignored.
     throw new Error('reject accepts either a memory id or --value, not both.');
   }
   if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
@@ -121,8 +118,7 @@ function removeLiveRows(db: DatabaseSyncLike, opts: RejectFlowOpts, holdsValue: 
       removedRawIds.push(row.id);
     } else {
       // suppressForgetAudit: the aggregate reject_value row below is the
-      // trail for these removals, not N individual forget rows (plan
-      // §4, round-3 advisory 2 — mirrors api.ts:1873-1877).
+      // trail for these removals, not N individual forget rows.
       deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
     }
     removedIds.push(row.id);
@@ -179,10 +175,8 @@ function auditRejectValue(db: DatabaseSyncLike, opts: RejectFlowOpts, digest: st
 // raw ids.
 function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: RejectRemoval): void {
   for (const id of removal.removedIds) {
-    // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
-    // which cleanupArchivedMirrors' reaper never scans — reports the
-    // EXPLICIT leftover path(s) instead of the false "will retry via
-    // reaper" claim. See its own doc comment (store.ts, near
+    // purgeMirrorBestEffort retries once, then for non-raw ids (which the
+    // reaper never scans) reports the EXPLICIT leftover path(s). See its own doc comment (store.ts, near
     // removeEntryMirrors) for the full rationale.
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, removal.removedRawIds.includes(id), 'hippo reject');
     if (mirrorOk && removal.removedRawIds.includes(id)) {
@@ -269,11 +263,8 @@ export function unrejectValue(
   digestOrPrefix: string,
   actor: string,
 ): UnrejectOutcome {
-  // P2 fix: an empty/blank prefix startsWith-matches EVERY digest (every
-  // string starts with ''), which would previously fall through to the
-  // ambiguous-candidates branch and list the whole tombstone set instead of
-  // failing loud on the actually-invalid input. Reject before the DB round
-  // trip.
+  // An empty/blank prefix startsWith-matches EVERY digest and would list the whole
+  // tombstone set as ambiguous, so reject it before the DB round trip.
   if (digestOrPrefix.trim().length === 0) {
     return { status: 'not_found' };
   }

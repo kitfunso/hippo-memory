@@ -7,7 +7,7 @@ import { log } from '../log.js';
 import type { Context } from './types.js';
 
 /**
- * Record memory text handed to an agent in the token ledger (ROADMAP TE0).
+ * Record memory text handed to an agent in the token ledger.
  * Best-effort: never throws, because a ledger failure must not fail the
  * recall or context call that produced the text.
  */
@@ -49,7 +49,7 @@ export function tokenSummary(ctx: Context, opts: { days?: number } = {}): TokenS
   }
 }
 
-/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30); ROADMAP CD13. */
+/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30). */
 export function failureSummary(ctx: Context, opts: { days?: number } = {}): FailureSummary {
   const db = openHippoDb(ctx.hippoRoot);
   try {

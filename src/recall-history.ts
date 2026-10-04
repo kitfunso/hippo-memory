@@ -1,21 +1,20 @@
 /**
- * J1 anchoring detector (recall-recurrence) — pure module.
+ * Anchoring detector (recall-recurrence), pure module.
  *
- * Implements two detection rules from ROADMAP-RESEARCH.md L546:
- *   R1 query_repeat: same queryHash within recentRepeatWindow returned
+ * Implements two detection rules:
+ *   query_repeat: same queryHash within recentRepeatWindow returned
  *     same topMemoryId (caller is re-asking the same question).
- *   R2 memory_dominance: same topMemoryId across >= minDominance distinct
+ *   memory_dominance: same topMemoryId across >= minDominance distinct
  *     queryHashes (memory acts as a fixed-point anchor regardless of what
  *     the agent asks).
  *
- * Per the plan v3 architectural decision: each pipeline (api.recall via
+ * Each pipeline (api.recall via
  * HTTP, cmdRecall, MCP hippo_recall) owns its OWN ring buffer Map keyed
  * by (tenant, session). No cross-pipeline sharing (the typical multi-
  * process deployment makes IPC ring-sharing impractical; per-pipeline
  * is correct because each pipeline has its own top-1 ranking anyway).
  *
- * Plan: docs/plans/2026-05-26-j1-anchoring-detector.md.
- * Composes with J3.2: AnchoringHint + PlanningFallacyHint are independent
+ * AnchoringHint + PlanningFallacyHint are independent
  * signals; both can fire on the same recall.
  */
 
@@ -45,10 +44,10 @@ export interface RecallHistoryEntry {
   queryHash: number;
   /** Top-1 memory id this recall surfaced; null if zero results. */
   topMemoryId: string | null;
-  /** ISO-8601 timestamp; advisory, not used by R1/R2 logic. */
+  /** ISO-8601 timestamp; advisory, not used by the detection rules. */
   ts: string;
   /** Memory id of the AnchoringHint that fired on this recall, if any.
-   *  Used by R1/R2 cooldown logic to prevent re-emitting the same hint on
+   *  Used by the cooldown logic to prevent re-emitting the same hint on
    *  consecutive recalls within the dominance window. Caller-written
    *  AFTER detectAnchoring returns; reads next time detectAnchoring runs. */
   anchoredOn?: string;
@@ -57,10 +56,10 @@ export interface RecallHistoryEntry {
 export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
 export interface DetectAnchoringOpts {
-  /** R2 threshold: number of distinct queryHashes that must have returned
+  /** memory_dominance threshold: number of distinct queryHashes that must have returned
    *  the same topMemoryId. Default 3. */
   minDominance?: number;
-  /** R1 window: how many recent history entries to scan for query repeat.
+  /** query_repeat window: how many recent history entries to scan for query repeat.
    *  Default 5. */
   recentRepeatWindow?: number;
   /** Cooldown: if the immediately-prior fire (per `anchoredOn`) was for
@@ -83,43 +82,26 @@ const DEFAULT_COOLDOWN = 3;
  * sort tokens → join → FNV-1a 32-bit.
  *
  * Token sort + dedup means semantically-equivalent queries with reordered
- * words collide intentionally (the roadmap's "semantically-distinct" v1
- * uses textual normalization; embedding-based distinctness is J1-v2).
+ * words collide intentionally ("semantically-distinct" is approximated by
+ * textual normalization, not embeddings).
  *
  * Deterministic across processes; stable across Node + V8 versions.
  */
 export function hashQueryText(query: string): number {
   if (!query) return 0;
-  // Token dedup before join: the R2 contract says "distinct queries"
-  // means semantically distinct, so `foo bar` and `foo foo bar` should
-  // collapse to the same hash. Without dedup, simple phrasing
-  // variations (typos, doubled tokens, intensifiers) would inflate
-  // distinct-query counts and trip R2 on essentially the same question.
-  // Codex round-1 catch.
-  // Unicode-aware tokenization (codex round-3 P2 catch): the prior
-  // ASCII-only [^a-z0-9\s] pattern stripped every non-Latin letter, so
-  // Japanese, Arabic, Cyrillic, accented-Latin etc. queries collapsed
-  // to empty token set -> hash 0 -> false R1 collisions across distinct
-  // non-English queries. \p{L} = any Unicode letter, \p{N} = any Unicode
-  // number, \p{M} = combining marks (preserve composed accented chars).
-  // Requires the /u flag and Node >= 12.
+  // Tokens are deduped before join so `foo foo bar` and `foo bar` count as one query for memory_dominance.
+  // Unicode classes (\p{L} letter, \p{N} number, \p{M} combining mark; needs /u) keep
+  // non-Latin queries from collapsing to an empty token set and colliding at hash 0.
   const normalized = query
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter((t) => t.length > 0);
-  // Drop tokens shorter than 3 chars to match the normalizer contract
-  // (filler / stop words). Without this, `a login bug` vs `login bug`
-  // hash differently and inflate R2 distinct-query counts, firing
-  // memory_dominance on repeated phrasings of the same question.
-  // Codex round-4 P2 catch. Matches the same >=3 filter in
-  // src/forward-claim-detector.ts for class-resolver tokens.
+  // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash
+  // alike; matches the >=3 filter in src/forward-claim-detector.ts.
   const filtered = normalized.filter((t) => t.length >= 3);
-  // Fallback when the >=3 filter would collapse the entire query to
-  // empty: CJK queries like `测试` / `环境` are 2-char tokens; English
-  // acronyms like `AI` / `UI` are 2 chars. Without this fallback they
-  // all hash to fnv1a32(''), producing false R1 collisions across
-  // distinct short-token queries. Codex round-5 P2 catch.
+  // Fall back to all tokens when the filter empties the query (CJK 2-char words,
+  // acronyms like `AI`) so distinct short queries do not all hash to fnv1a32('').
   const tokens = filtered.length > 0 ? filtered : normalized;
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
@@ -145,17 +127,17 @@ function fnv1a32(text: string): number {
  * Detect anchoring patterns in the recall history against the current
  * recall's (queryHash, topMemoryId).
  *
- * Rule precedence: R2 (memory_dominance) wins on tie. When both R1 and R2
- * fire on the same recall, return only the R2 hint — R2's signal is the
- * cognitively stronger one (a memory dominating multiple DIFFERENT queries
- * is a fixed-point anchor; R1 alone is just a literal re-ask).
+ * Rule precedence: memory_dominance wins on tie. When both rules fire on the
+ * same recall, return only memory_dominance, the stronger signal (a memory
+ * dominating multiple DIFFERENT queries is a fixed-point anchor; query_repeat
+ * alone is just a literal re-ask).
  *
  * Cooldown: if the immediately-prior recall fired a hint on the SAME
  * topMemoryId within `cooldown=3` history entries, suppress. Prevents
  * spam when the agent repeatedly recalls within the dominance window.
- * Cooldown is per-memory, not per-rule: if R2 fired on M (cooldown
- * engaged for M), and the next recall has top=N + repeated query →
- * R1 fires on N (different memory, not in cooldown).
+ * Cooldown is per-memory, not per-rule: if memory_dominance fired on M
+ * (cooldown engaged for M), and the next recall has top=N + repeated query,
+ * query_repeat fires on N (different memory, not in cooldown).
  *
  * @returns AnchoringHint when a pattern fires; null otherwise.
  */
@@ -179,7 +161,7 @@ export function detectAnchoring(
     }
   }
 
-  // R2 check FIRST (wins on tie). Count distinct queryHashes in history
+  // memory_dominance check FIRST (wins on tie). Count distinct queryHashes in history
   // where topMemoryId === currentTopMemoryId (excluding null tops).
   const matchingQueryHashes = new Set<number>();
   for (const entry of history) {
@@ -200,7 +182,7 @@ export function detectAnchoring(
     };
   }
 
-  // R1 check: is currentQueryHash present in the last `recentRepeatWindow`
+  // query_repeat check: is currentQueryHash present in the last `recentRepeatWindow`
   // entries AND was that entry's topMemoryId === currentTopMemoryId?
   const r1Slice = history.slice(-recentRepeatWindow);
   for (const entry of r1Slice) {

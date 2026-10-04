@@ -33,10 +33,8 @@ export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: Mem
     opts?.afterCommit?.();
     writeEntryMirrors(hippoRoot, stamped);
   } catch (error) {
-    // AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by
-    // the time this catch runs, so the refusal audit lands post-rollback in
-    // a fresh implicit transaction — then rethrow so the caller sees the
-    // refusal.
+    // writeEntryDbOnly's SAVEPOINT has already unwound here, so the refusal audit lands
+    // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
     if (error instanceof RejectedValueError) {
       auditRejectionRefusal(db, error, opts?.actor ?? 'cli');
     }
@@ -86,10 +84,8 @@ export function writeEntryDbOnly(
       opts?.actor ?? 'cli',
       entry.tenantId,
     );
-    // v0.30 / E2 — DAG live-coupling: child write under a level-2 summary
-    // marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on
-    // null dag_parent_id (vast majority of writes); cost is one null check
-    // on the hot path.
+    // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
+    // have no parent, so the hot path pays one null check.
     if (entry.dag_parent_id) {
       markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, opts?.actor ?? 'cli');
     }

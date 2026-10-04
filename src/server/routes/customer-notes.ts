@@ -8,7 +8,7 @@ import type { RouteRequest } from '../types.js';
 import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 import { isJsonString } from '../../json.js';
 
-// ── E2 customer_note routes ──
+// ── customer_note routes ──
 //
 // 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
 // note), GET /v1/customer-notes (list; status + customer filter; shared

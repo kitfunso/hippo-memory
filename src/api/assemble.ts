@@ -21,7 +21,7 @@ export interface AssembleOpts {
    *  ancestor. Default true. */
   summarizeOlder?: boolean;
   /**
-   * Restrict to a specific scope. v1.6.1 senior-review P1 #3 parity with
+   * Restrict to a specific scope, same rule as
    * `recall`: when set, exact match required (so an authorised caller can
    * assemble a `slack:private:CSEC` session by passing scope explicitly).
    * When undefined, default-deny applies to ANY `<source>:private:*` and
@@ -66,19 +66,15 @@ export interface AssembleResult {
   items: AssembledContextItem[];
   tokens: number;
   /**
-   * Tenant + scope-filtered raw row count for the session — what the caller
-   * could have seen given their grant. Pre-v1.6.1 was pre-filter (confusing
-   * for all-private sessions); pre-v1.6.3 was capped (under-reported on
-   * sessions > rowCap). v1.6.3 reports the FULL post-filter count via a
-   * separate COUNT(*) query so consumers can render "session has N msgs"
-   * accurately even when items[] is the windowed view.
+   * Tenant + scope-filtered raw row count for the session, uncapped by `rowCap`, so
+   * "session has N msgs" stays accurate when items[] is the windowed view.
    */
   totalRaw: number;
   summarized: number;
   evicted: number;
   /**
-   * True when `rowCap` truncated the loaded window. With v1.6.2's NEWEST-cap
-   * semantics, the items[] array represents the freshest tail of the session;
+   * True when `rowCap` truncated the loaded window. The cap keeps the NEWEST
+   * rows, so the items[] array represents the freshest tail of the session;
    * older rows beyond the cap are silently absent. Use `totalRaw - items.length
    * - summarized + ...` to estimate how much you didn't see, or widen `rowCap`.
    */
@@ -124,19 +120,14 @@ export function assemble(
 
   const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap);
   const truncated = rows.length === rowCap;
-  // v1.6.3 senior-review P0-1: report the FULL post-filter row count even
-  // when the cap windows the loaded set. Pre-v1.6.3 used `scoped.length`
-  // which under-reported on long sessions and made consumers render
-  // wrong "session has N msgs" UX.
+  // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
   const scoped = rows.filter((r) =>
     passesScopeFilterForRecall(r.scope ?? null, opts.scope),
   );
   let totalRaw: number;
   if (truncated) {
-    // v1.6.3 codex P1 / senior P0: scope-aware unbounded COUNT. The helper
-    // SQL-encodes the same default-deny rule passesScopeFilterForRecall
-    // applies in TS, so a no-scope caller cannot infer private rows by
-    // comparing totalRaw to items.length on a truncated session.
+    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
+    // caller cannot infer private rows by comparing totalRaw to items.length.
     totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope);
   } else {
     totalRaw = scoped.length;
@@ -163,9 +154,8 @@ export function assemble(
     strength: r.strength,
   }));
 
-  // F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than
-  // localeCompare and chronological by virtue of the timestamp invariant
-  // documented in src/memory.ts above MemoryEntry.
+  // Byte compare is chronological for the fixed-form UTC ISO timestamps
+  // (invariant documented in src/memory.ts above MemoryEntry).
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));

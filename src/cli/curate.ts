@@ -36,11 +36,7 @@ export function cmdOutcome(
     process.exit(1);
   }
 
-  // Behavior fix (v1.11.3): cmdOutcome used to bypass api.outcome and do its
-  // own readEntry/writeEntry inline, which silently skipped the audit_log
-  // emission that the MCP outcome path already has via api.outcome. T6
-  // rewires through api.outcome so every successful CLI 'outcome' call now
-  // writes one audit_log row per affected id, matching MCP parity.
+  // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
@@ -80,7 +76,7 @@ function cmdForget(
     actor: api.adminActor('cli'),
   };
 
-  // A3: raw memories (Slack / GitHub connector ingestion) are append-only — a
+  // Raw memories (Slack / GitHub connector ingestion) are append-only: a
   // BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned
   // removal path; it records ctx.actor as the archiver for provenance.
   if (flags['archive'] === true) {
@@ -219,11 +215,8 @@ export function cmdResolve(
   }
 
   const forgetLoser = Boolean(flags['forget']);
-  // AT1: --reject-loser tombstones the loser's normalized digest so it
-  // cannot be re-asserted later, in addition to removing it (kind-aware).
-  // --reason defaults to a conflict-context string when omitted (resolve
-  // already has the conflict id + keepId; unlike `hippo reject`, a reason
-  // is not strictly required here).
+  // --reject-loser tombstones the loser's digest so it cannot be re-asserted, as well as removing it.
+  // --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and keepId.
   const rejectLoser = Boolean(flags['reject-loser']);
   const reasonFlag = typeof flags['reason'] === 'string' ? (flags['reason'] as string) : undefined;
   const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId, {
@@ -245,8 +238,7 @@ export function cmdResolve(
 }
 
 // ---------------------------------------------------------------------------
-// AT1: reject / rejections / unreject
-// docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+// reject / rejections / unreject
 // ---------------------------------------------------------------------------
 
 export function cmdReject(
@@ -259,8 +251,7 @@ export function cmdReject(
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
 
-  // --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no
-  // content, so reason is its only human-readable identity.
+  // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable identity.
   const reason = typeof flags['reason'] === 'string' ? (flags['reason'] as string).trim() : '';
   if (!reason) {
     printError('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
@@ -276,8 +267,7 @@ export function cmdReject(
     process.exit(1);
   }
   if (memoryId && valueFlag !== undefined) {
-    // Ambiguous ask: silently preferring one form would ignore the other
-    // without feedback (code-review round-1 low).
+    // Ambiguous ask: silently preferring one form would ignore the other without feedback.
     printError('hippo reject takes EITHER a memory id OR --value, not both.');
     process.exit(1);
   }
@@ -445,7 +435,7 @@ export function cmdDormant(
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
 }
 
-/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (CD5 poisoning defence). */
+/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
 export function cmdQuarantine(
   hippoRoot: string,
   args: string[],

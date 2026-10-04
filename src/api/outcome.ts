@@ -27,10 +27,9 @@ import type { Context } from './types.js';
  * in ctx.tenantId). Callers that surface the id list
  * over a multi-tenant boundary (HTTP /v1/outcome last-recall path, Python SDK)
  * MUST return `appliedIds` instead of the raw input list — otherwise the
- * non-applied (cross-tenant) ids leak to the caller. Added in v1.11.4 to
- * close that disclosure path on POST /v1/outcome.
+ * non-applied (cross-tenant) ids leak to the caller.
  *
- * `opts.traceId` (LC1, docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
+ * `opts.traceId`:
  * OPTIONAL additive opt so a programmatic caller can link this outcome to
  * the recall_traces row it judges. NOT applied unconditionally — an SDK
  * caller passing explicit ids with no preceding CLI/context recall would
@@ -57,7 +56,7 @@ export function outcome(
       const entry = live.get(id);
       if (!entry) continue;
       let updated = applyOutcome(entry, good);
-      if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
+      if (good && updated.tags.includes(CHURN_STALE_TAG)) { // a good outcome reconfirms the entry
         updated = { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
       }
       writeEntryOn(db, ctx.hippoRoot, updated, { actor: ctx.actor.subject });
@@ -71,7 +70,7 @@ export function outcome(
       });
       appliedIds.push(id);
     }
-    // LC1: link the outcome to its trace, recording only the ids actually
+    // Link the outcome to its trace, recording only the ids actually
     // credited (post tenant-filtering, matches appliedIds). Lives in its own
     // append-only table so audit_log pruning can never erase training data.
     if (opts?.traceId !== undefined && appliedIds.length > 0) {
@@ -89,7 +88,7 @@ export function outcome(
 }
 
 // ---------------------------------------------------------------------------
-// outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
+// outcomeForLastRecall (last-recall wrapper around outcome)
 // ---------------------------------------------------------------------------
 
 /**
@@ -101,14 +100,10 @@ export function outcome(
  * ids in `last_retrieval_ids` are silently skipped, matching the MCP
  * `hippo_outcome` semantics.
  *
- * **Tenant-safe response shape (v1.11.4 security fix):** the returned `ids`
+ * **Tenant-safe response shape:** the returned `ids`
  * field contains ONLY the tenant-filtered subset that actually had outcomes
- * applied (i.e. `appliedIds` from the inner `outcome()` call). Earlier
- * versions returned the raw `last_retrieval_ids` regardless of tenant, which
- * leaked cross-tenant memory IDs to the caller via POST /v1/outcome's
- * no-body last-recall response. The fix is at this helper so all callers
- * (CLI cmdOutcome, HTTP /v1/outcome, MCP `hippo_outcome` if added later)
- * inherit the tenant-safe contract.
+ * applied (i.e. `appliedIds` from the inner `outcome()` call). It lives in this
+ * helper so every caller (CLI, HTTP /v1/outcome, MCP) inherits the contract.
  *
  * Do NOT tighten `loadIndex` with `tenantId` inside this helper — doing so
  * would break the (correct) cross-tenant-silent-skip behavior covered by
@@ -125,15 +120,8 @@ export function outcomeForLastRecall(
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };
-  // LC1 F1(d) structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
-  // read the trace id from the SAME `loadIndex` snapshot already in hand
-  // (idx.last_trace_id) — a single-snapshot read, not a second DB round
-  // trip via a now-deleted readLastTraceId helper. The value is already
-  // strict-parsed by buildIndexFromDb's parseLastTraceId (store.ts): every
-  // consumer gets a clean positive-integer string or null, never a garbage
-  // value that could reach outcome() and INSERT trace_id=0/NaN. null on a
-  // fresh store / pre-v40 flow / api.recall-only usage — outcome() skips
-  // linkage silently when traceId is undefined.
+  // Same `loadIndex` snapshot as the ids; buildIndexFromDb already strict-parses it to a
+  // positive-integer string or null, so no trace_id=0/NaN reaches outcome().
   const traceId = idx.last_trace_id !== null ? Number(idx.last_trace_id) : null;
   const { applied, appliedIds } = outcome(ctx, ids, good, traceId !== null ? { traceId } : undefined);
   return { applied, ids: appliedIds };

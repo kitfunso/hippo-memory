@@ -8,7 +8,7 @@ import type { Migration } from './types.js';
 export const v39: Migration = {
     version: 39,
     up: (db, ctx) => {
-      // Memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
+      // Memory scope isolation.
       // origin_project: '<name>' = owned by that project, '' = user-global,
       // NULL = legacy/unknown (ambient context treats NULL as deny).
       if (!tableHasColumn(db, 'memories', 'origin_project')) {

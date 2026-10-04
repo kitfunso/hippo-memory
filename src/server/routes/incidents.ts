@@ -10,7 +10,7 @@ import { type JsonValue, isJsonString } from '../../json.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;
 
-// ── incidents (E2 first-class object) ──
+// ── incidents (first-class object) ──
 //
 // 5 routes: POST /v1/incidents (open; body text + context + linkedMemoryIds[]),
 // GET /v1/incidents (list, status filter), GET /v1/incidents/:id (show),
@@ -18,7 +18,7 @@ const MAX_LINKED_MEMORY_IDS = 256;
 // POST /v1/incidents/:id/close (open|resolved -> closed). Bearer-authed +
 // tenant-scoped via buildContextWithAuth. status validated against
 // VALID_INCIDENT_STATES. DoS caps: text 4096, context 4096, resolutionText
-// 4096 (v1.11.4 pattern). Mirrors /v1/decisions; lifecycle is
+// 4096. Mirrors /v1/decisions; lifecycle is
 // open->resolved->closed (no supersede), so linkedMemoryIds replaces
 // supersedesDecisionId on create.
 export async function handleCreateIncident({ req, res, opts }: RouteRequest): Promise<void> {

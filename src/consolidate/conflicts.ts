@@ -34,18 +34,14 @@ export function detectConflicts(
   entries: MemoryEntry[],
   now: Date,
   decayOpts: DecayOptions = {},
-  // LC2-E3 (opt-in, default off): ids rescued by this cycle's decay pass.
-  // detectConflicts recomputes its own strength>=DECAY_THRESHOLD survivor
-  // filter independently of the decay pass above; without this bypass,
-  // rescued entries would be silently re-excluded from conflict detection
-  // every cycle even though the decay pass just decided to keep them.
-  // Default empty set: flag-off behavior is unchanged.
+  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
+  // without this bypass rescued entries would be silently re-excluded from conflict detection.
   rescuedIds: Set<string> = new Set(),
 ): Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> {
   const survivors = entries.filter(
     (entry) =>
       entry.layer !== Layer.Semantic
-      // CD5: an unreviewed quarantined row must not taint a visible memory as conflicted.
+      // An unreviewed quarantined row must not taint a visible memory as conflicted.
       && !isQuarantineScope(entry.scope ?? null)
       && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
   );

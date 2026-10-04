@@ -1,6 +1,5 @@
 /**
- * Statistics and cost accounting for the token-efficiency evals (ROADMAP
- * Part IX, TE3-TE5).
+ * Statistics and cost accounting for the token-efficiency evals.
  *
  * - Cost: price provider usage over four buckets (uncached input, cache
  *   write, cache read, output). Raw token counts overstate savings when most

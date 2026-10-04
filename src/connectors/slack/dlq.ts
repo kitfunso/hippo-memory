@@ -26,7 +26,7 @@ export interface DlqItem {
 }
 
 /**
- * v0.39 commit 3: writeToDlq is now bucket-aware. `bucket` defaults to
+ * writeToDlq is bucket-aware. `bucket` defaults to
  * 'parse_error' to preserve the legacy single-arg call sites while letting
  * new callers tag rows for `hippo slack dlq replay` triage.
  *

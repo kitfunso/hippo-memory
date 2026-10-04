@@ -122,8 +122,8 @@ const CARD_COMMENTS_DDL = `
     )
   `;
 
-// Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15
-// incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Fresh stores use the chain.
+// Before the loop on stamped stores: a table lost after its migration stamped
+// is never re-migrated, and v4/v16/v22 ALTER or read it. Fresh stores use the chain.
 export function ensureContinuityTables(db: DatabaseSyncLike): void {
   db.exec(TASK_SNAPSHOTS_DDL);
   db.exec(SESSION_EVENTS_DDL);

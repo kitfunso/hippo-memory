@@ -78,7 +78,7 @@ export interface McpContext {
    * assuming admin, or a member key over HTTP-MCP would act as admin.
    */
   role?: 'admin' | 'member';
-  /** EI2: scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
+  /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
   viaAuthResolver?: true;
   /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */

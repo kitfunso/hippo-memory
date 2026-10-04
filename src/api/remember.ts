@@ -18,14 +18,14 @@ export interface RememberOpts {
   tags?: string[];
   /**
    * Optional hook invoked inside the same transaction as the underlying
-   * memories INSERT. Used by ingestion connectors (E1.3+) to stamp
+   * memories INSERT. Used by ingestion connectors to stamp
    * idempotency / cursor rows atomically with the memory row, so a crash
    * mid-write cannot produce a memory without its corresponding side-effect
    * log row (or vice versa). If the callback throws, the INSERT is rolled
    * back and the error is rethrown.
    */
   afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
-  /** CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
+  /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
   untrusted?: boolean;
 }
 

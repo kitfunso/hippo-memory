@@ -150,7 +150,7 @@ const TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE = `
           END
         `;
 
-// Reverse guard (codex-review-critic 2026-06-01, P1): the graph-table triggers
+// Reverse guard: the graph-table triggers
 // only fire on writes to the GRAPH tables. They do NOT fire when an
 // already-indexed memory is later mutated. So 'UPDATE memories SET kind=raw'
 // (or a tenant change) on a memory the graph references would silently leave
@@ -174,7 +174,7 @@ const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
           END
         `;
 
-// Reverse guard #2 (codex-review-critic 2026-06-01 retry, P2): an entity that is
+// Second reverse guard: an entity that is
 // a relation endpoint cannot be moved cross-tenant. The entity UPDATE trigger
 // validates the entity against its source memory, but an existing relation
 // pointing at the entity is NOT re-validated, so a raw 'UPDATE entities SET
@@ -194,7 +194,7 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
 export const v37: Migration = {
     version: 37,
     up: (db) => {
-      // E3.3 graph-on-consolidated guard (docs/plans/2026-06-01-e3-graph-guard.md).
+      // Graph-on-consolidated guard.
       // The graph layer (entities + relations) sits ON TOP OF consolidated state and
       // must NEVER index the raw layer. The substrate: entities + relations +
       // graph_extraction_queue, each FK-ing to memories and guarded so they can only
@@ -205,8 +205,8 @@ export const v37: Migration = {
       // is a BEFORE INSERT *and* BEFORE UPDATE trigger (the subquery-capable pattern
       // from the v30 decisions / predictions tenant-match triggers). Both INSERT and
       // UPDATE are guarded: an INSERT-only guard is bypassable via a raw SQL UPDATE
-      // that moves a row onto a raw memory (plan-eng-critic 2026-06-01). All column
-      // names checked vs SQL reserved words (rule 10): rel_type avoids REFERENCES.
+      // that moves a row onto a raw memory. All column
+      // names checked vs SQL reserved words: rel_type avoids REFERENCES.
       if (!tableExists(db, 'entities')) {
         db.exec(ENTITIES_TABLE);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);

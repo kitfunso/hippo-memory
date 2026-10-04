@@ -1,5 +1,5 @@
 /**
- * E2 process first-class object (docs/plans/2026-05-29-e2-process-object.md).
+ * Process first-class object.
  *
  * A `process` is a "living process map": a named, ordered list of steps that
  * evolves over time. Unlike `incident` (open->resolved->closed, no supersede),
@@ -230,8 +230,8 @@ interface ProcessWrite {
 // row's autoincrement id could otherwise collide with a non-existent
 // supersedesProcessId (e.g. superseding id 1 on an empty store), making
 // the row supersede itself. Validating first means the new row is never a
-// candidate for its own supersede UPDATE. Mirrors saveDecision (codex P1
-// 2026-05-28). The same SELECT reads the predecessor version so the
+// candidate for its own supersede UPDATE. Mirrors saveDecision.
+// The same SELECT reads the predecessor version so the
 // successor's version is server-derived, never client-supplied.
 function preflightProcessSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: SELECT status, version FROM processes; row shape matches

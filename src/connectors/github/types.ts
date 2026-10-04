@@ -11,7 +11,7 @@
 import { type JsonValue, isJsonString } from '../../json.js';
 
 /**
- * Codex P1 #7: `private` MUST be optional, not required. The Slack-style
+ * `private` MUST be optional, not required. The Slack-style
  * fail-safe in scope.ts requires an envelope with `private: undefined` to
  * map to private; a strict boolean type would reject the payload before
  * scope can fail closed.

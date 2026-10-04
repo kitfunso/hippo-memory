@@ -7,14 +7,13 @@ import type { RouteRequest } from '../types.js';
 import { isJsonNumber, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 import { isJsonString } from '../../json.js';
 
-// ── E2 prediction first-class object (v0.31) ──
-// docs/plans/2026-05-26-e2-prediction-object.md
+// ── prediction first-class object ──
 //
 // 4 routes: POST /v1/predictions (create), GET /v1/predictions (list),
 // GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
 // All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
 // validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
-// (4096 chars) + closureNote (2048 chars) per v1.11.4 pattern.
+// (4096 chars) + closureNote (2048 chars).
 export async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
@@ -99,7 +98,7 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   return;
 }
 
-// J3 reference-class / planning-fallacy detector (v0.31).
+// Reference-class / planning-fallacy detector.
 // Order matters: this must match BEFORE /v1/predictions/:id since 'stats'
 // is not a number — the :id regex requires \d+ so they don't conflict,
 // but routing this first avoids the dispatch order risk.

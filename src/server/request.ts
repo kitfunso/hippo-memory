@@ -97,11 +97,8 @@ export const requestIds = new WeakMap<IncomingMessage, string>();
  * them — otherwise `%2F` becomes `/`, path-split runs, and the route either
  * silently 404s or matches the wrong template.
  *
- * codex round 3 P2: only scan the PATHNAME portion of the raw URL, not the
- * query string. Pre-fix, `?q=https%3A%2F%2Fexample.com` would 400 because
- * the regex matched `%2F` anywhere in `req.url`. Recall queries containing
- * URLs would have been rejected as bypass attempts. Splitting on the first
- * `?` confines the check to the path.
+ * Only the PATHNAME is scanned (split on the first `?`), so recall queries
+ * containing URLs like `?q=https%3A%2F%2Fexample.com` are not rejected.
  */
 export function rejectEncodedSlash(rawUrl: string): void {
   const queryIdx = rawUrl.indexOf('?');

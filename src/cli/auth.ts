@@ -8,7 +8,7 @@ import { printError } from './output.js';
 import { resolveAuthRoot } from './shared.js';
 
 // ---------------------------------------------------------------------------
-// Auth subcommands (A5 stub auth)
+// Auth subcommands
 // ---------------------------------------------------------------------------
 
 function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
@@ -17,9 +17,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
   const asJson = Boolean(flags['json']);
 
-  // v1.12.3: --role flag surfaces the api_keys.role column added v1.12.0
-  // sub-1. Accepts 'admin' | 'member' only; anything else exits 1 with a
-  // typed error so a typo doesn't silently default to admin.
+  // Accepts 'admin' | 'member' only; anything else exits 1 so a typo doesn't silently default to admin.
   const roleFlag = typeof flags['role'] === 'string' ? (flags['role'] as string) : undefined;
   let role: 'admin' | 'member' = 'admin';
   if (roleFlag !== undefined) {
@@ -65,7 +63,6 @@ function formatKeyRow(item: ApiKeyListItem): string {
   const label = item.label ?? '-';
   const created = item.createdAt;
   const revoked = item.revokedAt ?? '-';
-  // v1.12.3: role column surfaced
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${revoked}`;
 }
 
@@ -125,7 +122,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
   console.log(`Revoked ${keyId} at ${revokedAt}`);
 }
 
-/** EI2: `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
+/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
 function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: Record<string, string | boolean | string[]>): void {
   const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
   try {

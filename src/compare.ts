@@ -6,8 +6,7 @@
  * multihop.ts, rerankers/*). Every comparator here takes a structural param
  * type instead of an imported one, on purpose — a type-only import back to
  * search.ts would still create the search.ts <-> physics.ts ESM import
- * cycle this module exists to avoid (r2 critic HIGH,
- * docs/plans/2026-07-09-recall-determinism.md T2).
+ * cycle this module exists to avoid.
  *
  * Mirrors the deliberate-determinism comment style already established in
  * graph-stream.ts:88, :165-168, :233-236 — a sort with a documented,
@@ -34,11 +33,9 @@ export interface EntryIdentity {
  * independently-created stores (different directory name, different insert
  * order of everything else on disk) sorts identically. The metadata keys make
  * byte-identical twins order by what they carry instead of by `id`
- * (`crypto.randomUUID()`), which is per-instance random: before v1.38.1 the
- * dedupe survivor of two twins that differed only in tags or source was
- * whichever id sorted first, and a semantic/episodic pair always kept the
- * episodic copy because `mem_` sorts before `sem_`. `id` stays the terminal
- * key so the order is total within one store.
+ * (`crypto.randomUUID()`), which is per-instance random and would make the
+ * dedupe survivor arbitrary. `id` stays the terminal key so the order is
+ * total within one store.
  *
  * Layer rank puts semantic first: semantic rows are consolidation output, so
  * keeping that copy preserves the promotion instead of demoting the memory.
@@ -49,8 +46,8 @@ export interface EntryIdentity {
  * Plain `<`/`>`, NOT `localeCompare`: `localeCompare` is locale- and
  * ICU-version-dependent (a determinism leak in its own right) and needlessly
  * slow for a tiebreak that only needs a total order. The metadata keys are
- * only computed on a content tie, which is rare post-T1 (path-tag embedding
- * fix), so the per-compare Set/sort cost never lands on the hot path.
+ * only computed on a content tie, which is rare, so the per-compare Set/sort
+ * cost never lands on the hot path.
  */
 export function compareEntryIdentity(a: EntryIdentity, b: EntryIdentity): number {
   return (
@@ -116,13 +113,11 @@ export function compareScoredResults(a: ScoredEntryLike, b: ScoredEntryLike): nu
  *
  * `ScoredPhysicsResult` (physics.ts) carries `{ memoryId, baseScore,
  * clusterAmplification, finalScore }` -- NO `entry`/`content` in scope at
- * that layer, so `compareEntryIdentity` cannot apply directly (plan T2
- * shape (c)). With only the default memoryId key this is PER-INSTANCE-ONLY
- * determinism; callers that need CROSS-INGEST stability supply `tieKeyOf`
- * mapping the result to its memory CONTENT (codex review finding: the
- * baseScore tie order selects the cluster_top_k amplification set, which
- * MUTATES scores before the downstream content-aware merge sort runs -- so
- * the tie key must be content-stable at THIS layer, not just downstream).
+ * that layer, so `compareEntryIdentity` cannot apply directly. With only the
+ * default memoryId key this is PER-INSTANCE-ONLY determinism; callers that need
+ * CROSS-INGEST stability supply `tieKeyOf` mapping the result to its memory
+ * CONTENT, because the baseScore tie order selects the cluster_top_k
+ * amplification set, which MUTATES scores before the content-aware merge sort.
  *
  * A factory (not a fixed-field comparator) because physics.ts re-sorts the
  * same result array by two different score fields in sequence (`baseScore`

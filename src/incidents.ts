@@ -1,5 +1,5 @@
 /**
- * E2 incident first-class object (docs/plans/2026-05-29-e2-incident-object.md).
+ * Incident first-class object.
  *
  * An incident is a postmortem capsule: a recorded operational event with a
  * lifecycle and optional linked receipts (the memories that are its evidence).

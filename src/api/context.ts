@@ -49,13 +49,13 @@ export { oneCopyPerMemory } from './context-select.js';
  * v39: the single ambient-injection admission policy, shared by getContext
  * and the CLI-side ambient-state summary so the two cannot drift.
  *
- * - S4 secret veto is UNCONDITIONAL: neither crossProject nor
+ * - Secret veto is UNCONDITIONAL: neither crossProject nor
  *   contextProjectIsolation:false re-includes secrets. A flagged row only
  *   injects inside its owning project; flagged rows with no project origin
  *   (''/null) never ambient-inject at all. Explicit recall is unaffected -
  *   recalling a secret is a deliberate act.
- * - S2 envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
- * - S3 origin partition: other-project rows are excluded unless
+ * - Envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
+ * - Origin partition: other-project rows are excluded unless
  *   `includeCrossProject`.
  */
 function ambientAdmitEntry(
@@ -71,7 +71,7 @@ function ambientAdmitEntry(
 }
 
 /**
- * v39 S4: the secret half of the ambient policy on its own, for callers
+ * The secret half of the ambient policy on its own, for callers
  * that apply their own scope rule. A flagged row is only admitted inside its owning project;
  * flagged rows with no project origin never ambient-inject.
  */
@@ -109,7 +109,7 @@ function loadAmbientEntries(
       : loadContextCandidates(hippoRoot, tenantId, window);
     return { entries: rows.filter(admit) };
   }
-  // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
+  // The quality floor runs on the recent-N slice AFTER this load, so the load
   // counts by it too, or it stops short of a store whose newest rows are junk.
   const admitAmbient = (e: MemoryEntry): boolean => {
     if (!admit(e)) return false;

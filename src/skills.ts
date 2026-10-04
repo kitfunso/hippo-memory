@@ -1,5 +1,5 @@
 /**
- * E2 skill first-class object (docs/plans/2026-05-30-e2-skill-object.md).
+ * Skills as a first-class, versioned object.
  *
  * A `skill` is a reusable, agent-followable capability: an `instructions` body
  * plus an optional `trigger` ("when to apply"), evolving via the supersede delta
@@ -48,8 +48,8 @@ export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>
 export const MAX_SKILL_NAME_LEN = 256;
 export const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
 export const MAX_SKILL_TRIGGER_LEN = 1024;
-/** Aggregate bound on a single export render (plan-eng-critic: cap the unbounded
- *  export body). Realistic active-skill counts are tens; 1000 is a generous bound. */
+/** Aggregate bound on a single export render so the export body is never unbounded.
+ *  Realistic active-skill counts are tens; 1000 is a generous bound. */
 export const MAX_EXPORT_SKILLS = 1000;
 
 export interface Skill {
@@ -106,8 +106,8 @@ interface ValidatedSkillFields {
 
 /**
  * Validate + normalise skill fields. skill_name is trimmed and MUST be a single
- * line (no newlines) so it cannot break the H2 header in the export render
- * (plan-eng-critic). instructions are kept verbatim (operator content) but capped.
+ * line (no newlines) so it cannot break the H2 header in the export render.
+ * instructions are kept verbatim (operator content) but capped.
  * Returns the normalised name + trigger (null when absent/empty).
  */
 function validateSkillFields(
@@ -133,8 +133,8 @@ function validateSkillFields(
       throw new BadRequestError(`saveSkill: trigger exceeds the ${MAX_SKILL_TRIGGER_LEN}-char cap`);
     }
     // Single-line, like skill_name: a trigger is a short "when to apply" phrase,
-    // and a newline would let it forge a heading inside the export **When:** line
-    // (independent-review 2026-05-30). Reject rather than emit a multi-line trigger.
+    // and a newline would let it forge a heading inside the export **When:** line.
+    // Reject rather than emit a multi-line trigger.
     if (/[\r\n]/.test(trigger)) {
       throw new BadRequestError('saveSkill: trigger must be a single line (no newlines)');
     }
@@ -217,7 +217,7 @@ interface SkillWrite {
 // Preflight the supersede target BEFORE inserting the new row (so the new
 // autoincrement id can never be its own supersede target); read the
 // predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveProcess / savePolicy (codex P1 2026-05-28).
+// Mirrors saveProcess / savePolicy.
 function preflightSkillSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: row shape matches the `status, version` columns named in the SELECT below.
   const pred = db.prepare(

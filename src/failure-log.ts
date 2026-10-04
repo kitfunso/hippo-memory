@@ -1,4 +1,4 @@
-/** Failure log (ROADMAP CD13): every failed tool call the capture-error hook sees, stored or not. */
+/** Failure log: every failed tool call the capture-error hook sees, stored or not. */
 import type { CaptureErrorOutcome, RoutineRule } from './capture-error.js';
 import type { DatabaseSyncLike } from './db.js';
 
@@ -58,7 +58,7 @@ export interface SessionFailures {
   repeats: number;
 }
 
-/** Rated failures per session since `sinceIso`, the input for repeat-error rate per arm (CD11, CD12). */
+/** Rated failures per session since `sinceIso`, the input for repeat-error rate per arm. */
 export function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
   // SAFETY: the SELECT names exactly these three TEXT columns.
   const rows = db.prepare(
@@ -80,7 +80,7 @@ export function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceI
   return [...bySession.values()];
 }
 
-/** Failure log totals over a window, for {@link summarizeFailures}. Counts only: a rate needs a holdout arm (CD11). */
+/** Failure log totals over a window, for {@link summarizeFailures}. Counts only: a rate needs a holdout arm. */
 export interface FailureSummary {
   /** ISO start of the window (inclusive). */
   since: string;

@@ -134,7 +134,7 @@ function recallPresenter(
     const continuityPiece = includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
     const showContinuity = continuityPiece !== '' && pays(continuityPiece);
 
-    // J1, J2 and C5: the hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
+    // The hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
     const render = (cut: SearchResult[]): RenderedRecall => {
       const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
       const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
@@ -223,11 +223,8 @@ function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer 
         });
       }
     } else {
-      // Telemetry: caller had no sessionId so ring tracking skipped.
-      // Per the recall-audit convention at api.ts:854, use SHA-256/16
-      // for prompt hashing (NOT hashQueryText which is FNV-1a 32-bit
-      // for recall matching; brute-force trivial for low-entropy
-      // queries). Codex round-2 P2 catch.
+      // No sessionId, so no ring. Hash the prompt with SHA-256/16 as the recall audit does (api.ts:854):
+      // hashQueryText is FNV-1a 32-bit, trivial to brute-force on low-entropy queries.
       appendRecallAudit(hippoRoot, {
         tenantId,
         actor: ctx?.actor ?? 'mcp',
@@ -328,10 +325,8 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
   if (depth !== undefined) drillExtra.depth = depth;
   const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, cost: drillCost });
   if ('failure' in r) {
-    // v1.6.4: only not_drillable is caller-actionable. not_found
-    // intentionally collapses cross-tenant + scope-blocked + missing
-    // (codex round 3 P1: distinguishing scope_blocked would leak
-    // private-row existence on this surface).
+    // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
+    // missing, because telling scope_blocked apart would leak private-row existence.
     if (r.failure === 'not_drillable') {
       return `Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`;
     }

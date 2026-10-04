@@ -93,7 +93,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
 }
 
 /**
- * v1.7.4 — depth-cap enforcer extracted from pushGoalWithDb and resumeGoal.
+ * Depth-cap enforcer shared by pushGoalWithDb and resumeGoal.
  * If the (tenant, session) has >= MAX_ACTIVE_GOAL_DEPTH active goals,
  * suspend the oldest `overflow` ones.
  *
@@ -102,7 +102,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
  * is impossible to misread the contract at a call site. Both existing call
  * sites (pushGoalWithDb, resumeGoal) wrap in `BEGIN IMMEDIATE` already.
  *
- * @internal v1.7.4 -- internal goal-stack invariant. Subject to change.
+ * @internal Internal goal-stack invariant. Subject to change.
  */
 export function enforceDepthCapWithinTx(
   db: DatabaseSyncLike,
@@ -438,9 +438,8 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
       const matches = tags.filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
       const multiplier = goalBoostMultiplier(r.entry, tags, matches, goalsByTag, policiesByGoalId);
-      // A7 recall-trace side-channel: record the goal-boost step BEFORE the
-      // score is mutated, keyed by entry id. Pure read of r.score here; the
-      // mutation below is byte-identical to pre-A7.
+      // Recall-trace side-channel: record the goal-boost step BEFORE the
+      // score is mutated, keyed by entry id; a pure read of r.score.
       if (trace) {
         trace.set(r.entry.id, {
           stage: 'goal-boost',
@@ -456,7 +455,7 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
       // still satisfies R's shape exactly.
       return { ...r, score: r.score * multiplier } as R;
     })
-    // T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity
+    // Deliberately a PLAIN stable score sort, no compareEntryIdentity
     // tail -- a re-sort of an already deterministically-ordered ranking
     // inherits its determinism via sort stability, and ties preserve the
     // prior (meaningful) rank instead of reordering by content.
@@ -505,7 +504,7 @@ const STRENGTH_DECAY = 0.85;
 export interface CompleteGoalOpts {
   outcomeScore?: number;
   /**
-   * v1.7.4 — when true, skip the strength-multiplier propagation block.
+   * When true, skip the strength-multiplier propagation block.
    * Default false (propagate). The goal's status still transitions to
    * 'completed' and `outcome_score` is still recorded; only the side-effect
    * on recalled memories' strength is suppressed.

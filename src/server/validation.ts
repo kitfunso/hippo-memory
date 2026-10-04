@@ -26,13 +26,8 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
   return set.has(value as T);
 }
 
-// Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires
-// a positive INTEGER <= 1000. Number.isInteger rejects fractional values like
-// "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a
-// datatype mismatch (a 500). Shared across the decision/incident/process/policy
-// list routes so the guard cannot drift (codex review 2026-05-30 P2: fractional
-// limit reached SQLite on the policy route; the same latent hole existed in the
-// sibling routes this was copied from).
+// Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
+// Shared by every first-class-object list route so the guard cannot drift.
 export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = 1000): number {
   if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
@@ -71,7 +66,7 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
 }
 
 /**
- * v1.6.4: charset + length validation for `:id` route captures. Routes call
+ * Charset + length validation for `:id` route captures. Routes call
  * this immediately after `matchPath` to reject empty / overlong / illegal
  * ids with a useful 400 instead of silently falling through to "not found".
  *

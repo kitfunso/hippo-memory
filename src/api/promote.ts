@@ -31,8 +31,7 @@ import { selectMemoryTenant } from '../store/tenant-lookup.js';
  *
  * Note: `promoteToGlobal` does not currently take a tenantId override — it
  * reads the entry from the local root via `readEntry` (no tenant filter) and
- * preserves the entry's existing tenantId on the global side. Task 4 may
- * tighten this once writeEntry/readEntry thread tenant context.
+ * preserves the entry's existing tenantId on the global side.
  */
 export interface PromoteResult {
   ok: true;
@@ -80,9 +79,8 @@ export function promote(
 
 /**
  * Replace an old memory with new content, chaining old.superseded_by = new.id.
- * Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides
- * — A1 keeps the API minimal; the CLI handler will continue to handle those
- * flags and pass the resolved values once Task 4 lands).
+ * Mirrors `cmdSupersede` in cli.ts minus the flag-driven layer/tag/pin
+ * overrides: the CLI handler resolves those so the API stays minimal.
  */
 export interface SupersedeResult {
   ok: true;
@@ -189,13 +187,12 @@ function commitSupersede(db: DatabaseSyncLike, ctx: Context, oldId: string, old:
  *
  * `archiveRawMemory` audits the operation internally (op='archive_raw') using the
  * row's own tenant_id. We DO NOT emit a second audit event here to avoid double-
- * emitting the archive_raw op (unlike Task 1 remember/forget where the underlying
- * helpers hardcode actor='cli'). Instead we pass `ctx.actor.subject` through as `who`,
+ * emitting the archive_raw op. Instead we pass `ctx.actor.subject` through as `who`,
  * and raw-archive.ts uses that for the audit row.
  */
 export interface ArchiveRawOpts {
   /**
-   * Connector idempotency hook (v0.39 commit 3). Runs inside the same
+   * Connector idempotency hook. Runs inside the same
    * SAVEPOINT as the archive — throwing rolls the archive back. Used by the
    * Slack deletion connector to mark the deletion event seen atomically.
    */

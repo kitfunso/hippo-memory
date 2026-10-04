@@ -24,7 +24,7 @@ export const v23: Migration = {
       if (!tableHasColumn(db, 'task_snapshots', 'scope')) {
         db.exec(`ALTER TABLE task_snapshots ADD COLUMN scope TEXT`);
       }
-      // Quarantine policy (codex round 1 P1): pre-existing continuity rows
+      // Quarantine policy: pre-existing continuity rows
       // with NULL scope cannot be safely classified as public after the fact.
       // Mark them 'unknown:legacy' so the api.recall + cmdRecall default-deny
       // filter excludes them for no-scope callers. Fresh rows from new

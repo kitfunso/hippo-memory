@@ -1,16 +1,15 @@
 /**
- * E3.1 deterministic entity extraction (first slice)
- * (docs/plans/2026-06-01-e3-deterministic-extraction.md).
+ * Deterministic entity extraction.
  *
- * Populates the E3 graph from the already-structured consolidated E2-object tables -
+ * Populates the graph from the already-structured consolidated first-class object tables -
  * NO NLP, no precision gate for entities + supersedes. The graph is a pure derived
- * function of the current E2 state, so `extractGraph` is an idempotent REBUILD: clear
+ * function of the current object state, so `extractGraph` is an idempotent REBUILD: clear
  * the tenant's graph, then re-derive entities + `supersedes` relations from decisions /
- * policies / customer_notes / project_briefs (the four E2 types whose kind maps to the
+ * policies / customer_notes / project_briefs (the four object types whose kind maps to the
  * `entity_type` enum). All writes go through the src/graph.ts consolidated-source guard
  * (insertEntity / insertRelation / clearGraph); this module issues no raw SQL.
  *
- * Pass 3 (E3 cross-object, docs/plans/2026-06-02-e3-cross-object-references.md) adds the
+ * Pass 3 adds the
  * first CROSS-OBJECT relations: a deterministic NAME-MATCH heuristic that emits a
  * `references` edge when one consolidated object's text contains another entity's name.
  * It is conservative (word-boundary, length-bounded, ambiguity-guarded, per-source
@@ -60,16 +59,16 @@ export interface ExtractResult {
   truncated: string[];
 }
 
-/** A consolidated E2 row normalised to the fields extraction needs. */
+/** A consolidated object row normalised to the fields extraction needs. */
 interface ExtractRow {
   entityType: EntityType;
-  /** The E2 table id (unique only WITHIN its table, hence keyed with entityType). */
+  /** The object table id (unique only WITHIN its table, hence keyed with entityType). */
   e2Id: number;
   name: string;
   /** The object's full text searched for OTHER entities' names in Pass 3. */
   searchText: string;
   memoryId: string | null;
-  /** The successor's E2 id (Y) when this row (X) is superseded; null otherwise. */
+  /** The successor's object id (Y) when this row (X) is superseded; null otherwise. */
   supersededBy: number | null;
 }
 
@@ -78,8 +77,8 @@ function keyOf(entityType: EntityType, e2Id: number): string {
   return `${entityType}:${e2Id}`;
 }
 
-/** The four E2-derived extraction entity types map 1:1 to source_object_type; the other
- *  two EntityType members ('person', 'system') have no E2 table and stay unmapped. */
+/** The four object-derived extraction entity types map 1:1 to source_object_type; the other
+ *  two EntityType members ('person', 'system') have no object table and stay unmapped. */
 const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   decision: 'decision',
   policy: 'policy',
@@ -89,8 +88,8 @@ const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   system: undefined,
 } satisfies Record<EntityType, SourceObjectType | undefined>;
 
-/** The E2 source-object ref for an extraction row (always set: every extracted row is an
- *  E2 object). Throws on an unmappable entityType (a graph invariant violation). */
+/** The source-object ref for an extraction row (always set: every extracted row is a
+ *  first-class object). Throws on an unmappable entityType (a graph invariant violation). */
 function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
   if (!type) throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
@@ -128,7 +127,7 @@ function loadType(
       // loadProjectBriefs (wired at each extractGraph call site); every one of their row
       // types declares id: number, memoryId: string | null, supersededBy: number | null.
       // `any` here is the deliberate type-erasure boundary (see eslint-disable above)
-      // that lets one loop handle all four E2 row shapes.
+      // that lets one loop handle all four object row shapes.
       rows.push({
         entityType,
         e2Id: r.id as number,
@@ -143,7 +142,7 @@ function loadType(
 }
 
 /** A Pass-1-created entity, the unit Pass 3 traverses (never `allRows` - a row with an
- *  empty name produced NO entity and must never be a references source). Carries its E2
+ *  empty name produced NO entity and must never be a references source). Carries its
  *  source object so a references edge stays anchored to the object even when the mirror
  *  memory is gone (memoryId null). */
 interface CreatedEntity {
@@ -152,19 +151,19 @@ interface CreatedEntity {
   /** The source mirror memory, or null once forgotten/pruned (the edge then anchors to
    *  the source object only). */
   memoryId: string | null;
-  /** The E2 source object this entity descends from (always set). */
+  /** The source object this entity descends from (always set). */
   sourceObject: SourceObjectRef;
   name: string;
   searchText: string;
   /** True when this row was superseded by a successor. References are extracted among
-   *  ACTIVE entities only - an edge to/from a superseded (outdated) row is stale (codex). */
+   *  ACTIVE entities only - an edge to/from a superseded (outdated) row is stale. */
   superseded: boolean;
 }
 
 /**
- * Idempotent rebuild of the tenant's deterministic graph from its consolidated E2
+ * Idempotent rebuild of the tenant's deterministic graph from its consolidated first-class
  * objects. Returns the entity/relation counts (+ which types were truncated at the
- * per-type cap). Safe to re-run: output is a pure function of the current E2 state.
+ * per-type cap). Safe to re-run: output is a pure function of the current object state.
  */
 export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult {
   assertTenantId('extractGraph', tenantId);
@@ -193,7 +192,7 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
     return { entityType: src.entityType, rows, hitCap };
   });
 
-  // WRITE PHASE (codex P2): clear + every insert run in ONE transaction, so two
+  // WRITE PHASE: clear + every insert run in ONE transaction, so two
   // concurrent rebuilds serialize on the SQLite write lock (no duplicate rows)
   // and a throw mid-rebuild rolls back the clear (no bricked graph). No second
   // connection is opened inside.
@@ -216,8 +215,8 @@ interface EntityPass {
   created: CreatedEntity[];
 }
 
-// Pass 1: entities. Every ACTIVE/SUPERSEDED E2 row becomes an entity ANCHORED to its
-// authoritative E2 object (source_object_type/id) - it survives a forgotten mirror
+// Pass 1: entities. Every ACTIVE/SUPERSEDED object row becomes an entity ANCHORED to its
+// authoritative object (source_object_type/id) - it survives a forgotten mirror
 // (memory_id NULL). The mirror memory is passed through only when it still exists
 // (it remains a recall pointer until forgotten/pruned).
 function insertEntityRows(
@@ -232,15 +231,9 @@ function insertEntityRows(
     pass.byType[entityType] = 0;
     for (const row of rows) {
       pass.allRows.push(row);
-      // Normalise the label so a long/odd-but-valid E2 name can never throw in
-      // insertEntity and (because clearGraph already ran) brick the rebuild
-      // unrebuildably. E2 name fields (decisionText / policyName) are UNCAPPED at
-      // source, and insertEntity REJECTS (not truncates) both an over-cap name AND an
-      // empty one. So: TRIM FIRST (codex 2026-06-01: >512 leading-whitespace chars
-      // would otherwise slice to a whitespace-only string -> trimmed to '' ->
-      // 'name is required' throw), THEN cap to MAX_ENTITY_NAME_LEN; if the normalised
-      // label is empty (the E2 save APIs forbid this, but be defensive) skip the row
-      // rather than throw. This closes the entire name-brick class.
+      // Name fields are uncapped at source and insertEntity rejects an over-cap or empty name,
+      // which after clearGraph would brick the rebuild. Trim before capping so leading
+      // whitespace cannot slice to ''; skip a still-empty label rather than throw.
       const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN);
       if (name.length === 0) continue;
       const sourceObject = sourceObjectOf(row.entityType, row.e2Id);
@@ -269,7 +262,7 @@ interface SupersedesPass {
 // "Y supersedes X" - but only when BOTH X and Y were EXTRACTED (e.g. Y may be closed
 // and absent). The emit guard is ENTITY presence (entityIdByKey), not memory presence:
 // a forgotten successor mirror must still emit the edge. The relation is anchored to Y's
-// authoritative E2 object; Y's mirror memory is passed only when it still lives.
+// authoritative object; Y's mirror memory is passed only when it still lives.
 function insertSupersedesRelations(
   txDb: GraphTxDb,
   hippoRoot: string,
@@ -325,7 +318,7 @@ function rebuildGraphRows(
 
   // Pass 3: cross-object `references` edges via conservative name matching. A source's
   // text containing a target entity's name -> "source references target". Sources +
-  // targets are CREATED entities only, each anchored to its E2 source object (so the
+  // targets are CREATED entities only, each anchored to its source object (so the
   // edge survives a forgotten source mirror).
   const references = extractReferences(hippoRoot, tenantId, created, supersedes.supersededPairs, truncated, txDb);
   relations += references;
@@ -338,7 +331,7 @@ function rebuildGraphRows(
  * Pass 3. Build a target-name index from the created entities (names within the length
  * bounds, ambiguous names dropped), scan each created entity's text once with one
  * combined word-boundary regex, and emit `references` edges (self-skipped, deduped,
- * per-source capped). Each edge is anchored to the source entity's E2 object (memoryId
+ * per-source capped). Each edge is anchored to the source entity's object (memoryId
  * passed through only when the mirror lives). Returns the number of references edges written.
  */
 function extractReferences(
@@ -355,7 +348,7 @@ function extractReferences(
   const ambiguous = new Set<string>();
   for (const e of created) {
     // References are among ACTIVE entities only: a superseded (outdated) row is not a
-    // current cross-reference target (codex).
+    // current cross-reference target.
     if (e.superseded) continue;
     // Decisions are SOURCE-only: their name is decision prose, referenced by supersedes,
     // not by name-mention. Excluding them as targets also prevents a decision's own name
@@ -381,7 +374,7 @@ function extractReferences(
   if (nameToId.size > MAX_TARGET_NAMES) truncated.push('references-targets');
   // LONGEST name first, then alphabetical: JS regex alternation is leftmost-first, so
   // ordering longer names before their prefixes makes the match longest-at-position
-  // (`postgres pro` wins over `postgres`; codex). Deterministic, so truncation is stable.
+  // (`postgres pro` wins over `postgres`). Deterministic, so truncation is stable.
   const targetNames = [...nameToId.keys()]
     .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0))
     .slice(0, MAX_TARGET_NAMES);
@@ -390,7 +383,7 @@ function extractReferences(
 
   let references = 0;
   for (const src of created) {
-    if (src.superseded) continue; // superseded sources hold only stale references (codex)
+    if (src.superseded) continue; // superseded sources hold only stale references
     if (!src.searchText) continue;
     const targets = new Set<number>();
     for (const m of src.searchText.matchAll(re)) {

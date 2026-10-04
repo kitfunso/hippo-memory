@@ -73,7 +73,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
       writeEntryDbOnly(db, restored, { actor: ctx.actor.subject });
       deleteDormantRow(db, ctx.tenantId, id);
       // A restore is a labelled "forgot it, then needed it" event: the
-      // signal a learned lifecycle (ROADMAP LC3) trains on. Same transaction
+      // signal a learned lifecycle trains on. Same transaction
       // as the restore, so the label exists exactly when the restore does.
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,

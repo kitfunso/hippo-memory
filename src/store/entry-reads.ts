@@ -88,8 +88,7 @@ export function selectChildrenByParent(
 /**
  * Batched lookup. Caps at 500 ids per call to keep the IN(?,?,...) clause
  * within SQLite limits. Tenant filter is enforced when `tenantId` is passed.
- * Used by DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 1.5)
- * to fetch parent summaries for a set of overflowed leaves.
+ * Used by DAG-aware recall to fetch parent summaries for a set of overflowed leaves.
  */
 export function loadEntriesByIds(
   hippoRoot: string,
@@ -101,9 +100,7 @@ export function loadEntriesByIds(
   const db = openStore(hippoRoot);
   try {
     const placeholders = capped.map(() => '?').join(',');
-    // T2: no ORDER BY meant row order followed SQLite's IN(...) scan order
-    // (undefined w.r.t. the caller's `ids` order). created ASC, id ASC
-    // makes it deterministic.
+    // Without ORDER BY, rows follow SQLite's IN(...) scan order, which is undefined w.r.t. `ids`.
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
     const rows = tenantId !== undefined
@@ -124,10 +121,8 @@ export function loadEntriesByIds(
  * oldest-first. Used by `api.assemble` to walk a session's chronological
  * context. Excludes superseded rows.
  *
- * Cap semantics (v1.6.2 codex fix): when `cap` is provided, the NEWEST
- * `cap` rows are loaded — `ORDER BY created DESC LIMIT cap` server-side,
- * reversed to oldest-first client-side. Pre-v1.6.2 ordered ASC + LIMIT,
- * which silently dropped the newest rows and broke fresh-tail in assemble.
+ * Cap semantics: when `cap` is provided, the NEWEST `cap` rows are loaded (DESC LIMIT server-side,
+ * reversed client-side); ASC + LIMIT would drop the newest rows and break fresh-tail in assemble.
  *
  * Returns `[]` for an empty sessionId. Final order: `created ASC, id ASC`.
  */
@@ -168,11 +163,8 @@ export function loadSessionRawMemories(
  * the full session size even when `rowCap` truncates the loaded window,
  * WITHOUT leaking rows the caller wouldn't have been allowed to load.
  *
- * v1.6.3 codex P1 / senior P0: an earlier draft of this helper ran an
- * unscoped COUNT, which let a no-scope caller infer the existence of
- * private rows by comparing `totalRaw` against `items.length`. This
- * version SQL-encodes the same default-deny rule `passesScopeFilterForRecall`
- * applies in TS:
+ * An unscoped COUNT would let a no-scope caller infer private rows by comparing `totalRaw`
+ * against `items.length`, so this SQL-encodes the default-deny rule `passesScopeFilterForRecall` applies in TS:
  *   - explicit scope passed: exact-match
  *   - no scope: rows where scope IS NULL, or scope is NOT a `<source>:private:*`
  *     pattern AND not the `unknown:legacy` quarantine bucket.
@@ -217,23 +209,14 @@ export function countSessionRawMemories(
  * `sessionId` is supplied, also constrains to a specific session — that
  * is the correct shape for "what did I just see in THIS session."
  *
- * v1.6.2 codex review fix: pre-v1.6.2 was tenant-wide only. With multiple
- * concurrent sessions in a tenant, fresh-tail recall surfaced unrelated
- * rows from other sessions and stamped them `isFreshTail=true`. Callers
- * that want session-scoped fresh-tail now pass `sessionId`. The
- * tenant-wide form (no sessionId) still exists for "anything new across
- * the whole tenant" — pass undefined to opt in.
+ * Without `sessionId`, concurrent sessions in a tenant surface each other's rows as fresh tail;
+ * pass undefined only for "anything new across the whole tenant".
  *
  * Bounded count cap at 200 — beyond that the caller should filter via
  * tags/scope rather than time-windowed recall.
  *
- * Deprecation note (v1.6.5) — the **tenant-wide call shape** (omitting
- * `sessionId`) is rarely the right shape for "what did I just see in this
- * conversation". `api.recall` enforces session scoping when
- * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set, throwing
- * `RecallContractError` instead. Tenant-wide remains the back-compat default
- * but is discouraged for new callers. Passing `sessionId` is fully supported
- * and recommended; this function is NOT deprecated as a whole.
+ * The tenant-wide shape is the back-compat default but discouraged; `api.recall` throws
+ * `RecallContractError` for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set.
  */
 export function loadFreshRawMemories(
   hippoRoot: string,
@@ -255,11 +238,8 @@ export function loadFreshRawMemories(
       sql += ' AND source_session_id = ?';
       params.push(sessionId);
     }
-    // T2: tie tail keeps the LIMIT window keyed on `created` while making
-    // same-`created` rows deterministic. `content` before `id` (codex
-    // review): ids are random UUIDs, so an id-only tail would pick WHICH
-    // same-created rows make the window per-instance; content is
-    // cross-ingest-stable.
+    // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
+    // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
     sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
     params.push(capped);
     // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.

@@ -47,8 +47,8 @@ export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
  *
  * Byte-comparison sort (`<` / `>`) is chronological for any pair of
  * canonical UTC ISO strings. ~50× faster than `localeCompare` with no
- * semantic gain. F4 (v1.6.5) uses byte compare on `assemble`; if a future
- * import path admits non-canonical timestamps, the F4 sort and any
+ * semantic gain. `assemble` sorts by byte compare; if a future
+ * import path admits non-canonical timestamps, that sort and any
  * downstream chronological reasoning will need a normalization pass.
  */
 
@@ -80,45 +80,45 @@ export interface MemoryEntry {
   extracted_from: string | null;
   dag_level: number;            // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
-  // Cached DAG metadata (schema v25). Populated for level-2+ summary rows so
+  // Cached DAG metadata. Populated for level-2+ summary rows so
   // recall can reason about scope without re-walking the DAG. Always 0 / null
   // for level-0 leaves and level-1 facts.
   descendant_count?: number;
   earliest_at?: string | null;
   latest_at?: string | null;
-  // DAG live-coupling (schema v28, E1 of 5-episode arc).
-  /** v28: 1 when this summary row has at least one child invalidated,
+  // DAG live-coupling.
+  /** 1 when this summary row has at least one child invalidated,
    *  superseded, forgotten, or archived since it was last rebuilt. Cleared
-   *  by E3's rebuildDirtySummaries during sleep. Always 0 for non-summary
-   *  rows (dag_level !== 2; E5 widens to include 3). */
+   *  by rebuildDirtySummaries during sleep. Always 0 for non-summary
+   *  rows (dag_level !== 2). */
   summary_dirty?: 0 | 1;
-  /** v28: ISO 8601 timestamp of the last successful rebuild for this
+  /** ISO 8601 timestamp of the last successful rebuild for this
    *  summary, or null if never rebuilt. */
   last_rebuilt_at?: string | null;
-  /** v28: monotonically-increasing counter of successful rebuilds for this
-   *  summary. 0 for initial buildDag write; bumped by E3. */
+  /** Monotonically-increasing counter of successful rebuilds for this
+   *  summary. 0 for initial buildDag write; bumped by each rebuild. */
   rebuild_count?: number;
-  /** v28 (reserved for E5): ISO 8601 timestamp the level-3 entity profile
+  /** Reserved: ISO 8601 timestamp the level-3 entity profile
    *  was built. Only ever populated on dag_level=3 rows. */
   dag_level_3_built_at?: string | null;
-  // A3 provenance envelope (schema v14)
+  // Provenance envelope
   kind: MemoryKind;             // raw | distilled | superseded | archived
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null;         // 'user:<id>' or 'agent:<id>'
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
-  // A5 stub auth (schema v16)
+  // Stub auth
   tenantId: string;             // 'default' for single-tenant deployments
   /**
-   * Memory scope isolation (schema v39): owning project for ambient-context
+   * Memory scope isolation: owning project for ambient-context
    * partitioning. A lowercased project name, '' for user-global (injectable
-   * everywhere), or null for legacy pre-v39 rows - ambient context treats
-   * null as other-project (deny). Stamped from the store's location at write
-   * time (store.ts stampOriginProject); undefined only on entries not yet
-   * written. See docs/plans/2026-07-01-memory-scope-isolation.md.
+   * everywhere), or null for legacy rows written before the column - ambient
+   * context treats null as other-project (deny). Stamped from the store's location
+   * at write time (store.ts stampOriginProject); undefined only on entries not yet
+   * written.
    */
   origin_project?: string | null;
   /**
-   * F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
+   * Raw SQLite FTS5 bm25() score from the FTS path of
    * `loadSearchEntries`.
    *
    * Populated ONLY when ALL of the following hold:
@@ -138,20 +138,11 @@ export interface MemoryEntry {
   bm25_score?: number;
 }
 
-/** FE2: tag on a memory whose named file/symbol/script changed after it was stored. */
+/** Tag on a memory whose named file/symbol/script changed after it was stored. */
 export const CHURN_STALE_TAG = 'churn-stale';
 
-// Emotional multipliers from PLAN.md.
-//
-// v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics:
-// losses ~2x larger than equivalent gains). Defaults rebalanced:
-//   - positive (success-tagged): 1.3 -> 1.0
-//   - negative (error-tagged):   1.5 -> 2.0
-//   - critical stays at 2.0 (literal roadmap reading; J5 silent on critical;
-//     ranking signal in consolidate.ts/salience.ts/ambient.ts unchanged)
-//   - neutral stays at 1.0
-//
-// `negative` is further scaled per-process by HIPPO_LOSS_AVERSION_RATIO
+// Emotional multipliers from PLAN.md. Losses weigh ~2x equivalent gains (Lovallo-Kahneman TFAS empirics),
+// so negative is 2.0. `negative` is further scaled per-process by HIPPO_LOSS_AVERSION_RATIO
 // (env var, default 1.0; see getLossAversionRatio + applyLossAversionRatio).
 const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
@@ -161,7 +152,7 @@ const EMOTIONAL_MULTIPLIERS = {
 } satisfies Record<EmotionalValence, number>;
 
 /**
- * v1.13.5 / J5 — module-level lazy-cached read of HIPPO_LOSS_AVERSION_RATIO.
+ * Module-level lazy-cached read of HIPPO_LOSS_AVERSION_RATIO.
  *
  * `calculateStrength` is called per-entry inside hot recall loops
  * (api.ts/consolidate.ts/search.ts), so a per-call `process.env` lookup
@@ -171,21 +162,20 @@ const EMOTIONAL_MULTIPLIERS = {
  */
 
 /**
- * v1.13.5 minimum acceptable ratio. Below this, the negative multiplier
+ * Minimum acceptable ratio. Below this, the negative multiplier
  * (2.0 * ratio) becomes small enough that calculateStrength * decay can fall
  * below `DECAY_THRESHOLD = 0.05` in `src/consolidate.ts:146`, which would
  * permanently delete non-pinned error-tagged memories on the next sleep
- * cycle. 0.5 is chosen as the floor because (a) it recovers the v1.13.4
+ * cycle. 0.5 is chosen as the floor because (a) it recovers the pre-calibration
  * effective multiplier (2.0 * 0.5 = 1.0 + the negative premium, i.e. 1.5x
- * the v1.13.4 default), and (b) below this the user is asking for LESS
+ * the pre-calibration default), and (b) below this the user is asking for LESS
  * loss aversion than has ever shipped — that's outside the supported
- * tuning range. See codex-review-critic round 1 P1.
+ * tuning range.
  */
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
 /**
- * Validation policy (v1.13.5 + independent-review round-1 HIGH + codex
- * round-1 P1 folds):
+ * Validation policy:
  *   - Valid: finite numbers >= 0.5.
  *   - Invalid (silent fallback to 1.0): empty string, non-numeric,
  *     numbers below 0.5 (including 0 and negatives), NaN, +/-Infinity.
@@ -193,17 +183,16 @@ const LOSS_AVERSION_RATIO_MIN = 0.5;
  *     on a typo.
  *
  * Why the 0.5 floor and not 0:
- *   - codex-review-critic round 1 P1: rejecting only `0` (the original
- *     HIGH fold) leaves the same silent data-loss surface for any ratio
+ *   - Rejecting only `0` leaves the same silent data-loss surface for any ratio
  *     below ~0.025 (and worse for aged memories, where even ratio=0.25
  *     can produce strength < DECAY_THRESHOLD = 0.05 in consolidate.ts).
- *     Floor at the v1.13.4-equivalent (0.5) so the env var's tuning
+ *     Floor at the pre-calibration equivalent (0.5) so the env var's tuning
  *     range never crosses into the deletion regime.
- *   - Users wanting LESS loss aversion than v1.13.4's 1.5 multiplier
- *     should reconsider the design intent of J5 (the calibration was
+ *   - Users wanting LESS loss aversion than the pre-calibration 1.5 multiplier
+ *     should reconsider the design intent (the calibration was
  *     toward MORE loss aversion, not less). If a future use case
  *     genuinely needs ratio < 0.5, the right path is a separate
- *     `HIPPO_NEGATIVE_MULTIPLIER` env override (deferred to J5-v2).
+ *     `HIPPO_NEGATIVE_MULTIPLIER` env override.
  */
 let _lossAversionRatioCache: number | undefined;
 
@@ -241,8 +230,7 @@ export function _resetLossAversionRatioCacheForTests(): void {
 /**
  * Apply the loss-aversion ratio scalar to the `negative` multiplier ONLY.
  * Other valences (positive, critical, neutral) pass through unchanged.
- * `critical` is deliberately NOT scaled: J5 roadmap is silent on critical;
- * its multiplier is left alone so the calibration only touches the
+ * `critical` is deliberately NOT scaled, so the calibration only touches the
  * specific empirical claim (TFAS 2x losses-vs-gains).
  */
 function applyLossAversionRatio(
@@ -288,9 +276,9 @@ export function netWrong(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_
 
 /**
  * Options for decay basis.
- * - clock: wall-clock time (default pre-v0.15)
+ * - clock: wall-clock time (former default)
  * - session: decay by sleep cycle count (for intermittent agents)
- * - adaptive: auto-scale half-life by session frequency (default v0.15+)
+ * - adaptive: auto-scale half-life by session frequency (default)
  */
 /** What calculateStrength reads, so a caller can score a row without loading its text. */
 export type StrengthInputs = Pick<
@@ -328,13 +316,9 @@ export function calculateStrength(
   const wrongPenalty = Math.pow(0.5, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
   if (entry.pinned) return wrongPenalty;
 
-  // EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated,
-  // anchor decay at CREATION, not last_retrieved. A never-strengthened memory
-  // decays from when it was made; using last_retrieved would let clock resets
-  // persisted by PRIOR unflagged runs leak strengthening into an ablated
-  // arm's rankings (codex P2). Identity on fresh stores (created ==
-  // last_retrieved at write). Prior-run half_life increments are NOT
-  // reconstructed - see the ablation.ts caveat (fresh stores per arm).
+  // EVAL-ONLY ablation (see ablation.ts): anchor decay at CREATION, so clock resets persisted by PRIOR
+  // unflagged runs cannot leak strengthening into an ablated arm. Prior-run half_life increments are
+  // NOT reconstructed - see the ablation.ts caveat (fresh stores per arm).
   const lastRetrieved = new Date(
     isRecallBoostAblated() ? entry.created : entry.last_retrieved,
   );
@@ -373,20 +357,14 @@ export function calculateStrength(
   // formula note.
   const decay = isDecayAblated() ? 1.0 : Math.pow(0.5, decayExponent);
 
-  // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
-  // EVAL-ONLY ablation (see ablation.ts): the recall-boost flag neutralizes
-  // the READ side too, so a store with PRIOR retrieval history (counts > 0
-  // written before the flag was set) does not leak strengthening into an
-  // ablated arm's rankings (codex P2).
+  // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1). EVAL-ONLY ablation (see ablation.ts) neutralizes
+  // the READ side too, so counts written before the flag cannot leak strengthening into an ablated arm.
   const retrievalBoost = isRecallBoostAblated() || netWrong(entry) > 0
     ? 1.0
     : 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
 
-  // Emotional multiplier
-  // v1.13.5 / J5: apply HIPPO_LOSS_AVERSION_RATIO to the negative multiplier
-  // ONLY (positive/critical/neutral pass through unchanged). Lazy module-cache
-  // means this is a single Map lookup + one numeric multiply, not a per-call
-  // process.env read.
+  // Emotional multiplier. HIPPO_LOSS_AVERSION_RATIO scales the negative one ONLY; the lazy
+  // module cache makes this one lookup + one multiply, not a per-call process.env read.
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotional_valence] ?? 1.0;
   const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier);
 
@@ -517,10 +495,8 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
 
 /**
  * Base half-life for a new memory, in days, before `deriveHalfLife`'s
- * write-time multipliers. 365 since 1.46.0: the pre-registered E1 decision
- * (docs/evals/2026-09-24-decay-default-result.md and prereg-2) found 7 days
- * lost the current fact far more often (29% vs 75% in the top five), and
- * 730 days and decay off tied with 365. `hippo sleep` moves memories still
+ * write-time multipliers. 365 because 7 days lost the current fact far more
+ * often, and 730 days or no decay did no better. `hippo sleep` moves memories still
  * on an older base (src/half-life-migration.ts).
  */
 export const DEFAULT_HALF_LIFE_DAYS = 365;

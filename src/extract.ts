@@ -132,16 +132,13 @@ export function storeExtractedFacts(
       source: source.source,
       extracted_from: source.id,
       scope: source.scope,
-      // T1 executor check (2026-08-15 hardening pass): same defect as the
-      // consolidate.ts merge/trace passes — createMemory with no tenantId
-      // option stamps 'default' (memory.ts:535) regardless of the source
-      // entry's own tenant. Thread it through so extracted facts land in
-      // the same tenant as the episodic memory they were extracted from.
+      // Without it createMemory stamps 'default', and extracted facts leave
+      // the tenant of the episodic memory they were extracted from.
       tenantId: source.tenantId,
       baseHalfLifeDays,
     }), origin_project: source.origin_project };
 
-    // AT1 containment: a refusal is per-VALUE — one rejected fact must not
+    // A refusal is per-VALUE: one rejected fact must not
     // drop the rest of this batch. writeEntry has already audited the
     // refusal (reject_refusal) before rethrowing, so skip-and-count here.
     try {

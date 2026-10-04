@@ -8,11 +8,8 @@ import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { requireInit, type CliFlags } from './shared.js';
 
-// Strict positive-integer id parse for the mutating process subcommands.
-// parseInt alone accepts trailing junk ('1abc' -> 1), which would let
-// `process close 1abc` / `supersede 1abc` silently hit the wrong row; require
-// the whole arg to be digits. (Mirrors parsePositiveIncidentId; codex P2,
-// 2026-05-29.)
+// parseInt alone accepts trailing junk ('1abc' -> 1), which would let `process close 1abc`
+// silently hit the wrong row; require the whole arg to be digits.
 function parsePositiveProcessId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
@@ -194,8 +191,7 @@ function processCreate(hippoRoot: string, tenantId: string, processName: string,
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
 }
 
-// Strict positive-integer id parse for the mutating policy subcommands (mirrors
-// parsePositiveProcessId; codex P2 class - parseInt alone accepts '1abc' -> 1).
+// Strict positive-integer id parse for the mutating policy subcommands: parseInt alone accepts '1abc' -> 1.
 function parsePositivePolicyId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
@@ -387,8 +383,7 @@ function policyCreate(hippoRoot: string, tenantId: string, args: string[], flags
   }
 }
 
-// Strict positive-integer id parse for the mutating skill subcommands (mirrors
-// parsePositivePolicyId; codex P2 class - parseInt accepts '1abc' -> 1).
+// Strict positive-integer id parse for the mutating skill subcommands: parseInt accepts '1abc' -> 1.
 function parsePositiveSkillId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);

@@ -8,12 +8,9 @@ function main(): void {
   if (envSkipPostinstall()) return;
 
   try {
-    // Repair-only: re-ensure the wrapper for users who previously opted in
-    // (e.g. a Codex update restored the real binary over our shim). A first
-    // install never happens here — swapping the codex binary from a package
-    // postinstall is a consent violation and reads as binary hijacking to
-    // supply-chain scanners (issue #133). First install is `hippo hook
-    // install codex` only.
+    // Repair-only, for users who opted in (a Codex update can restore the real binary over our shim).
+    // Swapping the binary from postinstall is a consent violation that supply-chain scanners read as
+    // hijacking, so first install is `hippo hook install codex` only.
     repairCodexWrapperIfInstalled();
   } catch {
     // Never fail package install because auto-integration could not be applied.

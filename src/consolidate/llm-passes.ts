@@ -82,9 +82,9 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
 }
 
 // -------------------------------------------------------------------------
-// 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
+// 1.8. DAG summary rebuild — drain dirty queue from the child-write hooks
 // -------------------------------------------------------------------------
-// Consumer of E2's summary_dirty flag. Walks dirty L2 summaries, regenerates
+// Consumer of the summary_dirty flag. Walks dirty L2 summaries, regenerates
 // each via generateDagSummary, atomically refreshes content + 6 metadata
 // columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
 // as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
@@ -94,8 +94,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   try {
     const { rebuildDirtySummaries } = await import('../dag.js');
     const rawCap = envDagRebuildCap();
-    // R1 MED must-fix: hard ceiling so misconfigured env can't burn
-    // unbounded LLM cost.
+    // Hard ceiling so a misconfigured env can't burn unbounded LLM cost.
     const cap = rawCap !== undefined ? Math.min(rawCap, 1000) : 20;
     const rebuildResult = await rebuildDirtySummaries(run.hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
     result.summariesRebuilt = rebuildResult.rebuilt;
@@ -120,7 +119,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 // -------------------------------------------------------------------------
 // 1.9. DAG entity profiles — cluster L2 topic summaries into L3 profiles
 // -------------------------------------------------------------------------
-// E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
+// Aggregate per-entity L2 summaries (e.g. all the speaker:Alice
 // topic summaries) into a single L3 entity profile. Runs even when phase
 // 1.7 buildDag was skipped (re-clusters existing L2s every sleep).
 //

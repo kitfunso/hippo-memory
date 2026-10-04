@@ -34,7 +34,7 @@ export const PRE_COMPACT_NEXT_STEP_CAP = 500;
  * newest with assistant responses after them, so a head-first cap keeps
  * stale context and drops exactly the newest working state this feature
  * exists to preserve. Keep the LAST maxChars instead, aligned forward to a
- * nearby line start, with a trim marker (codex round 3).
+ * nearby line start, with a trim marker.
  */
 export function truncateKeepNewest(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
@@ -157,7 +157,7 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
   let rawTask = '';
   let rawNextStep = '';
   try {
-    // Compaction fires when a big tool_result lands (CX7), so the last human and assistant turns can sit
+    // Compaction fires when a big tool_result lands, so the last human and assistant turns can sit
     // megabytes back: grow the window a bounded number of times until both turns are in it.
     const size = fs.statSync(transcriptPath).size;
     for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
@@ -178,8 +178,8 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
     return null;
   }
 
-  // X9: these fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
-  // re-injection token budget and never split a surrogate pair (X2); `hippo snapshot save` stays uncapped.
+  // These fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
+  // re-injection token budget and never split a surrogate pair; `hippo snapshot save` stays uncapped.
   const task = maskEmails(redactSecretsStrict(rawTask));
   const summary = maskEmails(redactSecretsStrict(rawSummary));
   const nextStep = maskEmails(redactSecretsStrict(rawNextStep));
@@ -192,7 +192,7 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
 
 /** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean, logFile: string): void {
-  // X3: the PreCompact hook fires in every Claude Code project, including
+  // The PreCompact hook fires in every Claude Code project, including
   // ones that never ran `hippo init`, so gate before any store-opening call
   // (saveActiveTaskSnapshot etc. call initStore, which would create one).
   if (!isInitialized(hippoRoot)) {
@@ -230,12 +230,8 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
 
 /** The transcript to snapshot, or null after logging why there is none. */
 function resolvePreCompactTranscript(payloadTranscriptPath: string | null, stdinText: string | undefined, logFile: string): string | null {
-  // A payload transcript_path is EXCLUSIVE: never fall back to
-  // newest-transcript auto-discovery when it's missing/unreadable. That
-  // fallback would snapshot a DIFFERENT session's transcript under THIS
-  // payload's session_id — cross-session contamination with wrong linkage
-  // (verify-stage E2E finding, 2026-08-03). Auto-discovery only applies
-  // on a true manual invocation (no payload at all).
+  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's
+  // transcript under THIS payload's session_id, so it runs only on a manual invocation (no payload).
   let transcriptPath: string | null;
   if (payloadTranscriptPath !== null) {
     if (isReadableFile(payloadTranscriptPath)) {
@@ -264,7 +260,7 @@ function saveDerivedSnapshot(
 ): void {
   const tenantId = resolveTenantId({});
 
-  // Per-field merge (X1): a tool-heavy tail whose only user turns are
+  // Per-field merge: a tool-heavy tail whose only user turns are
   // tool_result arrays derives an empty task even though the summary is
   // non-empty. Loading the existing snapshot first lets each field fall
   // back independently instead of the whole write clobbering a
@@ -276,7 +272,7 @@ function saveDerivedSnapshot(
     // No existing snapshot to merge against — proceed with derived-only.
   }
 
-  // CX6 (codex round 2): field fallback must never move content across
+  // Field fallback must never move content across
   // sessions — session A's task carried into a snapshot saved under session
   // B's id would pass compact-resume's session gate wearing the wrong
   // badge. Fall back only when the existing snapshot has no session, this

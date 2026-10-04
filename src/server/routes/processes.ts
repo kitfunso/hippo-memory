@@ -33,7 +33,7 @@ function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   return raw as string[];
 }
 
-// ── processes (E2 first-class object) ──
+// ── processes (first-class object) ──
 //
 // 5 routes: POST /v1/processes (new; body processName + steps[] + description),
 // GET /v1/processes (list, status filter), GET /v1/processes/:id (show),

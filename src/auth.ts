@@ -50,7 +50,7 @@ function verifyKey(plaintext: string, stored: string): boolean {
 export interface CreateApiKeyOpts {
   tenantId: string;
   label?: string;
-  /** v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify). */
+  /** 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify). */
   role?: 'admin' | 'member';
 }
 
@@ -64,10 +64,8 @@ export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): Crea
   const secret = randBase32(SECRET_LEN);
   const plaintext = `${keyId}.${secret}`;
   const hash = hashKey(plaintext);
-  // v1.12.0: 6-column INSERT including role. Boot-order guarantee:
-  // openHippoDb runs runMigrations synchronously before returning the db
-  // handle, so migration v26 (adds role column) is in place before this
-  // INSERT runs.
+  // openHippoDb runs runMigrations synchronously before returning the db handle,
+  // so migration v26 (adds role column) is in place before this INSERT runs.
   db.prepare(
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role) VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(keyId, hash, opts.tenantId, opts.label ?? null, new Date().toISOString(), opts.role ?? 'admin');
@@ -78,9 +76,9 @@ export interface ValidateResult {
   valid: boolean;
   tenantId?: string;
   keyId?: string;
-  /** v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Present only when valid=true. */
+  /** 'admin' | 'member'. Present only when valid=true. */
   role?: 'admin' | 'member';
-  /** EI2: scope grants for this key. Present only when valid=true. */
+  /** Scope grants for this key. Present only when valid=true. */
   scopes?: string[];
 }
 
@@ -197,7 +195,7 @@ export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {
   verifiedKeys.delete(keyId);
 }
 
-/** EI2: grant `keyId` read access to one restricted `scope`. Idempotent. */
+/** Grant `keyId` read access to one restricted `scope`. Idempotent. */
 export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
   db.prepare(
     `INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)
@@ -206,13 +204,13 @@ export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): 
   verifiedKeys.delete(keyId);
 }
 
-/** EI2: revoke `keyId`'s grant on `scope`. Not an error when no such grant exists. */
+/** Revoke `keyId`'s grant on `scope`. Not an error when no such grant exists. */
 export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
   db.prepare(`DELETE FROM api_key_scope_grants WHERE key_id = ? AND scope = ?`).run(keyId, scope);
   verifiedKeys.delete(keyId);
 }
 
-/** EI2: every restricted scope `keyId` may read. */
+/** Every restricted scope `keyId` may read. */
 export function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
   // SAFETY: rows' shape matches the single `scope` column named in the SELECT above.
   const rows = db
@@ -228,12 +226,11 @@ export interface ApiKeyListItem {
   createdAt: string;
   revokedAt: string | null;
   /**
-   * v1.12.3: authorization role bound to the key. SELECT extended to read
-   * the `role` column (added in schema migration v26 by v1.12.0 sub-1).
+   * Authorization role bound to the key, from the `role` column (schema migration v26).
    * Fail-safe-to-member cast: any non-'admin' value reads as 'member'.
    */
   role: 'admin' | 'member';
-  /** EI2: restricted scopes this key may read. */
+  /** Restricted scopes this key may read. */
   scopes: string[];
 }
 

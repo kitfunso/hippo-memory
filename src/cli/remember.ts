@@ -74,7 +74,7 @@ function parseKindFlag(flags: CliFlags): string | undefined {
   const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
   // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
-  // (E1.x: Slack/Jira/Gmail) that route deletions through archiveRawMemory. Existing
+  // that route deletions through archiveRawMemory. Existing
   // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
   // trigger, so exposing --kind raw here would create unforgettable memories.
   // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
@@ -94,7 +94,6 @@ interface RememberEnvelope {
   scope: string | null;
 }
 
-// A3 envelope flags
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);
   const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
@@ -132,8 +131,7 @@ async function cmdRemember(
   const schemaFit = computeSchemaFit(text, requestedTags, existing);
   const envelope = parseRememberEnvelope(flags);
 
-  // A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation
-  // can filter on this row. Default tenant 'default' for unauthenticated CLI.
+  // Stamp tenant_id from env (HIPPO_TENANT) so recall isolation can filter on this row; unauthenticated CLI gets 'default'.
   const tenantId = resolveTenantId({});
   const rememberConfig = loadConfig(targetRoot);
 
@@ -259,15 +257,8 @@ function cmdSupersede(
     pinned,
   });
 
-  // AT1: write the SUCCESSOR first. The rejection guard fires on the new
-  // content — if it refuses, nothing has been mutated yet (the old ordering
-  // committed old.superseded_by before the guarded new write, leaving a
-  // dangling pointer to an id that was never created). If the old-row write
-  // below fails instead, the new row exists unpointered — an orphan
-  // successor, strictly less harmful than a dangling pointer. NOTE: unlike
-  // api.supersede (whose CAS + insert commit in ONE transaction), this CLI
-  // path is two independent writes and stays non-atomic; write order is its
-  // only ordering guarantee.
+  // Write the SUCCESSOR first: a rejection-guard refusal then mutates nothing, and an old-row failure leaves an
+  // orphan successor rather than a dangling pointer. Unlike api.supersede this path is two non-atomic writes.
   try {
     writeEntry(hippoRoot, newEntry);
   } catch (err) {
@@ -501,8 +492,7 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
   // flags (--pin, --layer, --extract, --global) still need the direct
   // path; we only intercept the minimal envelope. The salience gate is
   // NOT in richFlag and the route does not apply it, so a routed remember
-  // stores what a direct one would skip. Measured 2026-09-07, tracked in
-  // TODOS.md; do not read this list as covering salience.
+  // stores what a direct one would skip; do not read this list as covering salience.
   const richFlag =
     flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
     flags['observed'] || flags['inferred'] || flags['verified'] ||
@@ -512,9 +502,7 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
     const rememberKindAllowed = ['distilled', 'superseded'] as const;
     if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
       const tags = rememberTags(flags, process.cwd()).all;
-      // B2 v1.12.6 — validate --owner on the thin-client path too.
-      // Failure on this path exits early so the user gets the same
-      // validation experience whether or not a server is up.
+      // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
       const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
       const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
       if (!thinOwnerCheck.ok) {

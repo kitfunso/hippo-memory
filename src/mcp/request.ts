@@ -28,7 +28,7 @@ function createGlobalStoreOnFirstRun(): string {
   return root;
 }
 
-// ── Token ledger (ROADMAP TE0) ──
+// ── Token ledger ──
 
 const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
   ['hippo_recall', 'mcp_recall'],
@@ -93,7 +93,7 @@ async function executeTool(
   const hippoRoot = ctx?.hippoRoot ?? findHippoRoot() ?? createGlobalStoreOnFirstRun();
 
   const config = loadConfig(hippoRoot);
-  // A5: every store read in this server returns to the caller and is
+  // Every store read in this server returns to the caller and is
   // tenant-isolated. Resolved once per tool call: prefer the transport's
   // ctx.tenantId so an HTTP Bearer for tenant B doesn't drop to HIPPO_TENANT.
   const tenantId = ctx?.tenantId ?? resolveTenantId({});

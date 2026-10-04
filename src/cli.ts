@@ -190,7 +190,7 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Reco
 // hook install codex` (a Codex update can restore the real binary over our
 // shim). Never first-installs — silently swapping the codex binary on routine
 // commands is a consent violation and reads as binary hijacking to
-// supply-chain scanners (issue #133).
+// supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -605,13 +605,8 @@ async function main(
     return;
   }
   maybeRepairCodexWrapper(command, flags);
-  /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
-   *  flag as boolean true; downstream the 14 consumer sites either coerced that to
-   *  the literal scope string 'true' (recall filter/unlock input, wm session scope,
-   *  the remember scope-tag dual-write) or silently dropped the user's scoping
-   *  intent (the remember envelope WRITE). Reject it once here, mirroring the
-   *  --hops value-less guard, so every current and future command - including the
-   *  thin-client dispatch relays - sees --scope only as a non-empty string. */
+  /** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
+   *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
   if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
     printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
     process.exit(1);

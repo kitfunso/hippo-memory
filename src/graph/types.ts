@@ -14,11 +14,11 @@ export type RelationType = 'owns' | 'supersedes' | 'depends-on' | 'blocked-by' |
 export type GraphQueueStatus = 'pending' | 'processed' | 'skipped';
 /** The consolidated source kinds the graph is permitted to index (never 'raw'). */
 export type SourceKind = 'distilled' | 'superseded';
-/** The authoritative E2 object types a graph row may be anchored to (the object
+/** The authoritative first-class object types a graph row may be anchored to (the object
  *  provenance path, alongside the memory path). Maps to source_object_type. */
 export type SourceObjectType = 'decision' | 'policy' | 'customer' | 'project';
 
-/** A soft (type,id) pointer to the authoritative E2 row a graph row descends from.
+/** A soft (type,id) pointer to the authoritative object row a graph row descends from.
  *  Survives a mirror memory forget/prune (memory_id may go NULL); the rebuild
  *  re-validates it (it is not a hard FK). */
 export interface SourceObjectRef {
@@ -48,8 +48,8 @@ export interface Entity {
    *  its source_object provenance. */
   memoryId: string | null;
   sourceKind: SourceKind;
-  /** The authoritative E2 object this entity is anchored to (E2-provenance path).
-   *  Set for E2-sourced entities; absent for memory-only (prose/NLP) entities. */
+  /** The authoritative object this entity is anchored to (object-provenance path).
+   *  Set for object-sourced entities; absent for memory-only (prose/NLP) entities. */
   sourceObjectType?: SourceObjectType;
   sourceObjectId?: number;
   createdAt: string;
@@ -83,9 +83,9 @@ export interface InsertEntityOpts {
   entityType: EntityType;
   name: string;
   /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
-   *  the entity is anchored only to its E2 source object (mirror forgotten/pruned). */
+   *  the entity is anchored only to its source object (mirror forgotten/pruned). */
   memoryId?: string | null;
-  /** The authoritative E2 object this entity descends from. Required when memoryId is
+  /** The authoritative object this entity descends from. Required when memoryId is
    *  null; optional alongside a live memory (both paths may be set). */
   sourceObject?: SourceObjectRef;
 }
@@ -95,8 +95,8 @@ export interface InsertRelationOpts {
   toEntityId: number;
   relType: RelationType;
   /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
-   *  the relation is anchored only to its E2 source object. */
+   *  the relation is anchored only to its source object. */
   memoryId?: string | null;
-  /** The authoritative E2 object this relation descends from. */
+  /** The authoritative object this relation descends from. */
   sourceObject?: SourceObjectRef;
 }

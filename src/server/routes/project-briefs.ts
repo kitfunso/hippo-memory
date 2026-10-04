@@ -17,7 +17,7 @@ interface ProjectBriefListOpts {
   after?: KeysetPosition;
 }
 
-// ── E2 project_brief routes ──
+// ── project_brief routes ──
 //
 // 6 routes: POST /v1/project-briefs (new; body repo + summary), GET
 // /v1/project-briefs (list; status + repo filter; shared parseListLimit), POST

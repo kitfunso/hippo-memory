@@ -1,19 +1,18 @@
 /**
- * E3.2 multi-hop graph recall (docs/plans/2026-06-02-e3.2-multihop-recall.md).
+ * Multi-hop graph recall.
  *
- * READ-ONLY consumer of the E3 graph substrate (entities/relations built by E3.1,
- * guarded by E3.3). Given the lexical recall seeds, walk the relations graph up to N
+ * READ-ONLY consumer of the graph substrate (entities/relations built by graph-extract,
+ * guarded by the graph-on-consolidated triggers). Given the lexical recall seeds, walk the relations graph up to N
  * hops and surface the memories of reached entities that the lexical search did not
  * already return.
  *
  * Relation-type-AGNOSTIC: it walks whatever edges exist. Today the graph holds only
  * `supersedes` edges (so a 1-hop walk surfaces a supersession-linked predecessor/
- * successor a lexical search may miss); the moment E3.1 emits cross-object edges
+ * successor a lexical search may miss); the moment extraction emits cross-object edges
  * (owns/depends-on/blocked-by/references) the SAME traversal lights up cross-entity
  * multi-hop with zero rework here.
  *
- * Design points (the first two were forced by the verify-stage benchmark, the rest by
- * codex review — all root-cause, not patches):
+ * Design points:
  *  1. Graph-reached memories are loaded DIRECTLY by id (tenant-scoped PK fetch), NOT
  *     intersected with the recall handler's candidate set — that set is lexically
  *     prefiltered (loadSearchRows filters by query tokens), so intersecting would exclude
@@ -29,11 +28,11 @@
  *     nothing at realistic budgets.
  *  3. BOTH the local and global stores are expanded — a global seed's entities/relations
  *     live under the global root, so graph recall must traverse each seed in the store its
- *     graph lives in (codex review).
+ *     graph lives in.
  *  4. By-id loads are chunked at 500 (loadEntriesByIds caps at 500/call), so a high-fanout
- *     traversal (--hops 3 --max-neighbors 200 -> up to 600 ids) loses none (codex review).
+ *     traversal (--hops 3 --max-neighbors 200 -> up to 600 ids) loses none.
  *
- * No graph writes (only SELECTs via graph.ts read helpers + store reads), so the E3.3
+ * No graph writes (only SELECTs via graph.ts read helpers + store reads), so the
  * check-graph-writes lint permits this module living outside graph.ts.
  */
 import { loadEntriesByIds } from './store/entry-reads.js';
@@ -288,8 +287,7 @@ export function graphExpandRecall(
   if (hitsByOrigin.size === 0) return baseResults;
   // Closer hops first within each origin group, then by inherited score.
   // Hops asc and score desc are both true primary keys (unchanged);
-  // compareEntryIdentity is only the TAIL for a same-hop, same-score tie
-  // (T2, deterministic tie keys).
+  // compareEntryIdentity is only the TAIL for a same-hop, same-score tie.
   for (const hits of hitsByOrigin.values()) {
     hits.sort((a, b) => {
       const byHops = a.graphVia.hops - b.graphVia.hops;
@@ -309,16 +307,14 @@ export function graphExpandRecall(
   // (NOTE: at a tight budget a new graph hit can displace a weakly-scored base result;
   // aggregate recall stays >= baseline, the displaced item is the lowest-value one.)
   // Protect the top --min-results base rows from eviction (graph expansion must not
-  // violate the recall min-results floor; codex P2). They are kept regardless of budget;
+  // violate the recall min-results floor). They are kept regardless of budget;
   // baseResults is score-ordered, so slice(0, N) is the top N.
   const protectedCount = Math.min(Math.max(minResults, 1), baseResults.length);
   const keep = new Set<SearchResult>(baseResults.slice(0, protectedCount));
   const price = opts.cost ?? ((r: SearchResult) => r.tokens);
   let usedTokens = [...keep].reduce((s, r) => s + price(r), 0);
-  // T2 note: PLAIN stable score sort on purpose -- both input lists are
-  // deterministically ordered by this point, stability inherits that, and a
-  // base-vs-graph-hit tie keeps the BASE result first (the concat order),
-  // preserving pre-T2 semantics.
+  // PLAIN stable score sort on purpose: both input lists are already deterministically
+  // ordered, and a base-vs-graph-hit tie keeps the BASE result first (the concat order).
   for (const r of [...baseResults.slice(protectedCount), ...allHits].sort((a, b) => b.score - a.score)) {
     const tokens = price(r);
     if (usedTokens + tokens > budget) continue;

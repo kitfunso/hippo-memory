@@ -5,13 +5,13 @@
  *   - /repos/{repo}/issues/comments      -> issue_comments_hwm
  *   - /repos/{repo}/pulls/comments       -> pr_review_comments_hwm
  *
- * Crash safety (codex P1 #3): each stream's HWM is persisted ONLY after
+ * Crash safety: each stream's HWM is persisted ONLY after
  * the stream fully drains. If stream 2 throws mid-flight, stream 1's HWM
  * is committed and stream 2's stays NULL (or its prior value). Rerun
  * picks up from stream 1's saved HWM and re-fetches stream 2 from its
  * last committed point.
  *
- * Codex P1 #2: the /issues endpoint returns BOTH issues and PRs (a PR is
+ * The /issues endpoint returns BOTH issues and PRs (a PR is
  * an issue with a `pull_request` field). We skip PRs here so they don't
  * get ingested under the issues schema. PRs are handled via webhook in
  * V1 (no /pulls backfill stream — review comments cover the discussion
@@ -193,18 +193,15 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
 
 /**
  * Drain one stream end-to-end. Pauses and retries on rate-limit. Throws on
- * any other fetch error so the caller leaves the HWM unchanged (round 1
- * codex P1 #3 crash safety).
+ * any other fetch error so the caller leaves the HWM unchanged.
  *
- * v1.3.1 (round 2 codex P1s + claude P1):
  *   - Tracks max(updated_at) across ALL fetched items, including ones
  *     `toIngestEvent` rejects (e.g., PRs returned via `/issues`). Otherwise
  *     a page of pure PRs would never advance the HWM and the next run would
  *     re-fetch the same window forever.
  *   - Returns `drained: boolean` — true only when the stream actually ran
- *     to next=null. Callers MUST NOT advance the HWM when drained=false.
- *     Was a bug in v1.3.0: hitting maxPerStream cap returned the partial
- *     maxUpdatedAt and the caller persisted it, skipping the unfetched tail.
+ *     to next=null. Callers MUST NOT advance the HWM when drained=false,
+ *     or a capped run would persist a partial HWM and skip the unfetched tail.
  */
 async function drainStream(
   ctx: Context,
@@ -234,9 +231,7 @@ async function drainStream(
     pages++;
 
     for (const item of page.items) {
-      // v1.3.1: track updated_at on EVERY item, before the toIngestEvent
-      // filter. Skipped PRs from /issues still contribute to the HWM so
-      // PR-only pages don't loop forever.
+      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
       // SAFETY: updated_at is GitHub's ISO-timestamp field on every item
       // shape this stream returns; a non-string value would only fail the
       // string comparisons below, matching pre-migration passthrough.
@@ -270,7 +265,7 @@ async function drainStream(
 
 function issueItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
   if (!isIssuesItem(item)) return null;
-  // Codex P1 #2: /issues returns PRs too — skip them.
+  // /issues returns PRs too; skip them.
   if (item.pull_request) return null;
   const payload: GitHubIssueEvent = {
     action: 'opened',
@@ -346,9 +341,7 @@ async function backfillStream(
     sleep,
     opts.maxPerStream,
   );
-  // v1.3.1: only advance HWM when the stream actually drained. A capped run
-  // (--max) must leave the HWM at its previous value so the next invocation
-  // re-fetches the unprocessed tail.
+  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
     writeOneHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
   }

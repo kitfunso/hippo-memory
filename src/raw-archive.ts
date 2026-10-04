@@ -39,7 +39,7 @@ function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
 }
 
 function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
-  // GDPR Path A (v0.39): raw_archive stores ONLY metadata, not the original
+  // GDPR: raw_archive stores ONLY metadata, not the original
   // memory content. The audit_log row appended below carries op='archive_raw'
   // for the compliance audit trail. True right-to-be-forgotten — the original
   // content is unrecoverable from raw_archive after this point.
@@ -71,7 +71,7 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   }
 }
 
-// A5 audit: emit archive_raw event inside the SAVEPOINT so the audit row is
+// Emit the archive_raw audit event inside the SAVEPOINT so the audit row is
 // committed atomically with the row deletion. Use the row's own tenant_id
 // (fetched above as part of SELECT *), not the env. Archives must be
 // attributed to the tenant that owns the row, not whatever HIPPO_TENANT
@@ -109,10 +109,8 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
   try {
     moveRowToArchive(db, id, row, opts);
     auditArchive(db, id, row, opts);
-    // v0.30 / E2 — DAG live-coupling: archive of a child under a level-2
-    // summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark
-    // commits atomically with the archive. row.dag_parent_id was fetched
-    // via SELECT * at L28 (schema v28 includes it).
+    // Archiving a child under a level-2 summary marks the parent dirty, inside the
+    // SAVEPOINT so the dirty-mark commits atomically with the archive.
     if (row.dag_parent_id) {
       markSummaryDirtyInTx(
         db,
@@ -121,7 +119,7 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         opts.who || 'cli',
       );
     }
-    // afterArchive hook (v0.39 commit 3): connector-level idempotency markers
+    // afterArchive hook: connector-level idempotency markers
     // (e.g. slack_event_log) must commit atomically with the archive itself.
     // Throwing here rolls back the entire SAVEPOINT — both the archive and any
     // hook side effects. The hook runs INSIDE the SAVEPOINT so its writes

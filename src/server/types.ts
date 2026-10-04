@@ -5,7 +5,7 @@ export interface ServerHandle {
   port: number;
   url: string;
   stop: () => Promise<void>;
-  /** Introspection-only (v1.26.2): the underlying node:http Server, exposed so
+  /** Introspection-only: the underlying node:http Server, exposed so
    *  tests can assert keep-alive/headers timeout hardening without reaching
    *  into serve()'s closure. Additive field — do not depend on it for control
    *  flow outside tests. */

@@ -23,7 +23,7 @@ export interface ResolveArgs {
  *         is non-empty (multi-tenant install with foreign installation)
  *       - `installationId` is missing AND either routing table is non-empty
  *         AND no `repository.full_name` match (PAT-mode webhook from a foreign
- *         account — codex P0 #4 regression target)
+ *         account)
  *
  * Escape hatch: `GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK=1` restores the
  * env fallback for emergency rollback only. Mirrors the Slack equivalent

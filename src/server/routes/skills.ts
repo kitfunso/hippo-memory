@@ -7,7 +7,7 @@ import type { RouteRequest } from '../types.js';
 import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 import { isJsonString } from '../../json.js';
 
-// ── skills (E2 first-class object, executable/exportable) ──
+// ── skills (first-class object, executable/exportable) ──
 //
 // 6 routes: POST /v1/skills (new; body skillName + instructions + trigger?),
 // GET /v1/skills (list, status filter; shared parseListLimit), GET

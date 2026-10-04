@@ -5,8 +5,7 @@ import * as path from 'path';
 import { log } from './log.js';
 
 /**
- * Project identity resolution for memory scope isolation (ROADMAP.md Part I
- * [Committed] "Memory scope isolation"; plan docs/plans/2026-07-01-memory-scope-isolation.md S1).
+ * Project identity resolution for memory scope isolation.
  *
  * Resolution rules:
  * - The nearest ancestor of cwd (including cwd itself) containing a `.hippo`
@@ -184,7 +183,7 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
 }
 
 /** Nearest ancestor `.hippo` below home and the temp root (never projects; on Windows the temp root sits inside home).
- *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. Design notes: docs/plans/2026-09-05-*.md */
+ *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. */
 export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpts): string | null {
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
   const stops = [realpathOrResolve(os.tmpdir())];
@@ -270,8 +269,7 @@ export function originFromSource(
  * Returns the project name, or '' for user-global (written at/under home or
  * in a markerless directory) - injectable everywhere. Write sites must always
  * persist this value; a NULL origin_project column is reserved for legacy
- * pre-migration rows, which ambient context treats as deny (see plan
- * docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
+ * pre-migration rows, which ambient context treats as deny.
  */
 export function deriveOriginProject(
   cwd?: string,

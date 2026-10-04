@@ -13,11 +13,9 @@ import type { DatabaseSyncLike } from '../../db.js';
  *     deployment's tenant). Escape hatch: SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1
  *     restores the env fallback for emergency rollback only.
  *
- * v0.39 commit 3 (CRITICAL #5): the previous version returned null on miss
- * unconditionally, and the route handler then fell back to HIPPO_TENANT —
- * which silently routed events from a foreign workspace into the deployment
- * tenant. The fail-closed contract lives here so every caller (route handler,
- * CLI replay, future MCP) gets the same protection.
+ * The fail-closed contract lives here so every caller (route handler, CLI
+ * replay, future MCP) gets the same protection against routing a foreign
+ * workspace's events into the deployment tenant.
  */
 export function resolveTenantForTeam(db: DatabaseSyncLike, teamId: string): string | null {
   // SAFETY: query selects only `tenant_id`, so a returned row has that shape;

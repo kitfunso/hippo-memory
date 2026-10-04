@@ -4,9 +4,8 @@ import type { Migration } from './types.js';
 export const v29: Migration = {
     version: 29,
     up: (db) => {
-      // E2 prediction first-class object (docs/plans/2026-05-26-e2-prediction-object.md).
-      // Adds a canonical predictions table for J3 reference-class /
-      // planning-fallacy detector (a follow-up episode). Predictions
+      // Prediction first-class object: a predictions table for the reference-class /
+      // planning-fallacy detector. Predictions
       // duplicate claim_text in the table itself so memory deletion
       // (forget/consolidate/archive) does not lose prediction data; FK
       // memory_id is NULLABLE with ON DELETE SET NULL.
@@ -18,7 +17,7 @@ export const v29: Migration = {
       // FK target. Precedent: v14 memories.kind trigger pair at db.ts:298-322.
       //
       // CHECK constraint pins closure_state to (open|closed|closed-unknown).
-      // J3 computes accuracy (clean vs regressed) from (estimate_value,
+      // Accuracy (clean vs regressed) is computed from (estimate_value,
       // actual_value) at query time.
       if (!tableExists(db, 'predictions')) {
         db.exec(`

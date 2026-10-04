@@ -73,7 +73,7 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 }
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
-  // E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
+  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
   // (a liveness probe) and other paths are never throttled. A 429 thrown
   // here lands in the createServer catch like any other HttpError.
   //

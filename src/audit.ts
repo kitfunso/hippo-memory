@@ -39,23 +39,16 @@ const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
 // CJK words average ~2 characters, so approximate substantive units as one per
 // 2 CJK LETTERS.
 //
-// Two properties this must hold, both learned from codex review findings:
-//  1. Letters only, enforced by construction. Two separate wrong guesses were
-//     caught here: a Katakana BLOCK range counts the middle dot and prolonged
-//     sound mark, and `\p{Script=Han}` alone still counts Han-script
-//     NON-letters (Kangxi radicals, the old Chinese hook mark) because Script
-//     properties are not restricted to letters. The `(?=\p{L})` lookahead
-//     makes "letters only" true by definition rather than by assertion, and
-//     the category sweep in tests/df3-cjk-quality-floor.test.ts pins it so the
-//     next wrong guess fails locally instead of in review.
+// Two properties this must hold:
+//  1. Letters only, enforced by construction: a Katakana BLOCK range counts the
+//     middle dot and prolonged sound mark, and `\p{Script=Han}` alone counts
+//     Han NON-letters (Kangxi radicals), so the `(?=\p{L})` lookahead makes
+//     "letters only" true by definition; tests/df3-cjk-quality-floor.test.ts sweeps it.
 //
 // SCOPE, stated precisely because the constant name says "CJK": this covers
 // Han, Hiragana and Katakana only. Hangul is absent (Korean largely survives
 // the whitespace split already) and other spaceless scripts - Thai, Khmer,
-// Burmese, Lao - still hit the original one-word failure. Their behavior is
-// byte-identical to before this change, so nothing regressed; widening the
-// script set is a separate, deliberately-scoped follow-up rather than another
-// mid-episode guess at this predicate.
+// Burmese, Lao - still hit the original one-word failure.
 //  2. ADD to the latin count, never strip before it. Stripping CJK first can
 //     REDUCE the count for short mixed tokens (`UI<han> DB<han> QA<han>` leaves
 //     three 2-char latin fragments that fail the `> 2` filter), which would
@@ -101,25 +94,10 @@ function hasNoSpecificity(text: string): boolean {
   const words = text.toLowerCase().split(/\s+/);
   const hasNumber = /\d/.test(text);
   const hasProperNoun = /[A-Z][a-z]{2,}/.test(text);
-  // An ACRONYM is specificity too, and this test could not see one: the
-  // proper-noun pattern needs lowercase after the capital, so "PR", "CI",
-  // "DB", "API", "S3" - the densest domain tokens in a technical memory -
-  // all read as vague. Surfaced by DF2: clause-bounding correctly shortened
-  // "The rule is every PR needs two approvals, no exceptions." to "every PR
-  // needs two approvals", which then fell under the 40-char vagueness gate
-  // and was silently DROPPED - a rule that stored before this branch.
-  // ...but an acronym only signals specificity when it stands out AGAINST
-  // ordinary prose. Without the lowercase requirement, any shouted phrase
-  // qualifies: "FIXED SIGNALS" passed the gate while the identical
-  // "fixed signals" was correctly rejected, so capitalization alone bought a
-  // bypass - into auditMemory and includeRecent as well, where junk would
-  // then occupy recent-context slots. Codex P2, r8.
-  // CHAT acronyms are not domain signal. Admitting any all-caps token let
-  // "LGTM ship it", "TODO fix this thing", "FYI all done here" through a gate
-  // that correctly rejected them before - and this gate is shared, so the
-  // effect is retroactive: junk rows already in a user's store were filtered
-  // out of recent-context slots and would have started occupying them, and
-  // `hippo audit` would have stopped flagging them. Found at the ship gate.
+  // An ACRONYM is specificity too: the proper-noun pattern needs lowercase after the capital, so
+  // "PR", "CI", "DB", "API", "S3" (the densest domain tokens in a technical memory) all read as vague.
+  // It counts only against ordinary prose (the lowercase test), else a shouted phrase bypasses the gate,
+  // and CHAT acronyms never count: the gate is shared, so "LGTM ship it" would reach recent-context slots.
   const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|WIP|NB|PS)$/;
   const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
   const hasAcronym = domainAcronyms.length > 0 && /[a-z]/.test(text);
@@ -195,7 +173,7 @@ export function isContentWorthStoring(content: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// A5 audit log primitives (append-only mutation trail)
+// Audit log primitives (append-only mutation trail)
 // ---------------------------------------------------------------------------
 
 // The one list of audit ops: the AuditOp type, `hippo audit list --op` and GET /v1/audit?op= all read it.

@@ -22,7 +22,7 @@ export interface SlackMessageEvent {
   thread_ts?: string;
   /**
    * Slack `bot_message` subtype carries `bot_id` instead of `user`. The
-   * v0.40.0 provenance gate requires a non-null `owner`, so transform.ts
+   * provenance gate requires a non-null `owner`, so transform.ts
    * derives `owner: bot:<bot_id>` when `user` is absent.
    */
   bot_id?: string;

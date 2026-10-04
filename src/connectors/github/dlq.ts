@@ -9,9 +9,8 @@ import type { JsonValue } from '../../json.js';
 /**
  * GitHub webhook DLQ. Mirrors the Slack DLQ shape (src/connectors/slack/dlq.ts)
  * but carries GitHub-specific metadata: event_name, delivery_id, signature,
- * installation_id, repo_full_name. Codex P1 #5 mandates this rich context
- * so a `hippo gh dlq replay` operator can triage without re-deriving anything
- * from the raw payload.
+ * installation_id, repo_full_name, so a `hippo gh dlq replay` operator can
+ * triage without re-deriving anything from the raw payload.
  *
  * Buckets:
  *   - parse_error     — raw_payload was not valid JSON
@@ -171,7 +170,7 @@ export interface ReplayDlqOpts {
   /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
   webhookSecret?: string;
   /**
-   * Previous webhook secret during rotation (v1.3.1 hotfix — claude P1).
+   * Previous webhook secret during rotation.
    * Operators rotating GITHUB_WEBHOOK_SECRET would otherwise be forced into
    * --force on DLQ rows written under the old secret. Plumbed through to
    * verifyGitHubSignature.previousSecret.
@@ -203,10 +202,8 @@ export interface ReplayResult {
  * route already knows how to route an envelope, so it passes that capability
  * back in.
  *
- * v1.3.2 (claude review): the v1.3.1 contract advertised an `idempotencyKey`
- * field, but the v1.3.1 ingest re-derives the key from the parsed event
- * itself, so the field was a phantom — any future hook that trusted the
- * passed-in value would dedupe against a stale key. Field removed.
+ * No `idempotencyKey` field: ingest re-derives the key from the parsed event,
+ * so a hook trusting a passed-in key would dedupe against a stale one.
  */
 export type IngestHook = (
   ctx: Context,
@@ -227,7 +224,7 @@ export type IngestHook = (
  *   4. Type-guard the envelope. Fail → bump, `unhandled`.
  *   5. If an `ingestHook` is supplied, call it and return its memoryId.
  *      If not (dry-run path), bump retry_count and return status `replayed`
- *      with memoryId=null. The webhook route wires the real hook in Task 14.
+ *      with memoryId=null. The webhook route wires the real hook.
  *
  * Mirrors Slack's "always use current routing" policy: replays use the
  * deployment state NOW, not at the time of original DLQing.
@@ -278,8 +275,7 @@ export async function replayDlqEntry(
   // Real replay path. The route's IngestHook is responsible for routing,
   // idempotency, and writing the memory. The DLQ module only validates the
   // surface and bumps the retry counter.
-  // v1.3.2: dropped the stale idempotencyKey arg — the hook re-derives it
-  // from the parsed event (artifact_ref + updated_at) since v1.3.1.
+  // No idempotencyKey arg: the hook re-derives it from the parsed event (artifact_ref + updated_at).
   const eventName = row.eventName ?? '';
   const deliveryId = row.deliveryId ?? '';
   const { memoryId } = await opts.ingestHook(ctx, {

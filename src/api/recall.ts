@@ -35,7 +35,7 @@ import { type Context, RecallContractError } from './types.js';
  * `api.recall`, `cmdRecall`, and the MCP `hippo_recall` handler so all three
  * pipelines produce the same shape without duplicating field-construction
  * logic. Pass-through identity today; kept as a helper so future field
- * additions (B4 interference counter wiring, etc.) land at one site.
+ * additions land at one site.
  */
 export function buildSuppressionSummary(counts: {
   totalCandidates: number;
@@ -60,7 +60,7 @@ export function buildSuppressionSummary(counts: {
  * `ctx.tenantId` and keeps that order whatever `mode` says; `retrieve` is the
  * mode-aware, strengthening variant the HTTP route uses.
  *
- * **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract
+ * **api.recall does NOT mutate `index.last_retrieval_ids`** (contract
  * lock). The CLI `cmdRecall` (cli.ts) writes `last_retrieval_ids` because the
  * CLI is interactive (user is about to run `hippo outcome --good`). SDK callers
  * are programmatic: they either pass explicit ids to `api.outcome` or call
@@ -77,7 +77,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false));
 }
 
-/** Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock). */
+/** Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (contract lock). */
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
@@ -155,11 +155,8 @@ async function retrieveFromStore(
 
 /** Contract preflight: throws before any store-touching work. */
 function recallWindowSize(opts: RecallOpts): number {
-  // F5 (v1.6.5) preflight — codex P1: original guard fired AFTER
-  // loadSearchEntries (which runs initStore, migrating legacy state on first
-  // call). For a true contract preflight we want the throw before any
-  // store-touching work. Single check here; the consumer site at
-  // `if (freshTailCount > 0)` does NOT re-validate (would be a no-op).
+  // Throw before loadSearchEntries, which runs initStore and migrates legacy state on first call.
+  // The consumer site at `if (freshTailCount > 0)` does NOT re-validate.
   const freshTailCountPreflight = opts.freshTailCount ?? 0;
   if (
     freshTailCountPreflight > 0 &&
@@ -172,16 +169,8 @@ function recallWindowSize(opts: RecallOpts): number {
         'pass opts.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
     );
   }
-  // F3 (v1.7.0): scorerWindow opt-in. When undefined (default),
-  // loadSearchEntries uses its own store-internal default — this
-  // preserves every pre-v1.7.0 caller's behaviour bit-for-bit (codex
-  // mk2-pass P0-1: defaulting to `limit` would have shrunk the
-  // candidate pool and killed overflow summaries).
-  // DEFAULT_SEARCH_CANDIDATE_LIMIT is imported from store.ts so the two
-  // values cannot drift (codex diff-pass P1 #3).
-  // Validate the input — codex diff-pass P1 #1 caught that scorerWindow=0
-  // would route through FTS/LIKE LIMIT 0 and then fall through to an
-  // uncapped full-store fallback. Reject non-positive / non-finite values.
+  // Undefined keeps the store default: defaulting to `limit` would shrink the pool and kill overflow summaries.
+  // 0 would reach FTS/LIKE LIMIT 0 and then an uncapped full-store fallback, so non-positive values throw.
   if (opts.scorerWindow !== undefined) {
     if (
       !Number.isFinite(opts.scorerWindow) ||

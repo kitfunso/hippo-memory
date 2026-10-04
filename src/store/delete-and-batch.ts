@@ -38,20 +38,11 @@ export function memoriesBackingObjects(hippoRoot: string): Set<string> {
 }
 
 /**
- * AT1 (plan §4, round-2 fix, designed from source): db-scoped delete core.
- * `deleteEntry` used to open+close its OWN connection, which meant it could
- * never compose inside a caller's transaction (unlike writeEntry/
- * writeEntryDbOnly, which already split this way). Split identically: row-
- * meta SELECT, `DELETE FROM memories`, FTS delete, `forget` audit, DAG
- * dirty-mark. NO filesystem I/O — the caller's own transaction may still be
- * rolled back, and mirror writes must only happen post-commit.
+ * db-scoped delete core, so a delete can compose inside a caller's transaction.
+ * NO filesystem I/O: the caller's transaction may still roll back, and mirrors are written post-commit.
  *
- * `opts.suppressForgetAudit` (default false, off): two AT1 callers set this
- * so a removed non-raw row does NOT ALSO emit a `forget` row, because each
- * already writes its own aggregate audit trail — `src/reject-flow.ts`'s
- * `rejectValue` (single `reject_value` row covering every same-digest row
- * removed) and `resolveConflict` (`conflict_resolve` row per resolution).
- * Default keeps `deleteEntry` byte-identical to its pre-split behavior.
+ * `opts.suppressForgetAudit` (default false): `rejectValue` and `resolveConflict` set it because each
+ * writes its own aggregate audit row, so a removed row must not ALSO emit a `forget` row.
  *
  * Returns `{tenantId, dagParentId}` for the removed row, or `null` if no row with `id`
  * existed or `automatic` refused it (pinned, raw, kept for good or backing an object at DELETE time, so a late pin wins).
@@ -73,11 +64,8 @@ export function deleteEntryCore(
   if (!opts?.suppressForgetAudit) {
     audit(db, 'forget', id, opts?.reason ? { reason: opts.reason } : undefined, opts?.actor ?? 'cli', row.tenant_id);
   }
-  // v0.30 / E2 — DAG live-coupling: forget of a child under a level-2
-  // summary marks parent dirty. Non-atomic with the DELETE (no SAVEPOINT
-  // wrapper here, same as pre-split deleteEntry); markSummaryDirtyInTx is
-  // idempotent so any future child mutation re-marks parent if this fails.
-  // Acceptable degradation, mirrors the pre-split audit best-effort posture.
+  // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
+  // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
     markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? 'default', opts?.actor ?? 'cli');
   }
@@ -160,20 +148,11 @@ export function batchWriteAndDelete(
 
   const db = openStore(hippoRoot);
   try {
-    // BEGIN IMMEDIATE (codex delta-review P2): the AT1 tombstone probes below
-    // READ before the first write. Under a deferred BEGIN, that read pins a
-    // WAL snapshot; a concurrent writer (e.g. `hippo reject`) committing
-    // between probe and first upsert would make the later write-lock upgrade
-    // fail with SQLITE_BUSY and roll back the ENTIRE batch — the exact race
-    // the probe exists to contain. Taking the write lock up front serializes
-    // the probe and the writes on one consistent snapshot.
+    // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
+    // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
     db.exec('BEGIN IMMEDIATE');
-    // v0.30 / E2 — DAG live-coupling: BEFORE deletes, snapshot dag_parent_id
-    // for every doomed row so we can mark parents dirty post-COMMIT. Done
-    // inside the same BEGIN so the SELECT sees pre-delete state.
-    // independent-review-critic R1 HIGH: consolidate.ts/sleep flushes through
-    // this path every cycle; without these hooks parents NEVER get marked
-    // dirty for the dominant mutation source (decay, merge, garbage-collect).
+    // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here
+    // every cycle, so without it parents would never be marked dirty for decay, merge or garbage-collect.
     const dirty: DirtyParents = { parents: new Set<string>(), tenantById: new Map<string, string>() };
     const deletableIds: string[] = [];
     if (toDeleteIds.length > 0) {
@@ -269,23 +248,8 @@ function applyBatchWrites(
   snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
   dirty: DirtyParents,
 ) {
-  // AT1 P1 fix (codex, batch-transaction rejection race): the producer-side
-  // check (e.g. consolidate.ts's merge pass) runs BEFORE this transaction,
-  // on a different connection. A `hippo reject X` that commits in that
-  // window is invisible to it — a queued same-id write of X already
-  // sitting in `toWrite` (decay/replay re-persist, or a merge built before
-  // the reject) would silently re-INSERT the just-rejected row via the
-  // blind bypass. Fix: one indexed point probe per batch entry, on THIS
-  // connection, INSIDE this transaction — closes the race regardless of
-  // which write class hits it. N is small per sleep, so the extra query
-  // per entry is cheap.
-  //
-  // Skip, don't throw: the batch must still complete for every OTHER
-  // entry. Skipping is correct for every write class here — a merge
-  // summary skip just means that rollup is absent this cycle (its source
-  // facts stay merely demoted, recoverable next sleep); a skipped
-  // demotion/replay re-persist of a rejected-removed row means it stays
-  // gone, which is the entire point of the tombstone.
+  // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier
+  // on another connection, so a reject committed in between would be re-inserted. Skip, never throw, so the rest lands.
   let batchRejectedSkips = 0;
   const written: MemoryEntry[] = [];
   const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
@@ -301,18 +265,8 @@ function applyBatchWrites(
     }
     if (base && !live) continue;
     written.push(row);
-    // AT1 (plan §3, corrected): bypass the rejection guard here.
-    // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
-    // consolidate.ts:736-751) of already-guarded leaf facts, not an LLM
-    // paraphrase — refusing mid-batch would abort the whole consolidation
-    // transaction. The bypass is safe because consolidate.ts's merge pass
-    // now checks the merged content's rejection digest against the
-    // tenant's tombstones BEFORE ever pushing a merge into pendingWrites,
-    // skipping that merge entirely on a hit, AND because the point-probe
-    // immediately above closes the race window between that producer
-    // check and this COMMIT. The guard itself still belongs on leaf
-    // inserts, which write through writeEntry / writeEntryDbOnly and stay
-    // guarded (bypassRejectionGuard defaults false).
+    // Bypass the guard: merges concatenate already-guarded facts, the merge pass checks merged content, and
+    // the probe above closes the race; a mid-batch refusal would abort the whole consolidation.
     upsertEntryRow(db, row, true);
     // Hook for writes: a new child, or a change to what its summary reads, marks the parent dirty; decay alone does not.
     if (row.dag_parent_id && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
@@ -326,15 +280,8 @@ function applyBatchWrites(
 /** True, after auditing the refusal, when the write would introduce a rejected value. */
 function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
   const entryTenantId = row.tenantId ?? 'default';
-  // Codex delta-review P2 fix: reuse checkRejectionGuard rather than a
-  // bare tombstone probe — the guard's content-INTRODUCTION
-  // classification must apply here too. A tombstone can legitimately
-  // coexist with a live same-content row (resolveConflict deliberately
-  // excludes keepId from its sweep; unreject-then-re-reject windows), and
-  // an unconditional skip would starve that row of decay/replay metadata
-  // updates forever. The guard throws only when the write is new-row or
-  // changes content TO the rejected value; unchanged same-id re-persists
-  // pass through, exactly as on the writeEntry path.
+  // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row,
+  // and skipping every re-persist would starve it of decay/replay updates; only new or changed content is refused.
   try {
     checkRejectionGuard(db, entryTenantId, row.id, row.content);
   } catch (err) {

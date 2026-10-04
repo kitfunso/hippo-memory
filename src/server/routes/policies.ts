@@ -22,7 +22,7 @@ function optionalDateField(raw: JsonValue | undefined, label: string): string | 
   return raw;
 }
 
-// ── policies (E2 first-class object, bi-temporal-first) ──
+// ── policies (first-class object, bi-temporal-first) ──
 //
 // 6 routes: POST /v1/policies (new; processName-style body policyName +
 // policyText + validFrom? + validTo?), GET /v1/policies (list, status filter),

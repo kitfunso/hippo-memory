@@ -197,7 +197,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
   }
   assertLocalCaller(req);
 
-  // v1.12.0: loopback fallback is process-local, treat as admin.
+  // Loopback fallback is process-local, treat as admin.
   return {
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),

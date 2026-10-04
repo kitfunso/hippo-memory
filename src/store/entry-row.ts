@@ -6,26 +6,8 @@ import { checkRejectionGuard } from '../rejection.js';
 import { log } from '../log.js';
 
 /**
- * `bypassRejectionGuard` (AT1, plan §3): ONLY `batchWriteAndDelete`'s call
- * site passes `true`. Consolidation merges are DETERMINISTIC CONCATENATION
- * (mergeContents, consolidate.ts:736-751), not LLM paraphrase — the bypass
- * is safe because the producer (consolidate.ts's merge pass) now checks the
- * merged content's rejection digest against the tenant's tombstones BEFORE
- * ever assembling a batch to write, and skips the merge entirely on a hit.
- * Every other caller (writeEntryDbOnly, bootstrapLegacyStore, rebuildIndex)
- * leaves this false and the guard runs live.
- *
- * AT1 P1 fix (codex, batch-transaction rejection race): the producer check
- * above runs on a DIFFERENT connection BEFORE this transaction opens — a
- * `hippo reject X` that commits in that window is invisible to it. This
- * parameter's contract is UNCHANGED (still the sole bypass, still trusted
- * by the producer-side check for the common case); what changed is that
- * `batchWriteAndDelete` no longer trusts it BLINDLY. It now runs its own
- * in-transaction point-probe (same connection, same digest lookup this
- * function's guard would have done) immediately before each upsert and
- * skips — rather than writes — any entry whose content matches a tombstone
- * that landed after the producer's check. See batchWriteAndDelete for the
- * skip logic.
+ * `bypassRejectionGuard`: ONLY `batchWriteAndDelete` passes `true`; its merges concatenate
+ * already-guarded facts, and it re-probes tombstones in-transaction before each upsert.
  */
 export function upsertEntryRow(
   db: ReturnType<typeof openHippoDb>,
@@ -169,14 +151,14 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
  * Write a memory entry to SQLite and refresh compatibility mirrors.
  *
  * `opts.actor` defaults to 'cli' so unauthenticated direct-CLI callers still
- * get the right audit attribution. The HTTP server (A1) and api.* layer pass
+ * get the right audit attribution. The HTTP server and api.* layer pass
  * the resolved actor (`api_key:<key_id>` / `localhost:cli`) so audit events
  * land with one row per write, no double-emit.
  *
  * `opts.afterWrite` is invoked inside the same SAVEPOINT as the memories
  * INSERT (mirrors archiveRawMemory's shape in raw-archive.ts). On callback
  * throw, the SAVEPOINT rolls back — the memory row never lands, and the
- * filesystem mirrors / audit emit never run. Used by E1.3+ connectors to
+ * filesystem mirrors / audit emit never run. Used by connectors to
  * stamp idempotency rows atomically with the memory write.
  */
 /**
@@ -191,7 +173,7 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
  * v39 migration found no evidence for" and is deny-by-default in ambient
  * context. A writeback (e.g. markRetrieved on a crossProject-included row)
  * must not launder it into an injectable origin - the migration is the only
- * evidence-based NULL converter (codex gating round 2 P1).
+ * evidence-based NULL converter.
  */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
@@ -205,7 +187,7 @@ export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): Memor
  * backfill. Same evidence order as the migration: the provenance source
  * (`shared:<project>:` / `promoted:<localRoot>`) wins over the destination
  * store's location, so a shared row imported into the global store keeps its
- * owning project instead of becoming user-global (codex gating round 3 P1).
+ * owning project instead of becoming user-global.
  */
 export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;

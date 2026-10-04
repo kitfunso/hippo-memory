@@ -12,8 +12,8 @@ import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseListLimit, validateIdSegment } from '../validation.js';
 
-// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
-// for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
+// Module-level per-(tenant, session) recall-history ring map
+// for the HTTP pipeline. Separate from CLI/MCP rings (per-
 // pipeline rings; no IPC). HTTP is the only caller that threads its
 // snapshot through opts.recallHistory to api.recall — api.recall's
 // anchoringHint on the returned RecallResult IS the user-visible hint
@@ -41,15 +41,14 @@ interface RecallQuery {
 }
 
 function parseFreshTail(query: URLSearchParams): Pick<RecallQuery, 'freshTailCount' | 'freshTailSessionId'> {
-  // v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP
-  // callers. Pre-v1.6.2 the route silently ignored these so the
-  // session-scoped fresh-tail and summary substitution were JS-only.
+  // Surface the fresh-tail RecallOpts to HTTP callers so session-scoped
+  // fresh-tail and summary substitution are not JS-only.
   const freshTailCountRaw = query.get('fresh_tail_count');
   const freshTailCount = freshTailCountRaw === null ? undefined : Number(freshTailCountRaw);
   if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
     throw new HttpError(400, 'fresh_tail_count must be a non-negative number');
   }
-  // v1.6.3 senior-review P1-3: cap session_id length consistent with the
+  // Cap session_id length consistent with the
   // rest of the API. Untrimmed strings round-trip through the SQL layer
   // and through any downstream metric/log; 256 is generous for a session
   // id and matches the rest of this file's id-shaped param parsers.
@@ -64,7 +63,7 @@ function parseFreshTail(query: URLSearchParams): Pick<RecallQuery, 'freshTailCou
 }
 
 function parseSessionId(query: URLSearchParams): string | undefined {
-  // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
+  // session_id for the dlPFC goal-stack boost. 256-char cap mirrors
   // fresh_tail_session_id (above). Trim then drop if empty so api.recall
   // sees undefined when the param is omitted or whitespace-only.
   const sessionIdRaw = query.get('session_id');
@@ -92,10 +91,8 @@ function parseRecallQuery(query: URLSearchParams): RecallQuery {
   const includeContinuity = includeContinuityRaw === '1'
     || includeContinuityRaw === 'true';
   const { freshTailCount, freshTailSessionId } = parseFreshTail(query);
-  // v1.6.3 senior-review P1-4: tighten parser to match the includeContinuity
-  // convention. Pre-v1.6.3 accepted any non-'0'/'false' value as `true`,
-  // so `?summarize_overflow=banana` and `?summarize_overflow=` both
-  // turned it on. Surface convention drift fixed.
+  // Strict parse matching the includeContinuity convention, so values
+  // like `?summarize_overflow=banana` or an empty value do not turn it on.
   const summarizeOverflowRaw = query.get('summarize_overflow');
   const summarizeOverflow = summarizeOverflowRaw === null
     ? undefined
@@ -107,7 +104,7 @@ function parseRecallQuery(query: URLSearchParams): RecallQuery {
     throw new HttpError(400, 'scorer_window must be <= 1000');
   }
   const sessionId = parseSessionId(query);
-  // A7 recall-trace: opt-in explain flag. When set, api.recall attaches the
+  // Recall-trace: opt-in explain flag. When set, api.recall attaches the
   // lifecycle re-ranking trace (goal-boost step on the api pipeline) +
   // rerankPipeline:'api' to each result item; the field then rides on the
   // serialized RecallResult. Mirrors the include_continuity convention.
@@ -121,7 +118,7 @@ interface SessionRing {
   httpRingKey: string | undefined;
 }
 
-// v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
+// HTTP per-pipeline anchoring detector. HTTP threads its
 // ring snapshot via opts.recallHistory so api.recall's own
 // anchoringHint compute path activates. Unlike CLI (which computes
 // its own hint separately because cmdRecall runs its own physics/
@@ -133,12 +130,8 @@ function snapshotSessionRing(ctx: Context, hippoRoot: string, q: string, session
   let httpRingKey: string | undefined;
   if (biasHintEnabled('anchoring')) {
     if (sessionId) {
-      // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
-      // before recall() preflight runs. A request with an invalid
-      // scorer_window / fresh_tail_count would create-or-touch the
-      // session ring (LRU-evicting valid sessions) even though recall
-      // throws 400. Snapshot the EXISTING ring if present; only
-      // create-or-touch after the recall returns successfully.
+      // Do NOT mutate sessionRecallHistoryHttp before recall() preflight: a request
+      // that 400s would otherwise create-or-touch a ring and LRU-evict valid sessions.
       httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
       const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
       httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
@@ -147,11 +140,8 @@ function snapshotSessionRing(ctx: Context, hippoRoot: string, q: string, session
       // Per the normal recall-audit convention (api.ts:854 stores
       // SHA-256/16 hash of the query, NOT raw text), avoid retaining
       // prompts in audit_log here too — query content can contain
-      // secrets, PII, or RTBF-restricted material. Codex round-2 P2
-      // catch: hashQueryText is a 32-bit FNV-1a designed for recall
-      // matching, NOT a privacy hash; brute-force trivial for low-
-      // entropy queries. Use the same SHA-256/16 truncation as the
-      // canonical recall audit.
+      // secrets, PII, or RTBF-restricted material. hashQueryText is a 32-bit
+      // FNV-1a, NOT a privacy hash, so use the recall audit's SHA-256/16 truncation.
       const dbForAudit = openHippoDb(hippoRoot);
       try {
         appendAuditEvent(dbForAudit, {
@@ -203,13 +193,8 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
     ...recallExtraOpts(parsed, httpRecallHistory),
   });
 
-  // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
-  // recall() ran). anchoredOn carries the memoryId of any hint that fired
-  // (api.recall computed it from the same snapshot we passed in), feeding
-  // the cooldown logic for the NEXT recall on this session.
-  // Codex round-5 P2 fix: create-or-touch the ring ONLY HERE, after recall
-  // returns successfully. Invalid requests that throw 400 in recall()
-  // never reach this point, so they cannot LRU-evict valid sessions.
+  // Append only after recall succeeds, so a 400 cannot LRU-evict valid sessions;
+  // anchoredOn feeds the cooldown logic for the NEXT recall on this session.
   if (httpRingKey) {
     const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
     const topId = result.results[0]?.id ?? null;
@@ -246,10 +231,8 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
     throw new HttpError(400, 'freshTail must be a non-negative number');
   }
-  // v1.6.3 senior review P1: same strict-parse convention as the v1.6.3
-  // summarize_overflow tighten on /v1/memories. Pre-v1.6.3 accepted any
-  // non-'0'/'false' as true; ?summarizeOlder=banana now correctly returns
-  // false (matches includeContinuity convention).
+  // Same strict-parse convention as summarize_overflow on /v1/memories:
+  // ?summarizeOlder=banana is false (matches includeContinuity convention).
   const sumOlderRaw = query.get('summarizeOlder');
   const summarizeOlder = sumOlderRaw === null
     ? undefined
@@ -286,12 +269,12 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
     throw new HttpError(400, 'budget must be a positive number');
   }
-  // v0.30 / E5: depth query param walks N levels (default 1, hard cap 10).
+  // depth query param walks N levels (default 1, hard cap 10).
   const depthRaw = query.get('depth');
   let depth: number | undefined;
   if (depthRaw !== null) {
     const parsed = Number(depthRaw);
-    // L4 fold: reject out-of-range explicitly (no silent clamp).
+    // Reject out-of-range explicitly (no silent clamp).
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
       throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
     }
@@ -304,7 +287,7 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (depth !== undefined) drillExtra.depth = depth;
   const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
   if ('failure' in result) {
-    // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
+    // Leaf id maps to 422 (caller-actionable). Other cases stay
     // as 404 to avoid leaking cross-tenant existence or scope grants.
     if (result.failure === 'not_drillable') {
       throw new HttpError(422, 'Id is a leaf row, not a level-2+ summary; nothing to drill into');
@@ -322,7 +305,7 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
 // (matches cmdContext); real-query hybrid search emits one 'recall' row.
 export async function handleGetContext({ req, res, opts, query }: RouteRequest): Promise<void> {
   const q = query.get('q') ?? undefined;
-  // v1.11.5: DoS cap on q-param length. 1024 covers real multi-clause queries
+  // DoS cap on q-param length. 1024 covers real multi-clause queries
   // (pasted error messages, multi-stem searches) while bounding BM25
   // tokenisation cost (~150 tokens worst case at 1024 chars).
   if (q !== undefined && q.length > 1024) {

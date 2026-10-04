@@ -1,5 +1,5 @@
 /**
- * Token ledger (ROADMAP Part IX, TE0): what memory text hippo hands agents,
+ * Token ledger: what memory text hippo hands agents,
  * and how many tokens it costs.
  *
  * One row per block of memory text sent to an agent, on every surface: the
@@ -11,7 +11,7 @@
  * Every later model call re-reads a sent block until the host compacts; at session end the worker counts
  * those calls from the transcript as `reread` rows for the {@link REREAD_SURFACES} blocks, dated by call day.
  *
- * It also backs TE2, inject only on change: the per-prompt hook compares the
+ * It also backs inject-only-on-change: the per-prompt hook compares the
  * hash of the block it is about to send with the last block it sent in the
  * same session and records a `skip` instead of sending it again.
  *
@@ -32,7 +32,7 @@ import { type JsonValue, isJsonString } from './json.js';
 /**
  * Where a block of memory text was sent.
  * - `hook`: the per-prompt `UserPromptSubmit` hook (`hippo context --pinned-only`).
- * - `hook_recall`: the same hook's Z1 prompt-recall section (docs/plans/2026-09-26-z1-prompt-recall.md).
+ * - `hook_recall`: the same hook's prompt-recall section.
  * - `compact_resume`: the snapshot the SessionStart(compact) hook prints (`hippo compact-resume`).
  * - `context`, `recall`: the CLI commands.
  * - `mcp_recall`, `mcp_context`: the MCP tools.
