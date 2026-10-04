@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.63.0 - 2026-10-04
+
+### Added
+
+- **A project is named by its committed `.hippo-project.json` id, else its `origin` remote, else its folder.** Two repos both called `api` shared every memory in the global store; now each gets its own id, such as `github.com/acme/api`. The remote is read from git's config files with no git process, so hooks stay fast; ssh, scp, https and Azure DevOps forms of one repo agree, and a token in the URL, query or fragment never reaches a row. A file id may not contain a slash, so a cloned repo's file cannot claim another repo's remote id. A worktree takes its main checkout's remote, a submodule its own, a nested store its folder name, and home stays user-global. Set `projectIdentity.remote` to `false` in the global config to keep folder names.
+- **Rows saved under the old folder name stay visible.** Context, recall, the ambient summary, compaction repeats and churn staleness read rows under every name the checkout resolves to: the file id, the remote and the old folder name. The next agent-memory sync moves imports and their dormant copies under the id in place, keeping their ids, instead of importing them again.
+
+### Changed
+
+- **`hippo sleep` runs the project tag repair once per store after an upgrade, so nobody has to.** It sets aside misfiled note imports, folds a project store's own folder name into its id and re-tags merged memories, writing a backup and an audit event first; a store with nothing to fix gets no backup. Name folds in the global store stay with `hippo projects repair --global`: their only evidence is compaction folders, which cannot see a same-named repo that never compacted. A failed repair warns and runs again at the next sleep.
+- **`hippo projects repair` folds a project store's own folder name into its id, and refuses a name two projects now claim.** `hippo doctor` names each fold and each shared name with its ids; a shared name needs `hippo projects merge` by hand. `hippo projects merge` now sets aside only the imports the target already holds; the next sync moves the rest under the target.
+- **`saveDecision` now answers a lost supersede race with 409 Conflict, not 400 Bad Request.** When another writer supersedes the same decision between the preflight check and the update, `POST /v1/decisions` returns HTTP 409 and the API throws `ConflictError`, like the other save paths. Clients that retried only on 400 should retry on 409.
+- **`GET /v1/predictions` with no `status` and no `class` now lists closed predictions too.** `status=all` used to return only open rows when no class was given. `hippo predict list` had the same gap and now shows every prediction in every class.
+- **`HIPPO_REQUIRE_SERVER` is on only for `1` or `true`.** Any other non-empty value, such as `0` or `false`, used to turn it on.
+- **Store passes that touched one row at a time now open the store once and read rows in batches.** `outcome`, `quarantineList`, `drillDown`, `importEntries`, `invalidateMatching`, churn tagging and dedupe used to open the store, or run a read, once per row. At 200 rows, `outcome` went from 401 store opens to 1 and from 18,639 SQL statements to 2,042, and `drillDown` went from 202 opens and 202 row reads to 1 open and 3 reads. The sleep conflict pass now updates and rewrites mirror files only for memories whose conflict list changed, where before it rewrote every row and every mirror file. `resolveConflict` rewrites two mirror files instead of all of them. Results, order, errors and per-row transactions are unchanged.
+- **Fifteen long functions across 14 `src/` modules are split into smaller helpers, with no change in behaviour.** They include `serve`, `detectServer`, `rejectValue`, `detectChurnStale`, `createDeliveryRecorder`, `buildSyntheticCorpus`, `runDoctor` and `autoShare`. Each one is now 63 lines or fewer, and their entries are gone from `.size-baseline.json`. A new test pins the synthetic eval corpus.
+- **`loadConfig` and the `GET /v1/memories` handler are split into smaller helpers, with no change in behaviour.** Each is now 53 lines or fewer, and both entries are gone from `.size-baseline.json`. New tests pin the config warnings and fallbacks, and which bad recall query param is reported first.
+- **Shared helpers and named constants replace copies and magic numbers, with no change in behaviour.** `JsonValue` and `isJsonString` now live once in `src/json.ts` (14 type copies and 12 function copies folded into one each), and `escapeLike` and `escapeRegex` live once in `src/escape.ts` (8 copies, two of them inline, folded into two). The 4000-token recall budget, the 1.2 local-over-global bump and its 1/1.2 global discount, and the 256-character id cap are named constants. Unused imports and variables went from 62 lint hits to 0, and the lint baseline is lowered to match.
+- **History moved out of `src/` comments into `docs/incidents.md` and `docs/ARCHITECTURE.md`.** Ticket codes, release tags, review notes, dates and plan paths in source comments fell from 1,093 lines to 86, and each comment now keeps only its one-line reason. The moved text is quoted under a heading per module, so nothing was lost. No code changed: the compiled output with comments stripped is byte-identical.
+
+### Fixed
+
+- **`MCP_SSE_HEARTBEAT_MS`, `MCP_SSE_MAX_AGE_SEC` and `HIPPO_LLM_RERANKER_TIMEOUT_MS` ignore zero and negative values.** The caller's default applies instead of a negative timer.
+- **`HIPPO_SESSION_ID`, `CLAUDE_CODE_SESSION_ID`, `HIPPO_MODEL_CACHE` and `TYPESAFE_API_KEY` are trimmed in one place.** A blank value reads as unset everywhere.
+- **A memory queued twice for a dormant move binds one value per placeholder.** node:sqlite bound the missing values as NULL, so nothing broke, but a strict driver would throw.
+- **`hippo serve --host ::1` now writes `http://[::1]:<port>` and the CLI finds it.** The server URL lacked brackets, so it did not parse, and the pidfile check compared `[::1]` against `::1`, so an IPv6 loopback server was never detected.
+- **A busy 503 from the server logs at warn, not error.** It is back-pressure the client retries, not a server fault.
+- Dead code and stale comments left by the long-function splits: the `--dry-run` value guard in `hippo invalidate`, an unused flag and variable in `hippo hook`, the unused max velocity in `hippo status`, a duplicate L2 tenant partition in `buildEntityProfiles`, two extra config loads per `getContext` call, and docs that sat above the wrong function or named old line numbers.
+
+### Documentation
+
+- **The 17 ways CLI, MCP and HTTP recall differ today are written down and pinned by tests, with no change in behaviour.** `docs/recall-surface-differences.md` lists them, and `tests/recall-surface-parity-golden.test.ts` pins each surface's output, order, scores, audit rows, session hints and input checks on one store. The ranker eval that will pick the single recall ranker is pre-registered in `docs/evals/2026-10-04-q3b-ranker-floor-prereg.md`, before any run.
+
+### Tests
+
+- **`tests/per-row-query-counts.test.ts` counts the SQL each of those passes runs on a real store at 10 and 200 rows.** The counts must stay flat as rows grow, and all nine count tests fail against the previous code.
+
 ## 1.62.0 - 2026-10-04
 
 ### Changed
