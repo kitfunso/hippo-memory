@@ -46,6 +46,9 @@ jobs:
       - run: node scripts/check-graph-writes.mjs
       - name: No runtime import cycles in src
         run: node scripts/check-import-cycles.mjs
+      # Files over 800 lines and functions over 80 in src/ may shrink but never grow, and no new one may appear.
+      - name: Size ratchet
+        run: node scripts/check-size-ratchet.mjs
       - run: node scripts/check-roadmap.mjs
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
