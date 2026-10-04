@@ -14,7 +14,7 @@ import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { loadConfig } from '../config.js';
-import { classifyOriginProject } from '../project-identity.js';
+import { classifyOriginProject, projectId, type ProjectRef } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
 import { errorMessage, log } from '../log.js';
 import { extractFromText, type ExtractedItem } from './extract.js';
@@ -51,7 +51,8 @@ export interface CaptureOptions {
    * existing memories. Undefined means host-wide dedup. Ignored when `global: true` (global captures are host-wide).
    */
   tenantId?: string;
-  originProject?: string;
+  /** The session's project: rows are stamped with its id, and dedup reads its rows under either name. */
+  originProject?: ProjectRef;
 }
 
 export function cmdCapture(
@@ -281,7 +282,7 @@ function captureEntry(item: ExtractedItem, options: CaptureOptions, baseHalfLife
     tenantId: useGlobal ? undefined : options.tenantId,
     baseHalfLifeDays,
   });
-  return options.originProject === undefined ? created : { ...created, origin_project: options.originProject };
+  return options.originProject === undefined ? created : { ...created, origin_project: projectId(options.originProject) };
 }
 
 interface CaptureWriteContext {

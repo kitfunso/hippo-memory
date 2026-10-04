@@ -358,7 +358,7 @@ export async function handleGetContext({ req, res, opts, query }: RouteRequest):
     scope,
     includeRecent,
     crossProject,
-    currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))).name,
+    currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
   recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });

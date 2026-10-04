@@ -3,6 +3,7 @@ import { closeHippoDb } from '../db.js';
 import { RECALL_DEFAULT_DENY_SCOPES } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
+import { originInSql } from '../project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 
 export interface AmbientRecallRequest {
@@ -85,8 +86,8 @@ export function loadAmbientCandidates(
 export interface ContextCandidateFilter {
   /** Envelope scope asked for by name; absent applies recall's default deny. */
   exactScope?: string;
-  /** Rows of this project and user-global rows pass; absent admits every origin. */
-  project?: string;
+  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
+  project?: readonly string[];
   /** Most rows returned; past it, the rows decay has worn least win. */
   cap: number;
   now: Date;
@@ -112,8 +113,8 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
     params.push(...RECALL_DEFAULT_DENY_SCOPES);
   }
   if (filter.project !== undefined) {
-    where.push(`(origin_project = '' OR origin_project = ?)`);
-    params.push(filter.project);
+    where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
+    params.push(...filter.project);
   }
   const db = openStore(hippoRoot);
   try {

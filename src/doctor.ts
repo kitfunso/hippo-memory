@@ -175,7 +175,8 @@ function projectsCheck(globalRoot: string): DoctorCheck {
     const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
-      r.folds.length > 0 ? `${r.folds.length} old project names that now resolve to another project` : '',
+      r.folds.length > 0 ? `old project names that now resolve to another project: ${r.folds.map((f) => `${f.from} -> ${f.into}`).join(', ')}` : '',
+      r.collisions.length > 0 ? `old project names shared by several projects, folded by hand only: ${r.collisions.map((c) => `${c.name} (${c.ids.join(', ')})`).join('; ')}` : '',
       r.toProject.length + r.setAside.length > 0 ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global` : '',
     ].filter((s) => s !== '');
     return found.length === 0

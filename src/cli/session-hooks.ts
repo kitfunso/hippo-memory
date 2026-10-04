@@ -28,7 +28,7 @@ import {
 } from '../token-ledger.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { deriveOriginProject } from '../project-identity.js';
+import { resolveProjectIdentity } from '../project-identity.js';
 import { getGlobalRoot } from '../shared.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact, transcriptWorkingState } from '../capture/compact.js';
@@ -342,7 +342,7 @@ function captureEndedSession(
         global: false,
         tenantId: resolveTenantId({}),
         // In the global store, rows would otherwise read as user-global and show up in every project.
-        originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+        originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
         sessionTurns: scan?.turns,
       });
     }
@@ -589,7 +589,7 @@ export async function cmdCodexSessionEndWorker(
       dryRun: false,
       global: false,
       tenantId: resolveTenantId({}),
-      originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+      originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
       sessionTurns: scan?.turns,
     };
     try {

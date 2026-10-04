@@ -23,7 +23,7 @@ import { fitBudget } from './search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
 import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
-import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
+import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
@@ -646,7 +646,7 @@ export function syncGlobalToLocal(
   // excludes - other-project rows are skipped by default and secret rows
   // are never copied. origin_project is preserved on the copy (writeEntry
   // only stamps when the field is missing).
-  const currentName = deriveOriginProject(path.dirname(path.resolve(localRoot)));
+  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(localRoot)));
   let count = 0;
   // A locally rejected value must not come back through sync down: caught per item, printed as one line.
   let rejected = 0;
@@ -660,7 +660,7 @@ export function syncGlobalToLocal(
     if (detectSecret(entry).flagged) continue;
     if (
       !opts.includeCrossProject &&
-      classifyOriginProject(entry.origin_project, currentName) === 'cross-project'
+      classifyOriginProject(entry.origin_project, currentProject) === 'cross-project'
     ) continue;
 
     try {

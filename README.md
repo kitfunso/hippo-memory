@@ -547,6 +547,12 @@ hippo projects merge hippo-wt-fix hippo --global   # fold an old worktree name i
 hippo projects repair --global                 # set aside note copies, fold old worktree names, re-tag merges
 ```
 
+A project's name is the `id` in a committed `.hippo-project.json`, else its `origin` remote
+(`github.com/acme/api`), else its folder name. So two repos both called `api` no longer share
+memories in the global store. Rows saved under the old folder name stay visible to the
+project, and `hippo projects repair` folds that name into the id unless two projects claim it.
+Set `{"projectIdentity":{"remote":false}}` in the global `config.json` to keep folder names.
+
 **See what memory costs in tokens.** Every block of memory text hippo hands an agent (the
 per-prompt hook, the block `hippo compact-resume` restores after compaction, `hippo context`,
 `hippo recall`, the MCP tools, the HTTP API) is recorded in a token ledger: counts, surface

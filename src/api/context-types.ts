@@ -5,6 +5,7 @@ import type { SessionHandoff } from '../handoff.js';
 import type { MemoryEntry } from '../memory.js';
 import type { DeliveryObserver } from '../delivery-recorder.js';
 import type { AmbientState } from '../ambient.js';
+import type { ProjectRef } from '../project-identity.js';
 
 // ---------------------------------------------------------------------------
 // getContext
@@ -41,11 +42,11 @@ export interface ContextOpts {
    *  origin partition excludes by default. They come back tagged
    *  `category: 'cross-project'` so renderers can demarcate them. */
   crossProject?: boolean;
-  /** The active project name for the origin partition ('' = not in a
-   *  project). Defaults to `resolveProjectIdentity(process.cwd()).name`;
-   *  surfaces whose process cwd is not the caller's project (HTTP server)
-   *  should pass it explicitly. */
-  currentProject?: string;
+  /** The active project for the origin partition ('' = not in a project): a
+   *  name, or an identity whose rows may also carry its legacy folder name.
+   *  Defaults to `resolveProjectIdentity(process.cwd())`; surfaces whose
+   *  process cwd is not the caller's project (HTTP server) should pass it. */
+  currentProject?: ProjectRef;
   /** The calling
    *  session's id. Stamped on this call's recall trace, and the owner-match input to
    *  `loadFreshActiveTaskSnapshot` — when it strictly equals the active

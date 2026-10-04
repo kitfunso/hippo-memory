@@ -346,14 +346,14 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }:
     ? args.scope
     : undefined;
   // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
-  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot))).name;
+  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   const result = await apiGetContext(
     { hippoRoot, tenantId, actor: mcpActor(ctx) },
     {
       q: autoDetectContext(),
       budget,
       exactScope,
-      currentProject: storeProject !== '' ? storeProject : resolveProjectIdentity(process.cwd()).name,
+      currentProject: storeProject.name !== '' ? storeProject : resolveProjectIdentity(process.cwd()),
       cost: contextCost,
     },
   );

@@ -154,6 +154,11 @@ export interface HippoConfig {
   pilot: {
     holdoutRateBp: number;
   };
+  /** How a folder's project is named. `remote: false` drops the origin-remote rule, leaving
+   *  `.hippo-project.json` then the folder name. Read from the global store's config only, so every store agrees. */
+  projectIdentity: {
+    remote: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -242,6 +247,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   pilot: {
     holdoutRateBp: 0,
   },
+  projectIdentity: {
+    remote: true,
+  },
 };
 
 function isMemoryValueConfig(
@@ -293,6 +301,18 @@ function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
     `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
   );
   return 0;
+}
+
+// Only a real false turns the remote rule off; anything else malformed warns and keeps it on.
+function projectIdentityRemote(value: HippoConfig['projectIdentity'] | undefined): boolean {
+  const remote = value?.remote;
+  if (remote === true || remote === false) return remote;
+  if (value === undefined || (remote === undefined && value !== null && value.constructor === Object)) return true;
+  log.warn(
+    `config.json's "projectIdentity" must be an object like {"remote": false} ` +
+    `(got ${JSON.stringify(value)}) - using true (projects named by their origin remote).`,
+  );
+  return true;
 }
 
 function agentMemoryTools(value: string[] | null | undefined): string[] | null {
@@ -434,6 +454,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
       deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
       pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
+      projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

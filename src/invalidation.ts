@@ -239,7 +239,10 @@ export function extractChurnRefs(content: string): ChurnRefs {
 
 export interface DetectChurnStaleOptions {
   tenantId: string;
+  /** The project id; rows under it or legacyName are checked. */
   projectName: string;
+  /** The folder name older rows carry, and the repo folder a memory's paths may start with. */
+  legacyName?: string;
   /** Evaluate matches but write nothing. */
   dryRun?: boolean;
 }
@@ -347,11 +350,11 @@ interface ChurnCandidates {
   skippedPinned: string[];
 }
 
-function collectChurnCandidates(entries: readonly MemoryEntry[], projectName: string): ChurnCandidates {
+function collectChurnCandidates(entries: readonly MemoryEntry[], opts: Pick<DetectChurnStaleOptions, 'projectName' | 'legacyName'>): ChurnCandidates {
   const skippedPinned: string[] = [];
   const candidates: ChurnCandidate[] = [];
   for (const entry of entries) {
-    if (!entry.origin_project || entry.origin_project !== projectName) continue;
+    if (!entry.origin_project || (entry.origin_project !== opts.projectName && entry.origin_project !== opts.legacyName)) continue;
     if (entry.superseded_by) continue;
     if (entry.kind === 'raw' || entry.kind === 'archived') continue;
     if (entry.pinned) {
@@ -522,7 +525,7 @@ export function detectChurnStale(
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
   const entries = loadAllEntries(hippoRoot, opts.tenantId);
-  const { candidates, skippedPinned } = collectChurnCandidates(entries, opts.projectName);
+  const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
   const confirmedAt = queryConfirmedAt(hippoRoot, opts.tenantId);
@@ -545,7 +548,7 @@ export function detectChurnStale(
   const result: ChurnStaleResult = { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
 
   try {
-    const git = loadChurnGitView(repoRoot, opts.projectName, candidates, anchorOf, needs);
+    const git = loadChurnGitView(repoRoot, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
     // Collected here, written only after every candidate's evidence is
     // computed: a GitReadError thrown mid-loop must never leave an earlier
     // candidate tagged while a later one aborts the run untagged.

@@ -135,6 +135,18 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
+  it('checks rows stamped with the legacy folder name once the project has an id', () => {
+    fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v1');
+    commit(repoDir, BEFORE_ANCHOR);
+    storeMemory('see a.ts for the setup', { created: ANCHOR });
+    fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
+    commit(repoDir, AFTER_ANCHOR);
+
+    const opts = { tenantId: 'default', projectName: 'github.com/acme/churn', dryRun: true };
+    expect(detectChurnStale(hippoRoot, repoDir, opts).preview).toHaveLength(0);
+    expect(detectChurnStale(hippoRoot, repoDir, { ...opts, legacyName: project }).preview).toHaveLength(1);
+  });
+
   it('file-deleted: a tracked file removed after the anchor is evidence (--no-renames)', () => {
     fs.writeFileSync(path.join(repoDir, 'b.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);

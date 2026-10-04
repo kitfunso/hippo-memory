@@ -24,7 +24,7 @@ import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { evalNow, isRecallBoostAblated } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
 import { loadConfig } from '../config.js';
-import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot } from '../project-identity.js';
+import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
 import { detectSecret } from '../secret-detect.js';
 import { isSessionDigestRow } from '../session-digest.js';
@@ -60,14 +60,14 @@ export { oneCopyPerMemory } from './context-select.js';
  */
 function ambientAdmitEntry(
   e: MemoryEntry,
-  currentProjectName: string,
+  currentProject: ProjectRef,
   includeCrossProject: boolean,
   exactScope?: string,
 ): boolean {
-  if (!ambientSecretAdmit(e, currentProjectName)) return false;
+  if (!ambientSecretAdmit(e, currentProject)) return false;
   if (!passesScopeFilterForRecall(e.scope ?? null, exactScope)) return false;
   if (includeCrossProject) return true;
-  return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
+  return classifyOriginProject(e.origin_project, currentProject) !== 'cross-project';
 }
 
 /**
@@ -75,11 +75,11 @@ function ambientAdmitEntry(
  * that apply their own scope rule. A flagged row is only admitted inside its owning project;
  * flagged rows with no project origin never ambient-inject.
  */
-export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
+export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.origin_project;
   if (origin === undefined || origin === null || origin === '') return false;
-  return origin === currentProjectName;
+  return projectNames(currentProject).includes(origin);
 }
 
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
@@ -89,7 +89,7 @@ export const CONTEXT_CANDIDATE_CAP = 2000;
 interface ContextQueryWindow {
   query: string;
   exactScope: string | undefined;
-  project: string | undefined;
+  project: readonly string[] | undefined;
 }
 
 // The pinned-only branch needs pins and recent-N candidates, not the corpus; `recall` applies there only.
@@ -210,8 +210,8 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
   const config = loadConfig(ctx.hippoRoot);
   const isolationEnabled = config.contextProjectIsolation !== false;
-  const currentProjectName =
-    opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
+  const currentProject =
+    opts.currentProject ?? resolveProjectIdentity(process.cwd());
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
 
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their connection.
@@ -219,7 +219,7 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
 
   const cost = opts.cost;
   const price = (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
-    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProjectName) })
+    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
     : estimateTokens(entry.content);
   return {
     pinnedOnly,
@@ -234,9 +234,9 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
     primaryIsGlobal,
     hasLocalTaskState: hasLocal && !primaryIsGlobal,
     config,
-    currentProjectName,
+    currentProject,
     includeCrossProject,
-    originProject: includeCrossProject || currentProjectName === '' ? undefined : currentProjectName,
+    originProject: includeCrossProject || projectId(currentProject) === '' ? undefined : projectNames(currentProject),
     promptRecallPending,
     cost,
     price,
@@ -259,7 +259,7 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
 function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
-  obs?.facts({ projectName: plan.currentProjectName, budgetTokens: blockBudget, promptRecall: promptRecallPending });
+  obs?.facts({ projectName: projectId(plan.currentProject), budgetTokens: blockBudget, promptRecall: promptRecallPending });
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   return cost
     ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: plan.includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
@@ -328,7 +328,7 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
       digestHiddenForHandoff = true;
       return false;
     }
-    return ambientAdmitEntry(e, plan.currentProjectName, plan.includeCrossProject, plan.exactScope);
+    return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope);
   };
   const ownSessionId = opts.currentSessionId || '';
   // Inside admit, not after the load, so the loader's window widens past a session's own items.
@@ -394,7 +394,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.origin_project ?? null,
-    category: classifyOriginProject(r.entry.origin_project, plan.currentProjectName),
+    category: classifyOriginProject(r.entry.origin_project, plan.currentProject),
   }));
   obs?.selected(selected);
   return { items: selected, tokens };
@@ -465,7 +465,7 @@ function recordRetrieval(
 }
 
 function readAmbientState(ctx: Context, plan: ContextPlan): AmbientState | undefined {
-  const filter = { exactScope: plan.exactScope, project: plan.originProject, currentProject: plan.currentProjectName, now: evalNow() };
+  const filter = { exactScope: plan.exactScope, project: plan.originProject, currentProject: projectNames(plan.currentProject), now: evalNow() };
   const roots = [...(plan.hasLocal ? [ctx.hippoRoot] : []), ...(plan.hasGlobal && !plan.primaryIsGlobal ? [plan.globalRoot] : [])];
   const tallies = roots.map((root) => loadAmbientTallies(root, ctx.tenantId, filter));
   const total = tallies.length > 0 ? tallies.reduce(addAmbientTallies) : undefined;

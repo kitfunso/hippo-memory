@@ -15,6 +15,7 @@ import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../search/types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
 import { type HippoConfig } from '../config.js';
+import type { ProjectRef } from '../project-identity.js';
 import {
   promptTokens,
   contentTokens,
@@ -42,9 +43,9 @@ export interface ContextPlan {
   primaryIsGlobal: boolean;
   hasLocalTaskState: boolean;
   config: HippoConfig;
-  currentProjectName: string;
+  currentProject: ProjectRef;
   includeCrossProject: boolean;
-  originProject: string | undefined;
+  originProject: readonly string[] | undefined;
   promptRecallPending: boolean;
   cost: ContextCost | undefined;
   price: (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean) => number;

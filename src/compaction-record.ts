@@ -7,7 +7,7 @@ import { loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
-import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
+import { isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
@@ -73,10 +73,20 @@ interface CompactionRow {
 export type Log = (message: string) => void;
 
 /** Where the session ran: rows written through the global store keep the project the session was in. */
-function compactionOrigin(hippoRoot: string, cwd: string | null): string {
-  if (!isGlobalStoreRoot(hippoRoot)) return deriveOriginProject(path.dirname(hippoRoot));
+function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
+  if (!isGlobalStoreRoot(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
-  return cwd === null ? '' : deriveOriginProject(cwd);
+  return cwd === null ? '' : resolveProjectIdentity(cwd);
+}
+
+function compactionOrigin(hippoRoot: string, cwd: string | null): string {
+  return projectId(compactionProject(hippoRoot, cwd));
+}
+
+/** The names a record's held rows may carry: its origin, plus the folder name rows saved before project ids used. */
+function heldOrigins(hippoRoot: string, cwd: string | null, originProject: string): readonly string[] {
+  const names = projectNames(compactionProject(hippoRoot, cwd));
+  return names[0] === originProject ? names : [originProject];
 }
 
 function scrub(text: string): string {
@@ -231,6 +241,8 @@ export interface ItemContext {
   recordId: string | null;
   sessionId: string;
   originProject: string;
+  /** Where the session ran, so rows held under the project's older folder name count too. */
+  cwd: string | null;
   items: string[];
 }
 
@@ -263,12 +275,12 @@ interface Held {
 }
 
 /** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
-function heldRows(db: DatabaseSyncLike, tenantId: string, originProject: string): Held[] {
+function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): Held[] {
   // SAFETY: the SELECT names the id, source_session_id and content columns.
   const rows = db.prepare(
-    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND origin_project = ? AND superseded_by IS NULL AND kind != 'raw'
+    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND superseded_by IS NULL AND kind != 'raw'
        AND (scope IS NULL OR (scope != 'unknown:legacy' AND scope NOT LIKE '%:private:%'))`,
-  ).all(tenantId, originProject) as Array<{ id: string; source_session_id: string | null; content: string }>;
+  ).all(tenantId, ...origins) as Array<{ id: string; source_session_id: string | null; content: string }>;
   return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
 }
 
@@ -298,7 +310,7 @@ function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: numbe
 /** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
 function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
-  const held = heldRows(db, ctx.tenantId, ctx.originProject);
+  const held = heldRows(db, ctx.tenantId, heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
   const restated = new Set<string>();
   for (const text of rows) {
     const itemWords = words(text);
@@ -455,6 +467,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
         recordId: record?.id ?? null,
         sessionId: payload.sessionId,
         originProject: record?.originProject ?? compactionOrigin(hippoRoot, payload.cwd),
+        cwd: payload.cwd,
         items: text.items,
       }, log);
     } catch (err) {
@@ -625,7 +638,7 @@ function importSpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, 
       // The record holds the items now, so the file is done even if the write below fails.
       fs.rmSync(claimed, { force: true });
       removed = true;
-      saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: record.items }, log);
+      saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
       finished++;
     } catch (err) {
       log(`spool file ${name} not imported: ${errorMessage(err)}`);
@@ -645,7 +658,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
   for (const record of stalled) {
     if (Date.now() > deadline) break;
     try {
-      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: record.items }, log);
+      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
       finished++;
     } catch (err) {
       log(`replay of ${record.id} failed: ${errorMessage(err)}`);
@@ -682,7 +695,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
         log(`${record.id} was filled by another process`);
         continue;
       }
-      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: text.items }, log);
+      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: text.items }, log);
       finished++;
     } catch (err) {
       log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);

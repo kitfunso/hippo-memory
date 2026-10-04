@@ -52,7 +52,7 @@ describe('loadContextCandidates over the cap', () => {
   afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));
 
   it('keeps pins, then the rows decay has worn least, and returns them oldest first', () => {
-    const got = loadContextCandidates(root, 'default', { project: 'proj', cap: 5, now: NOW });
+    const got = loadContextCandidates(root, 'default', { project: ['proj'], cap: 5, now: NOW });
     // Past the pin: k-team, b-fresh, h-global, then d-rewarded, whose reward outlasts e-mid's shorter age.
     expect(got.map((e) => e.id)).toEqual(['a-old-pin', 'd-rewarded', 'h-global', 'b-fresh', 'k-team']);
     const strengths = got.filter((e) => !e.pinned).map((e) => calculateStrength(e, NOW));
@@ -62,11 +62,11 @@ describe('loadContextCandidates over the cap', () => {
   it('applies scope, origin, tenant and supersession in SQL', () => {
     const all = (filter: Parameters<typeof loadContextCandidates>[2]): string[] =>
       loadContextCandidates(root, 'default', filter).map((e) => e.id).sort();
-    expect(all({ project: 'proj', cap: 100, now: NOW })).toEqual(['a-old-pin', 'b-fresh', 'c-stale', 'd-rewarded', 'e-mid', 'h-global', 'k-team']);
+    expect(all({ project: ['proj'], cap: 100, now: NOW })).toEqual(['a-old-pin', 'b-fresh', 'c-stale', 'd-rewarded', 'e-mid', 'h-global', 'k-team']);
     expect(all({ cap: 100, now: NOW })).toContain('g-other');
     expect(all({ exactScope: 'team:x', cap: 100, now: NOW })).toEqual(['k-team']);
-    expect(all({ project: 'proj', cap: 100, now: NOW })).not.toContain('f-private');
-    expect(all({ exactScope: 'slack:private:c1', project: 'proj', cap: 100, now: NOW })).toEqual(['f-private']);
+    expect(all({ project: ['proj'], cap: 100, now: NOW })).not.toContain('f-private');
+    expect(all({ exactScope: 'slack:private:c1', project: ['proj'], cap: 100, now: NOW })).toEqual(['f-private']);
   });
 
   it('tallies sources and finds rows by a word they hold', () => {

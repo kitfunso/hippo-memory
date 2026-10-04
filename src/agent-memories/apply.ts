@@ -1,7 +1,7 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
 import { appendAuditEvent } from '../audit.js';
 import type { DatabaseSyncLike } from '../db.js';
-import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot } from '../dormant.js';
+import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../dormant.js';
 import { gatedWrite } from '../gated-write.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
@@ -40,6 +40,8 @@ export interface ContainerWork {
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
   /** Legacy rows a new row of the key supersedes, by key (second round). */
   readonly replace: ReadonlyMap<string, readonly MemoryEntry[]>;
+  /** This container's prefixes under the project's earlier names; their rows move here, so a new id imports nothing twice. */
+  readonly legacyPrefixes: readonly string[];
 }
 
 export interface ContainerOutcome {
@@ -102,6 +104,7 @@ class ContainerRun {
 
   run(): ContainerOutcome {
     this.adoptLegacy();
+    for (const old of this.w.legacyPrefixes) this.adoptPrefix(old);
     const live = selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix);
     for (const row of [...live, ...[...this.w.replace.values()].flat()]) this.rows.set(row.id, row);
     const refusals = this.refusals();
@@ -145,6 +148,27 @@ class ContainerRun {
         this.tally.adopted++;
         this.mirror.push({ ...row, source });
       }
+    }
+  }
+
+  /** Rows filed under an earlier project name keep their id and history; dormant ones move only when live ones did, since finding them scans every snapshot. */
+  private adoptPrefix(old: string): void {
+    const origin = this.s.originProject ?? null;
+    let moved = 0;
+    for (const row of selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, old)) {
+      const source = this.w.prefix + row.source.slice(old.length);
+      const done = this.s.db.prepare(
+        `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? AND source = ?`,
+      ).run(source, origin, row.id, row.tenantId, row.source);
+      if (Number(done.changes ?? 0) === 0) continue;
+      moved++;
+      this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
+    }
+    this.tally.renamed += moved;
+    if (moved === 0) return;
+    for (const snap of dormantSnapshotsBySourcePrefix(this.s.db, this.s.tenantId, old)) {
+      const source = this.w.prefix + snap.entry.source.slice(old.length);
+      replaceDormantEntry(this.s.db, this.s.tenantId, snap.entry.id, { ...snap.entry, source, origin_project: origin ?? snap.entry.origin_project });
     }
   }
 

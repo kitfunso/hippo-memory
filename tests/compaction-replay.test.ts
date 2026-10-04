@@ -260,7 +260,7 @@ describe('two replayers working the same store', () => {
     seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
     const db = openHippoDb(s.hippoRoot);
     try {
-      const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', items: ITEMS };
+      const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', cwd: null, items: ITEMS };
       expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
       expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
