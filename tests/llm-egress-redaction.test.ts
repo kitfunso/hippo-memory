@@ -14,7 +14,10 @@ import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import type { JsonValue } from '../src/working-memory.js';
 
 const SECRET = 'AKIA' + 'Q7'.repeat(8);
-const TEXT = `the deploy key is ${SECRET} for prod`;
+// Bearer and JWT shapes only the strict redaction catches; a path on the store redaction would leak them.
+const BEARER = 'b'.repeat(24);
+const JWT = `eyJ${'h'.repeat(12)}.eyJ${'p'.repeat(12)}.sig`;
+const TEXT = `the deploy key is ${SECRET} for prod, header Bearer ${BEARER}, session ${JWT}`;
 const ENV = ['HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'TYPESAFE_API_KEY', 'OPENAI_API_KEY'];
 const saved: Record<string, string | undefined> = {};
 let bodies: string[];
@@ -35,6 +38,8 @@ function expectScrubbed(): void {
   expect(bodies.length).toBeGreaterThan(0);
   for (const body of bodies) {
     expect(body).not.toContain('AKIA');
+    expect(body).not.toContain(BEARER);
+    expect(body).not.toContain(JWT);
     expect(body).toContain('[REDACTED]');
   }
 }

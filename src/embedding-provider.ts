@@ -39,7 +39,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
 } from './embeddings.js';
 import { loadConfig } from './config.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry } from './http-retry.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
@@ -265,7 +265,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
           'content-type': 'application/json',
           authorization: `Bearer ${key}`,
         },
-        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecrets), role)),
+        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
       }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
