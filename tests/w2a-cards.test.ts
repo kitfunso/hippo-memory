@@ -691,8 +691,8 @@ describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
     expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "key === 'depends-on'")).toBe(1);
   });
 
-  it("case 'card' appears once in the dispatch switch", () => {
-    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "case 'card':")).toBe(1);
+  it('card appears once in the dispatch table', () => {
+    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), '  card: {')).toBe(1);
   });
 
   it('createCard is re-exported exactly once from src/index.ts', () => {
