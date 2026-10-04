@@ -11,7 +11,7 @@ export const FAKE = resolve(__dirname, 'fake-claude.mjs');
 export const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 export const CHECKS = resolve(__dirname, 'z0-checks');
 const PATH_KEY = pathKey(process.env);
-const ENV_KEYS = ['HOME', 'USERPROFILE', 'APPDATA', 'HIPPO_HOME', PATH_KEY, 'FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS', 'FAKE_WT_DIR', 'Z0_ANCESTOR_STOP', 'GIT_CONFIG_GLOBAL', 'Z0_ENV_DUMP_DIR', 'Z0_TOGGLE', 'Z0_TOGGLE_TO'];
+const ENV_KEYS = ['HOME', 'USERPROFILE', 'APPDATA', 'HIPPO_HOME', PATH_KEY, 'FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS', 'FAKE_WT_DIR', 'Z0_ANCESTOR_STOP', 'GIT_CONFIG_GLOBAL', 'Z0_ENV_DUMP_DIR', 'Z0_TOGGLE', 'Z0_TOGGLE_TO', 'CODEX_HOME', 'FAKE_CODEX_LOG', 'FAKE_CODEX_STATE', 'FAKE_CODEX_INTERNAL_SOURCE'];
 const savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 const dirs: string[] = [];

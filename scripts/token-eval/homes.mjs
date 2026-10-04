@@ -20,6 +20,8 @@ export function runDirs(outDir, seq, arm, seed) {
     codexHome: path.join(root, 'codex-home'),
     hippoHome: path.join(root, 'hippo-home'),
     bin: path.join(root, 'bin'),
+    // HOME and APPDATA for Codex sessions and the X2 install, so hippo's wrapper metadata is per run (E6 plan R11).
+    home: path.join(root, 'home'),
   };
 }
 
@@ -36,7 +38,7 @@ export function assertFreshEmpty(dirs) {
 /** Remove and recreate a run's dirs, then check its homes are empty. */
 export function freshRunDirs(dirs) {
   fs.rmSync(dirs.root, { recursive: true, force: true });
-  for (const k of [...HOME_DIRS, 'work']) fs.mkdirSync(dirs[k], { recursive: true });
+  for (const k of [...HOME_DIRS, 'work', 'home']) fs.mkdirSync(dirs[k], { recursive: true });
   assertFreshEmpty(dirs);
 }
 

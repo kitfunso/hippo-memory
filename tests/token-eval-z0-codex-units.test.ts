@@ -5,7 +5,7 @@ import { validateTasks, planRuns } from '../scripts/token-eval/ab-run.mjs';
 import { armEnv, armSettings, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS } from '../scripts/token-eval/arms.mjs';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
 import { CHECKS, cleanup, tmp, lesson, family, task, teach, apply } from './fixtures/z0-harness.js';
-import type { FixtureRepo, TaskDef, FamilyDef } from './fixtures/z0-harness.js';
+import type { FixtureRepo, TaskDef } from './fixtures/z0-harness.js';
 
 afterEach(cleanup);
 
@@ -14,7 +14,7 @@ interface SeqDef { id: string; cluster: string; repo: string; fixedOrder: boolea
 interface Step { seed: number; position: number; arm: string; sequence: SeqDef; taskId: string; role: { kind: string; set: string } }
 
 /** Three families on one sequence, every teach before its applies with two tasks between. */
-function xFamilies(seq: string, prefix: string): { families: FamilyDef[]; tasks: TaskDef[] } {
+function xFamilies(seq: string, prefix: string) {
   const ids = ['a', 'b', 'c'].map((k) => `${prefix}${k}`);
   const families = ids.map((id) => ({ ...family(id, [lesson(`${id}-l1`, `Rule ${id} holds`)]), sequence: seq }));
   const teaches = ids.map((id) => teach(R, `t-${id}`, `${id}-l1`, `teach ${id}`));

@@ -11,6 +11,7 @@ import { openContext, cacheTaskRepos } from './runs.mjs';
 import { assertNoPhraseLeaks } from './leaks.mjs';
 import { runSteps } from './task.mjs';
 import { planScreen, screenLines, runScreen } from './screen.mjs';
+import { parseHookTrust } from './codex.mjs';
 
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
@@ -98,6 +99,17 @@ export function preflight(spec, out, mode, stopAt, { screen = false } = {}) {
   if (mode === 'real') cacheTaskRepos(spec, path.join(out, 'repo-cache'), { screen });
 }
 
+/** What a real run with an X arm needs before any session: a model to record, and hook trust when X2 runs (prereg 91, E6 test 23).
+ * @param {string[]} arms
+ * @param {string} mode
+ * @param {{codexModel?: string | null, codexHookTrust?: string}} [options] */
+export function codexPreflight(arms, mode, { codexModel = null, codexHookTrust = 'none' } = {}) {
+  if (mode !== 'real' || !arms.some((a) => armSet(a) === 'X')) return;
+  if (!codexModel) throw new Error('an X arm runs Codex: pass --codex-model, so every record names the model it ran');
+  // An untrusted X2 runs hippo's hooks never, so its cells would test only the wrapper and must not reach the data.
+  if (arms.includes('X2') && parseHookTrust(codexHookTrust).kind === 'none') throw new Error('X2 with --codex-hook-trust none: Codex would never run hippo\'s hooks. Pass the trust from the smoke report (flag, or file:<path>)');
+}
+
 /** Run the whole plan in lockstep. Returns the records written; `progress.last` names the last completed step. */
 export async function runAll(opts) {
   const { spec, arms, seeds = null, outDir } = opts;
@@ -130,7 +142,8 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off]';
+const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories' };
 
 /** The command line, checked: the tasks file, out dir, arms, seeds, pass-env names and mode. */
 function parseArgs(argv) {
@@ -189,6 +202,8 @@ async function main() {
   if (mode === 'real' && spec.dev === true) throw new Error('the tasks file sets "dev": true; it is for --dry-run and --check-homes only, never a real run');
   if (mode === 'real' && stopAt) throw new Error('Z0_ANCESTOR_STOP is set; it is only honoured for --dry-run and --check-homes. Unset it for a real run.');
   if (mode === 'real' && !process.env[TOKEN_KEY]) throw new Error('run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN');
+  const codexOpts = Object.fromEntries(Object.entries(CODEX_FLAGS).map(([k, name]) => [k, flag(name, undefined)]).filter(([, v]) => v !== undefined));
+  codexPreflight(arms, mode, codexOpts);
   // Outside the try below: a task the runner refuses is not a run abandoned partway, so it must not leave ABANDONED.
   preflight(spec, out, mode, stopAt, { screen: args.screen });
   if (args.screen) console.log(`${steps.length} screen sessions: A0 and A4 only, seeds 1 and 2.`);
@@ -203,7 +218,7 @@ async function main() {
   const opts = {
     spec, arms, seeds, outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
     maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: !process.argv.includes('--no-warmup'),
-    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries,
+    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, ...codexOpts,
   };
   try {
     if (args.screen) {
