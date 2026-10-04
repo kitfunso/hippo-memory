@@ -3,7 +3,7 @@
   "name": "io.github.kitfunso/hippo-memory",
   "title": "Hippo memory",
   "description": "Memory for AI agents that learns what is wrong and ranks it down. Local SQLite store.",
-  "version": "1.59.0",
+  "version": "1.60.0",
   "websiteUrl": "https://hippo-memory.com",
   "repository": {
     "url": "https://github.com/kitfunso/hippo-memory",

@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.60.0 - 2026-10-04
+
+### Changed
+
+- **CI runs the full test suite on Windows and macOS as well as Linux.** The Windows job used to run only the test files that name `win32`.
+- **CI now enforces the coverage thresholds in `vitest.config.ts`.** Each `test` shard writes a coverage blob, and a new `coverage` job merges the three and fails the PR when lines, branches, functions or statements fall under the floor.
+- **Building context no longer scans the whole memories table to find pinned rows.** Schema v51 adds a partial index on pinned rows (tenant, created, id) and a second, normally empty, index that makes the date-drift check a single seek instead of a tenant-wide scan. Both are additive and built on first open.
+- **Library, server, MCP, connector and hook warnings now go through the `HIPPO_LOG` logger.** Lines that printed before still print at the default level, now as `[hippo] warn: ...` or `[hippo] error: ...` on stderr. Fallbacks that used to fail silently (a missing git repo, an unreadable JSON column, a failed judge or rerank model load) now log at `debug`. Printed command results, the dashboard banner and the delivery-ledger hook line keep their old format.
+- **`hippo refine` says why a refinement failed.** A failed request, a non-2xx answer, an unreadable body or a too-short reply now logs one warning instead of being dropped.
+- **Tests whose file names start with a, b or c now type-check.** Fixtures pass the required `baseHalfLifeDays`, API contexts use the real `Context` type, and a test that passed a tenant string as `deleteEntry` options no longer does. No runtime behaviour moved.
+- **Type-checked the test files whose names start with d to h.** Their fixtures now match the real `createMemory`, `Context`, `Actor` and reranker types, so a wrong call shape fails the compiler instead of passing by accident. No runtime or CLI change.
+- **Fixed type errors in the test files named i through r.** Tests now pass the shapes the code declares, so a wrong call fails type-check instead of passing by accident. Test-only, no runtime or CLI change.
+- **Test files named s to z, digits and underscore, plus every tests/ subfolder, now type-check.** Fixtures use the real `Context`, `ChannelMeta`, `RerankResult` and `Response` shapes, and `createMemory` calls go through `tests/_helpers/default-half-life-memory.ts` so each one passes a half-life. Two tests passed arguments the code ignored (`deleteEntry` tenant, `remember` layer); both are corrected. No runtime or CLI change.
+
+### Fixed
+
+- **`hippo serve` answers recall about four times faster on Windows.** Each request opened and closed its own store connection, and with no other connection open every close checkpointed and deleted the write-ahead log, which the next open rebuilt. The server now holds one connection for its lifetime: a recall GET on a 100-memory store went from about 80 ms to about 20 ms, and the 550-request concurrency test from 46 s to 16 s.
+- **A folder under the temp root no longer takes its project name from a `.hippo` or `.git` above that root.** The store lookup already stopped at the temp root, but the project-name lookup did not; on Windows, where the temp root sits inside the home folder, a session with a redirected home folder stamped memories with the real home folder's name.
+- **Every call that sends memory text off the machine now strips Bearer tokens, Basic-auth headers and JWTs.** The Jev, CLEF and LLM rerankers, LLM extraction, `hippo refine` and the DAG summary used the redaction for stored memories, which leaves these shapes in place. They now use the stricter redaction for text that leaves the machine.
+- **A CLEF private endpoint can no longer leak its token.** `HIPPO_CLEF_ENDPOINT` must use https unless it runs on this machine, and must not hold a username or password in its URL. A token that a request header cannot carry is refused before the request, so the fallback warning can no longer print it. Each of these keeps the native order and makes no request.
+- **CLEF replies are capped at 1 MiB, and `HIPPO_CLEF_TIMEOUT_MS` is read strictly.** A larger reply keeps the native order. A timeout that is not a whole number of milliseconds from 1 to 120000 uses the 15-second default. Before, `15s` was read as 15 ms.
+- **The 1.59.0 notes said each CLEF result records its provenance.** It does, but only in memory: `--json` output and saved recall traces do not show it yet. Each result now gets its own copy, so editing one result cannot change another.
+- **`--reranker-top-k` must be a positive whole number.** A negative value made the reranker quietly drop candidates from the end of the list, and a fraction was cut to a whole number. Both now exit with an error.
+- **`scripts/rerank-3arm-ab.mjs` reports the verdict as void when any CLEF query fell back.** A query that fell back keeps the base order, so it looked like a real result. The script now counts fallback reasons, and labels each contrast by arm. It dates each CLEF output file, so a rerun does not overwrite an earlier one. A blank `HIPPO_CLEF_ENDPOINT` no longer passes the check that guards hosted costs.
+- **A recall-scope test no longer times out on Windows CI.** It seeded 221 rows with a store open and close per row; it now seeds them through one shared connection, which halves its run time.
+
+### Security
+
+- **MCP no longer sends internal error text to clients.** On both the stdio server and `POST /mcp`, a typed error (not found, bad request, forbidden, conflict) keeps its message. Any other error answers `internal server error (request id <id>)` with the id in `error.data.requestId`, and the real error is logged at `error` with that id.
+
 ## 1.59.0 - 2026-10-04
 
 ### Added
