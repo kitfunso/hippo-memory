@@ -4,7 +4,7 @@ import { cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateTasks } from '../../scripts/token-eval/ab-run.mjs';
-import { CHECKS, apply, isolate, lesson, makeRepo, plain, run, teach, tmp, type FamilyDef, type FixtureRepo, type TaskDef } from './z0-harness';
+import { CHECKS, apply, isolate, lesson, makeRepo, plain, run, teach, tmp, type FamilyDef, type FixtureRepo, type TaskDef } from './z0-harness.js';
 
 export const TOKEN = 'z0-dummy-oauth-token';
 export const PASS_ENV = ['Z0_TOGGLE', 'Z0_ENV_DUMP_DIR'];

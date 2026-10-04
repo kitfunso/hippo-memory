@@ -3,8 +3,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, realpathSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { CHECKS, cleanup } from './fixtures/z0-harness';
-import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade';
+import { CHECKS, cleanup } from './fixtures/z0-harness.js';
+import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade.js';
 
 const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
 let shared: Shared;

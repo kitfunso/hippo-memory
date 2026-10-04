@@ -6,8 +6,8 @@ import { agentGit } from '../../scripts/token-eval/checks.mjs';
 import { readerDiff } from '../../scripts/token-eval/grading.mjs';
 import { cellKey } from '../../scripts/token-eval/z0-records.mjs';
 import { runCli } from '../../scripts/token-eval/z0-regrade.mjs';
-import { generate, type Z0Record } from './z0-gen';
-import { tmp } from './z0-harness';
+import { generate, type Z0Record } from './z0-gen.js';
+import { tmp } from './z0-harness.js';
 
 export type Verdict = 'pass' | 'fail' | 'na';
 export interface Cell { arm: string; position: number; seed?: number; kind?: 'teach' | 'apply'; first?: Verdict; final?: Verdict; finalChecked?: boolean; diff?: string; commands?: string[] }

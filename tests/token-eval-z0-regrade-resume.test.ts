@@ -2,9 +2,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { cleanup } from './fixtures/z0-harness';
-import { PRICES } from './fixtures/z0-gen';
-import { copyOut, grading, keyOf, readGrading, regrade, rowFor, rowsOf, sharedRun, taskOf, type RawSpec, type Shared } from './fixtures/z0-regrade';
+import { cleanup } from './fixtures/z0-harness.js';
+import { PRICES } from './fixtures/z0-gen.js';
+import { copyOut, grading, keyOf, readGrading, regrade, rowFor, rowsOf, sharedRun, taskOf, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
 import { evidenceOf } from '../scripts/token-eval/regrade.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';

@@ -7,8 +7,8 @@ import { equalShares, fillStrata, kappa, parseLabels, seededOrder, wilson } from
 import { pairDiff } from '../scripts/token-eval/reader-sample.mjs';
 import { listGrades } from '../scripts/token-eval/regrade.mjs';
 import { g5 } from '../scripts/token-eval/z0-gates.mjs';
-import { cleanup, tmp } from './fixtures/z0-harness';
-import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5';
+import { cleanup, tmp } from './fixtures/z0-harness.js';
+import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5.js';
 
 const win = process.platform === 'win32';
 const ARM_WORD = /\b(A0|A1|A2|A4|A5|X1|X2|X3|X4)\b/;
