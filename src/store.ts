@@ -338,7 +338,7 @@ function ensureMirrorDirectories(hippoRoot: string): void {
   ];
 
   for (const dir of dirs) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 }
 

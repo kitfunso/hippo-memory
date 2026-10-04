@@ -2762,8 +2762,18 @@ export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): 
   return db;
 }
 
+// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs.
+function createStoreFilesOwnerOnly(hippoRoot: string): void {
+  fs.mkdirSync(hippoRoot, { recursive: true, mode: 0o700 });
+  try {
+    fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
+  } catch (err) {
+    if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) throw err;
+  }
+}
+
 function openOwnHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  fs.mkdirSync(hippoRoot, { recursive: true });
+  createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   const busyWaitMs = opts?.busyWaitMs;
   try {

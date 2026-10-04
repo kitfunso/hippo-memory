@@ -69,7 +69,7 @@ export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
 }
 
 export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceRegistry): void {
-  fsDeps.mkdirSync(globalRoot, { recursive: true });
+  fsDeps.mkdirSync(globalRoot, { recursive: true, mode: 0o700 });
   fsDeps.writeFileSync(
     workspaceRegistryPath(globalRoot),
     JSON.stringify(

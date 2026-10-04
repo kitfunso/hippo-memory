@@ -1,0 +1,10 @@
+# Workflow actions are pinned to commit SHAs; this keeps the pins and their version comments current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
