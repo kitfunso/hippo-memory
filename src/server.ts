@@ -145,7 +145,7 @@ import {
   sendJson,
   type JsonValue,
 } from './http-util.js';
-import { NotFoundError } from './api-errors.js';
+import { ForbiddenError, NotFoundError } from './api-errors.js';
 
 // Add-on packages revoke keys through these without importing the whole api surface.
 export { authRevoke, ForbiddenError, type Context, type Actor };
