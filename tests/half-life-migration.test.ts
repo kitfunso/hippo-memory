@@ -17,7 +17,7 @@ import { replaceDetectedConflicts, listMemoryConflicts, resolveConflict } from '
 import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../src/memory.js';
 import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration, LEGACY_TYPED_HALF_LIFE } from '../src/half-life-migration.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { saveIncident, resolveIncident } from '../src/incidents.js';
 import { saveCustomerNote } from '../src/customer-notes.js';

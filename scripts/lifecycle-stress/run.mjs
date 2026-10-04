@@ -48,7 +48,7 @@ import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
 import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';
-import { consolidate } from '../../dist/consolidate.js';
+import { consolidate } from '../../dist/consolidate/sleep.js';
 import { resetAllPhysicsState } from '../../dist/physics-state.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';

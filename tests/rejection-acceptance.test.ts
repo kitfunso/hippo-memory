@@ -38,7 +38,7 @@ import {
 import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { importEntries } from '../src/importers/core.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { NO_MERGE_TAGS } from '../src/shared.js';

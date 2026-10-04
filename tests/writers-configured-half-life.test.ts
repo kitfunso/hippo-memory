@@ -11,7 +11,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
 import * as api from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts } from '../src/extract.js';
 import { importGenericFile } from '../src/importers/sources.js';

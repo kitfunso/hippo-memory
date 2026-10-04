@@ -6,7 +6,7 @@ import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
 import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
-import { consolidate } from '../consolidate.js';
+import { consolidate } from '../consolidate/sleep.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
 import { resolveTenantId } from '../tenant.js';

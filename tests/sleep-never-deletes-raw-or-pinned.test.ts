@@ -11,7 +11,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { sleep, supersede, type Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';

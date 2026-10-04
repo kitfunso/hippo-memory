@@ -9,7 +9,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';

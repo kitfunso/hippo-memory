@@ -5,7 +5,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../audit.js';
 import { autoShare } from '../shared.js';
-import { consolidate } from '../consolidate.js';
+import { consolidate } from '../consolidate/sleep.js';
 import { loadConfig } from '../config.js';
 import { deduplicateStore } from '../dedupe.js';
 import { computeAmbientState, type AmbientState } from '../ambient.js';

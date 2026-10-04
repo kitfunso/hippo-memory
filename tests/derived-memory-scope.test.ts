@@ -10,7 +10,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';

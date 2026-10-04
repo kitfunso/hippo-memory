@@ -23,7 +23,7 @@ import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
 import * as dagModule from '../src/dag.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
 

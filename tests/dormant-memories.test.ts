@@ -29,7 +29,7 @@ import { saveProjectBrief } from '../src/project-briefs.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { savePrediction } from '../src/predictions/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/dormant.js';
 import { loadConfig } from '../src/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';

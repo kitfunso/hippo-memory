@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';

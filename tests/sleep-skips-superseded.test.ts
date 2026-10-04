@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { supersede, type Context } from '../src/api.js';
 
 const DAY = 86_400_000;

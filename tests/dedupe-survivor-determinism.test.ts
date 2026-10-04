@@ -27,7 +27,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, type Context } from '../src/api.js';
 import { deduplicateStore, strengthBucket } from '../src/dedupe.js';
 import { compareEntryIdentity } from '../src/compare.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 function tmpHome(prefix: string) {

@@ -15,7 +15,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { refreshBrief } from '../src/project-briefs.js';
 import { extractGraph } from '../src/graph-extract.js';
 import * as api from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
