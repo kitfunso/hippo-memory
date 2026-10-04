@@ -6,7 +6,7 @@ import { agentGit } from './checks.mjs';
 import { readerDiff } from './grading.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { listGrades, readRows, rowsFile } from './regrade.mjs';
-import { FORBIDDEN, HIDDEN_COMMAND, equalShares, fenced, fillStrata, labelsTemplate, leakScan, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
+import { FORBIDDEN, isHiddenCommand, equalShares, fenced, fillStrata, labelsTemplate, leakScan, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
 
 const VERDICTS = ['pass', 'fail', 'na'];
 const sealed = (out, name) => path.join(out, 'g5', 'sealed', name);
@@ -37,10 +37,11 @@ export function taskText(tasksFile) {
   };
 }
 
-/** What a blinded file must never hold: memory names and markers, every run name, arm path and seed path in the out dir. */
+/** What a blinded file must never hold: memory names and markers, every run-name, arm and seed path segment in the out dir. */
 export function forbiddenFor(grades, extra = FORBIDDEN) {
   const names = new Set(extra);
-  for (const g of grades) for (const s of [g.runName, `/${g.arm}/seed`, `seed${g.seed}/work`]) names.add(s);
+  // Every arm shares the run name, so only its path form is forbidden; a bare one would reject pairs that name the repo.
+  for (const g of grades) for (const s of [`/${g.runName}/`, `/${g.arm}/seed`, `seed${g.seed}/work`]) names.add(s);
   return [...names];
 }
 
@@ -98,7 +99,7 @@ export function pairDiff(out, e, which) {
 function renderPair(ctx, p) {
   const g = p.entry.grade;
   const commands = (p.which === 'first' ? g.commandsFirst : g.commandsFinal) ?? [];
-  const kept = commands.filter((c) => !HIDDEN_COMMAND.test(c));
+  const kept = commands.filter((c) => !isHiddenCommand(c));
   const text = [
     '## Task', ctx.text.prompt(g.sequence, g.taskId), '', '## Rule', ctx.text.lesson(g.lessonId).rule, '',
     '## Commands the agent ran', kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', '',

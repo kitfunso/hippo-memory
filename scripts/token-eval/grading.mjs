@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { agentGit } from './checks.mjs';
-import { isInstructionPath } from './workspace.mjs';
+import { isReaderHidden } from './workspace.mjs';
 import { RESTORABLE } from './surfaces.mjs';
 import { surfaceBytes } from './leaks.mjs';
 
@@ -20,10 +20,10 @@ export function surfaceText({ root, surfaces, stores }) {
   return text.length > SURFACE_CAP ? `${text.slice(0, SURFACE_CAP)}\n[cut at ${SURFACE_CAP} chars]\n` : text;
 }
 
-/** A text diff with every instruction file left out, since one could show the reader the arm (decision 24). */
+/** A text diff with every instruction and memory file left out, since one could show the reader the arm (decision 24). */
 export function readerDiff(rgit, work, from, to) {
   const names = rgit(['diff', '--no-renames', '--name-only', '-z', from, to], work).split('\0').filter(Boolean);
-  const hidden = names.filter(isInstructionPath).map((p) => `:(exclude,literal)${p}`);
+  const hidden = names.filter(isReaderHidden).map((p) => `:(exclude,literal)${p}`);
   return rgit(['diff', '--no-ext-diff', '--no-color', '--no-textconv', '--no-renames', from, to, '--', '.', ...hidden], work);
 }
 

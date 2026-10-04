@@ -1,8 +1,10 @@
 // Z0 G5 (prereg 166, 179): the reader sample's seeded draw, blinding, labels and scoring, and the stored sample's statistics.
 import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readFileSync, readdirSync, renameSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { agentGit } from '../scripts/token-eval/checks.mjs';
+import { readerDiff } from '../scripts/token-eval/grading.mjs';
 import { equalShares, fillStrata, kappa, parseLabels, seededOrder, wilson } from '../scripts/token-eval/g5-draw.mjs';
 import { pairDiff } from '../scripts/token-eval/reader-sample.mjs';
 import { listGrades } from '../scripts/token-eval/regrade.mjs';
@@ -98,6 +100,41 @@ describe('reader sample draw', () => {
     expect(text).not.toMatch(ARM_WORD);
     expect(readdirSync(dir).sort()).toEqual(['labels.tsv', 'p01.md']);
     expect(pairsOf(s.out)[0]).toMatchObject({ file: 'p01', droppedCommands: 1 });
+  });
+
+  it('drops every command that names an instruction or memory file, and the reader diff leaves those files out (24b)', () => {
+    const commands = ['npm test', 'cat AGENTS.md', 'ls .claude\\rules', 'cat sub/CLAUDE.local.md', 'cat AGENTS.override.md', 'head MEMORY.md'];
+    const s = synthOut([{ arm: 'A0', position: 0, commands }]);
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 0 });
+    const text = readFileSync(join(s.out, 'g5', 'reader-r1', 'p01.md'), 'utf8');
+    expect(text).toContain('npm test');
+    for (const bad of ['AGENTS', 'CLAUDE', 'rules', 'MEMORY']) expect(text).not.toContain(bad);
+    expect(pairsOf(s.out)[0]).toMatchObject({ droppedCommands: 5 });
+
+    const repo = tmp('z0-g5-hide-');
+    const git = (...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...a], { cwd: repo, encoding: 'utf8' }).trim();
+    git('init', '-q');
+    writeFileSync(join(repo, 'lib.js'), '1\n');
+    git('add', '-A');
+    git('commit', '-qm', 'a');
+    const from = git('rev-parse', 'HEAD');
+    const files = ['lib.js', 'AGENTS.md', 'AGENTS.override.md', 'MEMORY.md', 'docs/MEMORY.md', 'sub/CLAUDE.local.md', '.claude/rules/r.md'];
+    for (const f of files) {
+      mkdirSync(dirname(join(repo, f)), { recursive: true });
+      writeFileSync(join(repo, f), '2\n');
+    }
+    git('add', '-A');
+    git('commit', '-qm', 'b');
+    const to = git('rev-parse', 'HEAD');
+    const diff: string = agentGit(repo, (rgit: (a: string[], cwd: string) => string) => readerDiff(rgit, repo, from, to));
+    expect(diff).toContain('lib.js');
+    for (const f of files.slice(1)) expect(diff).not.toContain(f);
+  });
+
+  it('keeps a pair that names the run name as a plain word, since every arm shares it; only its path forms are forbidden (25b)', () => {
+    const s = synthOut([{ arm: 'A0', position: 0, diff: `diff --git a/lib.js b/lib.js\n+// the ${SEQ} parser\n` }, { arm: 'A0', position: 1, diff: `diff --git a/lib.js b/lib.js\n+// x/${SEQ}/y\n` }]);
+    expect(draw(s.out, s.tasks)).toMatchObject({ code: 0 });
+    expect(sealedKey(s.out, 'reader-r1.key.json')).toMatchObject({ unblindable: 1, pairs: [{ pairId: `${listGrades(s.out)[0].key}:first` }] });
   });
 
   it('replaces a pair whose blinded text still names the memory tool from its own stratum (25)', () => {

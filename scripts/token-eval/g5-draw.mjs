@@ -3,12 +3,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './regrade.mjs';
+import { READER_HIDDEN } from './workspace.mjs';
 
 const win = process.platform === 'win32';
 const Z95 = 1.959963984540054;
+// The memory tool, its homes and every instruction or memory file the reader diff hides: a command naming one is dropped.
+const HIDDEN_WORDS = ['hippo', 'memory/', 'claude-config', 'codex-home', ...READER_HIDDEN];
 // Strings that name a memory tool, a home or a hidden marker: any of them left in a blinded file could show the arm.
-export const FORBIDDEN = ['hippo', '.hippo', 'CLAUDE.md', 'memory/', 'claude-config', 'codex-home', 'hippo-home', '[command hidden]', '[tool]'];
-export const HIDDEN_COMMAND = /hippo|CLAUDE\.md|memory\/|claude-config|codex-home/i;
+export const FORBIDDEN = [...HIDDEN_WORDS, '.hippo', 'hippo-home', '[command hidden]', '[tool]'];
+export const isHiddenCommand = (command) => leakScan(command, HIDDEN_WORDS).length > 0;
 
 /** Items in sha256(`${seed}:${salt}${id}`) order: a pure function of the seed and the set, never of the listing order. */
 export function seededOrder(seed, items, idOf = (x) => x, salt = '') {
