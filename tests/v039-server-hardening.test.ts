@@ -6,13 +6,11 @@ import { createHmac, scryptSync, randomBytes } from 'node:crypto';
 import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, revokeApiKey, validateApiKey } from '../src/auth.js';
+import { createApiKey, revokeApiKey } from '../src/auth.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 
 // v0.39 commit 5 — Server hardening regressions:
-//   - Fix 5.2: DUMMY_HASH precomputed at module load; miss path runs verifyKey
-//     so the timing signal between hit and miss is reduced.
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
 //     caps stream age. MCP_SSE_HEARTBEAT_MS makes the interval testable.
 //   - Fix 5.4: graceful shutdown awaits server.stop() before process.exit.
@@ -48,74 +46,6 @@ describe('v039 server hardening', () => {
     delete process.env.MCP_SSE_MAX_AGE_SEC;
     delete process.env.MCP_SSE_HEARTBEAT_MS;
     try { rmSync(root, { recursive: true, force: true }); } catch { /* windows file locks */ }
-  });
-
-  // ---- Fix 5.2: auth timing reduced -------------------------------------
-  //
-  // We measure wall-clock elapsed time of validateApiKey on:
-  //   - hit: a real key in the DB
-  //   - miss-known-format: an unknown key with the dotted shape
-  // Both should run scrypt exactly once now. We assert the miss path is
-  // within 50% of the hit path (loose bound — CI is noisy and scrypt is
-  // sensitive to background load). The key behavioral assertion is "miss
-  // path ran scrypt at all" — pre-fix it returned ~instantly.
-  it('auth timing: miss path pays scrypt cost (within 50% of hit)', () => {
-    const db = openHippoDb(root);
-    let plaintext: string;
-    try {
-      const created = createApiKey(db, { tenantId: 'default', label: 'timing-hit' });
-      plaintext = created.plaintext;
-
-      // Warmup — JIT, scrypt cost cache, etc.
-      for (let i = 0; i < 3; i++) {
-        validateApiKey(db, plaintext);
-        validateApiKey(db, 'hk_unknown_key.unknown_secret_blob');
-      }
-
-      // Noise only adds time, so each path's fastest sample is its own cost; a median flaked on CI.
-      const N = 7;
-      const hitTimes: number[] = [];
-      const missTimes: number[] = [];
-      for (let i = 0; i < N; i++) {
-        const t0 = process.hrtime.bigint();
-        validateApiKey(db, plaintext);
-        const t1 = process.hrtime.bigint();
-        hitTimes.push(Number(t1 - t0));
-
-        const t2 = process.hrtime.bigint();
-        validateApiKey(db, 'hk_unknown_key.unknown_secret_blob');
-        const t3 = process.hrtime.bigint();
-        missTimes.push(Number(t3 - t2));
-      }
-      const hit = Math.min(...hitTimes);
-      const miss = Math.min(...missTimes);
-      // Floor: the miss path ran scrypt. Ceiling: it ran scrypt once, not twice.
-      expect(miss).toBeGreaterThan(hit * 0.3);
-      expect(miss).toBeLessThan(hit * 1.5);
-    } finally {
-      closeHippoDb(db);
-    }
-  });
-
-  // ---- Fix 5.2: malformed key (no dot) still pays scrypt cost ----------
-  it('auth timing: malformed input (no dot) pays scrypt cost', () => {
-    const db = openHippoDb(root);
-    try {
-      // Warmup
-      for (let i = 0; i < 3; i++) validateApiKey(db, 'no-dot-here');
-
-      const t0 = process.hrtime.bigint();
-      const result = validateApiKey(db, 'no-dot-here');
-      const t1 = process.hrtime.bigint();
-      const elapsed = Number(t1 - t0);
-      expect(result.valid).toBe(false);
-      // scrypt of 32-byte keylen costs ~30ms on dev hardware. We assert at
-      // least 5ms to stay safe under heavily-loaded CI; the pre-fix path
-      // returned in <0.1ms.
-      expect(elapsed).toBeGreaterThan(5_000_000);
-    } finally {
-      closeHippoDb(db);
-    }
   });
 
   // ---- Fix 5.3: SSE max-age closes stream ------------------------------

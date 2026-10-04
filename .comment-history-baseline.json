@@ -3,7 +3,7 @@
   "src/api.ts": 206,
   "src/audit-prune.ts": 3,
   "src/audit.ts": 7,
-  "src/auth.ts": 13,
+  "src/auth.ts": 10,
   "src/autolearn.ts": 1,
   "src/availability.ts": 3,
   "src/capture-error.ts": 1,

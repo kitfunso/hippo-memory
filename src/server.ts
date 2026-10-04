@@ -33,7 +33,7 @@ export function __resetSessionRecallHistoryHttp(): void {
 }
 import { PACKAGE_VERSION } from './version.js';
 import { log } from './log.js';
-import { API_KEY_PREFIX, validateApiKey } from './auth.js';
+import { API_KEY_PREFIX, verifyApiKeyCached } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
   remember,
@@ -624,21 +624,9 @@ async function resolveBearer(token: string, opts: AuthOpts): Promise<BearerIdent
     const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
     return { ...(await askResolver(opts.authResolver, token, deadlineMs)), viaAuthResolver: true };
   }
-  const db = openHippoDb(opts.hippoRoot);
-  try {
-    const result = validateApiKey(db, token);
-    if (!result.valid || !result.tenantId || !result.keyId || !result.role) {
-      throw new HttpError(401, 'invalid api key');
-    }
-    return {
-      tenantId: result.tenantId,
-      subject: `api_key:${result.keyId}`,
-      role: result.role,
-      scopes: result.scopes,
-    };
-  } finally {
-    closeHippoDb(db);
-  }
+  const key = verifyApiKeyCached(opts.hippoRoot, token);
+  if (!key) throw new HttpError(401, 'invalid api key');
+  return { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
 }
 
 /**

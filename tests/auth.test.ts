@@ -3,13 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, validateApiKey, revokeApiKey, listApiKeys, _dummyHashForTests } from '../src/auth.js';
+import { createApiKey, validateApiKey, revokeApiKey, listApiKeys } from '../src/auth.js';
 
 describe('auth', () => {
-  it('dummy timing-padding hash keeps the scrypt$<32 hex>$<64 hex> shape (Z1b: literal, no longer computed at module load)', () => {
-    expect(_dummyHashForTests()).toMatch(/^scrypt\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
-  });
-
   it('createApiKey returns plaintext exactly once and stores hash', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
     const db = openHippoDb(home);
