@@ -4,7 +4,9 @@
 import * as fs from 'fs';
 import { calculateStrength, confidenceFacets, netWrong, Layer as MemoryLayer, type MemoryEntry } from './memory.js';
 import { isQuarantineScope } from './quarantine.js';
-import { listMemoryConflicts, loadAllEntries, type MemoryConflict } from './store.js';
+import { listMemoryConflicts } from './store/conflicts.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import type { MemoryConflict } from './store/rows.js';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from './db.js';
 import { storedVectorIds } from './vector-store.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';

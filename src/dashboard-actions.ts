@@ -3,7 +3,9 @@
 import * as api from './api.js';
 import { NotFoundError } from './api-errors.js';
 import type { MemoryEntry } from './memory.js';
-import { listMemoryConflicts, readEntry, resolveConflict, writeEntry } from './store.js';
+import { listMemoryConflicts, resolveConflict } from './store/conflicts.js';
+import { readEntry } from './store/entry-reads.js';
+import { writeEntry } from './store/entry-writes.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from './dashboard-snapshot.js';
 import type { ForgetResult, ResolveResult } from './dashboard-types.js';

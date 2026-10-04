@@ -1,7 +1,7 @@
 // A dashboard write that committed answers 200 even when the next snapshot rebuild would fail; the next read is where it surfaces.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as storeApi from '../src/store.js';
+import * as entryReads from '../src/store/entry-reads.js';
 import type { MemoryDetail, Overview } from '../src/dashboard-types.js';
 import {
   NOW, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
@@ -23,7 +23,7 @@ afterEach(async () => {
 
 /** Makes every snapshot build throw, because `loadAllEntries` is the one store call only a build makes. */
 function breakSnapshotRebuild(): void {
-  vi.spyOn(storeApi, 'loadAllEntries').mockImplementation(() => {
+  vi.spyOn(entryReads, 'loadAllEntries').mockImplementation(() => {
     throw new Error('forced rebuild failure');
   });
 }
@@ -39,7 +39,7 @@ describe('pin while the snapshot rebuild fails', () => {
     expect(pinned.status).toBe(200);
     expect(parse<MemoryDetail>(pinned).pinned).toBe(true);
     expect(parse<MemoryDetail>(pinned).snapshotId).toBe(before.snapshotId);
-    expect(storeApi.readEntry(store.hippoRoot, target.id)!.pinned).toBe(true);
+    expect(entryReads.readEntry(store.hippoRoot, target.id)!.pinned).toBe(true);
     expect((await get(dash.port, '/api/overview')).status).toBe(500);
   });
 });

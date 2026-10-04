@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/memory.js';
-import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store.js';
+import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
 import { createSnapshotService } from '../src/dashboard-snapshot.js';
 import { buildOverview } from '../src/dashboard-queries.js';

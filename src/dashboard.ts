@@ -3,8 +3,10 @@
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
+import type { AddressInfo } from 'net';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { evalNow } from './ablation.js';
-import { readEntry } from './store.js';
+import { readEntry } from './store/entry-reads.js';
 import { listCards } from './store-cards.js';
 import { resolveTenantId } from './tenant.js';
 import { loadCardDetail } from './card-detail.js';
@@ -223,8 +225,28 @@ function serveSpa(res: http.ServerResponse, distUiDir: string, pathname: string)
   notBuilt(res);
 }
 
-/** Starts the dashboard on loopback; `opts.now` dates the projections (default: the eval clock) and `opts.cacheClock` ages the snapshot cache (default: the wall clock). */
-export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { now?: () => number; cacheClock?: () => number }): http.Server {
+function sameToken(given: string | undefined, token: string): boolean {
+  if (given === undefined) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function cookieValue(header: string | undefined, name: string): string | undefined {
+  for (const part of (header ?? '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return undefined;
+}
+
+/** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
+export function serveDashboard(
+  hippoRoot: string,
+  port: number = 3333,
+  token: string = randomBytes(32).toString('base64url'),
+  opts?: { now?: () => number; cacheClock?: () => number },
+): http.Server {
   const distUiDir = path.resolve(import.meta.dirname, '..', 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
   const now = opts?.now ?? ((): number => evalNow().getTime());
@@ -234,6 +256,16 @@ export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { 
     const host = req.headers.host;
     if (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) return forbidden(res);
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+    // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
+    const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
+    if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
+      res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
+      res.writeHead(401, { 'Content-Type': 'text/plain' });
+      res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
+      return;
+    }
 
     if (url.pathname.startsWith('/api/')) {
       // A malformed % sequence throws URIError here; the caller answers 400.
@@ -274,8 +306,10 @@ export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { 
   server.on('close', () => snapshots.close());
 
   server.listen(port, '127.0.0.1', () => {
+    // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.
+    const boundPort = (server.address() as AddressInfo).port;
     // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
-    console.log(`Hippo Dashboard running at http://localhost:${port}`);
+    console.log(`Hippo Dashboard running at http://localhost:${boundPort}/?token=${token}`);
     if (hasDistUi) console.log(`Serving React UI from ${distUiDir}`);
     console.log('Press Ctrl+C to stop.');
   });

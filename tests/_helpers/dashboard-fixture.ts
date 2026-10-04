@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { initStore, writeEntry } from '../../src/store.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import { upsertVectors } from '../../src/vector-store.js';
 import type { MemoryEntry } from '../../src/memory.js';
@@ -73,6 +74,9 @@ export function embed(hippoRoot: string, ids: readonly string[]): void {
   }
 }
 
+/** The access token every fixture dashboard starts with; `call` sends it as the session cookie. */
+export const DASHBOARD_TOKEN = 'test-dashboard-token';
+
 export interface RunningDashboard {
   server: Server;
   port: number;
@@ -81,7 +85,7 @@ export interface RunningDashboard {
 
 export async function startDashboard(hippoRoot: string, now: () => number = () => NOW): Promise<RunningDashboard> {
   // One test clock drives both the projections and the cache age.
-  const server = serveDashboard(hippoRoot, 0, { now, cacheClock: now });
+  const server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { now, cacheClock: now });
   const port = await new Promise<number>((resolve) => {
     const done = (): void => {
       // SAFETY: serveDashboard binds a TCP port, so address() is an AddressInfo once listening.
@@ -107,7 +111,8 @@ export interface CallOptions {
 
 export function call(port: number, method: string, path: string, opts: CallOptions = {}): Promise<Reply> {
   return new Promise((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method, headers: opts.headers }, (res) => {
+    const headers = { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}`, ...opts.headers };
+    const req = httpRequest({ host: '127.0.0.1', port, path, method, headers }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (chunk: string) => {

@@ -38,13 +38,13 @@ describe('dashboard local access token', () => {
   });
 
   it('refuses the API and the page without the token', async () => {
-    expect((await fetch(`http://127.0.0.1:${port}/api/stats`)).status).toBe(401);
+    expect((await fetch(`http://127.0.0.1:${port}/api/overview`)).status).toBe(401);
     expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(401);
-    expect((await fetch(`http://127.0.0.1:${port}/api/stats?token=wrong`)).status).toBe(401);
+    expect((await fetch(`http://127.0.0.1:${port}/api/overview?token=wrong`)).status).toBe(401);
   });
 
   it('accepts the token in the query and sets an HttpOnly SameSite=Strict cookie', async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/stats?token=${TOKEN}`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
     expect(res.status).toBe(200);
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).toMatch(/HttpOnly/i);
@@ -52,14 +52,14 @@ describe('dashboard local access token', () => {
     const pair = cookie.split(';')[0]!;
     expect(pair.endsWith(`=${TOKEN}`)).toBe(true);
 
-    const again = await fetch(`http://127.0.0.1:${port}/api/stats`, { headers: { cookie: pair } });
+    const again = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } });
     expect(again.status).toBe(200);
   });
 
   it('keeps the Host-header check ahead of the token', async () => {
     const status = await new Promise<number | undefined>((resolve, reject) => {
       const req = request(
-        { host: '127.0.0.1', port, path: `/api/stats?token=${TOKEN}`, headers: { host: 'evil.example' } },
+        { host: '127.0.0.1', port, path: `/api/overview?token=${TOKEN}`, headers: { host: 'evil.example' } },
         (res) => {
           res.resume();
           resolve(res.statusCode);

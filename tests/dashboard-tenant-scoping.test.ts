@@ -6,10 +6,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
+import { DASHBOARD_TOKEN } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 
 function post(
@@ -19,7 +21,7 @@ function post(
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json', cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -78,7 +80,7 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
 
     // Run the dashboard under HIPPO_TENANT=tenant_b on an ephemeral port.
     process.env.HIPPO_TENANT = 'tenant_b';
-    server = serveDashboard(hippoRoot, 0);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 
     const res = await post(port, `/api/memory/${a.id}/pin`, '{"pinned":true}');

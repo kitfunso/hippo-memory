@@ -3,11 +3,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { listMemoryConflicts, readEntry, replaceDetectedConflicts } from '../src/store.js';
+import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard-types.js';
 import {
-  NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
+  DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 
 const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
@@ -230,7 +231,7 @@ describe('request guards', () => {
     const status = await new Promise<number>((resolve, reject) => {
       const req = httpRequest({
         host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', cookie: `hippo_dashboard_${dash.port}=${DASHBOARD_TOKEN}` },
       });
       let answered = false;
       req.on('response', (res) => {
