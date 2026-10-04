@@ -176,7 +176,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       # Test stores live in the temp dir, and C: takes 5 ms per fsync against 0.15 ms on D:.
-      - name: Temp dir on D:
+      - name: Temp dir on the D drive
         if: runner.os == 'Windows'
         run: |
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
