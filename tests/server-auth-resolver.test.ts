@@ -403,7 +403,7 @@ describe('exported authRevoke for add-ons', () => {
     actor: { subject: 'system:addon:u1', role: 'admin', viaAuthResolver: true },
   });
 
-  function mint(tenantId: string, role: 'admin' | 'member'): CreatedApiKey {
+  function mint(tenantId: string, role: 'admin' | 'member'): CreateApiKeyResult {
     const db = openHippoDb(home);
     try {
       return createApiKey(db, { tenantId, label: `addon-${role}`, role });

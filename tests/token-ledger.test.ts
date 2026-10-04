@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   recordTokenUse,
   lastSentState,

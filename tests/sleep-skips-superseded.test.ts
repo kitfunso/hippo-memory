@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore, writeEntry, loadAllEntries, loadChildrenOfSummary, loadAllL2Summaries } from '../src/store.js';
 import { consolidate } from '../src/consolidate.js';
 import { supersede, type Context } from '../src/api.js';

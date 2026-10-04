@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { rrfFuse } from '../src/rrf.js';
 import { selectGraphSeeds, graphRankStream } from '../src/graph-stream.js';

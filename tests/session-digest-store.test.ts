@@ -7,7 +7,7 @@ import { adminActor, reject } from '../src/api.js';
 import { consolidate } from '../src/consolidate.js';
 import { storeExtractedFacts } from '../src/extract.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { autoShare, getGlobalRoot, neverAutoShareTags } from '../src/shared.js';
 import { initStore, listMemoryConflicts, loadAllEntries, saveSessionHandoff, writeEntry } from '../src/store.js';
 import {

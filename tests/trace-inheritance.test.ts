@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Layer, calculateStrength } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/consolidate.js';
 import {
   initStore,

@@ -9,7 +9,7 @@ import { initStore, writeEntry, readEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, listScopeGrants } from '../src/auth.js';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { refreshBrief } from '../src/project-briefs.js';
 import { extractGraph } from '../src/graph-extract.js';

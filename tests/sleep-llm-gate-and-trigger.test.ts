@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore, writeEntry, readEntry, countCreatedSinceLastSleep } from '../src/store.js';
 import { consolidate } from '../src/consolidate.js';
 import { remember, type Context } from '../src/api.js';

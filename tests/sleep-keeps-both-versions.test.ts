@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { Layer, type MemoryEntry } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore, writeEntry, loadAllEntries, readEntry } from '../src/store.js';
 import { consolidate } from '../src/consolidate.js';
 import { deduplicateStore } from '../src/dedupe.js';

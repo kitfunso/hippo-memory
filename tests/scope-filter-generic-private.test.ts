@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, saveActiveTaskSnapshot } from '../src/store.js';
 import type { Context } from '../src/api.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall } from '../src/api.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 

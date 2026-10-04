@@ -7,7 +7,7 @@ import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { appendSessionEvent, getHippoRoot, initStore, isInitialized, loadIndex, readEntry, saveActiveTaskSnapshot, saveSessionHandoff, writeEntry } from '../src/store.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { adminActor, recall as apiRecall } from '../src/api.js';

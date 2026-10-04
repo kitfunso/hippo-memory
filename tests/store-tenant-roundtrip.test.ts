@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 describe('store roundtrip with tenant_id', () => {
   it('writeEntry persists tenant_id, readEntry returns it', () => {

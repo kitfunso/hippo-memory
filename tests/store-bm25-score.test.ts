@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadSearchEntries } from '../src/store.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 function makeRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));

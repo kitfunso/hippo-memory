@@ -3,7 +3,7 @@ import {
   crossEncoderReranker,
   isCrossEncoderAvailable,
 } from '../../src/rerankers/cross-encoder.js';
-import { createMemory } from '../_helpers/create-memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/search.js';
 
 function asResult(content: string, score: number): SearchResult {

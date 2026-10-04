@@ -9,7 +9,7 @@ import { appendSessionEvent, initStore, saveActiveTaskSnapshot, writeEntry } fro
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { runDoctor } from '../src/doctor.js';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
   estimateTokens,

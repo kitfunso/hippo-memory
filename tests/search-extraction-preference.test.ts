@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { search } from '../src/search.js';
 
 let tmpDir: string;

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { search, estimateTokens, textOverlap } from '../src/search.js';
 import { markRetrieved } from '../src/memory.js';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 function makeEntries() {
   return [

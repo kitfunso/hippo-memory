@@ -9,7 +9,7 @@ import {
   syncGlobalToLocal,
 } from '../src/shared.js';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

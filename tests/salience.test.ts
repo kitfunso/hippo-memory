@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { type MemoryEntry, type EmotionalValence } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { computeSalience } from '../src/salience.js';
 
 function mem(

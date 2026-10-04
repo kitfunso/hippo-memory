@@ -6,7 +6,7 @@ import { createHmac } from 'node:crypto';
 import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
 import type { Context } from '../src/api.js';
 import { Layer } from '../src/memory.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
 import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';

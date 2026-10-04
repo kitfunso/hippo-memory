@@ -10,7 +10,7 @@ import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { saveDecision } from '../src/decisions.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { saveIncident } from '../src/incidents.js';
-import { createMemory } from './_helpers/create-memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { batchWriteAndDelete, deleteEntry, initStore, loadAllEntries, memoriesBackingObjects, readEntry, writeEntry } from '../src/store.js';
 
 const roots: string[] = [];
