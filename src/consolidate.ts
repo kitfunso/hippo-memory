@@ -147,8 +147,150 @@ export async function consolidate(
 ): Promise<ConsolidationResult> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
+  const result = newConsolidationResult(dryRun);
+  const halfLife = migrateHalfLives(hippoRoot, dryRun, result);
 
-  const result: ConsolidationResult = {
+  // L9: host-wide by design. Consolidation runs across all tenants in one
+  // pass — per-tenant filtering would create N consolidation runs per host
+  // with no cross-tenant dedup. The api.sleep audit row tags this with the
+  // admin synthetic actor; see api.ts:2050 for the rationale.
+  const all = loadAllEntries(hippoRoot);
+  if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
+  const backingObjects = memoriesBackingObjects(hippoRoot);
+  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
+  const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
+  const snapshot = new Map(structuredClone(all).map((e) => [e.id, e]));
+
+  // Load decay options from config + session context
+  const config = loadConfig(hippoRoot);
+  const sessionCtx = loadSessionDecayContext(hippoRoot);
+  const decayOpts: DecayOptions = {
+    decayBasis: config.decayBasis,
+    avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
+    sleepCount: sessionCtx.sleepCount,
+  };
+
+  const consolidateDb = lazyConsolidateDb(hippoRoot, dryRun);
+  const run: SleepRun = {
+    hippoRoot, now, dryRun, config, decayOpts, result, all, retirable,
+    getConsolidateDb: consolidateDb.get,
+    survivors: [],
+    // Collect all writes/deletes and batch them at the end
+    pendingWrites: [],
+    pendingDeletes: [],
+    pendingDormant: [],
+  };
+
+  const decay = decayPass(run);
+
+  let mergesSkippedRejected = 0;
+  try {
+    promoteSessionTraces(run);
+    replayPass(run);
+    await llmPasses(run, options.fetcher);
+    physicsPass(run);
+    retireHeldTexts(run);
+    mergesSkippedRejected = mergePass(run);
+  } finally {
+    consolidateDb.close();
+  }
+
+  if (mergesSkippedRejected > 0) {
+    log.warn(
+      `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
+    );
+  }
+
+  flushPending(run, snapshot);
+  expireDormant(run);
+  if (!dryRun) logRun(run, decay);
+  return result;
+}
+
+// A changed default half-life moves memories still on the old base first,
+// so this pass decays them at the new one (src/half-life-migration.ts).
+function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): ReturnType<typeof migrateDefaultHalfLife> {
+  const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
+  if (halfLife.rescaled > 0) {
+    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ${halfLife.to}-day half-life`);
+  }
+  if (halfLife.typed > 0) {
+    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);
+  }
+  return halfLife;
+}
+
+/** The sleep's one tombstone-check handle: opened on first use, never under dryRun, closed once. */
+interface LazyDb {
+  get: () => DatabaseSyncLike | null;
+  close: () => void;
+}
+
+// AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+// covers BOTH the auto-promote pass (1.4) and the merge
+// pass (3) — both build deterministic content that
+// batchWriteAndDelete writes through the guard's bypass, so both need a
+// producer-side tombstone check before pushing to pendingWrites.
+//
+// T3 fix (2026-08-15 hardening pass, perf hygiene): memoized lazy getter,
+// not an eager open. The handle only serves these two tombstone checks —
+// a sleep with zero promotable sessions and zero merge clusters never
+// reaches either use site, so opening it unconditionally on every
+// non-dry-run sleep paid a db-open cost for nothing. dryRun still never
+// opens (getConsolidateDb short-circuits before touching the handle).
+// consolidateDbOpened (not just a truthy handle check) is the
+// single source of truth for "was this ever opened", so the finally
+// closes it exactly once and never double-opens.
+//
+// AT1 P2 fix (codex, handle-leak restructure): the getter's lifetime must
+// start IMMEDIATELY before the try whose finally closes it, covering every
+// phase that can touch it — not just the merge pass. An exception thrown by
+// auto-promote (1.4), replay (1.5), batch extraction (1.6), the DAG
+// passes (1.7-1.9), or physics (2) would otherwise propagate past an open handle
+// with nothing to close it.
+function lazyConsolidateDb(hippoRoot: string, dryRun: boolean): LazyDb {
+  let consolidateDbHandle: DatabaseSyncLike | null = null;
+  let consolidateDbOpened = false;
+  const get = (): DatabaseSyncLike | null => {
+    if (dryRun) return null;
+    if (!consolidateDbOpened) {
+      consolidateDbHandle = openHippoDb(hippoRoot);
+      consolidateDbOpened = true;
+    }
+    return consolidateDbHandle;
+  };
+  const close = (): void => {
+    if (consolidateDbHandle) closeHippoDb(consolidateDbHandle);
+  };
+  return { get, close };
+}
+
+/** State every sleep stage reads or appends to; the pending lists are flushed in one transaction at the end. */
+interface SleepRun {
+  hippoRoot: string;
+  now: Date;
+  dryRun: boolean;
+  config: ReturnType<typeof loadConfig>;
+  decayOpts: DecayOptions;
+  result: ConsolidationResult;
+  all: MemoryEntry[];
+  retirable: (entry: MemoryEntry) => boolean;
+  getConsolidateDb: () => DatabaseSyncLike | null;
+  survivors: MemoryEntry[];
+  pendingWrites: MemoryEntry[];
+  pendingDeletes: string[];
+  pendingDormant: DormantMove[];
+}
+
+/** What the decay pass hands to the conflict check and the rescue audit at the end of the run. */
+interface DecayOutcome {
+  rescuedIds: Set<string>;
+  rescuedEntries: MemoryEntry[];
+  rankById: Map<string, MvRankInfo>;
+}
+
+function newConsolidationResult(dryRun: boolean): ConsolidationResult {
+  return {
     decayed: 0,
     removed: 0,
     dormant: 0,
@@ -172,415 +314,339 @@ export async function consolidate(
     details: [],
     physicsSimulated: 0,
   };
+}
 
-  // A changed default half-life moves memories still on the old base first,
-  // so this pass decays them at the new one (src/half-life-migration.ts).
-  const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
-  if (halfLife.rescaled > 0) {
-    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ${halfLife.to}-day half-life`);
+// A faded, unpinned, unrescued memory leaves active memory one of three
+// ways. A raw receipt is append-only: trg_memories_raw_append_only aborts
+// a DELETE, and with it this whole cycle's batch and every later sleep,
+// so it stays where it is (stored strength refreshed) but sits out the
+// rest of this cycle the way a deleted row would. Anything else goes
+// dormant when config.dormant is on, and is deleted otherwise.
+// Only called for rows `retirable` allows (never pinned, raw, kept for good or backing a first-class object).
+function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
+  const { result } = run;
+  const why = `(strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`;
+  // A faded secret is deleted, never kept dormant: keeping it would hold a
+  // credential on disk that the user reasonably expects forgetting removed.
+  if (run.config.dormant.enabled && !detectSecret(entry).flagged) {
+    result.dormant++;
+    result.details.push(`  💤 dormant ${entry.id} ${why}`);
+    run.pendingDormant.push({ entry: { ...entry, strength }, strength, reason: 'decay', dormantAt: run.now.toISOString() });
+    return;
   }
-  if (halfLife.typed > 0) {
-    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);
+  result.removed++;
+  result.details.push(`  🗑  removed ${entry.id} ${why}`);
+  run.pendingDeletes.push(entry.id);
+}
+
+/** Keeps an entry with its live strength cached; only strength is a cached computation, confidence stays as stored. */
+function keepSurvivor(run: SleepRun, entry: MemoryEntry, strength: number): MemoryEntry {
+  const updated = { ...entry, strength };
+  run.survivors.push(updated);
+  if (!run.dryRun && strength !== entry.strength) {
+    run.pendingWrites.push(updated);
   }
+  run.result.decayed++;
+  return updated;
+}
 
-  // L9: host-wide by design. Consolidation runs across all tenants in one
-  // pass — per-tenant filtering would create N consolidation runs per host
-  // with no cross-tenant dedup. The api.sleep audit row tags this with the
-  // admin synthetic actor; see api.ts:2050 for the rationale.
-  const all = loadAllEntries(hippoRoot);
-  if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
-  const backingObjects = memoriesBackingObjects(hippoRoot);
-  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
-  const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
-  const snapshot = new Map(structuredClone(all).map((e) => [e.id, e]));
+// -------------------------------------------------------------------------
+// 1. Decay pass
+// -------------------------------------------------------------------------
+// LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md):
+// flag OFF keeps the single-phase loop below byte-identical to pre-E3
+// behavior (pre-registered gate G2). Flag ON restructures into two phases:
+// phase 1 classifies every entry (condemned vs survivor) with ZERO
+// commits; phase 2 runs rescueSet over the per-tenant candidate groups,
+// then commits — rescued entries get the standard survivor bookkeeping
+// refresh (stored strength + effective confidence; no half-life edits, no
+// rank-derived writes) and are pushed to survivors so they fully
+// participate in this cycle's merge/physics/conflict passes; non-rescued
+// condemned entries follow the existing pendingDeletes/result.removed/
+// details path.
+function decayPass(run: SleepRun): DecayOutcome {
+  if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
+  for (const entry of run.all) {
+    const strength = calculateStrength(entry, run.now, run.decayOpts);
 
-  // Load decay options from config + session context
-  const config = loadConfig(hippoRoot);
-  const sessionCtx = loadSessionDecayContext(hippoRoot);
-  const decayOpts: DecayOptions = {
-    decayBasis: config.decayBasis,
-    avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
-    sleepCount: sessionCtx.sleepCount,
-  };
-
-  // Collect all writes/deletes and batch them at the end
-  const pendingWrites: MemoryEntry[] = [];
-  const pendingDeletes: string[] = [];
-  const pendingDormant: DormantMove[] = [];
-
-  // A faded, unpinned, unrescued memory leaves active memory one of three
-  // ways. A raw receipt is append-only: trg_memories_raw_append_only aborts
-  // a DELETE, and with it this whole cycle's batch and every later sleep,
-  // so it stays where it is (stored strength refreshed) but sits out the
-  // rest of this cycle the way a deleted row would. Anything else goes
-  // dormant when config.dormant is on, and is deleted otherwise.
-  // Only called for rows `retirable` allows (never pinned, raw, kept for good or backing a first-class object).
-  const retireFaded = (entry: MemoryEntry, strength: number): void => {
-    const why = `(strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`;
-    // A faded secret is deleted, never kept dormant: keeping it would hold a
-    // credential on disk that the user reasonably expects forgetting removed.
-    if (config.dormant.enabled && !detectSecret(entry).flagged) {
-      result.dormant++;
-      result.details.push(`  💤 dormant ${entry.id} ${why}`);
-      pendingDormant.push({ entry: { ...entry, strength }, strength, reason: 'decay', dormantAt: now.toISOString() });
-      return;
+    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
+      retireFaded(run, entry, strength);
+    } else {
+      keepSurvivor(run, entry, strength);
     }
-    result.removed++;
-    result.details.push(`  🗑  removed ${entry.id} ${why}`);
-    pendingDeletes.push(entry.id);
-  };
+  }
+  return { rescuedIds: new Set(), rescuedEntries: [], rankById: new Map() };
+}
 
-  // -------------------------------------------------------------------------
-  // 1. Decay pass
-  // -------------------------------------------------------------------------
-  // LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md):
-  // flag OFF keeps the single-phase loop below byte-identical to pre-E3
-  // behavior (pre-registered gate G2). Flag ON restructures into two phases:
-  // phase 1 classifies every entry (condemned vs survivor) with ZERO
-  // commits; phase 2 runs rescueSet over the per-tenant candidate groups,
-  // then commits — rescued entries get the standard survivor bookkeeping
-  // refresh (stored strength + effective confidence; no half-life edits, no
-  // rank-derived writes) and are pushed to survivors so they fully
-  // participate in this cycle's merge/physics/conflict passes; non-rescued
-  // condemned entries follow the existing pendingDeletes/result.removed/
-  // details path.
-  const survivors: MemoryEntry[] = [];
+// A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be
+// rescued, so name those entries in one warning rather than leave it a silent NaN detail.
+function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string, MvRankInfo>): void {
+  const nonFiniteIds = [...rankById.entries()]
+    .filter(([, info]) => !Number.isFinite(info.score))
+    .map(([id]) => id);
+  if (nonFiniteIds.length > 0) {
+    result.details.push(
+      `  ⚠️ memory-value: skipped ${nonFiniteIds.length} entr${nonFiniteIds.length === 1 ? 'y' : 'ies'} ` +
+      `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
+    );
+  }
+}
+
+function decayWithMemoryValue(run: SleepRun): DecayOutcome {
+  const { all, now, result } = run;
+  // Carried forward to logRun, where the mv_rescue audit rows are actually
+  // written (code-review fix: writing them here, before batchWriteAndDelete,
+  // would assert rescues for a cycle whose effects might never land if a
+  // later phase throws).
+  const rescuedEntries: MemoryEntry[] = [];
   let rescuedIds: Set<string> = new Set();
-  // Carried forward to the post-flush "4. Log run" section below, where the
-  // mv_rescue audit rows are actually written (code-review fix: writing them
-  // here, before batchWriteAndDelete, would assert rescues for a cycle whose
-  // effects might never land if a later phase throws).
-  let rescuedEntries: MemoryEntry[] = [];
   let rankById: Map<string, MvRankInfo> = new Map();
-  if (config.memoryValue.enabled) {
-    // --- Phase 1: classify (zero commits) ---
-    const condemned: MemoryEntry[] = [];
-    const strengthById = new Map<string, number>();
-    for (const entry of all) {
-      const strength = calculateStrength(entry, now, decayOpts);
-      strengthById.set(entry.id, strength);
-      if (retirable(entry) && strength < DECAY_THRESHOLD) {
-        condemned.push(entry);
-      }
-    }
 
-    // --- Phase 2a: rescue decision (pure compute) ---
-    // Runs under --dry-run too (only the pendingDeletes flush and the audit write in
-    // "4. Log run" below stay !dryRun-gated), so the preview matches what a
-    // real run would decide.
-    const condemnedIds = new Set(condemned.map((e) => e.id));
-    // Fail-loud must not depend on condemnation traffic (round-2 code-review
-    // P2-2): validate the frozen weights constant unconditionally, even on a
-    // sleep with nothing condemned.
-    validateWeights();
-    if (condemnedIds.size > 0) {
-      // Compute the per-tenant ranking ONCE (round-2 code-review P2-2):
-      // rankById feeds both rescueSet's decision (via precomputedRanks,
-      // skipping its own internal rankNonPinnedByTenant call) and the
-      // detail/audit rank context below, so the whole-store ranking pass
-      // runs a single time per sleep instead of twice, and only when there
-      // is actually something condemned to rank against.
-      rankById = rankNonPinnedByTenant(all, now);
-      rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
-
-      // Review-round F2: entries with a non-finite computed feature (e.g. a
-      // malformed `created` string -> Date.parse NaN) score -Infinity in
-      // rankById and rescueSet's explicit finite-score guard means they can
-      // never be rescued. Surfaced here as one details warning line naming
-      // them, rather than leaving it a silent NaN-driven scoring detail.
-      const nonFiniteIds = [...rankById.entries()]
-        .filter(([, info]) => !Number.isFinite(info.score))
-        .map(([id]) => id);
-      if (nonFiniteIds.length > 0) {
-        result.details.push(
-          `  ⚠️ memory-value: skipped ${nonFiniteIds.length} entr${nonFiniteIds.length === 1 ? 'y' : 'ies'} ` +
-          `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
-        );
-      }
-    }
-
-    // --- Phase 2b: commit, one pass over `all` in ITS ORIGINAL ORDER ---
-    // (review-round F4: rescued entries used to be appended at the tail of
-    // survivors, systematically starving them in downstream order-sensitive
-    // passes like extraction's slice(0,20) — a single pass over `all`
-    // preserves flag-off's ordering semantics exactly.)
-    for (const entry of all) {
-      const strength = strengthById.get(entry.id)!;
-      if (retirable(entry) && strength < DECAY_THRESHOLD) {
-        if (rescuedIds.has(entry.id)) {
-          // Rescued (D1): standard survivor stored-strength refresh (P2-1).
-          // Confidence is left alone here: it is an epistemic tier, not a
-          // cached computation, so resolveConfidence derives it on read.
-          const updated = { ...entry, strength };
-          survivors.push(updated);
-          if (!dryRun && strength !== entry.strength) {
-            pendingWrites.push(updated);
-          }
-          result.decayed++;
-          rescuedEntries.push(updated);
-          const rank = rankById.get(entry.id);
-          const rankNote = rank
-            ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
-            : ' - rescued';
-          result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
-        } else {
-          retireFaded(entry, strength);
-        }
-      } else {
-        const updated = { ...entry, strength };
-        survivors.push(updated);
-        if (!dryRun && strength !== entry.strength) {
-          pendingWrites.push(updated);
-        }
-        result.decayed++;
-      }
-    }
-  } else {
-    for (const entry of all) {
-      const strength = calculateStrength(entry, now, decayOpts);
-
-      if (retirable(entry) && strength < DECAY_THRESHOLD) {
-        retireFaded(entry, strength);
-      } else {
-        // Only strength is a cached computation; confidence stays as stored.
-        const updated = { ...entry, strength };
-        survivors.push(updated);
-        if (!dryRun && strength !== entry.strength) {
-          pendingWrites.push(updated);
-        }
-        result.decayed++;
-      }
+  // --- Phase 1: classify (zero commits) ---
+  const condemned: MemoryEntry[] = [];
+  const strengthById = new Map<string, number>();
+  for (const entry of all) {
+    const strength = calculateStrength(entry, now, run.decayOpts);
+    strengthById.set(entry.id, strength);
+    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
+      condemned.push(entry);
     }
   }
 
-  // AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-  // covers BOTH the auto-promote pass (1.4, immediately below) and the merge
-  // pass (3, further down) — both build deterministic content that
-  // batchWriteAndDelete writes through the guard's bypass, so both need a
-  // producer-side tombstone check before pushing to pendingWrites.
-  //
-  // T3 fix (2026-08-15 hardening pass, perf hygiene): memoized lazy getter,
-  // not an eager open. The handle only serves these two tombstone checks —
-  // a sleep with zero promotable sessions and zero merge clusters never
-  // reaches either use site, so opening it unconditionally on every
-  // non-dry-run sleep paid a db-open cost for nothing. dryRun still never
-  // opens (getConsolidateDb short-circuits before touching the handle).
-  // Every `if (consolidateDb)` guard below becomes `const consolidateDb =
-  // getConsolidateDb();` at its use site — same semantics, opened on first
-  // real use. consolidateDbOpened (not just a truthy handle check) is the
-  // single source of truth for "was this ever opened", so the finally below
-  // closes it exactly once and never double-opens.
-  //
-  // AT1 P2 fix (codex, handle-leak restructure): the getter's lifetime must
-  // start IMMEDIATELY before the try whose finally closes it, covering every
-  // phase that can touch it — not just the merge pass. Previously the
-  // try/finally wrapped only section 3 (merge pass); an exception thrown by
-  // auto-promote (1.4), replay (1.5), batch extraction (1.6), the DAG
-  // passes (1.7-1.9), or physics (2) would propagate past an open handle
-  // with nothing to close it. No behavior change on the happy path — each
-  // of those phases already best-effort catches its own exceptions today
-  // (physics has its own try/catch below; each DAG pass wraps its own
-  // dynamic import + call in try/catch) — this only closes the handle on
-  // the rare path where one of them throws past its own catch. Deliberately
-  // NOT re-indented (mechanical wrap only, kept surgical): every statement
-  // between this try and its finally (below, at the end of the merge pass)
-  // stays at its original indentation.
-  let consolidateDbHandle: DatabaseSyncLike | null = null;
-  let consolidateDbOpened = false;
-  const getConsolidateDb = (): DatabaseSyncLike | null => {
-    if (dryRun) return null;
-    if (!consolidateDbOpened) {
-      consolidateDbHandle = openHippoDb(hippoRoot);
-      consolidateDbOpened = true;
+  // --- Phase 2a: rescue decision (pure compute) ---
+  // Runs under --dry-run too (only the pendingDeletes flush and the audit write in
+  // logRun stay !dryRun-gated), so the preview matches what a
+  // real run would decide.
+  const condemnedIds = new Set(condemned.map((e) => e.id));
+  // Fail-loud must not depend on condemnation traffic (round-2 code-review
+  // P2-2): validate the frozen weights constant unconditionally, even on a
+  // sleep with nothing condemned.
+  validateWeights();
+  if (condemnedIds.size > 0) {
+    // Compute the per-tenant ranking ONCE (round-2 code-review P2-2):
+    // rankById feeds both rescueSet's decision (via precomputedRanks,
+    // skipping its own internal rankNonPinnedByTenant call) and the
+    // detail/audit rank context below, so the whole-store ranking pass
+    // runs a single time per sleep instead of twice, and only when there
+    // is actually something condemned to rank against.
+    rankById = rankNonPinnedByTenant(all, now);
+    rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
+    reportNonFiniteScores(result, rankById);
+  }
+
+  // --- Phase 2b: commit, one pass over `all` in ITS ORIGINAL ORDER ---
+  // (review-round F4: rescued entries used to be appended at the tail of
+  // survivors, systematically starving them in downstream order-sensitive
+  // passes like extraction's slice(0,20) — a single pass over `all`
+  // preserves flag-off's ordering semantics exactly.)
+  for (const entry of all) {
+    const strength = strengthById.get(entry.id)!;
+    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
+      if (rescuedIds.has(entry.id)) {
+        // Rescued (D1): standard survivor stored-strength refresh (P2-1).
+        // Confidence is left alone here: it is an epistemic tier, not a
+        // cached computation, so resolveConfidence derives it on read.
+        rescuedEntries.push(keepSurvivor(run, entry, strength));
+        const rank = rankById.get(entry.id);
+        const rankNote = rank
+          ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
+          : ' - rescued';
+        result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
+      } else {
+        retireFaded(run, entry, strength);
+      }
+    } else {
+      keepSurvivor(run, entry, strength);
     }
-    return consolidateDbHandle;
-  };
-  // Declared here (not at the merge pass, its point of use) so it survives
-  // this try/finally — a `let` declared INSIDE the try would go out of
-  // scope before the `if (mergesSkippedRejected > 0)` check that reads it
-  // after the finally closes the handle.
-  let mergesSkippedRejected = 0;
+  }
+  return { rescuedIds, rescuedEntries, rankById };
+}
+
+// -------------------------------------------------------------------------
+// 1.4. Auto-promote complete sessions to traces
+// -------------------------------------------------------------------------
+//
+// For each session within the configured window that has a `session_complete`
+// event and no existing trace (idempotency via the source_session_id column),
+// render the action sequence as markdown and persist a Layer.Trace memory.
+// Traces inherit decay, search, replay, and physics from the base MemoryEntry.
+function promoteSessionTraces(run: SleepRun): void {
+  const { result } = run;
+  if (run.dryRun || run.config.autoTraceCapture === false) return;
+  let tracesSkippedRejected = 0;
+  const windowDays = run.config.autoTraceWindowDays ?? 7;
+  const sinceMs = run.now.getTime() - windowDays * 24 * 60 * 60 * 1000;
+  // Auto-trace currently runs in a single-tenant context (the env-resolved
+  // tenant for this process). Multi-tenant deployments that want
+  // consolidation across all tenants need a per-tenant loop layered on top
+  // of this — tracked in docs/plans/2026-05-02-continuity-tables-tenant-scope.md.
+  const consolidationTenant = resolveTenantId({});
+  const promotable = findPromotableSessions(run.hippoRoot, consolidationTenant, sinceMs);
+
+  for (const session of promotable) {
+    const built = sessionTrace(run, consolidationTenant, session.session_id);
+    if (!built) continue;
+    const { trace, outcome } = built;
+    if (traceRejected(run, trace, session.session_id)) {
+      tracesSkippedRejected++;
+      continue;
+    }
+
+    run.pendingWrites.push(trace);
+    run.survivors.push(trace);
+    result.promotedTraces++;
+    result.details.push(
+      `  🧬 promoted trace ${trace.id} from session ${session.session_id} (${outcome})`
+    );
+  }
+
+  if (result.promotedTraces > 0) {
+    result.details.push(
+      `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed session${result.promotedTraces === 1 ? '' : 's'}`
+    );
+  }
+  if (tracesSkippedRejected > 0) {
+    log.warn(
+      `consolidate: skipped ${tracesSkippedRejected} auto-promoted trace(s) whose content matches a rejected value`,
+    );
+  }
+}
+
+type TraceOutcome = 'success' | 'failure' | 'partial';
+
+/** The trace a completed session renders to, or null when it already has one or cannot be promoted. */
+function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: string): { trace: MemoryEntry; outcome: TraceOutcome } | null {
+  // Idempotency: skip if a trace for this session already exists.
+  if (traceExistsForSession(run.hippoRoot, consolidationTenant, sessionId)) return null;
+
+  const events = listSessionEvents(run.hippoRoot, consolidationTenant, {
+    session_id: sessionId,
+    limit: 1000,
+  });
+
+  // T7: a mixed-scope session would otherwise leak into one trace.
+  const sessionScope = commonDerivationScope(events.map((e) => e.scope));
+  if (!sessionScope.ok) {
+    run.result.tracesSkippedMixedScope++;
+    run.result.details.push(`  ⏭  skipped session ${sessionId}: events span mixed scopes`);
+    return null;
+  }
+
+  const completeEvent = events.find((e) => e.event_type === 'session_complete');
+  if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
+
+  const outcomeRaw = completeEvent.content;
+  if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
+    // Malformed terminal event — skip rather than crash the whole sleep.
+    return null;
+  }
+  const outcome: TraceOutcome = outcomeRaw;
+
+  const steps = events
+    .filter((e) => e.event_type !== 'session_complete')
+    .map((e) => ({ action: e.content, observation: '' }));
+
+  // SAFETY: session event metadata is a free-form Record<string, unknown>
+  // bag; summary is optional and is only trusted once isJsonString below
+  // confirms it is actually a string.
+  const summaryValue = completeEvent.metadata.summary as JsonValue;
+  const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
+
+  const trace = createMemory(
+    renderTraceContent({ task: summary, steps, outcome }),
+    {
+      layer: Layer.Trace,
+      trace_outcome: outcome,
+      source_session_id: sessionId,
+      tags: ['auto-promoted'],
+      source: 'auto-promote',
+      scope: sessionScope.scope,
+      // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
+      // tenant the traceExistsForSession idempotency check (above) runs
+      // under. Before
+      // this, createMemory omitted tenantId and the trace always landed
+      // 'default' (memory.ts:535) while the idempotency check ran under
+      // consolidationTenant — for any non-default tenant that check never
+      // hit, and the trace regenerated every sleep.
+      tenantId: consolidationTenant,
+      baseHalfLifeDays: run.config.defaultHalfLifeDays,
+    },
+  );
+  return { trace, outcome };
+}
+
+// AT1 (same producer-side pattern as the merge pass below): traceExistsForSession
+// only sees rows CURRENTLY in the store — once a rejected trace is
+// removed, that idempotency check no longer blocks regeneration, and
+// this write would otherwise reach batchWriteAndDelete's guard bypass
+// unchecked, resurrecting it every sleep. Check under THE ENTRY'S OWN
+// stamped tenantId (read off `trace` after createMemory — never guess
+// the tenant) + the built content's digest. A hit skips the push
+// entirely: not counted as promoted, not added to survivors.
+function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
+  const consolidateDb = run.getConsolidateDb();
+  if (!consolidateDb) return false;
+  const traceDigest = rejectionDigest(trace.content);
+  const tombstone = findRejectedValue(consolidateDb, trace.tenantId, traceDigest);
+  if (!tombstone) return false;
   try {
-
-  // -------------------------------------------------------------------------
-  // 1.4. Auto-promote complete sessions to traces
-  // -------------------------------------------------------------------------
-  //
-  // For each session within the configured window that has a `session_complete`
-  // event and no existing trace (idempotency via the source_session_id column),
-  // render the action sequence as markdown and persist a Layer.Trace memory.
-  // Traces inherit decay, search, replay, and physics from the base MemoryEntry.
-  if (!dryRun && config.autoTraceCapture !== false) {
-    let tracesSkippedRejected = 0;
-    const windowDays = config.autoTraceWindowDays ?? 7;
-    const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-    // Auto-trace currently runs in a single-tenant context (the env-resolved
-    // tenant for this process). Multi-tenant deployments that want
-    // consolidation across all tenants need a per-tenant loop layered on top
-    // of this — tracked in docs/plans/2026-05-02-continuity-tables-tenant-scope.md.
-    const consolidationTenant = resolveTenantId({});
-    const promotable = findPromotableSessions(hippoRoot, consolidationTenant, sinceMs);
-
-    for (const session of promotable) {
-      // Idempotency: skip if a trace for this session already exists.
-      if (traceExistsForSession(hippoRoot, consolidationTenant, session.session_id)) continue;
-
-      const events = listSessionEvents(hippoRoot, consolidationTenant, {
-        session_id: session.session_id,
-        limit: 1000,
-      });
-
-      // T7: a mixed-scope session would otherwise leak into one trace.
-      const sessionScope = commonDerivationScope(events.map((e) => e.scope));
-      if (!sessionScope.ok) {
-        result.tracesSkippedMixedScope++;
-        result.details.push(`  ⏭  skipped session ${session.session_id}: events span mixed scopes`);
-        continue;
-      }
-
-      const completeEvent = events.find((e) => e.event_type === 'session_complete');
-      if (!completeEvent) continue; // defence-in-depth; findPromotableSessions filters already.
-
-      const outcomeRaw = completeEvent.content;
-      if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
-        // Malformed terminal event — skip rather than crash the whole sleep.
-        continue;
-      }
-      const outcome: 'success' | 'failure' | 'partial' = outcomeRaw;
-
-      const steps = events
-        .filter((e) => e.event_type !== 'session_complete')
-        .map((e) => ({ action: e.content, observation: '' }));
-
-      // SAFETY: session event metadata is a free-form Record<string, unknown>
-      // bag; summary is optional and is only trusted once isJsonString below
-      // confirms it is actually a string.
-      const summaryValue = completeEvent.metadata.summary as JsonValue;
-      const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
-
-      const trace = createMemory(
-        renderTraceContent({ task: summary, steps, outcome }),
-        {
-          layer: Layer.Trace,
-          trace_outcome: outcome,
-          source_session_id: session.session_id,
-          tags: ['auto-promoted'],
-          source: 'auto-promote',
-          scope: sessionScope.scope,
-          // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
-          // tenant the traceExistsForSession idempotency check (above) runs
-          // under. Before
-          // this, createMemory omitted tenantId and the trace always landed
-          // 'default' (memory.ts:535) while the idempotency check ran under
-          // consolidationTenant — for any non-default tenant that check never
-          // hit, and the trace regenerated every sleep.
-          tenantId: consolidationTenant,
-          baseHalfLifeDays: config.defaultHalfLifeDays,
-        },
-      );
-
-      // AT1 (same producer-side pattern as the merge pass below): traceExistsForSession
-      // only sees rows CURRENTLY in the store — once a rejected trace is
-      // removed, that idempotency check no longer blocks regeneration, and
-      // this write would otherwise reach batchWriteAndDelete's guard bypass
-      // unchecked, resurrecting it every sleep. Check under THE ENTRY'S OWN
-      // stamped tenantId (read off `trace` after createMemory — never guess
-      // the tenant) + the built content's digest. A hit skips the push
-      // entirely: not counted as promoted, not added to survivors.
-      const consolidateDb = getConsolidateDb();
-      if (consolidateDb) {
-        const traceDigest = rejectionDigest(trace.content);
-        const tombstone = findRejectedValue(consolidateDb, trace.tenantId, traceDigest);
-        if (tombstone) {
-          tracesSkippedRejected++;
-          try {
-            appendAuditEvent(consolidateDb, {
-              tenantId: trace.tenantId,
-              actor: 'sleep',
-              op: 'reject_refusal',
-              metadata: {
-                digest: traceDigest,
-                reason: tombstone.reason,
-                sourceSessionId: session.session_id,
-              },
-            });
-          } catch (error) {
-            reportAuditWriteFailure('reject_refusal', String(error));
-          }
-          continue;
-        }
-      }
-
-      pendingWrites.push(trace);
-      survivors.push(trace);
-      result.promotedTraces++;
-      result.details.push(
-        `  🧬 promoted trace ${trace.id} from session ${session.session_id} (${outcome})`
-      );
-    }
-
-    if (result.promotedTraces > 0) {
-      result.details.push(
-        `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed session${result.promotedTraces === 1 ? '' : 's'}`
-      );
-    }
-    if (tracesSkippedRejected > 0) {
-      log.warn(
-        `consolidate: skipped ${tracesSkippedRejected} auto-promoted trace(s) whose content matches a rejected value`,
-      );
-    }
+    appendAuditEvent(consolidateDb, {
+      tenantId: trace.tenantId,
+      actor: 'sleep',
+      op: 'reject_refusal',
+      metadata: {
+        digest: traceDigest,
+        reason: tombstone.reason,
+        sourceSessionId: sessionId,
+      },
+    });
+  } catch (error) {
+    reportAuditWriteFailure('reject_refusal', String(error));
   }
+  return true;
+}
 
-  // -------------------------------------------------------------------------
-  // 1.5. Replay pass — rehearse high-value survivors
-  // -------------------------------------------------------------------------
-  //
-  // Biologically-inspired counterpart to hippocampal replay during slow-wave
-  // sleep: sample N memories weighted by outcome + valence + under-rehearsal
-  // + idle time, then apply the same retrieval-strengthening `markRetrieved`
-  // applies to real queries. Distinct from decay (removal), physics (motion),
-  // and merge (compression) — this is the "rehearse the important stuff so
-  // it doesn't fade" pass.
-  {
-    const replayCount = config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-    // EVAL-ONLY ablation (see ablation.ts): replay rehearsal IS recall
-    // strengthening (same markRetrieved dynamics), so the strengthen-off arm
-    // silences the whole pass - markRetrieved would return unmutated entries
-    // and persisting them anyway would still refresh updated_at / mirrors.
-    if (replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated()) {
-      const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
-      const picked = sampleForReplay(survivors, replayCount, now, seed);
-      if (picked.length > 0) {
-        const rehearsed = markRetrieved(picked, now);
-        const rehearsedById = new Map(rehearsed.map((e) => [e.id, e]));
-        // Update survivors in place so downstream passes see rehearsed state.
-        for (let i = 0; i < survivors.length; i++) {
-          const replacement = rehearsedById.get(survivors[i].id);
-          if (replacement) survivors[i] = replacement;
-        }
-        result.replayed = rehearsed.length;
-        result.details.push(
-          `  💭 replayed ${rehearsed.length} memor${rehearsed.length === 1 ? 'y' : 'ies'}: ` +
-          rehearsed.map((e) => e.id).join(', ')
-        );
-        if (!dryRun) {
-          for (const r of rehearsed) pendingWrites.push(r);
-        }
-      }
-    }
+// -------------------------------------------------------------------------
+// 1.5. Replay pass — rehearse high-value survivors
+// -------------------------------------------------------------------------
+//
+// Biologically-inspired counterpart to hippocampal replay during slow-wave
+// sleep: sample N memories weighted by outcome + valence + under-rehearsal
+// + idle time, then apply the same retrieval-strengthening `markRetrieved`
+// applies to real queries. Distinct from decay (removal), physics (motion),
+// and merge (compression) — this is the "rehearse the important stuff so
+// it doesn't fade" pass.
+function replayPass(run: SleepRun): void {
+  const { survivors, now } = run;
+  const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
+  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal IS recall
+  // strengthening (same markRetrieved dynamics), so the strengthen-off arm
+  // silences the whole pass - markRetrieved would return unmutated entries
+  // and persisting them anyway would still refresh updated_at / mirrors.
+  if (!(replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated())) return;
+  const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
+  const picked = sampleForReplay(survivors, replayCount, now, seed);
+  if (picked.length === 0) return;
+  const rehearsed = markRetrieved(picked, now);
+  const rehearsedById = new Map(rehearsed.map((e) => [e.id, e]));
+  // Update survivors in place so downstream passes see rehearsed state.
+  for (let i = 0; i < survivors.length; i++) {
+    const replacement = rehearsedById.get(survivors[i].id);
+    if (replacement) survivors[i] = replacement;
   }
-
-  // -------------------------------------------------------------------------
-  // 1.6. Batch extraction — extract facts from episodic memories missing them
-  // -------------------------------------------------------------------------
-  const extractedFromIds = new Set(
-    survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
+  run.result.replayed = rehearsed.length;
+  run.result.details.push(
+    `  💭 replayed ${rehearsed.length} memor${rehearsed.length === 1 ? 'y' : 'ies'}: ` +
+    rehearsed.map((e) => e.id).join(', ')
   );
-  const extractionCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e),
-  );
-  result.extractionCandidates = extractionCandidates.length;
+  if (!run.dryRun) {
+    for (const r of rehearsed) run.pendingWrites.push(r);
+  }
+}
 
+/** The key, model options and once-per-line error reporter every LLM phase shares. */
+function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
+  const { config, result } = run;
   // extraction.enabled=false is the opt-out for every LLM phase below, key or no key.
   const apiKey = config.extraction.enabled !== false ? (process.env.ANTHROPIC_API_KEY ?? '') : '';
   const llmErrorsSeen = new Set<string>();
@@ -591,193 +657,234 @@ export async function consolidate(
     result.details.push(line);
     log.warn(`consolidate ${phase}: ${msg}`);
   };
-  const llmOpts = { apiKey, model: config.extraction.model, fetcher: options.fetcher };
-  if (apiKey && extractionCandidates.length > 0 && !dryRun) {
+  const llmOpts = { apiKey, model: config.extraction.model, fetcher };
+  return { apiKey, llmError, llmOpts };
+}
+
+type SleepLlm = ReturnType<typeof sleepLlm>;
+
+async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
+  // -------------------------------------------------------------------------
+  // 1.6. Batch extraction — extract facts from episodic memories missing them
+  // -------------------------------------------------------------------------
+  const extractedFromIds = new Set(
+    run.survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
+  );
+  const extractionCandidates = run.survivors.filter(
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e),
+  );
+  run.result.extractionCandidates = extractionCandidates.length;
+
+  const llm = sleepLlm(run, fetcher);
+  if (llm.apiKey && extractionCandidates.length > 0 && !run.dryRun) {
     const { extractFacts, storeExtractedFacts } = await import('./extract.js');
     const batchLimit = 20;
     let extractedCount = 0;
     for (const candidate of extractionCandidates.slice(0, batchLimit)) {
       try {
-        const facts = await extractFacts(candidate.content, { ...llmOpts, onError: llmError('extraction') });
+        const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError: llm.llmError('extraction') });
         if (facts.length > 0) {
-          storeExtractedFacts(hippoRoot, candidate, facts);
+          storeExtractedFacts(run.hippoRoot, candidate, facts);
           extractedCount += facts.length;
         }
       } catch (err) {
-        llmError('extraction')(String(err));
+        llm.llmError('extraction')(String(err));
       }
     }
-    result.extracted = extractedCount;
+    run.result.extracted = extractedCount;
   }
 
-  // -------------------------------------------------------------------------
-  // 1.7. DAG summarization — cluster extracted facts and generate summaries
-  // -------------------------------------------------------------------------
-  const extractedFacts = survivors.filter(
+  await dagBuildPass(run, llm);
+  if (llm.apiKey && !run.dryRun) {
+    await dagRebuildPass(run, llm);
+    await entityProfilePass(run, llm);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 1.7. DAG summarization — cluster extracted facts and generate summaries
+// -------------------------------------------------------------------------
+async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepLlm): Promise<void> {
+  const extractedFacts = run.survivors.filter(
     (e) => e.tags.includes('extracted') && e.dag_level === 1 && !e.superseded_by,
   );
-  if (apiKey && extractedFacts.length >= 3 && !dryRun) {
-    try {
-      const { buildDag } = await import('./dag.js');
-      const dagResult = await buildDag(hippoRoot, extractedFacts, { ...llmOpts, onError: llmError('dag') });
-      result.dagCandidateClusters = dagResult.candidateClusters;
-      result.dagSummariesCreated = dagResult.summariesCreated;
-      if (dagResult.summariesCreated > 0) {
-        result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
-      }
-    } catch (err) {
-      llmError('dag')(String(err));
+  if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
+  try {
+    const { buildDag } = await import('./dag.js');
+    const dagResult = await buildDag(run.hippoRoot, extractedFacts, { ...llmOpts, onError: llmError('dag') });
+    run.result.dagCandidateClusters = dagResult.candidateClusters;
+    run.result.dagSummariesCreated = dagResult.summariesCreated;
+    if (dagResult.summariesCreated > 0) {
+      run.result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
     }
+  } catch (err) {
+    llmError('dag')(String(err));
   }
+}
 
-  // -------------------------------------------------------------------------
-  // 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
-  // -------------------------------------------------------------------------
-  // Consumer of E2's summary_dirty flag. Walks dirty L2 summaries, regenerates
-  // each via generateDagSummary, atomically refreshes content + 6 metadata
-  // columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
-  // as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
-  // 1000) prevents runaway LLM cost.
-  if (apiKey && !dryRun) {
-    try {
-      const { rebuildDirtySummaries } = await import('./dag.js');
-      const rawCap = parseInt(process.env.HIPPO_DAG_REBUILD_CAP ?? '20', 10);
-      // R1 MED must-fix: hard ceiling so misconfigured env can't burn
-      // unbounded LLM cost.
-      const cap = Number.isFinite(rawCap) && rawCap > 0
-        ? Math.min(rawCap, 1000)
-        : 20;
-      const rebuildResult = await rebuildDirtySummaries(hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
-      result.summariesRebuilt = rebuildResult.rebuilt;
-      result.summariesRebuildFailed = rebuildResult.failed;
-      result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
-      result.summariesRebuildRefused = rebuildResult.refused;
-      result.summariesRebuildCapped = rebuildResult.capped;
-      if (rebuildResult.rebuilt > 0 || rebuildResult.zeroChildSkipped > 0 || rebuildResult.failed > 0 || rebuildResult.refused > 0) {
-        const parts: string[] = [];
-        if (rebuildResult.rebuilt > 0) parts.push(`${rebuildResult.rebuilt} rebuilt`);
-        if (rebuildResult.refused > 0) parts.push(`${rebuildResult.refused} refused`);
-        if (rebuildResult.zeroChildSkipped > 0) parts.push(`${rebuildResult.zeroChildSkipped} zero-child-skipped`);
-        if (rebuildResult.failed > 0) parts.push(`${rebuildResult.failed} failed`);
-        if (rebuildResult.capped) parts.push(`CAPPED@${cap}`);
-        result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
-      }
-    } catch (err) {
-      llmError('dag rebuild')(String(err));
+// -------------------------------------------------------------------------
+// 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
+// -------------------------------------------------------------------------
+// Consumer of E2's summary_dirty flag. Walks dirty L2 summaries, regenerates
+// each via generateDagSummary, atomically refreshes content + 6 metadata
+// columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
+// as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
+// 1000) prevents runaway LLM cost.
+async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
+  const { result } = run;
+  try {
+    const { rebuildDirtySummaries } = await import('./dag.js');
+    const rawCap = parseInt(process.env.HIPPO_DAG_REBUILD_CAP ?? '20', 10);
+    // R1 MED must-fix: hard ceiling so misconfigured env can't burn
+    // unbounded LLM cost.
+    const cap = Number.isFinite(rawCap) && rawCap > 0
+      ? Math.min(rawCap, 1000)
+      : 20;
+    const rebuildResult = await rebuildDirtySummaries(run.hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
+    result.summariesRebuilt = rebuildResult.rebuilt;
+    result.summariesRebuildFailed = rebuildResult.failed;
+    result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
+    result.summariesRebuildRefused = rebuildResult.refused;
+    result.summariesRebuildCapped = rebuildResult.capped;
+    if (rebuildResult.rebuilt > 0 || rebuildResult.zeroChildSkipped > 0 || rebuildResult.failed > 0 || rebuildResult.refused > 0) {
+      const parts: string[] = [];
+      if (rebuildResult.rebuilt > 0) parts.push(`${rebuildResult.rebuilt} rebuilt`);
+      if (rebuildResult.refused > 0) parts.push(`${rebuildResult.refused} refused`);
+      if (rebuildResult.zeroChildSkipped > 0) parts.push(`${rebuildResult.zeroChildSkipped} zero-child-skipped`);
+      if (rebuildResult.failed > 0) parts.push(`${rebuildResult.failed} failed`);
+      if (rebuildResult.capped) parts.push(`CAPPED@${cap}`);
+      result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
     }
+  } catch (err) {
+    llmError('dag rebuild')(String(err));
   }
+}
 
-  // -------------------------------------------------------------------------
-  // 1.9. DAG entity profiles — cluster L2 topic summaries into L3 profiles
-  // -------------------------------------------------------------------------
-  // E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
-  // topic summaries) into a single L3 entity profile. Runs even when phase
-  // 1.7 buildDag was skipped (re-clusters existing L2s every sleep).
-  //
-  // Uses loadAllL2Summaries (not `survivors`) because phase 1.7 wrote new
-  // L2s directly via writeEntry without pushing back into survivors.
-  if (apiKey && !dryRun) {
-    try {
-      const { buildEntityProfiles } = await import('./dag.js');
-      const { loadAllL2Summaries } = await import('./store.js');
-      const l2Summaries = loadAllL2Summaries(hippoRoot);
-      if (l2Summaries.length >= 2) {
-        const profileResult = await buildEntityProfiles(hippoRoot, l2Summaries, { ...llmOpts, onError: llmError('dag profiles') });
-        result.entityProfilesCreated = profileResult.profilesCreated;
-        if (profileResult.profilesCreated > 0) {
-          result.details.push(`  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`);
-        }
+// -------------------------------------------------------------------------
+// 1.9. DAG entity profiles — cluster L2 topic summaries into L3 profiles
+// -------------------------------------------------------------------------
+// E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
+// topic summaries) into a single L3 entity profile. Runs even when phase
+// 1.7 buildDag was skipped (re-clusters existing L2s every sleep).
+//
+// Uses loadAllL2Summaries (not `survivors`) because phase 1.7 wrote new
+// L2s directly via writeEntry without pushing back into survivors.
+async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
+  try {
+    const { buildEntityProfiles } = await import('./dag.js');
+    const { loadAllL2Summaries } = await import('./store.js');
+    const l2Summaries = loadAllL2Summaries(run.hippoRoot);
+    if (l2Summaries.length >= 2) {
+      const profileResult = await buildEntityProfiles(run.hippoRoot, l2Summaries, { ...llmOpts, onError: llmError('dag profiles') });
+      run.result.entityProfilesCreated = profileResult.profilesCreated;
+      if (profileResult.profilesCreated > 0) {
+        run.result.details.push(`  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`);
       }
-    } catch (err) {
-      llmError('dag profiles')(String(err));
     }
+  } catch (err) {
+    llmError('dag profiles')(String(err));
   }
+}
 
-  // -------------------------------------------------------------------------
-  // 2. Physics simulation pass
-  // -------------------------------------------------------------------------
-  if (!dryRun) {
-    try {
-      const physicsEnabled = config.physics.enabled === true
-        || (config.physics.enabled === 'auto');
+// -------------------------------------------------------------------------
+// 2. Physics simulation pass
+// -------------------------------------------------------------------------
+function physicsPass(run: SleepRun): void {
+  if (run.dryRun) return;
+  const { config, result, survivors } = run;
+  try {
+    const physicsEnabled = config.physics.enabled === true
+      || (config.physics.enabled === 'auto');
 
-      if (physicsEnabled) {
-        const db = openHippoDb(hippoRoot);
-        try {
-          const physicsMap = loadPhysicsState(db);
-          const particles = Array.from(physicsMap.values());
+    if (physicsEnabled) {
+      const db = openHippoDb(run.hippoRoot);
+      try {
+        const physicsMap = loadPhysicsState(db);
+        const particles = Array.from(physicsMap.values());
 
-          if (particles.length > 0) {
-            // Build entry lookup for property refresh
-            const entryMap = new Map(survivors.map(e => [e.id, e]));
-            refreshParticleProperties(particles, entryMap, now);
+        if (particles.length > 0) {
+          // Build entry lookup for property refresh
+          const entryMap = new Map(survivors.map(e => [e.id, e]));
+          refreshParticleProperties(particles, entryMap, run.now);
 
-            // Build conflict pairs from survivors
-            const conflictPairs = new Map<string, Set<string>>();
-            for (const entry of survivors) {
-              if (entry.conflicts_with.length > 0) {
-                const set = conflictPairs.get(entry.id) ?? new Set<string>();
-                for (const cid of entry.conflicts_with) set.add(cid);
-                conflictPairs.set(entry.id, set);
-              }
+          // Build conflict pairs from survivors
+          const conflictPairs = new Map<string, Set<string>>();
+          for (const entry of survivors) {
+            if (entry.conflicts_with.length > 0) {
+              const set = conflictPairs.get(entry.id) ?? new Set<string>();
+              for (const cid of entry.conflicts_with) set.add(cid);
+              conflictPairs.set(entry.id, set);
             }
-
-            // Build half-life lookup
-            const halfLives = new Map<string, number>();
-            for (const entry of survivors) {
-              halfLives.set(entry.id, entry.half_life_days);
-            }
-
-            const ctx: ForceContext = {
-              conflictPairs,
-              halfLives,
-              config: config.physics,
-            };
-
-            const stats = simulate(particles, ctx);
-            savePhysicsState(db, particles);
-
-            result.physicsSimulated = stats.particleCount;
-            result.details.push(
-              `  ⚛️  physics: ${stats.particleCount} particles, ` +
-              `avg vel ${stats.avgVelocityMagnitude.toFixed(4)}, ` +
-              `energy ${stats.energy.total.toFixed(4)}`
-            );
           }
-        } finally {
-          closeHippoDb(db);
-        }
-      }
-    } catch (error) {
-      result.details.push(`  ⚠️ physics simulation skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
-    }
-  }
 
-  const byId = new Map(all.map((e) => [e.id, e]));
+          // Build half-life lookup
+          const halfLives = new Map<string, number>();
+          for (const entry of survivors) {
+            halfLives.set(entry.id, entry.half_life_days);
+          }
+
+          const ctx: ForceContext = {
+            conflictPairs,
+            halfLives,
+            config: config.physics,
+          };
+
+          const stats = simulate(particles, ctx);
+          savePhysicsState(db, particles);
+
+          result.physicsSimulated = stats.particleCount;
+          result.details.push(
+            `  ⚛️  physics: ${stats.particleCount} particles, ` +
+            `avg vel ${stats.avgVelocityMagnitude.toFixed(4)}, ` +
+            `energy ${stats.energy.total.toFixed(4)}`
+          );
+        }
+      } finally {
+        closeHippoDb(db);
+      }
+    }
+  } catch (error) {
+    result.details.push(`  ⚠️ physics simulation skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+  }
+}
+
+function retireHeldTexts(run: SleepRun): void {
+  const { survivors } = run;
+  const byId = new Map(run.all.map((e) => [e.id, e]));
   const rejectedIn = (tenantId: string) => (text: string): boolean => {
-    const db = getConsolidateDb();
+    const db = run.getConsolidateDb();
     return db !== null && findRejectedValue(db, tenantId, rejectionDigest(text)) !== null;
   };
   for (let i = survivors.length - 1; i >= 0; i--) {
     const row = survivors[i];
-    const successor = retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenantId)) : undefined;
+    const successor = run.retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenantId)) : undefined;
     if (successor === undefined) continue;
-    result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
-    if (dryRun) continue;
-    pendingDeletes.push(row.id);
+    run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
+    if (run.dryRun) continue;
+    run.pendingDeletes.push(row.id);
     if (successor) {
-      pendingWrites.push(successor);
+      run.pendingWrites.push(successor);
       survivors[i] = successor;
     } else {
       survivors.splice(i, 1);
     }
   }
+}
 
-  // -------------------------------------------------------------------------
-  // 3. Merge pass  - episodic entries only
-  // -------------------------------------------------------------------------
-  const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
-  const mergeCandidates = survivors.filter(
+/** The tenant, scope and origin every row merged out of one partition inherits. */
+interface MergePartition {
+  tenantId: string;
+  scope: ReturnType<typeof derivationScope>;
+  origin: MemoryEntry['origin_project'];
+}
+
+// -------------------------------------------------------------------------
+// 3. Merge pass  - episodic entries only
+// -------------------------------------------------------------------------
+/** Returns how many clusters were skipped because their merged text matches a rejected value. */
+function mergePass(run: SleepRun): number {
+  const alreadyMergedIds = new Set(run.survivors.flatMap((e) => e.parents));
+  const mergeCandidates = run.survivors.filter(
     (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
       && !e.pinned // a pin merged with a look-alike would read as one of two values
       && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
@@ -800,18 +907,18 @@ export async function consolidate(
   }
 
   // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-  // reuses the single consolidateDb handle opened once above (before the
-  // auto-promote pass, 1.4) for the whole non-dry-run consolidate — see that
+  // reuses the single consolidateDb handle opened lazily in consolidate()
+  // for the whole non-dry-run consolidate — see that
   // declaration's comment. Only needed for real writes — a dry-run preview
   // never reaches batchWriteAndDelete's guard bypass, so there is nothing
-  // here for it to protect against. (mergesSkippedRejected itself is
-  // declared up at the try's opening above 1.4, not here — it has to
-  // survive the try/finally that now wraps this whole section; see the
-  // handle-leak restructure comment there.)
+  // here for it to protect against.
+  let mergesSkippedRejected = 0;
   for (const [, tenantCandidates] of mergeCandidatesByTenant) {
-    const mergeTenant = tenantCandidates[0].tenantId;
-    const mergeScope = derivationScope(tenantCandidates[0].scope);
-    const mergeOrigin = tenantCandidates[0].origin_project;
+    const partition: MergePartition = {
+      tenantId: tenantCandidates[0].tenantId,
+      scope: derivationScope(tenantCandidates[0].scope),
+      origin: tenantCandidates[0].origin_project,
+    };
     const partnersOf = mergePartners(tenantCandidates.map((e) => e.content));
     for (let i = 0; i < tenantCandidates.length; i++) {
       if (used.has(tenantCandidates[i].id) || tenantCandidates[i].content.length > MERGE_MAX_CHARS) continue;
@@ -831,224 +938,228 @@ export async function consolidate(
       }
 
       if (cluster.length < MERGE_MIN_CLUSTER) continue;
-
-      // Create a semantic summary
-      const mergedContent = mergeContents(cluster);
-      const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
-      const maxValence = pickStrongestValence(cluster);
-
-      // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
-      // and pure — so the tombstone check below runs under the tenant the
-      // row will ACTUALLY land in.
-      // T1 fix: createMemory now receives tenantId: mergeTenant (the
-      // partition's tenant — every member of `cluster` shares it by
-      // construction), so the row lands in its source tenant instead of
-      // always 'default'.
-      let semantic: MemoryEntry | null = null;
-      if (!dryRun) {
-        semantic = {
-          ...createMemory(mergedContent, {
-            layer: Layer.Semantic,
-            tags: allTags,
-            emotional_valence: maxValence,
-            schema_fit: 0.7,
-            source: 'consolidation',
-            confidence: 'inferred',
-            tenantId: mergeTenant,
-            scope: mergeScope,
-            baseHalfLifeDays: config.defaultHalfLifeDays,
-          }),
-          origin_project: mergeOrigin,
-          parents: cluster.map((e) => e.id),
-        };
-      }
-
-      // mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)
-      // — if a human rejected exactly this byte-identical rollup before, an
-      // unguarded sleep would regenerate it every cycle and
-      // batchWriteAndDelete's guard bypass (store.ts) would silently
-      // re-assert it forever. This producer-side check is what makes that
-      // bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
-      // not demoted, not deleted — so a later sleep gets another chance if
-      // the tombstone is lifted.
-      const consolidateDb = getConsolidateDb();
-      if (consolidateDb && semantic) {
-        const newDigest = rejectionDigest(semantic.content);
-        const oldDigest = rejectionDigest(legacyMergeContents(related)); // tombstones from older releases hold this format's digest
-        const newHit = findRejectedValue(consolidateDb, semantic.tenantId, newDigest);
-        const tombstone = newHit ?? findRejectedValue(consolidateDb, semantic.tenantId, oldDigest);
-        const mergeDigest = newHit ? newDigest : oldDigest;
-        if (tombstone) {
-          // Still mark used — these members are not re-tried against a
-          // DIFFERENT cluster within this same pass; next sleep re-clusters
-          // them fresh.
-          const rejected = newHit ? cluster : related; // the old format digested the uncapped list, so rows past the cap were rejected too
-          for (const e of rejected) used.add(e.id);
-          mergesSkippedRejected++;
-          try {
-            appendAuditEvent(consolidateDb, {
-              tenantId: semantic.tenantId,
-              actor: 'sleep',
-              op: 'reject_refusal',
-              metadata: {
-                digest: mergeDigest,
-                reason: tombstone.reason,
-                sourceIds: rejected.map((e) => e.id),
-              },
-            });
-          } catch (error) {
-            reportAuditWriteFailure('reject_refusal', String(error));
-          }
-          continue;
-        }
-      }
-
-      // Mark cluster members as used
-      for (const e of cluster) used.add(e.id);
-      result.merged += cluster.length;
-
-      result.details.push(
-        `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
-      );
-
-      if (!dryRun && semantic) {
-        pendingWrites.push(semantic);
-        result.semanticCreated++;
-
-        // Demote source episodics (they've been compressed into neocortex):
-        // scale half_life_days so they decay sooner while staying recoverable.
-        // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
-        // slice-1 eval measured that dropping children below a worse-retrieving
-        // summary regresses budget-bounded QA (docs/evals/). The stored
-        // strength is refreshed to the live value so inspect, replay sampling,
-        // and strength-sorted assembly see the truth instead of a fake 0.3.
-        // Mutate in place (not a copy): `cluster` holds the same object
-        // references as `survivors`, and the later detectConflicts(survivors)
-        // pass in this same run must see the post-demotion half-life, or it
-        // can persist conflicts for entries the just-written state excludes.
-        for (const e of cluster) {
-          e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
-          e.strength = calculateStrength(e, now, decayOpts);
-          pendingWrites.push(e);
-        }
-      }
+      if (!mergeCluster(run, partition, cluster, related, used)) mergesSkippedRejected++;
     }
   }
-  } finally {
-    if (consolidateDbHandle) closeHippoDb(consolidateDbHandle);
+  return mergesSkippedRejected;
+}
+
+/** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged text. */
+function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryEntry[], related: MemoryEntry[], used: Set<string>): boolean {
+  const { result, dryRun } = run;
+  // Create a semantic summary
+  const mergedContent = mergeContents(cluster);
+  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
+  const maxValence = pickStrongestValence(cluster);
+
+  // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
+  // and pure — so the tombstone check below runs under the tenant the
+  // row will ACTUALLY land in.
+  // T1 fix: createMemory now receives tenantId: mergeTenant (the
+  // partition's tenant — every member of `cluster` shares it by
+  // construction), so the row lands in its source tenant instead of
+  // always 'default'.
+  let semantic: MemoryEntry | null = null;
+  if (!dryRun) {
+    semantic = {
+      ...createMemory(mergedContent, {
+        layer: Layer.Semantic,
+        tags: allTags,
+        emotional_valence: maxValence,
+        schema_fit: 0.7,
+        source: 'consolidation',
+        confidence: 'inferred',
+        tenantId: partition.tenantId,
+        scope: partition.scope,
+        baseHalfLifeDays: run.config.defaultHalfLifeDays,
+      }),
+      origin_project: partition.origin,
+      parents: cluster.map((e) => e.id),
+    };
   }
 
-  if (mergesSkippedRejected > 0) {
-    log.warn(
-      `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
-    );
-  }
+  if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
 
+  // Mark cluster members as used
+  for (const e of cluster) used.add(e.id);
+  result.merged += cluster.length;
+
+  result.details.push(
+    `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+  );
+
+  if (!dryRun && semantic) {
+    run.pendingWrites.push(semantic);
+    result.semanticCreated++;
+
+    // Demote source episodics (they've been compressed into neocortex):
+    // scale half_life_days so they decay sooner while staying recoverable.
+    // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
+    // slice-1 eval measured that dropping children below a worse-retrieving
+    // summary regresses budget-bounded QA (docs/evals/). The stored
+    // strength is refreshed to the live value so inspect, replay sampling,
+    // and strength-sorted assembly see the truth instead of a fake 0.3.
+    // Mutate in place (not a copy): `cluster` holds the same object
+    // references as `survivors`, and the later detectConflicts(survivors)
+    // pass in this same run must see the post-demotion half-life, or it
+    // can persist conflicts for entries the just-written state excludes.
+    for (const e of cluster) {
+      e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+      e.strength = calculateStrength(e, run.now, run.decayOpts);
+      run.pendingWrites.push(e);
+    }
+  }
+  return true;
+}
+
+// mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)
+// — if a human rejected exactly this byte-identical rollup before, an
+// unguarded sleep would regenerate it every cycle and
+// batchWriteAndDelete's guard bypass (store.ts) would silently
+// re-assert it forever. This producer-side check is what makes that
+// bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
+// not demoted, not deleted — so a later sleep gets another chance if
+// the tombstone is lifted.
+function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntry[], related: MemoryEntry[], used: Set<string>): boolean {
+  const consolidateDb = run.getConsolidateDb();
+  if (!consolidateDb) return false;
+  const newDigest = rejectionDigest(semantic.content);
+  const oldDigest = rejectionDigest(legacyMergeContents(related)); // tombstones from older releases hold this format's digest
+  const newHit = findRejectedValue(consolidateDb, semantic.tenantId, newDigest);
+  const tombstone = newHit ?? findRejectedValue(consolidateDb, semantic.tenantId, oldDigest);
+  const mergeDigest = newHit ? newDigest : oldDigest;
+  if (!tombstone) return false;
+  // Still mark used — these members are not re-tried against a
+  // DIFFERENT cluster within this same pass; next sleep re-clusters
+  // them fresh.
+  const rejected = newHit ? cluster : related; // the old format digested the uncapped list, so rows past the cap were rejected too
+  for (const e of rejected) used.add(e.id);
+  try {
+    appendAuditEvent(consolidateDb, {
+      tenantId: semantic.tenantId,
+      actor: 'sleep',
+      op: 'reject_refusal',
+      metadata: {
+        digest: mergeDigest,
+        reason: tombstone.reason,
+        sourceIds: rejected.map((e) => e.id),
+      },
+    });
+  } catch (error) {
+    reportAuditWriteFailure('reject_refusal', String(error));
+  }
+  return true;
+}
+
+function flushPending(run: SleepRun, snapshot: Map<string, MemoryEntry>): void {
+  const { result, pendingDeletes, pendingDormant } = run;
   result.removedIds = pendingDeletes;
   // One transaction; the snapshot keeps what the DAG passes and other writers changed while sleep ran.
   // Dormant moves ride in the same transaction (src/dormant.ts).
-  if (!dryRun) {
-    const left = new Set(batchWriteAndDelete(hippoRoot, pendingWrites, pendingDeletes, { snapshot, dormant: pendingDormant }));
-    for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
-      if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
-    }
-    result.removedIds = pendingDeletes.filter((id) => left.has(id));
-    result.removed = result.removedIds.length;
-    result.dormant = pendingDormant.filter((m) => left.has(m.entry.id)).length;
+  if (run.dryRun) return;
+  const left = new Set(batchWriteAndDelete(run.hippoRoot, run.pendingWrites, pendingDeletes, { snapshot, dormant: pendingDormant }));
+  for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
+    if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
+  }
+  result.removedIds = pendingDeletes.filter((id) => left.has(id));
+  result.removed = result.removedIds.length;
+  result.dormant = pendingDormant.filter((m) => left.has(m.entry.id)).length;
+}
+
+// Dormant retention: a dormant memory nobody restored within
+// dormant.retentionDays is deleted for good (0 keeps them forever). Runs
+// even when dormant.enabled is off, so turning it off still ages out what
+// earlier sleeps kept.
+function expireDormant(run: SleepRun): void {
+  const { config, result, dryRun } = run;
+  if (!(config.dormant.retentionDays > 0)) return;
+  const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const db = openHippoDb(run.hippoRoot);
+  try {
+    result.dormantExpired = dryRun ? countExpiredDormant(db, cutoff) : purgeExpiredDormant(db, cutoff);
+  } finally {
+    closeHippoDb(db);
+  }
+  if (result.dormantExpired > 0) {
+    result.details.push(`  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} older than ${config.dormant.retentionDays} days`);
+  }
+}
+
+// -------------------------------------------------------------------------
+// 4. Log run
+// -------------------------------------------------------------------------
+function logRun(run: SleepRun, decay: DecayOutcome): void {
+  const { hippoRoot, now, result } = run;
+  const detectedConflicts = detectConflicts(run.survivors, now, run.decayOpts, decay.rescuedIds);
+  replaceDetectedConflicts(hippoRoot, detectedConflicts, now.toISOString());
+
+  if (detectedConflicts.length > 0) {
+    result.details.push(`  ⚠️ detected ${detectedConflicts.length} memory conflict${detectedConflicts.length === 1 ? '' : 's'}`);
   }
 
-  // Dormant retention: a dormant memory nobody restored within
-  // dormant.retentionDays is deleted for good (0 keeps them forever). Runs
-  // even when dormant.enabled is off, so turning it off still ages out what
-  // earlier sleeps kept.
-  if (config.dormant.retentionDays > 0) {
-    const cutoff = new Date(now.getTime() - config.dormant.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    const db = openHippoDb(hippoRoot);
+  appendConsolidationRun(hippoRoot, {
+    timestamp: now.toISOString(),
+    decayed: result.decayed,
+    merged: result.merged,
+    removed: result.removed,
+  });
+  incrementSleepCount(hippoRoot);
+  if (decay.rescuedEntries.length > 0) auditRescues(run, decay);
+}
+
+// One audit row per rescue (attributability, D1). Written here, AFTER
+// batchWriteAndDelete has committed this cycle's writes/deletes
+// (and after conflict detection + run logging), not inline in the decay
+// pass — same durability posture as api.ts's top-level 'consolidate'
+// summary audit row (written only once the whole sleep has completed).
+// Writing it earlier would assert rescues for a cycle whose effects
+// never landed if a later phase threw. Real writes only — dry-run
+// previews the decision (details line above) but persists nothing.
+function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): void {
+  const { result } = run;
+  try {
+    const auditDb = openHippoDb(run.hippoRoot);
     try {
-      result.dormantExpired = dryRun ? countExpiredDormant(db, cutoff) : purgeExpiredDormant(db, cutoff);
-    } finally {
-      closeHippoDb(db);
-    }
-    if (result.dormantExpired > 0) {
-      result.details.push(`  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} older than ${config.dormant.retentionDays} days`);
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // 4. Log run
-  // -------------------------------------------------------------------------
-  if (!dryRun) {
-    const detectedConflicts = detectConflicts(survivors, now, decayOpts, rescuedIds);
-    replaceDetectedConflicts(hippoRoot, detectedConflicts, now.toISOString());
-
-    if (detectedConflicts.length > 0) {
-      result.details.push(`  ⚠️ detected ${detectedConflicts.length} memory conflict${detectedConflicts.length === 1 ? '' : 's'}`);
-    }
-
-    appendConsolidationRun(hippoRoot, {
-      timestamp: now.toISOString(),
-      decayed: result.decayed,
-      merged: result.merged,
-      removed: result.removed,
-    });
-    incrementSleepCount(hippoRoot);
-
-    // One audit row per rescue (attributability, D1). Written here, AFTER
-    // batchWriteAndDelete above has committed this cycle's writes/deletes
-    // (and after conflict detection + run logging), not inline in the decay
-    // pass — same durability posture as api.ts's top-level 'consolidate'
-    // summary audit row (written only once the whole sleep has completed).
-    // Writing it earlier would assert rescues for a cycle whose effects
-    // never landed if a later phase threw. Real writes only — dry-run
-    // previews the decision (details line above) but persists nothing.
-    if (rescuedEntries.length > 0) {
-      try {
-        const auditDb = openHippoDb(hippoRoot);
+      // Review-round F5: per-row try/catch, not one try/catch around the
+      // whole loop — a single failed appendAuditEvent must not silently
+      // drop every remaining row. Mirrors the physics pass's
+      // skipped-warning precedent: count losses, keep
+      // the overall fail-soft posture, tell the operator via details.
+      let auditFailures = 0;
+      for (const entry of rescuedEntries) {
         try {
-          // Review-round F5: per-row try/catch, not one try/catch around the
-          // whole loop — a single failed appendAuditEvent must not silently
-          // drop every remaining row. Mirrors the physics pass's
-          // skipped-warning precedent (line ~564 above): count losses, keep
-          // the overall fail-soft posture, tell the operator via details.
-          let auditFailures = 0;
-          for (const entry of rescuedEntries) {
-            try {
-              const rank = rankById.get(entry.id);
-              appendAuditEvent(auditDb, {
-                tenantId: entry.tenantId,
-                actor: 'sleep',
-                op: 'mv_rescue',
-                targetId: entry.id,
-                metadata: rank
-                  ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
-                  : {},
-              });
-            } catch (error) {
-              auditFailures++;
-              reportAuditWriteFailure('mv_rescue', String(error), entry.id);
-            }
-          }
-          if (auditFailures > 0) {
-            result.details.push(
-              `  ⚠️ memory-value: ${auditFailures} mv_rescue audit row${auditFailures === 1 ? '' : 's'} ` +
-              `failed to write (the rescue itself still landed)`,
-            );
-          }
-        } finally {
-          closeHippoDb(auditDb);
+          const rank = rankById.get(entry.id);
+          appendAuditEvent(auditDb, {
+            tenantId: entry.tenantId,
+            actor: 'sleep',
+            op: 'mv_rescue',
+            targetId: entry.id,
+            metadata: rank
+              ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
+              : {},
+          });
+        } catch (error) {
+          auditFailures++;
+          reportAuditWriteFailure('mv_rescue', String(error), entry.id);
         }
-      } catch {
-        // openHippoDb/closeHippoDb-level failure: audit must never crash a
-        // mutation (mirrors store.ts's audit() posture).
+      }
+      if (auditFailures > 0) {
         result.details.push(
-          `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
-          `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,
+          `  ⚠️ memory-value: ${auditFailures} mv_rescue audit row${auditFailures === 1 ? '' : 's'} ` +
+          `failed to write (the rescue itself still landed)`,
         );
       }
+    } finally {
+      closeHippoDb(auditDb);
     }
+  } catch {
+    // openHippoDb/closeHippoDb-level failure: audit must never crash a
+    // mutation (mirrors store.ts's audit() posture).
+    result.details.push(
+      `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
+      `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,
+    );
   }
-
-  return result;
 }
 
 // ---------------------------------------------------------------------------

@@ -706,10 +706,6 @@ function migratePinnedInjectRecentCommands(hookArray: JsonValue | undefined): bo
   return changed;
 }
 
-function hasCurrentSessionEnd(hookArray: JsonValue | undefined): boolean {
-  return hookArrayContains(hookArray, HIPPO_SESSION_END_MARKER);
-}
-
 /**
  * Returns true when `hooks.SessionEnd` still contains either of the legacy
  * v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`)
@@ -790,13 +786,18 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     }
   }
   if (target === 'codex') return installCodexHooks(settingsPath, settings);
+  return installClaudeCodeHooks(settingsPath, settings, logFile);
+}
 
-  if (!settings.hooks) settings.hooks = {};
-  // SAFETY: settings.hooks is either freshly initialised to {} on the line above, or an
-  // existing value from settings.json — Claude Code's own schema always writes an object
-  // there; each event key below is still re-validated with Array.isArray before use.
-  const hooks = settings.hooks as Record<string, JsonValue[]>;
+type ClaudeHooks = Record<string, JsonValue[]>;
 
+interface LegacyHookMigration {
+  migratedFromStop: boolean;
+  migratedLegacySessionEnd: boolean;
+  migratedSplitSessionEnd: boolean;
+}
+
+function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
   let migratedFromStop = false;
   if (Array.isArray(hooks.Stop) && hookArrayContains(hooks.Stop, HIPPO_SLEEP_MARKER)) {
     hooks.Stop = hooks.Stop.filter((entry) => !JSON.stringify(entry).includes(HIPPO_SLEEP_MARKER));
@@ -823,76 +824,49 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     migratedSplitSessionEnd = true;
     migratedLegacySessionEnd = before > 1;
   }
+  return { migratedFromStop, migratedLegacySessionEnd, migratedSplitSessionEnd };
+}
 
-  let installedSessionEnd = false;
-  if (!hasCurrentSessionEnd(hooks.SessionEnd)) {
-    if (!Array.isArray(hooks.SessionEnd)) hooks.SessionEnd = [];
-    hooks.SessionEnd.push({
-      hooks: [
-        {
-          type: 'command',
-          command: `hippo session-end --log-file "${logFile}"`,
-          timeout: 5,
-        },
-      ],
-    });
-    installedSessionEnd = true;
-  }
+function claudeCommandGroup(command: string, timeout: number, matcher?: string): JsonObject {
+  const hooks = [{ type: 'command', command, timeout }];
+  return matcher === undefined ? { hooks } : { matcher, hooks };
+}
 
-  let installedSessionStart = false;
-  if (!hookArrayContains(hooks.SessionStart, HIPPO_LAST_SLEEP_MARKER)) {
-    if (!Array.isArray(hooks.SessionStart)) hooks.SessionStart = [];
-    hooks.SessionStart.push({
-      hooks: [
-        {
-          type: 'command',
-          command: `hippo last-sleep --path "${logFile}"`,
-          timeout: 5,
-        },
-      ],
-    });
-    installedSessionStart = true;
-  }
+function appendHookIfMissing(hooks: ClaudeHooks, event: string, marker: string, group: JsonObject): boolean {
+  if (hookArrayContains(hooks[event], marker)) return false;
+  if (!Array.isArray(hooks[event])) hooks[event] = [];
+  hooks[event].push(group);
+  return true;
+}
+
+function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile: string): InstallResult {
+  if (!settings.hooks) settings.hooks = {};
+  // SAFETY: settings.hooks is either freshly initialised to {} on the line above, or an
+  // existing value from settings.json — Claude Code's own schema always writes an object
+  // there; each event key below is still re-validated with Array.isArray before use.
+  const hooks = settings.hooks as ClaudeHooks;
+  const migration = migrateLegacyClaudeHooks(hooks);
+
+  const installedSessionEnd = appendHookIfMissing(hooks, 'SessionEnd', HIPPO_SESSION_END_MARKER,
+    claudeCommandGroup(`hippo session-end --log-file "${logFile}"`, 5));
+  const installedSessionStart = appendHookIfMissing(hooks, 'SessionStart', HIPPO_LAST_SLEEP_MARKER,
+    claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, 5));
 
   // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn,
   // so pinned memories stay in context even after the model would otherwise
   // "forget" them in a long session. Include the fresh write tail so lessons
   // saved earlier in the same session become visible on the next prompt even
   // before the user pins them explicitly.
-  let installedUserPromptSubmit = false;
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
-  if (!hookArrayContains(hooks.UserPromptSubmit, HIPPO_PINNED_INJECT_MARKER)) {
-    if (!Array.isArray(hooks.UserPromptSubmit)) hooks.UserPromptSubmit = [];
-    hooks.UserPromptSubmit.push({
-      hooks: [
-        {
-          type: 'command',
-          command: HIPPO_PINNED_INJECT_COMMAND,
-          timeout: 5,
-        },
-      ],
-    });
-    installedUserPromptSubmit = true;
-  }
+  const installedUserPromptSubmit = appendHookIfMissing(hooks, 'UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER,
+    claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, 5));
 
   // PreCompact: fires on manual AND auto compaction (no matcher). Records the compaction, asks the
   // summariser for a "Memories for hippo" list and saves a working-state snapshot before the summary drops detail.
   // Exit-0 contract lives in the verb itself (src/capture.ts cmdPreCompact),
   // not here — this is install-time wiring only.
-  let installedPreCompact = false;
-  if (!hookArrayContains(hooks.PreCompact, HIPPO_PRE_COMPACT_MARKER)) {
-    if (!Array.isArray(hooks.PreCompact)) hooks.PreCompact = [];
-    hooks.PreCompact.push({
-      hooks: [
-        {
-          type: 'command',
-          command: `hippo pre-compact --log-file "${defaultPreCompactLogPath()}"`,
-          timeout: 30,
-        },
-      ],
-    });
-    installedPreCompact = true;
-  }
+  const installedPreCompact = appendHookIfMissing(hooks, 'PreCompact', HIPPO_PRE_COMPACT_MARKER,
+    claudeCommandGroup(`hippo pre-compact --log-file "${defaultPreCompactLogPath()}"`, 30));
 
   // SessionStart(compact): a SECOND SessionStart entry alongside the
   // un-matched last-sleep entry above. The matcher is an optimization, not
@@ -900,76 +874,22 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   // older Claude Code that ignores the matcher just runs a silent no-op on
   // normal starts. Marker check keys on the command string, so this stays
   // idempotent alongside the sibling last-sleep entry.
-  let installedCompactResume = false;
-  if (!hookArrayContains(hooks.SessionStart, HIPPO_COMPACT_RESUME_MARKER)) {
-    if (!Array.isArray(hooks.SessionStart)) hooks.SessionStart = [];
-    hooks.SessionStart.push({
-      matcher: 'compact',
-      hooks: [
-        {
-          type: 'command',
-          command: 'hippo compact-resume',
-          timeout: 10,
-        },
-      ],
-    });
-    installedCompactResume = true;
-  }
+  const installedCompactResume = appendHookIfMissing(hooks, 'SessionStart', HIPPO_COMPACT_RESUME_MARKER,
+    claudeCommandGroup('hippo compact-resume', 10, 'compact'));
 
   // PostCompact: saves the memories the summariser listed and prints one line, which Claude Code only shows.
   // PreCompact stdout, by contrast, is handed to the summariser as instructions, so pre-compact prints just the request.
-  let installedPostCompact = false;
-  if (!hookArrayContains(hooks.PostCompact, HIPPO_POST_COMPACT_MARKER)) {
-    if (!Array.isArray(hooks.PostCompact)) hooks.PostCompact = [];
-    hooks.PostCompact.push({
-      hooks: [
-        {
-          type: 'command',
-          command: `hippo post-compact --log-file "${defaultPreCompactLogPath()}"`,
-          timeout: 10,
-        },
-      ],
-    });
-    installedPostCompact = true;
-  }
+  const installedPostCompact = appendHookIfMissing(hooks, 'PostCompact', HIPPO_POST_COMPACT_MARKER,
+    claudeCommandGroup(`hippo post-compact --log-file "${defaultPreCompactLogPath()}"`, 10));
 
   // PostToolUseFailure: a failed tool call becomes an error memory, after
   // `hippo capture-error` drops routine failures (interrupts, declined
   // permissions, empty searches) and repeats. Same hook the plugin ships.
-  let installedCaptureError = false;
-  if (!hookArrayContains(hooks.PostToolUseFailure, HIPPO_CAPTURE_ERROR_MARKER)) {
-    if (!Array.isArray(hooks.PostToolUseFailure)) hooks.PostToolUseFailure = [];
-    hooks.PostToolUseFailure.push({
-      matcher: '.*',
-      hooks: [
-        {
-          type: 'command',
-          command: 'hippo capture-error',
-          timeout: 10,
-        },
-      ],
-    });
-    installedCaptureError = true;
-  }
+  const installedCaptureError = appendHookIfMissing(hooks, 'PostToolUseFailure', HIPPO_CAPTURE_ERROR_MARKER,
+    claudeCommandGroup('hippo capture-error', 10, '.*'));
 
-  if (
-    installedSessionEnd ||
-    installedSessionStart ||
-    installedUserPromptSubmit ||
-    installedPreCompact ||
-    installedCompactResume ||
-    installedPostCompact ||
-    installedCaptureError ||
-    migratedPinnedInjectRecent ||
-    migratedFromStop ||
-    migratedLegacySessionEnd ||
-    migratedSplitSessionEnd
-  ) {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-  }
-
-  return {
-    target,
+  const result: InstallResult = {
+    target: 'claude-code',
     settingsPath,
     installedSessionEnd,
     installedSessionStart,
@@ -979,11 +899,13 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedPostCompact,
     installedCaptureError,
     migratedPinnedInjectRecent,
-    migratedFromStop,
-    migratedLegacySessionEnd,
-    migratedSplitSessionEnd,
+    ...migration,
     invalidJson: false,
   };
+  if (Object.values(result).some((v) => v === true)) {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  }
+  return result;
 }
 
 /** The exact command hippo writes for each Codex event; uninstall removes only these handlers. */

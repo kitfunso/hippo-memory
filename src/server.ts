@@ -2557,39 +2557,11 @@ async function handleRequest(
   const { method, path, query } = parseRequest(req);
 
   if (method === 'GET' && path === '/health') {
-    // Loopback callers (detectServer's stale-pidfile probe reads version and
-    // pid) get the full body. Non-loopback callers get liveness only: the
-    // version string would fingerprint the build for the public internet and
-    // the pid is noise. Platform health checks only need the 200.
-    if (isLoopback(req.socket.remoteAddress)) {
-      sendJson(res, 200, {
-        ok: true,
-        version: VERSION,
-        started_at: startedAt,
-        pid: process.pid,
-        audit_write_failures: auditWriteFailureCount(),
-      });
-    } else {
-      sendJson(res, 200, { ok: true });
-    }
+    sendHealth(req, res, startedAt);
     return;
   }
 
-  // E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
-  // (a liveness probe) and other paths are never throttled. A 429 thrown
-  // here lands in the createServer catch like any other HttpError.
-  //
-  // Keyed on the socket's remote address by default. Behind a TLS-terminating
-  // proxy every socket carries the proxy's address, collapsing the per-IP
-  // buckets into one global bucket that pre-auth traffic can drain; set
-  // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
-  // (see clientIpForRateLimit).
-  if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
-    const ip = clientIpForRateLimit(req);
-    if (!limiter.check(ip)) {
-      throw new HttpError(429, 'rate limit exceeded');
-    }
-  }
+  enforceRateLimit(req, path, limiter);
 
   if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
 
@@ -2611,147 +2583,191 @@ async function handleRequest(
     return;
   }
 
-  // ── MCP-over-HTTP/SSE transport (Task 11) ──
-  //
-  // Two routes implement an MCP HTTP transport alongside the stdio one. Both
-  // dispatch to the same `handleMcpRequest` as the stdio loop in src/mcp/server.ts.
-  //
-  // POST /mcp        — Send a JSON-RPC request, get a JSON-RPC response synchronously
-  //                    in the body. Content-type: application/json both ways.
-  // GET  /mcp/stream — Open an SSE stream for server-initiated messages.
-  //                    v1 simplification: this stream is keepalive-only. Clients
-  //                    that need server-pushed notifications/progress will see
-  //                    only `: ping` comments every 30s. All real responses come
-  //                    back synchronously on POST /mcp. This matches the
-  //                    "synchronous JSON in body" leg of the MCP HTTP spec and
-  //                    is enough for `tools/list` / `tools/call` round-trips.
-  //                    Server-initiated SSE messages will be wired in a later task.
-  //
-  // Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
-  // loopback no-auth fallback. SSE check runs once at stream-open.
-
   if (method === 'POST' && path === '/mcp') {
-    // Build the same Context the /v1/* routes use so MCP tool calls inherit
-    // the server's bound hippoRoot and the auth-resolved tenantId / actor.
-    // Without this, executeTool would walk from cwd via findHippoRoot() and
-    // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
-    // back to whatever the env says.
-    const ctx = await buildContextWithAuth(req, opts);
-    const raw = await readBody(req);
-    let mcpReq: JsonValue;
-    try {
-      mcpReq = JSON.parse(raw);
-    } catch {
-      throw new HttpError(400, 'invalid JSON-RPC body');
-    }
-    if (!isJsonObjectRecord(mcpReq) || !isJsonString(mcpReq.method)) {
-      throw new HttpError(400, 'JSON-RPC body must include a method string');
-    }
-    // SAFETY: validated above as a plain JSON object carrying a string method;
-    // the remaining McpRequest wire fields (jsonrpc, id, params) are checked or
-    // safely defaulted inside handleMcpRequest's JSON-RPC dispatch.
-    const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
-    let mcpRes;
-    try {
-      mcpRes = await handleMcpRequest(rpcReq, {
-        hippoRoot: ctx.hippoRoot,
-        tenantId: ctx.tenantId,
-        // v1.12.0: McpContext.actor stays string; extract subject at the boundary.
-        actor: ctx.actor.subject,
-        // The caller's real role: MCP tools must not run a member key as admin.
-        role: ctx.actor.role,
-        scopes: ctx.actor.scopes,
-        viaAuthResolver: ctx.actor.viaAuthResolver,
-        clientKey: buildMcpClientKey(req),
-      });
-    } catch (err) {
-      mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
-    }
-    if (mcpRes === null) {
-      // Notification — no body, 202 Accepted.
-      res.writeHead(202);
-      res.end();
-      return;
-    }
-    sendJson(res, 200, mcpRes);
+    await handleMcpPost(req, res, opts);
     return;
   }
 
   if (method === 'GET' && path === '/mcp/stream') {
-    await requireAuth(req, opts);
-    // An async resolver can outlive the client; 'close' has already fired, so no timer may start.
-    if (req.destroyed || res.destroyed || req.socket.destroyed) return;
-    res.writeHead(200, {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-cache',
-      connection: 'keep-alive',
-    });
-    // Initial ping so smoke tests can confirm the stream is live without
-    // waiting for the first keepalive interval.
-    res.write(': ping\n\n');
-
-    // v0.39 SSE hardening:
-    //   - Heartbeat re-validates the bearer (default 60s). If the key was
-    //     revoked or rotated, close the stream with reason='auth_revoked'.
-    //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close
-    //     with reason='max_age_exceeded' when reached.
-    //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
-    //     interval without waiting a full minute.
-    const heartbeatMs =
-      parseInt(process.env.MCP_SSE_HEARTBEAT_MS ?? '60000', 10) || 60000;
-    const maxAgeMs =
-      (parseInt(process.env.MCP_SSE_MAX_AGE_SEC ?? '3600', 10) || 3600) * 1000;
-    const startedAt = Date.now();
-    let closed = false;
-    let checking = false;
-    const closeWith = (reason: string): void => {
-      if (closed) return;
-      closed = true;
-      try {
-        res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
-      } catch { /* socket already gone */ }
-      try { res.end(); } catch { /* socket already gone */ }
-    };
-    const ping = setInterval(() => {
-      if (closed) {
-        clearInterval(ping);
-        return;
-      }
-      if (Date.now() - startedAt >= maxAgeMs) {
-        closeWith('max_age_exceeded');
-        clearInterval(ping);
-        return;
-      }
-      if (checking) return;
-      checking = true;
-      void heartbeatVerdict(req, opts).then((verdict) => {
-        checking = false;
-        if (closed || verdict === 'unavailable') return;
-        if (verdict === 'revoked') {
-          closeWith('auth_revoked');
-          clearInterval(ping);
-          return;
-        }
-        try {
-          res.write(': ping\n\n');
-        } catch {
-          clearInterval(ping); // the client hung up; stop pinging a dead socket
-        }
-      });
-    }, heartbeatMs);
-    // Don't keep the event loop alive just for this timer — the server's
-    // listener already does that, and tests want the process to exit cleanly.
-    if (ping.unref instanceof Function) ping.unref();
-    // res 'close' covers an early socket drop that req 'close' can miss.
-    res.on('close', () => {
-      closed = true;
-      clearInterval(ping);
-    });
+    await handleMcpStream(req, res, opts);
     return;
   }
 
   res.writeHead(404, JSON_HEADERS);
   res.end(JSON.stringify({ error: 'not found' }));
+}
+
+function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
+  // Loopback callers (detectServer's stale-pidfile probe reads version and
+  // pid) get the full body. Non-loopback callers get liveness only: the
+  // version string would fingerprint the build for the public internet and
+  // the pid is noise. Platform health checks only need the 200.
+  if (isLoopback(req.socket.remoteAddress)) {
+    sendJson(res, 200, {
+      ok: true,
+      version: VERSION,
+      started_at: startedAt,
+      pid: process.pid,
+      audit_write_failures: auditWriteFailureCount(),
+    });
+  } else {
+    sendJson(res, 200, { ok: true });
+  }
+}
+
+function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
+  // E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
+  // (a liveness probe) and other paths are never throttled. A 429 thrown
+  // here lands in the createServer catch like any other HttpError.
+  //
+  // Keyed on the socket's remote address by default. Behind a TLS-terminating
+  // proxy every socket carries the proxy's address, collapsing the per-IP
+  // buckets into one global bucket that pre-auth traffic can drain; set
+  // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
+  // (see clientIpForRateLimit).
+  if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
+    const ip = clientIpForRateLimit(req);
+    if (!limiter.check(ip)) {
+      throw new HttpError(429, 'rate limit exceeded');
+    }
+  }
+}
+
+// ── MCP-over-HTTP/SSE transport (Task 11) ──
+//
+// Two routes implement an MCP HTTP transport alongside the stdio one. Both
+// dispatch to the same `handleMcpRequest` as the stdio loop in src/mcp/server.ts.
+//
+// POST /mcp        — Send a JSON-RPC request, get a JSON-RPC response synchronously
+//                    in the body. Content-type: application/json both ways.
+// GET  /mcp/stream — Open an SSE stream for server-initiated messages.
+//                    v1 simplification: this stream is keepalive-only. Clients
+//                    that need server-pushed notifications/progress will see
+//                    only `: ping` comments every 30s. All real responses come
+//                    back synchronously on POST /mcp. This matches the
+//                    "synchronous JSON in body" leg of the MCP HTTP spec and
+//                    is enough for `tools/list` / `tools/call` round-trips.
+//                    Server-initiated SSE messages will be wired in a later task.
+//
+// Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
+// loopback no-auth fallback. SSE check runs once at stream-open.
+
+async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ServeOpts): Promise<void> {
+  // Build the same Context the /v1/* routes use so MCP tool calls inherit
+  // the server's bound hippoRoot and the auth-resolved tenantId / actor.
+  // Without this, executeTool would walk from cwd via findHippoRoot() and
+  // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
+  // back to whatever the env says.
+  const ctx = await buildContextWithAuth(req, opts);
+  const raw = await readBody(req);
+  let mcpReq: JsonValue;
+  try {
+    mcpReq = JSON.parse(raw);
+  } catch {
+    throw new HttpError(400, 'invalid JSON-RPC body');
+  }
+  if (!isJsonObjectRecord(mcpReq) || !isJsonString(mcpReq.method)) {
+    throw new HttpError(400, 'JSON-RPC body must include a method string');
+  }
+  // SAFETY: validated above as a plain JSON object carrying a string method;
+  // the remaining McpRequest wire fields (jsonrpc, id, params) are checked or
+  // safely defaulted inside handleMcpRequest's JSON-RPC dispatch.
+  const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
+  let mcpRes;
+  try {
+    mcpRes = await handleMcpRequest(rpcReq, {
+      hippoRoot: ctx.hippoRoot,
+      tenantId: ctx.tenantId,
+      // v1.12.0: McpContext.actor stays string; extract subject at the boundary.
+      actor: ctx.actor.subject,
+      // The caller's real role: MCP tools must not run a member key as admin.
+      role: ctx.actor.role,
+      scopes: ctx.actor.scopes,
+      viaAuthResolver: ctx.actor.viaAuthResolver,
+      clientKey: buildMcpClientKey(req),
+    });
+  } catch (err) {
+    mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
+  }
+  if (mcpRes === null) {
+    // Notification — no body, 202 Accepted.
+    res.writeHead(202);
+    res.end();
+    return;
+  }
+  sendJson(res, 200, mcpRes);
+}
+
+async function handleMcpStream(req: IncomingMessage, res: ServerResponse, opts: ServeOpts): Promise<void> {
+  await requireAuth(req, opts);
+  // An async resolver can outlive the client; 'close' has already fired, so no timer may start.
+  if (req.destroyed || res.destroyed || req.socket.destroyed) return;
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  // Initial ping so smoke tests can confirm the stream is live without
+  // waiting for the first keepalive interval.
+  res.write(': ping\n\n');
+
+  // v0.39 SSE hardening:
+  //   - Heartbeat re-validates the bearer (default 60s). If the key was
+  //     revoked or rotated, close the stream with reason='auth_revoked'.
+  //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close
+  //     with reason='max_age_exceeded' when reached.
+  //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
+  //     interval without waiting a full minute.
+  const heartbeatMs =
+    parseInt(process.env.MCP_SSE_HEARTBEAT_MS ?? '60000', 10) || 60000;
+  const maxAgeMs =
+    (parseInt(process.env.MCP_SSE_MAX_AGE_SEC ?? '3600', 10) || 3600) * 1000;
+  const startedAt = Date.now();
+  let closed = false;
+  let checking = false;
+  const closeWith = (reason: string): void => {
+    if (closed) return;
+    closed = true;
+    try {
+      res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
+    } catch { /* socket already gone */ }
+    try { res.end(); } catch { /* socket already gone */ }
+  };
+  const ping = setInterval(() => {
+    if (closed) {
+      clearInterval(ping);
+      return;
+    }
+    if (Date.now() - startedAt >= maxAgeMs) {
+      closeWith('max_age_exceeded');
+      clearInterval(ping);
+      return;
+    }
+    if (checking) return;
+    checking = true;
+    void heartbeatVerdict(req, opts).then((verdict) => {
+      checking = false;
+      if (closed || verdict === 'unavailable') return;
+      if (verdict === 'revoked') {
+        closeWith('auth_revoked');
+        clearInterval(ping);
+        return;
+      }
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        clearInterval(ping); // the client hung up; stop pinging a dead socket
+      }
+    });
+  }, heartbeatMs);
+  // Don't keep the event loop alive just for this timer — the server's
+  // listener already does that, and tests want the process to exit cleanly.
+  if (ping.unref instanceof Function) ping.unref();
+  // res 'close' covers an early socket drop that req 'close' can miss.
+  res.on('close', () => {
+    closed = true;
+    clearInterval(ping);
+  });
 }
 
 /**

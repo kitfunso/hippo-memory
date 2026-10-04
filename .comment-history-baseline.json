@@ -32,7 +32,7 @@
   "src/connectors/slack/types.ts": 1,
   "src/connectors/slack/web-client.ts": 1,
   "src/connectors/slack/workspaces.ts": 1,
-  "src/consolidate.ts": 33,
+  "src/consolidate.ts": 32,
   "src/customer-notes.ts": 7,
   "src/dag.ts": 20,
   "src/dashboard.ts": 6,
