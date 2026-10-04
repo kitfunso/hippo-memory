@@ -5,6 +5,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { createApiKey, listApiKeys, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem } from '../auth.js';
 import { isRestrictedScope } from '../recall-scope.js';
+import { selectApiKeyOwner } from '../store/tenant-lookup.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -122,18 +123,9 @@ export function authRevoke(
   }
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    // SAFETY: row's shape matches the four columns named in the SELECT
-    // above.
-    const row = db
-      .prepare(`SELECT key_id, tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
-      .get(keyId) as
-      | { key_id: string; tenant_id: string; revoked_at: string | null; role: string }
-      | undefined;
-    if (!row) {
-      throw new NotFoundError(`Unknown key_id: ${keyId}`);
-    }
+    const row = selectApiKeyOwner(db, keyId);
     // Cross-tenant access denied: same message as missing key, no info leak.
-    if (row.tenant_id !== ctx.tenantId) {
+    if (!row || row.tenantId !== ctx.tenantId) {
       throw new NotFoundError(`Unknown key_id: ${keyId}`);
     }
     if (ctx.actor.viaAuthResolver && row.role === 'admin') {
@@ -142,23 +134,18 @@ export function authRevoke(
 
     let revokedAt: string;
     let alreadyRevoked = false;
-    if (row.revoked_at) {
+    if (row.revokedAt) {
       alreadyRevoked = true;
-      revokedAt = row.revoked_at;
+      revokedAt = row.revokedAt;
     } else {
       revokeApiKey(db, keyId);
-      // SAFETY: updated's shape matches the single `revoked_at` column named
-      // in the SELECT above.
-      const updated = db
-        .prepare(`SELECT revoked_at FROM api_keys WHERE key_id = ?`)
-        .get(keyId) as { revoked_at: string | null } | undefined;
-      revokedAt = updated?.revoked_at ?? new Date().toISOString();
+      revokedAt = selectApiKeyOwner(db, keyId)?.revokedAt ?? new Date().toISOString();
     }
 
     if (!alreadyRevoked) {
       try {
         appendAuditEvent(db, {
-          tenantId: row.tenant_id, // M1: KEY's tenant, not ctx.tenantId.
+          tenantId: row.tenantId, // M1: KEY's tenant, not ctx.tenantId.
           actor: ctx.actor.subject,
           op: 'auth_revoke',
           targetId: keyId,
@@ -170,6 +157,22 @@ export function authRevoke(
     }
 
     return { ok: true, revokedAt };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
+ * so the local CLI can run revoke and grant in the key's own tenant.
+ */
+export function authKeyTenant(ctx: Context, keyId: string): string | undefined {
+  if (!ctx.actor.hostAdmin) {
+    throw new ForbiddenError('Only the host admin can look up a key across tenants');
+  }
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    return selectApiKeyOwner(db, keyId)?.tenantId;
   } finally {
     closeHippoDb(db);
   }
@@ -196,14 +199,11 @@ function changeScopeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_
   }
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
-    const row = db
-      .prepare(`SELECT tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
-      .get(keyId) as { tenant_id: string; revoked_at: string | null } | undefined;
-    if (!row || row.tenant_id !== ctx.tenantId) {
+    const row = selectApiKeyOwner(db, keyId);
+    if (!row || row.tenantId !== ctx.tenantId) {
       throw new NotFoundError(`Unknown key_id: ${keyId}`);
     }
-    if (op === 'auth_grant' && row.revoked_at) {
+    if (op === 'auth_grant' && row.revokedAt) {
       throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
     }
     if (!isRestrictedScope(scope)) {

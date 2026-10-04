@@ -136,7 +136,6 @@
   "src/mcp/admin-tools.ts": 5,
   "src/mcp/format.ts": 1,
   "src/mcp/framing.ts": 1,
-  "src/mcp/memory-tools.ts": 2,
   "src/mcp/protocol.ts": 1,
   "src/mcp/recall-tools.ts": 4,
   "src/mcp/request.ts": 2,

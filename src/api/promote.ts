@@ -17,6 +17,7 @@ import { promoteToGlobal } from '../shared.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { loadConfig } from '../config.js';
 import type { Context } from './types.js';
+import { selectMemoryTenant } from '../store/tenant-lookup.js';
 
 // ---------------------------------------------------------------------------
 // promote
@@ -50,12 +51,7 @@ export function promote(
   // another tenant).
   const ownerDb = openHippoDb(ctx.hippoRoot);
   try {
-    // SAFETY: row's shape matches the single `tenant_id` column named in
-    // the SELECT above.
-    const row = ownerDb
-      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-      .get(id) as { tenant_id?: string } | undefined;
-    if (!row || row.tenant_id !== ctx.tenantId) {
+    if (selectMemoryTenant(ownerDb, id) !== ctx.tenantId) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
@@ -233,12 +229,7 @@ export function archiveRaw(
     // pre-check. Deny cross-tenant access with the same not-found message
     // archiveRawMemory itself would throw on a missing row, so we don't
     // leak whether the id exists in another tenant.
-    // SAFETY: row's shape matches the single `tenant_id` column named in
-    // the SELECT above.
-    const row = db
-      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-      .get(id) as { tenant_id?: string } | undefined;
-    if (!row || row.tenant_id !== ctx.tenantId) {
+    if (selectMemoryTenant(db, id) !== ctx.tenantId) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
     archiveRawMemory(db, id, {

@@ -30,3 +30,5 @@ export * from './api/tokens.js';
 export * from './api/dormant.js';
 export * from './api/quarantine.js';
 export * from './api/sleep.js';
+export * from './api/goals.js';
+export * from './api/learn.js';

@@ -7,28 +7,20 @@ import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
-import { confidenceLabel, computeSchemaFit, createMemory, Layer } from '../memory.js';
+import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { updateStats } from '../store/index-and-stats.js';
-import { RejectedValueError } from '../rejection.js';
 import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
-import { embedMemory } from '../embeddings.js';
 import { type HippoConfig, loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../pilot-arm.js';
 import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
-import { isGitRepo, fetchGitLog, extractLessons, partitionLessons } from '../autolearn.js';
-import { storedTextKeys, duplicateKey } from '../same-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
-import { type ChurnStaleResult, detectChurnStale, extractInvalidationTarget, invalidateMatching } from '../invalidation.js';
+import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
 import { resolveProjectIdentity } from '../project-identity.js';
-import { extractPathTags } from '../path-context.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
@@ -36,6 +28,7 @@ import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audi
 import * as client from '../client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
+import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
 import { log } from '../log.js';
@@ -523,118 +516,20 @@ export function learnFromRepo(
   label?: string
 ): { added: number; skipped: number; lowInfo: number } {
   const prefix = label ? `[${label}] ` : '';
-
-  if (!isGitRepo(repoPath)) {
+  const ctx: Context = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli') };
+  const result = learn(ctx, { repoPath, days, profile: CLI_LEARN });
+  if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);
     return { added: 0, skipped: 0, lowInfo: 0 };
   }
-
-  const gitLog = fetchGitLog(repoPath, days);
-  if (!gitLog.trim()) {
+  if (result.status !== 'scanned') {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
     return { added: 0, skipped: 0, lowInfo: 0 };
   }
-
-  // Same patterns as MCP hippo_learn: config.gitLearnPatterns (whose default
-  // equals extractLessons' built-in list) so a custom list applies everywhere.
-  const config = loadConfig(hippoRoot);
-  const parsedLessons = extractLessons(gitLog, config.gitLearnPatterns);
-  if (parsedLessons.length === 0) {
-    console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0, lowInfo: 0 };
+  const { added, skipped, rejected, lowInfo } = result;
+  for (const { from, count } of result.invalidations) {
+    console.log(`${prefix}   Invalidated ${count} memories referencing "${from}"`);
   }
-
-  // The admission gate lives at the write path, not in extractLessons
-  // (a published API surface that only parses). Bare subjects like "fixed
-  // signals" are dropped here, before they ever become a memory.
-  // The gate filters the loop INPUT, so a dropped lesson neither stores nor
-  // invalidates. That is deliberate, and it was argued both ways.
-  //
-  // One review called the lost invalidation serious: a migration subject
-  // too thin to store ("replace webpack with vite") would stop weakening
-  // stale webpack memories. True. So the loop was widened to walk every
-  // parsed lesson with the gate on the write alone.
-  //
-  // A second review found the cure was worse. STORAGE is what makes invalidation
-  // idempotent here: a stored lesson is recognised by its same-text key on
-  // the next scan and short-circuits before invalidating again. A lesson that
-  // invalidates but is never stored has no such record, so every rescan
-  // re-invalidates, and invalidateMatching halves half_life_days each time.
-  // Measured: 7 -> 3 -> 1 over two runs. That is compounding data damage.
-  //
-  // Measured frequency decided it. Across 413 real auto-learn rows in 4
-  // stores, 24 are gated and ZERO of those carry an invalidation target; the
-  // 45 lessons that do carry targets all pass the gate and are unaffected
-  // either way. Both failure modes are empty on real data, so the tie breaks
-  // on which one is benign if it ever fires: not invalidating is a missed
-  // improvement, re-invalidating forever is damage.
-  //
-  // Documented limitation, pinned by test: a migration subject too thin to
-  // store also does not invalidate. Making invalidateMatching idempotent
-  // would allow both, and is backlogged - it is a latent issue for the manual
-  // `hippo invalidate` path too, not just this one.
-  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
-  const lowInfo = dropped.length;
-
-  let added = 0;
-  let skipped = 0;
-  // Containment: per-lesson refusal must not abort the rest
-  // of the git-log scan. No signature change (added/skipped return shape
-  // used by cmdLearn + cmdSleepCore callers) — counted locally, folded into
-  // the existing summary line.
-  let rejected = 0;
-  const gitLearnTags = ['error', 'git-learned'];
-  const existingForSchema = loadAllEntries(hippoRoot, resolveTenantId({}));
-  const keys = storedTextKeys(existingForSchema);
-
-  for (const lesson of lessons) {
-    if (keys.has(duplicateKey(lesson))) {
-      skipped++;
-      continue;
-    }
-
-    const target = extractInvalidationTarget(lesson);
-    if (target) {
-      const invResult = invalidateMatching(hippoRoot, target, resolveTenantId({}));
-      if (invResult.invalidated > 0) {
-        console.log(`${prefix}   Invalidated ${invResult.invalidated} memories referencing "${target.from}"`);
-      }
-    }
-
-    const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
-
-    const entry = createMemory(lesson, {
-      layer: Layer.Episodic,
-      tags: [...gitLearnTags],
-      source: 'git-learn',
-      confidence: 'observed',
-      schema_fit: schemaFitVal,
-      tenantId: resolveTenantId({}),
-      baseHalfLifeDays: config.defaultHalfLifeDays,
-    });
-
-    // Auto-tag with path context from the repo being learned
-    const learnPathTags = extractPathTags(repoPath);
-    for (const pt of learnPathTags) {
-      if (!entry.tags.includes(pt)) entry.tags.push(pt);
-    }
-
-    try {
-      writeEntry(hippoRoot, entry);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejected++;
-        continue;
-      }
-      throw err;
-    }
-    updateStats(hippoRoot, { remembered: 1 });
-    keys.add(duplicateKey(lesson));
-    void embedMemory(hippoRoot, entry);
-
-    added++;
-  }
-
   console.log(
     `${prefix}${added} new lessons added, ${skipped} duplicates skipped` +
       (rejected > 0 ? `, ${rejected} rejected value(s) skipped` : '') +

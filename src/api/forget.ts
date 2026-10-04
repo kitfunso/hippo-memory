@@ -7,6 +7,7 @@ import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import type { Context } from './types.js';
+import { selectMemoryTenant } from '../store/tenant-lookup.js';
 
 // ---------------------------------------------------------------------------
 // forget
@@ -29,12 +30,7 @@ export interface ForgetResult {
 export function forget(ctx: Context, id: string): ForgetResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    // SAFETY: row's shape matches the single `tenant_id` column named in
-    // the SELECT above.
-    const row = db
-      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-      .get(id) as { tenant_id?: string } | undefined;
-    if (!row || row.tenant_id !== ctx.tenantId) {
+    if (selectMemoryTenant(db, id) !== ctx.tenantId) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
@@ -98,12 +94,7 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     // keeps the error message consistent with the rest of this module.
     const db = openHippoDb(ctx.hippoRoot);
     try {
-      // SAFETY: row's shape matches the single `tenant_id` column named in
-      // the SELECT above.
-      const row = db
-        .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-        .get(opts.memoryId) as { tenant_id?: string } | undefined;
-      if (!row || row.tenant_id !== ctx.tenantId) {
+      if (selectMemoryTenant(db, opts.memoryId) !== ctx.tenantId) {
         throw new NotFoundError(`memory not found: ${opts.memoryId}`);
       }
     } finally {

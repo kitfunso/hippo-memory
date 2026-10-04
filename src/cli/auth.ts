@@ -98,23 +98,19 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
   }
 }
 
-function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
-  const root = resolveAuthRoot(hippoRoot, flags);
-  // The local CLI owns every tenant, so the revoke runs in the key's own tenant.
-  const db = openHippoDb(root);
-  let keyTenant: string | undefined;
-  try {
-    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
-    const row = db.prepare(`SELECT tenant_id FROM api_keys WHERE key_id = ?`).get(keyId) as { tenant_id: string } | undefined;
-    keyTenant = row?.tenant_id;
-  } finally {
-    closeHippoDb(db);
-  }
+// The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
+function keyContext(root: string, keyId: string): api.Context {
+  const hostCtx: api.Context = { hippoRoot: root, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
+  const keyTenant = api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     printError(`Unknown key_id: ${keyId}`);
     process.exit(1);
   }
-  const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
+  return { ...hostCtx, tenantId: keyTenant };
+}
+
+function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
+  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
   let revokedAt: string;
   try {
     revokedAt = api.authRevoke(ctx, keyId).revokedAt;
@@ -131,22 +127,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
 
 /** EI2: `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
 function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: Record<string, string | boolean | string[]>): void {
-  const root = resolveAuthRoot(hippoRoot, flags);
-  // The local CLI owns every tenant (as auth revoke does), so the grant runs in the key's own tenant.
-  const db = openHippoDb(root);
-  let keyTenant: string | undefined;
-  try {
-    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
-    const row = db.prepare(`SELECT tenant_id FROM api_keys WHERE key_id = ?`).get(keyId) as { tenant_id: string } | undefined;
-    keyTenant = row?.tenant_id;
-  } finally {
-    closeHippoDb(db);
-  }
-  if (keyTenant === undefined) {
-    printError(`Unknown key_id: ${keyId}`);
-    process.exit(1);
-  }
-  const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
+  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
   try {
     if (grant) api.authGrant(ctx, keyId, scope);
     else api.authUngrant(ctx, keyId, scope);

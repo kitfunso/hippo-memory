@@ -221,6 +221,24 @@ export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goa
   }
 }
 
+/** Every goal of a (tenant, session), whatever its status, oldest first. */
+export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
+    const rows = db.prepare(`
+      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+      FROM goal_stack
+      WHERE tenant_id = ? AND session_id = ?
+      ORDER BY created_at ASC
+    `).all(opts.tenantId, opts.sessionId) as GoalRow[];
+    return rows.map(rowToGoal);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
   // SAFETY: rows come from the SELECT above, which projects exactly
   // GoalRow's columns (in the same order goal_stack defines them).

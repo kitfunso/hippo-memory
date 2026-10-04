@@ -1,10 +1,8 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
 import { envHippoSessionId } from '../env.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from '../goals.js';
-import type { PolicyType, Goal, GoalRow } from '../goals.js';
-import { rowToGoal } from '../goals.js';
+import type { PolicyType } from '../goals.js';
+import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 
@@ -98,9 +96,8 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
   }
   const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
 
-  const goal = pushGoal(hippoRoot, {
+  const goal = api.goalPush(goalContext(hippoRoot, tenantId), {
     sessionId,
-    tenantId,
     goalName: name,
     level,
     parentGoalId,
@@ -110,28 +107,14 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
   console.log(goal.id);
 }
 
-function listAllGoals(hippoRoot: string, sessionId: string, tenantId: string): Goal[] {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const rows = db.prepare(`
-      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
-             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
-      FROM goal_stack
-      WHERE tenant_id = ? AND session_id = ?
-      ORDER BY created_at ASC
-    `).all(tenantId, sessionId) as GoalRow[];
-    return rows.map(rowToGoal);
-  } finally {
-    closeHippoDb(db);
-  }
+function goalContext(hippoRoot: string, tenantId: string = resolveTenantId({})): api.Context {
+  return { hippoRoot, tenantId, actor: api.adminActor('cli') };
 }
 
 function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
   const { sessionId, tenantId } = resolveGoalSession(flags);
   const showAll = Boolean(flags['all']);
-  const goals = showAll
-    ? listAllGoals(hippoRoot, sessionId, tenantId)
-    : getActiveGoals(hippoRoot, { sessionId, tenantId });
+  const goals = api.goalList(goalContext(hippoRoot, tenantId), { sessionId, all: showAll });
 
   if (goals.length === 0) {
     console.log('(no goals)');
@@ -182,7 +165,7 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string
     outcomeScore = parsed;
   }
   const noPropagate = flags['no-propagate'] === true;
-  completeGoal(hippoRoot, id, { outcomeScore, noPropagate });
+  api.goalComplete(goalContext(hippoRoot), id, { outcomeScore, noPropagate });
   console.log('ok');
 }
 
@@ -192,7 +175,7 @@ function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
     printError('Usage: hippo goal suspend <id>');
     process.exit(1);
   }
-  suspendGoal(hippoRoot, id);
+  api.goalSuspend(goalContext(hippoRoot), id);
   console.log('ok');
 }
 
@@ -202,7 +185,7 @@ function cmdGoalResume(hippoRoot: string, args: string[]): void {
     printError('Usage: hippo goal resume <id>');
     process.exit(1);
   }
-  resumeGoal(hippoRoot, id);
+  api.goalResume(goalContext(hippoRoot), id);
   console.log('ok');
 }
 

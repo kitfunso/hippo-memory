@@ -1,0 +1,212 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MCP hippo_learn > returns the same text and writes the same rows, and refuses a caller that is not the host admin 1`] = `
+[
+  "{"content":[{"type":"text","text":"Git learn: 2 new, 1 duplicates skipped, 1 low-information subjects dropped (scanned 30 days)"}]}",
+  "{"content":[{"type":"text","text":"Git learn: 0 new, 3 duplicates skipped, 1 low-information subjects dropped (scanned 30 days)"}]}",
+  "threw ForbiddenError: hippo_learn requires a host admin",
+  "{"content":[{"type":"text","text":"No git history found."}]}",
+  "{"content":[{"type":"text","text":"Git learn: 0 new, 0 duplicates skipped (scanned 30 days)"}]}",
+]
+`;
+
+exports[`MCP hippo_learn > returns the same text and writes the same rows, and refuses a caller that is not the host admin 2`] = `
+"{
+ "memories": [
+  {
+   "content": "migrate from webpack to vite for the dashboard build",
+   "layer": "episodic",
+   "tags": [
+    "git-learned"
+   ],
+   "source": "git",
+   "confidence": "observed",
+   "schema_fit": 0.5,
+   "half_life_days": 365
+  },
+  {
+   "content": "quote paths with spaces in the deploy script on windows",
+   "layer": "episodic",
+   "tags": [
+    "git-learned"
+   ],
+   "source": "git",
+   "confidence": "observed",
+   "schema_fit": 0.5,
+   "half_life_days": 365
+  },
+  {
+   "content": "the cache key must include the tenant id",
+   "layer": "episodic",
+   "tags": [
+    "seed"
+   ],
+   "source": "cli",
+   "confidence": "verified",
+   "schema_fit": 0.5,
+   "half_life_days": 365
+  },
+  {
+   "content": "We build the dashboard with webpack and babel loaders",
+   "layer": "episodic",
+   "tags": [
+    "seed"
+   ],
+   "source": "cli",
+   "confidence": "verified",
+   "schema_fit": 0.5,
+   "half_life_days": 365
+  }
+ ],
+ "audit": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "mcp",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "mcp",
+   "op": "remember"
+  }
+ ]
+}"
+`;
+
+exports[`hippo learn --git (in process) > prints the same lines and writes the same rows for --repos, the working directory and the edge cases 1`] = `
+"$ learn (no --git) -> 1
+--- stdout
+--- stderr
+Usage: hippo learn --git [--days <n>] [--repos <paths>]
+
+$ learn --repos -> 0
+--- stdout
+Scanning git log for the last 30 days...
+[<repo>]    Invalidated 1 memories referencing "webpack"
+[<repo>] 2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.
+Git learn complete: 2 new lessons added, 1 duplicates skipped across 1 repos.
+--- stderr
+
+$ learn --repos (again) -> 0
+--- stdout
+Scanning git log for the last 30 days...
+[<repo>] 0 new lessons added, 3 duplicates skipped, 1 low-information subject(s) dropped.
+Git learn complete: 0 new lessons added, 3 duplicates skipped across 1 repos.
+--- stderr
+
+$ learn (cwd) -> 0
+--- stdout
+Scanning git log for the last 30 days...
+   Invalidated 1 memories referencing "webpack"
+2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.
+Git learn complete: 2 new lessons added, 1 duplicates skipped.
+--- stderr
+
+$ learn (not a repo) -> 0
+--- stdout
+Scanning git log for the last 30 days...
+No git history found (or not a git repository).
+Git learn complete: 0 new lessons added, 0 duplicates skipped.
+--- stderr
+
+$ learn (no lessons) -> 0
+--- stdout
+Scanning git log for the last 30 days...
+No fix/revert/bug commits found in the specified period.
+Git learn complete: 0 new lessons added, 0 duplicates skipped.
+--- stderr
+"
+`;
+
+exports[`hippo learn --git (in process) > prints the same lines and writes the same rows for --repos, the working directory and the edge cases 2`] = `
+"{
+ "memories": [
+  {
+   "content": "migrate from webpack to vite for the dashboard build",
+   "layer": "episodic",
+   "tags": [
+    "error",
+    "git-learned",
+    "path:*"
+   ],
+   "source": "git-learn",
+   "confidence": "observed",
+   "schema_fit": 0.08000000000000002,
+   "half_life_days": 365
+  },
+  {
+   "content": "quote paths with spaces in the deploy script on windows",
+   "layer": "episodic",
+   "tags": [
+    "error",
+    "git-learned",
+    "path:*"
+   ],
+   "source": "git-learn",
+   "confidence": "observed",
+   "schema_fit": 0,
+   "half_life_days": 365
+  },
+  {
+   "content": "the cache key must include the tenant id",
+   "layer": "episodic",
+   "tags": [
+    "seed"
+   ],
+   "source": "cli",
+   "confidence": "verified",
+   "schema_fit": 0.5,
+   "half_life_days": 365
+  },
+  {
+   "content": "We build the dashboard with webpack and babel loaders",
+   "layer": "episodic",
+   "tags": [
+    "invalidated",
+    "seed"
+   ],
+   "source": "cli",
+   "confidence": "stale",
+   "schema_fit": 0.5,
+   "half_life_days": 182
+  }
+ ],
+ "audit": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember"
+  }
+ ]
+}"
+`;
