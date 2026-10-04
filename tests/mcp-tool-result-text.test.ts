@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 
+// The auto query comes from the checkout's git state, which differs between a dev branch and CI.
+vi.mock('../src/context-auto.js', () => ({ autoDetectContext: () => '' }));
+
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
 let home: string;
@@ -84,7 +87,16 @@ describe('MCP tool reply text', () => {
 
     expect(await call('hippo_context', { budget: 0 })).toMatchInlineSnapshot(`"Done."`);
     expect(await call('hippo_context', { budget: 3 })).toMatchInlineSnapshot(`"Done."`);
-    expect(await call('hippo_context', { budget: 4000 })).toMatchInlineSnapshot(`"No relevant memories found."`);
+    expect(await call('hippo_context', { budget: 4000 })).toMatchInlineSnapshot(`
+      "Found 2 memories:
+
+      [verified] tags: error, deploy (strength=1.00)
+      the staging lock table blocks deploys
+
+      [verified] (strength=1.00)
+      release notes are folded from changelog fragments
+      "
+    `);
     expect(await call('hippo_status')).toMatchInlineSnapshot(`
       "Memories: 2 (0 pinned, 1 errors)
       Avg strength: 1.00
