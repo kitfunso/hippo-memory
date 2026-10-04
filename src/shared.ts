@@ -22,6 +22,7 @@ import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';
 import { fitBudget } from './search/finalize.js';
 import type { SearchResult, ResultCost } from './search/types.js';
+import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
@@ -240,14 +241,11 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
+  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
   // window before any admitted row is even loaded (codex gating round 6).
-  // Only ambient-context query mode sets entryFilter, and that path is
-  // interactive - never the per-turn pinned-only hook - so ranking the full
-  // match set is acceptable.
   // 5000 = 25x the default 200-row window: large enough that exclusion
   // crowding is a non-issue on real stores, bounded so a common query term
   // on a 100k-row store cannot stall an interactive call by ranking every
@@ -277,8 +275,6 @@ export async function searchBothHybrid(
   const localEntries = loadEntries(localRoot).filter(admit);
   const globalEntries = loadEntries(globalRoot).filter(admit);
 
-  if (localEntries.length === 0 && globalEntries.length === 0) return [];
-
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates = {
     tenantId,
@@ -286,9 +282,22 @@ export async function searchBothHybrid(
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
+  return rankBothStores(query, { local: localRoot, global: globalRoot }, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+}
+
+/** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
+export async function rankBothStores(
+  query: string,
+  roots: { local: string; global: string },
+  entries: { local: MemoryEntry[]; global: MemoryEntry[] },
+  vectorCandidates: HybridVectorCandidates,
+  options: HybridSearchOptions = {},
+): Promise<SearchResult[]> {
+  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness } = options;
+  if (entries.local.length === 0 && entries.global.length === 0) return [];
   const shared = { budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness, vectorCandidates };
-  const localResults = await hybridSearch(query, localEntries, { ...shared, hippoRoot: localRoot });
-  const globalResults = await hybridSearch(query, globalEntries, { ...shared, hippoRoot: globalRoot });
+  const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
+  const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });
 
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [

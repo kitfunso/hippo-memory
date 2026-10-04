@@ -6,7 +6,7 @@ import type { AmbientLoadResult } from '../store/candidates.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
 import { appendAuditEvent, auditQueryFields, isContentWorthStoring } from '../audit.js';
-import { searchBothHybrid } from '../shared.js';
+import { rankBothStores } from '../shared.js';
 import { evalNow } from '../ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
@@ -53,6 +53,8 @@ export interface ContextPlan {
 export interface ContextAdmission {
   ambientAdmit: (e: MemoryEntry) => boolean;
   admit: (e: MemoryEntry) => boolean;
+  /** What the two-store search admits: `admit` without the own-session compaction rule. */
+  bothStoresAdmit: (e: MemoryEntry) => boolean;
   digestHidden: () => boolean;
 }
 
@@ -363,31 +365,31 @@ export async function selectBySearch(
 ): Promise<ContextResultEntry[]> {
   const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
   const results = plan.hasGlobal && !plan.primaryIsGlobal
-    ? await searchBothStores(ctx, plan, left, minResults, admission.ambientAdmit)
+    ? await searchBothStores(ctx, plan, left, minResults, pools, admission.bothStoresAdmit)
     : await searchLocalRows(ctx, plan, left, minResults, pools.local.entries, admission.admit);
   auditContextRecall(ctx, plan, results.length);
   return results;
 }
 
-// searchBothHybrid loads its own rows, so admission runs inside it via entryFilter, before ranking, dedupe and budget:
-// a post-filter would let an excluded row fill the budget or shadow its admitted duplicate. Recall never sets it.
+// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an excluded row fill the
+// budget or shadow its admitted duplicate.
 async function searchBothStores(
   ctx: Context,
   plan: ContextPlan,
   left: number,
   minResults: number | undefined,
-  ambientAdmit: (e: MemoryEntry) => boolean,
+  pools: ContextPools,
+  admit: (e: MemoryEntry) => boolean,
 ): Promise<ContextResultEntry[]> {
   const { cost, price } = plan;
   const localIndex = loadIndex(ctx.hippoRoot);
   const isGlobalHit = (e: MemoryEntry): boolean => !localIndex.entries[e.id];
-  const merged = await searchBothHybrid(plan.query, ctx.hippoRoot, plan.globalRoot, {
+  const roots = { local: ctx.hippoRoot, global: plan.globalRoot };
+  const merged = await rankBothStores(plan.query, roots, { local: pools.local.entries, global: pools.global.entries }, contextVectorSpec(ctx, plan, admit), {
     budget: left,
     minResults,
     cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
     scope: plan.activeScope,
-    tenantId: ctx.tenantId,
-    entryFilter: ambientAdmit,
   });
   return merged.map((r) => ({
     entry: r.entry,
@@ -395,6 +397,11 @@ async function searchBothStores(
     tokens: price(r.entry, isGlobalHit(r.entry)),
     isGlobal: isGlobalHit(r.entry),
   }));
+}
+
+/** The vector arm under the lexical window's own tenant, scope and current-row rules. */
+function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEntry) => boolean): HybridVectorCandidates {
+  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact'), includeSuperseded: false, admit };
 }
 
 async function searchLocalRows(
@@ -409,9 +416,7 @@ async function searchLocalRows(
   const ctxConfig = loadConfig(ctx.hippoRoot);
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
-  const vectorCandidates: HybridVectorCandidates = {
-    tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact'), includeSuperseded: false, admit,
-  };
+  const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const ctxResults = usePhysicsCtx
     ? await physicsSearch(query, localEntries, {
         budget: left,

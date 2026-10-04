@@ -17,7 +17,6 @@
     "src/server-detect.ts:detectServer": 96,
     "src/server.ts:serve": 164,
     "src/server/routes/recall.ts:handleRecallMemories": 158,
-    "src/shared.ts:autoShare": 89,
-    "src/shared.ts:searchBothHybrid": 84
+    "src/shared.ts:autoShare": 89
   }
 }

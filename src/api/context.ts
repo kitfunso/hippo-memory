@@ -3,6 +3,7 @@
 import { isInitialized } from '../store/open.js';
 import { strengthenRetrieved } from '../store/entry-writes.js';
 import { loadRecallSearchEntries } from '../store/search-rows.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import {
   loadAmbientCandidates,
   loadContextCandidates,
@@ -84,10 +85,11 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): 
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
 export const CONTEXT_CANDIDATE_CAP = 2000;
 
-/** A local-only query reads its FTS window; the search's vector arm adds the nearest rows. */
+/** A query reads recall's FTS window from each store; the search's vector arm adds the nearest rows. */
 interface ContextQueryWindow {
   query: string;
   exactScope: string | undefined;
+  project: string | undefined;
 }
 
 // The pinned-only branch needs pins and recent-N candidates, not the corpus; `recall` applies there only.
@@ -103,7 +105,7 @@ function loadAmbientEntries(
 ): AmbientLoadResult {
   if (!pinnedOnly) {
     const rows = 'query' in window
-      ? loadRecallSearchEntries(hippoRoot, window.query, CONTEXT_CANDIDATE_CAP, tenantId, window.exactScope, 'exact', false)
+      ? loadRecallSearchEntries(hippoRoot, window.query, DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, window.exactScope, 'exact', false, window.project)
       : loadContextCandidates(hippoRoot, tenantId, window);
     return { entries: rows.filter(admit) };
   }
@@ -336,19 +338,23 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
     e.tags.includes(COMPACTION_MEMORY_TAG);
   // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
-  return { ambientAdmit, admit, digestHidden: () => digestHiddenForHandoff };
+  // The two-store search has always ranked a session's own compaction items; only the local search drops them.
+  const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
+  return { ambientAdmit, admit, bothStoresAdmit, digestHidden: () => digestHiddenForHandoff };
 }
 
 function loadPools(ctx: Context, plan: ContextPlan, admission: ContextAdmission, recallRequest: AmbientRecallRequest | undefined): ContextPools {
   const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope } = plan;
-  const loadAdmit = obs ? obs.watchAdmit(admission.admit) : admission.admit;
+  const searches = plan.query !== '*' && !pinnedOnly;
+  const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
+  const poolAdmit = searchesBoth ? admission.bothStoresAdmit : admission.admit;
+  const loadAdmit = obs ? obs.watchAdmit(poolAdmit) : poolAdmit;
   const qualityDrop = (isGlobal: boolean): ((e: MemoryEntry) => void) | undefined =>
     obs && !plan.promptRecallPending ? (e) => obs.qualityDropped(e, isGlobal) : undefined;
 
   // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
-  const searchesLocalRows = plan.query !== '*' && !(hasGlobal && !primaryIsGlobal);
-  const window: ContextCandidateFilter | ContextQueryWindow = searchesLocalRows && !pinnedOnly
-    ? { query: plan.query, exactScope }
+  const window: ContextCandidateFilter | ContextQueryWindow = searches
+    ? { query: plan.query, exactScope, project: plan.originProject }
     : {
         exactScope,
         project: plan.originProject,

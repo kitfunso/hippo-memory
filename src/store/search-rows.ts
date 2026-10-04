@@ -63,6 +63,12 @@ function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | unde
   return { sql: ` AND (${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value] };
 }
 
+// In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows out of the LIMIT.
+function withProject(scope: SqlFragment, col: 'm.' | '', originProject: string | undefined): SqlFragment {
+  if (originProject === undefined) return scope;
+  return { sql: `${scope.sql} AND (${col}origin_project = '' OR ${col}origin_project = ?)`, params: [...scope.params, originProject] };
+}
+
 /** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set. */
 export function recallScopeFilter(requestedScope: string | undefined, mode: 'exact' | 'additive'): RecallScopeFilter {
   if (!requestedScope) return { mode: 'default-deny' };
@@ -94,8 +100,9 @@ function loadSearchRows(
   tenantId: string | undefined,
   scopeFilter?: RecallScopeFilter,
   includeSuperseded = true,
+  originProject?: string,
 ): MemoryRow[] {
-  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded);
+  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProject);
 
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
@@ -133,6 +140,7 @@ function searchPredicates(
   tenantId: string | undefined,
   scopeFilter: RecallScopeFilter | undefined,
   includeSuperseded: boolean,
+  originProject: string | undefined,
 ): SearchPredicates {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -164,8 +172,8 @@ function searchPredicates(
   const archivedClauseTenantOnly =
     tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
-  const aliasScope = recallScopeClause('m.', scopeFilter);
-  const plainScope = recallScopeClause('', scopeFilter);
+  const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProject);
+  const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProject);
   const scopeParams = aliasScope.params;
 
   const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
@@ -285,10 +293,11 @@ export function loadRecallSearchEntries(
   requestedScope?: string,
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
+  originProject?: string,
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded);
+    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProject);
   } finally {
     closeHippoDb(db);
   }
@@ -304,8 +313,9 @@ export function loadRecallSearchEntriesFromDb(
   requestedScope?: string,
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
+  originProject?: string,
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode), includeSuperseded).map(rowToEntry);
+  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode), includeSuperseded, originProject).map(rowToEntry);
 }
 
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */
