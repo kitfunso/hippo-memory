@@ -23,9 +23,9 @@ describe('Context.actor shape (v1.12.0)', () => {
     expect(a.role).toBe('admin');
   });
 
-  it('adminActor() builds {subject, role=admin}', () => {
+  it('adminActor() builds {subject, role=admin, hostAdmin}', () => {
     const a = adminActor('mcp');
-    expect(a).toEqual({ subject: 'mcp', role: 'admin' });
+    expect(a).toEqual({ subject: 'mcp', role: 'admin', hostAdmin: true });
   });
 
   it('member-role Actor is buildable directly', () => {

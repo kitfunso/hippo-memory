@@ -639,6 +639,8 @@ async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promi
     const id = await resolveBearer(auth.token, opts);
     const actor: Actor = { subject: id.subject, role: id.role, scopes: id.scopes };
     if (id.viaAuthResolver) actor.viaAuthResolver = true;
+    // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
+    else if (id.role === 'admin' && id.tenantId === resolveTenantId({})) actor.hostAdmin = true;
     return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor };
   }
 
@@ -653,7 +655,7 @@ async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promi
   return {
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: { subject: 'localhost:cli', role: 'admin' },
+    actor: { subject: 'localhost:cli', role: 'admin', hostAdmin: true },
   };
 }
 
@@ -688,10 +690,10 @@ async function heartbeatVerdict(req: IncomingMessage, opts: AuthOpts): Promise<'
   }
 }
 
-/** Gate for any action beyond the caller's own tenant: a resolver admin is a customer's tenant admin, never a host admin. */
+/** Gate for any action beyond the caller's own tenant: a tenant's admin, by key or resolver, is never a host admin. */
 function assertCrossTenantAdmin(ctx: Context, what: string): void {
   if (ctx.actor.role !== 'admin') throw new HttpError(403, `${what} requires admin role`);
-  if (ctx.actor.viaAuthResolver) throw new HttpError(403, `${what} requires an API-key admin`);
+  if (!ctx.actor.hostAdmin) throw new HttpError(403, `${what} requires a host admin`);
 }
 
 function getString(obj: Record<string, JsonValue>, key: string): string | undefined {
@@ -2677,6 +2679,7 @@ async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: Se
       role: ctx.actor.role,
       scopes: ctx.actor.scopes,
       viaAuthResolver: ctx.actor.viaAuthResolver,
+      hostAdmin: ctx.actor.hostAdmin,
       clientKey: buildMcpClientKey(req),
     });
   } catch (err) {

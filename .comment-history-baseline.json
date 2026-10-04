@@ -1,6 +1,6 @@
 {
   "src/ablation.ts": 1,
-  "src/api.ts": 206,
+  "src/api.ts": 205,
   "src/audit-prune.ts": 3,
   "src/audit.ts": 7,
   "src/auth.ts": 10,

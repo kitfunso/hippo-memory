@@ -13,7 +13,7 @@ import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { resolveTenantId } from '../../tenant.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
-import { adminActor, type Context } from '../../api.js';
+import type { Context } from '../../api.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -223,7 +223,7 @@ export async function handleGitHubEventsWebhook({ req, res, opts }: WebhookReque
   const ctx: Context = {
     hippoRoot: opts.hippoRoot,
     tenantId: resolvedTenant,
-    actor: adminActor('connector:github'),
+    actor: { subject: 'connector:github', role: 'admin' },
   };
 
   // Dispatch by event header. Type guards cross-check the body shape against

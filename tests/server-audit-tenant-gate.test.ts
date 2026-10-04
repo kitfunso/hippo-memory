@@ -37,10 +37,10 @@ describe('GET /v1/audit?tenant= admin gate', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  function key(role: 'admin' | 'member'): string {
+  function key(role: 'admin' | 'member', tenantId = 'acme'): string {
     const db = openHippoDb(home);
     try {
-      return createApiKey(db, { tenantId: 'acme', label: `${role}-test`, role }).plaintext;
+      return createApiKey(db, { tenantId, label: `${role}-test`, role }).plaintext;
     } finally {
       closeHippoDb(db);
     }
@@ -67,7 +67,11 @@ describe('GET /v1/audit?tenant= admin gate', () => {
     expect((await get('', k)).status).toBe(200);
   });
 
-  it('admin reading another tenant gets 200', async () => {
-    expect((await get('?tenant=other', key('admin'))).status).toBe(200);
+  it('a tenant admin reading another tenant gets 403', async () => {
+    expect((await get('?tenant=other', key('admin'))).status).toBe(403);
+  });
+
+  it('a host-tenant admin reading another tenant gets 200', async () => {
+    expect((await get('?tenant=other', key('admin', 'default'))).status).toBe(200);
   });
 });

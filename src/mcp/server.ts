@@ -30,6 +30,7 @@ import { dropHeldCopies, duplicateKey, longestWord, storedTextKeys } from '../sa
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
+import { ForbiddenError } from '../api-errors.js';
 import { retrieve as apiRetrieve, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type Actor as ApiActor, type ContextCost, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';
 import { resolveProjectIdentity, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
@@ -130,6 +131,8 @@ export interface McpContext {
   /** EI2: scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
   viaAuthResolver?: true;
+  /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */
+  hostAdmin?: true;
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
@@ -147,6 +150,7 @@ export interface McpContext {
 function mcpActor(ctx: McpContext | undefined): ApiActor {
   const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
   if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
+  if (ctx?.role === undefined || ctx.hostAdmin) actor.hostAdmin = true;
   return actor;
 }
 
@@ -1015,8 +1019,10 @@ function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): 
   const entry = readEntry(hippoRoot, result.id, tenantId);
 
   // Auto-sleep: one run per store at a time, triggered by what arrived since the last one.
+  // Consolidation is host-wide, so only the host tenant's writes may start it.
   if (
     config.autoSleep.enabled &&
+    tenantId === resolveTenantId({}) &&
     !autoSleepInFlight.has(hippoRoot) &&
     countCreatedSinceLastSleep(hippoRoot, tenantId) >= config.autoSleep.threshold
   ) {
@@ -1108,6 +1114,8 @@ function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string {
 }
 
 function runLearnTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): string {
+  // It reads the server's own git history, which belongs to the host, not to the caller's tenant.
+  if (!mcpActor(ctx).hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const days = Number(args.days) || 7;
   if (!isGitRepo(process.cwd())) return 'No git history found.';
   const gitLog = fetchGitLog(process.cwd(), days);

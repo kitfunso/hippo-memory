@@ -6,7 +6,7 @@ import { writeToDlq } from './dlq.js';
 import { resolveTenantForTeam } from './tenant-routing.js';
 import { resolveTenantId } from '../../tenant.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
-import { adminActor, type Context } from '../../api.js';
+import type { Context } from '../../api.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -140,7 +140,7 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
   const ctx: Context = {
     hippoRoot: opts.hippoRoot,
     tenantId: resolvedTenant,
-    actor: adminActor('connector:slack'),
+    actor: { subject: 'connector:slack', role: 'admin' },
   };
   if (body === undefined || !isSlackEventEnvelope(body)) {
     const db = openHippoDb(ctx.hippoRoot);

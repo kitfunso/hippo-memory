@@ -159,6 +159,8 @@ export interface Actor {
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
+  /** The host's operator (CLI, stdio MCP, keyless loopback, host-tenant admin key): may act beyond its tenant. */
+  hostAdmin?: true;
 }
 
 export interface Context {
@@ -168,14 +170,14 @@ export interface Context {
 }
 
 /**
- * Helper for building process-local (admin-by-default) Actor values. v1.12.0
- * factory used by CLI / MCP / connector Context constructors so the role
+ * Helper for building process-local Actor values (admin and host admin),
+ * used by CLI and CLI-run connector Context constructors so the role
  * boilerplate isn't repeated at every site. Bearer-authed callers (HTTP
  * /v1/*) construct Actor directly from the api_keys row's role column via
  * buildContextWithAuth in src/server.ts.
  */
 export function adminActor(subject: string): Actor {
-  return { subject, role: 'admin' };
+  return { subject, role: 'admin', hostAdmin: true };
 }
 
 /**
