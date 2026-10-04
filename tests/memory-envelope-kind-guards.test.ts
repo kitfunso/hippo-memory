@@ -9,7 +9,7 @@ import { writeEntry, readEntry, initStore } from '../src/store.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 describe('memory envelope: kind column, delete and update guards, raw_archive, round-trip', () => {
-  it('getCurrentSchemaVersion matches the constant in src/db.ts', () => {
+  it('getCurrentSchemaVersion matches the constant in src/db/migrations/index.ts', () => {
     expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
   });
 

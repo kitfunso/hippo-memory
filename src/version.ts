@@ -6,7 +6,7 @@
  * hand. scripts/check-manifest-versions.mjs gates publish on all seven sites.
  *
  * Used by:
- *   - src/db.ts rollback-safety guard (refuses to open a DB stamped with
+ *   - src/db/migrate.ts rollback-safety guard (refuses to open a DB stamped with
  *     min_compatible_binary newer than this).
  *   - src/server.ts HTTP /health.
  *   - src/mcp/server.ts MCP serverInfo.
