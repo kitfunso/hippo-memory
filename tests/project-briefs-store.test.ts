@@ -28,7 +28,7 @@ import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
 import {
   saveProjectBrief,
   closeProjectBrief,
@@ -339,13 +339,16 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     } finally { closeHippoDb(db2); }
   });
 
-  it('refresh stays within the summary cap with many long receipts (codex P2 regression)', () => {
+  it('refresh stays within the summary cap with many long receipts (codex P2 regression)', async () => {
     // 50 receipts (the MAX_BRIEF_RECEIPTS scan cap) with long headlines would build
     // an ~11KB digest if rendered naively, exceeding MAX_BRIEF_SUMMARY_LEN (8192) and
     // making saveProjectBrief reject it. Budget-aware assembly must keep it bounded.
-    for (let i = 0; i < 50; i++) {
-      addReceipt(home, 'default', 'big', `receipt ${i} ` + 'x'.repeat(300));
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 50; i++) {
+        addReceipt(home, 'default', 'big', `receipt ${i} ` + 'x'.repeat(300));
+      }
+    });
     const assembled = assembleBriefFromReceipts(home, 'default', 'big');
     expect(assembled.receiptCount).toBe(50);
     expect(assembled.markdown.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);

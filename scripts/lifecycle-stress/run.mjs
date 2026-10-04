@@ -47,7 +47,7 @@ import { embedMemory, isEmbeddingAvailable, loadEmbeddingIndex } from '../../dis
 import { physicsSearch } from '../../dist/search.js';
 import { consolidate } from '../../dist/consolidate.js';
 import { resetAllPhysicsState } from '../../dist/physics-state.js';
-import { openHippoDb, closeHippoDb } from '../../dist/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';
 
 import { injectStream, writeLabelSidecar, mulberry32 } from './inject.mjs';
@@ -129,11 +129,14 @@ async function buildStore(memories) {
   // replay.count; decayBasis and the rest keep their defaults.
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }, null, 2));
   const createdOrder = [];
-  for (const m of memories) {
-    const e = createMemory(m.content, { tags: m.tags, source: 'lse' });
-    writeEntry(root, e);
-    createdOrder.push(e.id);
-  }
+  // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+  await withSharedStoreHandles(() => {
+    for (const m of memories) {
+      const e = createMemory(m.content, { tags: m.tags, source: 'lse' });
+      writeEntry(root, e);
+      createdOrder.push(e.id);
+    }
+  });
   for (const e of loadAllEntries(root)) await embedMemory(root, e);
   return { base, root, createdOrder };
 }

@@ -13,7 +13,7 @@ import { pushGoal } from '../src/goals.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -212,15 +212,21 @@ describe('MCP hippo_recall ranking', () => {
   it('a strong match outside the 200-row lexical window still ranks', async () => {
     const s = track(seed());
     add(s, 'W1', 'alpha important decision record', { tags: ['decision', 'extracted'] });
-    for (let i = 0; i < 210; i++) add(s, `F${i}`, `alpha note ${i}`);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 210; i++) add(s, `F${i}`, `alpha note ${i}`);
+    });
     expect(observe(s, textOf(await call(s.home, { query: 'alpha', budget: 300 })))).toEqual(EXPECTED.windowEdge);
   });
 
   it('overflowed children of a level-2 summary bring the summary into the tail', async () => {
     const s = track(seed());
     const parent = add(s, 'SUM', 'rollup summary of the child notes', { dag_level: 2, tags: ['dag-summary'] });
-    for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dag_level: 0, dag_parent_id: parent.id });
-    for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dag_level: 0, dag_parent_id: parent.id });
+      for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
+    });
     expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);
   });
 

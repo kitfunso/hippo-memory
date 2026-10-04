@@ -10,6 +10,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { isContentWorthStoring } from '../src/audit.js';
 import { getContext, type Context } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { withSharedStoreHandles } from '../src/db.js';
 
 const PROJECT = 'proj-a';
 
@@ -49,11 +50,14 @@ afterEach(() => {
 
 describe('pinned-only context loads a slice, not the corpus', () => {
   it('returns a pin that sits far outside the recent window', async () => {
-    for (let i = 0; i < 60; i++) {
-      seed(local, `filler row number ${i} with enough words to be worth storing`, {
-        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-      });
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 60; i++) {
+        seed(local, `filler row number ${i} with enough words to be worth storing`, {
+          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+        });
+      }
+    });
     const oldPin = seed(local, 'the pinned decision that predates every filler row', {
       pinned: true,
       created: '2020-01-01T00:00:00.000Z',
@@ -65,10 +69,12 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('returns the newest admissible rows for the recent-N backfill', async () => {
-    const rows = Array.from({ length: 40 }, (_, i) =>
-      seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
-        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-      }),
+    const rows = await withSharedStoreHandles(() =>
+      Array.from({ length: 40 }, (_, i) =>
+        seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
+          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+        }),
+      ),
     );
 
     const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
@@ -78,12 +84,14 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('falls back to the whole store when the window is all cross-project', async () => {
-    for (let i = 0; i < 50; i++) {
-      seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
-        origin_project: 'proj-b',
-        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
-      });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 50; i++) {
+        seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
+          origin_project: 'proj-b',
+          created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+        });
+      }
+    });
     const buried = seed(local, 'the only row this project owns, far behind the window', {
       created: '2026-01-01T00:00:00.000Z',
     });
