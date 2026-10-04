@@ -9,7 +9,7 @@ import { saveItems } from '../src/compaction-record.js';
 import { listDormantSnapshots } from '../src/dormant.js';
 import { runDoctor } from '../src/doctor.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
-import { mergeProjects, planProjectRepair, repairProjects } from '../src/project-merge.js';
+import { mergeProjects, planProjectRepair, repairOnceOnSleep, repairProjects } from '../src/project-merge.js';
 import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/project-identity.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -223,5 +223,29 @@ describe('a project store with an id', () => {
       `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'svc', 'auto', ?, NULL, ?)`,
     ).run(T, svc, new Date().toISOString()));
     expect(withDb(store, (db) => planProjectRepair(db, store, T)).folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
+  });
+});
+
+describe('repair on sleep', () => {
+  it('folds the folder name of a project store once, then never runs again', () => {
+    const svc = checkout('git@github.com:acme/svc.git', 'svc');
+    const store = join(svc, '.hippo');
+    initStore(store);
+    const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
+    const first = withDb(store, (db) => repairOnceOnSleep(db, store, T));
+    expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
+    expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
+    pinned(store, 'A later row under the old name.', 'svc');
+    expect(withDb(store, (db) => repairOnceOnSleep(db, store, T))).toBeNull();
+  });
+
+  it('leaves global folds to the manual repair, since a same-named repo may never have compacted', () => {
+    initStore(w.global);
+    const a = checkout('git@github.com:acme-pay/api.git', 'pay', 'api');
+    pinned(w.global, 'OLD-API rows under the folder name.', 'api');
+    compaction('c-a', 'api', a);
+    expect(withDb(w.global, (db) => repairOnceOnSleep(db, w.global, T))).toBeNull();
+    expect(loadAllEntries(w.global).map((e) => e.origin_project)).toEqual(['api']);
+    expect(withDb(w.global, (db) => planProjectRepair(db, w.global, T)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
   });
 });

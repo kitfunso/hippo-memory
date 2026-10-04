@@ -7,6 +7,7 @@ import { containerId, containerPrefix } from './agent-memories/source.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
+import { getMeta, setMeta } from './db/meta.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
 import { processEnv } from './env.js';
 import { calculateStrength, type MemoryEntry } from './memory.js';
@@ -220,7 +221,7 @@ function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string)
 }
 
 /** The global store reads each name's recorded session folders, where a compaction's name came from its cwd; a project store folds only its own folder name. */
-function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): Pick<RepairResult, 'folds' | 'collisions'> {
+function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, globalFolds: boolean): Pick<RepairResult, 'folds' | 'collisions'> {
   // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
   const chosen = new Set(queryAuditEvents(db, { tenantId, op: 'project_merge', limit: 10000 }).map((e) => e.metadata.into));
   if (!isGlobalStoreRoot(hippoRoot)) return { folds: ownLegacyFold(db, hippoRoot, tenantId).filter((f) => !chosen.has(f.from)), collisions: [] };
@@ -241,7 +242,7 @@ function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): P
   }
   // A fold into a name that itself folds would land rows by run order; the next repair takes the rest of the chain.
   const sources = new Set(folds.map((f) => f.from));
-  return { folds: folds.filter((f) => !sources.has(f.into)), collisions };
+  return { folds: globalFolds ? folds.filter((f) => !sources.has(f.into)) : [], collisions };
 }
 
 /** A project store's rows, dormant snapshots and compaction records written before its id existed carry its folder name. */
@@ -287,8 +288,8 @@ export function namesFoldedInto(db: DatabaseSyncLike, tenantId: string, names: r
 }
 
 /** Reads only, so doctor and a dry run take no write lock; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */
-export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): Omit<RepairResult, 'backup'> {
-  const { folds, collisions } = planFolds(db, hippoRoot, tenantId);
+export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, globalFolds = true): Omit<RepairResult, 'backup'> {
+  const { folds, collisions } = planFolds(db, hippoRoot, tenantId, globalFolds);
   return { copies: strayImports(db, hippoRoot, tenantId).map((e) => e.id), folds, collisions, ...planUserGlobalRepair(db, tenantId, folds) };
 }
 
@@ -316,10 +317,10 @@ function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string, folds: rea
 
 /** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges by their parents; a dry run only plans. */
 export function repairProjects(
-  db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; dryRun: boolean },
+  db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; dryRun: boolean; globalFolds?: boolean },
 ): RepairResult {
-  const { tenantId, dryRun } = opts;
-  if (dryRun) return { ...planProjectRepair(db, hippoRoot, tenantId), backup: null };
+  const { tenantId, dryRun, globalFolds = true } = opts;
+  if (dryRun) return { ...planProjectRepair(db, hippoRoot, tenantId, globalFolds), backup: null };
   const backup = backupStore(db, hippoRoot, 'before-repair');
   const { result, rewrite, purge } = inTransaction(db, false, () => {
     const copies: string[] = [];
@@ -327,7 +328,7 @@ export function repairProjects(
       const tag = toolTag(row.source);
       if (tag !== null && setAsideRow(db, tag, row, 'project-repair').kind === 'dormant') copies.push(row.id);
     }
-    const { folds, collisions } = planFolds(db, hippoRoot, tenantId);
+    const { folds, collisions } = planFolds(db, hippoRoot, tenantId, globalFolds);
     const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
     const plan = planUserGlobalRepair(db, tenantId, []);
     const stamp = db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`);
@@ -346,6 +347,25 @@ export function repairProjects(
     };
   });
   refreshMirrors(db, hippoRoot, tenantId, rewrite, purge);
+  return result;
+}
+
+const AUTO_REPAIR_META_KEY = 'project_repair_auto';
+
+/** True when a repair would change nothing. */
+function repairIsEmpty(r: Omit<RepairResult, 'backup'>): boolean {
+  return r.copies.length + r.folds.length + r.toProject.length + r.setAside.length === 0;
+}
+
+/**
+ * Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay
+ * with `hippo projects repair`: their evidence is compaction folders, blind to a same-named repo that never compacted.
+ */
+export function repairOnceOnSleep(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): RepairResult | null {
+  if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
+  const plan = planProjectRepair(db, hippoRoot, tenantId, false);
+  const result = repairIsEmpty(plan) ? null : repairProjects(db, hippoRoot, { tenantId, dryRun: false, globalFolds: false });
+  setMeta(db, AUTO_REPAIR_META_KEY, '1');
   return result;
 }
 
