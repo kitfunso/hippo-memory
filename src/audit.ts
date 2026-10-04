@@ -5,6 +5,8 @@ import type { JsonObject } from './working-memory.js';
 import { log } from './log.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
 import type { JsonValue } from './json.js';
+import { assessAutomaticMemory, hasNoSpecificity, isReleaseCommitNoise, substantiveWordCount } from './automatic-memory-quality.js';
+export { STOP_WORDS } from './automatic-memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -21,90 +23,12 @@ export interface AuditResult {
   clean: number;
 }
 
-export const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
-  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'it',
-  'this', 'that', 'and', 'or', 'but', 'not', 'no', 'so', 'if', 'do',
-  'did', 'does', 'has', 'had', 'have', 'will', 'would', 'could', 'should',
-  'may', 'might', 'can', 'shall', 'we', 'i', 'you', 'they', 'he', 'she',
-  'my', 'our', 'your', 'its', 'his', 'her', 'their', 'up', 'out', 'just',
-  'also', 'then', 'than', 'some', 'all', 'any', 'each', 'very', 'too',
-]);
-
-const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
-
-// Han, Hiragana and Katakana carry no whitespace word boundaries, so a plain
-// \s+ split scores
-// an entire sentence as one "word" and the gate rejects real sentences as junk.
-// CJK words average ~2 characters, so approximate substantive units as one per
-// 2 CJK LETTERS.
-//
-// Two properties this must hold:
-//  1. Letters only, enforced by construction: a Katakana BLOCK range counts the
-//     middle dot and prolonged sound mark, and `\p{Script=Han}` alone counts
-//     Han NON-letters (Kangxi radicals), so the `(?=\p{L})` lookahead makes
-//     "letters only" true by definition; tests/df3-cjk-quality-floor.test.ts sweeps it.
-//
-// SCOPE, stated precisely because the constant name says "CJK": this covers
-// Han, Hiragana and Katakana only. Hangul is absent (Korean largely survives
-// the whitespace split already) and other spaceless scripts - Thai, Khmer,
-// Burmese, Lao - still hit the original one-word failure.
-//  2. ADD to the latin count, never strip before it. Stripping CJK first can
-//     REDUCE the count for short mixed tokens (`UI<han> DB<han> QA<han>` leaves
-//     three 2-char latin fragments that fail the `> 2` filter), which would
-//     reject content this gate previously accepted and make capture silently
-//     drop it. Adding keeps the change strictly more permissive - the property
-//     that makes it safe in a predicate shared with capture's write gate.
-const CJK_LETTERS = /(?=\p{L})(?:\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana})/gu;
-
-function substantiveWordCount(text: string): number {
-  const cjkLetterCount = (text.match(CJK_LETTERS) ?? []).length;
-  const latinWordCount = text
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !STOP_WORDS.has(w))
-    .length;
-  return latinWordCount + Math.floor(cjkLetterCount / 2);
-}
-
-function isVersionBump(text: string): boolean {
-  const t = text.trim();
-  // release/bump/prep/tag + version
-  if (/^(?:bump|release|prep|tag)\s+(?:to\s+)?v?\d+\.\d+/i.test(t)) return true;
-  // bare semver ("0.24.1", "v1.2.3")
-  if (/^v?\d+\.\d+\.\d+\s*$/i.test(t)) return true;
-  // chore: release 1.2.3 / chore(ci): bump v1.2.3
-  if (/^chore(?:\([^)]+\))?:\s*(?:release|bump|version|tag|prep)\b/i.test(t)) return true;
-  // Merge commits
-  if (/^(?:Merge branch|Merge pull request)\b/i.test(t)) return true;
-  // WIP sentinels
-  if (/^WIP\b/i.test(t)) return true;
-  return false;
-}
-
 function isFragment(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.startsWith('to ') && trimmed.length < 50) return true;
   if (trimmed.startsWith('for ') && trimmed.length < 50) return true;
   if (trimmed.startsWith('and ') && trimmed.length < 50) return true;
   return false;
-}
-
-function hasNoSpecificity(text: string): boolean {
-  const words = text.toLowerCase().split(/\s+/);
-  const hasNumber = /\d/.test(text);
-  const hasProperNoun = /[A-Z][a-z]{2,}/.test(text);
-  // An ACRONYM is specificity too: the proper-noun pattern needs lowercase after the capital, so
-  // "PR", "CI", "DB", "API", "S3" (the densest domain tokens in a technical memory) all read as vague.
-  // It counts only against ordinary prose (the lowercase test), else a shouted phrase bypasses the gate,
-  // and CHAT acronyms never count: the gate is shared, so "LGTM ship it" would reach recent-context slots.
-  const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|WIP|NB|PS)$/;
-  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
-  const hasAcronym = domainAcronyms.length > 0 && /[a-z]/.test(text);
-  const hasPath = /[/\\.]/.test(text);
-  const hasCode = /[`_{}()\[\]]/.test(text);
-  if (hasNumber || hasProperNoun || hasPath || hasCode || hasAcronym) return false;
-  return words.length < 8 && VAGUE_ONLY.test(text);
 }
 
 export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
@@ -128,7 +52,7 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
     return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 10 chars)' };
   }
 
-  if (isVersionBump(content)) {
+  if (isReleaseCommitNoise(content)) {
     return { memoryId: entry.id, content, severity: 'error', reason: 'release/commit noise, not a useful memory' };
   }
 
@@ -143,6 +67,11 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
 
   if (content.length < 40 && hasNoSpecificity(content)) {
     return { memoryId: entry.id, content, severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
+  }
+
+  const assessment = assessAutomaticMemory(content);
+  if (!assessment.accepted) {
+    return { memoryId: entry.id, content, severity: 'warning', reason: `automatic memory defect: ${assessment.reason}` };
   }
 
   return null;
@@ -162,14 +91,9 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
   };
 }
 
+/** Shared automatic admission and recent-context quality floor. */
 export function isContentWorthStoring(content: string): boolean {
-  const trimmed = content.trim();
-  if (trimmed.length < 10) return false;
-  if (isVersionBump(trimmed)) return false;
-  if (isFragment(trimmed)) return false;
-  if (substantiveWordCount(trimmed) < 2) return false;
-  if (trimmed.length < 40 && hasNoSpecificity(trimmed)) return false;
-  return true;
+  return assessAutomaticMemory(content).accepted;
 }
 
 // ---------------------------------------------------------------------------

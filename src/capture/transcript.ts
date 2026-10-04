@@ -153,10 +153,10 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
     '# Session Summary',
     '',
     '## User Messages',
-    ...tailUsers.map((m) => `- ${m.replace(/\s+/g, ' ').slice(0, 500)}`),
+    ...tailUsers.map((m) => `- ${m}`),
     '',
     '## Assistant Responses',
-    ...tailAssistants.map((t) => t.slice(0, 2000)),
+    ...tailAssistants,
   ].join('\n');
 }
 

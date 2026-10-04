@@ -23,7 +23,7 @@ import { rejectionDigest } from './rejection.js';
 import { escapeLike } from './escape.js';
 
 /** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, or `hippo projects repair` splitting a two-project merge. */
-export type DormantReason = 'decay' | 'source-deleted' | 'project-repair';
+export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
 export interface DormantMove {

@@ -13,6 +13,7 @@ import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
 import { neverAutoShareTags } from './shared.js';
 import { log } from './log.js';
+import { assessAutomaticMemory } from './automatic-memory-quality.js';
 
 export interface FactCluster {
   label: string;
@@ -116,6 +117,11 @@ export async function generateDagSummary(
   try {
     const data: { content?: Array<{ text?: string }> } = await res.json();
     const text = data.content?.[0]?.text?.trim() ?? '';
+    const assessment = assessAutomaticMemory(text);
+    if (!assessment.accepted) {
+      opts.onError?.(`summary quality refused: ${assessment.reason}`);
+      return null;
+    }
     return text.length >= 20 ? text : null;
   } catch (err) {
     opts.onError?.(`unparseable response: ${err instanceof Error ? err.message : String(err)}`);

@@ -340,7 +340,13 @@ export const VERB_USAGE = {
     dlq replay <id> [--force]
                            Re-ingest a DLQ entry (--force skips sig check)`],
   audit: [`
-  audit [--fix]            Check memory quality (--fix removes junk)`, `
+  audit [--fix]            Check memory quality (--fix removes junk)
+    audit repair [--apply] Preview recoverable quality repair; --apply hides eligible defects
+      --json               Report ids, reasons, protections and schema blockers as JSON
+      --global             Operate on the global store without changing its schema
+                           Keeps dormant snapshots and a database backup; undo with unreject,
+                           then dormant restore. Sleep's dormant retention still applies;
+                           the database backup remains until you remove it.`, `
   audit <sub>              Query the append-only audit log (A5 stub auth)
     audit list             List audit events for the active tenant
       --op <op>            Filter by op (remember | recall | promote |

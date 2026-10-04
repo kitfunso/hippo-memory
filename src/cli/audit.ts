@@ -9,6 +9,8 @@ import { resolveTenantId } from '../tenant.js';
 import { pruneAuditLog, parseOlderThanFlag } from '../audit-prune.js';
 import { printError } from './output.js';
 import { requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
+import { repairAutomaticMemories } from '../quality-repair.js';
+import { getGlobalRoot } from '../shared.js';
 
 // ---------------------------------------------------------------------------
 // Audit log subcommands (`hippo audit list`)
@@ -129,6 +131,22 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
 }
 
 export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
+  if (args[0] === 'repair') {
+    const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, {
+      tenantId: resolveTenantId({}), apply: flags['apply'] === true && flags['dry-run'] !== true,
+    });
+    if (flags['json']) {
+      console.log(JSON.stringify(result));
+      return;
+    }
+    console.log(`Quality repair ${flags['apply'] === true && !flags['dry-run'] ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
+    for (const issue of result.issues) console.log(`  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`);
+    for (const blocker of result.blockers) console.log(`  Blocked: ${blocker}. Schema upgrade requires explicit approval.`);
+    if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: hippo unreject <digest>, then hippo dormant restore <id>.`);
+    for (const warning of result.warnings) console.log(`Warning: ${warning}`);
+    if (!flags['apply']) console.log('Preview only. Add --apply to preserve and hide eligible defects.');
+    return;
+  }
   // `audit list` and `audit prune` -> audit-log subcommands.
   // Other forms (no sub, --fix) keep the existing memory-quality auditor
   // for backwards compatibility.
