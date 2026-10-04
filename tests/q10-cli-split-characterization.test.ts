@@ -148,7 +148,8 @@ describe('hippo hook', () => {
   it('install claude-code without a CLAUDE.md skips the file and installs settings hooks', () => {
     const r = run('hook', 'install', 'claude-code');
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain(`CLAUDE.md not found in ${root} — skipping agent-instructions patch.`);
+    // The CLI prints process.cwd(), which macOS resolves through the /var -> /private/var link.
+    expect(r.stdout).toContain(`CLAUDE.md not found in ${fs.realpathSync(root)} — skipping agent-instructions patch.`);
     expect(r.stdout).toContain('Installed hippo session-end SessionEnd hook in ');
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(false);
     expect(fs.existsSync(path.join(root, '.claude', 'settings.json'))).toBe(true);
