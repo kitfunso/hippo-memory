@@ -15,6 +15,23 @@
  */
 
 import type { RememberOpts, RememberResult } from './api.js';
+import { fetchWithRetry } from './http-retry.js';
+
+/** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
+const SERVER_TIMEOUT_MS = 30_000;
+
+/** Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the server answered busy with 503. */
+const STORE_BUSY_ATTEMPTS = 5;
+
+/** The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the auth-provider 503 has none. */
+function isStoreBusy(res: Response): boolean {
+  return res.status === 503 && res.headers.has('retry-after');
+}
+
+/** Replaying is safe because each routed write commits in one transaction and anything after it is best-effort, so a busy 503 means nothing landed. */
+function sendWrite(url: string, init: RequestInit): Promise<Response> {
+  return fetchWithRetry(url, init, { timeoutMs: SERVER_TIMEOUT_MS, attempts: STORE_BUSY_ATTEMPTS, retryOn: isStoreBusy });
+}
 
 function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   const headers: Record<string, string> = {};
@@ -61,7 +78,7 @@ export async function remember(
   apiKey: string | undefined,
   opts: RememberOpts,
 ): Promise<RememberResult> {
-  const res = await fetch(`${serverUrl}/v1/memories`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories`, {
     method: 'POST',
     headers: buildHeaders(apiKey, true),
     body: JSON.stringify(opts),
@@ -76,7 +93,7 @@ export async function forget(
   apiKey: string | undefined,
   id: string,
 ): Promise<{ ok: true; id: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: buildHeaders(apiKey, false),
   });
@@ -90,7 +107,7 @@ export async function promote(
   apiKey: string | undefined,
   id: string,
 ): Promise<{ ok: true; sourceId: string; globalId: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/promote`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/promote`, {
     method: 'POST',
     headers: buildHeaders(apiKey, false),
   });
@@ -105,7 +122,7 @@ export async function archiveRaw(
   id: string,
   reason: string,
 ): Promise<{ ok: true; archivedAt: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/archive`, {
+  const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/archive`, {
     method: 'POST',
     headers: buildHeaders(apiKey, true),
     body: JSON.stringify({ reason }),
@@ -148,5 +165,7 @@ export function classifyTransportFailure(err: unknown): TransportFailure {
     return 'delivery-unknown';
   }
   if (message.includes('socket hang up') || message.includes('fetch failed')) return 'delivery-unknown';
+  // The request was sent and the server went quiet, so it may have committed.
+  if (err.name === 'TimeoutError') return 'delivery-unknown';
   return 'none';
 }

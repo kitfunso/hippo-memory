@@ -1,0 +1,362 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hippo auth revoke, grant and ungrant (in process) > prints the same bytes and exit codes and leaves the same rows 1`] = `
+"$ auth revoke (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo auth revoke <key_id>
+
+$ auth revoke (unknown) -> 1
+--- stdout
+--- stderr
+Unknown key_id: key#4
+
+$ auth grant (no scope) -> 1
+--- stdout
+--- stderr
+Usage: hippo auth grant <key_id> <scope>
+
+$ auth grant (unknown) -> 1
+--- stdout
+--- stderr
+Unknown key_id: key#4
+
+$ auth grant (open scope) -> 1
+--- stdout
+--- stderr
+Error: team:eng is not a restricted scope; it is already readable by default
+
+$ auth grant -> 0
+--- stdout
+Granted key#3 read access to unknown:legacy
+--- stderr
+
+$ auth grant --json (again) -> 0
+--- stdout
+{"keyId":"key#3","scope":"unknown:legacy","granted":true}
+--- stderr
+
+$ auth ungrant -> 0
+--- stdout
+Removed key#3's grant on unknown:legacy
+--- stderr
+
+$ auth ungrant --json (none held) -> 0
+--- stdout
+{"keyId":"key#3","scope":"unknown:legacy","granted":false}
+--- stderr
+
+$ auth revoke (other tenant) -> 0
+--- stdout
+Revoked key#2 at <ts>
+--- stderr
+
+$ auth revoke --json (again) -> 0
+--- stdout
+{"keyId":"key#2","revokedAt":"<ts>"}
+--- stderr
+
+$ auth grant (revoked) -> 1
+--- stdout
+--- stderr
+Error: key#2 is revoked; a grant on it would never apply
+
+$ auth revoke (own tenant) -> 0
+--- stdout
+{"keyId":"key#1","revokedAt":"<ts>"}
+--- stderr
+"
+`;
+
+exports[`hippo auth revoke, grant and ungrant (in process) > prints the same bytes and exit codes and leaves the same rows 2`] = `
+"{
+ "keys": [
+  {
+   "key_id": "key#1",
+   "tenant_id": "default",
+   "revoked": 1
+  },
+  {
+   "key_id": "key#2",
+   "tenant_id": "acme",
+   "revoked": 1
+  },
+  {
+   "key_id": "key#3",
+   "tenant_id": "acme",
+   "revoked": 0
+  }
+ ],
+ "grants": [],
+ "audit": [
+  {
+   "tenant_id": "acme",
+   "actor": "cli",
+   "op": "auth_grant",
+   "target_id": "key#3",
+   "metadata_json": "{\\"scope\\":\\"unknown:legacy\\"}"
+  },
+  {
+   "tenant_id": "acme",
+   "actor": "cli",
+   "op": "auth_grant",
+   "target_id": "key#3",
+   "metadata_json": "{\\"scope\\":\\"unknown:legacy\\"}"
+  },
+  {
+   "tenant_id": "acme",
+   "actor": "cli",
+   "op": "auth_ungrant",
+   "target_id": "key#3",
+   "metadata_json": "{\\"scope\\":\\"unknown:legacy\\"}"
+  },
+  {
+   "tenant_id": "acme",
+   "actor": "cli",
+   "op": "auth_ungrant",
+   "target_id": "key#3",
+   "metadata_json": "{\\"scope\\":\\"unknown:legacy\\"}"
+  },
+  {
+   "tenant_id": "acme",
+   "actor": "cli",
+   "op": "auth_revoke",
+   "target_id": "key#2",
+   "metadata_json": "{}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "auth_revoke",
+   "target_id": "key#1",
+   "metadata_json": "{}"
+  }
+ ]
+}"
+`;
+
+exports[`hippo goal (in process) > prints the same bytes and exit codes and leaves the same rows 1`] = `
+"$ goal (no sub) -> 1
+--- stdout
+--- stderr
+Usage: hippo goal <push|list|complete|suspend|resume> [args]
+
+$ goal bogus -> 1
+--- stdout
+--- stderr
+Unknown goal subcommand: bogus. Expected: push | list | complete | suspend | resume.
+
+$ goal push (no name) -> 1
+--- stdout
+--- stderr
+Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]
+
+$ goal push (no session) -> 1
+--- stdout
+--- stderr
+session id required (set HIPPO_SESSION_ID or pass --session-id)
+
+$ goal push (valueless policy) -> 1
+--- stdout
+--- stderr
+--policy requires a value (e.g., --policy error-prioritized)
+
+$ goal push (bad policy) -> 1
+--- stdout
+--- stderr
+Unknown --policy 'fastest'. Expected one of: schema-fit-biased | error-prioritized | recency-first | hybrid.
+
+$ goal push (valueless success) -> 1
+--- stdout
+--- stderr
+--success requires a value (e.g., --success "<condition>")
+
+$ goal push (bad level) -> 1
+--- stdout
+--- stderr
+--level must be an integer in [0, 2]
+
+$ goal push (valueless parent) -> 1
+--- stdout
+--- stderr
+--parent requires a value (e.g., --parent <goalId>)
+
+$ goal push -> 0
+--- stdout
+id#1
+--- stderr
+
+$ goal push (control chars, parent) -> 0
+--- stdout
+id#2
+--- stderr
+note: stripped control characters from goal name
+
+$ goal push (other tenant) -> 0
+--- stdout
+id#3
+--- stderr
+
+$ goal push (session from env) -> 0
+--- stdout
+id#4
+--- stderr
+
+$ goal list (empty session) -> 0
+--- stdout
+(no goals)
+--- stderr
+
+$ goal list -> 0
+--- stdout
+id                  status  name              outcome
+id#1  active  ship the release  -      
+id#2  active  fix?[31m ci       -      
+id#4  active  write docs        -      
+--- stderr
+
+$ goal complete (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]
+
+$ goal complete (valueless outcome) -> 1
+--- stdout
+--- stderr
+--outcome requires a value (e.g., --outcome 0.9)
+
+$ goal complete (bad outcome) -> 1
+--- stdout
+--- stderr
+--outcome must be a number in [0, 1]
+
+$ goal complete -> 0
+--- stdout
+ok
+--- stderr
+
+$ goal complete (again) -> 0
+--- stdout
+ok
+--- stderr
+
+$ goal suspend (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo goal suspend <id>
+
+$ goal suspend -> 0
+--- stdout
+ok
+--- stderr
+
+$ goal list (suspended hidden) -> 0
+--- stdout
+id                  status  name              outcome
+id#1  active  ship the release  -      
+--- stderr
+
+$ goal list --all -> 0
+--- stdout
+id                  status     name              outcome
+id#1  active     ship the release  -      
+id#2  completed  fix?[31m ci       0.9    
+id#4  suspended  write docs        -      
+--- stderr
+
+$ goal resume (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo goal resume <id>
+
+$ goal resume -> 0
+--- stdout
+ok
+--- stderr
+
+$ goal complete --no-propagate -> 0
+--- stdout
+ok
+--- stderr
+
+$ goal list --all (after) -> 0
+--- stdout
+id                  status     name              outcome
+id#1  completed  ship the release  0.5    
+id#2  completed  fix?[31m ci       0.9    
+id#4  active     write docs        -      
+--- stderr
+
+$ goal list --tenant-id acme -> 0
+--- stdout
+id                  status  name       outcome
+id#3  active  acme goal  -      
+--- stderr
+"
+`;
+
+exports[`hippo goal (in process) > prints the same bytes and exit codes and leaves the same rows 2`] = `
+"{
+ "goals": [
+  {
+   "id": "id#1",
+   "session_id": "s1",
+   "tenant_id": "default",
+   "goal_name": "ship the release",
+   "level": 0,
+   "parent_goal_id": null,
+   "status": "completed",
+   "success_condition": "CI green",
+   "has_policy": 1,
+   "completed": 1,
+   "outcome_score": 0.5
+  },
+  {
+   "id": "id#2",
+   "session_id": "s1",
+   "tenant_id": "default",
+   "goal_name": "fix?[31m ci",
+   "level": 1,
+   "parent_goal_id": "id#1",
+   "status": "completed",
+   "success_condition": null,
+   "has_policy": 0,
+   "completed": 1,
+   "outcome_score": 0.9
+  },
+  {
+   "id": "id#3",
+   "session_id": "s1",
+   "tenant_id": "acme",
+   "goal_name": "acme goal",
+   "level": 0,
+   "parent_goal_id": null,
+   "status": "active",
+   "success_condition": null,
+   "has_policy": 0,
+   "completed": 0,
+   "outcome_score": null
+  },
+  {
+   "id": "id#4",
+   "session_id": "s1",
+   "tenant_id": "default",
+   "goal_name": "write docs",
+   "level": 0,
+   "parent_goal_id": null,
+   "status": "active",
+   "success_condition": null,
+   "has_policy": 0,
+   "completed": 0,
+   "outcome_score": null
+  }
+ ],
+ "policies": [
+  {
+   "id": "id#5",
+   "goal_id": "id#1",
+   "policy_type": "error-prioritized"
+  }
+ ]
+}"
+`;

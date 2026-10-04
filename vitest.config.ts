@@ -31,7 +31,7 @@ const AGENT_HOME_KEYS = [
 ];
 for (const k of AGENT_HOME_KEYS) delete process.env[k];
 delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
-const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY'];
+const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 
 export default defineConfig({
@@ -46,12 +46,23 @@ export default defineConfig({
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
     globalSetup: ['tests/_real-store-guard.ts'],
+    server: { deps: { external: [/tests[\\/]_coverage-provider\.ts$/] } },
     // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
     // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.
-    poolOptions: { forks: { maxForks: 6 } },
+    maxWorkers: 6,
     // Real-SQLite tests that take ~2s alone blow the 5s default under that
     // contention, and setup hooks fork more children still, so both get 30s.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    coverage: {
+      provider: 'custom',
+      customProviderModule: './tests/_coverage-provider.ts',
+      // Without include, untested src files would not count; dist/ lets spawned-CLI results through to remap.
+      include: ['src/**/*.ts', 'dist/**/*.js'],
+      autoAttachSubprocess: true,
+      excludeAfterRemap: true,
+      reporter: ['text-summary', 'json-summary'],
+      thresholds: { lines: 90, branches: 82, functions: 95, statements: 89 },
+    },
   },
 });

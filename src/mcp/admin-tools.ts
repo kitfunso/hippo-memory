@@ -1,0 +1,111 @@
+// Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
+
+import { calculateStrength } from '../memory.js';
+import { evalNow } from '../ablation.js';
+import { loadStrengthRows } from '../store/candidates.js';
+import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
+import { shareMemory, listPeers } from '../shared.js';
+import { computePredictionBaserate } from '../predictions/store.js';
+import { isJsonString, type ToolCall } from './protocol.js';
+
+export function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+  // J3 reference-class / planning-fallacy detector. Reads from the E2
+  // predictions table; returns text-only response matching the existing
+  // MCP tool convention (no structured JSON over the wire). Direct call
+  // to computePredictionBaserate; helper opens its own db + emits audit
+  // (single source of truth, no caller-site drift).
+  const classTag = String(args.class_tag || '').trim();
+  if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
+  const baserate = computePredictionBaserate(hippoRoot, tenantId, classTag, ctx?.actor ?? 'mcp');
+  if (baserate.nClosed === 0) {
+    return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute.`;
+  }
+  const lines: string[] = [baserate.summary, ''];
+  lines.push(`n_closed:         ${baserate.nClosed}`);
+  lines.push(`n_ratio_eligible: ${baserate.nRatioEligible}`);
+  if (baserate.meanEstimate !== null) lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(3)}`);
+  if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(3)}`);
+  if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(3)}x`);
+  if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(3)}x`);
+  if (baserate.mae !== null)          lines.push(`mae:              ${baserate.mae.toFixed(3)}`);
+  return lines.join('\n');
+}
+
+export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string {
+  // Every row counts toward the averages, so this scans the store, but without its text.
+  const entries = loadStrengthRows(hippoRoot, tenantId);
+  const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+  let atRisk = 0;
+  let totalStrength = 0;
+  for (const e of entries) {
+    const s = calculateStrength(e, now);
+    totalStrength += s;
+    if (s < 0.1 && !e.pinned) atRisk++;
+  }
+  const avgStrength = entries.length > 0 ? (totalStrength / entries.length).toFixed(2) : '0';
+  const pinned = entries.filter((e) => e.pinned).length;
+  const errors = entries.filter((e) => e.tags.includes('error')).length;
+  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId).length;
+  return [
+    `Memories: ${entries.length} (${pinned} pinned, ${errors} errors)`,
+    `Avg strength: ${avgStrength}`,
+    `At risk (<0.1): ${atRisk}`,
+    `Open conflicts: ${conflicts}`,
+    `Half-life default: ${config.defaultHalfLifeDays}d`,
+  ].join('\n');
+}
+
+export function runConflictsTool({ hippoRoot, tenantId }: ToolCall): string {
+  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
+  if (conflicts.length === 0) return 'No open conflicts.';
+  return conflicts.map((c) =>
+    `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
+  ).join('\n');
+}
+
+export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+  const conflictId = Number(args.conflict_id);
+  const keepId = String(args.keep || '');
+  const forget = Boolean(args.forget);
+  // AT1: optional rejectLoser + reason, threaded straight through to
+  // resolveConflict's opts (plan §5 — mirrors the CLI's --reject-loser).
+  const rejectLoser = Boolean(args.rejectLoser);
+  const reason = isJsonString(args.reason) ? args.reason : undefined;
+  if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
+  const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
+    rejectLoserValue: rejectLoser,
+    reason,
+    // P2 fix: resolveConflict's opts.rejectedBy defaults to 'cli' when
+    // omitted — this call site never passed it, so the tombstone's
+    // rejected_by AND the conflict_resolve audit's actor both landed as
+    // 'cli' even though the caller was MCP. ctx.actor carries the
+    // auth-resolved actor for HTTP-MCP (see McpContext above); stdio
+    // callers pass no ctx, so 'mcp' is the honest fallback there.
+    rejectedBy: ctx?.actor ?? 'mcp',
+  });
+  if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
+  const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
+  return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
+}
+
+export function runShareTool({ args, hippoRoot, tenantId }: ToolCall): string {
+  const shareId = String(args.id || '');
+  if (!shareId) return 'Required: id (memory ID to share).';
+  const force = Boolean(args.force);
+  // Pass tenantId so shareMemory's readEntry filters by tenant. Without
+  // this, a Bearer for tenant A could call hippo_share with tenant B's
+  // id and copy the row to the global store. The 'Memory not found'
+  // error matches the cross-tenant deny shape elsewhere in the code.
+  const shared = shareMemory(hippoRoot, shareId, { force, tenantId });
+  if (!shared) return 'Transfer score too low. Use force=true to override.';
+  return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
+}
+
+export function runPeersTool({ tenantId }: ToolCall): string {
+  // D4 v1.12.10: tenant-scope the cross-project peer discovery.
+  // tenantId is the caller's tenant (matches hippo_share above);
+  // passing undefined would restore the pre-D4 host-wide behaviour.
+  const peers = listPeers(undefined, tenantId);
+  if (peers.length === 0) return 'No peers found.';
+  return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, 10)})`).join('\n');
+}

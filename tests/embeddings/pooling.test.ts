@@ -12,7 +12,7 @@
  * least preserves enough signal for retrieval to remain functional.
  */
 import { describe, it, expect } from 'vitest';
-import { poolingFor, prefixFor } from '../../src/embeddings.js';
+import { poolingFor, prefixFor } from '../../src/local-embedding.js';
 
 describe('embeddings: poolingFor', () => {
   it('returns "cls" for BGE-base', () => {

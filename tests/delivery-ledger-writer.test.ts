@@ -18,7 +18,7 @@ import {
   type DeliveryRejectReason,
   type DeliveryStage,
 } from '../src/delivery-recorder.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 let root: string;
 let db: DatabaseSyncLike;
@@ -224,7 +224,7 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
 });
 
 describe('createDeliveryRecorder row building', () => {
-  const mem = (n: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`memory number ${n}`), id: `m${String(n).padStart(3, '0')}`, ...extra });
+  const mem = (n: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`memory number ${n}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), id: `m${String(n).padStart(3, '0')}`, ...extra });
   const recorder = (payload: Record<string, string> = {}) => createDeliveryRecorder({
     root, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit', ...payload }),

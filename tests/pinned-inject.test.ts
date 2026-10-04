@@ -3,8 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -123,7 +125,7 @@ describe('hippo context --pinned-only', () => {
     runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
 
     // Reload from disk and verify retrieval_count is still 0
-    const { loadAllEntries } = await import('../src/store.js');
+    const { loadAllEntries } = await import('../src/store/entry-reads.js');
     const reloaded = loadAllEntries(hippoDir);
     const target = reloaded.find((e) => e.id === pinned.id);
     expect(target).toBeDefined();

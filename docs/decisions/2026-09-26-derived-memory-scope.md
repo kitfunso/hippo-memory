@@ -21,7 +21,9 @@ output with no scope, so private channel text reached every caller through defau
 ## Decision
 Every producer that derives or compares memories partitions by `derivationPartitionKey`
 (tenant plus restricted scope, unrestricted scopes collapse to one bucket) and stamps the
-bucket's scope on its output. A derivation whose sources span two restricted scopes, or a
+bucket's scope on its output. Amended 2026-10-03: the key also carries `origin_project`, and
+each output keeps its bucket's origin, so sleep in the global store never blends two projects
+(tests/sleep-origin-partition.test.ts). A derivation whose sources span two restricted scopes, or a
 restricted and an unrestricted one, is not built (auto-promote skips and counts it).
 
 ## Alternatives considered

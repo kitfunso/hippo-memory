@@ -22,6 +22,7 @@ exports[`HTTP route parity under the rate limiter > throttles /v1 and /mcp but n
   },
   "health": {
     "body": {
+      "audit_write_failures": "number",
       "ok": "boolean",
       "pid": "number",
       "started_at": "string",
@@ -285,6 +286,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/c
 exports[`HTTP route parity: status, headers and body shape per route > GET /v1/customer-notes with no body on loopback 1`] = `
 {
   "body": {
+    "next_cursor": "null",
     "notes": [],
   },
   "cacheControl": null,
@@ -333,6 +335,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/d
 {
   "body": {
     "decisions": [],
+    "next_cursor": "null",
   },
   "cacheControl": null,
   "contentType": "application/json",
@@ -405,6 +408,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/i
 {
   "body": {
     "incidents": [],
+    "next_cursor": "null",
   },
   "cacheControl": null,
   "contentType": "application/json",
@@ -475,6 +479,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/p
 exports[`HTTP route parity: status, headers and body shape per route > GET /v1/policies with no body on loopback 1`] = `
 {
   "body": {
+    "next_cursor": "null",
     "policies": [],
   },
   "cacheControl": null,
@@ -546,6 +551,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/p
 exports[`HTTP route parity: status, headers and body shape per route > GET /v1/predictions with no body on loopback 1`] = `
 {
   "body": {
+    "next_cursor": "null",
     "predictions": [],
   },
   "cacheControl": null,
@@ -617,6 +623,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/p
 exports[`HTTP route parity: status, headers and body shape per route > GET /v1/processes with no body on loopback 1`] = `
 {
   "body": {
+    "next_cursor": "null",
     "processes": [],
   },
   "cacheControl": null,
@@ -665,6 +672,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/p
 {
   "body": {
     "briefs": [],
+    "next_cursor": "null",
   },
   "cacheControl": null,
   "contentType": "application/json",
@@ -711,6 +719,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/q
 exports[`HTTP route parity: status, headers and body shape per route > GET /v1/quarantine with no body on loopback 1`] = `
 {
   "body": {
+    "next_cursor": "null",
     "quarantine": [],
   },
   "cacheControl": null,
@@ -787,6 +796,7 @@ exports[`HTTP route parity: status, headers and body shape per route > GET /v1/s
 exports[`HTTP route parity: status, headers and body shape per route > GET /v1/skills with no body on loopback 1`] = `
 {
   "body": {
+    "next_cursor": "null",
     "skills": [],
   },
   "cacheControl": null,
@@ -875,8 +885,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "customer is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -923,8 +933,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "note is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -947,8 +957,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "text is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -995,8 +1005,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "text is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1019,8 +1029,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "text is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1067,8 +1077,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "resolutionText is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1091,8 +1101,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "content is required",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1115,8 +1125,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "reason is required",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1163,8 +1173,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "content is required",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1187,8 +1197,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "good is required (boolean)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1211,8 +1221,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "policyName is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1259,8 +1269,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "policyText is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1283,8 +1293,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "claim is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1307,8 +1317,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "state is required and must be one of: closed | closed-unknown",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1331,8 +1341,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "processName is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1379,8 +1389,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "steps is required (at least one step) for a supersession",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1403,8 +1413,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "repo is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1451,8 +1461,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "summary is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1475,8 +1485,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "repo is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1547,8 +1557,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "skillName is required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1595,8 +1605,8 @@ exports[`HTTP route parity: status, headers and body shape per route > POST /v1/
   },
   "cacheControl": null,
   "contentType": "application/json",
-  "error": "instructions are required (non-empty string)",
-  "status": 400,
+  "error": "invalid api key",
+  "status": 401,
 }
 `;
 
@@ -1791,6 +1801,7 @@ exports[`HTTP route parity: status, headers and body shape per route > auth, qua
   },
   "quarantine": {
     "body": {
+      "next_cursor": "null",
       "quarantine": [],
     },
     "cacheControl": null,
@@ -1892,6 +1903,7 @@ exports[`HTTP route parity: status, headers and body shape per route > incident 
           "tenantId": "string",
         },
       ],
+      "next_cursor": "null",
     },
     "cacheControl": null,
     "contentType": "application/json",
@@ -1969,6 +1981,7 @@ exports[`HTTP route parity: status, headers and body shape per route > incident 
   },
   "processes": {
     "body": {
+      "next_cursor": "null",
       "processes": [
         {
           "changeSummary": "null",
@@ -2330,6 +2343,7 @@ exports[`HTTP route parity: status, headers and body shape per route > non-route
   },
   "health": {
     "body": {
+      "audit_write_failures": "number",
       "ok": "boolean",
       "pid": "number",
       "started_at": "string",
@@ -2523,6 +2537,7 @@ exports[`HTTP route parity: status, headers and body shape per route > policy an
   },
   "policies": {
     "body": {
+      "next_cursor": "null",
       "policies": [
         {
           "changeSummary": "null",
@@ -2638,6 +2653,7 @@ exports[`HTTP route parity: status, headers and body shape per route > policy an
   },
   "skills": {
     "body": {
+      "next_cursor": "null",
       "skills": [
         {
           "changeSummary": "null",
@@ -2795,6 +2811,7 @@ exports[`HTTP route parity: status, headers and body shape per route > predictio
           "tenantId": "string",
         },
       ],
+      "next_cursor": "null",
     },
     "cacheControl": null,
     "contentType": "application/json",
@@ -2846,6 +2863,7 @@ exports[`HTTP route parity: status, headers and body shape per route > predictio
   },
   "predictions": {
     "body": {
+      "next_cursor": "null",
       "predictions": [
         {
           "actualValue": "null",
@@ -2970,6 +2988,7 @@ exports[`HTTP route parity: status, headers and body shape per route > project b
           "version": "number",
         },
       ],
+      "next_cursor": "null",
     },
     "cacheControl": null,
     "contentType": "application/json",
@@ -3037,6 +3056,7 @@ exports[`HTTP route parity: status, headers and body shape per route > project b
   },
   "notes": {
     "body": {
+      "next_cursor": "null",
       "notes": [
         {
           "changeSummary": "null",

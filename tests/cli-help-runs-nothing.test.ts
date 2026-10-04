@@ -1,17 +1,15 @@
-/** `hippo <verb> --help` prints usage and runs nothing, for every verb main() dispatches. */
+/** `hippo <verb> --help` prints usage and runs nothing, for every verb the dispatch table holds. */
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { parseArgs, usageText, verbUsage } from '../src/cli.js';
+import { COMMANDS, parseArgs, usageText, verbUsage } from '../src/cli.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
-const SRC = readFileSync(resolve(__dirname, '..', 'src', 'cli.ts'), 'utf8');
-// Read from main()'s switch so a verb added later is covered without editing this file.
-const MAIN = SRC.slice(SRC.indexOf('async function main('), SRC.indexOf('export async function runCli'));
-const VERBS = [...new Set(Array.from(MAIN.matchAll(/case '([^']*)':/g), (m) => m[1]))];
+// Read from the dispatch table so a verb added later is covered without editing this file.
+const VERBS = Object.entries(COMMANDS).flatMap(([verb, spec]) => [verb, ...('aliases' in spec ? spec.aliases : [])]);
 // No PATH, so a verb that ignored --help could not reach schtasks, crontab or codex.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
 

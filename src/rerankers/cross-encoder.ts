@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
+import { log } from '../log.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -61,7 +62,8 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
     const seq =
       mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
     return tok && seq ? { AutoTokenizer: tok, AutoModelForSequenceClassification: seq } : null;
-  } catch {
+  } catch (err) {
+    log.debug(`cross-encoder: transformers import failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -104,7 +106,8 @@ async function buildPipeline(): Promise<CrossEncoderFn | null> {
       if (!Number.isFinite(score)) throw new Error('cross-encoder returned a non-finite score');
       return score;
     };
-  } catch {
+  } catch (err) {
+    log.debug(`cross-encoder: model load failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -134,9 +137,8 @@ export const crossEncoderReranker: RerankerFn = async (
     // working reranker.
     if (!warnedOnFallback) {
       warnedOnFallback = true;
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[hippo] cross-encoder reranker unavailable (no Transformers.js backend, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
+      log.warn(
+        'cross-encoder reranker unavailable (no Transformers.js backend, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
       );
     }
     return head.map((r, i) => ({

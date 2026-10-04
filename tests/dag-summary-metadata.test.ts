@@ -12,20 +12,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry, loadAllEntries, loadEntriesByIds, loadChildrenOf } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, loadEntriesByIds, loadChildrenOf } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
-
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -59,6 +52,7 @@ describe('schema v25 — DAG summary metadata', () => {
 
   it('writeEntry round-trips descendant_count + earliest/latest_at', () => {
     const summary: MemoryEntry = createMemory('topic summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['dag-summary'],
       confidence: 'inferred',
@@ -77,9 +71,9 @@ describe('schema v25 — DAG summary metadata', () => {
   });
 
   it('loadEntriesByIds returns matching rows scoped to tenant', () => {
-    const a = createMemory('row A', { layer: Layer.Buffer, dag_level: 0 });
-    const b = createMemory('row B', { layer: Layer.Buffer, dag_level: 0 });
-    const c = createMemory('row C', { layer: Layer.Buffer, dag_level: 0, tenantId: 'other' });
+    const a = createMemory('row A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dag_level: 0 });
+    const b = createMemory('row B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dag_level: 0 });
+    const c = createMemory('row C', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dag_level: 0, tenantId: 'other' });
     writeEntry(root, a);
     writeEntry(root, b);
     writeEntry(root, c);
@@ -96,6 +90,7 @@ describe('schema v25 — DAG summary metadata', () => {
 
   it('loadChildrenOf returns direct children only, tenant scoped, in created order', () => {
     const parent: MemoryEntry = createMemory('parent', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       dag_level: 2,
     });
@@ -103,18 +98,21 @@ describe('schema v25 — DAG summary metadata', () => {
     writeEntry(root, parent);
 
     const child1: MemoryEntry = createMemory('child 1', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       dag_level: 1,
       dag_parent_id: parent.id,
     });
     child1.created = '2026-01-01T00:00:00.000Z';
     const child2: MemoryEntry = createMemory('child 2', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       dag_level: 1,
       dag_parent_id: parent.id,
     });
     child2.created = '2026-01-02T00:00:00.000Z';
     const grandchild: MemoryEntry = createMemory('grandchild', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       dag_level: 0,
       dag_parent_id: child1.id,

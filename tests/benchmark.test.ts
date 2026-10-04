@@ -21,16 +21,15 @@ import {
   Layer,
   type MemoryEntry,
 } from '../src/memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
-import { search, estimateTokens } from '../src/search.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { search } from '../src/search/bm25-search.js';
+import { estimateTokens } from '../src/token-ledger.js';
 import { markRetrieved } from '../src/memory.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,7 +46,7 @@ function daysAgo(n: number): string {
 function seed(
   label: string,
   content: string,
-  opts: Parameters<typeof createMemory>[1] = {}
+  opts: Partial<Parameters<typeof createMemory>[1]> = {}
 ): MemoryEntry {
   const entry = createMemory7(content, opts);
   // Use label as a deterministic ID fragment so tests are readable

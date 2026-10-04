@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval-suite.js';
-
-const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
+import { cmdEval } from '../src/cli/eval.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 describe('eval-suite scoring', () => {
   it('scores the synthetic corpus deterministically with every category present', async () => {
@@ -35,29 +34,36 @@ describe('eval-suite scoring', () => {
 
 describe('hippo eval --suite', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'hippo-eval-suite-')); });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'hippo-eval-suite-'));
+    vi.stubEnv('HIPPO_HOME', join(dir, 'home'));
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(dir, { recursive: true, force: true });
+  });
 
-  const run = (args: string[]) => spawnSync('node', [CLI, 'eval', '--suite', '--baseline', join(dir, 'base.json'), ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HIPPO_HOME: join(dir, 'home') } });
+  const run = (extra: Record<string, boolean> = {}) =>
+    runInProcess(() => cmdEval(join(dir, '.hippo'), null, { suite: true, baseline: join(dir, 'base.json'), ...extra }));
 
-  it('writes a baseline file on --save-baseline and then passes against it', () => {
-    const saved = run(['--save-baseline']);
+  it('writes a baseline file on --save-baseline and then passes against it', async () => {
+    const saved = await run({ 'save-baseline': true });
     expect(saved.status).toBe(0);
     const baseline = JSON.parse(readFileSync(join(dir, 'base.json'), 'utf8'));
     expect(Object.keys(baseline.features)).toHaveLength(6);
 
-    const again = run([]);
+    const again = await run();
     expect(again.status).toBe(0);
     expect(again.stdout).toContain('Verdict: PASS');
   });
 
-  it('exits 1 when the metrics fall below a saved baseline', () => {
-    run(['--save-baseline']);
+  it('exits 1 when the metrics fall below a saved baseline', async () => {
+    await run({ 'save-baseline': true });
     const baseline = JSON.parse(readFileSync(join(dir, 'base.json'), 'utf8'));
     for (const f of Object.values<{ mrr: number }>(baseline.features)) f.mrr = 2;
     writeFileSync(join(dir, 'base.json'), JSON.stringify(baseline));
 
-    const res = run([]);
+    const res = await run();
     expect(res.status).toBe(1);
     expect(res.stdout).toContain('REGRESSIONS DETECTED');
     expect(existsSync(join(dir, 'base.json'))).toBe(true);

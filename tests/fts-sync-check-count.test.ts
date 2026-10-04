@@ -5,8 +5,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'module';
-import { initStore, writeEntry, loadSearchEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadSearchEntries } from '../src/store/search-rows.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 
 const require = createRequire(import.meta.url);
@@ -22,7 +24,7 @@ let root: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-f2-fts-count-'));
   initStore(root);
-  writeEntry(root, createMemory('a distinctive gribblesnort memory row for the fts count test'));
+  writeEntry(root, createMemory('a distinctive gribblesnort memory row for the fts count test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 });
 
 afterEach(() => {

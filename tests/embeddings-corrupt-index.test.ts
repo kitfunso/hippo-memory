@@ -1,16 +1,17 @@
-// A corrupt embeddings.json must be kept aside and the index rebuilt, never saved over.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// A corrupt legacy embeddings.json found at import must be kept aside and the vectors rebuilt, never dropped silently.
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { embedMemory, embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
 let savedKey: string | undefined;
-let stderrSpy: ReturnType<typeof vi.spyOn>;
+let stderrSpy: MockInstance<typeof process.stderr.write>;
 
 // One vector per input, derived from the text so each memory gets a distinct one.
 function fakeEmbeddings(): ReturnType<typeof vi.fn> {
@@ -45,20 +46,20 @@ afterEach(() => {
 });
 
 async function remember(content: string): Promise<string> {
-  const entry = createMemory(content);
+  const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(root, entry);
   await embedMemory(root, entry);
   return entry.id;
 }
 
-describe('corrupt embeddings.json', () => {
+describe('corrupt embeddings.json at import', () => {
   it('keeps the corrupt file aside and a later remember leaves every memory with a vector', async () => {
     const first = await remember('the deploy runs on fridays');
     const second = await remember('staging uses the blue cluster');
     expect(Object.keys(loadEmbeddingIndex(root)).sort()).toEqual([first, second].sort());
 
     const fp = path.join(root, 'embeddings.json');
-    const corrupt = fs.readFileSync(fp, 'utf8').slice(0, 20);
+    const corrupt = '{"mem_cut": [0.1, 0.';
     fs.writeFileSync(fp, corrupt, 'utf8');
 
     const third = await remember('rollbacks need a ticket');
@@ -66,18 +67,19 @@ describe('corrupt embeddings.json', () => {
     const aside = asideFiles();
     expect(aside).toHaveLength(1);
     expect(fs.readFileSync(path.join(root, aside[0]!), 'utf8')).toBe(corrupt);
+    expect(fs.existsSync(fp)).toBe(false);
     expect(Object.keys(loadEmbeddingIndex(root)).sort()).toEqual([first, second, third].sort());
     const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('embeddings.json'));
     expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('[hippo] error:');
   });
 
-  it('a read alone moves the file aside and the next embed run rebuilds it', async () => {
+  it('a read alone moves the file aside and the next embed run rebuilds every vector', async () => {
     const first = await remember('the deploy runs on fridays');
     const fp = path.join(root, 'embeddings.json');
     fs.writeFileSync(fp, 'null', 'utf8');
 
-    expect(loadEmbeddingIndex(root)).toEqual({});
+    expect(Object.keys(loadEmbeddingIndex(root))).toEqual([first]);
     expect(fs.existsSync(fp)).toBe(false);
     expect(asideFiles()).toHaveLength(1);
 

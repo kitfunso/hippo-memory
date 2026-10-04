@@ -6,7 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -78,7 +79,8 @@ const promptPayload = (sessionId: string): string =>
   JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan for the deploy' });
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hook-open-count-'));
+  // Real path: the CLI logs opens by resolved path, and macOS spells the temp root through the /var symlink.
+  tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hook-open-count-')));
   projectDir = path.join(tmp, 'proj');
   localRoot = path.join(projectDir, '.hippo');
   globalRoot = path.join(tmp, 'global');

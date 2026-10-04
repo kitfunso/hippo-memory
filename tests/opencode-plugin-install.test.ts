@@ -20,8 +20,8 @@ import {
   installOpencodePlugin,
   uninstallOpencodePlugin,
   resolveOpencodePluginPath,
-  detectInstalledTools,
-} from '../src/hooks.js';
+} from '../src/hooks/opencode.js';
+import { detectInstalledTools } from '../src/hooks/shared.js';
 
 describe('OPENCODE_PLUGIN_SOURCE', () => {
   it('contains the versioned hippo marker', () => {

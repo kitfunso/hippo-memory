@@ -22,12 +22,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import type { Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember } from '../src/api.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /**
  * Parses a fetch Response body as the shape `T` the caller asserts on.
@@ -41,13 +45,6 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-ctx-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 describe('GET /v1/context', () => {
   let home: string;
   let globalHome: string;
@@ -55,8 +52,8 @@ describe('GET /v1/context', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-ctx');
+    globalHome = makeRoot('srv-ctx');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -74,7 +71,7 @@ describe('GET /v1/context', () => {
   });
 
   it('returns entries within budget (200)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 5; i++) {
       remember(ctx, { content: `ctx-route-mem-${i}` });
     }
@@ -87,7 +84,7 @@ describe('GET /v1/context', () => {
   });
 
   it('honors tight budget cap', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 10; i++) {
       remember(ctx, { content: `padding ${'x'.repeat(200)} content ${i}` });
     }
@@ -110,7 +107,7 @@ describe('GET /v1/context', () => {
     initStore(projHippo);
     const projHandle = await serve({ hippoRoot: projHippo, port: 0 });
     try {
-      const ctx = { hippoRoot: projHippo, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+      const ctx: Context = { hippoRoot: projHippo, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
       remember(ctx, { content: 'ownrow deploykey local fact' });
       // Cross-project row in the GLOBAL store (the 2026-07-01 leak shape).
       writeEntry(globalHome, {
@@ -138,7 +135,7 @@ describe('GET /v1/context', () => {
   });
 
   it('v39 secret veto at the HTTP surface: secret rows never inject, even with cross_project=1', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'harmless deploykey row' });
     // Secret-bearing rows: one cross-project, one with no origin — neither
     // may ambient-inject regardless of the cross_project override.
@@ -162,7 +159,7 @@ describe('GET /v1/context', () => {
   });
 
   it('budget=0 short-circuits to empty result', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'budget-zero' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=0`);
@@ -184,12 +181,12 @@ describe('GET /v1/context', () => {
 
   it('pinned_only filters to pinned entries only', async () => {
     // Seed: 2 unpinned + 1 pinned. Default-tenant memories.
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'unpinned-1' });
     remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
-    const { writeEntry } = await import('../src/store.js');
-    const { createMemory, Layer } = await import('../src/memory.js');
+    const { writeEntry } = await import('../src/store/entry-writes.js');
+    const { Layer } = await import('../src/memory.js');
     const pinnedEntry = createMemory('pinned-canary', {
       layer: Layer.Episodic,
       tags: ['ctx-route-test'],
@@ -218,7 +215,7 @@ describe('GET /v1/context', () => {
       session_id: 'sess-ctx-route',
       scope: null,
     });
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'snapshot-companion' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -232,8 +229,8 @@ describe('GET /v1/context', () => {
   });
 
   it('tenant scoping: default Bearer does not see tenant_b memories', async () => {
-    const ctxA = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    const ctxB = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctxA: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctxB: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctxA, { content: 'belongs-to-default' });
     remember(ctxB, { content: 'belongs-to-tenant-B' });
 
@@ -258,7 +255,7 @@ describe('GET /v1/context', () => {
   });
 
   it('q at 1024-char boundary returns 200', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'boundary-test' });
     const q = 'a'.repeat(1024);
     const res = await fetch(`${handle.url}/v1/context?q=${q}`);
@@ -266,7 +263,7 @@ describe('GET /v1/context', () => {
   });
 
   it('q=foo emits exactly one recall audit row (row-count delta)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'foo bar baz' });
     remember(ctx, { content: 'foo qux' });
     remember(ctx, { content: 'unrelated content' });
@@ -297,8 +294,8 @@ describe('GET /v1/context - ambientState field', () => {
   let handle: ServerHandle;
 
   async function startServer(ambientEnabled: boolean): Promise<void> {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-ctx');
+    globalHome = makeRoot('srv-ctx');
     writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
@@ -318,7 +315,7 @@ describe('GET /v1/context - ambientState field', () => {
 
   it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {
     await startServer(true);
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'ambient-route-marker-row' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -336,7 +333,7 @@ describe('GET /v1/context - ambientState field', () => {
 
   it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {
     await startServer(false);
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'ambient-off-marker-row' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);

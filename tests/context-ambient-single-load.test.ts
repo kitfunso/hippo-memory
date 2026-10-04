@@ -7,8 +7,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getContext, type Context } from '../src/api.js';
 import { computeAmbientState, renderAmbientSummary } from '../src/ambient.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
@@ -22,12 +23,14 @@ describe('single load: cli.ts renders getContext.ambientState instead of re-deri
     // Fallback per plan: cli.ts self-invokes main() at import time, so
     // spying on loadAllEntries in-process would trigger a real CLI dispatch.
     const cliSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli.ts'), 'utf8');
+    const contextSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli', 'context.ts'), 'utf8');
     const marker = 'if (result.ambientState) {';
-    const idx = cliSrc.indexOf(marker);
-    expect(idx, 'cli.ts should render result.ambientState').toBeGreaterThan(-1);
-    const block = cliSrc.slice(idx, idx + 150);
+    const idx = contextSrc.indexOf(marker);
+    expect(idx, 'cli/context.ts should render result.ambientState').toBeGreaterThan(-1);
+    const block = contextSrc.slice(idx, idx + 150);
     expect(block).not.toContain('loadAllEntries');
     expect(cliSrc).not.toContain('computeAmbientState');
+    expect(contextSrc).not.toContain('computeAmbientState');
   });
 
   it('behavioural pin: `hippo context` still renders the ambient summary end to end (real CLI, real store)', () => {
@@ -75,17 +78,17 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
   });
 
   it('cross-project row + private-scope row are excluded from ambientState and its rendered summary', async () => {
-    const admitted = { ...createMemory('ADMITTED-ROW stays visible in the landscape summary'), origin_project: 'proj-a' };
+    const admitted = { ...createMemory('ADMITTED-ROW stays visible in the landscape summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-a' };
     writeEntry(projA, admitted);
 
     const crossProjectRow = {
-      ...createMemory('CROSS-PROJECT-ROW belongs to a different project entirely'),
+      ...createMemory('CROSS-PROJECT-ROW belongs to a different project entirely', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       origin_project: 'proj-b',
     };
     writeEntry(projA, crossProjectRow);
 
     const privateScopeRow = {
-      ...createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', { scope: 'slack:private:C123' }),
+      ...createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:C123' }),
       origin_project: 'proj-a',
     };
     writeEntry(projA, privateScopeRow);
@@ -123,7 +126,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
 
     // Half-life 7 days, aged ~8 months before the call below: pre-retrieval
     // strength decays to near zero.
-    const aged = { ...createMemory('AGED-ROW decayed far past its half-life'), origin_project: 'proj-a' };
+    const aged = { ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-a' };
     writeEntry(projA, aged);
 
     process.env.HIPPO_FAKE_NOW = FAKE_NOW;

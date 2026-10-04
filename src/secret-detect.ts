@@ -12,7 +12,8 @@
  *    a deliberate act.
  *
  * This is deliberately a thin slice of the A4 lifecycle-compliance item
- * (no write-time scrubbing, no PII detection).
+ * (no PII detection). Write-time scrubbing covers only text no person
+ * typed into hippo; see `vetSecrets`.
  *
  * Leaf module: keep free of imports from store/api/shared so all of them
  * can import it without cycles.
@@ -24,7 +25,8 @@ export interface SecretDetection {
   reason: string | null;
 }
 
-const SECRET_TAGS = new Set([
+/** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before the lookup. */
+export const SECRET_TAGS: ReadonlySet<string> = new Set([
   'secret', 'api-key', 'apikey', 'credential', 'credentials',
   'token', 'password', 'private-key',
 ]);
@@ -112,6 +114,47 @@ export function maskEmails(text: string): string {
 /** Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and JWTs. */
 export function redactSecretsStrict(text: string): string {
   return redactText(text, true);
+}
+
+/** The text a write keeps, plus what to tell its caller about secret material in it. */
+export interface SecretVet {
+  content: string;
+  warnings: string[];
+}
+
+/** Write-time veto: `scrub` text no person typed gets capture's strict redaction; typed text is a person's own call, so it is kept and flagged. */
+export function vetSecrets(content: string, tags: readonly string[], scrub: boolean): SecretVet {
+  const kept = scrub ? redactSecretsStrict(content) : content;
+  const warnings: string[] = [];
+  if (kept !== content) {
+    const found = detectSecret({ content, tags: [] }).reason;
+    warnings.push(`secret-shaped text was redacted before storing${found ? ` (${found})` : ''}`);
+  }
+  const left = detectSecret({ content: kept, tags: [...tags] });
+  if (left.flagged) {
+    warnings.push(`content looks like a secret (${left.reason}) and was stored as sent; forget it if it should not be kept`);
+  }
+  return { content: kept, warnings };
+}
+
+const JSON_STRING = /"(?:[^"\\]|\\.)*"/g;
+
+/** Appended to a dead-letter row's error when `redactPayload` changed its body. */
+export const DLQ_REDACTED_NOTE = 'secret-shaped text redacted, signature dropped; replay needs --force';
+
+/** `vetSecrets` redaction for a raw webhook body: JSON stays valid for replay, and an untouched body stays byte-identical so its signature still verifies. */
+export function redactPayload(raw: string): string {
+  try {
+    JSON.parse(raw);
+  } catch {
+    // Not JSON, so there is no structure to keep valid; redact the raw text.
+    return redactSecretsStrict(raw);
+  }
+  return raw.replace(JSON_STRING, (literal) => {
+    const text: string = JSON.parse(literal);
+    const kept = redactSecretsStrict(text);
+    return kept === text ? literal : JSON.stringify(kept);
+  });
 }
 
 function redactText(text: string, strict: boolean): string {

@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.57.0",
+  "version": "1.62.0",
   "description": "Memory for AI agents that learns what is wrong and ranks it down. MCP server, hooks for Claude Code, OpenCode and Codex, AGENTS.md instructions for Codex, Cursor, OpenClaw and Pi. SQLite, zero runtime deps.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
@@ -30,10 +30,12 @@
   "scripts": {
     "baseline": "npm run build && npm test",
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
     "dev": "tsc --watch",
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:delivery-ledger": "vitest run tests/delivery-ledger",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
@@ -90,9 +92,11 @@
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
     "@types/node": "^22.16.0",
+    "@vitest/coverage-v8": "^5.0.3",
     "oxlint": "^1.78.0",
     "typescript": "^5.4.0",
-    "vitest": "^3.2.6"
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
   },
   "peerDependenciesMeta": {
     "@xenova/transformers": {

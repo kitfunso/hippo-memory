@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject, JsonValue } from './working-memory.js';
+import { log } from './log.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -256,6 +258,8 @@ export const AUDIT_OPS = [
   'quarantine_reject', // emitted by api.quarantineReject
   'agent_memory_restore', // emitted by the agent memory sync when a deleted note comes back
   'agent_memory_set_aside', // emitted by the agent memory sync when a note is deleted or refused
+  'project_merge', // emitted by `hippo projects merge --apply` with every id it touched
+  'project_repair', // emitted by `hippo projects repair --apply` with every id it touched
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];
@@ -316,11 +320,26 @@ export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): v
   );
 }
 
+let auditWriteFailures = 0;
+
+/** For callers that keep a mutation when its audit row fails: the failure is logged and counted, never silent. */
+export function reportAuditWriteFailure(op: AuditOp, reason: string, targetId?: string | null): void {
+  auditWriteFailures++;
+  log.error(`audit write failed: ${reason}`, { op, target: targetId ?? undefined });
+}
+
+/** Audit rows this process failed to write; the loopback `/health` body reports it. */
+export function auditWriteFailureCount(): number {
+  return auditWriteFailures;
+}
+
 export interface QueryAuditOpts {
   tenantId: string;
   op?: AuditOp;
   since?: string; // ISO timestamp
   limit?: number;
+  /** Resume after this row: the (ts, id) position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 export interface AuditEvent {
@@ -344,13 +363,15 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
     where.push('ts >= ?');
     params.push(opts.since);
   }
-  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10000));
+  const after = keysetAfter('ts', 'id', opts.after);
+  // One past the route's 10000 cap: GET /v1/audit reads a row ahead to tell whether another page exists.
+  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10001));
   // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(
-      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY ts DESC, id DESC LIMIT ?`,
+      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC LIMIT ?`,
     )
-    .all(...params, limit) as AuditRow[];
+    .all(...params, ...after.params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
 }
 
@@ -424,6 +445,7 @@ function safeJsonParse(raw: string): JsonObject {
     // `typeof v === 'object' && v !== null` check without using typeof.
     return v instanceof Object ? (v as JsonObject) : {};
   } catch {
+    // Malformed metadata reads as empty so the audit row itself stays listable.
     return {};
   }
 }

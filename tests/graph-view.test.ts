@@ -7,10 +7,7 @@
  * Canvas export, and the GET /v1/graph route. Real SQLite, no mocks.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { saveDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
@@ -23,15 +20,10 @@ import {
   type GraphModel,
 } from '../src/graph-view.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graphview-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 /** Seed: a policy + a decision that names it -> 2 entities + 1 `references` edge. */
 function seedGraph(home: string, tenant = T): void {
   savePolicy(home, tenant, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
@@ -41,7 +33,7 @@ function seedGraph(home: string, tenant = T): void {
 
 describe('graph-view: buildGraphModel (real DB)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graphview'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('1. maps entities -> nodes and relations -> edges', () => {
@@ -222,8 +214,8 @@ describe('graph-view: GET /v1/graph (live server)', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('graphview');
+    globalHome = makeRoot('graphview');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });

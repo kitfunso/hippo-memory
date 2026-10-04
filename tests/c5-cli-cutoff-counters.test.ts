@@ -29,9 +29,10 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { insertEntity, insertRelation } from '../src/graph.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { remember, type Context } from '../src/api.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
@@ -199,6 +200,7 @@ describe('C5: graph-expanded recall keeps the published accounting honest', () =
     const T = 'default';
     const mk = (text: string) => {
       const m = createMemory(text, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T,
       });
       writeEntry(root, m, { actor: 'test' });

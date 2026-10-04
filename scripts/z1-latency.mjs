@@ -14,7 +14,8 @@ const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'memory.js')));
-const { initStore, writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store.js')));
+const { initStore } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'open.js')));
+const { writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'entry-writes.js')));
 
 // Same PRNG as scripts/lifecycle-stress/inject.mjs; Math.random is banned so the corpus is reproducible.
 function mulberry32(seed) {

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Plan: stop duplicate and cross-project memories, repair existing stores</title>
+<style>
+body{font:16px/1.55 system-ui,Segoe UI,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#1d232b}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #dde}
+code{background:#f2f4f7;padding:0 .25em;border-radius:3px}table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #dde;padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:#f6f7f9}
+.ask{background:#fff7e6;border-left:4px solid #f0a020;padding:.5rem .8rem}
+</style></head><body>
+<h1>Stop duplicate and cross-project memories, and repair stores that already have them</h1>
+<p>Status: revised after outside review, then built (branch <code>feat/projects-merge-repair</code>) and dry-run plus applied on a copy of Keith's global store, 2026-10-03. On the copy, merging <code>hippo-wt-az6</code> into <code>hippo</code> set aside 78 note copies and re-tagged 44 memories and 4 compaction records in under a second; <code>repair</code> set aside 1 two-project merge and left 90 untraceable rows as they were. Scope: hippo core. Live-data changes on any real store need Keith's yes.</p>
+
+<h2>1. Prevention (new writes)</h2>
+<table><tr><th>Cause</th><th>Fix</th><th>State</th></tr>
+<tr><td>Compaction summary listed lessons already saved with <code>hippo remember</code></td><td>PreCompact instruction skips them</td><td>#395 merged, unreleased</td></tr>
+<tr><td>A git worktree got its own folder name as its project, so the Claude memory import stored one copy per worktree and hid worktree memories from the main checkout</td><td>Storeless worktree takes its repo's name</td><td>#399 merged, unreleased</td></tr>
+<tr><td>Sleep's merge, dedup, fact extraction and DAG passes ignored the project tag. A merge of two projects' notes and every extracted fact became user-global; dedup could delete a project's only visible copy; conflicts were flagged across projects and tenants; a null (unknown) project was dropped from the markdown mirror, so a rebuild stamped it user-global</td><td>Partition key carries <code>origin_project</code>; derived rows and extracted facts keep their source's project; the mirror writes <code>origin_project: null</code>; conflicts pair only rows one project's context can show</td><td>branch <code>fix/sleep-origin-partition</code>, reviewed, mutation-checked. Session traces still take the store's project: session events record none (needs a column, a schema change)</td></tr>
+</table>
+
+<h2>2. Damage already in stores (Keith's global store, read-only census)</h2>
+<table><tr><th>Class</th><th>Count</th><th>Effect today</th></tr>
+<tr><td>Claude memory-folder import copies under old worktree names</td><td>1,985</td><td>Each has an identical copy under the repo name. After #399 no checkout resolves to the old names, so they are inert bloat</td></tr>
+<tr><td>Non-import memories saved inside worktrees</td><td>548</td><td>After #399 no checkout's ambient context shows them, including the worktree they came from (explicit recall still does). This is the one class #399 made worse for existing rows</td></tr>
+<tr><td>Sleep-merged rows stamped user-global</td><td>91 (2 traced by text to <code>clawd</code> and <code>hippo</code> sources; <code>parents_json</code> is empty on the rows checked, so most cannot be traced)</td><td>In every project's context</td></tr>
+</table>
+
+<h2>3. Repair design</h2>
+<p>Revised after outside review (2026-10-03). Principles: explicit operator intent is the evidence; dry run is the default; one <code>BEGIN IMMEDIATE</code> transaction per store; tenant-scoped; a database backup is written before any change and its path printed; one audit event records every id touched; nothing is deleted, removed rows go to <code>dormant_memories</code> through <code>setAsideRow</code>.</p>
+<ol>
+<li><b><code>hippo projects</code></b> (read-only): each origin in the current store with live row counts (imported vs saved) and newest write. Hints: live worktrees come from <code>git worktree list</code> run in the current checkout, so they are exact. For other names the evidence is how many of their imported notes are copies held under another name, never a merge target. On Keith's store every old worktree name imported the same home-level notes folder, so a "shares notes with X" hint pointed at a sibling worktree and was dropped.</li>
+<li><b><code>hippo projects merge &lt;from&gt; &lt;into&gt; [--apply]</code></b>, for the resolved tenant:
+ <ul>
+ <li><code>''</code> and null are refused as either side; user-global and unknown are not projects.</li>
+ <li><b>Import rows</b> of <code>from</code> (source <code>agent-memory:&lt;tool&gt;:&lt;container&gt;/…</code>, where the container hashes folder plus origin) are copies of note files. All of them are set aside with a new <code>SetAsideWhy</code> of <code>'project-merge'</code>. The next sync under <code>into</code> re-imports every note still on disk under its own container, and a note no longer on disk was stale anyway. A pinned row comes back untagged rather than removed: restamp that result. This replaces the reviewer's prefix rewrite and same-scope text match: no folder has to be resolved, and no copy can survive under the wrong container.</li>
+ <li><b>Every other live row</b> of <code>from</code>: restamp to <code>into</code>.</li>
+ <li><b>Rows outside <code>memories</code></b> that carry origin: dormant rows (<code>entry_json</code>) and <code>compactions.origin_project</code> are restamped too, so a later restore does not come back hidden.</li>
+ <li><b>After commit</b>: purge mirrors of set-aside rows and rewrite mirrors of restamped rows, the same order <code>sync.ts</code> uses, or <code>rebuildIndex</code> brings old values back.</li>
+ <li><b>Undo</b>: no command. The backup plus the audit event's ids are the undo path. A sleep after the merge can fold restamped rows into new merged rows, which no id list can reverse.</li>
+ </ul></li>
+<li><b><code>hippo projects repair [--apply]</code></b> (built as its own subcommand, so it does not hide behind a merge), for <code>source='consolidation'</code> rows stamped <code>''</code>: if their parents (live or dormant) agree on one project, stamp that project. If the parents disagree, set the row aside; the parents re-merge per project on the next sleep. <b>Changed after a dry run on a copy of Keith's store:</b> a row with no parent left is not touched. The reviewed plan restamped it null, which would have hidden 90 of the 91 rows from every project on no evidence; some are truly user-global.</li>
+<li><b><code>hippo doctor</code></b>: one <code>projects</code> line, warning when <code>repair</code> would change a row (from the same read-only plan function). Never applies anything. Worktree names are listed by <code>hippo projects</code>, not by doctor.</li>
+</ol>
+<p>Not automatic on upgrade. Default freeze applies, and a silent restamp across a fleet is the wrong default for enterprise. Admins can script <code>merge</code> per store from the <code>projects</code> output.</p>
+
+<h2>4. Mixed-version fleets</h2>
+<p>One docs line: upgrade every hippo on the machine (a second global install, a pinned plugin) and the server, server first, before running <code>merge</code>. An older binary keeps writing worktree names and cross-project merges until it is upgraded.</p>
+
+<h2>5. Open enterprise risk: project identity is the folder name</h2>
+<p>Two different repos cloned into folders with the same name (for example <code>/workspace</code> in agent sandboxes, or <code>api</code> in two orgs) share one origin in a shared store, so each sees the other's memories. Candidate fix: an explicit project id, taken in order from <code>.hippo/project.json</code>, else the normalised git remote URL (<code>github.com/org/repo</code>), else the folder name. Existing rows keep their old origin, so the switch needs an alias table (old name to new id, per store) or a <code>projects merge</code> run per checkout. Separate plan: <code>2026-10-03-project-identity.html</code>; not in this change.</p>
+
+<h2>6. Needs Keith</h2>
+<div class="ask"><ol>
+<li>Ship <code>fix/sleep-origin-partition</code> (behaviour change in sleep, leak fix).</li>
+<li>Run on Keith's global store (each <code>--apply</code> backs up first): merge each worktree name into <code>hippo</code> or <code>hippo-enterprise</code> (about 1,985 set aside, 548 restamped), and <code>repair</code> (1 set aside, 90 left).</li>
+<li>Release #395, #399 and the above.</li>
+<li>Approve or reject the identity plan (section 5), which needs a schema change.</li>
+</ol></div>
+</body></html>

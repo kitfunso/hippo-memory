@@ -23,6 +23,7 @@ benchmarks/memory-value/results/
 .claude/worktrees/
 .context/
 provenance-coverage.json
+coverage/
 # F6 reranker hardening: dataset (15MB) + ingested store + sweep outputs
 # are large and reproducible from the orchestrator. Don't commit.
 data/longmemeval_oracle.json
@@ -73,3 +74,4 @@ benchmarks/public/results/*/predicted/
 benchmarks/public/results/**/answer_prompts/
 benchmarks/public/results/**/judge_prompts/
 __pycache__/
+.vitest/

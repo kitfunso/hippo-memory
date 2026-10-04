@@ -34,7 +34,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, Layer } from '../../dist/memory.js';
-import { writeEntry, initStore } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
 import { estimateTokens } from '../../dist/token-ledger.js';
 import { uncachedEquivalentInput, DEFAULT_CACHE_RATIOS } from '../../dist/eval-stats.js';
 
@@ -200,6 +201,6 @@ function main() {
   console.log(`\nWrote ${path.relative(REPO, outFile)}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main();
 }

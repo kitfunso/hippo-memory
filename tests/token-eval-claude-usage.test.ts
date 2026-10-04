@@ -7,7 +7,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recordTokenUse } from '../src/token-ledger.js';
 import { readTranscript, readProjects, readLedger, report } from '../scripts/token-eval/claude-usage.mjs';

@@ -7,13 +7,15 @@ import * as path from 'path';
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
+// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet bounded so a wedged git cannot stall sleep.
+const GIT_TIMEOUT_MS = 60_000;
 
 /** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on this. */
 export class GitReadError extends Error {}
 
 function runGit(args: string[], repoRoot: string): string {
   try {
-    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
+    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true });
   } catch (err) {
     throw new GitReadError(`git ${args.join(' ')} failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -22,7 +24,7 @@ function runGit(args: string[], repoRoot: string): string {
 // git grep exits 1 for "no match" -- a normal empty result, not a failure.
 function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
   try {
-    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
+    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true });
   } catch (err) {
     // SAFETY: execFileSync attaches `status` to the thrown Error on a non-zero child exit.
     const status = (err as { status?: number }).status;

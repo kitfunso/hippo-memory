@@ -11,6 +11,8 @@
  * (see `TODOS.md` A3 follow-ups for the migration path).
  */
 
+import { processEnv } from './env.js';
+
 export const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
 export const OWNER_CONTRACT_HINT =
   'Must match ^(user|agent):[A-Za-z0-9_-]+$ (e.g. user:alice, agent:capture-bot).';
@@ -66,6 +68,6 @@ export function validateOwner(
  * Returns true when strict-owner enforcement is enabled via env var.
  * Centralised here so any future bump to default-strict is one edit.
  */
-export function isStrictOwnerEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isStrictOwnerEnv(env: NodeJS.ProcessEnv = processEnv()): boolean {
   return env.HIPPO_STRICT_OWNER === '1';
 }

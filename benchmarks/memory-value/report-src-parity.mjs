@@ -108,7 +108,7 @@ function guard(cond, message) {
 // dynamically imported, only after this guard passes.
 // ---------------------------------------------------------------------------
 const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'memory-value.js');
-const DIST_STORE_PATH = path.join(REPO_ROOT, 'dist', 'store.js');
+const DIST_STORE_PATH = path.join(REPO_ROOT, 'dist', 'store', 'entry-reads.js');
 const SRC_WATCH_PATHS = [
   path.join(REPO_ROOT, 'src', 'memory-value.ts'),
   path.join(REPO_ROOT, 'src', 'memory-value-weights.ts'),

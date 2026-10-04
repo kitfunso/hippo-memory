@@ -1,11 +1,12 @@
+import { envStdinWaitMs } from './env.js';
+
 /** `timedOut` means the window closed with stdin still open, so absent
  * `text` is "unknown", not "none", and present `text` may be truncated.
  * Treating absence as a manual run is only safe when it is false. */
 export interface BoundedStdin { text?: string; timedOut: boolean; }
 
 function defaultWaitMs(): number {
-  const parsed = Number.parseInt(process.env.HIPPO_STDIN_WAIT_MS ?? '', 10);
-  return parsed > 0 ? parsed : 1000;
+  return envStdinWaitMs() ?? 1000;
 }
 
 /** Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of
@@ -13,7 +14,12 @@ function defaultWaitMs(): number {
  * so a slow but real write is not cut off, and capped at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
-  try { stdin = process.stdin; } catch { return Promise.resolve({ timedOut: false }); }
+  try {
+    stdin = process.stdin;
+  } catch {
+    // Reading process.stdin can throw when the handle is closed; that is the same as no input.
+    return Promise.resolve({ timedOut: false });
+  }
   if (stdin.isTTY) return Promise.resolve({ timedOut: false });
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];

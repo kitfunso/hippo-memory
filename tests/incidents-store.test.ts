@@ -22,15 +22,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import {
-  initStore,
-  deleteEntry,
-  writeEntry,
-} from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveIncident,
@@ -42,13 +38,7 @@ import {
   resolveActiveIncidentIdByMemory,
   VALID_INCIDENT_STATES,
 } from '../src/incidents.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -279,7 +269,7 @@ describe('incidents store (E2 first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the incident', () => {
     const inc = saveIncident(home, 'default', { incidentText: 'survives memory decay' });
     expect(inc.memoryId).not.toBeNull();
-    deleteEntry(home, inc.memoryId!, 'default');
+    deleteEntry(home, inc.memoryId!);
     const reloaded = loadIncidentById(home, 'default', inc.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();

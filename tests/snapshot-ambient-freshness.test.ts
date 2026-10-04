@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { initStore } from '../src/store/open.js';
 import {
-  initStore,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
   closeTaskSnapshotsForSession,
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
-} from '../src/store.js';
+} from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the

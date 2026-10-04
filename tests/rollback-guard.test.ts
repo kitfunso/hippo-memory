@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, statSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { pushGoalWithDb } from '../src/goals.js';
 

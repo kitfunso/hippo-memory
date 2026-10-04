@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { Card, CardDetail } from "../../types.js";
 import { fetchCardDetail, errorMessage } from "../../api/client.js";
 import { isLeaseExpired } from "./lease.js";
+import { BOARD_TOOLBAR_H } from "./layout.js";
+import { useIsPhone } from "../../hooks/useMediaQuery.js";
+import { useFocusTrap, useBodyScrollLock } from "../../hooks/useModalSheet.js";
+import { SheetHandle } from "../../components/SheetHandle.js";
 
 interface CardDialogProps {
   cardId: string;
@@ -41,11 +45,15 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-/** A card's status, runs, comments, deps and latest handoff, in a non-modal side panel. */
+/** A card's status, runs, comments, deps and latest handoff: a non-modal side panel, a modal bottom sheet on phones. */
 export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const escRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const phone = useIsPhone();
+  useFocusTrap(panelRef, phone);
+  useBodyScrollLock(phone);
 
   useEffect(() => {
     let ignore = false;
@@ -66,7 +74,7 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
     escRef.current?.focus();
   }, []);
 
-  // Nothing else in board view listens for Escape, so a plain window listener is enough.
+  // Window-level so Escape closes the dialog wherever focus is; the shell's own Escape handler only hides the Health tip.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -78,10 +86,17 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
   const now = Date.now();
 
   return (
-    <div role="dialog" aria-label="Card details" style={panelStyle}>
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Card details"
+      aria-modal={phone ? true : undefined}
+      style={phone ? sheetStyle : panelStyle}
+    >
+      {phone && <SheetHandle onClose={onClose} />}
       <div style={headerRowStyle}>
         <span style={statusLabelStyle}>{detail?.card.status ?? ""}</span>
-        <button ref={escRef} type="button" aria-label="esc, close card details" onClick={onClose} style={escButtonStyle}>
+        <button ref={escRef} type="button" aria-label="esc, close card details" onClick={onClose} style={phone ? escButtonSheetStyle : escButtonStyle}>
           esc
         </button>
       </div>
@@ -143,62 +158,70 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
   );
 }
 
-// Starts under the 48px board bar so its refresh button stays clickable with a card open.
+// Starts under the board toolbar so its refresh button stays clickable with a card open.
 const panelStyle: React.CSSProperties = {
-  position: "absolute", top: 48, right: 0, width: "min(360px, 48vw)", height: "calc(100% - 48px)",
-  background: "var(--glass-bg-strong)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
-  borderLeft: "1px solid var(--glass-border)", overflowY: "auto", zIndex: 50,
+  position: "absolute", top: BOARD_TOOLBAR_H, right: 0, width: "min(360px, 48vw)", height: `calc(100% - ${BOARD_TOOLBAR_H}px)`,
+  background: "var(--surface)",
+  borderLeft: "1px solid var(--line)", overflowY: "auto", zIndex: 50,
+};
+
+const sheetStyle: React.CSSProperties = {
+  position: "fixed", left: 0, right: 0, bottom: 0, top: "auto", width: "100%", maxHeight: "85vh",
+  background: "var(--surface)", borderTop: "1px solid var(--line)", borderRadius: "12px 12px 0 0",
+  overflowY: "auto", zIndex: 50,
 };
 
 const headerRowStyle: React.CSSProperties = {
-  padding: "20px 24px 16px", borderBottom: "1px solid var(--glass-border)",
+  padding: "20px 24px 16px", borderBottom: "1px solid var(--line)",
   display: "flex", justifyContent: "space-between", alignItems: "flex-start",
 };
 
 const statusLabelStyle: React.CSSProperties = {
-  color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.5px", textTransform: "uppercase",
+  color: "var(--text-3)", fontSize: 12, fontFamily: "var(--mono)", textTransform: "uppercase",
 };
 
 const escButtonStyle: React.CSSProperties = {
-  background: "var(--ink-faint)", border: "none", borderRadius: 4,
-  color: "var(--dim)", cursor: "pointer", padding: "4px 10px", fontSize: 11, fontFamily: "var(--font-mono)",
+  background: "var(--bg)", border: "none", borderRadius: 4,
+  color: "var(--text-3)", cursor: "pointer", padding: "4px 10px", fontSize: 12, fontFamily: "var(--mono)",
 };
+
+const escButtonSheetStyle: React.CSSProperties = { ...escButtonStyle, minHeight: 44, minWidth: 44 };
 
 const bodyStyle: React.CSSProperties = { padding: "20px 24px" };
 
 const contentTitleStyle: React.CSSProperties = {
   color: "var(--text)", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word",
-  fontFamily: "var(--font-body)", marginBottom: 20,
+  fontFamily: "var(--sans)", marginBottom: 20,
 };
 
 const gridStyle: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", fontSize: 11, marginBottom: 20,
+  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", fontSize: 12, marginBottom: 20,
 };
 
 const gridLabelStyle: React.CSSProperties = {
-  color: "var(--dim)", fontSize: 9, fontFamily: "var(--font-mono)", textTransform: "uppercase",
-  letterSpacing: "0.5px", marginBottom: 2,
+  color: "var(--text-3)", fontSize: 12, fontFamily: "var(--mono)", textTransform: "uppercase",
+  marginBottom: 2,
 };
 
 const gridValueStyle: React.CSSProperties = {
-  color: "var(--text)", fontFamily: "var(--font-mono)", wordBreak: "break-word",
+  color: "var(--text)", fontFamily: "var(--mono)", wordBreak: "break-word",
 };
 
 const sectionBodyStyle: React.CSSProperties = {
-  color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-word",
+  color: "var(--text)", fontFamily: "var(--mono)", fontSize: 12, wordBreak: "break-word",
 };
 
 const footerStyle: React.CSSProperties = {
-  fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-mono)",
-  borderTop: "1px solid var(--glass-border)", paddingTop: 12, wordBreak: "break-word",
+  fontSize: 12, color: "var(--text-3)", fontFamily: "var(--mono)",
+  borderTop: "1px solid var(--line)", paddingTop: 12, wordBreak: "break-word",
 };
 
 const errorTextStyle: React.CSSProperties = {
-  color: "var(--red)", fontFamily: "var(--font-mono)", fontSize: 11,
+  color: "var(--risk)", fontFamily: "var(--mono)", fontSize: 12,
 };
 
 const loadingTextStyle: React.CSSProperties = {
-  color: "var(--dim)", fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "2px",
+  color: "var(--text-3)", fontFamily: "var(--mono)", fontSize: 12, letterSpacing: "2px",
 };
 
 const expiredDotStyle: React.CSSProperties = {
@@ -207,6 +230,6 @@ const expiredDotStyle: React.CSSProperties = {
   height: 8,
   borderRadius: "50%",
   background: "var(--accent)",
-  boxShadow: "0 0 8px var(--accent-focus)",
+  boxShadow: "0 0 0 3px var(--accent-weak)",
   verticalAlign: "middle",
 };

@@ -2,11 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import type { Context } from '../src/api.js';
 import { backfillChannel } from '../src/connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 
-const ctx = (root: string) => ({
+const ctx = (root: string): Context => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: { subject: 'connector:slack', role: 'admin' },
@@ -34,30 +36,14 @@ describe('backfill survives 429 + Retry-After through the full loop', () => {
       phase++;
       if (phase === 1) {
         // 429 with Retry-After: 0.01 seconds → fetchWithRetry sleeps 10ms.
-        // SAFETY: fetchWithRetry only reads status/headers.get/json off this Response, and the
-        // real Response type is a superset of that shape, so the real type is assignable back
-        // onto this literal.
-        return {
-          status: 429,
-          headers: { get: (h: string) => (h.toLowerCase() === 'retry-after' ? '0.01' : null) },
-          json: async () => ({}),
-        } as Response;
+        return new Response('{}', { status: 429, headers: { 'retry-after': '0.01' } });
       }
       // Second attempt succeeds with one message.
-      // SAFETY: fetchWithRetry only reads status/headers.get/json off this Response, and the
-      // real Response type is a superset of that shape, so the real type is assignable back
-      // onto this literal.
-      return {
-        status: 200,
-        headers: { get: () => null },
-        json: async () => ({
-          ok: true,
-          messages: [
-            { type: 'message', user: 'U1', text: 'rate limit survivor', ts: '1700000001.000100' },
-          ],
-          response_metadata: { next_cursor: null },
-        }),
-      } as Response;
+      return Response.json({
+        ok: true,
+        messages: [{ type: 'message', user: 'U1', text: 'rate limit survivor', ts: '1700000001.000100' }],
+        response_metadata: { next_cursor: null },
+      });
     });
 
     const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch);

@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
+import { Layer, type MemoryEntry} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { assemble, recall, supersede, type Context } from '../src/api.js';
 
 const roots: string[] = [];

@@ -4,8 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { captureError, extractLessons, partitionLessons, deduplicateLesson, fetchGitLog, isGitRepo } from '../src/autolearn.js';
-import { initStore, writeEntry, readEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../src/invalidation.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
@@ -321,6 +323,7 @@ describe('DF4: a gated lesson still invalidates', () => {
     // deliberate rather than incidental.
     const repoRoot = path.join(repoDir, '.hippo');
     const stale = createMemory('webpack config uses HtmlWebpackPlugin for output', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['webpack', 'build'],
     });
     writeEntry(repoRoot, stale);
@@ -401,7 +404,7 @@ describe('DF4 write-path gate: MCP hippo_learn tool', () => {
 // ---------------------------------------------------------------------------
 
 describe('HOOKS config', () => {
-  const cliSource = ['cli.ts', path.join('cli', 'shared.ts')].map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
+  const cliSource = ['cli.ts', path.join('cli', 'shared.ts'), path.join('cli', 'hook-blocks.ts')].map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
 
   it('openclaw hook targets AGENTS.md', () => {
     // The openclaw entry in HOOKS should use AGENTS.md, not a skill file
@@ -478,7 +481,7 @@ describe('deduplicateLesson', () => {
 
   it('returns true when an identical lesson exists', () => {
     const lesson = 'lesson about cache refresh pipeline error';
-    const entry = createMemory(lesson);
+    const entry = createMemory(lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(tmpDir, entry);
 
     const isDup = deduplicateLesson(tmpDir, lesson);
@@ -487,7 +490,7 @@ describe('deduplicateLesson', () => {
 
   it('returns true for near-duplicate lesson (>0.7 overlap)', () => {
     const existing = 'lesson about cache refresh pipeline error fix';
-    const entry = createMemory(existing);
+    const entry = createMemory(existing, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(tmpDir, entry);
 
     const similar = 'lesson about cache refresh pipeline error bug';
@@ -497,7 +500,7 @@ describe('deduplicateLesson', () => {
 
   it('returns false for unrelated lesson', () => {
     const existing = 'lesson about cache refresh pipeline error';
-    const entry = createMemory(existing);
+    const entry = createMemory(existing, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(tmpDir, entry);
 
     const unrelated = 'completely different content about authentication tokens jwt';
@@ -525,6 +528,7 @@ describe('invalidation during git learning', () => {
   it('invalidates old memories when learning a migration commit', () => {
     // Setup: create an existing memory about webpack
     const mem = createMemory('webpack config uses HtmlWebpackPlugin for output', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['webpack', 'build'],
     });
     writeEntry(tmpDir, mem);
@@ -549,6 +553,7 @@ describe('invalidation during git learning', () => {
 
   it('does not invalidate memories for non-migration commits', () => {
     const mem = createMemory('webpack config uses HtmlWebpackPlugin for output', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['webpack', 'build'],
     });
     writeEntry(tmpDir, mem);

@@ -3,6 +3,8 @@
  * Based on the strength formula from PLAN.md.
  */
 
+import { envLossAversionRatio } from './env.js';
+import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
 import {
   isDecayAblated,
@@ -207,7 +209,7 @@ let _lossAversionRatioCache: number | undefined;
 
 function getLossAversionRatio(): number {
   if (_lossAversionRatioCache !== undefined) return _lossAversionRatioCache;
-  const raw = process.env.HIPPO_LOSS_AVERSION_RATIO;
+  const raw = envLossAversionRatio();
   if (raw === undefined || raw === '') {
     _lossAversionRatioCache = 1.0;
     return 1.0;
@@ -261,7 +263,7 @@ function applyLossAversionRatio(
  * Modulates effective half-life: memories with consistent positive outcomes
  * decay slower; consistent negative outcomes decay faster.
  */
-export function calculateRewardFactor(entry: MemoryEntry): number {
+export function calculateRewardFactor(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
   // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
   if (isOutcomeSlowAblated()) return 1.0;
   const pos = entry.outcome_positive ?? 0;
@@ -279,7 +281,7 @@ const MAX_WRONG_HALVINGS = 3;
  * Strength halves per unit (capped at 3) and recall stops strengthening
  * the memory, so a correction outranks pinning, error tags and heavy recall.
  */
-export function netWrong(entry: MemoryEntry): number {
+export function netWrong(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
   if (isOutcomeSlowAblated() || isDecayAblated()) return 0;
   return Math.max(0, (entry.outcome_negative ?? 0) - (entry.outcome_positive ?? 0));
 }
@@ -290,6 +292,12 @@ export function netWrong(entry: MemoryEntry): number {
  * - session: decay by sleep cycle count (for intermittent agents)
  * - adaptive: auto-scale half-life by session frequency (default v0.15+)
  */
+/** What calculateStrength reads, so a caller can score a row without loading its text. */
+export type StrengthInputs = Pick<
+  MemoryEntry,
+  'pinned' | 'created' | 'last_retrieved' | 'half_life_days' | 'retrieval_count' | 'emotional_valence' | 'outcome_positive' | 'outcome_negative'
+>;
+
 export interface DecayOptions {
   decayBasis?: 'clock' | 'session' | 'adaptive';
   /** Average interval between sleep cycles, in days. Used by 'adaptive' and 'session' modes. */
@@ -310,7 +318,7 @@ export interface DecayOptions {
  * Pinned memories skip time decay; being marked wrong still fades them (netWrong).
  */
 export function calculateStrength(
-  entry: MemoryEntry,
+  entry: StrengthInputs,
   // evalNow(): the real clock unless HIPPO_FAKE_NOW is set (eval-only,
   // simulated-time protocols; see ablation.ts). Explicit `now` always wins.
   now: Date = evalNow(),
@@ -387,6 +395,32 @@ export function calculateStrength(
   // Clamp to [0, 1] with NaN guard
   const clamped = Math.min(1.0, Math.max(0.0, raw));
   return Number.isFinite(clamped) ? clamped * wrongPenalty : 0.0;
+}
+
+/** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in step.
+ *  An unparseable date scores NULL here and 0 in JS, so sums agree. */
+export function strengthSql(now: Date): string {
+  const num = (n: number): string => (Number.isInteger(n) ? n.toFixed(1) : String(n));
+  const pos = 'COALESCE(outcome_positive, 0)';
+  const neg = 'COALESCE(outcome_negative, 0)';
+  const wrong = isOutcomeSlowAblated() || isDecayAblated() ? '0' : `MAX(0, ${neg} - ${pos})`;
+  const reward = isOutcomeSlowAblated()
+    ? '1.0'
+    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + 0.5 * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
+  const halfLife = `(COALESCE(half_life_days, 7) * ${reward})`;
+  const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
+  const nowJulian = num(now.getTime() / 86400000 + 2440587.5);
+  const decay = isDecayAblated() ? '1.0' : `pow(0.5, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;
+  const boost = isRecallBoostAblated()
+    ? '1.0'
+    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + 0.1 * log2(COALESCE(retrieval_count, 0) + 1) END)`;
+  const valences = /* SAFETY: a Record keyed by EmotionalValence */ Object.keys(EMOTIONAL_MULTIPLIERS) as EmotionalValence[];
+  const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
+    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v]))}`)
+    .join(' ')} ELSE 1.0 END)`;
+  const penalty = `pow(0.5, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
+  return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
+    ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
 }
 
 /**
@@ -543,12 +577,12 @@ export function createMemory(content: string, options: CreateMemoryOptions): Mem
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   const trimmed = content.trim();
   if (trimmed.length < 3) {
-    throw new Error(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+    throw new BadRequestError(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
   }
 
   const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
   if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
-    throw new Error(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
+    throw new BadRequestError(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
   }
 
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)

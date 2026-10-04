@@ -13,18 +13,15 @@
  */
 
 import { closeHippoDb } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
-import {
-  openStore,
-  deleteEntryCore,
-  purgeMirrorBestEffort,
-  selectAllEntries,
-  stampOriginProject,
-  writeEntryDbOnly,
-  writeEntryMirrors,
-} from './store.js';
+import { stampOriginProject } from './store/entry-row.js';
+import { purgeMirrorBestEffort } from './store/mirrors.js';
+import { openStore } from './store/open.js';
+import { writeEntryDbOnly, writeEntryMirrors } from './store/entry-writes.js';
+import { selectAllEntries } from './store/entry-reads.js';
+import { deleteEntryCore } from './store/delete-and-batch.js';
 import type { MemoryEntry } from './memory.js';
 import { heldTexts } from './same-text.js';
 import { mergedSuccessor } from './merged-row.js';
@@ -189,12 +186,9 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
           targetId: opts.memoryId,
           metadata: { digest, removedIds, count: removedIds.length },
         });
-      } catch {
-        // Best-effort — mirrors store.ts's private audit() semantics. This
-        // runs INSIDE the still-open transaction (COMMIT is the next
-        // statement): a swallowed audit failure lets the tombstone +
-        // removals commit without the trail row, rather than rolling the
-        // whole reject back over bookkeeping.
+      } catch (error) {
+        // Inside the open transaction: the reject commits without its trail row rather than rolling back over bookkeeping.
+        reportAuditWriteFailure('reject_value', String(error), opts.memoryId);
       }
 
       db.exec('COMMIT');
@@ -274,8 +268,8 @@ export function unrejectValue(
         targetId: target.sourceMemoryId ?? undefined,
         metadata: { digest: target.digest, reason: target.reason },
       });
-    } catch {
-      // Best-effort, same as reject's audit call above.
+    } catch (error) {
+      reportAuditWriteFailure('unreject_value', String(error), target.sourceMemoryId);
     }
     return { status: 'ok', digest: target.digest, reason: target.reason };
   } finally {

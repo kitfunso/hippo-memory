@@ -1,0 +1,22 @@
+{
+  "files": {},
+  "functions": {
+    "src/compaction-record.ts:saveItems": 81,
+    "src/config.ts:loadConfig": 127,
+    "src/dedupe.ts:deduplicateStore": 81,
+    "src/delivery-recorder.ts:createDeliveryRecorder": 185,
+    "src/doctor.ts:runDoctor": 119,
+    "src/embeddings.ts:embedAll": 89,
+    "src/eval-suite.ts:buildSyntheticCorpus": 182,
+    "src/graph-extract.ts:rebuildGraphRows": 95,
+    "src/graph-recall.ts:produceHitsForRoot": 119,
+    "src/graph-stream.ts:accumulateForRoot": 93,
+    "src/invalidation.ts:detectChurnStale": 167,
+    "src/raw-archive.ts:archiveRawMemory": 92,
+    "src/reject-flow.ts:rejectValue": 155,
+    "src/server-detect.ts:detectServer": 96,
+    "src/server.ts:serve": 164,
+    "src/server/routes/recall.ts:handleRecallMemories": 158,
+    "src/shared.ts:autoShare": 89
+  }
+}

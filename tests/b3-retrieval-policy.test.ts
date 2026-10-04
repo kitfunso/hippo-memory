@@ -15,8 +15,8 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store.js';
-import { remember } from '../src/api.js';
+import { initStore } from '../src/store/open.js';
+import { remember, type Context } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
@@ -75,7 +75,7 @@ describe('retrieval policy', () => {
   });
 
   it('error-prioritized policy ranks error-tagged > non-error within same goal', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
     remember(ctx, {
       content: 'lesson learned during auth refactor: bare except handler caused a bug',
@@ -95,7 +95,7 @@ describe('retrieval policy', () => {
   });
 
   it('final multiplier never exceeds 3.0x even with extreme policy weights', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
     // Baseline: no session → no boost.

@@ -60,6 +60,23 @@ Reading: the ranking win holds on two corpora. An answer win over the free cross
 
 Measured over 300 rerank calls of 40 candidates: p50 295 ms, p90 414 ms, max 953 ms, 300 of 300 HTTP ok, total cost 0.12 USD. That is about 0.0004 USD a recall.
 
+## CLEF transport (`clef-flash`, `clef`)
+
+`--reranker clef-flash` and `--reranker clef` send the same request as `jev` (same state, same 40-candidate pool, one `noul` question per candidate) to a CLEF decision model. Both are opt-in and off by default.
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | unset | Hosted Cloudflare Workers AI. Both must be set, or no request is made. |
+| `HIPPO_CLEF_ENDPOINT` | unset | A private CLEF server you run. When set it wins over Workers AI. Set it in your own environment; recall arguments cannot change it. |
+| `HIPPO_CLEF_ENDPOINT_TOKEN` | unset | Optional bearer token for that server. |
+| `HIPPO_CLEF_TIMEOUT_MS` | 15000 | Abort the request after this many ms. |
+
+The Workers AI reply must name the requested model and score every candidate from 0 to 1. Any failure keeps the native order and prints one warning: missing credentials, a bad status, a timeout, a wrong model, or an incomplete answer set. It never falls back to paid Jev and never reorders part of the list. Each result records the backend, the requested and reported model, token usage and any fallback reason.
+
+The CLEF weights are free to download. That does not make inference free or unlimited. Workers AI gives each account a small daily free allocation, shared with all its other usage, and bills past it. A private server costs its hardware and power. The query and candidate text leave the machine on the hosted route.
+
+No benefit is claimed yet. CLEF has not been compared with native order, the cross-encoder or Jev inside hippo; that comparison is CLF12 in ROADMAP Part XXI and has not run.
+
 ## Limits
 
 - Jev never abstains. On a query with no valid answer in the pool it still ranks something first. A high score is not proof that an answer exists.

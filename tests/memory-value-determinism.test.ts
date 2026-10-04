@@ -27,19 +27,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { evaluateAll } from '../benchmarks/memory-value/evaluate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { _resetAblationCacheForTests } from '../dist/ablation.js';
 
 import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
@@ -79,6 +72,9 @@ describe('cross-ingest determinism (codex review P1 fix verification)', () => {
       const runA = await ingestSimExtractUnder(rootA);
       const runB = await ingestSimExtractUnder(rootB);
 
+      // SAFETY: evaluateAll returns summary.train as scorer -> budget -> { meanRetention } (evaluate.mjs); the inferred type is {}.
+      const trainOf = (r: { evalResult: { summary: unknown } }) => (r.evalResult.summary as { train: Record<string, Record<number, { meanRetention: number } | undefined>> }).train;
+
       // (1) retention identical for EVERY scorer x budget (not just recency) —
       // this is the property the previous memory_id-primary tie-break broke.
       // SAFETY: evaluateAll (evaluate.mjs) returns { scorers: string[], ... }
@@ -86,8 +82,8 @@ describe('cross-ingest determinism (codex review P1 fix verification)', () => {
       // evalResult is untyped at the import boundary.
       for (const scorerName of runA.evalResult.scorers as string[]) {
         for (const budget of budgets) {
-          const a = runA.evalResult.summary.train[scorerName]?.[budget];
-          const b = runB.evalResult.summary.train[scorerName]?.[budget];
+          const a = trainOf(runA)[scorerName]?.[budget];
+          const b = trainOf(runB)[scorerName]?.[budget];
           expect(b?.meanRetention, `${scorerName}@${budget}`).toBe(a?.meanRetention);
         }
       }

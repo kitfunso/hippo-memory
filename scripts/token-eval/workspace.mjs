@@ -122,7 +122,7 @@ function rm(p) {
 
 // NTFS and Git for Windows match names in any case, so OBJECTS or .GIT is a repo piece there too.
 const fold = (name) => (win ? name.toLowerCase() : name);
-// Hippo's store never uses these names (src/store.ts), so in a kept .hippo each marks a repo or a piece of one.
+// Hippo's store never uses these names (src/store/), so in a kept .hippo each marks a repo or a piece of one.
 const GIT_NAMES = new Set(['.git', 'objects', 'refs', 'packed-refs', 'HEAD', 'commondir', 'gitdir'].map(fold));
 const holdsRepo = (entries) => entries.some((e) => ['.git', 'objects', 'commondir', 'gitdir'].includes(fold(e.name)));
 const GIT_MAGIC = ['# v2 git bundle', '# v3 git bundle', 'PACK\0\0\0\x02', 'PACK\0\0\0\x03'].map((s) => Buffer.from(s, 'latin1'));

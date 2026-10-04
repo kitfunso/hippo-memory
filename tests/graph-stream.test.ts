@@ -8,30 +8,23 @@
  * the seed-linked-to-another-seed case).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { insertEntity, insertRelation } from '../src/graph.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { insertEntity, insertRelation } from '../src/graph/write.js';
 import {
   selectGraphSeeds,
   graphRankStream,
   type GraphSeed,
 } from '../src/graph-stream.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graphstream-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 function mem(home: string, tenant: string, text: string): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
-  const m = createMemory(content, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
+  const m = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
   writeEntry(home, m, { actor: 'test' });
   return m;
 }
@@ -42,7 +35,7 @@ const seed = (index: number, strength = 1.0): GraphSeed => ({ index, strength })
 /** Like `mem`, but with an explicit envelope scope (v1.26.1 pool-only pinning case). */
 function scopedMem(home: string, tenant: string, text: string, scope: string): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
-  const m = createMemory(content, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant, scope });
+  const m = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant, scope });
   writeEntry(home, m, { actor: 'test' });
   return m;
 }
@@ -70,7 +63,7 @@ describe('selectGraphSeeds (pure)', () => {
 describe('L1 graphRankStream (real SQLite)', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graphstream'); });
   afterEach(() => safeRmSync(home));
 
   it('scores a 1-hop neighbour; excludes the seed and unrelated in-pool entries', () => {
@@ -197,7 +190,7 @@ describe('L1 graphRankStream (real SQLite)', () => {
   });
 
   it('expands across the global store (a global seed reaches a global neighbour)', () => {
-    const glob = makeRoot();
+    const glob = makeRoot('graphstream');
     try {
       const g = mem(glob, T, 'global seed'); const gn = mem(glob, T, 'global neighbour');
       const eg = ent(glob, T, g, 'G'); const egn = ent(glob, T, gn, 'GN');

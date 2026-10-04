@@ -1,3 +1,4 @@
+import { envTenant } from './env.js';
 import type { DatabaseSyncLike } from './db.js';
 import { validateApiKey } from './auth.js';
 
@@ -16,8 +17,7 @@ export function resolveTenantId(opts: ResolveOpts): string {
   // L1: empty / whitespace-only HIPPO_TENANT must fall through to 'default'.
   // `??` only catches undefined, so HIPPO_TENANT="" leaked through as the
   // literal empty string and broke every downstream tenant filter.
-  const t = process.env.HIPPO_TENANT?.trim();
-  return t ? t : 'default';
+  return envTenant();
 }
 
 /** A value that round-trips through JSON.stringify/JSON.parse unchanged. */

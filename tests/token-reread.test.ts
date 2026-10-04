@@ -5,10 +5,13 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { appendSessionEvent, initStore, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { runDoctor } from '../src/doctor.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
   estimateTokens,
@@ -404,6 +407,18 @@ describe('compact-resume books the block it prints', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('hippo compact-resume: skipped:');
+  });
+
+  it('reports the skip reason through the logger, so HIPPO_LOG=error silences it', () => {
+    const store = join(proj, '.hippo');
+    initStore(store);
+    writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
+    for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
+    const loud = hippo(['compact-resume'], proj, env, payload);
+    expect(loud.stderr).toContain('[hippo] warn: hippo compact-resume: skipped:');
+    const quiet = hippo(['compact-resume'], proj, { ...env, HIPPO_LOG: 'error' }, payload);
+    expect([quiet.status, quiet.stdout]).toEqual([0, '']);
+    expect(quiet.stderr).not.toContain('compact-resume');
   });
 });
 

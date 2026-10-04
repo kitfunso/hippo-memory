@@ -6,8 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
 import { pushGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
@@ -19,9 +20,9 @@ const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 
 let template: string;
 let goalId = '';
 
-function seeded(content: string, id: string, created: string, extra: Partial<MemoryEntry> = {}, opts: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
+function seeded(content: string, id: string, created: string, extra: Partial<MemoryEntry> = {}, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
   // createMemory decays strength over the real milliseconds it runs, so a fixed value keeps snapshots stable.
-  return { ...createMemory(content, opts), id, created, last_retrieved: created, valid_from: created, strength: 1, ...extra };
+  return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts }), id, created, last_retrieved: created, valid_from: created, strength: 1, ...extra };
 }
 
 function seedLocal(hippoRoot: string): void {

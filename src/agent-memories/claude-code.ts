@@ -1,9 +1,9 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user folder.
 import fs from 'node:fs';
 import path from 'node:path';
-import { realpathOrResolve } from '../project-identity.js';
+import { deriveOriginProject, realpathOrResolve } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks.js';
+import { isJsonObject } from '../hooks/shared.js';
 import type { JsonValue } from '../working-memory.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
@@ -48,22 +48,67 @@ export const claudeCodeAdapter: Adapter = {
   },
 };
 
-/** Post-compact's read: the session's own notes folder and nothing else, so no git call runs inside the hook's time limit. */
+/** A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time limit. */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
   const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
   const folder = path.join(path.dirname(transcriptPath), 'memory');
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
 }
 
+/** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder, else cwd or a parent; null when none matches. */
+export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): string | null {
+  const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
+  const folder = fold(path.basename(path.dirname(transcriptPath)));
+  const start = transcriptStartCwd(transcriptPath);
+  const pinned = pinnedProjectDirName(machine.env);
+  if (pinned !== null && fold(pinned) === folder) {
+    // A pinned name stands for whatever project the session ran in, so its start folder decides.
+    const from = start ?? cwd;
+    return from !== null && fs.existsSync(from) ? deriveOriginProject(from) : null;
+  }
+  for (const from of [start, cwd]) {
+    for (let dir = from === null ? null : path.resolve(from); dir !== null; dir = path.dirname(dir) === dir ? null : path.dirname(dir)) {
+      // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
+      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return fs.existsSync(dir) ? deriveOriginProject(dir) : null;
+    }
+  }
+  return null;
+}
+
+// Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with room to spare.
+const START_SCAN_BYTES = 64 * 1024;
+
+/** The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder name alone cannot give back. */
+function transcriptStartCwd(transcriptPath: string): string | null {
+  if (!fs.existsSync(transcriptPath)) return null;
+  const fd = fs.openSync(transcriptPath, 'r');
+  try {
+    const buf = Buffer.alloc(START_SCAN_BYTES);
+    const lines = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').split('\n');
+    for (const line of lines) {
+      const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
+      if (cwd === undefined) continue;
+      // SAFETY: the match is the body of one JSON string, so parsing it in quotes yields a string.
+      return JSON.parse(`"${cwd}"`) as string;
+    }
+    return null;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function projectFolders(ctx: AdapterContext, config: string): string[] {
   const projects = path.join(config, 'projects');
   const names = ctx.projectRoot === undefined ? [] : [...claudeMemoryFolderNames(ctx.projectRoot, ctx.platform)];
-  const pinned = ctx.env.CLAUDE_CODE_PROJECT_DIR_NAME;
+  const pinned = pinnedProjectDirName(ctx.env);
+  if (pinned !== null) names.push(pinned);
+  return names.map((name) => path.join(projects, name, 'memory'));
+}
+
+function pinnedProjectDirName(env: AdapterContext['env']): string | null {
+  const pinned = env.CLAUDE_CODE_PROJECT_DIR_NAME;
   // Claude reads the pinned name only alongside a pinned config folder.
-  if (ctx.env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned)) names.push(pinned);
-  const folders = names.map((name) => path.join(projects, name, 'memory'));
-  if (ctx.transcriptPath) folders.push(path.join(path.dirname(ctx.transcriptPath), 'memory'));
-  return folders;
+  return env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned) ? pinned : null;
 }
 
 function userFolders(ctx: AdapterContext, config: string, warnings: string[]): string[] {

@@ -3,7 +3,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { initStore, listSessionEvents, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { listSessionEvents } from '../src/store/sessions.js';
 import { createMemory } from '../src/memory.js';
 import { renderTraceContent, parseSteps } from '../src/trace.js';
 

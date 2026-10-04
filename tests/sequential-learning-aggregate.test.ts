@@ -10,12 +10,10 @@ import {
   ciHalfWidth95,
   aggregatePhases,
   pairedPermutationCI,
-  // @ts-expect-error -- .mjs has no .d.ts; runtime ESM is fine
 } from '../benchmarks/sequential-learning/aggregate.mjs';
 import {
   generateTasks,
   TRAP_PLACEMENTS,
-  // @ts-expect-error -- .mjs has no .d.ts
 } from '../benchmarks/sequential-learning/traps.mjs';
 
 // ---------------------------------------------------------------------------
@@ -135,6 +133,7 @@ describe('generateTasks(seed) (v1.7.5)', () => {
     expect(a).toEqual(b);
     // Specifically: position 2 still maps to overwrite_production canonical map.
     const trapAt2 = a.find((t: { id: number }) => t.id === 2);
+    if (!trapAt2) throw new Error('no task at position 2');
     expect(trapAt2.trapCategory).toBe('overwrite_production');
   });
 

@@ -3,12 +3,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site awaits a `fetch()` response from the local test server started
@@ -16,19 +15,13 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-assemble-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 
 let home: string;
 let handle: ServerHandle;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-assemble');
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 
@@ -41,6 +34,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
   it('200 with items + counts for a real session', async () => {
     for (let i = 0; i < 4; i++) {
       const e = createMemory(`http session message ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         confidence: 'observed',
         kind: 'raw',
@@ -83,11 +77,13 @@ describe('GET /v1/sessions/:id/assemble', () => {
   it('summarizeOlder=0 disables substitution', async () => {
     // 3 raws under one parent + parent summary. Without summarize: 3 items.
     const summary = createMemory('topic alpha rollup http', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'],
     });
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
       const e = createMemory(`older detail ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         confidence: 'observed',
         kind: 'raw',

@@ -12,7 +12,7 @@ import { stateCommit, holdPre, dropPre, runCheck } from '../scripts/token-eval/c
 import { stubBaseCommit, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
 import { runScreen } from '../scripts/token-eval/screen.mjs';
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
-import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract';
+import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;
@@ -89,7 +89,8 @@ const task = (r: FixtureRepo, id: string, prompt: string, extra: Partial<TaskDef
 const teach = (r: FixtureRepo, id: string, lessonId: string, prompt: string, extra: Partial<TaskDef> = {}) => task(r, id, prompt, { kind: 'teach', familyId: lessonId.split('-')[0], lessonId, ...extra });
 const apply = (r: FixtureRepo, id: string, lessonId: string, prompt: string, extra: Partial<TaskDef> = {}) => task(r, id, prompt, { kind: 'apply', familyId: lessonId.split('-')[0], lessonId, ...extra });
 const plain = (r: FixtureRepo, id: string) => task(r, id, 'look around only');
-const spec = (r: FixtureRepo, families: FamilyDef[], tasks: TaskDef[]) => validateTasks({ families, sequences: [{ id: 'seqF', cluster: 'c', repo: r.repo, fixedOrder: true, tasks }] }, CHECKS);
+interface Spec { families: FamilyDef[]; sequences: Array<{ id: string; cluster: string; repo: string; fixedOrder: boolean; tasks: TaskDef[] }> }
+const spec = (r: FixtureRepo, families: FamilyDef[], tasks: TaskDef[]): Spec => validateTasks({ families, sequences: [{ id: 'seqF', cluster: 'c', repo: r.repo, fixedOrder: true, tasks }] }, CHECKS);
 /** The usual reversal family: f1-l1 then f1-l2 superseding it. */
 const reversal = (l1: Partial<LessonDef> = {}, l2: Partial<LessonDef> = {}) => family('f1', [lesson('f1-l1', 'Write the lesson file', l1), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...l2 })]);
 
@@ -234,7 +235,7 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     for (const arm of ['A0', 'A1', 'A2', 'A4', 'A5']) {
       const get = (id: string) => find(recs, arm, id);
       expect(get('t1'), arm).toMatchObject({ kind: 'teach', set: 'R', teachTurns: 1, correctionTurns: 0, teachForm: 'confirmation', lessons: [{ lessonId: 'f1-l1', first: 'pass', final: 'pass', staleFollow: null }] });
-      expect(get('t1').usage.extra.outputTokens, arm).toBeGreaterThan(0);
+      expect(get('t1').usage?.extra.outputTokens, arm).toBeGreaterThan(0);
       expect(get('t2'), arm).toMatchObject({ teachForm: 'correction', lessons: [{ lessonId: 'f1-l2', first: 'fail', final: 'pass' }] });
       expect(get('a1'), arm).toMatchObject({ kind: 'apply', applyIndex: 1, afterReversal: false, tasksSinceTeach: 2, teachTurns: 0, correctionTurns: 1, teachForm: null, lessons: [{ first: 'fail', final: 'pass', staleFollow: null }] });
       expect(get('a3'), arm).toMatchObject({ applyIndex: 2, afterReversal: true, tasksSinceTeach: 2, lessons: [{ lessonId: 'f1-l2', staleFollow: true }] });
@@ -328,7 +329,7 @@ describe('A4 and invalid shapes', () => {
     for (const id of ['n1', 'n2', 'a1', 't2']) expect(seen(out, 'A4', id)['CLAUDE.md'], id).toBe(STUB_CLAUDE_MD + line(l1));
     for (const id of ['n3', 'n4', 'a3']) expect(seen(out, 'A4', id)['CLAUDE.md'], id).toBe(STUB_CLAUDE_MD + line(l2));
     for (const id of ['t1', 'n1', 'a1', 'a3']) expect(seen(out, 'A0', id)['CLAUDE.md'], id).toBe(STUB_CLAUDE_MD);
-    const steps = planRuns(s, ['A0', 'A1', 'A2', 'A4', 'A5']);
+    const steps: Array<{ arm: string; seed: number; taskId: string; position: number }> = planRuns(s, ['A0', 'A1', 'A2', 'A4', 'A5']);
     const a4Seeds = new Set(steps.filter((x) => x.arm === 'A4').map((x) => x.seed));
     expect([...a4Seeds].sort()).toEqual([1, 2]);
   }, 300_000);
@@ -638,8 +639,8 @@ describe('usage limits around resumes', () => {
 describe('drawn order in the plan', () => {
   it('plan cells follow the drawn order per seed and carry kind, familyId and set; the dry run prints orders and spacing', () => {
     const file = join(CHECKS, 'toy-tasks.json');
-    const s = validateTasks(JSON.parse(readFileSync(file, 'utf8')), CHECKS);
-    const steps = planRuns(s, ['A0', 'A4'], () => 2);
+    const s: Spec = validateTasks(JSON.parse(readFileSync(file, 'utf8')), CHECKS);
+    const steps: Array<{ seed: number; taskId: string; position: number }> = planRuns(s, ['A0', 'A4'], () => 2);
     for (const seed of [1, 2]) {
       const order = drawOrder(s.sequences[0], s.families, seed);
       for (const st of steps.filter((x) => x.seed === seed)) expect(st.taskId).toBe(order[st.position]);
@@ -650,6 +651,7 @@ describe('drawn order in the plan', () => {
     const plan = readPlan(out);
     for (const c of plan) {
       const t = s.sequences[0].tasks.find((x) => x.id === c.taskId);
+      if (!t) throw new Error(`plan cell names unknown task ${c.taskId}`);
       expect(c).toMatchObject({ kind: t.kind, familyId: t.familyId ?? null, set: t.kind === 'no-lesson' ? 'N' : 'R' });
       expect(c.taskId).toBe(drawOrder(s.sequences[0], s.families, c.seed)[c.position]);
     }

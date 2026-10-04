@@ -1,7 +1,8 @@
+import { BadRequestError, NotFoundError } from './api-errors.js';
 import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
-import { appendAuditEvent } from './audit.js';
-import { markSummaryDirtyInTx } from './store.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
 
 export interface ArchiveOpts {
   reason: string;
@@ -39,9 +40,9 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
   const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as
     | ArchivedMemoryRow
     | undefined;
-  if (!row) throw new Error(`memory not found: ${id}`);
+  if (!row) throw new NotFoundError(`memory not found: ${id}`);
   if (row.kind !== 'raw') {
-    throw new Error(`memory ${id} is not raw (kind=${String(row.kind)})`);
+    throw new BadRequestError(`memory ${id} is not raw (kind=${String(row.kind)})`);
   }
 
   // SAVEPOINT (not BEGIN) so this works whether or not we're already inside a
@@ -91,9 +92,9 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         targetId: id,
         metadata: { reason: opts.reason },
       });
-    } catch {
-      // Audit must not crash the archive. Failures here mean the audit table
-      // is unwritable; the archive itself has already succeeded.
+    } catch (error) {
+      // The archive itself has already succeeded; an unwritable audit table must not undo it.
+      reportAuditWriteFailure('archive_raw', String(error), id);
     }
     // v0.30 / E2 — DAG live-coupling: archive of a child under a level-2
     // summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark

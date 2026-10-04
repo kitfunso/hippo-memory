@@ -2,13 +2,19 @@
 import { mechanics } from '../content/site';
 import { mdInline } from '../content/readme';
 import DecayCurve from './DecayCurve.tsx';
+
+interface Props {
+  // The /how-it-works/ page already shows this eyebrow in its PageIntro.
+  eyebrow?: boolean;
+}
+const { eyebrow = true } = Astro.props;
 ---
 
-<section id="how" class="relative scroll-mt-20 border-t border-white/5">
-  <div class="mx-auto max-w-6xl px-5 py-24">
+<section id="how" class="relative border-t border-white/5">
+  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
     <div class="max-w-2xl">
-      <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">How it works</p>
-      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
+      {eyebrow && <p class="mb-4 font-mono text-xs uppercase tracking-wider text-acc-cyan">How it works</p>}
+      <h2 class="text-3xl leading-tight sm:text-4xl">
         Memories decay. Retrieval makes them <span class="text-gradient">stronger.</span>
       </h2>
       <p class="mt-5 text-lg leading-relaxed text-zinc-400">
@@ -30,7 +36,7 @@ import DecayCurve from './DecayCurve.tsx';
       <div class="flex items-center justify-center font-mono text-xs text-zinc-400" aria-hidden="true">sleep</div>
       <div class="glass flex flex-col rounded-2xl p-5">
         <span class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Semantic</span>
-        <p class="mt-2 text-sm leading-relaxed text-zinc-400">Related episodes merge into one memory. The originals decay.</p>
+        <p class="mt-2 text-sm leading-relaxed text-zinc-400">Repeated episodes compress into stable patterns. The originals decay.</p>
       </div>
     </div>
     <p class="mt-3 text-center font-mono text-xs text-zinc-400">weak traces are forgotten; repeated ones consolidate during sleep</p>

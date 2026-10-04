@@ -31,15 +31,17 @@
  * egress-blocked in the build sandbox).
  */
 
+import { envByName } from './env.js';
 import {
   type EmbeddingRole,
   getEmbedding,
   isEmbeddingAvailable,
   resolveEmbeddingModel,
   DEFAULT_EMBEDDING_MODEL,
-} from './embeddings.js';
+} from './local-embedding.js';
 import { loadConfig } from './config.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
+import { fetchWithRetry } from './http-retry.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -230,12 +232,12 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   isAvailable(): boolean {
-    return this.enabled && !!process.env[this.keyEnv]?.trim();
+    return this.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
   async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
     if (texts.length === 0) return [];
-    const key = process.env[this.keyEnv]?.trim();
+    const key = envByName(this.keyEnv)?.trim();
     if (!key) {
       // Hard, actionable failure — never includes a key value (there is none).
       throw new Error(
@@ -258,15 +260,14 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     let resp: Response;
     try {
-      resp = await fetch(url, {
+      resp = await fetchWithRetry(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${key}`,
         },
-        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecrets), role)),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
+      }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key));
@@ -327,6 +328,7 @@ function readEmbeddingsConfig(hippoRoot: string): EmbeddingsConfigValues {
   try {
     return loadConfig(hippoRoot).embeddings;
   } catch {
+    // An unreadable config falls back to provider defaults; loadConfig warns on a bad parse.
     return {};
   }
 }

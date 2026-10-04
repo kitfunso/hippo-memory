@@ -1,9 +1,9 @@
 ---
-import { receipts, importsFrom } from '../content/site';
+import { receipts } from '../content/site';
 ---
 
-<section id="receipts" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
-  <div class="mx-auto max-w-6xl px-5 py-24">
+<section id="receipts" class="relative border-t border-white/5 bg-white/[0.02]">
+  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-xl">
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Receipts</p>
@@ -12,7 +12,7 @@ import { receipts, importsFrom } from '../content/site';
       <p class="font-mono text-sm text-zinc-400">every claim links to its source</p>
     </div>
 
-    <div class="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {receipts.map((r) => (
         <a
           href={r.href}
@@ -28,13 +28,6 @@ import { receipts, importsFrom } from '../content/site';
             source ↗
           </span>
         </a>
-      ))}
-    </div>
-
-    <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm text-zinc-400" data-reveal>
-      <span class="text-zinc-400">imports from</span>
-      {importsFrom.map((src) => (
-        <span class="rounded border border-white/8 bg-white/[0.02] px-2 py-0.5 text-zinc-400">{src}</span>
       ))}
     </div>
   </div>

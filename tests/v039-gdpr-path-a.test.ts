@@ -9,6 +9,7 @@ import {
   getSchemaVersion,
   type DatabaseSyncLike,
 } from '../src/db.js';
+import type { Context } from '../src/api.js';
 import { remember, archiveRaw, recall } from '../src/api.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
@@ -95,7 +96,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('2. fresh archive Path A: payload_json is metadata-only (no original content)', () => {
-    const ctx = { hippoRoot: root, tenantId: 'tenant-A', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: root, tenantId: 'tenant-A', actor: { subject: 'cli', role: 'admin' } };
     const { id } = remember(ctx, {
       content: 'a-very-distinctive-secret-string-zylph123',
       kind: 'raw',
@@ -212,7 +213,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', () => {
-    const ctx = { hippoRoot: root, tenantId: 'tenant-B', actor: { subject: 'user:42', role: 'admin' } };
+    const ctx: Context = { hippoRoot: root, tenantId: 'tenant-B', actor: { subject: 'user:42', role: 'admin' } };
     const { id } = remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
     archiveRaw(ctx, id, 'compliance test');
 
@@ -233,7 +234,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('6. no re-recall after archive: original content text returns 0 results', () => {
-    const ctx = { hippoRoot: root, tenantId: 'tenant-C', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: root, tenantId: 'tenant-C', actor: { subject: 'cli', role: 'admin' } };
     const distinctive = 'gdpr-canary-token-quaxle';
     const { id } = remember(ctx, { content: distinctive, kind: 'raw' });
 

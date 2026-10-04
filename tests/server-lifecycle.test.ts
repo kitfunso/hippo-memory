@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
 
+// Not initStore'd on purpose: these tests start from an empty `.hippo` dir.
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
@@ -15,6 +16,7 @@ interface HealthBody {
   version: string;
   started_at: string;
   pid: number;
+  audit_write_failures: number;
 }
 
 /**
@@ -56,6 +58,7 @@ describe('server lifecycle', () => {
       // ISO 8601 sanity check
       expect(Number.isFinite(Date.parse(body.started_at))).toBe(true);
       expect(body.pid).toBe(process.pid);
+      expect(body.audit_write_failures).toEqual(expect.any(Number));
     } finally {
       await handle.stop();
       rmSync(home, { recursive: true, force: true });

@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
+import { presentConnectionsAsRemote } from './_helpers/listen.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -21,19 +20,12 @@ async function jsonAs<T>(res: Response): Promise<T> {
 // surface: synchronous JSON-RPC responses on POST, keepalive-only SSE on GET,
 // and the auth middleware reuse.
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-http-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 describe('MCP-over-HTTP transport', () => {
   let home: string;
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
+    home = makeRoot('mcp-http');
     // The HTTP transport now threads hippoRoot + auth-resolved tenant
     // through handleMcpRequest, so executeTool no longer walks cwd via
     // findHippoRoot() or reads HIPPO_TENANT from the env. No env hacks
@@ -134,17 +126,12 @@ describe('MCP-over-HTTP transport', () => {
   });
 
   it('rejects POST /mcp without auth from a non-loopback origin', async () => {
-    // Smoke check: the auth middleware fires on /mcp routes too. We can't
-    // easily fake a non-loopback connection in-process, so this asserts the
-    // happy-path 200 (loopback no-auth) — the negative case is covered by
-    // the broader auth tests in tests/server-auth.test.ts. Treat the
-    // positive case as a minimal regression guard: if requireAuth threw on
-    // loopback, it would 401 here.
+    presentConnectionsAsRemote(handle.server!);
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'tools/list' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 });

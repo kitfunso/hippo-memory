@@ -9,16 +9,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { invalidateMatching } from '../src/invalidation.js';
 import { refineStore } from '../src/refine-llm.js';
 import { deduplicateLesson } from '../src/autolearn.js';
-import { cmdCapture } from '../src/capture.js';
+import { cmdCapture } from '../src/capture/command.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
-import { importEntries } from '../src/importers.js';
+import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/shared.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { listPeers, syncGlobalToLocal } from '../src/shared.js';
 import { embedAll } from '../src/embeddings.js';
 
@@ -152,9 +154,9 @@ describe('L9: per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(aOnly[0].content.startsWith('[Consolidated from')).toBe(true);
 
     let refineCallSources: number | undefined;
-    const fetcher = async (_url: string, init?: { body?: string }): Promise<Response> => {
+    const fetcher = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       // Capture how many sources were sent to the LLM
-      const body = init?.body ? JSON.parse(init.body) : {};
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
       const userMsg = body.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
       refineCallSources = (userMsg.match(/Source \d/g) ?? []).length;
       return new Response(

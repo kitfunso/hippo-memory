@@ -17,8 +17,8 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store.js';
-import { remember } from '../src/api.js';
+import { initStore } from '../src/store/open.js';
+import { remember, type Context } from '../src/api.js';
 import { pushGoal, completeGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
@@ -79,7 +79,7 @@ function setStrength(root: string, memId: string, strength: number) {
   }
 }
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;

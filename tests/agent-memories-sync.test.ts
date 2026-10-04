@@ -1,15 +1,19 @@
 // The PR 2 list from the agent memory plan's Tests section, run against real stores in scratch folders.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { restoreDormant } from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/dormant.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { deriveOriginProject } from '../src/project-identity.js';
-import { deleteEntryRowInTx, isInitialized, loadAllEntries, readEntry, removeEntryMirrors, writeEntry } from '../src/store.js';
+import { removeEntryMirrors } from '../src/store/mirrors.js';
+import { isInitialized } from '../src/store/open.js';
+import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import {
   agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
   tally, toolTally, withDb, type World,
@@ -146,6 +150,26 @@ describe('agent memory sync: the PR 2 list', () => {
     expect(liveTexts(w.local)).toEqual([DEPLOY, STAGING].sort());
   });
 
+  it('an old row with an email in clear matches its masked note, and a copy already imported collapses into one row', () => {
+    const MAIL = 'Release notes go to ops-team@example.com before each tag.';
+    const MASKED = 'Release notes go to [email] before each tag.';
+    const dir = projectNotes(w);
+    note(dir, 'release.md', MAIL);
+    const renamed = legacyRow(MAIL, 'old-release-name.md');
+    expect(claude(sync())).toMatchObject({ adopted: 1, imported: 0 });
+    expect(readEntry(w.local, renamed.id)?.superseded_by).toBeNull();
+
+    note(dir, 'mail.md', MAIL.replace('Release', 'Weekly'));
+    sync();
+    const stale = { ...createMemory(MAIL.replace('Release', 'Weekly'), { tags: ['claude-code-memory'], source: 'claude-memory:gone.md', tenantId: 'default' }), created: '2026-01-01T00:00:00.000Z' };
+    writeEntry(w.local, stale);
+
+    sync();
+    const copy = liveRows(w.local).find((e) => e.content === MASKED.replace('Release', 'Weekly'));
+    expect(readEntry(w.local, stale.id)?.superseded_by).toBe(copy?.id);
+    expect(liveRows(w.local).filter((e) => e.content.includes('Weekly'))).toHaveLength(1);
+  });
+
   it.skipIf(process.platform !== 'win32')('Windows folder case is normalised: the same folders in another case are the same container', () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
     sync();
@@ -207,14 +231,13 @@ describe('agent memory sync: the PR 2 list', () => {
     expect(loadAllEntries(w.local).filter((e) => e.layer === Layer.Semantic)).toEqual([]);
   });
 
-  it('session end in a folder without a store imports the project and transcript notes into the global store with the project as origin', () => {
-    const cwd = join(w.dir, 'hookproj');
-    mkdirSync(join(cwd, '.git'), { recursive: true });
+  it('session end in a folder without a store imports the project and session folder notes into the global store with the project as origin', () => {
+    const cwd = join(w.dir, 'hookproj', 'src');
+    mkdirSync(join(w.dir, 'hookproj', '.git'), { recursive: true });
+    mkdirSync(cwd);
     note(projectNotes(w, cwd), 'deploy.md', DEPLOY);
-    const session = join(w.home, '.claude', 'projects', 'transcript-folder');
     const QUEUE = 'The session folder note says the queue drains at midnight.';
-    note(join(session, 'memory'), 'queue.md', QUEUE);
-    const transcript = join(session, 's1.jsonl');
+    const transcript = join(dirname(note(projectNotes(w, dirname(cwd)), 'queue.md', QUEUE)), '..', 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
     expect(claude(importAtSessionEnd(cwd, transcript, { machine: w.machine })).imported).toBe(2);

@@ -6,7 +6,9 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isSessionDigestRow, sessionDigestId } from '../src/session-digest.js';
-import { initStore, loadAllEntries, loadLatestHandoff, saveSessionHandoff } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';

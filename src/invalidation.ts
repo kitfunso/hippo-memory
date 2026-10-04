@@ -1,4 +1,5 @@
-import { loadAllEntries, readEntry, writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './memory.js';
 import {

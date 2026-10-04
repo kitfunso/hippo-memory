@@ -21,8 +21,8 @@ import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
 import { rejectionDigest } from './rejection.js';
 
-/** Why a memory went dormant: sleep's decay pass, or an imported agent memory whose note was deleted. */
-export type DormantReason = 'decay' | 'source-deleted';
+/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, or `hippo projects repair` splitting a two-project merge. */
+export type DormantReason = 'decay' | 'source-deleted' | 'project-repair';
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
 export interface DormantMove {
@@ -114,6 +114,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
     }
     return entry;
   } catch {
+    // A row that will not parse is out of shape, so it is not restorable.
     return null;
   }
 }

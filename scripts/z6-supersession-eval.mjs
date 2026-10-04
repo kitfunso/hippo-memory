@@ -385,7 +385,7 @@ function buildTemplate(rootBase, fixture) {
   if (!initR.stdout.includes('Initialized Hippo at') || initR.stdout.includes('Already initialized at')) throw new Error('init did not report a fresh store');
   if (!fs.existsSync(path.join(proj, '.hippo', 'hippo.db'))) throw new Error('init did not create proj/.hippo/hippo.db');
   const workspaces = JSON.parse(fs.readFileSync(path.join(hh, 'workspaces.json'), 'utf8')).workspaces;
-  // hippo registers fs.realpathSync.native(root), not path.resolve; an 8.3 short name or junction would else mismatch (src/store.ts:302-303).
+  // hippo registers fs.realpathSync.native(root), not path.resolve; an 8.3 short name or junction would else mismatch (src/store/open.ts).
   const wantWs = fs.realpathSync.native(proj).replace(/\\/g, '/');
   const gotWs = Array.isArray(workspaces) && workspaces.length === 1 ? workspaces[0] : null;
   const wsMatch = process.platform === 'win32' ? gotWs?.toLowerCase() === wantWs.toLowerCase() : gotWs === wantWs;

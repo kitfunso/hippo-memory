@@ -14,7 +14,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally, type Tally } from '../src/agent-memories/report.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { detectSecret } from '../src/secret-detect.js';
 
 const sync = (root: string, home: string): Tally =>

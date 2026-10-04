@@ -1,39 +1,97 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-/**
- * The one Preact island (client:visible). Animated SVG of a memory's strength over
- * time: exponential decay, re-strengthened by two `recall` events, then decaying
- * again.
- *
- * Robustness: SSR / no-JS renders the curve FULLY DRAWN (visible) - the line is not
- * JS-dependent. JS enhances it with a scroll-triggered draw-in: snap the stroke to
- * "undrawn" off-screen (rAF, no visible flash), enable the transition, then draw it
- * in when scrolled into view. prefers-reduced-motion: leave it drawn and static.
- */
+// One memory, three futures, from calculateStrength and markRetrieved in src/memory.ts at their defaults.
+// Labels are HTML over a stretched SVG so text keeps its size at every width.
+
+type Ev = { day: number; kind: 'recall' | 'wrong' };
+type Pt = readonly [day: number, strength: number];
+
+const END = 730;
+const TOP = 1.1; // headroom above full strength for the recall labels
+
+function simulate(events: readonly Ev[]): Pt[] {
+  let anchor = 0;
+  let halfLife = 365;
+  let recalls = 0;
+  let wrong = 0;
+  const at = (d: number) => {
+    const reward = wrong ? 1 - (0.5 * wrong) / (wrong + 1) : 1;
+    const boost = wrong ? 1 : 1 + 0.1 * Math.log2(recalls + 1);
+    return Math.min(1, boost * 0.5 ** ((d - anchor) / (halfLife * reward))) * 0.5 ** Math.min(wrong, 3);
+  };
+  const pts: Pt[] = [];
+  let i = 0;
+  for (let d = 0; d <= END; d += 2) {
+    while (i < events.length && events[i].day <= d) {
+      const e = events[i++];
+      pts.push([e.day, at(e.day)]);
+      if (e.kind === 'wrong') wrong += 1;
+      else if (!wrong) {
+        recalls += 1;
+        anchor = e.day;
+        halfLife += 2;
+      }
+      pts.push([e.day, at(e.day)]);
+    }
+    pts.push([d, at(d)]);
+  }
+  return pts;
+}
+
+const RECALLS = [120, 330, 540];
+const WRONG_AT = 260;
+const SUPERSEDED_AT = 450;
+
+const alone = simulate([]);
+const recalled = simulate(RECALLS.map((day) => ({ day, kind: 'recall' }))).filter(([d]) => d >= RECALLS[0]);
+const wrongPts = simulate([{ day: WRONG_AT, kind: 'wrong' }]).filter(([d]) => d >= WRONG_AT && d <= SUPERSEDED_AT);
+const strengthAt = (pts: Pt[], day: number) => [...pts].reverse().find(([d]) => d === day)?.[1] ?? 0;
+
+const y = (s: number) => (TOP - s) * 100;
+const path = (pts: Pt[]) => pts.map(([d, s], i) => `${i ? 'L' : 'M'}${d},${y(s).toFixed(2)}`).join(' ');
+const pos = (day: number, s: number) => ({ left: `${(day / END) * 100}%`, top: `${((TOP - s) / TOP) * 100}%` });
+
+const MINT = '#7ce38b';
+const AMBER = '#f2b84b';
+const GREY = '#9aa79e';
+
+const ticks = [
+  { day: 0, label: 'saved' },
+  { day: 182, label: '6 mo' },
+  { day: 365, label: '1 yr' },
+  { day: 547, label: '18 mo' },
+  { day: 730, label: '2 yr' },
+];
+
+function Dot({ day, s, color }: { day: number; s: number; color: string }) {
+  return (
+    <span
+      class="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 ring-zinc-900"
+      style={{ ...pos(day, s), background: color }}
+    />
+  );
+}
+
 export default function DecayCurve() {
-  const ref = useRef<SVGSVGElement>(null);
-  const [drawn, setDrawn] = useState(true); // SSR-visible default
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(true); // SSR and no-JS render the finished chart
   const [animating, setAnimating] = useState(false);
 
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const el = ref.current;
-    if (!el || mq.matches) return; // reduced motion: stay drawn + static
-
-    setDrawn(false); // snap to undrawn (transition still off -> instant, off-screen)
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setShown(false);
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setAnimating(true)); // arm transition after snap commits
+      raf2 = requestAnimationFrame(() => setAnimating(true)); // arm the transition only after the hidden state paints
     });
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            setDrawn(true); // draw in
-            io.disconnect();
-          }
-        });
+      ([e]) => {
+        if (e.isIntersecting) {
+          setShown(true);
+          io.disconnect();
+        }
       },
       { threshold: 0.35 },
     );
@@ -45,69 +103,68 @@ export default function DecayCurve() {
     };
   }, []);
 
-  // strength (y: 52 high -> 178 low) over time (x: 24 -> 460); two recall re-strengthens.
-  const curve =
-    'M24,52 C70,96 112,150 156,156 C162,156 166,144 168,124 C170,98 173,80 180,80 C228,102 276,150 312,158 C318,158 322,146 324,126 C326,100 329,84 336,84 C388,108 440,162 460,178';
-  const recalls = [
-    { x: 180, y: 80 },
-    { x: 336, y: 84 },
-  ];
-  const LEN = 1100;
-  const strokeTransition = animating ? 'stroke-dashoffset 1.8s cubic-bezier(0.22,1,0.36,1)' : 'none';
-  const fadeTransition = animating ? 'opacity 0.7s ease 0.3s' : 'none';
+  const reveal = {
+    clipPath: shown ? 'inset(0 0 0 0)' : 'inset(0 100% 0 0)',
+    transition: animating ? 'clip-path 1.6s cubic-bezier(0.22,1,0.36,1)' : 'none',
+  };
+  const fade = (delay: number) => ({
+    opacity: shown ? 1 : 0,
+    transition: animating ? `opacity 0.5s ease ${delay}s` : 'none',
+  });
+  const wrongBefore = strengthAt(alone, WRONG_AT);
+  const wrongAfter = wrongPts[1][1];
+  const supersededS = strengthAt(wrongPts, SUPERSEDED_AT);
+  const label = 'absolute whitespace-nowrap font-mono text-xs leading-none';
 
   return (
-    <svg
+    <div
       ref={ref}
-      viewBox="0 0 484 208"
       role="img"
-      aria-label="Memory strength decays over time, re-strengthened by each recall, then decays again."
-      class="h-auto w-full"
+      aria-label="Memory strength over two years. Left alone, a memory falls to half strength after a year. Each recall restores it to full. Marked wrong, it halves and fades faster; superseded, it leaves recall."
+      class="grid grid-cols-[auto_1fr] gap-x-3"
     >
-      <defs>
-        <linearGradient id="decayStroke" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#7ce38b" />
-          <stop offset="100%" stop-color="#a7f0b1" />
-        </linearGradient>
-        <linearGradient id="decayFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="rgba(124,227,139,0.18)" />
-          <stop offset="100%" stop-color="rgba(124,227,139,0)" />
-        </linearGradient>
-      </defs>
+      <div class="relative h-56 font-mono text-xs text-zinc-400 sm:h-72" aria-hidden="true">
+        {[1, 0.5, 0].map((s) => (
+          <span class="absolute right-0 -translate-y-1/2" style={{ top: pos(0, s).top }}>{s === 0.5 ? '½' : s}</span>
+        ))}
+      </div>
 
-      {/* axes */}
-      <line x1="24" y1="184" x2="464" y2="184" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
-      <line x1="24" y1="20" x2="24" y2="184" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
-      <text x="8" y="30" fill="#9aa79e" font-size="9" class="font-mono" transform="rotate(-90 8 30)" style="transform-box: fill-box;">strength</text>
-      <text x="430" y="200" fill="#9aa79e" font-size="9" class="font-mono">time</text>
+      <div class="relative h-56 sm:h-72" aria-hidden="true">
+        <svg viewBox={`0 0 ${END} ${TOP * 100}`} preserveAspectRatio="none" class="absolute inset-0 h-full w-full overflow-visible">
+          {[1, 0.5].map((s) => (
+            <line x1="0" x2={END} y1={y(s)} y2={y(s)} stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 6" vector-effect="non-scaling-stroke" />
+          ))}
+          <line x1="0" x2={END} y1={y(0)} y2={y(0)} stroke="rgba(255,255,255,0.14)" vector-effect="non-scaling-stroke" />
+          <g style={reveal}>
+            <path d={path(alone)} fill="none" stroke={GREY} stroke-width="2" stroke-dasharray="5 5" vector-effect="non-scaling-stroke" />
+            <path d={path(wrongPts)} fill="none" stroke={AMBER} stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            <path d={path(recalled)} fill="none" stroke={MINT} stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+          </g>
+        </svg>
 
-      {/* area fill under curve */}
-      <path
-        d={`${curve} L460,184 L24,184 Z`}
-        fill="url(#decayFill)"
-        opacity={drawn ? 1 : 0}
-        style={{ transition: fadeTransition }}
-      />
+        <div style={fade(0.9)}>
+          {RECALLS.map((day) => <Dot day={day} s={1} color={MINT} />)}
+          <span class={`${label} -translate-x-1/2 -translate-y-[calc(100%+10px)] text-acc-violet`} style={pos(RECALLS[0], 1)}>recall</span>
+          <Dot day={WRONG_AT} s={wrongBefore} color={AMBER} />
+          <span class={`${label} -translate-x-[calc(100%+10px)] -translate-y-1/2 text-acc-amber`} style={pos(WRONG_AT, wrongAfter)}>marked wrong</span>
+          <span class="absolute -translate-x-1/2 -translate-y-1/2 text-lg leading-none text-acc-amber" style={pos(SUPERSEDED_AT, supersededS)}>×</span>
+          <span class={`${label} -translate-x-1/2 translate-y-[12px] text-acc-amber`} style={pos(SUPERSEDED_AT, supersededS)}>superseded</span>
+          <span class={`${label} -translate-x-full translate-y-[8px] text-acc-violet`} style={pos(END, strengthAt(recalled, END))}>recalled</span>
+          <span class={`${label} -translate-x-full translate-y-[8px] text-zinc-400`} style={pos(END, strengthAt(alone, END))}>left alone</span>
+        </div>
+      </div>
 
-      {/* the decay curve */}
-      <path
-        d={curve}
-        fill="none"
-        stroke="url(#decayStroke)"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-dasharray={LEN}
-        stroke-dashoffset={drawn ? 0 : LEN}
-        style={{ transition: strokeTransition }}
-      />
-
-      {/* recall markers */}
-      {recalls.map((r, i) => (
-        <g opacity={drawn ? 1 : 0} style={{ transition: animating ? `opacity 0.5s ease ${0.9 + i * 0.4}s` : 'none' }}>
-          <circle cx={r.x} cy={r.y} r="4.5" fill="#7ce38b" class="decay-dot" />
-          <text x={r.x + 8} y={r.y - 4} fill="#9aa79e" font-size="9.5" class="font-mono">recall</text>
-        </g>
-      ))}
-    </svg>
+      <span />
+      <div class="relative mt-2 h-4 font-mono text-xs text-zinc-400" aria-hidden="true">
+        {ticks.map((t, i) => (
+          <span
+            class={`absolute whitespace-nowrap ${i === 0 ? '' : i === ticks.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
+            style={{ left: pos(t.day, 0).left }}
+          >
+            {t.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

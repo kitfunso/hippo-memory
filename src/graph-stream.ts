@@ -25,11 +25,7 @@
  * fused-score effect — only the induced order matters.
  */
 import type { MemoryEntry } from './memory.js';
-import {
-  loadEntitiesByMemoryId,
-  loadEntitiesByIds,
-  loadNeighborRelations,
-} from './graph.js';
+import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
 
 /** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph-recall). */

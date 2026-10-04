@@ -15,14 +15,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { Decision } from '../src/decisions.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every response in this suite comes from the /v1/decisions route
@@ -33,20 +31,13 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-dec-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 let home: string;
 let handle: ServerHandle;
-let apiKey: CreatedApiKey;
-let apiKeyB: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
+let apiKeyB: CreateApiKeyResult;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-dec');
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-dec', role: 'admin' });
@@ -62,14 +53,14 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders(key: CreatedApiKey = apiKey) {
+function authHeaders(key: CreateApiKeyResult = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
 
 async function createDecision(
   text: string,
   extra: { context?: string; supersedesDecisionId?: number } = {},
-  key: CreatedApiKey = apiKey,
+  key: CreateApiKeyResult = apiKey,
 ) {
   return fetch(`${handle.url}/v1/decisions`, {
     method: 'POST',

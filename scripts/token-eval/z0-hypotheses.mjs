@@ -9,7 +9,10 @@ export const CODINGS = ['violation', 'excluded'];
 export const HYPOTHESES = ['H1', 'H2', 'H3'];
 export const NOT_RUN = 'not run';
 export const NA = 'n/a';
+/** @typedef {import('../../src/eval-stats.js').VerdictSpec} VerdictSpec */
+/** @type {VerdictSpec} */
 const REPEAT_SPEC = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt: -0.15 };
+/** @type {Record<'H1' | 'H2' | 'H3', VerdictSpec>} */
 export const SPECS = { H1: REPEAT_SPEC, H2: REPEAT_SPEC, H3: { helpful: 'lower', tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 } };
 export const LESSONS_SENTENCE = "hippo's lessons cut repeat mistakes";
 export const BEHAVIOUR_SENTENCE = 'installing hippo changed behaviour, and this run cannot say its lessons did';

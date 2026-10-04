@@ -10,9 +10,11 @@ import { sleep, adminActor } from '../src/api.js';
 import { loadConfig } from '../src/config.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { autoShare, getGlobalRoot, promoteToGlobal, shareMemory, transferScore } from '../src/shared.js';
-import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
@@ -35,9 +37,9 @@ describe('git-learned rows and the global store', () => {
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(tmp, 'global');
     // The tags learnFromRepo gives every seed.
-    seed = createMemory(SEED, { tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
+    seed = createMemory(SEED, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
     writeEntry(hippoRoot, seed);
-    writeEntry(hippoRoot, createMemory(ORDINARY, { tags: ['error'], tenantId: 'default' }));
+    writeEntry(hippoRoot, createMemory(ORDINARY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'], tenantId: 'default' }));
     expect(transferScore(seed)).toBeGreaterThanOrEqual(0.6);
   });
 

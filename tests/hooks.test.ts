@@ -2,14 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  installJsonHooks,
-  uninstallJsonHooks,
-  resolveJsonHookPaths,
-  detectInstalledTools,
-  defaultSleepLogPath,
-  defaultPreCompactLogPath,
-} from '../src/hooks.js';
+import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
+import { detectInstalledTools, defaultSleepLogPath, defaultPreCompactLogPath } from '../src/hooks/shared.js';
 import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
 
 /**

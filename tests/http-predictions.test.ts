@@ -12,14 +12,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Prediction } from '../src/predictions.js';
+import type { Prediction } from '../src/predictions/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -29,19 +27,12 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-pred-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 let home: string;
 let handle: ServerHandle;
-let apiKey: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-pred');
   // Provision an admin API key for the test tenant
   const db = openHippoDb(home);
   try {

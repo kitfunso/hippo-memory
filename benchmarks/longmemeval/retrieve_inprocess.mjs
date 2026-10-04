@@ -12,9 +12,11 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { hybridSearch, physicsSearch, buildCorpus } from '../../dist/search.js';
+import { hybridSearch } from '../../dist/search/hybrid.js';
+import { physicsSearch } from '../../dist/search/physics-search.js';
+import { buildCorpus } from '../../dist/search/bm25.js';
 import { loadConfig } from '../../dist/config.js';
-import { loadAllEntries } from '../../dist/store.js';
+import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { getReranker } from '../../dist/rerankers/index.js';
 
 function flag(name, fallback) {

@@ -10,7 +10,7 @@ import { faqPick, site } from '../content/site';
 
 const title = 'Codex CLI memory across sessions | hippo-memory';
 const description =
-  'Codex CLI memory across sessions: hippo adds a block to AGENTS.md and a per-prompt hook, and keeps lessons in a local store you can correct, shared with Claude Code and Cursor.';
+  'Codex CLI memory across sessions: hippo adds a block to AGENTS.md and keeps lessons in a local store you can correct, shared with Claude Code and Cursor.';
 
 // The Codex entry of the hook templates in src/cli.ts, up to its closing capture note.
 const fence = '```';
@@ -28,13 +28,6 @@ const block = [
   `${fence}bash`,
   'hippo remember "<description of what went wrong>" --error',
   fence,
-  '',
-  'When you learn something that should outlive this session (a decision and',
-  'its reason, a user preference, a lesson), record it right then, while you',
-  'work, never as a closing step. Leave out secrets and personal details:',
-  `${fence}bash`,
-  'hippo remember "<what you learned and why>"',
-  fence,
 ];
 const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
 ---
@@ -47,34 +40,17 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
       <p>
         Codex reads <code>AGENTS.md</code> files before it starts work. <code>hippo init</code> adds a short block there
         telling Codex to run <code>hippo context --auto</code> at the start of every task, so lessons from earlier
-        sessions, and from your other agents, come back when they match the task. When Codex is installed, init also adds
-        a hook to Codex's <code>hooks.json</code> that puts your pinned memories plus up to 5 that match the prompt into every
-        prompt, with no command for the model to run.
+        sessions, and from your other agents, come back when they match the task.
       </p>
     </PageIntro>
 
     <Section title="Set it up">
+      <Cmd lines={[site.installCmd, 'hippo init', '# optional: capture Codex sessions too', 'hippo hook install codex']} />
       <p>
-        Run it inside one project. <code>hippo init</code> creates the project's <code>.hippo/</code> store, seeded from the
-        last 30 days of commits, and adds the block below to the project's <code>AGENTS.md</code> if it has one. When
-        Codex is installed and the project has <code>AGENTS.md</code> or a <code>.codex</code> folder, it also adds two
-        hooks to Codex's <code>hooks.json</code>. On your machine it installs a daily 6:15am run that learns from each
-        registered project's commits, plus Claude Code hooks or the OpenCode plugin if the project also uses those. The
-        <a class="link" href="/quickstart/">quickstart</a> lists every change and the flags that skip each one.
+        Capturing Codex sessions is opt-in. <code>hippo hook install codex</code> wraps the Codex launcher,
+        <code>hippo hook uninstall codex</code> removes the wrapper, and <code>hippo init</code> prints the command when it
+        detects Codex. <code>hippo doctor</code> checks the install.
       </p>
-      <p>
-        Codex asks you to trust a new hook once: after <code>hippo init</code>, open <code>/hooks</code> in Codex and
-        trust hippo's two hooks. One sends your pinned memories plus up to 5 that match the prompt with every prompt. The other runs when a session restarts
-        after a compaction, so the next prompt sends them again. Codex skips both until you trust them.
-      </p>
-      <Cmd lines={[site.installCmd, site.initCmd]} />
-      <p>
-        Capturing Codex sessions is opt-in, and it changes your machine: <code>hippo hook install codex</code> adds the two
-        hooks and wraps the Codex launcher so each session is captured when it ends, and <code>hippo hook uninstall
-        codex</code> removes hippo's hooks and the wrapper. <code>hippo init</code> prints the command when it detects
-        Codex. <code>hippo doctor</code> checks the install.
-      </p>
-      <Cmd lines={['hippo hook install codex']} />
     </Section>
 
     <Section title="What hippo adds to AGENTS.md" alt>

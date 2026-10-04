@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 
 const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', 'dist');
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
-const { textOverlap } = await distImport('search.js');
+const { textOverlap } = await distImport('tokenize.js');
 const { estimateTokens, blockHash, shouldSkipUnchanged } = await distImport('token-ledger.js');
 const { isContentWorthStoring } = await distImport('audit.js');
 const { ambientSecretAdmit } = await distImport('api.js');

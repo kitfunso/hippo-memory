@@ -3,8 +3,8 @@ import {
   crossEncoderReranker,
   isCrossEncoderAvailable,
 } from '../../src/rerankers/cross-encoder.js';
-import { createMemory } from '../../src/memory.js';
-import type { SearchResult } from '../../src/search.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import type { SearchResult } from '../../src/search/types.js';
 
 function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };
@@ -89,7 +89,7 @@ describe('crossEncoderReranker', () => {
     // The warn fires at most once per process on first identity-fallback.
     // beforeAll's probe call may have already consumed the warn on
     // fallback-mode machines, so the upper bound holds in both modes.
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     await crossEncoderReranker('q', inputs);
     await crossEncoderReranker('q', inputs);

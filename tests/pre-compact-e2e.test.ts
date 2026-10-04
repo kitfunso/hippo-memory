@@ -4,20 +4,12 @@ import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  getHippoRoot,
-  loadActiveTaskSnapshot,
-  saveActiveTaskSnapshot,
-  appendSessionEvent,
-  loadAllEntries,
-  writeSessionEndHandoff,
-} from '../src/store.js';
-import { defaultSleepLogPath } from '../src/hooks.js';
-import {
-  PRE_COMPACT_TASK_CAP,
-  PRE_COMPACT_SUMMARY_CAP,
-  PRE_COMPACT_NEXT_STEP_CAP,
-} from '../src/capture.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { writeSessionEndHandoff } from '../src/store/handoffs.js';
+import { defaultSleepLogPath } from '../src/hooks/shared.js';
+import { PRE_COMPACT_TASK_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_NEXT_STEP_CAP } from '../src/capture/compact.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 // Always run against the local built CLI so we're testing our source, not a

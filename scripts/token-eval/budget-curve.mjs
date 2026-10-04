@@ -41,9 +41,11 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, Layer } from '../../dist/memory.js';
-import { writeEntry, initStore, loadAllEntries } from '../../dist/store.js';
-import { hybridSearch } from '../../dist/search.js';
-import { isEmbeddingAvailable } from '../../dist/embeddings.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
+import { loadAllEntries } from '../../dist/store/entry-reads.js';
+import { hybridSearch } from '../../dist/search/hybrid.js';
+import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { estimateTokens } from '../../dist/token-ledger.js';
 import { pairedBootstrap } from '../../dist/eval-stats.js';
 
@@ -111,6 +113,7 @@ export async function evaluateQuestion(q, budgets) {
     const byNewest = [...sessions].sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const fullTokens = sessions.reduce((s, x) => s + x.tokens, 0);
 
+    /** @type {Record<number, Record<'hippo' | 'recency', {hit: boolean, tokens: number}>>} */
     const perBudget = {};
     for (const budget of budgets) {
       const results = await hybridSearch(q.question, entries, { budget, hippoRoot });
@@ -229,7 +232,7 @@ async function main() {
   console.log(`\nWrote ${path.relative(REPO, outFile)}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

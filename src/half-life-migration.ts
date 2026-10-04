@@ -21,7 +21,8 @@
  * moves memories of live decisions, incidents and other objects off the flat 90 days they used to get.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
-import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store.js';
+import { openStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store/open.js';
+import { selectAllEntries } from './store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './audit.js';
 import { loadConfig } from './config.js';

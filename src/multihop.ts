@@ -1,5 +1,7 @@
 import type { MemoryEntry } from './memory.js';
-import { fitBudget, search, type ResultCost, type SearchResult } from './search.js';
+import { fitBudget } from './search/finalize.js';
+import { search } from './search/bm25-search.js';
+import type { ResultCost, SearchResult } from './search/types.js';
 
 export function multihopSearch(
   query: string,

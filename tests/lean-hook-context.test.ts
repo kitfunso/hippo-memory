@@ -4,10 +4,14 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { estimateTokens, type SearchResult } from '../src/search.js';
-import { insertEntity, insertRelation } from '../src/graph.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { Layer, type MemoryEntry} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { estimateTokens } from '../src/token-ledger.js';
+import type { SearchResult } from '../src/search/types.js';
+import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

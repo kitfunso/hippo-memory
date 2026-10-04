@@ -9,11 +9,15 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
+import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
+
+const DASHBOARD_TOKEN = 'test-dashboard-token';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 const NOW = new Date('2026-09-07T12:00:00.000Z');
@@ -28,7 +32,7 @@ function seed(
   content: string,
   over: Partial<MemoryEntry> = {},
 ): MemoryEntry {
-  const e = { ...createMemory(content, { tags: ['facets'] }), ...over } as MemoryEntry;
+  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }), ...over } as MemoryEntry;
   writeEntry(root, e);
   return e;
 }
@@ -46,7 +50,7 @@ function runCli(cwd: string, args: string[]): string {
 
 function get(port: number, path: string): Promise<string> {
   return new Promise((res, rej) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET' }, (r) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } }, (r) => {
       let body = '';
       r.setEncoding('utf8');
       r.on('data', (c) => { body += c; });
@@ -234,28 +238,22 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    const port = 31000 + Math.floor(Math.random() * 5000);
-    server = serveDashboard(hippoRoot, port);
-    await new Promise<void>((res) => {
-      if (server!.listening) res();
-      else server!.once('listening', () => res());
-    });
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
+    const port = await boundPort(server);
 
-    const memories = JSON.parse(await get(port, '/api/memories')) as Array<{
-      id: string;
-      confidence: string;
-      aged_out: boolean;
-    }>;
-    const stats = JSON.parse(await get(port, '/api/stats')) as {
-      by_confidence: Record<string, number>;
-      aged_out: number;
+    // SAFETY: each route returns the dashboard-types.ts shape named in the cast.
+    const overview = JSON.parse(await get(port, '/api/overview')) as { projects: Array<{ key: string }> };
+    const key = encodeURIComponent(overview.projects[0]!.key);
+    // SAFETY: the memory page route returns the MemoryPage of dashboard-types.ts.
+    const page = JSON.parse(await get(port, `/api/projects/${key}/memories`)) as {
+      rows: Array<{ id: string; confidence: string }>;
     };
+    // SAFETY: the memory route returns the MemoryDetail of dashboard-types.ts.
+    const detail = JSON.parse(await get(port, `/api/memory/${e.id}`)) as { confidence: string; agedOut: boolean };
 
-    const row = memories.find((m) => m.id === e.id);
-    expect(row?.confidence).toBe('observed');
-    expect(row?.aged_out).toBe(true);
-    expect(stats.by_confidence['observed']).toBe(1);
-    expect(stats.aged_out).toBe(1);
+    expect(page.rows.find((m) => m.id === e.id)?.confidence).toBe('observed');
+    expect(detail.confidence).toBe('observed');
+    expect(detail.agedOut).toBe(true);
   }, 15_000);
 
   it('renders the pair on hippo trace, the surface that reads without retrieving', () => {

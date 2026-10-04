@@ -82,7 +82,19 @@ another session hit first. Repeat-error rate compares repeats per session betwee
 a holdout arm; it is never reported as one absolute number.
 _Avoid_: duplicate (that is a lesson hippo already holds), recurrence
 
+**At-risk memory**:
+An unpinned memory whose strength, projected 30 days ahead, falls under 0.2. The dashboard's
+Health view counts and colours projects by their share of these. A pinned memory is never at risk.
+_Avoid_: fading (that is the 0.2 to 0.5 band), weak, stale (that is a confidence tier)
+
 ### Access
+
+**Origin project**:
+The lowercased project a memory was captured in (`origin_project`). An empty string means
+user-global, shown as Global; null means a row from before schema v39, shown as Unassigned.
+The Health view groups memories by it. Unlike scope, it grants no access.
+_Avoid_: project scope, workspace, repo (for the grouping)
+
 
 **Scope**:
 The access boundary of a memory's source, one channel or one repo (`slack:private:C123`,

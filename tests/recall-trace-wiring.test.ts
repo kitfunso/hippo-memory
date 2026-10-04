@@ -21,9 +21,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { initStore, loadIndex, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { remember, recall, getContext, type Context } from '../src/api.js';
 
 // Invoke this worktree's own bin/hippo.js directly (not the `hippo` binary
@@ -306,7 +308,7 @@ describe('CLI cmdRecall — trace wiring', () => {
       expect(out).toContain('cli-trace-target');
 
       // The CLI's local store lives at `<cwd>/.hippo` (getHippoRoot,
-      // store.ts:261) — HIPPO_HOME only governs the separate global store.
+      // store/open.ts) — HIPPO_HOME only governs the separate global store.
       const localStore = join(hippoRoot, '.hippo');
       const traces = traceRows(localStore, 'cli');
       expect(traces).toHaveLength(1);
@@ -327,7 +329,7 @@ describe('CLI cmdRecall — trace wiring', () => {
     // advance either (F1 lockstep invariant).
     const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-zero-'));
     try {
-      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
       execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
       disableEmbeddings(join(hippoRoot, '.hippo'));
       execFileSync('node', [hippoBin, 'remember', 'zero-result-baseline eta fact'], { cwd: hippoRoot, env });
@@ -367,7 +369,7 @@ describe('CLI cmdRecall — trace wiring', () => {
   it('hostSessionId(): falls back to CLAUDE_CODE_SESSION_ID when HIPPO_SESSION_ID is absent', () => {
     const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host1-'));
     try {
-      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
       delete env.HIPPO_SESSION_ID;
       env.CLAUDE_CODE_SESSION_ID = 'sess-host-1';
       execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
@@ -401,7 +403,7 @@ describe('CLI cmdRecall — trace wiring', () => {
   it('hostSessionId(): session_id is null when neither var is set', () => {
     const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host3-'));
     try {
-      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
       delete env.HIPPO_SESSION_ID;
       delete env.CLAUDE_CODE_SESSION_ID;
       execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
@@ -421,7 +423,7 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
   it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', () => {
     const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-goalboost-hostvar-'));
     try {
-      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
       delete env.HIPPO_SESSION_ID;
       delete env.CLAUDE_CODE_SESSION_ID;
       execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });

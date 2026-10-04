@@ -21,8 +21,9 @@
  * superseded rows are not candidates at all (v1.38.1).
  */
 
-import { textOverlap } from './search.js';
-import { loadAllEntries, deleteEntry, memoriesBackingObjects } from './store.js';
+import { textOverlap } from './tokenize.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { deleteEntry, memoriesBackingObjects } from './store/delete-and-batch.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
@@ -104,7 +105,7 @@ export function deduplicateStore(
   const entriesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of entries) {
     // EI2: also split by restricted scope, else a private copy can delete the readable one.
-    const key = derivationPartitionKey(entry.tenantId, entry.scope);
+    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
     const bucket = entriesByTenant.get(key);
     if (bucket) bucket.push(entry);
     else entriesByTenant.set(key, [entry]);

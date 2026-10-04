@@ -1,9 +1,11 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js';
-import { writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
 import { loadConfig } from './config.js';
 import { RejectedValueError } from './rejection.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
+import { log } from './log.js';
 
 export interface ExtractedFact {
   content: string;
@@ -49,7 +51,7 @@ export async function extractFacts(
 
   let res: Response;
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -59,9 +61,9 @@ export async function extractFacts(
       body: JSON.stringify({
         model,
         max_tokens: 1200,
-        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecrets(text) }],
+        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecretsStrict(text) }],
       }),
-    });
+    }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
     opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];
@@ -129,7 +131,7 @@ export function storeExtractedFacts(
 
   for (const fact of facts) {
     const tags = ['extracted', ...inheritedTags, ...fact.tags];
-    const entry = createMemory(fact.content, {
+    const entry: MemoryEntry = { ...createMemory(fact.content, {
       layer: Layer.Semantic,
       tags,
       emotional_valence: fact.valence,
@@ -144,7 +146,7 @@ export function storeExtractedFacts(
       // the same tenant as the episodic memory they were extracted from.
       tenantId: source.tenantId,
       baseHalfLifeDays,
-    });
+    }), origin_project: source.origin_project };
 
     // AT1 containment: a refusal is per-VALUE — one rejected fact must not
     // drop the rest of this batch. writeEntry has already audited the
@@ -162,7 +164,7 @@ export function storeExtractedFacts(
   }
 
   if (rejected > 0) {
-    console.error(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
+    log.warn(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
   }
 
   return entries;

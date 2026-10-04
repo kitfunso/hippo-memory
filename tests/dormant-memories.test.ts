@@ -9,19 +9,17 @@
  * dormant, and a dormant memory older than `retentionDays` (default 180, 0 =
  * forever) is deleted for good. Real SQLite throughout.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-  getExistingEntryMirrorPaths,
-  loadStats,
-  MEMORY_BACKED_TABLES,
-} from '../src/store.js';
+import { getExistingEntryMirrorPaths } from '../src/store/mirrors.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
+import { loadStats } from '../src/store/index-and-stats.js';
 import { saveDecision } from '../src/decisions.js';
 import { saveIncident } from '../src/incidents.js';
 import { saveProcess } from '../src/processes.js';
@@ -29,9 +27,9 @@ import { savePolicy } from '../src/policies.js';
 import { saveSkill } from '../src/skills.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
-import { savePrediction } from '../src/predictions.js';
+import { savePrediction } from '../src/predictions/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/dormant.js';
 import { loadConfig } from '../src/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
@@ -72,21 +70,19 @@ function countDormantRows(home: string): number {
 
 describe('dormant memories are on by default, with an opt-out', () => {
   function captureWarnings(fn: () => void): string[] {
-    const warnings: string[] = [];
-    const originalError = console.error;
-    console.error = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       fn();
+      return stderr.mock.calls.map(([chunk]) => String(chunk));
     } finally {
-      console.error = originalError;
+      stderr.mockRestore();
     }
-    return warnings;
   }
 
   it('with no dormant setting a faded memory goes dormant, and retention defaults to 180 days', async () => {
     const { home, restore } = tmpHome('hippo-dormant-default-', JSON.stringify({ replay: { count: 0 } }));
     try {
-      const faded = aged(createMemory('the old staging hostname was build-07 before the move'), 90);
+      const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, faded);
 
       const result = await consolidate(home, { now: new Date() });
@@ -103,7 +99,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
   it('opting out deletes a faded memory as before', async () => {
     const { home, restore } = tmpHome('hippo-dormant-off-', DORMANT_OFF);
     try {
-      const faded = aged(createMemory('the old staging hostname was build-07 before the move'), 90);
+      const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, faded);
 
       const result = await consolidate(home, { now: new Date() });
@@ -143,8 +139,8 @@ describe('dormant memories are on by default, with an opt-out', () => {
   it('a faded memory holding a secret is deleted, never kept dormant', async () => {
     const { home, restore } = tmpHome('hippo-dormant-secret-', DORMANT_ON);
     try {
-      const secret = aged(createMemory('billing sandbox uses api_key=Zx81Qa92Lm37Pt45Rk for the nightly job'), 90);
-      const plain = aged(createMemory('the billing sandbox nightly job runs at 02:00 UTC'), 90);
+      const secret = aged(createMemory('billing sandbox uses api_key=Zx81Qa92Lm37Pt45Rk for the nightly job', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+      const plain = aged(createMemory('the billing sandbox nightly job runs at 02:00 UTC', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, secret);
       writeEntry(home, plain);
 
@@ -163,7 +159,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
 describe('dormant retention', () => {
   function storeWithOldDormant(prefix: string, config: string, daysAgo: number) {
     const { home, restore } = tmpHome(prefix, config);
-    const entry = createMemory('the retired cron host was called nightly-02');
+    const entry = createMemory('the retired cron host was called nightly-02', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const db = openHippoDb(home);
     try {
       insertDormantRow(db, {
@@ -221,8 +217,8 @@ describe('with dormant memories enabled', () => {
   it('sleep moves a faded memory out of active memory instead of deleting it', async () => {
     const { home, restore } = tmpHome('hippo-dormant-move-', DORMANT_ON);
     try {
-      const faded = aged(createMemory('the old staging hostname was build-07 before the move', { tags: ['infra'] }), 90);
-      const fresh = createMemory('the release checklist lives in docs/release-policy.md');
+      const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['infra'] }), 90);
+      const fresh = createMemory('the release checklist lives in docs/release-policy.md', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(home, faded);
       writeEntry(home, fresh);
 
@@ -251,7 +247,7 @@ describe('with dormant memories enabled', () => {
   it('a dormant memory never reaches recall or context', async () => {
     const { home, restore } = tmpHome('hippo-dormant-recall-', DORMANT_ON);
     try {
-      const faded = aged(createMemory('zanzibar gateway requires the legacy auth header'), 90);
+      const faded = aged(createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, faded);
       await consolidate(home, { now: new Date() });
 
@@ -265,7 +261,7 @@ describe('with dormant memories enabled', () => {
   it('a dormant memory sits out every later sleep untouched', async () => {
     const { home, restore } = tmpHome('hippo-dormant-idle-', DORMANT_ON);
     try {
-      const faded = aged(createMemory('the old staging hostname was build-07 before the move'), 90);
+      const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, faded);
       await consolidate(home, { now: new Date() });
       const before = api.listDormant(ctxFor(home));
@@ -283,8 +279,8 @@ describe('with dormant memories enabled', () => {
   it('pinned memories and raw receipts never go dormant', async () => {
     const { home, restore } = tmpHome('hippo-dormant-exempt-', DORMANT_ON);
     try {
-      const pinned = aged(createMemory('never force-push to master', { pinned: true }), 400);
-      const receipt = aged(createMemory('slack receipt: the prod deploy failed on the stale cache', { layer: Layer.Episodic, kind: 'raw' }), 90);
+      const pinned = aged(createMemory('never force-push to master', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), 400);
+      const receipt = aged(createMemory('slack receipt: the prod deploy failed on the stale cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, kind: 'raw' }), 90);
       writeEntry(home, pinned);
       writeEntry(home, receipt);
 
@@ -301,7 +297,7 @@ describe('with dormant memories enabled', () => {
   it('a dry run reports the move but changes nothing', async () => {
     const { home, restore } = tmpHome('hippo-dormant-dry-', DORMANT_ON);
     try {
-      const faded = aged(createMemory('the old staging hostname was build-07 before the move'), 90);
+      const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, faded);
 
       const result = await consolidate(home, { now: new Date(), dryRun: true });
@@ -317,7 +313,7 @@ describe('with dormant memories enabled', () => {
   it('api.sleep reports how many memories went dormant', async () => {
     const { home, restore } = tmpHome('hippo-dormant-sleep-', DORMANT_ON);
     try {
-      writeEntry(home, aged(createMemory('the old staging hostname was build-07 before the move'), 90));
+      writeEntry(home, aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
 
       const result = await api.sleep(ctxFor(home), { noShare: true });
 
@@ -334,7 +330,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
     const { home, restore } = tmpHome(prefix, DORMANT_ON);
     const ids: string[] = [];
     for (const content of contents) {
-      const entry = aged(createMemory(content), 90);
+      const entry = aged(createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(home, entry);
       ids.push(entry.id);
     }
@@ -411,7 +407,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
 
       // Same id written back as active (e.g. by an old binary): restore must
       // not overwrite the live row with the older snapshot.
-      const live = { ...createMemory('live copy under the same id'), id: ids[0] };
+      const live = { ...createMemory('live copy under the same id', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), id: ids[0] };
       writeEntry(home, live);
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(/already active/);
       expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([ids[0]]);
@@ -582,8 +578,8 @@ describe('hippo dormant CLI', () => {
     try {
       initStore(hippoRoot);
       writeFileSync(join(hippoRoot, 'config.json'), DORMANT_ON, 'utf8');
-      const keep = aged(createMemory('zanzibar gateway requires the legacy auth header'), 90);
-      const drop = aged(createMemory('the old staging hostname was build-07 before the move'), 90);
+      const keep = aged(createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+      const drop = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
       writeEntry(hippoRoot, keep);
       writeEntry(hippoRoot, drop);
       await consolidate(hippoRoot, { now: new Date() });
@@ -612,7 +608,7 @@ describe('hippo dormant CLI', () => {
 
       // `hippo forget` on a dormant id points at the dormant command instead
       // of a bare "not found".
-      writeEntry(hippoRoot, aged(createMemory('a third faded memory about the retired cron host'), 90));
+      writeEntry(hippoRoot, aged(createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
       await consolidate(hippoRoot, { now: new Date() });
       const [third] = api.listDormant(ctxFor(hippoRoot));
       const hint = runCli(workspace, 'forget', third.id);

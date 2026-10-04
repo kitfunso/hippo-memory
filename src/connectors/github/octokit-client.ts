@@ -12,6 +12,7 @@
 
 import type { JsonValue } from './types.js';
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
+import { fetchWithRetry } from '../../http-retry.js';
 
 export class GitHubFetchError extends Error {
   constructor(
@@ -56,14 +57,16 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
   return Object.fromEntries(entries);
 }
 
+const GITHUB_TIMEOUT_MS = 30_000;
+
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     },
-  });
+  }, { timeoutMs: GITHUB_TIMEOUT_MS });
   const headers = headersToRecord(res.headers);
   const rateLimit = parseRateLimit(headers, res.status);
 

@@ -6,8 +6,13 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { appendSessionEvent, getHippoRoot, initStore, isInitialized, loadIndex, readEntry, saveActiveTaskSnapshot, saveSessionHandoff, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { getHippoRoot, initStore, isInitialized } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
+import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { adminActor, recall as apiRecall } from '../src/api.js';
@@ -192,7 +197,8 @@ describe('CLI end to end', () => {
       const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' })
         .filter((e) => e.metadata?.mode === 'context');
       expect(audits).toHaveLength(2);
-      const traces = missedDb.prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id").all();
+      // SAFETY: the SELECT names exactly one integer column.
+      const traces = missedDb.prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id").all() as Array<{ result_count: number }>;
       expect(traces).toHaveLength(priorTraces + 2);
       expect(traces.at(-1)?.result_count).toBe(0);
     } finally {

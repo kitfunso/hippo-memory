@@ -5,22 +5,24 @@
  * Local .hippo/ stores are per-project.
  */
 
+import { BadRequestError, NotFoundError } from './api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
-import {
-  initStore,
-  loadAllEntries,
-  loadIndex,
-  loadSearchEntries,
-  loadRecallSearchEntries,
-  writeEntry,
-  readEntry,
-} from './store.js';
+import { initStore } from './store/open.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries, readEntry } from './store/entry-reads.js';
+import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
+import { tallySources } from './store/candidates.js';
+import { loadIndex } from './store/index-and-stats.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
-import { search, hybridSearch, fitBudget, SearchResult, type ResultCost } from './search.js';
+import { search } from './search/bm25-search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { fitBudget } from './search/finalize.js';
+import type { SearchResult, ResultCost } from './search/types.js';
+import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
@@ -28,6 +30,13 @@ import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
+import { log } from './log.js';
+import type { DatabaseSyncLike } from './db.js';
+
+// The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
+function logEmbedAllFailure<E>(caller: string, err: E): void {
+  log.warn(`${caller}: background embed failed (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+}
 
 /**
  * Returns the path to the global Hippo store.
@@ -60,21 +69,21 @@ export function initGlobal(): void {
 export function promoteToGlobal(
   localRoot: string,
   id: string,
-  opts?: { actor?: string; tenantId?: string },
+  opts?: { actor?: string; tenantId?: string; afterWrite?: (db: DatabaseSyncLike, globalId: string) => void },
 ): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
-  if (!entry) throw new Error(`Memory not found: ${id}`);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   // CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
-    throw new Error(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+    throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
   }
 
   // v39 S4 producer veto: promote is a producer path to the global store
   // exactly like shareMemory - same hard rule (codex gating review P2).
   const promoteSecret = detectSecret(entry);
   if (promoteSecret.flagged) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to promote ${id} to the global store: content matches secret material (${promoteSecret.reason}). ` +
       `Secrets stay in their owning project's store.`,
     );
@@ -93,7 +102,7 @@ export function promoteToGlobal(
     origin_project: entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot))),
   };
 
-  writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
+  writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: opts?.afterWrite });
 
   // Fire-and-forget: embedMemory gates on availability and never rejects.
   void embedMemory(globalRoot, globalEntry);
@@ -232,14 +241,11 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
+  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
   // window before any admitted row is even loaded (codex gating round 6).
-  // Only ambient-context query mode sets entryFilter, and that path is
-  // interactive - never the per-turn pinned-only hook - so ranking the full
-  // match set is acceptable.
   // 5000 = 25x the default 200-row window: large enough that exclusion
   // crowding is a non-issue on real stores, bounded so a common query term
   // on a 100k-row store cannot stall an interactive call by ranking every
@@ -261,29 +267,37 @@ export async function searchBothHybrid(
         )
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
-  let localEntries = loadEntries(localRoot);
-  let globalEntries = loadEntries(globalRoot);
-  if (recallScope) {
-    const passes = (e: MemoryEntry) =>
-      recallScope.additive
-        ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
-        : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested);
-    localEntries = localEntries.filter(passes);
-    globalEntries = globalEntries.filter(passes);
-  }
-  if (entryFilter) {
-    localEntries = localEntries.filter(entryFilter);
-    globalEntries = globalEntries.filter(entryFilter);
-  }
+  const passesScope = (e: MemoryEntry): boolean =>
+    !recallScope || (recallScope.additive
+      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
+      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested));
+  const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
+  const localEntries = loadEntries(localRoot).filter(admit);
+  const globalEntries = loadEntries(globalRoot).filter(admit);
 
-  if (localEntries.length === 0 && globalEntries.length === 0) return [];
+  // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
+  const vectorCandidates = {
+    tenantId,
+    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact') : undefined,
+    includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
+    admit,
+  };
+  return rankBothStores(query, { local: localRoot, global: globalRoot }, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+}
 
-  const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  });
-  const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  });
+/** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
+export async function rankBothStores(
+  query: string,
+  roots: { local: string; global: string },
+  entries: { local: MemoryEntry[]; global: MemoryEntry[] },
+  vectorCandidates: HybridVectorCandidates,
+  options: HybridSearchOptions = {},
+): Promise<SearchResult[]> {
+  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness } = options;
+  if (entries.local.length === 0 && entries.global.length === 0) return [];
+  const shared = { budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness, vectorCandidates };
+  const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
+  const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });
 
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [
@@ -393,14 +407,14 @@ export function shareMemory(
   // B's memory to global. readEntry returns null on cross-tenant lookups
   // when tenantId is provided.
   const entry = readEntry(localRoot, id, options.tenantId);
-  if (!entry) throw new Error(`Memory not found: ${id}`);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   // v39 S4 producer veto: secrets never go to the global store, not even
   // with --force. Explicit and loud - a silent null would read as "low
   // transfer score" and invite retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
       `Secrets stay in their owning project's store.`,
     );
@@ -408,7 +422,7 @@ export function shareMemory(
 
   // CD5: a quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
   if (isQuarantineScope(entry.scope)) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }
@@ -464,31 +478,28 @@ export function listPeers(
 
   // D4: tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const allEntries = loadAllEntries(root);
-  const entries = tenantId !== undefined
-    ? allEntries.filter((e) => e.tenantId === tenantId)
-    : allEntries;
+  const tallies = tallySources(root, tenantId).sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
   const peerMap = new Map<string, { count: number; latest: string }>();
 
-  for (const entry of entries) {
+  for (const tally of tallies) {
     let project = 'unknown';
 
-    if (entry.source.startsWith('shared:')) {
-      const parts = entry.source.split(':');
+    if (tally.source.startsWith('shared:')) {
+      const parts = tally.source.split(':');
       project = parts[1] || 'unknown';
-    } else if (entry.source.startsWith('promoted:')) {
-      const promotedPath = entry.source.slice('promoted:'.length);
+    } else if (tally.source.startsWith('promoted:')) {
+      const promotedPath = tally.source.slice('promoted:'.length);
       project = path.basename(path.resolve(promotedPath, '..'));
-    } else if (entry.source === 'cli-global') {
+    } else if (tally.source === 'cli-global') {
       project = 'global-cli';
     }
 
     const existing = peerMap.get(project);
     if (!existing) {
-      peerMap.set(project, { count: 1, latest: entry.created });
+      peerMap.set(project, { count: tally.count, latest: tally.latest });
     } else {
-      existing.count++;
-      if (entry.created > existing.latest) existing.latest = entry.created;
+      existing.count += tally.count;
+      if (tally.latest > existing.latest) existing.latest = tally.latest;
     }
   }
 
@@ -601,13 +612,13 @@ export function autoShare(
   }
 
   if (rejectedSkipped > 0) {
-    console.error(
+    log.warn(
       `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
     );
   }
 
   if (shared.length > 0) {
-    void embedAll(globalRoot).catch(() => {});
+    void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;
@@ -668,13 +679,13 @@ export function syncGlobalToLocal(
   }
 
   if (rejected > 0) {
-    console.error(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
+    log.warn(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
   }
 
   // Batch producer: one embedAll() on the destination rather than an
   // embedMemory() per copied row (same batching invariant as autoShare).
   if (count > 0) {
-    void embedAll(localRoot).catch(() => {});
+    void embedAll(localRoot).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 
   return count;

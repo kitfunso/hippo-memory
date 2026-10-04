@@ -9,8 +9,8 @@ import { runAll, planRuns, validateTasks, preflight, cacheTaskRepos } from '../s
 import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-eval/records.mjs';
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
-import { validateCorpus, validateRecord } from './fixtures/z0-contract';
-import { loadAllEntries } from '../src/store.js';
+import { validateCorpus, validateRecord } from './fixtures/z0-contract.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;
@@ -132,7 +132,11 @@ describe('Z0 runner plan and reads', () => {
       const [a, b] = [steps[i - 1], steps[i]];
       expect(a.seed < b.seed || (a.seed === b.seed && a.position <= b.position)).toBe(true);
     }
-    const firsts = (seed: number) => [0, 1, 2].map((p) => steps.find((s: { seed: number; position: number }) => s.seed === seed && s.position === p).arm);
+    const firsts = (seed: number) => [0, 1, 2].map((p) => {
+      const step = steps.find((s: { seed: number; position: number }) => s.seed === seed && s.position === p);
+      if (!step) throw new Error(`no step for seed ${seed} position ${p}`);
+      return step.arm;
+    });
     expect(steps.filter((s: { seed: number; arm: string }) => s.seed === 3 && s.arm === 'A0')).toHaveLength(0);
     expect(new Set(firsts(3))).toEqual(new Set(['A1', 'A2', 'A5']));
     expect(firsts(1)[0]).not.toBe(firsts(1)[1]);
@@ -579,7 +583,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const out = join(scratch, 'out');
     mkdirSync(out);
     writeFileSync(join(out, 'runs.jsonl'), '{"earlier":true}\n');
-    const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
+    const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
     delete env.Z0_ANCESTOR_STOP;
     const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
     expect(real.status).not.toBe(0);
@@ -614,7 +618,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const tasksFile = join(scratch, 'tasks.json');
     writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: r.linked })] }] }));
     const out = join(scratch, 'out');
-    const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
+    const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
     delete env.Z0_ANCESTOR_STOP;
     const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
     expect(real.status).not.toBe(0);

@@ -17,7 +17,7 @@ export interface Z0Record extends Z0PlanCell {
   acceptancePassed: boolean | null; timedOut: boolean; leak: boolean; resolved: boolean; invalid: string | null; void: string | null;
   surfaceRestored?: boolean; chain?: Z0Chain;
   limitRetries: number | null; carryUnionMerges: number | null; carryMerges?: number;
-  sessionId: string | null; resumeSessionId: string | null; transcriptFound: boolean; hippo: object | null; agentError: string | null;
+  baseCommit?: string | null; sessionId: string | null; resumeSessionId: string | null; transcriptFound: boolean; hippo: object | null; agentError: string | null;
 }
 
 const RN_ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];

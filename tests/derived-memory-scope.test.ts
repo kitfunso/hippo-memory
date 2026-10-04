@@ -4,15 +4,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-  appendSessionEvent,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { consolidate } from '../src/consolidate.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
@@ -61,13 +59,15 @@ describe('T3: consolidate() merge pass partitions by scope', () => {
       writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
       const backbone = 'rotate the staging tls certificates before expiry';
-      const privShort = createMemory(backbone, { layer: Layer.Episodic, scope: 'slack:private:C1' });
+      const privShort = createMemory(backbone, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, scope: 'slack:private:C1' });
       const privLong = createMemory(`${backbone} zzzprivatemarkerzzz notify the on-call channel`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         scope: 'slack:private:C1',
       });
-      const pubShort = createMemory(backbone, { layer: Layer.Episodic, scope: null });
+      const pubShort = createMemory(backbone, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, scope: null });
       const pubLong = createMemory(`${backbone} notify the on-call channel of the change`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         scope: null,
       });
@@ -102,8 +102,8 @@ describe('dedupe partitions by restricted scope', () => {
     try {
       initStore(home);
       const text = 'rotate the staging tls certificates before expiry and notify on-call';
-      const priv = createMemory(text, { layer: Layer.Semantic, scope: 'slack:private:C1' });
-      const pub = createMemory(text, { layer: Layer.Semantic, scope: null });
+      const priv = createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, scope: 'slack:private:C1' });
+      const pub = createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, scope: null });
       writeEntry(home, { ...priv, strength: 0.9 });
       writeEntry(home, { ...pub, strength: 0.1 });
 
@@ -175,10 +175,10 @@ describe('T3: dag buildDag / buildEntityProfiles partition by scope', () => {
     try {
       initStore(home);
       const privFacts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-        createMemory(c, { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
+        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
       );
       const pubFacts = ['alice shipped P', 'alice reviewed Q', 'alice merged R'].map((c) =>
-        createMemory(c, { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
+        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
       );
       for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
@@ -222,6 +222,7 @@ describe('T3: dag buildDag / buildEntityProfiles partition by scope', () => {
     try {
       initStore(home);
       const makeL2 = (content: string, scope: string | null) => createMemory(content, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dag_level: 2, scope,
       });
       const privL2s = [
@@ -272,6 +273,7 @@ describe('T3: extract.ts storeExtractedFacts copies the source scope', () => {
     try {
       initStore(home);
       const source = createMemory('Alice prefers dark mode and vim keybindings', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         scope: 'slack:private:C1',
       });
@@ -295,6 +297,7 @@ describe('T3: extract.ts storeExtractedFacts copies the source scope', () => {
 describe('T6: assembleBriefFromReceipts excludes restricted receipts', () => {
   function addReceipt(home: string, repo: string, content: string, scope: string | null): string {
     const mem = createMemory(content, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: [`path:${repo.toLowerCase()}`, 'note'],
       layer: Layer.Semantic,
       confidence: 'verified',

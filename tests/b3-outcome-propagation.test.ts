@@ -3,12 +3,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
-import { remember } from '../src/api.js';
+import { initStore } from '../src/store/open.js';
+import { remember, type Context } from '../src/api.js';
 import { pushGoal, completeGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);

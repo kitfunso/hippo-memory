@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { readTranscriptTail, truncateCodePointSafe } from '../src/capture.js';
+import { readTranscriptTail, truncateCodePointSafe } from '../src/transcript-tail.js';
 
 /**
  * Direct unit tests for readTranscriptTail's positional-read boundary

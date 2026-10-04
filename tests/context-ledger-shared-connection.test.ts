@@ -6,8 +6,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -34,7 +35,7 @@ let preloadPath: string;
 let logPath: string;
 
 function seedCli(content: string, extra: Partial<MemoryEntry> = {}) {
-  writeEntry(hippoDir, { ...createMemory(content), ...extra });
+  writeEntry(hippoDir, { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra });
 }
 
 function enablePromptRecall(root: string) {

@@ -87,6 +87,16 @@ def test_sync_auth_list_includes_role_when_server_v1_12_3plus(hippo_server: str)
             assert k.key_id.startswith("hk_")
 
 
+def test_sync_auth_list_follows_next_cursor_across_pages(hippo_server: str):
+    with HippoSync(base_url=hippo_server) as client:
+        for i in range(3):
+            client.auth_create(label=f"paging-key-{i}", role="member")
+        whole = client.auth_list()
+        paged = client.auth_list(page_size=2)
+        assert len(whole) >= 3
+        assert [k.key_id for k in paged] == [k.key_id for k in whole]
+
+
 def test_sync_error_on_unknown_route_raises_HippoError(hippo_server: str):
     with HippoSync(base_url=hippo_server) as client:
         try:

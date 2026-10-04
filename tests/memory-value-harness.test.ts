@@ -36,23 +36,17 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { computeSplit } from '../benchmarks/memory-value/split.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { computeSchemaFit } from '../dist/memory.js';
 
+import type { MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
 
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
@@ -69,8 +63,7 @@ afterAll(() => {
 });
 
 // Typed seams over the untyped .mjs harness surface (CONFIG / readJsonl /
-// readJson / scratchRootDir all import as `any`, per the @ts-expect-error
-// imports above). Each helper below owns the ONE cast for its shape so every
+// readJson / scratchRootDir import with weak inferred types from the .mjs files above). Each helper below owns the ONE cast for its shape so every
 // call site downstream is fully typed without repeating the justification.
 
 // SAFETY: config.mjs's FEATURES is a fixed array of feature-name strings,
@@ -166,17 +159,18 @@ describe('memory-value harness (real stores)', () => {
       const gold = jsonFile<{ memories: Array<{ id: string }> }>(goldPathFor(q.question_id));
       const { turns } = computeGold(q);
 
-      const entriesSoFar: Array<{ tags: string[]; content: string }> = [];
+      const entriesSoFar: MemoryEntry[] = [];
       let memIdx = 0;
       for (const t of turns) {
-        const content = (t.content ?? '').trim();
+        // SAFETY: computeGold pushes `content: t.content` on every turn (common.mjs:285); the inferred element type drops it.
+        const content = ((t as { content?: string }).content ?? '').trim();
         if (content.length < 3) continue; // mirrors ingest.mjs MIN_CONTENT_LEN
         const expectedFit = computeSchemaFit(content, [], entriesSoFar);
         const memId = gold.memories[memIdx].id;
         const row = rowById.get(memId);
         expect(row, `no features row for ${memId}`).toBeDefined();
         expect(row!.features.schema_fit).toBeCloseTo(expectedFit, 10);
-        entriesSoFar.push({ tags: [], content });
+        entriesSoFar.push(createMemory(content));
         memIdx++;
       }
 

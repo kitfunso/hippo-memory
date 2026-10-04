@@ -5,7 +5,7 @@ import { evalNow } from './ablation.js';
 import { oneCopyPerMemory } from './api.js';
 import { compareEntryIdentity } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
-import { isEmbeddingAvailable } from './embeddings.js';
+import { isEmbeddingAvailable } from './local-embedding.js';
 import { computeGoalStackBoost, type GoalRecallLogRow } from './goals.js';
 import { graphExpandRecall } from './graph-recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
@@ -14,10 +14,12 @@ import { multihopSearch } from './multihop.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { passesCliRecallScopeFilter } from './recall-scope.js';
 import type { RerankerFn } from './rerankers/types.js';
-import { hybridSearch, physicsSearch, textOverlap, type RerankStep, type ResultCost, type SearchResult } from './search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { physicsSearch } from './search/physics-search.js';
+import type { RerankStep, ResultCost, SearchResult } from './search/types.js';
 import { searchBothHybrid } from './shared.js';
-import { loadRecallSearchEntries } from './store.js';
-import { tokenize as tokenizeQuery } from './tokenize.js';
+import { loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
+import { textOverlap, tokenize as tokenizeQuery } from './tokenize.js';
 
 /** Stores rankRecall reads and where it sends operator notes. */
 export interface RankRecallCtx {
@@ -40,7 +42,7 @@ export interface RecallSearchOpts {
   mmrLambda: number;
   localBump: number;
   minResults?: number;
-  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out the bi-temporal flags. */
+  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and includeSuperseded. */
   explain: boolean;
 }
 
@@ -220,10 +222,17 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
     return multihopSearch(query, allEntries, { budget, cost, hippoRoot: ctx.hippoRoot, minResults, includeSuperseded, asOf });
   }
+  const requested = opts.explicitScope || undefined;
+  const vectorCandidates = {
+    tenantId: ctx.tenantId,
+    scope: recallScopeFilter(requested, 'additive'),
+    includeSuperseded: includeSuperseded || Boolean(asOf),
+    admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
+  };
   if (search.usePhysics && !globalRoot) {
-    // Explain has never passed the bi-temporal flags to physics; keeping that holds its output steady.
-    const temporal = explain ? {} : { minResults, includeSuperseded, asOf };
-    return physicsSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, ...temporal });
+    // Explain leaves minResults and includeSuperseded out to hold its output steady; asOf must reach physics or later rows leak.
+    const temporal = explain ? { asOf } : { minResults, includeSuperseded, asOf };
+    return physicsSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, vectorCandidates, ...temporal });
   }
   if (globalRoot) {
     // searchBothHybrid reloads candidates itself, so the scope rule is passed in rather than inherited from the pool.
@@ -233,7 +242,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
       recallScope: opts.explicitScope ? { requested: opts.explicitScope, additive: true } : {},
     });
   }
-  return hybridSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf });
+  return hybridSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, vectorCandidates });
 }
 
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */

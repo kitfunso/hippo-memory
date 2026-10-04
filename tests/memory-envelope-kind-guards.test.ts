@@ -3,12 +3,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { writeEntry, readEntry, initStore } from '../src/store.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 describe('memory envelope: kind column, delete and update guards, raw_archive, round-trip', () => {
-  it('getCurrentSchemaVersion matches the constant in src/db.ts', () => {
+  it('getCurrentSchemaVersion matches the constant in src/db/migrations/index.ts', () => {
     expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
   });
 

@@ -22,11 +22,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   savePolicy,
@@ -38,13 +38,8 @@ import {
   normalizePolicyDate,
   VALID_POLICY_STATES,
 } from '../src/policies.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -212,8 +207,8 @@ describe('policies store (E2 bi-temporal first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the policy; old versions stay loadable', () => {
     const v1 = savePolicy(home, 'default', { policyName: 'D', policyText: 'a' });
     const v2 = savePolicy(home, 'default', { policyName: 'D', policyText: 'b', supersedesPolicyId: v1.id });
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     const reV1 = loadPolicyById(home, 'default', v1.id)!;
     expect(reV1.memoryId).toBeNull();
     expect(reV1.status).toBe('superseded');

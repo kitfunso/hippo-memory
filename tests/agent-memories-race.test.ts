@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import {
   agentRows, assertFreshDist, closeWorld, codexSummary, distUrl, liveRows, note, openWorld, projectNotes, type World,
 } from './_helpers/agent-memories-world.js';

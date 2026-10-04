@@ -20,8 +20,13 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { initStore, writeEntry, readEntry, loadAllEntries, rebuildIndex, appendSessionEvent } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { rebuildIndex } from '../src/store/index-and-stats.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
   RejectedValueError,
@@ -30,11 +35,11 @@ import {
   insertRejectedValue,
   findRejectedValue,
 } from '../src/rejection.js';
-import { cmdCapture } from '../src/capture.js';
+import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
-import { importEntries } from '../src/importers.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { importEntries } from '../src/importers/core.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
@@ -172,7 +177,7 @@ describe('AT1 case 3: copy-path refusal (syncGlobalToLocal)', () => {
       // mockRestore() (unlike a bare unspy) also clears recorded call
       // history, so every assertion against errorSpy must run BEFORE it —
       // restore happens last, after the spy has served its purpose.
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const count = syncGlobalToLocal(localRoot, globalRoot);
       expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
@@ -416,7 +421,7 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
         closeHippoDb(db);
       }
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const result = await consolidate(home, { dryRun: false });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
@@ -551,7 +556,7 @@ describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
       api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
       expect(readEntry(home, traceBefore!.id)).toBeNull();
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const secondResult = await consolidate(home, { now: new Date() });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 auto-promoted trace'),
@@ -615,7 +620,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
         closeHippoDb(db);
       }
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const result = await consolidate(home, { dryRun: false });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
@@ -709,7 +714,7 @@ describe('AT1 codex-P1 fix 3: autoShare per-candidate rejection containment', ()
       api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
 
       const stats = { secretSkipped: 0, rejectedSkipped: 0 };
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const shared = autoShare(localRoot, { minScore: 0, stats });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 candidate(s) refused'),
