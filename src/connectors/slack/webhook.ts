@@ -1,3 +1,4 @@
+import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../env.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './types.js';
 import { ingestMessage } from './ingest.js';
@@ -39,13 +40,13 @@ import {
  */
 export async function handleSlackEventsWebhook({ req, res, opts }: WebhookRequest): Promise<void> {
   const rawBody = await readBody(req);
-  const secret = process.env.SLACK_SIGNING_SECRET;
+  const secret = envSlackSigningSecret();
   if (!secret) {
     res.writeHead(404, JSON_HEADERS);
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
-  const previousSecret = process.env.SLACK_SIGNING_SECRET_PREVIOUS;
+  const previousSecret = envSlackSigningSecretPrevious();
   const sig = req.headers['x-slack-signature'];
   const tsHdr = req.headers['x-slack-request-timestamp'];
   const sigStr = isHeaderString(sig) ? sig : null;

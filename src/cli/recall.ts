@@ -1,9 +1,11 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
+import { envHippoSessionId } from '../env.js';
 import { confidenceFacets, Layer } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import { strengthenRetrieved } from '../store/entry-writes.js';
+import { isRecallBoostAblated } from '../ablation.js';
 import { loadIndex, saveIndex, updateStats } from '../store/index-and-stats.js';
 import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
@@ -257,7 +259,7 @@ function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
-      : process.env.HIPPO_SESSION_ID ?? ''
+      : envHippoSessionId() ?? ''
   ).trim();
   return {
     budget, limit, asJson, showWhy, includeSuperseded, asOf, globalRoot, primaryIsGlobal, tenantId,
@@ -592,8 +594,9 @@ function writeRecallResult(hippoRoot: string, query: string, o: RecallOptions, f
 function recordRetrieval(hippoRoot: string, query: string, o: RecallOptions, results: SearchResult[], localIndex: RankedRecall['localIndex']): void {
   const { globalRoot, tenantId, sessionId, showWhy } = o;
   const retrievedIds = results.map((r) => r.entry.id);
-  const strengthenedHere = strengthenRetrieved(hippoRoot, retrievedIds);
-  if (isInitialized(globalRoot)) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)));
+  const gate = { recallBoostAblated: isRecallBoostAblated() };
+  const strengthenedHere = strengthenRetrieved(hippoRoot, retrievedIds, gate);
+  if (isInitialized(globalRoot)) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)), gate);
 
   // Track last retrieval IDs for outcome command
   localIndex.last_retrieval_ids = retrievedIds;

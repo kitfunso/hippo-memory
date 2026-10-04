@@ -1,5 +1,7 @@
 /** One retry policy for outbound HTTP: a timeout on every attempt, and backoff on 429 and 5xx only. */
 
+import { envLlmTimeoutMs } from './env.js';
+
 export interface RetryPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
   timeoutMs: number;
@@ -22,8 +24,7 @@ const DEFAULT_LLM_TIMEOUT_MS = 60_000;
 
 /** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; `HIPPO_LLM_TIMEOUT_MS` overrides it. */
 export function llmTimeoutMs(): number {
-  const parsed = Number.parseInt(process.env.HIPPO_LLM_TIMEOUT_MS ?? '', 10);
-  return parsed > 0 ? parsed : DEFAULT_LLM_TIMEOUT_MS;
+  return envLlmTimeoutMs() ?? DEFAULT_LLM_TIMEOUT_MS;
 }
 
 export function isRetryableStatus(status: number): boolean {

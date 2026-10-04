@@ -1,5 +1,6 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
+import { envHippoSessionId } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from '../goals.js';
 import type { PolicyType, Goal, GoalRow } from '../goals.js';
@@ -27,7 +28,7 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
-      : process.env.HIPPO_SESSION_ID ?? ''
+      : envHippoSessionId() ?? ''
   ).trim();
   if (!sessionId) {
     printError('session id required (set HIPPO_SESSION_ID or pass --session-id)');

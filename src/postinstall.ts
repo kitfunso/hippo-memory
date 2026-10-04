@@ -1,10 +1,11 @@
+import { envSkipPostinstall } from './env.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 
 function main(): void {
-  if (process.env.HIPPO_SKIP_POSTINSTALL === '1') return;
+  if (envSkipPostinstall()) return;
 
   try {
     // Repair-only: re-ensure the wrapper for users who previously opted in

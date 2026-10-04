@@ -1,3 +1,4 @@
+import { envHippoHome, envXdgDataHome } from './env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -218,9 +219,9 @@ export function classifyOriginProject(
  * shared.getGlobalRoot delegates to this.
  */
 export function resolveGlobalRootDir(): string {
-  const hippoHome = process.env.HIPPO_HOME?.trim();
+  const hippoHome = envHippoHome();
   if (hippoHome) return hippoHome;
-  const xdgData = process.env.XDG_DATA_HOME?.trim();
+  const xdgData = envXdgDataHome();
   if (xdgData) return path.join(xdgData, 'hippo');
   return path.join(os.homedir(), '.hippo');
 }

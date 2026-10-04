@@ -4,6 +4,7 @@
  * Falls back silently if the library is not installed.
  */
 
+import { envByName } from './env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -404,7 +405,7 @@ export async function embedAll(
       provider.kind !== 'local' &&
       cfg.enabled !== false &&
       provider.keyEnv &&
-      !process.env[provider.keyEnv]?.trim()
+      !envByName(provider.keyEnv)?.trim()
     ) {
       throw new Error(
         `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,

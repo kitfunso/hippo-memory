@@ -1,6 +1,5 @@
 import { type MemoryEntry, markRetrieved } from '../memory.js';
 import { type DatabaseSyncLike, closeHippoDb, openHippoDb } from '../db.js';
-import { isRecallBoostAblated } from '../ablation.js';
 import { RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { log } from '../log.js';
@@ -110,16 +109,22 @@ export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
 }
 
+/** The caller passes the eval-only recall-boost ablation switch, so the store never reads experiment config itself. */
+export interface StrengthenOptions {
+  readonly tenantId?: string;
+  readonly recallBoostAblated: boolean;
+}
+
 /** Strengthen what a read returned: update only the four retrieval columns on the live row, never a stale copy.
  *  Best effort: a failure logs and never fails the read. Returns the ids found in this store. */
-export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], tenantId?: string): Set<string> {
+export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], opts: StrengthenOptions): Set<string> {
   const found = new Set<string>();
-  if (ids.length === 0 || isRecallBoostAblated()) return found;
+  if (ids.length === 0 || opts.recallBoostAblated) return found;
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot);
     db.exec('BEGIN IMMEDIATE');
-    for (const id of strengthenRetrievedOn(db, ids, tenantId)) found.add(id);
+    for (const id of strengthenRetrievedOn(db, ids, opts)) found.add(id);
     db.exec('COMMIT');
   } catch (error) {
     try { db?.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
@@ -132,9 +137,10 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], t
 }
 
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */
-export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string[], tenantId?: string): Set<string> {
+export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
   const found = new Set<string>();
-  if (ids.length === 0 || isRecallBoostAblated()) return found;
+  if (ids.length === 0 || opts.recallBoostAblated) return found;
+  const { tenantId } = opts;
   const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
   const select = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenantClause}`);
   const live: MemoryEntry[] = [];

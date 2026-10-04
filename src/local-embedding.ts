@@ -1,4 +1,5 @@
 // The local Transformers.js embedder, a leaf so embedding-provider.ts can wrap it without importing embeddings.ts.
+import { envModelCache } from './env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
@@ -96,10 +97,10 @@ async function loadPipeline(model: string): Promise<any> {
       // failure to find a usable pipeline falls through to `return null`.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await _dynImport(pkg) as any;
-      if (process.env.HIPPO_MODEL_CACHE) {
+      if (envModelCache()) {
         if (mod.env) {
-          mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-          mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
+          mod.env.cacheDir = envModelCache();
+          mod.env.localModelPath = envModelCache();
           mod.env.allowRemoteModels = false;
         }
       }
@@ -112,7 +113,7 @@ async function loadPipeline(model: string): Promise<any> {
     if (!pipelineFn) return null;
 
     // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
-    const cacheRoot = process.env.HIPPO_MODEL_CACHE?.trim();
+    const cacheRoot = envModelCache()?.trim();
     const quantized = !cacheRoot
       || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
 

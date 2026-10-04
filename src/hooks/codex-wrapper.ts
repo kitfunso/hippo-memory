@@ -1,3 +1,4 @@
+import { envPath } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -195,7 +196,7 @@ export function detectRealCodexPath(): string | null {
   if (isCodexWrapperMetadataValid(metadata)) return metadata.realCodexPath;
 
   const { wrapperDir } = resolveCodexWrapperPaths();
-  const entries = (process.env.PATH ?? '')
+  const entries = (envPath() ?? '')
     .split(path.delimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)

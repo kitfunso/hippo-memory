@@ -1,4 +1,5 @@
 // MCP over HTTP: POST /mcp and the GET /mcp/stream SSE keepalive.
+import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import { handleMcpRequest, mcpErrorResponse, type McpRequest } from '../mcp/server.js';
@@ -107,8 +108,7 @@ function streamSlotKey(req: IncomingMessage): string {
 
 /** Takes a stream slot or throws 429; the slot is released once, when the response closes. */
 function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map<string, number>): void {
-  const configured = parseInt(process.env.MCP_SSE_MAX_STREAMS ?? '', 10);
-  const max = configured > 0 ? configured : DEFAULT_MAX_STREAMS_PER_CLIENT;
+  const max = envMcpSseMaxStreams() ?? DEFAULT_MAX_STREAMS_PER_CLIENT;
   const key = streamSlotKey(req);
   const open = slots.get(key) ?? 0;
   if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`);
@@ -147,9 +147,9 @@ export async function handleMcpStream(
   //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
   //     interval without waiting a full minute.
   const heartbeatMs =
-    parseInt(process.env.MCP_SSE_HEARTBEAT_MS ?? '60000', 10) || 60000;
+    envMcpSseHeartbeatMs() ?? 60000;
   const maxAgeMs =
-    (parseInt(process.env.MCP_SSE_MAX_AGE_SEC ?? '3600', 10) || 3600) * 1000;
+    (envMcpSseMaxAgeSec() ?? 3600) * 1000;
   const startedAt = Date.now();
   let closed = false;
   let checking = false;

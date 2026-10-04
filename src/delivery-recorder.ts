@@ -1,5 +1,6 @@
 // In-memory observer for one pinned-only context call: what was considered, why each was rejected, what reached stdout.
 // No DB access (the caller hands build()'s output to src/recall-trace.ts); hashes, ids, counts and enums only, never text.
+import { envTestDeliveryFault } from './env.js';
 import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
@@ -176,7 +177,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const startedMs = Date.now();
   const ts = evalNow().toISOString();
   // Test-only fault injection, as HIPPO_FAKE_NOW is for time.
-  const fault = process.env.HIPPO_TEST_DELIVERY_FAULT ?? '';
+  const fault = envTestDeliveryFault();
 
   const payloadSession = hookPayloadSessionId(init.stdinText);
   const subagent = isSubagentPayload(init.stdinText);

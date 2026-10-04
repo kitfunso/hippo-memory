@@ -1,5 +1,6 @@
 // `hippo slack`: backfill, dead-letter queue and workspace registry for the Slack connector.
 
+import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
@@ -25,7 +26,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
     process.exit(1);
   }
   // Real fetcher requires SLACK_BOT_TOKEN with channels:history scope.
-  const token = process.env.SLACK_BOT_TOKEN;
+  const token = envSlackBotToken();
   if (!token) {
     printError('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
     process.exit(2);
@@ -42,7 +43,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
     actor: api.adminActor('cli:slack-backfill'),
   };
   backfillChannel(ctx, {
-    teamId: process.env.SLACK_TEAM_ID ?? 'T_UNKNOWN',
+    teamId: envSlackTeamId() ?? 'T_UNKNOWN',
     channel: { id: channel, is_private: false },
     fetcher,
   })
@@ -89,7 +90,7 @@ function cmdSlackDlqReplay(
     id,
     {
       force,
-      signingSecret: process.env.SLACK_SIGNING_SECRET,
+      signingSecret: envSlackSigningSecret(),
     },
   );
   if (!result.ok) {

@@ -1,3 +1,4 @@
+import { envPort, envRequireAuth, envV1Rps } from './env.js';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
@@ -264,9 +265,9 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
  */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
-  const requestedPort = opts.port ?? Number(process.env.HIPPO_PORT ?? 6789);
+  const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
-  if (!LOOPBACK_HOSTS.has(host) && process.env.HIPPO_REQUIRE_AUTH !== '1') {
+  if (!LOOPBACK_HOSTS.has(host) && !envRequireAuth()) {
     throw new Error(
       `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
       `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
@@ -295,7 +296,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
   // set the rate before serve(). A non-positive or non-finite value disables
   // limiting (the opt-out knob).
-  const v1Rps = Number(process.env.HIPPO_V1_RPS ?? 20);
+  const v1Rps = Number(envV1Rps() ?? 20);
   const limiter: RateLimiter | undefined =
     Number.isFinite(v1Rps) && v1Rps > 0
       ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })

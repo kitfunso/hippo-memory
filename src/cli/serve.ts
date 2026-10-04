@@ -1,5 +1,6 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
+import { envPort } from '../env.js';
 import * as path from 'path';
 import { printError } from './output.js';
 import { requireInit, type CommandContext } from './shared.js';
@@ -25,7 +26,7 @@ export async function handleMcp(): Promise<void> {
 
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const portRaw = flags['port'] ?? process.env['HIPPO_PORT'] ?? '6789';
+  const portRaw = flags['port'] ?? envPort() ?? '6789';
   const port = Number(portRaw);
   if (!Number.isFinite(port) || port < 0) {
     printError(`Invalid --port: ${String(portRaw)}`);

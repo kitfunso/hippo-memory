@@ -1,3 +1,4 @@
+import { envHomeDir } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../capture-contract.js';
@@ -191,7 +192,7 @@ export function resolveLastSessionTranscript(
 
   if (!opts.mayScan) return null;
 
-  const home = process.env.HOME || process.env.USERPROFILE;
+  const home = envHomeDir();
   if (!home) return null;
   const projectsDir = path.join(home, '.claude', 'projects');
   if (!fs.existsSync(projectsDir)) return null;

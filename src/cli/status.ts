@@ -1,5 +1,6 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
+import { envHomeDir } from '../env.js';
 import { evalNow } from '../ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -385,7 +386,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     process.exit(1);
   }
   const includeLogs = flags['include-logs'] === true;
-  const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
+  const home = envHomeDir() || os.homedir();
   const now = new Date();
   const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
   const stamp = now.toISOString().replace(/[:.]/g, '-');

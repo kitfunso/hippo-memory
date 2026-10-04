@@ -1,3 +1,4 @@
+import { envHomeDir, processEnv } from '../env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -39,11 +40,11 @@ export const HIPPO_CAPTURE_ERROR_MARKER = 'hippo capture-error';
 export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
 
 export function homeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || os.homedir();
+  return envHomeDir() || os.homedir();
 }
 
 /** Codex's config folder: $CODEX_HOME, else ~/.codex, as the Codex hooks docs describe. */
-export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<string, string | undefined>> = process.env): string {
+export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 

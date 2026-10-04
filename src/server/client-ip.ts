@@ -1,4 +1,5 @@
 // Client IP keying and the per-IP rate limit for /v1 and /mcp.
+import { envClientIpHeader, envTrustedProxies } from '../env.js';
 import type { IncomingMessage } from 'node:http';
 import { BlockList, isIP } from 'node:net';
 import { log } from '../log.js';
@@ -27,9 +28,9 @@ import { HttpError } from '../http-util.js';
  */
 export function clientIpForRateLimit(req: IncomingMessage): string {
   const socketIp = req.socket.remoteAddress ?? 'unknown';
-  const header = process.env.HIPPO_CLIENT_IP_HEADER?.trim().toLowerCase();
+  const header = envClientIpHeader();
   if (!header) return socketIp;
-  const trusted = trustedProxyList(process.env.HIPPO_TRUSTED_PROXIES);
+  const trusted = trustedProxyList(envTrustedProxies());
   if (trusted && !isTrustedProxy(trusted, socketIp)) return socketIp;
   const raw = req.headers[header];
   const hops = (Array.isArray(raw) ? raw.join(',') : raw ?? '')

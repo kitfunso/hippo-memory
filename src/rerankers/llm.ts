@@ -1,3 +1,4 @@
+import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../search/types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
@@ -25,7 +26,7 @@ interface FetchHeaders {
 export function createLlmReranker(): RerankerFn {
   let warned = false;
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
-    const url = process.env.HIPPO_LLM_RERANKER_URL;
+    const url = envLlmRerankerUrl();
     if (!url) {
       throw new Error('HIPPO_LLM_RERANKER_URL not set; refusing to run LLM reranker.');
     }
@@ -58,7 +59,7 @@ export const llmReranker: RerankerFn = createLlmReranker();
 
 /** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
 async function requestPermutation(url: string, query: string, head: readonly SearchResult[]): Promise<number[]> {
-  const key = process.env.HIPPO_LLM_RERANKER_KEY;
+  const key = envLlmRerankerKey();
   const prompt = [
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in best-first order.`,
     `Query: ${redactSecretsStrict(query)}`,
@@ -66,10 +67,7 @@ async function requestPermutation(url: string, query: string, head: readonly Sea
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
   ].join('\n');
 
-  const timeoutMs = Number.parseInt(
-    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS ?? '',
-    10,
-  ) || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = envLlmRerankerTimeoutMs() ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -85,7 +83,7 @@ async function requestPermutation(url: string, query: string, head: readonly Sea
       method: 'POST',
       headers: { ...headers },
       body: JSON.stringify({
-        model: process.env.HIPPO_LLM_RERANKER_MODEL ?? 'gpt-4o-mini',
+        model: envLlmRerankerModel() ?? 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0,
       }),

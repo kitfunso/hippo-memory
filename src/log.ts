@@ -1,5 +1,7 @@
 /** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or unknown means warn. */
 
+import { envLogLevel } from './env.js';
+
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 /** Extra key=value pairs appended to the line; `requestId` ties a line to one HTTP request. */
@@ -16,7 +18,7 @@ function isLogLevel(value: string): value is LogLevel {
 
 /** The active threshold, read on every call so a test or a long-lived server can change it without a restart. */
 export function logThreshold(): LogLevel {
-  const raw = process.env.HIPPO_LOG?.trim().toLowerCase() ?? '';
+  const raw = envLogLevel();
   return isLogLevel(raw) ? raw : 'warn';
 }
 

@@ -1,8 +1,10 @@
 // Read path: recall (sync) and retrieve (async, adds the vector arm).
 
+import { envRequireSessionScopedFreshTail } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import { strengthenRetrieved } from '../store/entry-writes.js';
+import { isRecallBoostAblated } from '../ablation.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../store/entry-reads.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
@@ -90,7 +92,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
   const result = recallFrom(ctx, opts, windowSize, candidates);
-  strengthenRetrieved(ctx.hippoRoot, result.results.map((r) => r.id), ctx.tenantId);
+  strengthenRetrieved(ctx.hippoRoot, result.results.map((r) => r.id), { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
   return result;
 }
 
@@ -137,7 +139,7 @@ async function retrieveFromStore(
   const inPool = new Set(pool.map((e) => e.id));
   const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
   const shown = show({ ranked, pool: candidates, droppedByScope: loaded.length - pool.length }, result);
-  strengthenRetrieved(ctx.hippoRoot, shown, ctx.tenantId);
+  strengthenRetrieved(ctx.hippoRoot, shown, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
   if (!opts.suppressRecallTrace) {
     const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
     writeRecallTraceAtRoot(ctx.hippoRoot, {
@@ -162,7 +164,7 @@ function recallWindowSize(opts: RecallOpts): number {
   if (
     freshTailCountPreflight > 0 &&
     !opts.freshTailSessionId &&
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL === '1'
+    envRequireSessionScopedFreshTail()
   ) {
     throw new RecallContractError(
       'fresh_tail_requires_session_id',

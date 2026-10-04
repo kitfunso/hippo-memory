@@ -1,4 +1,5 @@
 // Bearer and loopback auth for the HTTP server.
+import { envRequireAuth } from '../env.js';
 import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
@@ -191,7 +192,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
 
   // No Authorization header. Loopback-only fallback for a direct local caller (no proxy headers),
   // unless HIPPO_REQUIRE_AUTH=1 forbids the local-CLI escape hatch.
-  if (process.env.HIPPO_REQUIRE_AUTH === '1') {
+  if (envRequireAuth()) {
     throw new HttpError(401, 'auth required');
   }
   assertLocalCaller(req);
@@ -219,7 +220,7 @@ export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise
     await resolveBearer(auth.token, opts);
     return;
   }
-  if (process.env.HIPPO_REQUIRE_AUTH === '1') {
+  if (envRequireAuth()) {
     throw new HttpError(401, 'auth required');
   }
   assertLocalCaller(req);

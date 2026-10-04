@@ -1,5 +1,6 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
+import { envAnthropicApiKey } from '../env.js';
 import { evalNow } from '../ablation.js';
 import * as fs from 'fs';
 import {
@@ -163,7 +164,7 @@ async function cmdRemember(
 
   const config = loadConfig(targetRoot);
   const shouldExtract = flags['extract'] || config.extraction.enabled === true;
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+  const apiKey = envAnthropicApiKey() ?? '';
 
   if (shouldExtract && apiKey) {
     try {

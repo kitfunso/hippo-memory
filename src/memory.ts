@@ -3,6 +3,7 @@
  * Based on the strength formula from PLAN.md.
  */
 
+import { envLossAversionRatio } from './env.js';
 import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
 import {
@@ -208,7 +209,7 @@ let _lossAversionRatioCache: number | undefined;
 
 function getLossAversionRatio(): number {
   if (_lossAversionRatioCache !== undefined) return _lossAversionRatioCache;
-  const raw = process.env.HIPPO_LOSS_AVERSION_RATIO;
+  const raw = envLossAversionRatio();
   if (raw === undefined || raw === '') {
     _lossAversionRatioCache = 1.0;
     return 1.0;

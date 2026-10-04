@@ -1,3 +1,4 @@
+import { envAnthropicApiKey, envDagRebuildCap } from '../env.js';
 import { Layer } from '../memory.js';
 import { log } from '../log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
@@ -6,7 +7,7 @@ import { keptAsWritten, type SleepRun } from './run.js';
 function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
   const { config, result } = run;
   // extraction.enabled=false is the opt-out for every LLM phase below, key or no key.
-  const apiKey = config.extraction.enabled !== false ? (process.env.ANTHROPIC_API_KEY ?? '') : '';
+  const apiKey = config.extraction.enabled !== false ? (envAnthropicApiKey() ?? '') : '';
   const llmErrorsSeen = new Set<string>();
   const llmError = (phase: string) => (msg: string): void => {
     const line = `  ⚠️ ${phase}: ${msg}`;
@@ -92,12 +93,10 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   const { result } = run;
   try {
     const { rebuildDirtySummaries } = await import('../dag.js');
-    const rawCap = parseInt(process.env.HIPPO_DAG_REBUILD_CAP ?? '20', 10);
+    const rawCap = envDagRebuildCap();
     // R1 MED must-fix: hard ceiling so misconfigured env can't burn
     // unbounded LLM cost.
-    const cap = Number.isFinite(rawCap) && rawCap > 0
-      ? Math.min(rawCap, 1000)
-      : 20;
+    const cap = rawCap !== undefined ? Math.min(rawCap, 1000) : 20;
     const rebuildResult = await rebuildDirtySummaries(run.hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
     result.summariesRebuilt = rebuildResult.rebuilt;
     result.summariesRebuildFailed = rebuildResult.failed;

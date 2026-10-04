@@ -10,6 +10,7 @@
  *   - hippo github dlq replay <id> [--force]
  */
 
+import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
 import { type Context, adminActor } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { resolveTenantId } from '../../tenant.js';
@@ -92,7 +93,7 @@ export async function cmdGithubBackfill(
     printGithubBackfillUsage();
     process.exit(2);
   }
-  const token = process.env.GITHUB_TOKEN;
+  const token = envGithubToken();
   if (!token) {
     console.error(
       'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
@@ -199,8 +200,8 @@ export async function cmdGithubDlqReplay(
   // real hook so `replay` actually re-runs the ingest path.
   const result = await replayDlqEntry(ctx, id, {
     force,
-    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
-    previousSecret: process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS,
+    webhookSecret: envGithubWebhookSecret(),
+    previousSecret: envGithubWebhookSecretPrevious(),
     ingestHook: async (innerCtx, args) => {
       const parsed = JSON.parse(args.rawPayload);
       const event = parsedToIngestEvent(parsed, args.eventName);

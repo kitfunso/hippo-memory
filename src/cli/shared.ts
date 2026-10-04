@@ -1,6 +1,7 @@
 // Helpers two or more CLI verbs use, split from cli.ts so a verb can move to its own file without importing cli.ts.
 // This module must never import cli.ts.
 
+import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer } from '../env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
@@ -131,7 +132,7 @@ export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root
  * promote); every other command opens the store directly, knob or not.
  */
 function failIfServerRequired(reason: string): void {
-  if (process.env['HIPPO_REQUIRE_SERVER']) {
+  if (envRequireServer()) {
     throw new Error(
       `hippo: HIPPO_REQUIRE_SERVER is set but ${reason}. ` +
       `Start \`hippo serve\`, or unset HIPPO_REQUIRE_SERVER to allow direct-mode fallback.`,
@@ -163,7 +164,7 @@ export async function runViaServerIfAvailable(
     failIfServerRequired('no running server was detected for this hippoRoot');
     return false;
   }
-  const apiKey = process.env['HIPPO_API_KEY'];
+  const apiKey = envApiKey();
   try {
     await httpFn(info, apiKey);
     return true;
@@ -438,7 +439,7 @@ export function cardStringFlag(flags: Record<string, string | boolean | string[]
 
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
 export function hostSessionId(): string | undefined {
-  return process.env.HIPPO_SESSION_ID?.trim() || process.env.CLAUDE_CODE_SESSION_ID?.trim() || undefined;
+  return envHippoSessionId()?.trim() || envClaudeCodeSessionId()?.trim() || undefined;
 }
 
 /**

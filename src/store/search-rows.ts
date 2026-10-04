@@ -1,3 +1,4 @@
+import { envForceLikePath } from '../env.js';
 import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { tokenize } from '../tokenize.js';
@@ -133,7 +134,7 @@ function loadSearchRows(
   // `isFtsAvailable` honestly and never silently skip FTS index sync.
   // Lets tests exercise the LIKE branch deterministically without
   // poisoning the on-disk FTS state.
-  const forceLikePath = process.env.HIPPO_FORCE_LIKE_PATH === '1';
+  const forceLikePath = envForceLikePath();
   if (!forceLikePath && isFtsAvailable(db)) {
     try {
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');

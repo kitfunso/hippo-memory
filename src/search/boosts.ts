@@ -1,3 +1,4 @@
+import { envSummaryDeboost } from '../env.js';
 import { calculateStrength, CHURN_STALE_TAG, type MemoryEntry } from '../memory.js';
 import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '../ablation.js';
 import { pathBoostMultiplier } from '../path-context.js';
@@ -39,7 +40,7 @@ export function resolveSummaryDeboost(perCall?: number): number {
   if (perCall !== undefined && Number.isFinite(perCall) && perCall > 0 && perCall <= 1) {
     return perCall;
   }
-  const raw = process.env.HIPPO_SUMMARY_DEBOOST;
+  const raw = envSummaryDeboost();
   if (raw !== undefined) {
     const parsed = parseFloat(raw);
     if (Number.isFinite(parsed) && parsed > 0 && parsed <= 1) {

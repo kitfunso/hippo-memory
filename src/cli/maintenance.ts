@@ -1,5 +1,6 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
+import { envAnthropicApiKey } from '../env.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../dedupe.js';
 import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
@@ -19,7 +20,7 @@ export async function cmdRefine(
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = envAnthropicApiKey();
   if (!apiKey) {
     printError('hippo refine needs ANTHROPIC_API_KEY in the environment.');
     process.exit(1);

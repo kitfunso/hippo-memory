@@ -1,3 +1,5 @@
+import { envGstackSkill, envOpenclawSkill, envScope } from './env.js';
+
 /**
  * Detect the current operational scope from environment signals.
  * Returns a scope name string (no prefix), or null if no scope detected.
@@ -6,13 +8,13 @@
  * Pure env var reads: no I/O, safe to call from hot paths (e.g. UserPromptSubmit hook).
  */
 export function detectScope(): string | null {
-  const explicit = process.env['HIPPO_SCOPE'];
+  const explicit = envScope();
   if (explicit && explicit.trim()) return explicit.trim();
 
-  const gstackSkill = process.env['GSTACK_SKILL'];
+  const gstackSkill = envGstackSkill();
   if (gstackSkill && gstackSkill.trim()) return gstackSkill.trim();
 
-  const openclawSkill = process.env['OPENCLAW_SKILL'];
+  const openclawSkill = envOpenclawSkill();
   if (openclawSkill && openclawSkill.trim()) return openclawSkill.trim();
 
   return null;

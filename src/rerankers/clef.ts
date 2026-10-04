@@ -1,3 +1,4 @@
+import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../search/types.js';
@@ -58,7 +59,7 @@ function checkHeaderSafe(name: string, token: string): void {
 
 /** Transport from trusted local env, never call arguments: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
 export function resolveClefRoute(model: ClefModel): ClefRoute {
-  const endpoint = process.env.HIPPO_CLEF_ENDPOINT?.trim();
+  const endpoint = envClefEndpoint();
   if (endpoint) {
     let parsed: URL;
     try {
@@ -76,12 +77,12 @@ export function resolveClefRoute(model: ClefModel): ClefRoute {
     if (parsed.protocol === 'http:' && !isLoopback(parsed.hostname)) {
       throw new Error('HIPPO_CLEF_ENDPOINT must use https unless it is on this machine');
     }
-    const endpointToken = process.env.HIPPO_CLEF_ENDPOINT_TOKEN?.trim() || undefined;
+    const endpointToken = envClefEndpointToken();
     if (endpointToken) checkHeaderSafe('HIPPO_CLEF_ENDPOINT_TOKEN', endpointToken);
     return { url: parsed.href, token: endpointToken, backend: 'private-endpoint' };
   }
-  const account = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? '';
-  const token = process.env.CLOUDFLARE_API_TOKEN?.trim() ?? '';
+  const account = envCloudflareAccountId();
+  const token = envCloudflareApiToken();
   if (!account || !token) throw new Error('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN not set');
   if (!ACCOUNT_ID.test(account)) throw new Error('CLOUDFLARE_ACCOUNT_ID is not a 32-character hex id');
   checkHeaderSafe('CLOUDFLARE_API_TOKEN', token);
@@ -152,7 +153,7 @@ async function readCappedJson(resp: Response): Promise<JsonValue> {
 async function requestScores(model: ClefModel, query: string, head: SearchResult[], route: ClefRoute): Promise<ClefScores> {
   const { state, questions } = buildRelevanceRequest(query, head);
   // Strict parse: parseInt would read "15s" as 15 ms, and Node clamps a delay past 2^31-1 to 1 ms.
-  const requested = Number(process.env.HIPPO_CLEF_TIMEOUT_MS);
+  const requested = Number(envClefTimeoutMs());
   const timeoutMs = Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
   if (route.token) headers.set('authorization', `Bearer ${route.token}`);

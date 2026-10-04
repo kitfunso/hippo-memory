@@ -1,5 +1,6 @@
 // `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily runner.
 
+import { envSkipAutoIntegrations } from '../env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -180,7 +181,7 @@ export function cmdInit(hippoRoot: string, flags: Record<string, string | boolea
 /** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
 function initInstallsIntegrations(flags: Record<string, string | boolean | string[]>): boolean {
   if (flags['no-hooks']) return false;
-  if (process.env.HIPPO_SKIP_AUTO_INTEGRATIONS !== '1') return true;
+  if (!envSkipAutoIntegrations()) return true;
   console.log('   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');
   return false;
 }

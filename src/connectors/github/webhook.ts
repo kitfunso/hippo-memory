@@ -1,3 +1,4 @@
+import { envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
 import { verifyGitHubSignature } from './signature.js';
 import {
   isGitHubWebhookEnvelope,
@@ -42,13 +43,13 @@ import {
  */
 export async function handleGitHubEventsWebhook({ req, res, opts }: WebhookRequest): Promise<void> {
   const rawBody = await readBody(req);
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  const secret = envGithubWebhookSecret();
   if (!secret) {
     res.writeHead(404, JSON_HEADERS);
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
-  const previousSecret = process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS;
+  const previousSecret = envGithubWebhookSecretPrevious();
   const sigHdr = req.headers['x-hub-signature-256'];
   const eventHdr = req.headers['x-github-event'];
   const deliveryHdr = req.headers['x-github-delivery'];

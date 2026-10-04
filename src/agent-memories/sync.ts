@@ -1,4 +1,5 @@
 // Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan designs 2, 8, 11).
+import { processEnv } from '../env.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,7 +41,7 @@ export interface Machine {
 }
 
 export function currentMachine(): Machine {
-  return { home: os.homedir(), env: process.env, platform: process.platform };
+  return { home: os.homedir(), env: processEnv(), platform: process.platform };
 }
 
 export interface SyncOptions {

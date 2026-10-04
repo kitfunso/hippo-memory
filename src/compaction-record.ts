@@ -10,6 +10,7 @@ import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, g
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
+import { isRecallBoostAblated } from './ablation.js';
 import { updateStats } from './store/index-and-stats.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, log as logger } from './log.js';
@@ -331,7 +332,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
       }
     }
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, [...restated], ctx.tenantId);
+    strengthenRetrievedOn(db, [...restated], { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
       db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.length, ctx.tenantId, ctx.recordId);
     }

@@ -1,3 +1,4 @@
+import { envGithubAllowUnknownInstallationFallback, envTenant } from '../../env.js';
 import type { DatabaseSyncLike } from '../../db.js';
 
 export interface ResolveArgs {
@@ -35,8 +36,8 @@ export function resolveTenantForGitHub(
   db: DatabaseSyncLike,
   args: ResolveArgs,
 ): string | null {
-  const envFallback = (): string => process.env.HIPPO_TENANT?.trim() || 'default';
-  const escapeHatch = process.env.GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK === '1';
+  const envFallback = (): string => envTenant();
+  const escapeHatch = envGithubAllowUnknownInstallationFallback();
 
   // SAFETY: the row comes from the SELECT above, which projects exactly one
   // column, `c`, as a COUNT(*).

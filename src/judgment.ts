@@ -2,6 +2,7 @@
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so
  *  every captured memory currently lands on a flat schema_fit of 0.5. */
 
+import { envTypesafeApiKey } from './env.js';
 import { ConfidenceLevel, EmotionalValence } from './memory.js';
 import { fetchWithRetry } from './http-retry.js';
 import { log } from './log.js';
@@ -75,7 +76,7 @@ const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive
 
 /** Absent key means hippo keeps its pre-Jev behaviour and makes no HTTP call. */
 export function judgmentApiKey(): string | undefined {
-  const key = process.env.TYPESAFE_API_KEY?.trim();
+  const key = envTypesafeApiKey()?.trim();
   return key ? key : undefined;
 }
 

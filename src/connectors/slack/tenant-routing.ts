@@ -1,3 +1,4 @@
+import { envSlackAllowUnknownTeamFallback, envTenant } from '../../env.js';
 import type { DatabaseSyncLike } from '../../db.js';
 
 /**
@@ -33,11 +34,11 @@ export function resolveTenantForTeam(db: DatabaseSyncLike, teamId: string): stri
     .get() as { c: number | bigint }).c;
   if (Number(total) === 0) {
     // Single-workspace install: env fallback is safe.
-    return process.env.HIPPO_TENANT?.trim() || 'default';
+    return envTenant();
   }
 
-  if (process.env.SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK === '1') {
-    return process.env.HIPPO_TENANT?.trim() || 'default';
+  if (envSlackAllowUnknownTeamFallback()) {
+    return envTenant();
   }
 
   return null; // fail closed

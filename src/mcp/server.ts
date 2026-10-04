@@ -12,6 +12,7 @@ export { __resetSessionRecallHistoryMcp } from './session-state.js';
 export { findHippoRoot, mcpErrorResponse, type McpRequest, type McpResponse, type McpContext } from './protocol.js';
 export { handleMcpRequest } from './request.js';
 export { startStdioLoop } from './stdio.js';
+import { envMcpStdio } from '../env.js';
 import { startStdioLoop } from './stdio.js';
 
 // Auto-start when invoked as the main module (node dist/mcp/server.js or via
@@ -25,7 +26,7 @@ const isMainModule = (() => {
   try {
     const argv1 = process.argv[1] ?? '';
     if (argv1.endsWith('mcp/server.js') || argv1.endsWith('mcp\\server.js')) return true;
-    if (process.env.HIPPO_MCP_STDIO === '1') return true;
+    if (envMcpStdio()) return true;
     // ESM main-module check
     const mainUrl = `file://${argv1.replace(/\\/g, '/')}`;
     return import.meta.url === mainUrl || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`;

@@ -31,6 +31,7 @@
  * egress-blocked in the build sandbox).
  */
 
+import { envByName } from './env.js';
 import {
   type EmbeddingRole,
   getEmbedding,
@@ -231,12 +232,12 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   isAvailable(): boolean {
-    return this.enabled && !!process.env[this.keyEnv]?.trim();
+    return this.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
   async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
     if (texts.length === 0) return [];
-    const key = process.env[this.keyEnv]?.trim();
+    const key = envByName(this.keyEnv)?.trim();
     if (!key) {
       // Hard, actionable failure — never includes a key value (there is none).
       throw new Error(

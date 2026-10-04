@@ -19,6 +19,8 @@
  * signals; both can fire on the same recall.
  */
 
+import { envAnchoringOff, envAvailabilityOff } from './env.js';
+
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
@@ -317,6 +319,6 @@ export function snapshotRing(ring: RingBuffer): RecallHistorySnapshot {
  */
 export function biasHintEnabled(kind: 'anchoring' | 'availability'): boolean {
   return kind === 'anchoring'
-    ? process.env.HIPPO_ANCHORING !== 'off'
-    : process.env.HIPPO_AVAILABILITY !== 'off';
+    ? !envAnchoringOff()
+    : !envAvailabilityOff();
 }

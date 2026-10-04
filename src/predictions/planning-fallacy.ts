@@ -1,3 +1,4 @@
+import { envAutodebiasOff } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { appendAuditEvent } from '../audit.js';
 import { detectForwardClaim } from '../forward-claim-detector.js';
@@ -200,7 +201,7 @@ export function computePlanningFallacyOutput(
   // (rather than module-load cache) is deliberate: tests env-toggle this
   // via process.env mutation without module reload.
   const mode: AutodebiasMode =
-    opts.mode ?? (process.env.HIPPO_AUTODEBIAS === 'off' ? 'off' : 'regex');
+    opts.mode ?? (envAutodebiasOff() ? 'off' : 'regex');
   if (mode === 'off') return {};
   if (!queryText) return {};
 

@@ -1,3 +1,4 @@
+import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
 import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../search/types.js';
@@ -62,13 +63,12 @@ export function buildRelevanceRequest(query: string, head: readonly SearchResult
 
 /** One batched request for the whole candidate list. Rejects with the reason when there are no usable scores. */
 async function requestScores(query: string, head: SearchResult[]): Promise<number[]> {
-  const key = process.env.TYPESAFE_API_KEY;
+  const key = envTypesafeApiKey();
   if (!key) throw new Error('TYPESAFE_API_KEY not set');
 
   const { state, questions } = buildRelevanceRequest(query, head);
 
-  const parsed = Number.parseInt(process.env.HIPPO_JEV_TIMEOUT_MS ?? '', 10);
-  const timeoutMs = parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+  const timeoutMs = envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -77,7 +77,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({
         state,
-        model: process.env.HIPPO_JEV_MODEL ?? DEFAULT_MODEL,
+        model: envJevModel() ?? DEFAULT_MODEL,
         questions,
       }),
       signal: controller.signal,

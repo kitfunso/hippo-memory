@@ -34,6 +34,7 @@
  *   hippo wm <push|read|clear|flush>
  */
 
+import { envSkipAutoIntegrations } from './env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
@@ -177,7 +178,7 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
 }
 
 export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): boolean {
-  if (process.env.HIPPO_SKIP_AUTO_INTEGRATIONS === '1') return false;
+  if (envSkipAutoIntegrations()) return false;
   if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
     return false;
   }
