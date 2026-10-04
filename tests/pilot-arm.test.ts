@@ -107,7 +107,8 @@ describe('pilot arm helpers', () => {
       try {
         const started = Date.now();
         expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
-        expect(Date.now() - started).toBeLessThan(1500);
+        // Under the 5 s default wait; SQLite's busy sleeps overshoot on macOS, where a 1 s wait measured up to 1.7 s idle.
+        expect(Date.now() - started).toBeLessThan(3000);
       } finally {
         closeHippoDb(reader);
       }
