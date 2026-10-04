@@ -18,7 +18,7 @@ import { refineStore } from '../src/refine-llm.js';
 import { deduplicateLesson } from '../src/autolearn.js';
 import { cmdCapture } from '../src/capture.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
-import { importEntries } from '../src/importers.js';
+import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/shared.js';
 import { consolidate } from '../src/consolidate.js';
 import { listPeers, syncGlobalToLocal } from '../src/shared.js';

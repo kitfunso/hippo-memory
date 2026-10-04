@@ -12,9 +12,9 @@ import {
   importClaude,
   importCursor,
   importGenericFile,
-  importMarkdown,
-  ImportOptions,
-} from '../src/importers.js';
+} from '../src/importers/sources.js';
+import { importMarkdown } from '../src/importers/markdown.js';
+import { ImportOptions } from '../src/importers/core.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 

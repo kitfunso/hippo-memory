@@ -12,11 +12,10 @@ import {
   importClaude,
   importCursor,
   importGenericFile,
-  importMarkdown,
-  importVault,
-  type ImportOptions,
-  type ImportResult,
-} from '../src/importers.js';
+} from '../src/importers/sources.js';
+import { importMarkdown } from '../src/importers/markdown.js';
+import { importVault } from '../src/importers/vault.js';
+import { type ImportOptions, type ImportResult } from '../src/importers/core.js';
 import { captureToolFailure } from '../src/capture-error.js';
 import { captureError, partitionLessons } from '../src/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';

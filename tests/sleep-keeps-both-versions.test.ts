@@ -18,7 +18,7 @@ import * as api from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
-import { importEntries } from '../src/importers.js';
+import { importEntries } from '../src/importers/core.js';
 import { autoShare, getGlobalRoot, initGlobal, searchBoth, searchBothHybrid } from '../src/shared.js';
 import { cmdCapture, extractFromText } from '../src/capture.js';
 import { computeSalience } from '../src/salience.js';

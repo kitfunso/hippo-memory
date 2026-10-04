@@ -14,7 +14,8 @@ import * as api from '../src/api.js';
 import { consolidate } from '../src/consolidate.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts } from '../src/extract.js';
-import { importGenericFile, importVault } from '../src/importers.js';
+import { importGenericFile } from '../src/importers/sources.js';
+import { importVault } from '../src/importers/vault.js';
 import { cmdCapture } from '../src/capture.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 

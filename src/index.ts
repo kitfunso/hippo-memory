@@ -120,12 +120,10 @@ export {
   importClaude,
   importCursor,
   importGenericFile,
-  importMarkdown,
-  importVault,
-  importEntries,
-  ImportResult,
-  ImportOptions,
-} from './importers.js';
+} from './importers/sources.js';
+export { importMarkdown } from './importers/markdown.js';
+export { importVault } from './importers/vault.js';
+export { importEntries, ImportResult, ImportOptions } from './importers/core.js';
 
 // Feature eval suite
 export {

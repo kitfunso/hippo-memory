@@ -27,10 +27,10 @@ import {
   importClaude,
   importCursor,
   importGenericFile,
-  importMarkdown,
-  importVault,
-  ImportOptions,
-} from '../importers.js';
+} from '../importers/sources.js';
+import { importMarkdown } from '../importers/markdown.js';
+import { importVault } from '../importers/vault.js';
+import { ImportOptions } from '../importers/core.js';
 import * as api from '../api.js';
 import * as client from '../client.js';
 import { resolveTenantId } from '../tenant.js';
