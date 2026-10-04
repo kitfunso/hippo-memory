@@ -116,7 +116,7 @@ export interface VoidHit { reason: string; class: string | null; tool: string | 
 export interface LeakHit { lessonId: string | null; surface: string; path: string | null }
 export interface InjectedRows { rows: number; importedRows: number; chars: number; importedChars: number; unmatched: number; ambiguous: number }
 export type RunRecord = Z0Record & {
-  voidHits?: VoidHit[]; resumeVoidHits?: VoidHit[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string };
+  voidHits?: VoidHit[]; resumeVoidHits?: VoidHit[]; resumeAncestorHits?: string[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string };
   chain?: { capturedAny: boolean | null }; injectedRows?: InjectedRows;
 };
 export const readRecords = (out: string): RunRecord[] => jsonl<RunRecord>(join(out, 'runs.jsonl'));

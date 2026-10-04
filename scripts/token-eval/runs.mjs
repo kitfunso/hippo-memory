@@ -148,9 +148,17 @@ export function writeRecord(ctx, record) {
 // Async, so a run inside a test worker never blocks the worker's RPC with its parent.
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
+let afterSettle = () => {};
+
+/** Test seam standing in for a background hook that writes during the wait (the lint bans module mocks); null removes it. */
+export function __setSettleHook(fn) {
+  afterSettle = fn ?? (() => {});
+}
+
 /** Hippo arms only: SessionEnd runs capture and sleep in a background worker, so let it finish before the next turn reads the store. */
 export async function settle(ctx, run, cell, when) {
   if (!HIPPO_ARMS.has(run.arm)) return;
   await sleep(ctx.settleMs);
   fs.appendFileSync(path.join(run.dirs.root, 'settle.log'), `${cell} ${when}\n`);
+  afterSettle(run, cell, when);
 }

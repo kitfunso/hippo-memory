@@ -64,13 +64,15 @@ function baseFields(ctx, run, step) {
   return base;
 }
 
-/** Instruction files in the agent-writable dirs between work/ and the out dir, written to the raw dir when there are any. */
-function ancestorHits(ctx, run, t) {
+/** Instruction files in the agent-writable dirs between work/ and the out dir, written to the raw dir as `name` when there are any. */
+function ancestorFiles(ctx, run, name) {
   // Claude Code loads every ancestor's CLAUDE.md, and preflight checked only the out dir, before any agent ran.
   const hits = ancestorInstructionFiles(path.dirname(run.dirs.work), { stopAt: ctx.outDir });
-  if (hits.length) fs.writeFileSync(path.join(run.rawDir, `${t.id}.ancestor.txt`), `${hits.join('\n')}\n`);
-  return hits.length > 0;
+  if (hits.length) fs.writeFileSync(path.join(run.rawDir, name), `${hits.join('\n')}\n`);
+  return hits;
 }
+
+const ancestorHits = (ctx, run, t) => ancestorFiles(ctx, run, `${t.id}.ancestor.txt`).length > 0;
 
 /** Every runner write before the session, then Z0_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
 function stageTask(ctx, run, step) {
@@ -160,20 +162,29 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
   if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
+  let resumeAncestorHits;
+  // Only a failing apply resumes, so its resume-time file is kept, never invalidating it; every teach resumes, so its file voids it (reading 13).
+  const resumeAncestors = () => {
+    if (teach) return (stage.ancestors ||= ancestorHits(ctx, run, t));
+    const hits = ancestorFiles(ctx, run, `${t.id}.resume-ancestor.txt`);
+    if (hits.length) resumeAncestorHits = hits.map((h) => path.relative(ctx.outDir, h).split(path.sep).join('/'));
+    return hits.length > 0;
+  };
   await settle(ctx, run, t.id, 'pre-resume');
-  // Again after the hooks settle, since one could write above work/ before the resume reads it.
-  if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
+  // Again after the hooks settle, since one could write above work/ before the resume reads it; the resume would load it, so it is skipped.
+  if (resumeAncestors()) return { ...noResume, resumeAncestorHits };
   const preResume = snapshotSurfaces(ctx, run, 'pre-resume', step);
   // Memory session 1 wrote reaches the resume; a rerun restores to this snapshot, so the verdict holds for it too.
   stage.resumeDelivery = newHits(deliveryHits(run, preResume, instructionSnapshot(run.dirs.work)), stage.delivery);
-  // A file a cut-off attempt left above work/ voids the cell, so the rerun never spends plan usage and A4 is never taught from it.
+  // A file a cut-off attempt left above work/ stops the rerun, so it never spends plan usage and A4 is never taught from it.
   const afterReset = () => {
     stage.restores.push(restoreSurfaces(ctx, run, preResume, 'resume-restore', step));
-    return (stage.ancestors ||= ancestorHits(ctx, run, t));
+    return resumeAncestors();
   };
   const resume = await resumeSession(ctx, run, t, sessionIds[0], teachMessage(lesson, form), afterReset).catch((err) => guarded(run, t, stage, () => { throw err; }));
   if (!resume) return noResume;
-  if (resume.stopped) return { ...noResume, resume };
+  // The reset put the transcripts back, so no resume ran; only its retries and wait are kept.
+  if (resume.stopped) return { ...noResume, resumeAncestorHits, cutOffResume: resume };
   writeRaw(run, `${t.id}.resume.json`, resume.cc.stdout || JSON.stringify({ error: resume.cc.stderr.slice(0, 4000), status: resume.cc.status }));
   const timedOut = !resume.result && resume.cc.timedOut;
   // A resume killed before its result names no id; one that forked a new id left a new top-level file.
@@ -263,8 +274,8 @@ function sessionRecord(ctx, run, step, parts) {
   const resumeId = resume?.result?.session_id ?? (resume?.cc.timedOut ? sessionIds.at(-1) : null);
   const g1 = resumeAwareVoid(ctx, run, step, stage, sessionIds, resume);
   const shared = {
-    void: g1.void, voidHits: g1.void ? g1.voidHits : undefined, resumeVoidHits: g1.resumeVoidHits,
-    timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + (resume?.limitRetries ?? 0),
+    void: g1.void, voidHits: g1.void ? g1.voidHits : undefined, resumeVoidHits: g1.resumeVoidHits, resumeAncestorHits: turns?.resumeAncestorHits,
+    timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + ((resume ?? turns?.cutOffResume)?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
     surfaceRestored: stage.restores.every(Boolean), injectedRows: stage.injected,
@@ -319,7 +330,7 @@ async function runTurns(ctx, run, step, stage, base) {
   if (stage.chainPre) stage.chainPre.shown ||= shownInSession(run, stage.chainPre.lesson, sessionIds);
   // A timed-out session is still checked and resumed (prereg 109, 165).
   const turns = sessionIds.length && !stage.ancestors ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
-  const wallMs = Math.round(performance.now() - started - session.cutOffMs - (turns?.resume?.cutOffMs ?? 0));
+  const wallMs = Math.round(performance.now() - started - session.cutOffMs - ((turns?.resume ?? turns?.cutOffResume)?.cutOffMs ?? 0));
   // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
   if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');

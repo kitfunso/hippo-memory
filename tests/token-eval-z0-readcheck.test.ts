@@ -1,13 +1,15 @@
 // Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { symlinkSync } from 'node:fs';
+import { symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
+import { __setSettleHook } from '../scripts/token-eval/runs.mjs';
 import { validateCorpus } from './fixtures/z0-contract.js';
-import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness.js';
+import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, logLines, runRoot, type RunRecord } from './fixtures/z0-harness.js';
 
 const classes = (r: RunRecord) => (r.voidHits ?? []).map((h) => h.class);
+interface SettledRun { arm: string }
 
 describe('reads outside the cell (one A1 run, one read per task)', () => {
   let recs: RunRecord[] = [];
@@ -118,6 +120,40 @@ describe('resume hits: session 1 decides void, and only a teach\'s resume adds t
     const a1 = find(readRecords(out), 'A0', 'a1');
     expect(a1).toMatchObject({ invalid: null, void: null });
     expect((a1.resumeVoidHits ?? []).map((h) => h.reason)).toEqual(['user-instructions']);
+  }, 300_000);
+});
+
+describe('an ancestor file seen only at an apply\'s resume is kept, never invalidating it', () => {
+  afterEach(() => {
+    __setSettleHook(null);
+    cleanup();
+  });
+  const above = (out: string, arm: string) => join(runRoot(out, arm), 'CLAUDE.md');
+
+  it('one a hook writes before a failing apply\'s resume skips the resume and leaves the apply valid', async () => {
+    const { out, log } = isolate('resume-ancestor');
+    // A passing apply takes no resume, so a file written at this point could never invalidate it.
+    __setSettleHook((_run: SettledRun, cell: string, when: string) => {
+      if (cell === 'a1' && when === 'pre-resume') writeFileSync(above(out, 'A2'), 'written by a late hook\n');
+      if (cell === 'a1' && when === 'end') rmSync(above(out, 'A2'), { force: true });
+    });
+    await run(oneLesson(makeRepo(), { a1: 'LESSON_BAD' }), ['A2'], out);
+    const recs = readRecords(out);
+    const a1 = find(recs, 'A2', 'a1');
+    expect(a1).toMatchObject({ invalid: null, void: null, correctionTurns: 0, resumeAncestorHits: ['runs/seqF/A2/seed1/CLAUDE.md'] });
+    expect(logLines(log).filter((l) => l === `resume ${a1.sessionId}`)).toEqual([]);
+    expect(find(recs, 'A2', 'a2').invalid).toBeNull();
+    expect(validateCorpus(recs, readPlan(out))).toEqual([]);
+  }, 300_000);
+
+  it('one a cut-off resume plants stops the rerun, keeps the retry count, and leaves the apply valid', async () => {
+    const { out } = isolate('resume-ancestor-cut');
+    await run(oneLesson(makeRepo(), { a1: 'LESSON_BAD CUT_ON_RESUME ANCESTOR_ON_CUT' }), ['A1'], out, { limitWaitMs: 0 });
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 'a1')).toMatchObject({ invalid: null, void: null, limitRetries: 1, correctionTurns: 0, resumeAncestorHits: ['runs/seqF/A1/seed1/CLAUDE.md'] });
+    // The file stays, so the next session would load it: that cell's own session-1 check voids it.
+    expect(find(recs, 'A1', 'a2').invalid).toBe('ancestor-instructions');
+    expect(validateCorpus(recs, readPlan(out))).toEqual([]);
   }, 300_000);
 });
 
