@@ -91,6 +91,6 @@
   "src/server.ts": 61,
   "src/shared.ts": 27,
   "src/skills.ts": 8,
-  "src/store.ts": 143,
+  "src/store.ts": 135,
   "src/token-ledger.ts": 3
 }

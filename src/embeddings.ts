@@ -10,7 +10,10 @@ import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { MemoryEntry } from './memory.js';
 import { loadAllEntries } from './store.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta } from './db.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
+import {
+  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, replaceAllVectors, storedVectorIds, upsertVectors,
+} from './vector-store.js';
 import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
@@ -28,7 +31,7 @@ const _pipelineInstances = new Map<string, unknown>();
 const _pipelineLoading = new Map<string, Promise<unknown>>();
 
 export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
-export const EMBEDDING_MODEL_META_KEY = 'embedding_model';
+export { EMBEDDING_MODEL_META_KEY };
 
 /**
  * Bump whenever `embeddingInputText`'s composition changes in a way that
@@ -285,7 +288,8 @@ export function resolveIndexedEmbeddingModel(
 ): string | null {
   const stored = loadStoredEmbeddingModel(hippoRoot);
   if (stored) return stored;
-  return Object.keys(index ?? loadEmbeddingIndex(hippoRoot)).length > 0 ? DEFAULT_EMBEDDING_MODEL : null;
+  const hasVectors = index ? Object.keys(index).length > 0 : withVectorDb(hippoRoot, hasStoredVectors);
+  return hasVectors ? DEFAULT_EMBEDDING_MODEL : null;
 }
 
 export function embeddingModelRequiresReindex(
@@ -404,78 +408,33 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return Math.min(1, Math.max(-1, dot / denom));
 }
 
-const EMBEDDINGS_FILE = 'embeddings.json';
-// Never equal to a real index identity, so the next embed run treats it as a model change and rebuilds every vector.
-const QUARANTINED_INDEX_IDENTITY = 'quarantined-corrupt-index';
-
-function isErrnoCode<E>(err: E, code: string): boolean {
-  return err instanceof Error && 'code' in err && err.code === code;
-}
-
-function parseEmbeddingIndex(raw: string): Record<string, number[]> | null {
+function withVectorDb<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T): T {
+  const db = openHippoDb(hippoRoot);
   try {
-    const parsed: unknown = JSON.parse(raw);
-    // SAFETY: saveEmbeddingIndex is the only writer and always writes this shape; anything that is not an object is corrupt.
-    return parsed instanceof Object && !Array.isArray(parsed) ? parsed as Record<string, number[]> : null;
-  } catch {
-    return null; // the caller quarantines the corrupt file and logs it
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
   }
 }
 
-/** Move a corrupt index aside and flag a full rebuild, so no later save can write over the only copy of those bytes. */
-function quarantineCorruptIndex(hippoRoot: string, fp: string): void {
-  const aside = `${fp}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`;
-  try {
-    fs.renameSync(fp, aside);
-  } catch (err) {
-    if (isErrnoCode(err, 'ENOENT')) return;
-    // A rename blocked by an open handle (Windows) still gets a copy kept; if the copy fails too, the throw stops the save.
-    fs.copyFileSync(fp, aside, fs.constants.COPYFILE_EXCL);
-  }
-  log.error(`${EMBEDDINGS_FILE} could not be parsed; kept it as ${path.basename(aside)} and the next embed rebuilds the index`, { hippoRoot });
-  try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      setMeta(db, EMBEDDING_MODEL_META_KEY, QUARANTINED_INDEX_IDENTITY);
-    } finally {
-      closeHippoDb(db);
-    }
-  } catch (err) {
-    log.warn(`could not flag the embedding index for rebuild; run 'hippo embed' to restore vectors (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
-  }
-}
-
-/**
- * Load the cached embedding index; `{}` when the file is missing. A corrupt file is moved aside and rebuilt on the next embed; any other read error throws, so nothing saves over an index it could not read.
- */
+/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  let raw: string;
-  try {
-    raw = fs.readFileSync(fp, 'utf8');
-  } catch (err) {
-    if (isErrnoCode(err, 'ENOENT')) return {};
-    throw err;
-  }
-  const index = parseEmbeddingIndex(raw);
-  if (index) return index;
-  quarantineCorruptIndex(hippoRoot, fp);
-  return {};
+  return Object.fromEntries(withVectorDb(hippoRoot, (db) => loadVectors(db)));
 }
 
-/**
- * Save the embedding index to disk.
- */
-export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>): void {
-  const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  const tmp = fp + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(index), 'utf8');
-  try {
-    fs.renameSync(tmp, fp);
-  } catch (err) {
-    try { fs.unlinkSync(tmp); } catch { /* best-effort cleanup */ }
-    throw err;
-  }
+/** Stored vectors for `ids` only. */
+export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
+  return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectors(db, ids));
+}
+
+/** Whether the store holds any vector at all. */
+export function hasEmbeddings(hippoRoot: string): boolean {
+  return withVectorDb(hippoRoot, hasStoredVectors);
+}
+
+/** Replace every stored vector with `index`; `model` defaults to the stored index identity. */
+export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
+  withVectorDb(hippoRoot, (db) => replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, '')));
 }
 
 const EMBED_LOCK_FILE = 'embeddings.lock';
@@ -533,7 +492,7 @@ async function acquireEmbedFileLock(hippoRoot: string): Promise<() => void> {
       fs.rmSync(lockPath, { force: true });
       continue;
     }
-    if (Date.now() >= deadline) throw new Error(`embeddings.json is busy: another hippo process holds ${lockPath}`);
+    if (Date.now() >= deadline) throw new Error(`the embedding index is busy: another hippo process holds ${lockPath}`);
     await new Promise((r) => setTimeout(r, 50));
   }
 }
@@ -592,16 +551,15 @@ export async function embedMemory(
     // where failures surface. On any failure we leave the existing index as-is.
     try {
       const identity = provider.id;
-      const existingIndex = loadEmbeddingIndex(hippoRoot);
 
-      if (embeddingModelRequiresReindex(hippoRoot, identity, existingIndex)) {
+      if (embeddingModelRequiresReindex(hippoRoot, identity)) {
         // L9: host-wide rebuild. The embedding index is keyed by entry.id
         // (which is tenant-scoped) but the index itself is one per hippoRoot.
         // Cross-tenant content equivalence is visible at the vector level.
         // Per-tenant indices would be a larger architecture change.
         const entries = loadAllEntries(hippoRoot);
         const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
-        saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+        saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
         saveStoredEmbeddingModel(hippoRoot, identity);
         resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
         return;
@@ -611,9 +569,7 @@ export async function embedMemory(
       const [vector] = await provider.embed([text], 'passage');
       if (!vector || vector.length === 0) return;
 
-      const index = existingIndex;
-      index[entry.id] = vector;
-      saveEmbeddingIndex(hippoRoot, index);
+      withVectorDb(hippoRoot, (db) => upsertVectors(db, [[entry.id, vector]], embeddingIndexIdentity(identity)));
       saveStoredEmbeddingModel(hippoRoot, identity);
 
       // Initialize physics state for this memory
@@ -675,26 +631,20 @@ export async function embedAll(
     // entries into the per-host embedding index. Per-tenant filtering would
     // produce partial indices and break recall.
     const entries = loadAllEntries(hippoRoot);
-    const index = loadEmbeddingIndex(hippoRoot);
+    const model = embeddingIndexIdentity(identity);
 
-    if (embeddingModelRequiresReindex(hippoRoot, identity, index)) {
+    if (embeddingModelRequiresReindex(hippoRoot, identity)) {
       const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
-      saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+      saveEmbeddingIndex(hippoRoot, rebuiltIndex, model);
       saveStoredEmbeddingModel(hippoRoot, identity);
       resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
       return Object.keys(rebuiltIndex).length;
     }
 
-    let dirty = false;
-
-    // Prune orphaned embeddings for deleted memories
-    const activeIds = new Set(entries.map((e) => e.id));
-    for (const id of Object.keys(index)) {
-      if (!activeIds.has(id)) {
-        delete index[id];
-        dirty = true;
-      }
-    }
+    const embedded = withVectorDb(hippoRoot, (db) => {
+      deleteOrphanVectors(db);
+      return storedVectorIds(db);
+    });
 
     // Embed entries without a cached vector in save-checkpointed chunks.
     // provider.embed batches internally (one HTTP request per batchSize for API
@@ -702,7 +652,7 @@ export async function embedAll(
     // not be embedded and is left for a later run (resumable). On a hard provider
     // failure mid-backfill we persist the chunks already embedded this run rather
     // than discarding paid progress, then stop and resume on the next run.
-    const pending = entries.filter((e) => !index[e.id]);
+    const pending = entries.filter((e) => !embedded.has(e.id));
     let count = 0;
     // Initialized to `undefined` (not a known-evidence literal like `null`) so
     // it stays a plain `unknown` binding for the arbitrary caught value below;
@@ -723,24 +673,15 @@ export async function embedAll(
         backfillError = err;
         break;
       }
-      let chunkDirty = false;
+      const rows: Array<[string, number[]]> = [];
       for (let j = 0; j < chunk.length; j++) {
         const vec = vectors[j];
-        if (vec && vec.length > 0) {
-          index[chunk[j].id] = vec;
-          count++;
-          dirty = true;
-          chunkDirty = true;
-        } else {
-          noteSkippedEmbedding(chunk[j].id);
-        }
+        if (vec && vec.length > 0) rows.push([chunk[j].id, vec]);
+        else noteSkippedEmbedding(chunk[j].id);
       }
-      if (chunkDirty) saveEmbeddingIndex(hippoRoot, index);
+      count += withVectorDb(hippoRoot, (db) => upsertVectors(db, rows, model));
     }
 
-    if (dirty) {
-      saveEmbeddingIndex(hippoRoot, index);
-    }
     saveStoredEmbeddingModel(hippoRoot, identity);
 
     // Partial progress is now persisted; surface a hard backfill failure so the

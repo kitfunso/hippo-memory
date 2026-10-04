@@ -45,6 +45,7 @@ import {
 import { archiveRawMemory } from './raw-archive.js';
 import { insertDormantRow, type DormantMove } from './dormant.js';
 import { log } from './log.js';
+import { topVectorMatches } from './vector-store.js';
 
 /** A value that round-trips through JSON.stringify/JSON.parse unchanged. */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -803,6 +804,30 @@ export type RecallScopeFilter =
   | { mode: 'exact'; value: string }
   | { mode: 'default-deny-or-exact'; value: string };
 
+interface SqlFragment {
+  sql: string;
+  params: string[];
+}
+
+/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in api.ts is its JS twin. */
+function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | undefined): SqlFragment {
+  if (scopeFilter === undefined) return { sql: '', params: [] };
+  if (scopeFilter.mode === 'exact') return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
+  // `IS NULL OR` admits NULL scopes, which NOT IN alone drops. NOT LIKE denies a superset of private scopes before the
+  // window cut so private rows cannot starve admitted ones; the anchored JS regex stays the exact post-filter.
+  const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${placeholders}) AND ${col}scope NOT LIKE '%:private:%')`;
+  if (scopeFilter.mode === 'default-deny') return { sql: ` AND (${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
+  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined included.
+  return { sql: ` AND (${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value] };
+}
+
+/** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set. */
+export function recallScopeFilter(requestedScope: string | undefined, mode: 'exact' | 'additive'): RecallScopeFilter {
+  if (!requestedScope) return { mode: 'default-deny' };
+  return mode === 'additive' ? { mode: 'default-deny-or-exact', value: requestedScope } : { mode: 'exact', value: requestedScope };
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
@@ -841,69 +866,9 @@ function loadSearchRows(
   const archivedClauseTenantOnly =
     tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
-  // v1.7.1 — recall-mode scope predicate (root-cause fix for the
-  // `unknown:legacy` leak codex flagged on the v1.6.5 review). Forms:
-  //   undefined                     → no scope filter (background pipelines)
-  //   { mode: 'default-deny' }      → exclude unknown:legacy + ':private:'
-  //   { mode: 'exact' }             → m.scope = 'X'
-  //   { mode: 'default-deny-or-exact' } → default set OR m.scope = 'X'
-  // v1.25.0: the private-scope exclusion now ALSO runs here pre-window as a
-  // conservative LIKE approximation (see the deny-mode comment below); the
-  // exact anchored regex stays the authoritative JS post-filter in the
-  // recall consumers.
-  //
-  // **Cross-reference:** `passesScopeFilterForRecall` in src/api.ts encodes
-  // the same default-deny rule. If the deny list grows (e.g. add
-  // `unknown:purged`), update BOTH this SQL clause AND that helper AND the
-  // continuity inline closure. v1.7.2 will consolidate them.
-  let scopeClauseAlias = '';
-  let scopeClauseNoAlias = '';
-  let scopeClauseTenantOnly = '';
-  const scopeParams: string[] = [];
-  if (scopeFilter !== undefined) {
-    if (scopeFilter.mode === 'default-deny') {
-      // T2: bind from RECALL_DEFAULT_DENY_SCOPES so SQL and JS share one
-      // source of truth. Module-load assertion at the top of this file
-      // guarantees length > 0, so NOT IN () (a SQL parse error) is impossible.
-      // NULL handling: m.scope NOT IN (?, ?) returns NULL on m.scope = NULL
-      // (three-valued logic). The `m.scope IS NULL OR ...` disjunct admits
-      // NULL rows.
-      // v1.25.0 (codex review-stage P2): the private-scope exclusion must run
-      // BEFORE the LIMIT, or a store where >window matching rows are
-      // `<source>:private:*` (heavy private-channel ingestion) starves every
-      // admitted row out of the candidate window and recall returns
-      // empty/incomplete. SQL uses a deliberately CONSERVATIVE approximation
-      // of the exact JS regex (`NOT LIKE '%:private:%'`, ASCII
-      // case-insensitive): it denies a strict superset (any scope containing
-      // ':private:' anywhere, any case) — fail-closed for a security filter.
-      // The exact anchored regex (`passesScopeFilterForRecall` /
-      // `isPrivateScope`) remains the authoritative JS post-filter.
-      const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-      scopeClauseAlias = ` AND (m.scope IS NULL OR (m.scope NOT IN (${placeholders}) AND m.scope NOT LIKE '%:private:%'))`;
-      scopeClauseNoAlias = ` AND (scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%'))`;
-      scopeClauseTenantOnly = scopeClauseNoAlias;
-      scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES);
-    } else if (scopeFilter.mode === 'default-deny-or-exact') {
-      // v1.25.0 CLI semantics: default-admitted set PLUS the explicitly
-      // requested scope (see the RecallScopeFilter doc above). Same NULL
-      // three-valued-logic handling and same pre-window private exclusion as
-      // 'default-deny' (codex P2, comment above); the trailing `OR scope = ?`
-      // arm keeps the explicitly requested scope loadable, INCLUDING a
-      // requested private or quarantine scope (deliberate owner access, same
-      // as api.recall's exact-match for the same input).
-      const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-      scopeClauseAlias = ` AND (m.scope IS NULL OR (m.scope NOT IN (${placeholders}) AND m.scope NOT LIKE '%:private:%') OR m.scope = ?)`;
-      scopeClauseNoAlias = ` AND (scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%') OR scope = ?)`;
-      scopeClauseTenantOnly = scopeClauseNoAlias;
-      scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value);
-    } else {
-      // mode === 'exact'
-      scopeClauseAlias = ` AND m.scope = ?`;
-      scopeClauseNoAlias = ` AND scope = ?`;
-      scopeClauseTenantOnly = scopeClauseNoAlias;
-      scopeParams.push(scopeFilter.value);
-    }
-  }
+  const aliasScope = recallScopeClause('m.', scopeFilter);
+  const plainScope = recallScopeClause('', scopeFilter);
+  const scopeParams = aliasScope.params;
 
   const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const currentNoAlias = includeSuperseded ? '' : ' AND superseded_by IS NULL';
@@ -914,7 +879,7 @@ function loadSearchRows(
     // path (codex diff-pass caught the full-store fallback at the bottom;
     // this no-terms path had the same shape). Apply LIMIT so all four
     // candidate paths honour the caller's cap when set.
-    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${scopeClauseTenantOnly}${currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${plainScope.sql}${currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
     // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
     // matches MemoryRow's field set.
     return db.prepare(sql).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
@@ -942,7 +907,7 @@ function loadSearchRows(
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
-        WHERE memories_fts MATCH ?${tenantPredicate}${archivedClauseAlias}${scopeClauseAlias}${currentAlias}
+        WHERE memories_fts MATCH ?${tenantPredicate}${archivedClauseAlias}${aliasScope.sql}${currentAlias}
         ORDER BY bm25(memories_fts), m.updated_at DESC, m.content ASC, m.id ASC
         LIMIT ?
       `).all(ftsQuery, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
@@ -965,7 +930,7 @@ function loadSearchRows(
   const rows = db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
-    WHERE (${where})${tenantPredicateNoAlias}${archivedClauseNoAlias}${scopeClauseNoAlias}${currentNoAlias}
+    WHERE (${where})${tenantPredicateNoAlias}${archivedClauseNoAlias}${plainScope.sql}${currentNoAlias}
     ORDER BY updated_at DESC, created DESC, content ASC, id ASC
     LIMIT ?
   `).all(...params, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
@@ -977,7 +942,7 @@ function loadSearchRows(
   // now reported on RecallResult, an unbounded fallback would lie about
   // candidate-pool size. Apply LIMIT here so all four paths honour the
   // caller's cap.
-  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${scopeClauseTenantOnly}${currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${plainScope.sql}${currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
   // SAFETY: fallback selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
   return db.prepare(fallback).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
@@ -2596,14 +2561,36 @@ export function loadRecallSearchEntriesFromDb(
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
 ): MemoryEntry[] {
-  // 'exact' narrows to requestedScope; 'additive' adds it to the default-admitted set.
-  const scopeFilter: RecallScopeFilter =
-    requestedScope && requestedScope !== ''
-      ? explicitScopeMode === 'additive'
-        ? { mode: 'default-deny-or-exact', value: requestedScope }
-        : { mode: 'exact', value: requestedScope }
-      : { mode: 'default-deny' };
-  return loadSearchRows(db, query, limit, tenantId, scopeFilter, includeSuperseded).map(rowToEntry);
+  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode), includeSuperseded).map(rowToEntry);
+}
+
+/** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */
+export interface VectorCandidateSpec {
+  tenantId?: string;
+  scope?: RecallScopeFilter;
+  includeSuperseded: boolean;
+  /** How many nearest rows to add; default 50. */
+  limit?: number;
+}
+
+/** The rows nearest `queryVector` that pass `spec`, nearest first. */
+export function loadVectorCandidateEntries(hippoRoot: string, queryVector: readonly number[], spec: VectorCandidateSpec): MemoryEntry[] {
+  const scope = recallScopeClause('m.', spec.scope);
+  const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
+  const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
+  const params = [...(spec.tenantId !== undefined ? [spec.tenantId] : []), ...scope.params];
+  const db = openStore(hippoRoot);
+  try {
+    const matches = topVectorMatches(db, queryVector, spec.limit ?? 50, `${tenant} AND m.kind != 'archived'${scope.sql}${current}`, params);
+    if (matches.length === 0) return [];
+    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${matches.map(() => '?').join(', ')})`)
+      .all(...matches.map((m) => m.id)) as MemoryRow[];
+    const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
+    return matches.flatMap((m) => byId.get(m.id) ?? []);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 /** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.

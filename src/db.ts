@@ -7,6 +7,7 @@ import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { PACKAGE_VERSION, compareSemver } from './version.js';
 import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from './project-identity.js';
 import { log } from './log.js';
+import { MEMORY_VECTORS_DDL, importLegacyEmbeddingIndex } from './vector-store.js';
 
 const require = createRequire(import.meta.url);
 
@@ -14,6 +15,7 @@ interface StatementSyncLike {
   run(...params: unknown[]): { lastInsertRowid?: number | bigint; changes?: number };
   get<T>(...params: unknown[]): T;
   all(...params: unknown[]): unknown[];
+  iterate(...params: unknown[]): IterableIterator<unknown>;
 }
 
 export interface DatabaseSyncLike {
@@ -31,7 +33,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 51;
+const CURRENT_SCHEMA_VERSION = 52;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2641,6 +2643,11 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 52,
+    // Vectors move out of embeddings.json so hybrid search reads only the rows it ranks. Additive only; the JSON import runs after COMMIT.
+    up: (db) => db.exec(MEMORY_VECTORS_DDL),
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
@@ -2844,6 +2851,16 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: nu
   ensureContinuityIndexes(db);
   ensureMetaDefaults(db);
   ensureOptionalFts(db);
+  if (hippoRoot) importLegacyVectors(db, hippoRoot);
+}
+
+// A failed import leaves embeddings.json in place for the next open to retry; the store still opens.
+function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
+  try {
+    importLegacyEmbeddingIndex(db, hippoRoot);
+  } catch (err) {
+    log.warn(`embeddings.json import failed; the next open retries it (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
+  }
 }
 
 function ensureMetaTable(db: DatabaseSyncLike): void {

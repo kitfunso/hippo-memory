@@ -255,61 +255,61 @@ describe('MCP hippo_recall ranking', () => {
   });
 });
 
-// Recorded on the pre-refactor handler (own loadAllEntries + physicsSearch/hybridSearch pipeline).
+// Candidates are a wide FTS window plus the nearest vectors, so Cutoff counts only rows that matched the query.
 const EXPECTED = {
   defaultHybrid: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   tightBudget: {
     ranked: ['SC1', 'L1', 'L2'],
     tail: [],
-    cutoff: 'Showing 3 of 26 candidates; 21 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: 'Showing 3 of 11 candidates; 8 dropped to fit limit.',
   },
   explicitScope: {
     ranked: ['SC1', 'SC2'],
     tail: [],
-    cutoff: 'Showing 2 of 26 candidates; 24 filtered pre-rank.',
+    cutoff: null,
   },
   continuity: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   physicsNoEmbeddings: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   hybridEmbeddings: {
     ranked: ['SC1', 'L1', 'S1', 'D1', 'L2', 'P1', 'L4', 'SC2', 'L3', 'L5', 'G1', 'C1'],
     tail: [],
-    cutoff: 'Showing 12 of 26 candidates; 12 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   physicsEmbeddings: {
     ranked: ['SC1', 'L1', 'D1', 'L2', 'S1', 'P1', 'L4', 'SC2', 'L3', 'L5', 'G1', 'C1'],
     tail: [],
-    cutoff: 'Showing 12 of 26 candidates; 12 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   goalBoost: {
-    ranked: ['SC1', 'L1', 'L2', 'G1', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5'],
+    ranked: ['SC1', 'L1', 'G1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   freshTail: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: ['T-one', 'T-three', 'T-two'],
-    cutoff: 'Showing 11 of 29 candidates; 16 dropped to fit limit; 2 filtered pre-rank; 3 fresh-tail added.',
+    cutoff: 'Showing 11 of 11 candidates; 3 fresh-tail added.',
   },
   windowEdge: {
-    ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110'],
+    ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110', 'F111'],
     tail: [],
-    cutoff: 'Showing 24 of 237 candidates; 211 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: 'Showing 25 of 213 candidates; 188 dropped to fit limit.',
   },
   dagOverflow: {
-    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12'],
+    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13'],
     tail: ['SUM'],
-    cutoff: 'Showing 13 of 90 candidates; 75 dropped to fit limit; 2 filtered pre-rank; 1 summary substitutions added.',
+    cutoff: 'Showing 14 of 63 candidates; 49 dropped to fit limit; 1 summary substitutions added.',
   },
 } satisfies Record<string, Observed>;

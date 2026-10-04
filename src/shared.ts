@@ -18,6 +18,7 @@ import {
   loadSearchEntries,
   loadRecallSearchEntries,
   tallySources,
+  recallScopeFilter,
   writeEntry,
   readEntry,
 } from './store.js';
@@ -269,29 +270,26 @@ export async function searchBothHybrid(
         )
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
-  let localEntries = loadEntries(localRoot);
-  let globalEntries = loadEntries(globalRoot);
-  if (recallScope) {
-    const passes = (e: MemoryEntry) =>
-      recallScope.additive
-        ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
-        : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested);
-    localEntries = localEntries.filter(passes);
-    globalEntries = globalEntries.filter(passes);
-  }
-  if (entryFilter) {
-    localEntries = localEntries.filter(entryFilter);
-    globalEntries = globalEntries.filter(entryFilter);
-  }
+  const passesScope = (e: MemoryEntry): boolean =>
+    !recallScope || (recallScope.additive
+      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
+      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested));
+  const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
+  const localEntries = loadEntries(localRoot).filter(admit);
+  const globalEntries = loadEntries(globalRoot).filter(admit);
 
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
-  const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  });
-  const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  });
+  // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
+  const vectorCandidates = {
+    tenantId,
+    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact') : undefined,
+    includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
+    admit,
+  };
+  const shared = { budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness, vectorCandidates };
+  const localResults = await hybridSearch(query, localEntries, { ...shared, hippoRoot: localRoot });
+  const globalResults = await hybridSearch(query, globalEntries, { ...shared, hippoRoot: globalRoot });
 
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [

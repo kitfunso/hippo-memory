@@ -20,6 +20,7 @@ import {
   deleteEntry,
   loadSearchEntries,
   loadRecallSearchEntries,
+  recallScopeFilter,
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
@@ -107,7 +108,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep, type SearchResult } from './search.js';
+import { estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type HybridVectorCandidates, type RerankStep, type SearchResult } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from './same-text.js';
 import { scopeMatch } from './scope.js';
@@ -830,7 +831,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked);
   let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false);
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
-    const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null };
+    const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts) };
     const ranked = opts.mode === 'physics'
       ? await physicsSearch(opts.query, candidates, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
       : await hybridSearch(opts.query, candidates, searchOpts);
@@ -842,17 +843,32 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   return result;
 }
 
-/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid otherwise, over every admitted row. */
+/** api.retrieve's vector arm: the recall load's exact-scope rule, current rows only. */
+function recallVectorSpec(ctx: Context, opts: RecallOpts): HybridVectorCandidates {
+  return {
+    tenantId: ctx.tenantId,
+    scope: recallScopeFilter(opts.scope, 'exact'),
+    includeSuperseded: false,
+    admit: (e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope),
+  };
+}
+
+// Tag, pin and recency boosts can lift a row from deep in the BM25 order, so MCP ranks a wide lexical window.
+const SHOW_RANKED_LEXICAL_WINDOW = 1000;
+
+/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid otherwise, over a wide lexical window plus the nearest vectors. */
 async function retrieveFromStore(
   ctx: Context,
   opts: RecallOpts,
   windowSize: number,
   show: NonNullable<RecallOpts['showRanked']>,
 ): Promise<RecallResult> {
-  const store = loadAllEntries(ctx.hippoRoot, ctx.tenantId);
-  const pool = store.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope));
+  const loaded = loadRecallSearchEntries(
+    ctx.hippoRoot, opts.query, Math.max(windowSize, SHOW_RANKED_LEXICAL_WINDOW), ctx.tenantId, opts.scope, 'exact', false,
+  );
+  const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
-  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot };
+  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, vectorCandidates: recallVectorSpec(ctx, opts) };
   let ranked = opts.mode === 'physics'
     ? await physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
     : await hybridSearch(opts.query, pool, searchOpts);
@@ -866,7 +882,10 @@ async function retrieveFromStore(
   }
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
   const result = recallFrom(ctx, { ...opts, suppressRecallTrace: true }, windowSize, window);
-  const shown = show({ ranked, pool, droppedByScope: store.length - pool.length }, result);
+  // Rows the vector arm added count as candidates too.
+  const inPool = new Set(pool.map((e) => e.id));
+  const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
+  const shown = show({ ranked, pool: candidates, droppedByScope: loaded.length - pool.length }, result);
   strengthenRetrieved(ctx.hippoRoot, shown, ctx.tenantId);
   if (!opts.suppressRecallTrace) {
     const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));

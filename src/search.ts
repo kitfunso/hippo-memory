@@ -12,8 +12,10 @@ import { detectScope, scopeMatch } from './scope.js';
 import {
   cosineSimilarity,
   embeddingModelRequiresReindex,
-  loadEmbeddingIndex,
+  hasEmbeddings,
+  loadStoredVectors,
 } from './embeddings.js';
+import { loadVectorCandidateEntries, type VectorCandidateSpec } from './store.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { physicsScore as computePhysicsScores, computeMass } from './physics.js';
 import type { PhysicsParticle } from './physics.js';
@@ -366,6 +368,38 @@ function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
   return ageMs >= 0 && ageMs <= FRESHNESS_WINDOW_MS ? DEFAULT_FRESHNESS_BOOST : 1.0;
 }
 
+/** hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry filters). */
+export type HybridVectorCandidates = VectorCandidateSpec & { admit?: (entry: MemoryEntry) => boolean };
+
+/** The nearest admitted rows not already in `entries`. */
+function vectorCandidatesOutside(
+  hippoRoot: string, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
+): MemoryEntry[] {
+  const inPool = new Set(entries.map((e) => e.id));
+  return loadVectorCandidateEntries(hippoRoot, queryVector, spec).filter((e) => !inPool.has(e.id) && (spec.admit?.(e) ?? true));
+}
+
+/** Rows current at `asOf`, or rows not superseded unless `includeSuperseded`. */
+function currentEntries(entries: MemoryEntry[], options: { asOf?: string; includeSuperseded?: boolean }): MemoryEntry[] {
+  if (options.asOf) {
+    const asOfDate = new Date(options.asOf);
+    const successorValidFrom = new Map<string, string>();
+    for (const e of entries) {
+      if (e.superseded_by) {
+        const successor = entries.find(s => s.id === e.superseded_by);
+        if (successor) successorValidFrom.set(e.id, successor.valid_from);
+      }
+    }
+    return entries.filter(e => {
+      if (new Date(e.valid_from) > asOfDate) return false;
+      if (!e.superseded_by) return true;
+      const succVf = successorValidFrom.get(e.id);
+      return succVf ? new Date(succVf) > asOfDate : true;
+    });
+  }
+  return options.includeSuperseded ? entries : entries.filter(e => !e.superseded_by);
+}
+
 /**
  * Hybrid search: BM25 + cosine similarity (when embeddings are available).
  * score = 0.4 * bm25_norm + 0.6 * cosine_sim  (with embeddings)
@@ -433,6 +467,8 @@ export async function hybridSearch(
       /** # of top lexical seeds to expand from. Default DEFAULT_GRAPH_SEED_COUNT. */
       seedCount?: number;
     };
+    /** Add the rows nearest the query vector, not only rescore `entries`; without it a row no query word matches cannot surface. */
+    vectorCandidates?: HybridVectorCandidates;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
@@ -448,58 +484,37 @@ export async function hybridSearch(
   const summaryDeboost = resolveSummaryDeboost(options.summaryDeboost);
   const summaryFreshness = options.summaryFreshness ?? true;
 
-  // Bi-temporal filtering
-  if (options.asOf) {
-    const asOfDate = new Date(options.asOf);
-    const successorValidFrom = new Map<string, string>();
-    for (const e of entries) {
-      if (e.superseded_by) {
-        const successor = entries.find(s => s.id === e.superseded_by);
-        if (successor) successorValidFrom.set(e.id, successor.valid_from);
-      }
-    }
-    entries = entries.filter(e => {
-      if (new Date(e.valid_from) > asOfDate) return false;
-      if (!e.superseded_by) return true;
-      const succVf = successorValidFrom.get(e.id);
-      return succVf ? new Date(succVf) > asOfDate : true;
-    });
-  } else if (!options.includeSuperseded) {
-    entries = entries.filter(e => !e.superseded_by);
-  }
-
+  entries = currentEntries(entries, options);
   if (entries.length === 0) return [];
 
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  // Build BM25 corpus (or reuse one the caller already built).
-  const corpus = options.preparedCorpus
-    ?? buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
-
-  // Score all entries with BM25
-  const bm25Scores: number[] = entries.map((_, i) => bm25Score(corpus, i, queryTerms));
-  const maxBm25 = bm25Scores.reduce((a, b) => Math.max(a, b), 1e-9);
-
   // Try to get embedding scores if available
   let useEmbeddings = false;
   let embeddingIndex: Record<string, number[]> = {};
   let queryVector: number[] = [];
+  let addedRows = false;
 
   if (options.hippoRoot) {
+    const root = options.hippoRoot;
     try {
-      const provider = resolveEmbeddingProvider(options.hippoRoot);
-      const idx = provider.isAvailable() ? loadEmbeddingIndex(options.hippoRoot) : {};
-      if (provider.isAvailable() && !embeddingModelRequiresReindex(options.hippoRoot, provider.id, idx)) {
-        // Only spend a (possibly paid, off-box) query embedding when at least one
-        // of THIS search's entries has a cached vector to compare against. An
-        // index of only orphaned / out-of-scope vectors yields a meaningless
-        // dense ranking, so stay BM25-only in that case.
-        if (entries.some((e) => (idx[e.id]?.length ?? 0) > 0)) {
+      const provider = resolveEmbeddingProvider(root);
+      if (provider.isAvailable() && !embeddingModelRequiresReindex(root, provider.id)) {
+        const spec = options.vectorCandidates;
+        const vectors = loadStoredVectors(root, entries.map((e) => e.id));
+        // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
+        if (vectors.size > 0 || (spec !== undefined && hasEmbeddings(root))) {
           const [vec] = await provider.embed([query], 'query');
           queryVector = vec ?? [];
           if (queryVector.length > 0) {
-            embeddingIndex = idx;
+            const added = spec ? vectorCandidatesOutside(root, entries, queryVector, spec) : [];
+            if (added.length > 0) {
+              addedRows = true;
+              entries = currentEntries([...entries, ...added], options);
+              for (const [id, v] of loadStoredVectors(root, added.map((e) => e.id))) vectors.set(id, v);
+            }
+            embeddingIndex = Object.fromEntries(vectors);
             useEmbeddings = true;
           } else {
             warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
@@ -512,6 +527,12 @@ export async function hybridSearch(
       warnBm25Fallback('error', err instanceof Error ? err.message : String(err));
     }
   }
+
+  // A prepared corpus covers the caller's entries only, so rows the vector arm added force a rebuild.
+  const corpus = (addedRows ? undefined : options.preparedCorpus)
+    ?? buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
+  const bm25Scores: number[] = entries.map((_, i) => bm25Score(corpus, i, queryTerms));
+  const maxBm25 = bm25Scores.reduce((a, b) => Math.max(a, b), 1e-9);
 
   // Compute cosine similarities for RRF ranking (need all before scoring)
   const cosineScores: number[] = new Array(entries.length).fill(0);
@@ -910,6 +931,8 @@ export async function physicsSearch(
     summaryDeboost?: number;
     /** v0.30 / E4 — same freshness boost as hybridSearch. */
     summaryFreshness?: boolean;
+    /** Same as hybridSearch's: rows nearest the query join the pool before physics scoring. */
+    vectorCandidates?: HybridVectorCandidates;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
@@ -930,7 +953,7 @@ export async function physicsSearch(
     // network/auth/5xx) can throw; fall back to hybrid/BM25 rather than reject
     // recall, matching the surrounding fallback contract. NOTE: physics search
     // scores against its own cached particle-state vectors (loaded below), NOT
-    // embeddings.json, so we do not gate the query embedding on the index here
+    // the stored embedding vectors, so we do not gate the query embedding on the index here
     // (doing so would skip valid physics when the embedding index is pruned).
     try {
       const provider = resolveEmbeddingProvider(options.hippoRoot);
@@ -945,6 +968,13 @@ export async function physicsSearch(
     }
     if (queryVector.length === 0) {
       return hybridSearch(query, entries, options);
+    }
+  }
+  if (options.vectorCandidates) {
+    try {
+      entries = [...entries, ...vectorCandidatesOutside(options.hippoRoot, entries, queryVector, options.vectorCandidates)];
+    } catch (err) {
+      log.warn(`physics search ranked the lexical pool only; the vector lookup failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -1075,7 +1105,7 @@ export async function physicsSearch(
 
   // Score classic memories (no physics state)
   const classicResults = classicEntries.length > 0
-    ? await hybridSearch(query, classicEntries, { ...options, budget: Infinity, explain })
+    ? await hybridSearch(query, classicEntries, { ...options, vectorCandidates: undefined, budget: Infinity, explain })
     : [];
 
   // Normalize both pools to [0, 1] and merge

@@ -16,7 +16,7 @@ import { passesCliRecallScopeFilter } from './recall-scope.js';
 import type { RerankerFn } from './rerankers/types.js';
 import { hybridSearch, physicsSearch, textOverlap, type RerankStep, type ResultCost, type SearchResult } from './search.js';
 import { searchBothHybrid } from './shared.js';
-import { loadRecallSearchEntries } from './store.js';
+import { loadRecallSearchEntries, recallScopeFilter } from './store.js';
 import { tokenize as tokenizeQuery } from './tokenize.js';
 
 /** Stores rankRecall reads and where it sends operator notes. */
@@ -220,10 +220,17 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
     return multihopSearch(query, allEntries, { budget, cost, hippoRoot: ctx.hippoRoot, minResults, includeSuperseded, asOf });
   }
+  const requested = opts.explicitScope || undefined;
+  const vectorCandidates = {
+    tenantId: ctx.tenantId,
+    scope: recallScopeFilter(requested, 'additive'),
+    includeSuperseded: includeSuperseded || Boolean(asOf),
+    admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
+  };
   if (search.usePhysics && !globalRoot) {
     // Explain has never passed the bi-temporal flags to physics; keeping that holds its output steady.
     const temporal = explain ? {} : { minResults, includeSuperseded, asOf };
-    return physicsSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, ...temporal });
+    return physicsSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, vectorCandidates, ...temporal });
   }
   if (globalRoot) {
     // searchBothHybrid reloads candidates itself, so the scope rule is passed in rather than inherited from the pool.
@@ -233,7 +240,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
       recallScope: opts.explicitScope ? { requested: opts.explicitScope, additive: true } : {},
     });
   }
-  return hybridSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf });
+  return hybridSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, vectorCandidates });
 }
 
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
