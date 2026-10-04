@@ -81,8 +81,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
+      # Floors are zeroed per shard: each sees a third of the suite, and the coverage job applies them to the merge.
       - name: Vitest
-        run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob
+        run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
         env:
           TMPDIR: /dev/shm
       - name: Upload blob report
