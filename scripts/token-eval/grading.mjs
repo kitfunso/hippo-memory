@@ -21,25 +21,30 @@ export function surfaceText({ root, surfaces, stores }) {
 }
 
 /** A text diff with every instruction file left out, since one could show the reader the arm (decision 24). */
-function readerDiff(rgit, work, from, to) {
+export function readerDiff(rgit, work, from, to) {
   const names = rgit(['diff', '--no-renames', '--name-only', '-z', from, to], work).split('\0').filter(Boolean);
   const hidden = names.filter(isInstructionPath).map((p) => `:(exclude,literal)${p}`);
   return rgit(['diff', '--no-ext-diff', '--no-color', '--no-textconv', '--no-renames', from, to, '--', '.', ...hidden], work);
 }
 
-/** Bundle pre, first and final past the stub, write both reader diffs, grade.json and an apply's surface text. */
+/** Bundle pre, first, final and each held check commit past the stub, write both reader diffs, grade.json and an apply's surface text. */
 export function saveGrading(ctx, run, step, stage, turns, record) {
   const { t, role } = step;
   const dir = path.join(ctx.outDir, 'grading', run.runName, run.arm, `seed${run.seed}`);
   fs.mkdirSync(dir, { recursive: true });
   const commits = { pre: stage.pre, first: turns?.firstPost ?? stage.finalPost, final: stage.finalPost };
+  // The commits the final and stale checks graded (R2); null when that check never ran, and then not bundled (R24).
+  const held = { finalCheck: turns?.finalCheckPost ?? null, stale: turns?.stalePost ?? null };
+  const bundled = { ...commits, ...Object.fromEntries(Object.entries(held).filter(([, sha]) => sha !== null)) };
+  const finalChecked = turns?.finalChecked ?? false;
   const work = run.dirs.work;
   agentGit(work, (rgit) => {
-    const refs = Object.keys(commits).map((k) => `${GRADE_REF}/${k}`);
+    const refs = Object.keys(bundled).map((k) => `${GRADE_REF}/${k}`);
     try {
-      for (const [k, sha] of Object.entries(commits)) rgit(['update-ref', '--no-deref', `${GRADE_REF}/${k}`, sha], work);
+      for (const [k, sha] of Object.entries(bundled)) rgit(['update-ref', '--no-deref', `${GRADE_REF}/${k}`, sha], work);
       rgit(['bundle', 'create', '--quiet', path.join(dir, `${t.id}.bundle`), ...refs, `^${stage.commit}`], work);
-      for (const k of ['first', 'final']) fs.writeFileSync(path.join(dir, `${t.id}.${k}.diff`), readerDiff(rgit, work, commits.pre, commits[k]));
+      const to = { first: commits.first, final: finalChecked ? held.finalCheck : commits.final };
+      for (const k of ['first', 'final']) fs.writeFileSync(path.join(dir, `${t.id}.${k}.diff`), readerDiff(rgit, work, commits.pre, to[k]));
     } finally {
       for (const ref of refs) rgit(['update-ref', '-d', ref], work);
     }
@@ -48,8 +53,9 @@ export function saveGrading(ctx, run, step, stage, turns, record) {
   fs.writeFileSync(path.join(dir, `${t.id}.grade.json`), `${JSON.stringify({
     sequence: run.s.id, runName: run.runName, arm: run.arm, seed: run.seed, position: step.position, order: step.order, taskId: t.id,
     kind: role.kind, lessonId: role.lessonId ?? null, staleLessonId: turns?.staleLesson?.id ?? null, stubRef: `refs/eval/${run.s.id}/${t.id}`, stub: stage.commit, ...commits,
+    finalChecked, ...held,
     verdicts: { first: turns?.first ?? null, final: turns?.final ?? null, staleFollow: turns?.staleFollow ?? null },
-    acceptancePassed: record.acceptancePassed, commandsFirst: turns?.commandsFirst ?? null, commandsFinal: turns?.commandsFinal ?? null,
+    acceptancePassed: record.acceptancePassed, commandsFirst: turns?.commandsFirst ?? null, commandsFinal: turns?.commandsFinal ?? null, commandsStale: turns?.commandsStale ?? null,
     checkers: Object.fromEntries(lessons.map((l) => [l.id, sha256(fs.readFileSync(l.checkPath))])),
   }, null, 2)}\n`);
   if (stage.surfaceText !== undefined) fs.writeFileSync(path.join(dir, `${t.id}.surfaces.txt`), stage.surfaceText);

@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { cleanup, isolate, makeRepo, oneLesson, run, tmp } from './fixtures/z0-harness';
+import { apply, cleanup, family, find, isolate, lesson, makeRepo, oneLesson, plain, readRecords, run, spec, teach, tmp } from './fixtures/z0-harness';
 
 describe('per-cell grading save', () => {
   afterEach(cleanup);
@@ -28,6 +28,11 @@ describe('per-cell grading save', () => {
     expect(g('rev-parse', 'refs/stub')).toBe(grade.stub);
     expect(g('rev-parse', 'refs/grade/pre', 'refs/grade/first', 'refs/grade/final').split('\n')).toEqual([grade.pre, grade.first, grade.final]);
     expect(grade.first).not.toBe(grade.final);
+    // The teach failed its first check, so the resume ran and the final check graded its own commit.
+    expect(grade).toMatchObject({ finalChecked: true, stale: null, commandsStale: null });
+    expect(g('rev-parse', 'refs/grade/finalCheck')).toBe(grade.finalCheck);
+    expect(g('rev-parse', 'refs/grade/finalCheck^{tree}')).toBe(g('rev-parse', 'refs/grade/final^{tree}'));
+    expect(g('for-each-ref', '--format=%(refname)', 'refs/grade/stale')).toBe('');
 
     const first = readFileSync(join(dir, 't1.first.diff'), 'utf8');
     expect(first).toContain('lib.js');
@@ -37,9 +42,40 @@ describe('per-cell grading save', () => {
     for (const f of ['CLAUDE.md', 'AGENTS.md', '.claude/rules/r.md']) expect(first).not.toContain(`b/${f}`);
     expect(readFileSync(join(dir, 't1.final.diff'), 'utf8')).toContain('lesson.txt');
 
-    expect(JSON.parse(readFileSync(join(dir, 'n1.grade.json'), 'utf8')).verdicts).toEqual({ first: null, final: null, staleFollow: null });
+    const n1 = JSON.parse(readFileSync(join(dir, 'n1.grade.json'), 'utf8'));
+    expect(n1).toMatchObject({ verdicts: { first: null, final: null, staleFollow: null }, finalChecked: false, finalCheck: null, stale: null });
+    // a1 passed its first check, so it was never resumed and its one check is both first and final.
+    const a1 = JSON.parse(readFileSync(join(dir, 'a1.grade.json'), 'utf8'));
+    expect(a1).toMatchObject({ verdicts: { first: 'pass', final: 'pass' }, finalChecked: false });
+    expect(a1.finalCheck).toBe(a1.first);
     expect(existsSync(join(dir, 't1.surfaces.txt'))).toBe(false);
     expect(readFileSync(join(dir, 'a2.surfaces.txt'), 'utf8')).toContain('apply note');
     expect(existsSync(join(dir, 'a1.surfaces.txt'))).toBe(true);
   }, 300_000);
+
+  it('holds the stale and final-check commits, so an agent gc in the resume cannot prune them before the save (R21)', async () => {
+    const { out } = isolate('grading-gc');
+    const r = makeRepo();
+    // env-dump writes into work/dumps, so each check's commit has its own tree and the stale commit is not the first one.
+    const dump = { check: { script: 'env-dump.mjs', args: ['exit=1'] } };
+    const fam = family('f1', [lesson('f1-l1', 'Write the lesson file'), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...dump })]);
+    process.env.Z0_ENV_DUMP_DIR = 'dumps';
+    await run(spec(r, [fam], [
+      teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'),
+      teach(r, 't2', 'f1-l2', 'LESSON_OK'), plain(r, 'n3'), plain(r, 'n4'), apply(r, 'a3', 'f1-l2', 'LESSON_OK\nGC_ON_RESUME'),
+    ]), ['A0'], out, { passEnv: ['Z0_ENV_DUMP_DIR'] });
+    expect(find(readRecords(out), 'A0', 'a3')).toMatchObject({ invalid: null, lessons: [{ first: 'fail', final: 'fail', staleFollow: true }] });
+    const dir = join(out, 'grading', 'seqF', 'A0', 'seed1');
+    const grade = JSON.parse(readFileSync(join(dir, 'a3.grade.json'), 'utf8'));
+    expect(grade).toMatchObject({ staleLessonId: 'f1-l1', finalChecked: true });
+    expect(grade.stale).not.toBe(grade.first);
+    expect(grade.commandsStale).toEqual(expect.any(Array));
+    const fresh = tmp('z0-grade-gc-');
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: fresh, encoding: 'utf8' }).trim();
+    g('init', '-q');
+    g('fetch', '-q', join(out, 'repo-cache', 'seqF'), `${grade.stubRef}:refs/stub`);
+    g('fetch', '-q', join(dir, 'a3.bundle'), 'refs/z0/grade/*:refs/grade/*');
+    expect(g('rev-parse', 'refs/grade/stale', 'refs/grade/finalCheck').split('\n')).toEqual([grade.stale, grade.finalCheck]);
+    expect(g('ls-tree', '--name-only', 'refs/grade/stale', 'dumps/').split('\n')).toHaveLength(1);
+  }, 600_000);
 });

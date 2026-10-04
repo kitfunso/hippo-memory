@@ -57,10 +57,12 @@ export function agentGit(work, fn) {
 }
 
 export class CheckerError extends Error {
-  constructor(message, stderr = '') {
+  // `started` false: the checker never ran, which the regrade keeps as a harness fault, never a flip (R6).
+  constructor(message, stderr = '', started = true) {
     super(message);
     this.name = 'CheckerError';
     this.stderr = stderr;
+    this.started = started;
   }
 }
 
@@ -79,7 +81,7 @@ export function runCheck(lesson, { work, env, preCommit, postCommit, commands, s
   });
   const stderr = r.stderr ?? '';
   if (r.error?.code === 'ETIMEDOUT') throw new CheckerError(`checker for lesson ${lesson.id} timed out after ${timeoutMs} ms`, stderr);
-  if (r.error) throw new CheckerError(`checker for lesson ${lesson.id} did not start: ${r.error.message}`, stderr);
+  if (r.error) throw new CheckerError(`checker for lesson ${lesson.id} did not start: ${r.error.message}`, stderr, false);
   const verdict = VERDICTS.get(r.status);
   if (!verdict) throw new CheckerError(`checker for lesson ${lesson.id} exited ${r.status ?? r.signal}`, stderr);
   return verdict;
@@ -99,6 +101,9 @@ export function stateCommit(work, parent) {
 
 // The first check's post commit, held through the resume for the grading save (166); an agent gc there would prune it.
 export const FIRST_REF = 'refs/z0/hold/first';
+// The stale and final checks' commits, held the same way for the regrade (R21).
+export const STALE_REF = 'refs/z0/hold/stale';
+export const FINAL_CHECK_REF = 'refs/z0/hold/finalCheck';
 
 /** Hold a commit (the pre-session one unless `ref` says) so a gc during the task cannot prune it. */
 export function holdPre(work, sha, ref = PRE_REF) {
@@ -108,6 +113,6 @@ export function holdPre(work, sha, ref = PRE_REF) {
 export function dropPre(work) {
   // After the session, so a hook the agent wrote into .git/hooks must not run here.
   agentGit(work, (rgit) => {
-    for (const ref of [PRE_REF, FIRST_REF]) rgit(['update-ref', '-d', ref], work);
+    for (const ref of [PRE_REF, FIRST_REF, STALE_REF, FINAL_CHECK_REF]) rgit(['update-ref', '-d', ref], work);
   });
 }

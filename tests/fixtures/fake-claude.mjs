@@ -264,6 +264,8 @@ function resumeTurn() {
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
   if (line) fs.appendFileSync('CLAUDE.md', `${line[1]}\n`);
   if (lessonState() && input.startsWith('No:')) fs.writeFileSync('lesson.txt', 'ok\n');
+  // GC_ON_RESUME: an agent's gc prunes every commit the runner has not held under a ref.
+  if (prompt.includes('GC_ON_RESUME')) sh('git gc -q --prune=now');
   // CAPTURE_TEACH: the agent saves the teach message to hippo itself.
   if (prompt.includes('CAPTURE_TEACH')) sh(`hippo remember "${input.replaceAll('"', '')}"`);
   appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` })]);

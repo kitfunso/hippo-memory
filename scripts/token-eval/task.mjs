@@ -12,11 +12,12 @@ import {
 import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { findLeaks, storedAt, shownAtStart, capturedBy, holds } from './leaks.mjs';
 import { runSession, resumeSession } from './turns.mjs';
-import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError, FIRST_REF } from './checks.mjs';
+import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, WorkspaceGitError, FIRST_REF, STALE_REF, FINAL_CHECK_REF } from './checks.mjs';
 import { saveGrading, surfaceText } from './grading.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
 import { deliveryHits, sessionVoid } from './readcheck.mjs';
+import { followedOf } from './z0-records.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const NOT_STAGED = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
@@ -118,11 +119,11 @@ function resetTask(ctx, run, t, stage) {
 /** Run every lesson check through one door, so a broken checker is kept once and never read as a verdict. */
 function checker(ctx, run, t, stage, sessionIds) {
   const state = { error: null, calls: [] };
-  state.check = (lesson) => {
+  state.check = (lesson, hold = state.calls.length ? null : FIRST_REF) => {
     const work = run.dirs.work;
     const postCommit = stage.fault ? null : guarded(run, t, stage, () => stateCommit(work, stage.pre));
     if (!postCommit) return null;
-    if (!state.calls.length) guarded(run, t, stage, () => holdPre(work, postCommit, FIRST_REF));
+    if (hold) guarded(run, t, stage, () => holdPre(work, postCommit, hold));
     if (stage.fault) return null;
     const commands = commandLog(transcriptsOf(run, sessionIds));
     state.calls.push({ lessonId: lesson.id, post: postCommit, commands });
@@ -146,13 +147,17 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const c = checker(ctx, run, t, stage, sessionIds);
   const first = c.check(lesson);
   const old = role.afterReversal ? ctx.lessons.get(lesson.supersedes).lesson : null;
-  const staleFollow = old ? c.check(old) === 'pass' : null;
+  const staleFollow = old ? c.check(old, STALE_REF) === 'pass' : null;
   const teach = role.kind === 'teach';
   const form = teach ? (first === 'fail' ? 'correction' : 'confirmation') : 'correction';
-  // What the grading save keeps (166): the first check's post commit and the commands each verdict saw.
+  // What the grading save keeps (166): each check's post commit and the commands each verdict saw.
   const saved = () => {
     const own = c.calls.filter((x) => x.lessonId === lesson.id);
-    return { staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null };
+    const stale = old ? c.calls.find((x) => x.lessonId === old.id) : undefined;
+    return {
+      staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null,
+      finalChecked: own.length > 1, finalCheckPost: own.at(-1)?.post ?? null, stalePost: stale?.post ?? null, commandsStale: stale?.commands ?? null,
+    };
   };
   // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session never (reading 4).
   const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null, ...saved() };
@@ -177,7 +182,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const resumeId = resume.result?.session_id ?? fresh;
   if (resumeId && !sessionIds.includes(resumeId)) sessionIds.push(resumeId);
   // Prereg 165: a timed-out resume is graded on the state at the kill.
-  const final = (resume.result || timedOut) && !c.error ? c.check(lesson) : first;
+  const final = (resume.result || timedOut) && !c.error ? c.check(lesson, FINAL_CHECK_REF) : first;
   const main = findTranscript(projectsOf(run), sessionIds[0]);
   const grew = Boolean(fresh) || (main !== null && fs.statSync(main).size > resume.bytesBefore);
   // Decision 7: a timed-out teach resume delivered the lesson once its transcript grew past the teach message.
@@ -355,15 +360,13 @@ const shownInSession = (run, lesson, sessionIds) => {
   return [...hookContexts(files), ...toolResultTexts(files)].some(({ text }) => holds(text, lesson.keyPhrase));
 };
 
-const FOLLOWED = { pass: true, fail: false };
-
 /** A valid apply's failure chain (prereg 179-182); `captured` is A2's alone, copied from its teach cell. */
 function chainOf(run, step, stage, turns) {
   if (step.role.kind !== 'apply') return undefined;
   const { stored, shown } = stage.chainPre;
   const none = { captured: null, capturedAny: null };
   const capture = run.arm === 'A2' ? run.captured.get(step.role.lessonId) ?? { captured: false, capturedAny: false } : none;
-  return { stored, shown, followed: shown ? FOLLOWED[turns?.first] ?? null : null, ...capture };
+  return { stored, shown, followed: followedOf(shown, turns?.first), ...capture };
 }
 
 /** End of a hippo cell: the injected rows (prereg 93) over both loads of the stores, and an A2 teach's capture (182). */
