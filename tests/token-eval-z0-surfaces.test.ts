@@ -125,6 +125,35 @@ describe('retry restores (prereg 114)', () => {
     }
   }, 300_000);
 
+  it('hashes the memory under a linked project folder, and a retry never deletes or writes through a link', (t) => {
+    const { ctx, r, step, dirs } = unitRun('linked-project');
+    const projects = join(dirs.claudeConfig, 'projects');
+    const linkedMemory = (name: string) => {
+      const target = tmp(`z0-surf-linked-${name}-`);
+      mkdirSync(join(target, 'memory'));
+      writeFileSync(join(target, 'memory', 'MEMORY.md'), `${name} memory\n`);
+      symlinkSync(target, join(projects, name), 'junction');
+      return join(target, 'memory', 'MEMORY.md');
+    };
+    let q: string;
+    try {
+      q = linkedMemory('q');
+    } catch (err) {
+      if (err instanceof Error && 'code' in err && err.code === 'EPERM') return t.skip();
+      throw err;
+    }
+    const snap = snapshotSurfaces(ctx, r, 'pre-session', step);
+    expect(snap.surfaces.autoMemory.map((e: { path: string }) => e.path)).toEqual(['claude-config/projects/p/memory/MEMORY.md', 'claude-config/projects/q/memory/MEMORY.md']);
+    expect(existsSync(join(snap.copyDir!, 'autoMemory', 'q'))).toBe(false);
+    expect(restoreSurfaces(ctx, r, snap, 'retry-restore', step)).toBe(true);
+    // A write through the link, and a linked folder the cut-off attempt made: neither is deleted, so the restore cannot match.
+    appendFileSync(q, 'written through the link\n');
+    const s = linkedMemory('s');
+    expect(restoreSurfaces(ctx, r, snap, 'retry-restore', step)).toBe(false);
+    expect(readFileSync(q, 'utf8')).toBe('q memory\nwritten through the link\n');
+    expect(readFileSync(s, 'utf8')).toBe('s memory\n');
+  });
+
   it('a restore from a copy that lost a file reports false', () => {
     const { out, ctx, r, step, memory } = unitRun('corrupt');
     const snap = snapshotSurfaces(ctx, r, 'pre-session', step);
