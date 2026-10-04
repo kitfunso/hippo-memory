@@ -33,7 +33,6 @@
     "src/cli/session-hooks.ts:cmdSessionEndWorker": 105,
     "src/cli/setup.ts:cmdHook": 186,
     "src/cli/setup.ts:cmdSetup": 122,
-    "src/cli/shared.ts:learnFromRepo": 127,
     "src/cli/status.ts:cmdStatus": 141,
     "src/cli/transfer.ts:cmdImport": 177,
     "src/compaction-record.ts:saveItems": 81,
