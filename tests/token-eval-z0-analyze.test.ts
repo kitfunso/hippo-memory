@@ -367,6 +367,12 @@ describe('Z0 gates', () => {
     canary.records[at(canary.records, 'A5', 'rn-repo3', 1, 5)]!.void = 'operator-canary';
     const r = analyze(canary);
     expect([real(r.gates).failed, r.hypotheses]).toEqual([['G1'], null]);
+    // A canary seen only in an apply's resume leaves the cell's void to session 1 but still fails the run (prereg 161).
+    const resumeOnly = fresh();
+    const hit = { reason: 'operator-canary', class: null, tool: null, path: null, file: 'x.jsonl' };
+    Object.assign(resumeOnly.records[at(resumeOnly.records, 'A1', 'rn-repo2', 1, 5)]!, { resumeVoidHits: [hit] });
+    const g = analyze(resumeOnly);
+    expect([real(g.gates).failed, real(g.gates).G1.operatorCanaries]).toEqual([['G1'], 1]);
     expect(analyze(generate({ knobs: { A4: { fail: 0.6 } } }))).toMatchObject({ gates: { failed: ['G2'] }, hypotheses: null });
     const oneCoding = gatesOf(generate({ knobs: { A4: { na: 0.5, fail: 0.05 } } })).G2.claudeCode;
     expect([oneCoding.violation.estimate > -0.3, oneCoding.excluded.estimate <= -0.3, oneCoding.pass]).toEqual([true, true, false]);

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
 import { __setSettleHook } from '../scripts/token-eval/runs.mjs';
+import { g1 } from '../scripts/token-eval/z0-gates.mjs';
 import { validateCorpus } from './fixtures/z0-contract.js';
 import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, logLines, runRoot, type RunRecord } from './fixtures/z0-harness.js';
 
@@ -120,6 +121,17 @@ describe('resume hits: session 1 decides void, and only a teach\'s resume adds t
     const a1 = find(readRecords(out), 'A0', 'a1');
     expect(a1).toMatchObject({ invalid: null, void: null });
     expect((a1.resumeVoidHits ?? []).map((h) => h.reason)).toEqual(['user-instructions']);
+  }, 300_000);
+
+  it('a canary seen only in an apply\'s resume leaves its void to session 1, and still fails the run at G1', async () => {
+    const { out } = isolate('resume-canary');
+    const canary = 'zz-canary-r';
+    await run(oneLesson(makeRepo(), { a1: `LESSON_BAD\nRESUME_ECHO:{B64:${Buffer.from(canary).toString('base64')}}` }), ['A1'], out, { canaries: [canary] });
+    const recs = readRecords(out);
+    const a1 = find(recs, 'A1', 'a1');
+    expect(a1).toMatchObject({ invalid: null, void: null });
+    expect((a1.resumeVoidHits ?? []).map((h) => h.reason)).toEqual(['operator-canary']);
+    expect(g1(recs, {})).toMatchObject({ pass: false, operatorCanaries: 1 });
   }, 300_000);
 });
 
