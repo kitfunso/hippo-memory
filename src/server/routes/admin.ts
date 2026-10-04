@@ -1,0 +1,152 @@
+// Admin routes: API keys, quarantine and the audit log.
+import { AUDIT_OPS, type AuditOp } from '../../audit.js';
+import { auditList, authCreate, authList, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
+import { HttpError, sendJson } from '../../http-util.js';
+import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
+import type { RouteRequest } from '../types.js';
+import { isJsonString, isSetMember, parseJsonBody, validateIdSegment } from '../validation.js';
+
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
+
+// Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
+// enough to dump a small deployment's full audit log without paginating, but
+// small enough that a malicious client can't ask for the world.
+const MAX_AUDIT_LIMIT = 10000;
+
+// POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
+// body (Task 8): the HTTP layer hands it to the client; the user-facing
+// "store this somewhere safe" warning belongs in the CLI client, not here.
+export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
+  const labelRaw = body['label'];
+  if (labelRaw !== undefined && !isJsonString(labelRaw)) {
+    throw new HttpError(400, 'label must be a string');
+  }
+  // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
+  // strictly — anything other than 'admin'|'member' is a 400 (no silent
+  // fallback to admin). authCreate refuses a member caller with a 403.
+  const roleRaw = body['role'];
+  let role: 'admin' | 'member' | undefined;
+  if (roleRaw !== undefined) {
+    if (roleRaw !== 'admin' && roleRaw !== 'member') {
+      throw new HttpError(400, "role must be 'admin' or 'member'");
+    }
+    role = roleRaw;
+  }
+  // Security: any `tenantId` in the body is IGNORED. The minted key is
+  // bound to the caller's authenticated tenant (ctx.tenantId, resolved
+  // from the Bearer token). Forwarding body.tenantId here would let
+  // tenant A mint a key for tenant B — see authCreate doc comment.
+  const result = authCreate(ctx, {
+    label: labelRaw,
+    role,
+  });
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/auth/keys?active=true — list keys visible to ctx.tenantId.
+// `active` defaults to true so the common case (show me usable keys) is
+// a single GET; ?active=false includes revoked rows.
+export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const activeRaw = query.get('active');
+  let active = true;
+  if (activeRaw !== null) {
+    if (activeRaw === 'true') active = true;
+    else if (activeRaw === 'false') active = false;
+    else throw new HttpError(400, "active must be 'true' or 'false'");
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = authList(ctx, { active });
+  sendJson(res, 200, result);
+  return;
+}
+
+// DELETE /v1/auth/keys/:keyId — revoke. Missing or cross-tenant keys are 404
+// (no info leak); a member key targeting any key but its own is 403.
+// 200 with the body rather than 204 so the caller sees revokedAt.
+export async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(keyMatch.keyId!, 'key id');
+  const ctx = await buildContextWithAuth(req, opts);
+  const result = authRevoke(ctx, keyMatch.keyId!);
+  sendJson(res, 200, result);
+  return;
+}
+
+// GET /v1/quarantine?status=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
+export async function handleListQuarantine({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const ctx = await buildContextWithAuth(req, opts);
+  if (ctx.actor.role !== 'admin') {
+    throw new HttpError(403, '/v1/quarantine requires admin role');
+  }
+  const statusRaw = query.get('status');
+  let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
+  if (statusRaw !== null) {
+    if (statusRaw !== 'pending' && statusRaw !== 'approved' && statusRaw !== 'rejected' && statusRaw !== 'all') {
+      throw new HttpError(400, 'status must be one of: pending | approved | rejected | all');
+    }
+    status = statusRaw;
+  }
+  sendJson(res, 200, { quarantine: quarantineList(ctx, { status }) });
+  return;
+}
+
+// POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
+export async function handleApproveQuarantine({ req, res, opts }: RouteRequest, quarantineApproveMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(quarantineApproveMatch.id!, 'memory id');
+  const ctx = await buildContextWithAuth(req, opts);
+  quarantineApprove(ctx, quarantineApproveMatch.id!);
+  sendJson(res, 200, { approved: quarantineApproveMatch.id });
+  return;
+}
+
+// POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
+export async function handleRejectQuarantine({ req, res, opts }: RouteRequest, quarantineRejectMatch: Record<string, string>): Promise<void> {
+  validateIdSegment(quarantineRejectMatch.id!, 'memory id');
+  const ctx = await buildContextWithAuth(req, opts);
+  quarantineReject(ctx, quarantineRejectMatch.id!);
+  sendJson(res, 200, { rejected: quarantineRejectMatch.id });
+  return;
+}
+
+// GET /v1/audit?op=&since=&limit= — read audit events. All three filters
+// validated at the route boundary so an invalid value lands a 400 before
+// we hit the DB.
+export async function handleListAudit({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const opRaw = query.get('op');
+  let op: AuditOp | undefined;
+  if (opRaw !== null) {
+    if (!isSetMember(VALID_AUDIT_OPS, opRaw)) {
+      throw new HttpError(400, `invalid op: ${opRaw}`);
+    }
+    op = opRaw;
+  }
+  const sinceRaw = query.get('since');
+  let since: string | undefined;
+  if (sinceRaw !== null) {
+    const parsed = Date.parse(sinceRaw);
+    if (!Number.isFinite(parsed)) {
+      throw new HttpError(400, `invalid since: ${sinceRaw}`);
+    }
+    since = sinceRaw;
+  }
+  const limitRaw = query.get('limit');
+  let limit: number | undefined;
+  if (limitRaw !== null) {
+    const parsed = Number(limitRaw);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
+      throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
+    }
+    limit = parsed;
+  }
+  const ctx = await buildContextWithAuth(req, opts);
+  // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
+  const tenantOverride = query.get('tenant');
+  const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
+  if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
+  const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
+  const result = auditList(effectiveCtx, { op, since, limit });
+  sendJson(res, 200, result);
+  return;
+}
