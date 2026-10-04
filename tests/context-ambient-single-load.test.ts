@@ -22,12 +22,14 @@ describe('single load: cli.ts renders getContext.ambientState instead of re-deri
     // Fallback per plan: cli.ts self-invokes main() at import time, so
     // spying on loadAllEntries in-process would trigger a real CLI dispatch.
     const cliSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli.ts'), 'utf8');
+    const contextSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli', 'context.ts'), 'utf8');
     const marker = 'if (result.ambientState) {';
-    const idx = cliSrc.indexOf(marker);
-    expect(idx, 'cli.ts should render result.ambientState').toBeGreaterThan(-1);
-    const block = cliSrc.slice(idx, idx + 150);
+    const idx = contextSrc.indexOf(marker);
+    expect(idx, 'cli/context.ts should render result.ambientState').toBeGreaterThan(-1);
+    const block = contextSrc.slice(idx, idx + 150);
     expect(block).not.toContain('loadAllEntries');
     expect(cliSrc).not.toContain('computeAmbientState');
+    expect(contextSrc).not.toContain('computeAmbientState');
   });
 
   it('behavioural pin: `hippo context` still renders the ambient summary end to end (real CLI, real store)', () => {
