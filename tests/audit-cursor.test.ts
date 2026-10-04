@@ -58,9 +58,9 @@ describe('listAuditEventsAfter', () => {
     const spy = { prepare: (sql: string) => (seen.push(sql), db.prepare(sql)) } as DatabaseSyncLike;
     listAuditEventsAfter(spy, { afterId: 0, limit: 10, tenantId: 'tenant-a' });
     expect(seen).toHaveLength(1);
-    const plan = db
-      .prepare(`EXPLAIN QUERY PLAN ${seen[0]!}`)
-      .all(0, 'tenant-a', 10)
+    // SAFETY: EXPLAIN QUERY PLAN returns rows with a `detail` text column.
+    const planRows = db.prepare(`EXPLAIN QUERY PLAN ${seen[0]!}`).all(0, 'tenant-a', 10) as Array<{ detail: string }>;
+    const plan = planRows
       .map((r) => String(r.detail))
       .join(' | ');
     expect(plan).toContain('INTEGER PRIMARY KEY');

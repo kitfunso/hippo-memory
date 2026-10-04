@@ -7,24 +7,17 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
-import { loadEntities, loadRelations } from '../src/graph.js';
+import { loadEntities, loadRelations } from '../src/graph/read.js';
 import { extractGraph } from '../src/graph-extract.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-extract-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function entityCount(home: string): number {
   const db = openHippoDb(home);
   try {
@@ -37,7 +30,7 @@ function entityCount(home: string): number {
 
 describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph-extract'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('extracts entities (4 types) + a supersedes relation; excludes closed; idempotent', () => {

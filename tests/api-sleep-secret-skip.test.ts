@@ -12,8 +12,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sleep, adminActor, type Context } from '../src/api.js';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getGlobalRoot } from '../src/shared.js';
 
 // Same secret shape tests/secret-detect.test.ts proves trips detectSecret;
@@ -35,8 +37,8 @@ describe('api.sleep secretSkipped counter', () => {
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalTmp;
 
-    writeEntry(hippoRoot, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
-    writeEntry(hippoRoot, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
+    writeEntry(hippoRoot, createMemory(SECRET_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
+    writeEntry(hippoRoot, createMemory(CLEAN_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
 
     ctx = { hippoRoot, tenantId: 'default', actor: adminActor('test:secret-skip') };
   });

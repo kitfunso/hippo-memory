@@ -4,31 +4,24 @@
  * Falls back silently if the library is not installed.
  */
 
+import { envByName } from './env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { createRequire } from 'module';
 import { MemoryEntry } from './memory.js';
-import { loadAllEntries } from './store.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta } from './db.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
+import {
+  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, replaceAllVectors, storedVectorIds, upsertVectors,
+} from './vector-store.js';
 import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
+import { DEFAULT_EMBEDDING_MODEL } from './local-embedding.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { log } from './log.js';
 
-// Use createRequire for synchronous module resolution check in ESM
-const _require = createRequire(import.meta.url);
-
-// Cached availability check
-let _embeddingAvailable: boolean | null = null;
-
-// Lazy-loaded pipeline (expensive to initialize)
-const _pipelineInstances = new Map<string, unknown>();
-const _pipelineLoading = new Map<string, Promise<unknown>>();
-
-export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
-export const EMBEDDING_MODEL_META_KEY = 'embedding_model';
+export { EMBEDDING_MODEL_META_KEY };
 
 /**
  * Bump whenever `embeddingInputText`'s composition changes in a way that
@@ -85,168 +78,6 @@ export function embeddingInputText(entry: { content: string; tags: string[] }): 
   return `${entry.content} ${tags.join(' ')}`.trim();
 }
 
-/**
- * Per-model pooling dispatch for Transformers.js's feature-extraction
- * pipeline. BGE family models were trained with CLS pooling (per BAAI's
- * official inference code in `FlagEmbedding`); MiniLM and most sentence-
- * transformers models use mean pooling. Unknown model ids default to mean
- * — that is the safe choice because most third-party models adopt the
- * sentence-transformers convention, and the alternative ('cls') silently
- * degrades vector quality for mean-pooling models.
- */
-export function poolingFor(model: string): 'cls' | 'mean' {
-  return /\bbge\b/i.test(model) ? 'cls' : 'mean';
-}
-
-/**
- * Per-model input-prefix dispatch. The intfloat/e5 family was trained with
- * asymmetric "query: " / "passage: " prefixes — the model only matches the
- * two halves correctly when each side carries its prefix at inference. BGE
- * also has prefix conventions for some downstream tasks, but symmetric use
- * without prefixes is the documented default for `bge-*-en-v1.5`, so we leave
- * BGE alone here. Symmetric models (MiniLM, BGE) and unknown models return
- * an empty prefix.
- *
- * `role` semantics:
- *   - 'query'   — the text is the user's question / search input.
- *   - 'passage' — the text is a document being indexed.
- *   - undefined or absent — symmetric path; no prefix is applied even for
- *     asymmetric models (preserves backwards compatibility with the legacy
- *     two-argument `getEmbedding(text, model)` API).
- */
-export type EmbeddingRole = 'query' | 'passage';
-
-export function prefixFor(model: string, role?: EmbeddingRole): string {
-  if (!role) return '';
-  if (/\be5\b/i.test(model)) {
-    return role === 'query' ? 'query: ' : 'passage: ';
-  }
-  return '';
-}
-
-// Use Function constructor to bypass TypeScript static module resolution
-// for optional peer dependencies that may not be installed.
-// SAFETY: `import(s)` always resolves to a module namespace object (or rejects);
-// Promise<object> names that honestly without claiming a specific module shape.
-const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<object>;
-
-/**
- * Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed.
- */
-export function isEmbeddingAvailable(): boolean {
-  if (_embeddingAvailable !== null) return _embeddingAvailable;
-
-  try {
-    _require.resolve('@xenova/transformers');
-    _embeddingAvailable = true;
-    return true;
-  } catch {
-    // fall through
-  }
-
-  try {
-    _require.resolve('@huggingface/transformers');
-    _embeddingAvailable = true;
-    return true;
-  } catch {
-    // fall through
-  }
-
-  _embeddingAvailable = false;
-  return false;
-}
-
-/**
- * Pick exactly one Transformers.js implementation before importing either.
- *
- * Importing both packages in one process loads incompatible native
- * onnxruntime-node versions (Xenova v2 uses ORT 1.14; Hugging Face v4 uses a
- * current ORT). Their finalizers can double-free an InferenceSession on exit.
- * Prefer the maintained package shipped by Hippo, with Xenova retained only as
- * a compatibility fallback for users who installed it themselves.
- */
-function resolveTransformersPackage(): string | null {
-  try {
-    _require.resolve('@huggingface/transformers');
-    return '@huggingface/transformers';
-  } catch {
-    // fall through
-  }
-  try {
-    _require.resolve('@xenova/transformers');
-    return '@xenova/transformers';
-  } catch {
-    return null;
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadPipeline(model: string): Promise<any> {
-  if (_pipelineInstances.has(model)) return _pipelineInstances.get(model);
-  if (_pipelineLoading.has(model)) return _pipelineLoading.get(model);
-
-  const loading = (async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pkg = resolveTransformersPackage();
-    if (!pkg) return null;
-
-    let pipelineFn: any = null;
-    try {
-      // SAFETY: the resolved module's shape is untyped by design (optional peer
-      // dependency); pipelineFn/mod.env are read defensively below and any
-      // failure to find a usable pipeline falls through to `return null`.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = await _dynImport(pkg) as any;
-      if (process.env.HIPPO_MODEL_CACHE) {
-        if (mod.env) {
-          mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-          mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-          mod.env.allowRemoteModels = false;
-        }
-      }
-      pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-    } catch {
-      return null;
-    }
-
-    if (!pipelineFn) return null;
-
-    // The Qdrant-vendored bundle (used in egress-restricted sandboxes) ships
-    // only `onnx/model.onnx` (FP32). The HF default ships `model_quantized.onnx`
-    // too. When pointing at a local cache, pick the variant that's on disk.
-    const cacheRoot = process.env.HIPPO_MODEL_CACHE?.trim();
-    const quantized = !cacheRoot
-      || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
-
-    try {
-      const instance = await pipelineFn('feature-extraction', model, { quantized });
-      _pipelineInstances.set(model, instance);
-      return instance;
-    } catch {
-      return null;
-    } finally {
-      _pipelineLoading.delete(model);
-    }
-  })();
-
-  _pipelineLoading.set(model, loading);
-  return loading;
-}
-
-export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string): string {
-  const direct = explicitModel?.trim();
-  if (direct) return direct;
-
-  try {
-    const configured = loadConfig(hippoRoot).embeddings.model?.trim();
-    if (configured) return configured;
-  } catch {
-    // Fall back to the default model when config cannot be read.
-  }
-
-  return DEFAULT_EMBEDDING_MODEL;
-}
-
 function loadStoredEmbeddingModel(hippoRoot: string): string | null {
   try {
     const db = openHippoDb(hippoRoot);
@@ -256,7 +87,8 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
     } finally {
       closeHippoDb(db);
     }
-  } catch {
+  } catch (err) {
+    log.debug(`stored embedding model unreadable: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -282,7 +114,8 @@ export function resolveIndexedEmbeddingModel(
 ): string | null {
   const stored = loadStoredEmbeddingModel(hippoRoot);
   if (stored) return stored;
-  return Object.keys(index ?? loadEmbeddingIndex(hippoRoot)).length > 0 ? DEFAULT_EMBEDDING_MODEL : null;
+  const hasVectors = index ? Object.keys(index).length > 0 : withVectorDb(hippoRoot, hasStoredVectors);
+  return hasVectors ? DEFAULT_EMBEDDING_MODEL : null;
 }
 
 export function embeddingModelRequiresReindex(
@@ -310,6 +143,8 @@ async function rebuildEmbeddingIndex(
     const vec = vectors[i];
     if (vec && vec.length > 0) {
       rebuilt[entries[i].id] = vec;
+    } else {
+      noteSkippedEmbedding(entries[i].id);
     }
   }
 
@@ -328,44 +163,15 @@ function resetPhysicsFromIndex(
     } finally {
       closeHippoDb(db);
     }
-  } catch {
-    // Physics reset is best-effort; retrieval will still fall back gracefully.
+  } catch (err) {
+    // Best effort: retrieval still falls back without physics state.
+    log.warn(`physics reset after reindex failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
-/**
- * Get an embedding vector for a piece of text.
- * Returns an empty array if transformers is not available or fails.
- *
- * Pass `role: 'query'` / `'passage'` to engage asymmetric prefixing for
- * model families that require it (currently intfloat/e5-*). Omitting `role`
- * keeps the legacy symmetric behavior (no prefix), so BGE / MiniLM callers
- * don't need to change.
- */
-export async function getEmbedding(
-  text: string,
-  model = DEFAULT_EMBEDDING_MODEL,
-  role?: EmbeddingRole,
-): Promise<number[]> {
-  if (!isEmbeddingAvailable()) return [];
-
-  try {
-    const pipe = await loadPipeline(model);
-    if (!pipe) return [];
-
-    const prefix = prefixFor(model, role);
-    const input = prefix ? `${prefix}${text}` : text;
-    // SAFETY: pipe() is a Transformers.js feature-extraction pipeline call;
-    // its untyped output is read defensively below (only `.data`, cast on
-    // the return line to the documented Float32Array tensor shape).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = await pipe(input, { pooling: poolingFor(model), normalize: true }) as any;
-    // SAFETY: output.data is a Float32Array per the feature-extraction
-    // pipeline's documented tensor output shape.
-    return Array.from(output.data as Float32Array);
-  } catch {
-    return [];
-  }
+/** A provider's `[]` row is a swallowed per-item failure; name the memory so the gap can be traced. */
+function noteSkippedEmbedding(id: string): void {
+  log.warn('memory not embedded; the next embed run retries it', { id });
 }
 
 /**
@@ -391,78 +197,33 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return Math.min(1, Math.max(-1, dot / denom));
 }
 
-const EMBEDDINGS_FILE = 'embeddings.json';
-// Never equal to a real index identity, so the next embed run treats it as a model change and rebuilds every vector.
-const QUARANTINED_INDEX_IDENTITY = 'quarantined-corrupt-index';
-
-function isErrnoCode<E>(err: E, code: string): boolean {
-  return err instanceof Error && 'code' in err && err.code === code;
-}
-
-function parseEmbeddingIndex(raw: string): Record<string, number[]> | null {
+function withVectorDb<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T): T {
+  const db = openHippoDb(hippoRoot);
   try {
-    const parsed: unknown = JSON.parse(raw);
-    // SAFETY: saveEmbeddingIndex is the only writer and always writes this shape; anything that is not an object is corrupt.
-    return parsed instanceof Object && !Array.isArray(parsed) ? parsed as Record<string, number[]> : null;
-  } catch {
-    return null;
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
   }
 }
 
-/** Move a corrupt index aside and flag a full rebuild, so no later save can write over the only copy of those bytes. */
-function quarantineCorruptIndex(hippoRoot: string, fp: string): void {
-  const aside = `${fp}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`;
-  try {
-    fs.renameSync(fp, aside);
-  } catch (err) {
-    if (isErrnoCode(err, 'ENOENT')) return;
-    // A rename blocked by an open handle (Windows) still gets a copy kept; if the copy fails too, the throw stops the save.
-    fs.copyFileSync(fp, aside, fs.constants.COPYFILE_EXCL);
-  }
-  log.error(`${EMBEDDINGS_FILE} could not be parsed; kept it as ${path.basename(aside)} and the next embed rebuilds the index`, { hippoRoot });
-  try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      setMeta(db, EMBEDDING_MODEL_META_KEY, QUARANTINED_INDEX_IDENTITY);
-    } finally {
-      closeHippoDb(db);
-    }
-  } catch (err) {
-    log.warn(`could not flag the embedding index for rebuild; run 'hippo embed' to restore vectors (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
-  }
-}
-
-/**
- * Load the cached embedding index; `{}` when the file is missing. A corrupt file is moved aside and rebuilt on the next embed; any other read error throws, so nothing saves over an index it could not read.
- */
+/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  let raw: string;
-  try {
-    raw = fs.readFileSync(fp, 'utf8');
-  } catch (err) {
-    if (isErrnoCode(err, 'ENOENT')) return {};
-    throw err;
-  }
-  const index = parseEmbeddingIndex(raw);
-  if (index) return index;
-  quarantineCorruptIndex(hippoRoot, fp);
-  return {};
+  return Object.fromEntries(withVectorDb(hippoRoot, (db) => loadVectors(db)));
 }
 
-/**
- * Save the embedding index to disk.
- */
-export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>): void {
-  const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  const tmp = fp + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(index), 'utf8');
-  try {
-    fs.renameSync(tmp, fp);
-  } catch (err) {
-    try { fs.unlinkSync(tmp); } catch { /* best-effort cleanup */ }
-    throw err;
-  }
+/** Stored vectors for `ids` only. */
+export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
+  return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectors(db, ids));
+}
+
+/** Whether the store holds any vector at all. */
+export function hasEmbeddings(hippoRoot: string): boolean {
+  return withVectorDb(hippoRoot, hasStoredVectors);
+}
+
+/** Replace every stored vector with `index`; `model` defaults to the stored index identity. */
+export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
+  withVectorDb(hippoRoot, (db) => replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, '')));
 }
 
 const EMBED_LOCK_FILE = 'embeddings.lock';
@@ -520,7 +281,7 @@ async function acquireEmbedFileLock(hippoRoot: string): Promise<() => void> {
       fs.rmSync(lockPath, { force: true });
       continue;
     }
-    if (Date.now() >= deadline) throw new Error(`embeddings.json is busy: another hippo process holds ${lockPath}`);
+    if (Date.now() >= deadline) throw new Error(`the embedding index is busy: another hippo process holds ${lockPath}`);
     await new Promise((r) => setTimeout(r, 50));
   }
 }
@@ -551,7 +312,7 @@ function warnEmbedFailureOnce(source: string, rawMessage: string): void {
   _embedFailureWarned = true;
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
   const message = redactSecretsStrict(rawMessage).replace(/\s+/g, ' ').replace(/\.+$/, '');
-  console.error(`hippo: embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
+  log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
 }
 
 /**
@@ -579,16 +340,15 @@ export async function embedMemory(
     // where failures surface. On any failure we leave the existing index as-is.
     try {
       const identity = provider.id;
-      const existingIndex = loadEmbeddingIndex(hippoRoot);
 
-      if (embeddingModelRequiresReindex(hippoRoot, identity, existingIndex)) {
+      if (embeddingModelRequiresReindex(hippoRoot, identity)) {
         // L9: host-wide rebuild. The embedding index is keyed by entry.id
         // (which is tenant-scoped) but the index itself is one per hippoRoot.
         // Cross-tenant content equivalence is visible at the vector level.
         // Per-tenant indices would be a larger architecture change.
         const entries = loadAllEntries(hippoRoot);
         const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
-        saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+        saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
         saveStoredEmbeddingModel(hippoRoot, identity);
         resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
         return;
@@ -598,9 +358,7 @@ export async function embedMemory(
       const [vector] = await provider.embed([text], 'passage');
       if (!vector || vector.length === 0) return;
 
-      const index = existingIndex;
-      index[entry.id] = vector;
-      saveEmbeddingIndex(hippoRoot, index);
+      withVectorDb(hippoRoot, (db) => upsertVectors(db, [[entry.id, vector]], embeddingIndexIdentity(identity)));
       saveStoredEmbeddingModel(hippoRoot, identity);
 
       // Initialize physics state for this memory
@@ -623,20 +381,20 @@ export async function embedMemory(
       warnEmbedFailureOnce(provider.kind, err instanceof Error ? err.message : String(err));
     }
   }).catch((err) => {
-    console.error(`hippo: skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+    log.warn(`skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
   });
 }
 
 /**
  * Embed all entries in hippoRoot that don't already have cached vectors.
  * Prunes orphaned embeddings for memories that no longer exist.
- * Returns the count of newly embedded entries.
+ * Returns the count of newly embedded entries. `provider` defaults to the store's configured one.
  */
 export async function embedAll(
   hippoRoot: string,
-  model?: string
+  model?: string,
+  provider: EmbeddingProvider = resolveEmbeddingProvider(hippoRoot, { model }),
 ): Promise<number> {
-  const provider = resolveEmbeddingProvider(hippoRoot, { model });
   if (!provider.isAvailable()) {
     // A configured (non-disabled) API provider with a missing key is a
     // misconfiguration, not a no-op: surface it so programmatic callers of the
@@ -647,7 +405,7 @@ export async function embedAll(
       provider.kind !== 'local' &&
       cfg.enabled !== false &&
       provider.keyEnv &&
-      !process.env[provider.keyEnv]?.trim()
+      !envByName(provider.keyEnv)?.trim()
     ) {
       throw new Error(
         `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,
@@ -662,26 +420,20 @@ export async function embedAll(
     // entries into the per-host embedding index. Per-tenant filtering would
     // produce partial indices and break recall.
     const entries = loadAllEntries(hippoRoot);
-    const index = loadEmbeddingIndex(hippoRoot);
+    const model = embeddingIndexIdentity(identity);
 
-    if (embeddingModelRequiresReindex(hippoRoot, identity, index)) {
+    if (embeddingModelRequiresReindex(hippoRoot, identity)) {
       const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
-      saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+      saveEmbeddingIndex(hippoRoot, rebuiltIndex, model);
       saveStoredEmbeddingModel(hippoRoot, identity);
       resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
       return Object.keys(rebuiltIndex).length;
     }
 
-    let dirty = false;
-
-    // Prune orphaned embeddings for deleted memories
-    const activeIds = new Set(entries.map((e) => e.id));
-    for (const id of Object.keys(index)) {
-      if (!activeIds.has(id)) {
-        delete index[id];
-        dirty = true;
-      }
-    }
+    const embedded = withVectorDb(hippoRoot, (db) => {
+      deleteOrphanVectors(db);
+      return storedVectorIds(db);
+    });
 
     // Embed entries without a cached vector in save-checkpointed chunks.
     // provider.embed batches internally (one HTTP request per batchSize for API
@@ -689,7 +441,7 @@ export async function embedAll(
     // not be embedded and is left for a later run (resumable). On a hard provider
     // failure mid-backfill we persist the chunks already embedded this run rather
     // than discarding paid progress, then stop and resume on the next run.
-    const pending = entries.filter((e) => !index[e.id]);
+    const pending = entries.filter((e) => !embedded.has(e.id));
     let count = 0;
     // Initialized to `undefined` (not a known-evidence literal like `null`) so
     // it stays a plain `unknown` binding for the arbitrary caught value below;
@@ -710,22 +462,15 @@ export async function embedAll(
         backfillError = err;
         break;
       }
-      let chunkDirty = false;
+      const rows: Array<[string, number[]]> = [];
       for (let j = 0; j < chunk.length; j++) {
         const vec = vectors[j];
-        if (vec && vec.length > 0) {
-          index[chunk[j].id] = vec;
-          count++;
-          dirty = true;
-          chunkDirty = true;
-        }
+        if (vec && vec.length > 0) rows.push([chunk[j].id, vec]);
+        else noteSkippedEmbedding(chunk[j].id);
       }
-      if (chunkDirty) saveEmbeddingIndex(hippoRoot, index);
+      count += withVectorDb(hippoRoot, (db) => upsertVectors(db, rows, model));
     }
 
-    if (dirty) {
-      saveEmbeddingIndex(hippoRoot, index);
-    }
     saveStoredEmbeddingModel(hippoRoot, identity);
 
     // Partial progress is now persisted; surface a hard backfill failure so the

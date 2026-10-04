@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
+import { seededRandom } from '../src/eval-stats.js';
 
 /**
  * F4 — byte compare canonical UTC ISO timestamps instead of localeCompare.
@@ -45,10 +47,12 @@ describe('assemble ISO sort (F4) — byte compare equivalence', () => {
   });
 
   it('byte compare matches Date-numeric ordering for randomized canonical ISO inputs', () => {
-    // Random check across 100 generated timestamps spanning ~50 years.
+    // A fresh seed each run widens coverage; HIPPO_TEST_SEED=<seed> replays a failure.
+    const seed = Number(process.env.HIPPO_TEST_SEED ?? Date.now() % 2 ** 32);
+    const random = seededRandom(seed);
     const samples: string[] = [];
     for (let i = 0; i < 100; i++) {
-      const epoch = Math.floor(Math.random() * 1_700_000_000_000);
+      const epoch = Math.floor(random() * 1_700_000_000_000);
       samples.push(new Date(epoch).toISOString());
     }
     const cmpIso = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -56,7 +60,7 @@ describe('assemble ISO sort (F4) — byte compare equivalence', () => {
     const numericSorted = [...samples].sort(
       (a, b) => Date.parse(a) - Date.parse(b),
     );
-    expect(byteSorted).toEqual(numericSorted);
+    expect(byteSorted, `HIPPO_TEST_SEED=${seed}`).toEqual(numericSorted);
   });
 });
 
@@ -91,6 +95,7 @@ describe('assemble ISO sort (F4) — integration', () => {
     ];
     for (const i of fixtureOrder) {
       const e: MemoryEntry = createMemory(`row ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         confidence: 'observed',
         kind: 'raw',

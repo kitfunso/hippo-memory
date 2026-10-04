@@ -1,10 +1,10 @@
 // In-memory observer for one pinned-only context call: what was considered, why each was rejected, what reached stdout.
 // No DB access (the caller hands build()'s output to src/recall-trace.ts); hashes, ids, counts and enums only, never text.
+import { envTestDeliveryFault } from './env.js';
 import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
-
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
 export type DeliverySurface = 'hook' | 'context';
@@ -177,7 +177,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const startedMs = Date.now();
   const ts = evalNow().toISOString();
   // Test-only fault injection, as HIPPO_FAKE_NOW is for time.
-  const fault = process.env.HIPPO_TEST_DELIVERY_FAULT ?? '';
+  const fault = envTestDeliveryFault();
 
   const payloadSession = hookPayloadSessionId(init.stdinText);
   const subagent = isSubagentPayload(init.stdinText);
@@ -348,6 +348,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (flushed) return;
       flushed = true;
       if (broken !== null) {
+        // Same pinned `[hippo] delivery ledger` hook stderr line as recall-trace.ts's write failure.
         console.error(`[hippo] delivery ledger skipped: recorder failed: ${broken}`);
         return;
       }

@@ -9,23 +9,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { savePrediction, closePrediction } from '../src/predictions.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
-interface ToolArgs {
+type ToolArgs = {
   class_tag?: string;
-}
+};
 
 function callTool(
   reqId: number,

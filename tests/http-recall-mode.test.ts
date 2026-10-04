@@ -5,8 +5,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory } from '../src/memory.js';
-import { initStore, writeEntry, loadEntriesByIds, loadIndex } from '../src/store.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadEntriesByIds } from '../src/store/entry-reads.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 import { recall, supersede, type Context } from '../src/api.js';
 
@@ -30,8 +33,8 @@ beforeEach(async () => {
   initStore(home);
   // The better BM25 match has decayed for years; hybrid scoring must see that.
   const old = '2020-01-01T00:00:00.000Z';
-  const weak = { ...createMemory('alpha alpha beta'), created: old, last_retrieved: old, half_life_days: 1 };
-  const strong = createMemory('alpha gamma delta');
+  const weak = { ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created: old, last_retrieved: old, half_life_days: 1 };
+  const strong = createMemory('alpha gamma delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(home, weak);
   writeEntry(home, strong);
   weakId = weak.id;

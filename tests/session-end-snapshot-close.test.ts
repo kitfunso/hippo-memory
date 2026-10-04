@@ -4,7 +4,9 @@ import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { getHippoRoot, loadActiveTaskSnapshot, loadLatestHandoff, saveActiveTaskSnapshot } from '../src/store.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { loadLatestHandoff } from '../src/store/handoffs.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `cmdSessionEnd` extracts `payload.session_id` from the

@@ -4,7 +4,8 @@ import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { getHippoRoot, loadAllEntries } from '../src/store.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 // OpenCode's idle hook runs `hippo session-end` with no payload. An empty stdin
 // must not read as a manual run: session-end never scans ~/.claude/projects.

@@ -7,7 +7,10 @@ import { importForStore } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/dormant.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
-import { deleteEntryRowInTx, readEntry, rebuildIndex, removeEntryMirrors, writeEntry } from '../src/store.js';
+import { removeEntryMirrors } from '../src/store/mirrors.js';
+import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { rebuildIndex } from '../src/store/index-and-stats.js';
 import {
   auditCount, auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes,
   sha, toolTally, withDb, type World,

@@ -14,6 +14,7 @@
 
 import { createHash } from 'node:crypto';
 import type { DatabaseSyncLike } from './db.js';
+import { BadRequestError } from './api-errors.js';
 
 /**
  * Normalize content for rejection-digest comparisons: Unicode NFC →
@@ -42,7 +43,7 @@ export function rejectionDigest(content: string): string {
  * blocks (writeEntry, api.supersede) to write a post-rollback
  * `reject_refusal` audit row via `auditRejectionRefusal` (plan §3).
  */
-export class RejectedValueError extends Error {
+export class RejectedValueError extends BadRequestError {
   readonly digest: string;
   readonly tenantId: string;
   readonly entryId: string;

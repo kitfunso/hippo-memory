@@ -3,11 +3,12 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -15,9 +16,9 @@ const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 
 
 let template: string;
 
-function seeded(content: string, id: string, created: string, extra: Partial<MemoryEntry> = {}, opts: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
+function seeded(content: string, id: string, created: string, extra: Partial<MemoryEntry> = {}, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
   // createMemory decays strength over the real milliseconds it runs, so a fixed value keeps snapshots stable.
-  return { ...createMemory(content, opts), id, created, last_retrieved: created, valid_from: created, strength: 1, ...extra };
+  return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts }), id, created, last_retrieved: created, valid_from: created, strength: 1, ...extra };
 }
 
 function seedLocal(hippoRoot: string): void {
@@ -66,7 +67,8 @@ function normalise(text: string, home: string): string {
 interface RunOutput { status: number | null; stdout: string; stderr: string; log?: string }
 
 function run(c: Case): RunOutput {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-sleep-golden-'));
+  // Real path: the CLI prints resolved paths, and macOS spells the temp root through the /var symlink.
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-sleep-golden-')));
   try {
     if (!c.uninitialised) cpSync(template, join(home, '.hippo'), { recursive: true });
     const env: NodeJS.ProcessEnv = { ...process.env };

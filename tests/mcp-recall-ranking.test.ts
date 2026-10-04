@@ -5,7 +5,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/memory.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api.js';
@@ -13,7 +14,7 @@ import { pushGoal } from '../src/goals.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -212,15 +213,21 @@ describe('MCP hippo_recall ranking', () => {
   it('a strong match outside the 200-row lexical window still ranks', async () => {
     const s = track(seed());
     add(s, 'W1', 'alpha important decision record', { tags: ['decision', 'extracted'] });
-    for (let i = 0; i < 210; i++) add(s, `F${i}`, `alpha note ${i}`);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 210; i++) add(s, `F${i}`, `alpha note ${i}`);
+    });
     expect(observe(s, textOf(await call(s.home, { query: 'alpha', budget: 300 })))).toEqual(EXPECTED.windowEdge);
   });
 
   it('overflowed children of a level-2 summary bring the summary into the tail', async () => {
     const s = track(seed());
     const parent = add(s, 'SUM', 'rollup summary of the child notes', { dag_level: 2, tags: ['dag-summary'] });
-    for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dag_level: 0, dag_parent_id: parent.id });
-    for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dag_level: 0, dag_parent_id: parent.id });
+      for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
+    });
     expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);
   });
 
@@ -249,61 +256,61 @@ describe('MCP hippo_recall ranking', () => {
   });
 });
 
-// Recorded on the pre-refactor handler (own loadAllEntries + physicsSearch/hybridSearch pipeline).
+// Candidates are a wide FTS window plus the nearest vectors, so Cutoff counts only rows that matched the query.
 const EXPECTED = {
   defaultHybrid: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   tightBudget: {
     ranked: ['SC1', 'L1', 'L2'],
     tail: [],
-    cutoff: 'Showing 3 of 26 candidates; 21 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: 'Showing 3 of 11 candidates; 8 dropped to fit limit.',
   },
   explicitScope: {
     ranked: ['SC1', 'SC2'],
     tail: [],
-    cutoff: 'Showing 2 of 26 candidates; 24 filtered pre-rank.',
+    cutoff: null,
   },
   continuity: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   physicsNoEmbeddings: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   hybridEmbeddings: {
     ranked: ['SC1', 'L1', 'S1', 'D1', 'L2', 'P1', 'L4', 'SC2', 'L3', 'L5', 'G1', 'C1'],
     tail: [],
-    cutoff: 'Showing 12 of 26 candidates; 12 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   physicsEmbeddings: {
     ranked: ['SC1', 'L1', 'D1', 'L2', 'S1', 'P1', 'L4', 'SC2', 'L3', 'L5', 'G1', 'C1'],
     tail: [],
-    cutoff: 'Showing 12 of 26 candidates; 12 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   goalBoost: {
-    ranked: ['SC1', 'L1', 'L2', 'G1', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5'],
+    ranked: ['SC1', 'L1', 'G1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5'],
     tail: [],
-    cutoff: 'Showing 11 of 26 candidates; 13 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: null,
   },
   freshTail: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: ['T-one', 'T-three', 'T-two'],
-    cutoff: 'Showing 11 of 29 candidates; 16 dropped to fit limit; 2 filtered pre-rank; 3 fresh-tail added.',
+    cutoff: 'Showing 11 of 11 candidates; 3 fresh-tail added.',
   },
   windowEdge: {
-    ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110'],
+    ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110', 'F111'],
     tail: [],
-    cutoff: 'Showing 24 of 237 candidates; 211 dropped to fit limit; 2 filtered pre-rank.',
+    cutoff: 'Showing 25 of 213 candidates; 188 dropped to fit limit.',
   },
   dagOverflow: {
-    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12'],
+    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13'],
     tail: ['SUM'],
-    cutoff: 'Showing 13 of 90 candidates; 75 dropped to fit limit; 2 filtered pre-rank; 1 summary substitutions added.',
+    cutoff: 'Showing 14 of 63 candidates; 49 dropped to fit limit; 1 summary substitutions added.',
   },
 } satisfies Record<string, Observed>;

@@ -2,13 +2,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { queryAuditEvents } from '../src/audit.js';
-import { extractFromText } from '../src/capture.js';
+import { extractFromText } from '../src/capture/extract.js';
 import { loadConfig } from '../src/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { gatedWrite } from '../src/gated-write.js';
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
-import { loadAllEntries, openStore, readEntry, initStore } from '../src/store.js';
+import { openStore, initStore } from '../src/store/open.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from './_helpers/compaction-hooks.js';
 
 let s: Scratch;

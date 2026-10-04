@@ -11,17 +11,17 @@ function cellTone(v: string): string {
   return 'text-zinc-300';
 }
 
-// Home shows 6 fact rows x 4 systems of the README's first table, including rows where others are stronger;
-// the design bets stay on GitHub. A cell shows its short verdict, the README cell minus its parenthetical, keeping footnote marks.
+// Home shows 6 rows x 4 systems of the README table; the GitHub link carries readers to all 10.
+// A cell shows its short verdict, the README cell minus its parenthetical, keeping footnote marks.
 const shortVerdict = (cell: string) => cell.replace(/\s*\(([^)]*)\)/g, (_, inner: string) => inner.match(/\*+/)?.[0] ?? '');
 const homeSystems = ['Hippo', 'Mem0', 'gbrain', 'Zep'];
 const homeFeatures = [
-  'Where your data lives',
-  'Needs an account or model key',
-  'License',
-  'Managed multi-user service',
-  'Graph or entity relations',
-  'LongMemEval (published)',
+  'Decay by default',
+  'Retrieval strengthening',
+  'Cross-tool import (ChatGPT/Claude/Cursor)',
+  'Auto-hook install',
+  'Zero runtime deps',
+  'LongMemEval (best published)',
 ];
 // A README rename must fail the build here, not drop a column or row from the page.
 const sysIdx = homeSystems.map((n) => {
@@ -37,8 +37,8 @@ const rows = homeFeatures.map((f) => {
 });
 ---
 
-<section id="compare" class="relative scroll-mt-20 border-t border-white/5">
-  <div class="mx-auto max-w-6xl px-5 py-24">
+<section id="compare" class="relative border-t border-white/5">
+  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
     <div class="max-w-2xl">
       <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Compare</p>
       <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
@@ -49,8 +49,9 @@ const rows = homeFeatures.map((f) => {
 
     <!-- trimmed matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
     <div class="relative mt-10">
-      <div class="overflow-x-auto rounded-2xl glass">
-        <table class="w-full min-w-[560px] border-collapse text-left text-sm">
+      <!-- Equal fixed columns: auto layout let the long LongMemEval cells set every column's width. -->
+      <div class="overflow-x-auto rounded-2xl glass" data-scroll-x>
+        <table class="w-full min-w-[640px] table-fixed border-collapse text-left text-sm">
           <thead>
             <tr class="border-b border-white/10">
               <th
@@ -86,7 +87,7 @@ const rows = homeFeatures.map((f) => {
                 {row.cells.map((c, ci) => (
                   <td
                     class:list={[
-                      'whitespace-nowrap px-2 py-2.5 text-center align-top text-[13px] leading-snug',
+                      'min-w-[8.5rem] px-3 py-2.5 text-center align-top text-[13px] leading-snug',
                       cellTone(c),
                       ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
                     ]}
@@ -97,11 +98,6 @@ const rows = homeFeatures.map((f) => {
           </tbody>
         </table>
       </div>
-      <!-- mobile scroll cue: right-edge fade over the scroll container -->
-      <div
-        class="pointer-events-none absolute inset-y-0 right-0 w-14 rounded-r-2xl bg-gradient-to-l from-zinc-950/90 to-transparent sm:hidden"
-        aria-hidden="true"
-      ></div>
     </div>
     <p class="mt-2 font-mono text-xs text-zinc-400 sm:hidden">{compare.scrollCue} →</p>
 
@@ -111,11 +107,10 @@ const rows = homeFeatures.map((f) => {
       </a>
     </p>
 
-    <div class="mt-4 space-y-2" data-reveal>
-      {comparison.footnotes.map((f) => <p class="copy max-w-lg text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
-      <p class="max-w-lg text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
+    <div class="mt-4 gap-x-12 *:mb-2 lg:columns-2" data-reveal>
+      {comparison.footnotes.map((f) => <p class="copy break-inside-avoid text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
+      <p class="break-inside-avoid text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
+      <p class="break-inside-avoid pt-4 text-sm leading-relaxed text-zinc-400">{comparison.closing}</p>
     </div>
-
-    <p class="mt-6 max-w-lg text-sm leading-relaxed text-zinc-400" data-reveal>{comparison.closing}</p>
   </div>
 </section>

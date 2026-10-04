@@ -10,7 +10,7 @@ Work taken off the active list, one line of reason each. `ROADMAP.md`
 - **Export the `api.ts` facade from `src/index.ts` (M10).** The CLI still calls store functions directly; route it through `api.ts` first so the export has one entry path. 1.45.0 only corrects the CHANGELOG line that told callers to import `recall()` from `index.ts`.
 - **The 47 bare catches (L1).** Each needs a read of its own call site, and routing the CLI through the facade rewrites most of them.
 - **Share the request code of `python/src/hippo_memory/client.py` and `sync_client.py`.** Each file carries the same 117 `/v1` lines; that duplication is the real cost.
-- **A Windows CI job (M14).** On `windows-latest`, 20 tests in 8 store-heavy files still timed out with the test stores on D: and Defender's real-time scan off: vitest took 900 s, against about 2 minutes on Linux. Stores already run WAL with `synchronous = NORMAL`, so commit syncs are not the cost. The job returns once the slow step is measured.
+- **A Windows CI job (M14). Returned in `ci/all-os-full-suite`.** The slow step was the fsync: the runner's C: disk, which holds `%TEMP%`, takes 5 ms per fsync against 0.15 ms on D:, and every closing connection checkpoints. Two store-heavy files ran 86 s with `TEMP` on C: and 9 s on D:, with Defender's real-time scan already off. The job now points `TEMP` and `TMP` at `runner.temp` and runs four workers, the runner's core count: with six, 10 store-heavy tests still timed out; with four, none did.
 
 ### Cut
 

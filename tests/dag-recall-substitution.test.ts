@@ -8,19 +8,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
-
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -32,11 +24,12 @@ function ctxFor(root: string, tenantId: string = 'default'): Context {
 
 function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     tags: opts.tags ?? [],
     confidence: 'observed',
     dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id,
+    dag_parent_id: opts.dag_parent_id ?? undefined,
     scope: opts.scope ?? null,
     tenantId: opts.tenantId ?? 'default',
     kind: opts.kind ?? 'distilled',
@@ -46,6 +39,7 @@ function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
 
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const s = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: opts.tags ?? ['dag-summary'],
     confidence: 'inferred',

@@ -4,12 +4,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { CODEX_TRUST_LINE, installJsonHooks, uninstallJsonHooks } from '../src/hooks.js';
+import { CODEX_TRUST_LINE } from '../src/hooks/shared.js';
+import { installJsonHooks, uninstallJsonHooks } from '../src/hooks/json-hooks.js';
 import { formatDoctor, runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/working-memory.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
-import { initStore, saveSessionHandoff, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const START = '<!-- hippo:start -->';
@@ -350,7 +353,7 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     const m = machine();
     const globalStore = path.join(m.root, 'global');
     initStore(globalStore);
-    const entry = createMemory('projectless hook remembers the staging flag', { pinned: true });
+    const entry = createMemory('projectless hook remembers the staging flag', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true });
     entry.origin_project = '';
     writeEntry(globalStore, entry);
     const foreignFolder = path.join(m.root, 'other-project');

@@ -5,8 +5,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import type { HippoConfig } from '../src/config.js';
 import { getContext, type Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -20,7 +21,7 @@ let local: string;
 let ctx: Context;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
-  const entry = { ...createMemory(content), origin_project: PROJECT, ...extra };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
   writeEntry(root, entry);
   return entry;
 }
@@ -291,7 +292,7 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
   // No origin_project override: the CLI derives it from cwd's own basename,
   // so a hardcoded 'proj-a' (unlike the api-level tests, which pin currentProject to match) would read as cross-project and get excluded.
   function seedCli(content: string, extra: Partial<MemoryEntry> = {}) {
-    const entry = { ...createMemory(content), ...extra };
+    const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
     writeEntry(hippoDir, entry);
     return entry;
   }

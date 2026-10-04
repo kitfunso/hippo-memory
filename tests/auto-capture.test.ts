@@ -12,11 +12,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { extractFromText } from '../src/capture.js';
+import { extractFromText } from '../src/capture/extract.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/compaction-record.js';
 import { lessonFromFailure, captureToolFailure, failureSignature } from '../src/capture-error.js';
-import { initStore, loadAllEntries, loadActiveTaskSnapshot, getHippoRoot } from '../src/store.js';
-import { installJsonHooks } from '../src/hooks.js';
+import { initStore, getHippoRoot } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { installJsonHooks } from '../src/hooks/json-hooks.js';
 import { runDoctor } from '../src/doctor.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

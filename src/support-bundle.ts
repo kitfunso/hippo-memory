@@ -1,11 +1,12 @@
 /** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (SQLite may leave empty -wal and -shm files); never touches memory content. */
+import { envByName, processEnv } from './env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { findHippoStoreDir, isGlobalStoreRoot, realpathOrResolve } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
-import { isInitialized } from './store.js';
+import { isInitialized } from './store/open.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTableRows, type DatabaseSyncLike } from './db.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';
@@ -140,11 +141,11 @@ function buildStores(opts: SupportBundleOpts): JsonValue[] {
 
 function listSetEnvNames(): string[] {
   const names = new Set<string>();
-  for (const key of Object.keys(process.env)) {
+  for (const key of Object.keys(processEnv())) {
     if (key.startsWith('HIPPO_')) names.add(key);
   }
   for (const key of OTHER_ENV_NAMES) {
-    if (process.env[key] !== undefined) names.add(key);
+    if (envByName(key) !== undefined) names.add(key);
   }
   return [...names].sort();
 }

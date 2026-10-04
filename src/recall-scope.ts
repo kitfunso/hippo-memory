@@ -7,6 +7,8 @@
  * (`api.isPrivateScope`, test imports of `passesScopeFilterForRecall`).
  */
 
+import { ForbiddenError } from './api-errors.js';
+
 /**
  * Literal scopes excluded from recall by default-deny when the
  * caller passes no `scope`. The SQL clause in `loadSearchRows` and the JS
@@ -121,7 +123,7 @@ export function passesCliRecallScopeFilter(
  * Thrown when a caller requests a scope its role may not read. The HTTP layer
  * maps it to 403.
  */
-export class ScopeForbiddenError extends Error {
+export class ScopeForbiddenError extends ForbiddenError {
   readonly scope: string;
 
   constructor(scope: string) {
@@ -140,7 +142,7 @@ export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
   // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string
   // literals; widening the array (not the input) lets .includes() take any scope.
-  // `:private:` anywhere, any case, matches the store's SQL default-deny (store.ts:894) so JS never admits what SQL hides.
+  // `:private:` anywhere, any case, matches the store's SQL default-deny (store/search-rows.ts) so JS never admits what SQL hides.
   return isPrivateScope(scope) || /:private:/i.test(scope) || (RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope);
 }
 
@@ -188,8 +190,11 @@ export function commonDerivationScope(
   return { ok: true, scope: common };
 }
 
-/** Map-partition key for consolidate/dag producers: tenant + derivation scope,
- *  so a derived row never blends two restricted scopes or a mixed pair. */
-export function derivationPartitionKey(tenantId: string, scope: string | null | undefined): string {
-  return `${tenantId}\u0000${derivationScope(scope) ?? ''}`;
+/** Map-partition key for consolidate/dag/dedup producers: tenant + derivation scope + origin project,
+ *  so a derived row never blends two restricted scopes, a mixed pair, or two projects. */
+export function derivationPartitionKey(
+  tenantId: string, scope: string | null | undefined, origin: string | null | undefined,
+): string {
+  const project = origin === undefined ? '\u0002' : origin ?? '\u0001'; // unstamped, unknown and named never share a bucket
+  return `${tenantId}\u0000${derivationScope(scope) ?? ''}\u0000${project}`;
 }

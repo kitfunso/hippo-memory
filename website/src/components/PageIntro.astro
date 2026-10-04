@@ -6,10 +6,10 @@ interface Props {
 const { eyebrow } = Astro.props;
 ---
 
-<section class="relative scroll-mt-20">
-  <div class="mx-auto max-w-6xl px-5 pb-12 pt-28 sm:pt-32">
+<section class="relative">
+  <div class="mx-auto max-w-6xl px-5 pb-12 pt-10 sm:pt-12">
     <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{eyebrow}</p>
-    <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+    <h1 class="mt-4 max-w-3xl text-balance font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
       <slot name="title" />
     </h1>
     <div class="copy mt-6 max-w-2xl space-y-4 text-lg leading-relaxed text-zinc-400">

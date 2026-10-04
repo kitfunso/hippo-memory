@@ -29,15 +29,12 @@ const description =
     </PageIntro>
 
     <Section title="Set it up">
+      <Cmd lines={[site.installCmd, 'hippo init']} />
       <p>
-        Run it inside one project. <code>hippo init</code> creates the project's <code>.hippo/</code> store, seeded from the
-        last 30 days of commits, and adds its instructions to the project's <code>AGENTS.md</code> if it has one; Cursor
-        reads that file from the project root. On your machine it installs a daily 6:15am run that learns from each
-        registered project's commits, plus Claude Code hooks or the OpenCode plugin if the project also uses those. The
-        <a class="link" href="/quickstart/">quickstart</a> lists every change and the flags that skip each one.
+        <code>hippo init</code> adds its instructions to the project's <code>AGENTS.md</code> if it has one, and Cursor
+        reads that file from the project root. Then give Cursor's agent the memory tools by adding hippo to
+        <code>.cursor/mcp.json</code>:
       </p>
-      <Cmd lines={[site.installCmd, site.initCmd]} />
-      <p>Then give Cursor's agent the memory tools by adding hippo to <code>.cursor/mcp.json</code>:</p>
       <Cmd lines={mcpJson} prompt={false} />
       <p>
         No global install? <code>"command": "npx", "args": ["-y", "hippo-memory", "mcp"]</code> works too. The agent gets
@@ -69,7 +66,7 @@ const description =
         (<a class="link" href="https://cursor.com/changelog/1-0" target="_blank" rel="noopener noreferrer">changelog<span class="sr-only"> (opens in new tab)</span></a>).
         Cursor staff say the feature was removed starting in version 2.1.x
         (<a class="link" href="https://forum.cursor.com/t/are-my-memories-gone/144057" target="_blank" rel="noopener noreferrer">forum<span class="sr-only"> (opens in new tab)</span></a>).
-        Hippo holds what the agent saves with <code>hippo remember</code>, in a store your other agents share, and lets you mark a lesson
+        Hippo holds what the agent learns as it works, in a store your other agents share, and lets you mark a lesson
         wrong with <code>hippo outcome --bad</code> or replace a fact that changed with <code>hippo supersede</code>.
       </p>
     </Section>

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { gitSpawn } from './exec.mjs';
 import { agentGit } from './checks.mjs';
-import { RESTORABLE, isImported, collapse } from './surfaces.mjs';
+import { RESTORABLE, isImported, collapse, followStat } from './surfaces.mjs';
 import { ownsPhrase } from './lessons.mjs';
 
 // Bytes as latin1 with ASCII-only case folding, so a non-ASCII phrase matches its exact UTF-8 bytes.
@@ -52,12 +52,38 @@ function workspaceFiles(work, pre, phrase) {
   }).split('\0').filter(Boolean).map((p) => p.slice(pre.length + 1));
 }
 
+/** Files under `dir` through every file and dir link, each real dir once, since a link may loop back up. */
+function linkedFiles(dir, rel, seen, out) {
+  const real = fs.realpathSync(dir);
+  if (seen.has(real)) return out;
+  seen.add(real);
+  for (const name of fs.readdirSync(dir).sort()) {
+    const abs = path.join(dir, name);
+    const st = followStat(abs);
+    if (st?.isDirectory()) linkedFiles(abs, `${rel}/${name}`, seen, out);
+    else if (st?.isFile()) out.push({ rel: `${rel}/${name}`, abs });
+  }
+  return out;
+}
+
+/** An entry's files as `{e, abs}`; a link gives what its target holds, as the agent reads through it. */
+function entryFiles(root, e) {
+  const abs = path.join(root, e.path);
+  if (!e.link) return [{ e, abs }];
+  const st = followStat(abs);
+  if (!st?.isDirectory()) return st ? [{ e, abs }] : [];
+  return linkedFiles(abs, e.path, new Set(), []).map((f) => ({ e: { ...e, path: f.rel }, abs: f.abs }));
+}
+
 /** Each surface entry's bytes as `{key, e, bytes}`, skipping entries the snapshot could not read and files gone since. */
 export function* surfaceBytes(root, surfaces, keys) {
   for (const key of keys) {
-    for (const e of surfaces[key] ?? []) {
-      const bytes = e.error ? null : readOrNull(path.join(root, e.path));
-      if (bytes) yield { key, e, bytes };
+    for (const entry of surfaces[key] ?? []) {
+      if (entry.error) continue;
+      for (const { e, abs } of entryFiles(root, entry)) {
+        const bytes = readOrNull(abs);
+        if (bytes) yield { key, e, bytes };
+      }
     }
   }
 }

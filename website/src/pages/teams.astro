@@ -4,24 +4,25 @@ import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { enterprise, site } from '../content/site';
 
-// Separate planned enterprise capabilities from the available MIT core.
+// Enterprise v1 is in development (ROADMAP Part XII). Every feature below that is not
+// shipped says so; the pilot measurement is the offer that exists today.
 const agents = ['Claude Code', 'Copilot', 'Cursor', 'Codex'];
 const sources = ['GitHub', 'GitLab', 'Jira', 'Slack'];
 const pillars = [
   {
     title: 'Recall respects access',
-    body: 'Planned source-aware permissions: a memory learned in a private repository should only reach developers who can open that repository.',
-    status: 'planned',
+    body: 'A memory learned in a private repository only reaches developers who can open that repository.',
+    status: 'in development',
   },
   {
     title: 'Leads approve what spreads',
-    body: 'Planned promotion policy: a lesson can spread from a repository to a team or company within the administrator’s configured approval rules.',
-    status: 'planned',
+    body: 'A lesson moves from one repository to a team, or to the whole company, only after a tech lead approves it.',
+    status: 'in development',
   },
   {
     title: 'Every write is on the record',
-    body: 'The MIT core records supported operations in an audit log and provides tenant-scoped API keys, admin/member roles and per-key scope grants.',
-    status: 'available in MIT core',
+    body: 'An audit log of who stored, recalled, changed or forgot what. Keys scoped to tenants and roles.',
+    status: 'shipped',
   },
 ];
 const kpis = [
@@ -34,36 +35,36 @@ const kpis = [
 
 <Base
   title="hippo for teams: memory your platform team can approve"
-  description="The commercial edition of hippo is planned and its private repository is a scaffold. Ask about a scoped pilot for governed shared memory inside your network."
+  description="Enterprise hippo is in development: shared memory for every Claude Code and Copilot seat, run inside your network. Pilots measure it against a holdout."
   crumb="Teams"
 >
   <Nav />
   <main id="main">
     <section class="relative overflow-hidden">
       <div class="pointer-events-none absolute inset-0 -z-10 hero-glow"></div>
-      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-24 pt-10 sm:pt-12 lg:grid-cols-2">
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-(--section-y) pt-10 sm:pt-12 lg:grid-cols-2">
         <div class="min-w-0">
           <span class="inline-flex items-center gap-2 rounded-full border border-acc-amber/40 bg-acc-amber/10 px-3 py-1 font-mono text-xs text-acc-amber">
-            {enterprise.status} · pilot requests open
+            Enterprise v1 · in development · pilots open
           </span>
           <h1 class="mt-6 font-display text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">
             The memory layer your <span class="text-gradient">platform team</span> can approve.
           </h1>
           <p class="mt-6 max-w-lg text-lg leading-relaxed text-zinc-400">
-            {enterprise.availability} The goal is governed shared memory inside your network, with source-aware access and routine capture after initial setup and required trust. Agent-by-agent automatic-save coverage and enterprise acceptance are still planned.
+            {enterprise.availability} One plugin turns on shared memory for every agent seat. It runs inside your network, recalls only what each developer can already see, and logs every write. No usage beacon, nothing sent home.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
-            <a href={site.links.pilot} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-acc-violet px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90">Ask about a pilot</a>
+            <a href={site.links.pilot} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-acc-violet px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90">Ask about a 4-week pilot</a>
             <a href={site.links.security} target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-white/12 px-5 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/5">Security policy</a>
           </div>
         </div>
 
-        <div class="glass min-w-0 rounded-2xl p-6" aria-label="Planned enterprise deployment">
-          <p class="font-mono text-xs uppercase tracking-wider text-zinc-400">Planned enterprise deployment</p>
+        <div class="glass min-w-0 rounded-2xl p-6" aria-label="How hippo deploys inside a company">
+          <p class="font-mono text-xs uppercase tracking-wider text-zinc-400">How it deploys</p>
           <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {agents.map((a) => <li class="rounded-lg border border-white/10 px-3 py-2.5 text-center text-sm text-zinc-200">{a}</li>)}
           </ul>
-          <p class="mt-3 text-center font-mono text-xs text-zinc-400">Planned: MCP over OAuth, signed in as the developer</p>
+          <p class="mt-3 text-center font-mono text-xs text-zinc-400">MCP over OAuth, signed in as the developer</p>
           <div class="mt-3 rounded-xl border-2 border-dashed border-acc-violet/50 p-4">
             <p class="font-mono text-xs text-acc-violet">YOUR NETWORK</p>
             <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-900 px-4 py-3">
@@ -74,16 +75,16 @@ const kpis = [
               {sources.map((s) => <li class="rounded-md bg-white/[0.04] px-2 py-2 text-center text-sm text-zinc-300">{s}</li>)}
             </ul>
           </div>
-          <p class="mt-4 text-sm text-zinc-400">Available today: the MIT core, the HTTP server with tenants, API keys and an audit log, and GitHub and Slack connectors. Postgres, Helm, SSO and additional enterprise sources are planned; this diagram is not a released deployment bundle.</p>
+          <p class="mt-4 text-sm text-zinc-400">Today: the MIT core, the HTTP server with tenants, API keys and an audit log, and GitHub and Slack connectors. Postgres, Helm, SSO and more sources are in development.</p>
         </div>
       </div>
     </section>
 
     <section class="border-t border-white/5">
-      <div class="mx-auto grid max-w-6xl gap-4 px-5 py-24 md:grid-cols-3">
+      <div class="mx-auto grid max-w-6xl gap-4 px-5 py-(--section-y) md:grid-cols-3">
         {pillars.map((p) => (
           <div class="glass flex flex-col gap-3 rounded-2xl p-6">
-            <span class:list={['self-start rounded px-2 py-0.5 font-mono text-xs', p.status === 'available in MIT core' ? 'bg-acc-violet/15 text-acc-violet' : 'bg-acc-amber/15 text-acc-amber']}>{p.status}</span>
+            <span class:list={['self-start rounded px-2 py-0.5 font-mono text-xs', p.status === 'shipped' ? 'bg-acc-violet/15 text-acc-violet' : 'bg-acc-amber/15 text-acc-amber']}>{p.status}</span>
             <h2 class="text-xl leading-snug">{p.title}</h2>
             <p class="text-sm leading-relaxed text-zinc-400">{p.body}</p>
           </div>
@@ -92,14 +93,14 @@ const kpis = [
     </section>
 
     <section class="border-t border-white/5 bg-white/[0.02]">
-      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-24 lg:grid-cols-2">
+      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-(--section-y) lg:grid-cols-2">
         <div class="min-w-0">
-          <p class="font-mono text-xs uppercase tracking-wider text-acc-violet">Proposed pilot</p>
+          <p class="font-mono text-xs uppercase tracking-wider text-acc-violet">The pilot</p>
           <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">Measured on your work, against a holdout.</h2>
           <p class="mt-5 max-w-lg text-lg leading-relaxed text-zinc-400">
-            Agree the scope, duration, customer outcomes and quality guardrails before the pilot. Compare against a holdout that cannot receive shared lessons from the treatment group, using comparable people, tasks, days and models. Join permitted agent telemetry and independently accepted outcomes inside your network; include setup, supervision and administrator effort.
+            For four weeks, a random share of sessions runs without memory. Both groups work on the same days, with the same people and models, so a model price change or a quiet week cannot fake a saving. The numbers come from your agent’s own telemetry, computed inside your network.
           </p>
-          <p class="mt-4 max-w-lg text-sm text-zinc-400">Reporting and automated joins are planned commercial work. Missing outcomes stay unknown, and the proposed report must show a null or negative result as clearly as a gain. We publish our own losses too.</p>
+          <p class="mt-4 max-w-lg text-sm text-zinc-400">If there is no difference, the report says so. We publish our own losses too.</p>
         </div>
         <ul class="glass min-w-0 divide-y divide-white/8 rounded-2xl">
           {kpis.map((k) => (

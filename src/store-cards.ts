@@ -3,7 +3,8 @@ import { closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from './handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
 import { assertTenantId } from './tenant.js';
-import { openStore, HANDOFF_COLUMNS } from './store.js';
+import { openStore } from './store/open.js';
+import { HANDOFF_COLUMNS } from './store/handoffs.js';
 
 // ---------------------------------------------------------------------------
 // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md).

@@ -10,8 +10,8 @@ import { REPO, readmeComparison, readmeFaq } from './readme';
 
 export { REPO };
 
+// The sync check keeps these two README-shared lines on the site; they postdate the Sep 28 wording.
 export const enterprise = {
-  status: 'Planned commercial edition',
   availability: 'The commercial edition is planned; its private repository is a scaffold, not a released enterprise product.',
 } as const;
 
@@ -20,14 +20,12 @@ export const site = {
   pkg: 'hippo-memory',
   version: pkg.version, // Build-source version; publication is verified separately.
   positioning: 'memory for AI agents that learns what is wrong', // page title and hero eyebrow
-  // Hero headline, split for accent emphasis: what works on day one leads.
-  tagline: { lead: 'Local memory for', accent: 'the agents you already use.' },
+  // Hero headline, split for accent emphasis. The per-agent install detail lives in Get started.
+  tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
   description:
-    "Hippo keeps your coding agents' memories in SQLite on your machine. Search needs no model or network call. hippo init installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's hooks.json when Codex is installed (requiring one-time trust), and adds instructions to an existing AGENTS.md for Codex, Cursor, OpenClaw and Pi; any MCP client can connect too. Capture and compaction coverage depend on the integration. Mark a memory wrong and it ranks lower; run hippo supersede and the old fact leaves recall.",
+    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, drops what turned out to be wrong, and replaces facts that changed.",
   installCmd: 'npm install -g hippo-memory',
-  initCmd: 'hippo init',
-  // Every page that offers the scan states what it changes before the command.
-  scanCmd: 'hippo init --scan ~',
+  initCmd: 'hippo init --scan ~',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
   tests: '3,500+',
   links: {
@@ -39,7 +37,6 @@ export const site = {
     longmemeval: `${REPO}/tree/master/benchmarks/longmemeval`,
     license: `${REPO}/blob/master/LICENSE`,
     jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
-    recallEval: `${REPO}/blob/master/docs/evals/2026-09-28-recall-cli-longmemeval-result.md`,
     atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
     // Pilot requests open a GitHub issue until a booking link exists.
     pilot: `${REPO}/issues/new?title=Pilot%20request&body=Company%2C%20team%20size%2C%20agents%20in%20use%3A`,
@@ -50,12 +47,7 @@ export const site = {
 // Hero proof lines, above the fold (audit: lead with capability proof, not adjectives).
 // The reranker line carries its null result inline; the win never travels without it.
 export const proofs = [
-  {
-    stat: '85.6% R@5',
-    text: 'from hippo recall on LongMemEval-S, inside its default 4,000-token budget; 96.8% with the budget lifted.',
-    href: site.links.recallEval,
-    hrefLabel: 'the hippo recall eval',
-  },
+  { stat: '98.0% R@5', text: 'on LongMemEval-S with a free local embedder (best of five settings).' },
   {
     stat: 'R@1 0.41 to 0.62',
     text: 'with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.',
@@ -73,7 +65,7 @@ export const nav = [
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-/** An illustrated two-day Claude Code session with hippo's hooks; the stored memory is the tool name plus the error text, as capture-error writes it (it prints nothing).
+/** An illustrated two-day Claude Code session with hippo's hooks; the hippo lines are shortened from what hippo prints.
  *  Kinds: note = day label, cmd = prompt, out = agent output, err = failed tool call, caught = hippo storing it,
  *  ok = hippo, mem = a memory in context. */
 export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' | 'ok' | 'mem'; text: string }> = [
@@ -85,15 +77,16 @@ export const terminal: Array<{ kind: 'note' | 'cmd' | 'out' | 'err' | 'caught' |
   { kind: 'note', text: 'Tuesday · new session' },
   { kind: 'cmd', text: 'add a webhook for failed payments' },
   { kind: 'ok', text: 'hippo · 2 memories in context' },
-  { kind: 'mem', text: 'Bash: lockfile is pnpm-lock.yaml; npm install would rewrite it' },
+  { kind: 'mem', text: 'billing uses pnpm; never run npm install here' },
+  { kind: 'out', text: 'Bash(pnpm add stripe)  ✓' },
   { kind: 'cmd', text: '/compact' },
-  { kind: 'ok', text: 'Hippo saved 3 memories from this compaction and restored your task snapshot.' },
+  { kind: 'ok', text: 'Hippo saved your task snapshot before compacting.' },
 ];
 
 /** The three commands under the hero. Sourced to README: the capture-error hook, `outcome --bad`, `doctor`. */
 export const commands = [
-  { cmd: 'hippo capture-error', body: 'Failed tool calls are stored as error memories, word for word. Interrupts, declined permissions and empty searches are skipped.' },
-  { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and hippo ranks it down.' },
+  { cmd: 'hippo capture-error', body: 'Real failures become lessons. Interrupts, declined permissions and empty searches are skipped.' },
+  { cmd: 'hippo outcome --bad', body: 'Mark a lesson wrong and it stops coming back.' },
   { cmd: 'hippo doctor', body: 'One command checks the install and names the fix for anything missing.' },
 ] as const;
 
@@ -101,8 +94,8 @@ export const problem = {
   kicker: 'The problem',
   heading: 'Most AI memory saves everything and searches later.',
   body: [
-    "That's storage with search on top. A note that turned out wrong ranks the same as one that held up, and an old fact sits beside the one that replaced it.",
-    'Hippo records which memories were marked wrong or replaced. A wrong one ranks lower, and a replaced one leaves the results.',
+    "That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before.",
+    'The system saw the failure four times. It had no way to know it should remember.',
   ],
   // README "Why this exists"
 } as const;
@@ -111,7 +104,7 @@ export const mechanics = [
   {
     title: 'Decay by default',
     metric: '365d half-life',
-    body: 'The default half-life is 365 days, and a memory fades unless it is used. We did not tune 365 days: it tied with 730 days and with decay off.',
+    body: 'Every memory fades on a one-year half-life unless it is used. We did not tune 365 days: it tied with 730 days and with decay off.',
   },
   {
     title: 'Retrieval strengthens',
@@ -119,23 +112,23 @@ export const mechanics = [
     body: 'Use it or lose it. Each recall extends the half-life. Memories you reach for survive.',
   },
   {
-    title: 'Errors last longer',
+    title: 'Errors stick',
     metric: '2x half-life',
-    body: 'Tag a failure as an error and it gets twice the half-life, so a later recall that matches it can still find it.',
+    body: 'Tag a failure once. It decays slower and resurfaces every time you walk back into that code.',
   },
   {
     title: 'Sleep consolidates',
-    metric: '2+ → 1',
-    body: 'On `hippo sleep`, two or more related episodes merge into one semantic memory. The originals decay; the merged memory survives. It keeps the store tidy, but in hippo\'s own audit it cost 3.6 points of LongMemEval recall.',
+    metric: '3+ → 1',
+    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.',
   },
 ] as const;
 
 export const receipts = [
   {
-    stat: '85.6%',
-    label: 'R@5 from hippo recall, LongMemEval-S',
-    note: "An answer session in the top 5 for 85.6% of the 500 questions, on a default install inside recall's 4,000-token budget. 87.6% with the optional MiniLM embedder; 96.8% with the budget lifted. The benchmark scripts' best of five settings reach 98.0%. BM25 only, older oracle split: 74.0%.",
-    href: site.links.recallEval,
+    stat: '98.0%',
+    label: 'R@5 on LongMemEval-S',
+    note: 'Any answer session in the top 5, per haystack, free local MiniLM (an optional install), best of five settings. Requiring every answer session: 86.8 to 88.5%. 99.8% with voyage-3-large (June 2026). BM25 only, older oracle split: 74.0%.',
+    href: site.links.longmemeval,
   },
   {
     stat: '−6.0',
@@ -165,39 +158,34 @@ export const mcpJson = ['{', '  "mcpServers": {', '    "hippo-memory": {', '    
 export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'markdown'] as const;
 
 export const compare = {
-  heading: 'How hippo compares.',
-  body: 'Where the data lives, what it runs on and what each tool has published, including the rows where another tool is stronger. Hippo\'s design bets, such as decay, are in a second table on GitHub.',
+  heading: 'Learn what is wrong. Stop repeating it.',
+  body: 'How hippo compares to the strongest tools in the category, on the features that define a memory lifecycle.',
   sourceHref: `${REPO}#comparison`,
-  sourceLabel: 'Both tables, all 10 tools, on GitHub',
+  sourceLabel: 'Full 10-tool matrix on GitHub',
   scrollCue: 'scroll for more tools',
   qualifierNote:
-    'Verdicts are shortened for scanning; the qualifier behind each Yes, No or Partial is in the full tables.',
+    'Verdicts are shortened for scanning; the qualifier behind each Yes/No/Partial is in the full matrix.',
 } as const;
 
 /** README.md's Comparison table, parsed at build by readme.ts, plus the site's own closing line. */
 export const comparison = {
   ...readmeComparison,
   closing:
-    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and rank it down."',
+    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and stop repeating it."',
 } as const;
 
-/** Get started in one project, with everything hippo init changes (src/cli.ts cmdInit) listed above the command. */
+/** Get started = quickstart + the zero-config auto-install differentiator. */
 export const getStarted = {
   kicker: 'Get started',
-  heading: 'Start in one project.',
-  body: 'Install it, then run init inside one repo. This is everything init changes on your machine.',
+  heading: 'Zero config. It wires itself in.',
+  body: 'Install it, run init in your repo, and hippo detects your agent framework and patches the right config file. Next session, your agent just uses it.',
   notice: 'Package installation alone does not enable automatic preservation on every agent. Complete the documented setup and required host trust; capture and compaction coverage depend on the integration.',
-  steps: [site.installCmd, site.initCmd],
-  changes: [
-    'A .hippo/ store in the project. On the first run it learns from the last 30 days of git history.',
-    'A hippo block in the CLAUDE.md or AGENTS.md the project already has. It never creates either file.',
-    'If the project uses Claude Code: 7 hook entries in ~/.claude/settings.json, for session start and end, each prompt, compaction and failed tool calls.',
-    "If the project has AGENTS.md or .codex and Codex is installed: 2 hook entries in Codex's hooks.json, for each prompt and after a compaction. Codex runs them once you trust them in /hooks.",
-    'If the project uses OpenCode: a plugin at ~/.config/opencode/plugins/hippo.ts.',
-    "A daily run at 6:15am, through crontab on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs hippo sleep there.",
-    "On the first run, it imports the project's Claude Code auto memory, from its folder under ~/.claude/projects/.",
-  ],
-  skip: 'To leave a part out: --no-hooks skips the block and the hooks, --no-schedule the daily run, --no-learn both imports.',
+  steps: [site.installCmd, 'hippo init'],
+  autoInstall: {
+    heading: 'Detected and patched automatically',
+    frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi'],
+    note: 'In a repo, init patches the instruction file each agent already has (CLAUDE.md, AGENTS.md) and adds session hooks where the agent supports them. hippo init --scan ~ gives every git repo under your home folder a store and installs the Claude Code hooks and the OpenCode plugin, but patches no instruction files. hippo init --no-hooks --no-schedule skips the hooks and the daily run.',
+  },
 } as const;
 
 /** Local-first / privacy. Every receipt sourced verbatim to README (L46/L57/L58). */
@@ -205,7 +193,7 @@ export const localFirst = {
   kicker: 'Local-first',
   points: [
     { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; opt-in features such as the Jev reranker, the LLM reranker and the API embedders do.' },
-    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set. Sleep runs at every Claude Code session end and in the daily job, so it happens without you asking. One config line turns that off.' },
+    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store with markdown mirrors you can read, grep, and commit. No cloud and no account. One default to know: hippo sleep sends text to Anthropic for fact extraction when ANTHROPIC_API_KEY is set, and one config line turns that off.' },
     { stat: '1 call', label: 'to forget', body: 'Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.' },
     { stat: 'tenant-safe', label: 'by default', body: 'Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.' },
   ],

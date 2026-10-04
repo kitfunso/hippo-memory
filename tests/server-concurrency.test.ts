@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember as apiRemember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';

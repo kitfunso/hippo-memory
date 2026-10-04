@@ -2,12 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  initStore,
-  saveActiveTaskSnapshot,
-  loadActiveTaskSnapshot,
-  clearActiveTaskSnapshot,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { saveActiveTaskSnapshot, loadActiveTaskSnapshot, clearActiveTaskSnapshot } from '../src/store/sessions.js';
 
 let tmpDir: string;
 beforeEach(() => {

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import {
   float32ToBuffer,
   bufferToFloat32,
@@ -15,7 +15,7 @@ import {
 } from '../src/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import type { MemoryEntry } from '../src/memory.js';
-import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,24 +76,12 @@ function insertMemoryRow(db: DatabaseSyncLike, id: string, opts?: Partial<{
 
 function makeMemoryEntry(id: string, overrides?: Partial<MemoryEntry>): MemoryEntry {
   return {
+    ...createMemory(`test content for ${id}`),
     id,
     created: NOW.toISOString(),
     last_retrieved: NOW.toISOString(),
-    retrieval_count: 0,
-    strength: 1.0,
     half_life_days: 7,
-    layer: Layer.Episodic,
-    tags: [],
-    emotional_valence: 'neutral',
-    schema_fit: 0.5,
     source: 'test',
-    outcome_score: null,
-    outcome_positive: 0,
-    outcome_negative: 0,
-    conflicts_with: [],
-    pinned: false,
-    confidence: 'verified',
-    content: `test content for ${id}`,
     ...overrides,
   };
 }
@@ -310,6 +298,18 @@ describe('loadPhysicsState with memoryIds filter', () => {
       // Per code: if memoryIds.length === 0, falls through to load all
       // Actually: memoryIds && memoryIds.length > 0 is false for [], so loads all
       expect(loaded.size).toBe(1);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('loads a whole-store id list longer than SQLite allows bound parameters', () => {
+    const db = openHippoDb(tmpDir);
+    try {
+      for (const id of ['mem_first', 'mem_last']) insertMemoryRow(db, id);
+      savePhysicsState(db, [makeParticle('mem_first'), makeParticle('mem_last')]);
+      const ids = ['mem_first', ...Array.from({ length: 40_000 }, (_, i) => `absent_${i}`), 'mem_last'];
+      expect([...loadPhysicsState(db, ids).keys()].sort()).toEqual(['mem_first', 'mem_last']);
     } finally {
       closeHippoDb(db);
     }

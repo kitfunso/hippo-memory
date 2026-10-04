@@ -2,22 +2,22 @@
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import {
-  collectSessionTurns,
-  errorMessage,
-  readTranscriptTail,
-  splitSentences,
-  type SessionTurn,
-  type TranscriptRecord,
-} from './capture.js';
+import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './capture/transcript.js';
+import { splitSentences } from './capture/extract.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
+import { errorMessage } from './log.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
-import { SNAPSHOT_AMBIENT_MAX_AGE_MS, isInitialized, loadAllEntries, loadLatestHandoff, writeEntry } from './store.js';
+import { isInitialized } from './store/open.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
+import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
+import { readTranscriptTail } from './transcript-tail.js';
 
 export const SESSION_DIGEST_TAG = 'session-digest';
 

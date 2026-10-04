@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`cli recall and explain golden output > 'explain --include-superseded --classic' 1`] = `
+exports[`cli recall and explain golden output > explain --include-superseded --classic 1`] = `
 {
   "status": 0,
   "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
@@ -46,7 +46,7 @@ Note: explain does not mark memories as retrieved (read-only).
 }
 `;
 
-exports[`cli recall and explain golden output > 'explain --json' 1`] = `
+exports[`cli recall and explain golden output > explain --json 1`] = `
 {
   "status": 0,
   "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
@@ -56,7 +56,7 @@ exports[`cli recall and explain golden output > 'explain --json' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'explain --scope private --json' 1`] = `
+exports[`cli recall and explain golden output > explain --scope private --json 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -65,7 +65,7 @@ exports[`cli recall and explain golden output > 'explain --scope private --json'
 }
 `;
 
-exports[`cli recall and explain golden output > 'explain default' 1`] = `
+exports[`cli recall and explain golden output > explain default 1`] = `
 {
   "status": 0,
   "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
@@ -142,7 +142,7 @@ Note: explain does not mark memories as retrieved (read-only).
 }
 `;
 
-exports[`cli recall and explain golden output > 'explain global store' 1`] = `
+exports[`cli recall and explain golden output > explain global store 1`] = `
 {
   "status": 0,
   "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
@@ -235,7 +235,7 @@ Note: explain does not mark memories as retrieved (read-only).
 }
 `;
 
-exports[`cli recall and explain golden output > 'explain no match' 1`] = `
+exports[`cli recall and explain golden output > explain no match 1`] = `
 {
   "status": 0,
   "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
@@ -245,7 +245,7 @@ exports[`cli recall and explain golden output > 'explain no match' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --as-of' 1`] = `
+exports[`cli recall and explain golden output > recall --as-of 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -254,7 +254,7 @@ exports[`cli recall and explain golden output > 'recall --as-of' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --budget 120' 1`] = `
+exports[`cli recall and explain golden output > recall --budget 120 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -275,7 +275,7 @@ deploy pipeline uses blue green rollout for the api
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --classic' 1`] = `
+exports[`cli recall and explain golden output > recall --classic 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -284,7 +284,7 @@ exports[`cli recall and explain golden output > 'recall --classic' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --goal' 1`] = `
+exports[`cli recall and explain golden output > recall --goal 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -350,7 +350,7 @@ deploy target is the new staging cluster in eu west
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --graph-stream' 1`] = `
+exports[`cli recall and explain golden output > recall --graph-stream 1`] = `
 {
   "status": 0,
   "stderr": "[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run \`hippo embed\` first.
@@ -391,7 +391,7 @@ deploy goal work: migrate the rollout scripts to the new runner
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --hops 1' 1`] = `
+exports[`cli recall and explain golden output > recall --hops 1 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -400,7 +400,7 @@ exports[`cli recall and explain golden output > 'recall --hops 1' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --include-superseded' 1`] = `
+exports[`cli recall and explain golden output > recall --include-superseded 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -409,7 +409,7 @@ exports[`cli recall and explain golden output > 'recall --include-superseded' 1`
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --json' 1`] = `
+exports[`cli recall and explain golden output > recall --json 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -418,7 +418,7 @@ exports[`cli recall and explain golden output > 'recall --json' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --layer trace' 1`] = `
+exports[`cli recall and explain golden output > recall --layer trace 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -433,7 +433,7 @@ deploy trace: ran the canary and promoted it
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --limit 2' 1`] = `
+exports[`cli recall and explain golden output > recall --limit 2 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -453,7 +453,7 @@ deploy checklist for team alpha runs smoke tests first
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --multihop' 1`] = `
+exports[`cli recall and explain golden output > recall --multihop 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -462,7 +462,7 @@ exports[`cli recall and explain golden output > 'recall --multihop' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --outcome success' 1`] = `
+exports[`cli recall and explain golden output > recall --outcome success 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -471,7 +471,7 @@ exports[`cli recall and explain golden output > 'recall --outcome success' 1`] =
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --physics' 1`] = `
+exports[`cli recall and explain golden output > recall --physics 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -480,7 +480,7 @@ exports[`cli recall and explain golden output > 'recall --physics' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --scope private' 1`] = `
+exports[`cli recall and explain golden output > recall --scope private 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -489,7 +489,7 @@ exports[`cli recall and explain golden output > 'recall --scope private' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --scope tag' 1`] = `
+exports[`cli recall and explain golden output > recall --scope tag 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -529,7 +529,7 @@ deploy goal work: migrate the rollout scripts to the new runner
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --why --json' 1`] = `
+exports[`cli recall and explain golden output > recall --why --json 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -538,7 +538,7 @@ exports[`cli recall and explain golden output > 'recall --why --json' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall --why' 1`] = `
+exports[`cli recall and explain golden output > recall --why 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -603,7 +603,7 @@ deploy goal work: migrate the rollout scripts to the new runner
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall default' 1`] = `
+exports[`cli recall and explain golden output > recall default 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -643,7 +643,7 @@ deploy goal work: migrate the rollout scripts to the new runner
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall global store --json --why' 1`] = `
+exports[`cli recall and explain golden output > recall global store --json --why 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -652,7 +652,7 @@ exports[`cli recall and explain golden output > 'recall global store --json --wh
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall global store' 1`] = `
+exports[`cli recall and explain golden output > recall global store 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -697,7 +697,7 @@ deploy goal work: migrate the rollout scripts to the new runner
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall graph-stream note then invalid…' 1`] = `
+exports[`cli recall and explain golden output > recall graph-stream note then invalid -… 1`] = `
 {
   "status": 1,
   "stderr": "[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run \`hippo embed\` first.
@@ -708,7 +708,7 @@ Invalid --layer: "bogus". Must be one of: buffer, episodic, semantic, trace.
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --as-of' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --as-of 1`] = `
 {
   "status": 1,
   "stderr": "Error: --as-of value "notadate" is not a valid ISO date (e.g. 2026-04-22 or <ts>).
@@ -717,7 +717,7 @@ exports[`cli recall and explain golden output > 'recall invalid --as-of' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --graph-hops' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --graph-hops 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --graph-hops: "0". Must be an integer 1..3.
@@ -726,7 +726,7 @@ exports[`cli recall and explain golden output > 'recall invalid --graph-hops' 1`
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --graph-seeds' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --graph-seeds 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --graph-seeds: "x". Must be a positive integer.
@@ -735,7 +735,7 @@ exports[`cli recall and explain golden output > 'recall invalid --graph-seeds' 1
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --hops' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --hops 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --hops: "x". Must be an integer 0..3.
@@ -744,7 +744,7 @@ exports[`cli recall and explain golden output > 'recall invalid --hops' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --layer' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --layer 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --layer: "bogus". Must be one of: buffer, episodic, semantic, trace.
@@ -753,7 +753,7 @@ exports[`cli recall and explain golden output > 'recall invalid --layer' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --max-neighbors' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --max-neighbors 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --max-neighbors: "0". Must be an integer 1..200.
@@ -762,7 +762,7 @@ exports[`cli recall and explain golden output > 'recall invalid --max-neighbors'
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --outcome' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --outcome 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --outcome: "nope". Must be one of: success, failure, partial.
@@ -771,16 +771,16 @@ exports[`cli recall and explain golden output > 'recall invalid --outcome' 1`] =
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --reranker' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --reranker 1`] = `
 {
   "status": 1,
-  "stderr": "Error: Unknown reranker: bogus. Available: cross-encoder, jev, llm
+  "stderr": "Error: Unknown reranker: bogus. Available: clef, clef-flash, cross-encoder, jev, llm
 ",
   "stdout": "",
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall invalid --salience-threshold' 1`] = `
+exports[`cli recall and explain golden output > recall invalid --salience-threshold 1`] = `
 {
   "status": 1,
   "stderr": "Invalid --salience-threshold: "-1". Must be a positive number.
@@ -789,7 +789,7 @@ exports[`cli recall and explain golden output > 'recall invalid --salience-thres
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall no match --json' 1`] = `
+exports[`cli recall and explain golden output > recall no match --json 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -798,7 +798,7 @@ exports[`cli recall and explain golden output > 'recall no match --json' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall no match' 1`] = `
+exports[`cli recall and explain golden output > recall no match 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -807,7 +807,7 @@ exports[`cli recall and explain golden output > 'recall no match' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall pfc rerankers' 1`] = `
+exports[`cli recall and explain golden output > recall pfc rerankers 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -816,7 +816,7 @@ exports[`cli recall and explain golden output > 'recall pfc rerankers' 1`] = `
 }
 `;
 
-exports[`cli recall and explain golden output > 'recall session goal stack' 1`] = `
+exports[`cli recall and explain golden output > recall session goal stack 1`] = `
 {
   "status": 0,
   "stderr": "",

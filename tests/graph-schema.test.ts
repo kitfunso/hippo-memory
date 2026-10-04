@@ -6,23 +6,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-schema-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('graph schema v37 (E3.3)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph-schema'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('CURRENT_SCHEMA_VERSION is 38', () => {

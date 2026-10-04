@@ -1,0 +1,316 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hippo card output (in process) > prints the same bytes and exit codes across every subcommand 1`] = `
+"$ card list (empty) -> 0
+--- stdout
+No cards found.
+--- stderr
+
+$ card create (no title) -> 1
+--- stdout
+--- stderr
+Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]
+
+$ card create (bad budget) -> 1
+--- stdout
+--- stderr
+Invalid budget: "x" (expected a positive integer)
+
+$ card create (valueless depends-on) -> 1
+--- stdout
+--- stderr
+--depends-on requires a value
+
+$ card create (unknown flag) -> 1
+--- stdout
+--- stderr
+Unknown flag --depend-on for hippo card create. Valid flags: --title, --repo, --contract, --budget, --depends-on
+
+$ card create (missing parent) -> 1
+--- stdout
+--- stderr
+unknown parent card id: card_#1
+
+$ card create parent -> 0
+--- stdout
+Created card card_#2 (status: ready)
+--- stderr
+
+$ card create child -> 0
+--- stdout
+Created card card_#3 (status: backlog)
+--- stderr
+
+$ card list -> 0
+--- stdout
+card_#3	backlog	child
+card_#2	ready	parent
+--- stderr
+
+$ card list --json -> 0
+--- stdout
+{
+  "cards": [
+    {
+      "id": "card_#3",
+      "title": "child",
+      "status": "backlog",
+      "assigneeRuntime": null,
+      "repo": null,
+      "contract": null,
+      "budget": null,
+      "leaseUntil": null,
+      "heartbeatAt": null,
+      "createdAt": "<ts>",
+      "updatedAt": "<ts>",
+      "tenantId": "default",
+      "scope": null
+    },
+    {
+      "id": "card_#2",
+      "title": "parent",
+      "status": "ready",
+      "assigneeRuntime": null,
+      "repo": "hippo",
+      "contract": "ship it",
+      "budget": 3,
+      "leaseUntil": null,
+      "heartbeatAt": null,
+      "createdAt": "<ts>",
+      "updatedAt": "<ts>",
+      "tenantId": "default",
+      "scope": null
+    }
+  ]
+}
+--- stderr
+
+$ card list --status bogus -> 1
+--- stdout
+--- stderr
+Invalid status: "bogus".
+
+$ card list --status ready -> 0
+--- stdout
+card_#2	ready	parent
+--- stderr
+
+$ card show (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo card show <id> [--json]
+
+$ card show (missing) -> 1
+--- stdout
+--- stderr
+No card found with id card_#1.
+
+$ card claim (no runtime) -> 1
+--- stdout
+--- stderr
+Usage: hippo card claim <id> --runtime <name> [--session <id>]
+
+$ card claim -> 0
+--- stdout
+Claimed card card_#2 for codex (run 1, lease until <ts>)
+--- stderr
+
+$ card claim (again) -> 1
+--- stdout
+--- stderr
+Could not claim card card_#2 (not ready/blocked, or already claimed).
+
+$ card heartbeat (bad run) -> 1
+--- stdout
+--- stderr
+Invalid --run: "0" (expected a positive integer).
+
+$ card heartbeat (no run) -> 1
+--- stdout
+--- stderr
+Usage: hippo card heartbeat <id> --run <n>
+
+$ card heartbeat (wrong run) -> 1
+--- stdout
+--- stderr
+Could not heartbeat card card_#2 (status running, live run 1).
+
+$ card heartbeat -> 0
+--- stdout
+Heartbeat card card_#2: lease until <ts>
+--- stderr
+
+$ card comment (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo card comment <id> --body "..." [--author <name>]
+
+$ card comment (missing card) -> 1
+--- stdout
+--- stderr
+No card found with id card_#1.
+
+$ card comment (no body) -> 1
+--- stdout
+--- stderr
+Usage: hippo card comment <id> --body "..." [--author <name>]
+
+$ card comment -> 0
+--- stdout
+Added comment 1 to card card_#2
+--- stderr
+
+$ card show -> 0
+--- stdout
+## Card card_#2
+
+- Title: parent
+- Status: running
+- Assignee: codex
+- Lease until: <ts>
+- Heartbeat: <ts>
+- Repo: hippo
+- Contract: ship it
+- Budget: 3
+- Updated: <ts>
+- Children: card_#3
+
+### Runs
+- run 1: codex started <ts> (open)
+
+### Comments
+- [<ts>] keith: first note
+
+--- stderr
+
+$ card show child -> 0
+--- stdout
+## Card card_#3
+
+- Title: child
+- Status: backlog
+- Updated: <ts>
+- Parents: card_#2
+
+--- stderr
+
+$ card block (no reason) -> 1
+--- stdout
+--- stderr
+hippo card block <id> requires --reason "<why>" (recorded as a comment).
+
+$ card block (not running) -> 1
+--- stdout
+--- stderr
+Could not block card card_#3 (not running).
+
+$ card review (no id) -> 1
+--- stdout
+--- stderr
+Usage: hippo card review <id> [--run <n>]
+
+$ card review (wrong run) -> 1
+--- stdout
+--- stderr
+Could not move card card_#2 to review (status running, live run 1).
+
+$ card review -> 0
+--- stdout
+Card card_#2 moved to review
+--- stderr
+
+$ card complete (bad outcome) -> 1
+--- stdout
+--- stderr
+Usage: hippo card complete <id> --outcome <success|failure|partial> [--run <n>]
+
+$ card complete (wrong run) -> 1
+--- stdout
+--- stderr
+Could not complete card card_#2 (status review, live run 1).
+
+$ card complete -> 0
+--- stdout
+Completed card card_#2 (status: done)
+Promoted to ready: card_#3
+--- stderr
+
+$ card show --json -> 0
+--- stdout
+{
+  "card": {
+    "id": "card_#2",
+    "title": "parent",
+    "status": "done",
+    "assigneeRuntime": "codex",
+    "repo": "hippo",
+    "contract": "ship it",
+    "budget": 3,
+    "leaseUntil": null,
+    "heartbeatAt": null,
+    "createdAt": "<ts>",
+    "updatedAt": "<ts>",
+    "tenantId": "default",
+    "scope": null
+  },
+  "deps": {
+    "parents": [],
+    "children": [
+      "card_#3"
+    ]
+  },
+  "runs": [
+    {
+      "id": 1,
+      "card": "card_#2",
+      "runtime": "codex",
+      "sessionId": "s1",
+      "started": "<ts>",
+      "ended": "<ts>",
+      "outcome": "success"
+    }
+  ],
+  "comments": [
+    {
+      "id": 1,
+      "cardId": "card_#2",
+      "author": "keith",
+      "body": "first note",
+      "createdAt": "<ts>"
+    }
+  ],
+  "handoff": null
+}
+--- stderr
+
+$ card claim child -> 0
+--- stdout
+Claimed card card_#3 for claude (run 2, lease until <ts>)
+--- stderr
+
+$ card block -> 0
+--- stdout
+Blocked card card_#3
+--- stderr
+
+$ card reclaim (with id) -> 1
+--- stdout
+--- stderr
+Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)
+
+$ card reclaim -> 0
+--- stdout
+No expired leases.
+--- stderr
+
+$ card unknown subcommand -> 1
+--- stdout
+--- stderr
+Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>
+
+$ card no subcommand -> 1
+--- stdout
+--- stderr
+Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>
+"
+`;

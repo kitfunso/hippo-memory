@@ -4,8 +4,9 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion } from '../src/db.js';
-import { loadAllEntries, readEntry } from '../src/store.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { dumpSchema } from './_helpers/schema-dump.js';
 
 // Frozen copy of migration v1's DDL: the oldest store shape a user can still have on disk.
 const V1_DDL = `
@@ -69,6 +70,15 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     expect(lesson.retrieval_count).toBe(3);
     expect(lesson.strength).toBeCloseTo(0.8);
     expect(lesson.created).toBe('2025-01-02T03:04:05.000Z');
+  });
+
+  it('ends with the pinned schema after the full migration chain', () => {
+    const db = openHippoDb(root);
+    try {
+      expect(dumpSchema(db)).toMatchSnapshot();
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('reopening the migrated store is a no-op for the data', () => {

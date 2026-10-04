@@ -6,7 +6,10 @@ import { gatedWrite } from '../gated-write.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
 import { redactSecretsStrict } from '../secret-detect.js';
-import { deleteEntryRowInTx, markSummaryDirtyInTx, selectLiveEntriesBySourcePrefix, setEntryTagsInTx, stampOriginProject } from '../store.js';
+import { stampOriginProject } from '../store/entry-row.js';
+import { deleteEntryRowInTx, setEntryTagsInTx } from '../store/entry-writes.js';
+import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
 import { emptyTally, type Tally } from './report.js';
@@ -61,7 +64,7 @@ export function syncContainer(s: StoreSession, work: ContainerWork): ContainerOu
   }
 }
 
-export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover';
+export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
 export type SetAsideResult = { readonly kind: 'untagged'; readonly entry: MemoryEntry } | { readonly kind: 'dormant'; readonly id: string };
 
 /** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other goes dormant, restorable. */

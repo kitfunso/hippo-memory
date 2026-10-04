@@ -134,7 +134,9 @@ describe('armEnv and childEnv', () => {
   it('puts bin/ first for A2/A5 only, drops the hippo dir for all, and childEnv drops bin/', () => {
     const { run, base, decoy, other } = setup();
     for (const arm of ARMS) {
-      const parts = armEnv(arm, run, base).PATH.split(delimiter);
+      const armPath = armEnv(arm, run, base).PATH;
+      if (armPath === undefined) throw new Error(`${arm} env has no PATH`);
+      const parts = armPath.split(delimiter);
       expect(parts.includes(decoy), arm).toBe(false);
       expect(parts.includes(other), arm).toBe(true);
       expect(parts[0] === run.bin, arm).toBe(arm === 'A2' || arm === 'A5');
@@ -315,6 +317,8 @@ function repoDirs(root: string, rel = ''): string[] {
 
 const nodeFs: typeof import('node:fs') = createRequire(import.meta.url)('node:fs');
 
+type FsCall = (...a: Array<string | number | object>) => ReturnType<typeof nodeFs.readdirSync> | number;
+
 interface FsHooks {
   before?: (p: string) => void;
   after?: (p: string) => void;
@@ -326,7 +330,8 @@ function withFs<K extends 'readdirSync' | 'openSync'>(name: K, hooks: FsHooks, f
   nodeFs[name] = new Proxy(real, {
     apply: (target, self, args) => {
       hooks.before?.(String(args[0]));
-      const out = target.apply(self, args);
+      // SAFETY: the Proxy forwards the caller's own arguments, so no overload is mixed with another's.
+      const out = (target as FsCall).apply(self, args);
       hooks.after?.(String(args[0]));
       return out;
     },
@@ -830,7 +835,7 @@ describe('homes check (built CLI, no claude session)', () => {
     process.env[key] = `${d}${delimiter}${process.env[key]}`;
     return d;
   };
-  const runs = ARMS.map((arm) => ({ seq: 'seqH', arm, seed: 1 }));
+  const runs = ARMS.map((arm: string) => ({ seq: 'seqH', arm, seed: 1 }));
   const textUnder = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? textUnder(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
 
   it('passes for every arm (A4 included, with no hippo) with a hippo decoy on PATH, and a real A2 init plus import keeps the canaries out', () => {

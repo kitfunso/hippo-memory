@@ -13,7 +13,8 @@ import { queryAuditEvents, type AuditOp } from '../../src/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db.js';
 import { listDormantRows, type DormantMemory } from '../../src/dormant.js';
 import type { MemoryEntry } from '../../src/memory.js';
-import { initStore, isInitialized, loadAllEntries } from '../../src/store.js';
+import { initStore, isInitialized } from '../../src/store/open.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
 
 export interface World {
   readonly dir: string;

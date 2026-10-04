@@ -18,11 +18,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveSkill,
@@ -34,13 +34,8 @@ import {
   VALID_SKILL_STATES,
   MAX_SKILL_INSTRUCTIONS_LEN,
 } from '../src/skills.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -185,8 +180,8 @@ describe('skills store (E2 executable/exportable first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the skill; old versions loadable', () => {
     const v1 = saveSkill(home, 'default', { skillName: 'D', instructions: 'a' });
     const v2 = saveSkill(home, 'default', { skillName: 'D', instructions: 'b', supersedesSkillId: v1.id });
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     expect(loadSkillById(home, 'default', v1.id)!.memoryId).toBeNull();
     expect(loadSkillById(home, 'default', v1.id)!.status).toBe('superseded');
     expect(loadSkillById(home, 'default', v2.id)!.status).toBe('active');

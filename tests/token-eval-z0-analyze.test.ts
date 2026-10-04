@@ -12,14 +12,24 @@ import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOpts
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
-const runOf = (rs: readonly { sequence: string; seed: number }[], sequence: string, seed: number) =>
+const runOf = <R extends { sequence: string; seed: number }>(rs: readonly R[], sequence: string, seed: number): R[] =>
   rs.filter((r) => r.sequence === sequence && r.seed === seed);
 const STAT = { iterations: 2000, seed: 1 };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
 const analyze = (g: Generated, extra = {}) =>
   analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, ...STAT, ...extra });
-const hyp = (opts: GenOpts) => analyze(generate(opts)).hypotheses;
-const gatesOf = (g: Generated) => analyze(g, { unblind: false }).gates;
+/** A report block the module types as a union with 'not run' or null; every block the tests read is present, so a primitive here is a test bug. */
+type Real<T> = [Extract<T, object>] extends [never] ? T : Merged<Extract<T, object>>;
+type KeysOf<U> = U extends unknown ? keyof U : never;
+type ValueAt<U, K extends PropertyKey> = U extends unknown ? (K extends keyof U ? U[K] : never) : never;
+type Merged<U> = [U] extends [readonly unknown[]] ? U : { [K in KeysOf<U>]-?: Real<ValueAt<U, K>> };
+const real = <T>(x: T): Real<T> => {
+  if (Object(x) !== x) throw new Error(`expected a report block, got ${String(x)}`);
+  // SAFETY: the check above rules out null, undefined and strings; deeper fields are asserted by the tests that read them.
+  return x as Real<T>;
+};
+const hyp = (opts: GenOpts) => real(analyze(generate(opts)).hypotheses);
+const gatesOf = (g: Generated) => real(analyze(g, { unblind: false }).gates);
 const te = (estimate: number, p: number, low: number, high: number, nullValue = 0) => ({ estimate, low, high, p, iterations: 2000, dropped: 0, nullValue });
 
 function corpus(recs: readonly Z0Record[], plan: readonly object[]) {
@@ -34,7 +44,7 @@ describe('Z0 records contract', () => {
       const i = mutate(records, plan);
       expect(() => corpus(records, plan)).toThrow(new RegExp(`runs\\.jsonl line ${i + 1}: .*${pattern.source}`));
     };
-    rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); delete rs[i]!.usage!.extra; return i; }, /usage\.extra/);
+    rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); Reflect.deleteProperty(rs[i]!.usage!, 'extra'); return i; }, /usage\.extra/);
     rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); Object.assign(rs[i]!, { kind: 'lesson' }); return i; }, /kind must be/);
     rejects((rs) => { const i = at(rs, 'A0', 'rn-repo1', 2, 4); rs[i]!.seed = 3; return i; }, /seed 3 is not run for A0/);
     rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); rs[i]!.familyId = null; return i; }, /familyId/);
@@ -135,7 +145,7 @@ describe('Z0 filters', () => {
     const voidedFrom = (arm: string, extra: Partial<Z0Record> = {}): number[] => {
       const { records, plan } = fresh();
       Object.assign(records[at(records, arm, 'rn-repo1', 1, 8)]!, { limitRetries: 1, ...extra });
-      const run = runOf(filterRecords(parse(records), plan).scored, 'rn-repo1', 1);
+      const run = runOf<Z0Record>(filterRecords(parse(records), plan).scored, 'rn-repo1', 1);
       return [...new Set(run.map((r: Z0Record) => r.position))].sort((a, b) => a - b);
     };
     const upTo8 = Array.from({ length: 8 }, (_, i) => i);
@@ -146,8 +156,8 @@ describe('Z0 filters', () => {
     const { records, plan } = fresh();
     records[at(records, 'X4', 'x-repo1', 1, 8)]!.limitRetries = 1;
     const f = filterRecords(parse(records), plan);
-    expect(runOf(f.scored, 'x-repo1', 1).every((r: Z0Record) => r.position < 8)).toBe(true);
-    expect(runOf(f.scored, 'x-repo1', 1).filter((r: Z0Record) => r.position === 7)).toHaveLength(4);
+    expect(runOf<Z0Record>(f.scored, 'x-repo1', 1).every((r: Z0Record) => r.position < 8)).toBe(true);
+    expect(runOf<Z0Record>(f.scored, 'x-repo1', 1).filter((r: Z0Record) => r.position === 7)).toHaveLength(4);
     expect(f.retryVoided.positions).toBe(6);
   });
 
@@ -188,7 +198,7 @@ describe('Z0 filters', () => {
     expect(f.scored.some((r: Z0Record) => r.sequence === 'rn-repo2' && r.seed === 2 && r.position === 6)).toBe(false);
     expect(f.leaked).toEqual(['rn-repo4 seed 1', 'rn-repo5 seed 2']);
     expect(f.abandoned).toEqual(['rn-repo5 seed 2']);
-    expect(runOf(f.scored, 'rn-repo4', 1).length + runOf(f.scored, 'rn-repo5', 2).length).toBe(0);
+    expect(runOf<Z0Record>(f.scored, 'rn-repo4', 1).length + runOf<Z0Record>(f.scored, 'rn-repo5', 2).length).toBe(0);
     expect([f.counts.A1.missing, f.counts.A1.abandoned]).toEqual([0, 10]);
     expect(f.scored.some((r: Z0Record) => r.lessons.some((l) => l.lessonId === lesson))).toBe(false);
     expect(f.scored[at(f.scored, 'A2', 'rn-repo6', 1, 4)].resolved).toBe(true);
@@ -206,14 +216,14 @@ describe('Z0 filters', () => {
     crash(g.records[at(g.records, 'A2', 'rn-repo1', 1, 0)]!);
     const f = filterRecords(parse(g.records), g.plan);
     expect(f.untaughtApplyDrops).toBe(2);
-    expect(runOf(f.scored, 'rn-repo1', 1).filter((r: Z0Record) => r.position === 4 || r.position === 11)).toEqual([]);
+    expect(runOf<Z0Record>(f.scored, 'rn-repo1', 1).filter((r: Z0Record) => r.position === 4 || r.position === 11)).toEqual([]);
     const h1 = repeatMistake(f.scored, 'A2', 'A1', 'violation', STAT, inSets('R'));
     expect([h1.units, h1.droppedUnits]).toEqual([71, []]);
     // Family 3 is taught at 5 and re-taught at 14; its applies sit at 9, 12 and 17.
     const reteach = fresh();
     crash(reteach.records[at(reteach.records, 'A2', 'rn-repo1', 1, 5)]!);
     const r = filterRecords(parse(reteach.records), reteach.plan);
-    const arms = (p: number) => runOf(r.scored, 'rn-repo1', 1).filter((x: Z0Record) => x.position === p).length;
+    const arms = (p: number) => runOf<Z0Record>(r.scored, 'rn-repo1', 1).filter((x: Z0Record) => x.position === p).length;
     expect([r.untaughtApplyDrops, arms(9), arms(12), arms(17)]).toEqual([2, 0, 0, 5]);
   });
 
@@ -221,7 +231,7 @@ describe('Z0 filters', () => {
     const gone = fresh();
     gone.records = gone.records.filter((x) => !(x.sequence === 'rn-repo1' && x.seed === 1 && x.position === 1));
     const m = filterRecords(parse(gone.records), gone.plan);
-    expect([m.untaughtApplyDrops, m.counts.A1.missing, runOf(m.scored, 'rn-repo1', 1).length]).toEqual([2, 1, 90 - 5 - 10]);
+    expect([m.untaughtApplyDrops, m.counts.A1.missing, runOf<Z0Record>(m.scored, 'rn-repo1', 1).length]).toEqual([2, 1, 90 - 5 - 10]);
   });
 });
 
@@ -254,7 +264,7 @@ describe('Z0 hypotheses', () => {
   it('6: H3 is the ratio of summed costs on heterogeneous tasks, with its splits', () => {
     const heavy = (s: { position: number }) => s.position % 3 === 0;
     const g = generate({ knobs: { A1: { cost: (s) => (heavy(s) ? 10 : 1) }, A2: { cost: (s) => (heavy(s) ? 7 : 1.2) } } });
-    const h = analyze(g).hypotheses;
+    const h = real(analyze(g).hypotheses);
     const cost = (r: Z0Record) => priceUsage(addUsage(r.usage!.firstSession, r.usage!.extra), PRICES['claude-code']);
     const [t, c] = ['A2', 'A1'].map((arm) => g.records.filter((r) => r.arm === arm && r.set !== 'X').map(cost));
     const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
@@ -278,14 +288,15 @@ describe('Z0 hypotheses', () => {
   it('29: H4 is not run without set N in the plan, and fails when filters leave set N empty', () => {
     const records = fresh().records.filter((r) => r.set !== 'N');
     const none = analyze({ records, plan: planOf(records) });
-    expect([none.hypotheses.H4, none.hypotheses.order.at(-2), none.unplanned]).toEqual([NOT_RUN, 'H4', ['set N']]);
+    const open = real(none.hypotheses);
+    expect([open.H4, open.order.at(-2), none.unplanned]).toEqual([NOT_RUN, 'H4', ['set N']]);
     const voided = fresh();
     for (const r of voided.records) if (r.set === 'N' && r.arm === 'A1') r.void = 'read-past-transcript';
-    const h = analyze(voided).hypotheses;
+    const h = real(analyze(voided).hypotheses);
     expect([h.H4.reason, h.H4.gate.pass, h.order[0]]).toEqual([NO_N_DATA, false, 'H4']);
     const full = fresh();
     const missingN = filterRecords(parse(full.records.filter((r) => r.set !== 'N')), full.plan);
-    expect([missingN.sets, missingN.abandoned, computeHypotheses(missingN, PRICES, STAT).H4.reason]).toEqual([['N', 'R', 'X'], [], NO_N_DATA]);
+    expect([missingN.sets, missingN.abandoned, real(computeHypotheses(missingN, PRICES, STAT)).H4.reason]).toEqual([['N', 'R', 'X'], [], NO_N_DATA]);
   });
 
   it('8: Holm runs once per coding, then the codings combine', () => {
@@ -316,7 +327,8 @@ describe('Z0 hypotheses', () => {
     // Without A5, A2 cannot have beaten it, so a win takes the behaviour sentence (148, "Otherwise").
     const noA5 = ARMS.filter((x) => x !== 'A5');
     const win = analyze(generate({ arms: noA5, knobs: { A2: { fail: 0.1 } } }));
-    expect([win.hypotheses.verdicts.H1.final.verdict, win.hypotheses.attribution]).toEqual(['win', { sentence: BEHAVIOUR_SENTENCE, reason: 'A5 not run' }]);
+    const winH = real(win.hypotheses);
+    expect([winH.verdicts.H1.final.verdict, winH.attribution]).toEqual(['win', { sentence: BEHAVIOUR_SENTENCE, reason: 'A5 not run' }]);
     expect(renderText(buildReport(win, { warnings: [] }, {}, null, []))).toContain(`attribution: ${BEHAVIOUR_SENTENCE}; A2 vs A5 not run\n`);
     expect(hyp({ arms: noA5 }).attribution).toEqual({ sentence: null, reason: 'not applicable, H1 is tie' });
     const h2 = (opts: GenOpts) => bothCodings(scoredOf(generate(opts)), 'X2', 'X3', STAT, codexApply);
@@ -329,7 +341,9 @@ describe('Z0 hypotheses', () => {
       if (r.kind === 'apply' && r.set === 'R' && (r.arm === 'A1' || r.arm === 'A2')) r.lessons[0]!.first = r.arm === 'A2' && r.applyIndex! > 1 ? 'fail' : 'pass';
     }
     g.records[at(g.records, 'A5', 'rn-repo1', 1, 3)]!.carryUnionMerges = 1;
-    const { hypotheses: h, reported: rep } = analyze(g);
+    const a = analyze(g);
+    const h = real(a.hypotheses);
+    const rep = real(a.reported);
     expect(h.H1.violation.estimate).toBeGreaterThan(0);
     expect(rep.firstApply.H1.violation.estimate).toBe(0);
     expect([h.H1.violation.units, rep.maintainerOnly.H1.violation.units, rep.sensitivity.H1.violation.units]).toEqual([72, 54, 68]);
@@ -352,12 +366,18 @@ describe('Z0 gates', () => {
     const canary = fresh();
     canary.records[at(canary.records, 'A5', 'rn-repo3', 1, 5)]!.void = 'operator-canary';
     const r = analyze(canary);
-    expect([r.gates.failed, r.hypotheses]).toEqual([['G1'], null]);
+    expect([real(r.gates).failed, r.hypotheses]).toEqual([['G1'], null]);
+    // A canary seen only in an apply's resume leaves the cell's void to session 1 but still fails the run (prereg 161).
+    const resumeOnly = fresh();
+    const hit = { reason: 'operator-canary', class: null, tool: null, path: null, file: 'x.jsonl' };
+    Object.assign(resumeOnly.records[at(resumeOnly.records, 'A1', 'rn-repo2', 1, 5)]!, { resumeVoidHits: [hit] });
+    const g = analyze(resumeOnly);
+    expect([real(g.gates).failed, real(g.gates).G1.operatorCanaries]).toEqual([['G1'], 1]);
     expect(analyze(generate({ knobs: { A4: { fail: 0.6 } } }))).toMatchObject({ gates: { failed: ['G2'] }, hypotheses: null });
     const oneCoding = gatesOf(generate({ knobs: { A4: { na: 0.5, fail: 0.05 } } })).G2.claudeCode;
     expect([oneCoding.violation.estimate > -0.3, oneCoding.excluded.estimate <= -0.3, oneCoding.pass]).toEqual([true, true, false]);
     const noX = analyze(generate({ arms: RN_ARMS }));
-    expect([noX.gates.pass, noX.gates.G2.codex.status, noX.hypotheses.verdicts.H2.final.verdict]).toEqual([true, NOT_RUN, NOT_RUN]);
+    expect([real(noX.gates).pass, real(noX.gates).G2.codex.status, real(noX.hypotheses).verdicts.H2.final.verdict]).toEqual([true, NOT_RUN, NOT_RUN]);
     for (const absent of ['A0', 'A4', 'X4']) {
       const g2 = gatesOf(generate({ arms: ARMS.filter((a) => a !== absent) })).G2;
       expect([g2.pass, (absent === 'X4' ? g2.codex : g2.claudeCode).status]).toEqual([false, NOT_RUN]);
@@ -389,7 +409,7 @@ describe('Z0 gates', () => {
   it('15, 24: G5 outcomes; an abandoned run is its own status, with no gate and no G4 missing', () => {
     const sample = (n: number, disagreements: number) => g5({ ...GRADING, acceptanceFlips: 2, readerSample: { n, disagreements } });
     expect([sample(29, 0).status, sample(30, 4).status, sample(30, 3).status, g5(null).pass]).toEqual(['reader sample short', 're-grade required', 'pass', false]);
-    expect(sample(30, 3).acceptanceFlips).toBe(2);
+    expect(real(sample(30, 3)).acceptanceFlips).toBe(2);
     const cut = fresh();
     cut.records = cut.records.filter((r) => !(r.sequence === 'rn-repo5' && r.seed === 2 && r.position >= 8));
     cut.records.splice(at(cut.records, 'A2', 'rn-repo1', 1, 5), 1);

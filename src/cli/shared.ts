@@ -1,36 +1,38 @@
 // Helpers two or more CLI verbs use, split from cli.ts so a verb can move to its own file without importing cli.ts.
 // This module must never import cli.ts.
 
+import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer } from '../env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
-import { installJsonHooks, CODEX_TRUST_LINE } from '../hooks.js';
-import { confidenceLabel, computeSchemaFit, createMemory, Layer } from '../memory.js';
-import { isInitialized, TaskSnapshot, SessionEvent, loadAllEntries, writeEntry, updateStats } from '../store.js';
-import { RejectedValueError } from '../rejection.js';
+import { installJsonHooks } from '../hooks/json-hooks.js';
+import { CODEX_TRUST_LINE } from '../hooks/shared.js';
+import { confidenceLabel } from '../memory.js';
+import { TaskSnapshot, SessionEvent } from '../store/rows.js';
+import { isInitialized } from '../store/open.js';
 import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
-import { type SearchResult, explainMatch } from '../search.js';
-import { embedMemory } from '../embeddings.js';
+import type { SearchResult } from '../search/types.js';
+import { explainMatch } from '../search/explain.js';
 import { type HippoConfig, loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
+import { ensurePilotArm, hashArm, readPilotArm } from '../pilot-arm.js';
 import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
-import { isGitRepo, fetchGitLog, extractLessons, partitionLessons } from '../autolearn.js';
-import { storedTextKeys, duplicateKey } from '../same-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
-import { type ChurnStaleResult, detectChurnStale, extractInvalidationTarget, invalidateMatching } from '../invalidation.js';
+import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
 import { resolveProjectIdentity } from '../project-identity.js';
-import { extractPathTags } from '../path-context.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
-import { sanitizeLogMessage } from '../capture.js';
-import { type AuditOp, appendAuditEvent } from '../audit.js';
-import { createHash } from 'node:crypto';
+import { sanitizeLogMessage } from '../capture/compact.js';
+import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import * as client from '../client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
+import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
+import { log } from '../log.js';
+import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
   if (!value) return Infinity;
@@ -48,13 +50,13 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
   if (value === undefined) return fallback;
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (typeof value !== 'string') {
-    console.error('--budget requires an integer value (e.g. --budget 1500).');
+    printError('--budget requires an integer value (e.g. --budget 1500).');
     process.exit(1);
   }
   // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
-    console.error(`Invalid --budget: "${value}". Must be a non-negative integer.`);
+    printError(`Invalid --budget: "${value}". Must be a non-negative integer.`);
     process.exit(1);
   }
   return parsed;
@@ -84,21 +86,22 @@ export function emitCliAudit(
     } finally {
       closeHippoDb(db);
     }
-  } catch {
-    // Audit is best-effort; surface failures only via missing rows.
+  } catch (error) {
+    // Best effort: the command already did its work.
+    reportAuditWriteFailure(op, String(error), targetId);
   }
 }
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
-    console.error(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
+    printError(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
     process.exit(1);
   }
 }
 
 /** Runs detectChurnStale against every store this repo's memories can live in. */
 export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
-  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true }).trim();
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000, windowsHide: true }).trim();
   const projectName = resolveProjectIdentity(process.cwd()).name;
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
@@ -122,7 +125,7 @@ export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root
  * promote); every other command opens the store directly, knob or not.
  */
 function failIfServerRequired(reason: string): void {
-  if (process.env['HIPPO_REQUIRE_SERVER']) {
+  if (envRequireServer()) {
     throw new Error(
       `hippo: HIPPO_REQUIRE_SERVER is set but ${reason}. ` +
       `Start \`hippo serve\`, or unset HIPPO_REQUIRE_SERVER to allow direct-mode fallback.`,
@@ -154,7 +157,7 @@ export async function runViaServerIfAvailable(
     failIfServerRequired('no running server was detected for this hippoRoot');
     return false;
   }
-  const apiKey = process.env['HIPPO_API_KEY'];
+  const apiKey = envApiKey();
   try {
     await httpFn(info, apiKey);
     return true;
@@ -162,7 +165,7 @@ export async function runViaServerIfAvailable(
     const failure = client.classifyTransportFailure(err);
     if (failure === 'never-sent') {
       failIfServerRequired('the server pidfile was stale (connection refused)');
-      console.error('hippo: stale server pidfile detected, falling back to direct mode');
+      log.warn('stale server pidfile detected, falling back to direct mode');
       // Clear the pidfile only if it still names the dead server we just
       // probed — a newer server may have rewritten it (removePidfileIfOwned).
       removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });
@@ -172,8 +175,8 @@ export async function runViaServerIfAvailable(
       // Every caller of this helper is a non-idempotent write, so replaying on
       // the direct path would store a row the server may already have committed.
       // Leave the pidfile alone: the next command's connect-phase failure heals it.
-      console.error(
-        `hippo: the connection to ${info.url} dropped mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
+      printError(
+        `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
       );
       process.exit(1);
     }
@@ -229,20 +232,7 @@ export function recallHeading(entries: number, tokens: number, query: string): s
 export function printAgentImport(report: ImportReport, indent = '   '): void {
   const line = summaryLine(report);
   if (line !== null) console.log(`${indent}${line}`);
-  for (const warning of report.warnings) console.error(`hippo: agent memories: ${warning}`);
-}
-
-/** The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is undefined for an edited block. */
-export function hippoBlock(text: string): { start: number; end: number; eol: string; inner: string; owner?: string } | null {
-  const at = text.indexOf(HOOK_MARKERS.start);
-  const start = at + HOOK_MARKERS.start.length;
-  const end = text.indexOf(HOOK_MARKERS.end, start);
-  if (at < 0 || end < 0) return null;
-  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own ending.
-  const raw = text.slice(start, end);
-  const inner = raw.replace(/\r\n/g, '\n').trim();
-  const owner = Object.keys(HOOKS).find((k) => HOOKS[k].content === inner) ?? SHIPPED_HOOK_HASHES.get(createHash('sha256').update(inner).digest('hex'));
-  return { start, end, eol: raw.includes('\r\n') ? '\r\n' : '\n', inner, owner };
+  for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
@@ -315,6 +305,7 @@ export function setupDailySchedule(globalRoot: string): void {
       execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
     } catch {
+      // No crontab or no permission: print the line for the user to add by hand.
       const cronLine = `15 6 * * * ${cmd}`;
       console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
       console.log(`   ${cronLine}`);
@@ -324,12 +315,19 @@ export function setupDailySchedule(globalRoot: string): void {
 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
+/** What the command table hands each verb's run(). */
+export interface CommandContext {
+  readonly hippoRoot: string;
+  readonly args: string[];
+  readonly flags: CliFlags;
+}
+
 export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
-    console.error(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
   }
   return asOf;
@@ -362,6 +360,7 @@ export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence[
       cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     }).trim() || null;
   } catch {
+    // No git, not a repo, or timed out: evidence is optional, so the field stays null.
     gitRef = null;
   }
   let dirtyTree: boolean | null = null;
@@ -371,6 +370,7 @@ export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence[
     });
     dirtyTree = status.trim().length > 0;
   } catch {
+    // Same as gitRef: unknown tree state is reported as null, never as an error.
     dirtyTree = null;
   }
   return { gitRef, dirtyTree, testStatus };
@@ -426,13 +426,13 @@ export function printHandoff(handoff: SessionHandoff): void {
 export function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
-  if (v === true || v === false || Array.isArray(v)) { console.error(`--${key} requires a value`); process.exit(1); }
+  if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }
   return v.trim();
 }
 
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
 export function hostSessionId(): string | undefined {
-  return process.env.HIPPO_SESSION_ID?.trim() || process.env.CLAUDE_CODE_SESSION_ID?.trim() || undefined;
+  return envHippoSessionId()?.trim() || envClaudeCodeSessionId()?.trim() || undefined;
 }
 
 /**
@@ -492,6 +492,7 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
     if (isInitialized(hippoRoot)) root = hippoRoot;
     else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
   } catch {
+    // An unreadable store root means no ledger write; the ledger must never break context or recall.
     return undefined;
   }
   if (root === null) return undefined;
@@ -499,7 +500,9 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
   try {
     db = openHippoDb(root);
     return fn(db);
-  } catch {
+  } catch (error) {
+    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
+    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
     return undefined;
   } finally {
     if (db) closeHippoDb(db);
@@ -513,118 +516,20 @@ export function learnFromRepo(
   label?: string
 ): { added: number; skipped: number; lowInfo: number } {
   const prefix = label ? `[${label}] ` : '';
-
-  if (!isGitRepo(repoPath)) {
+  const ctx: Context = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli') };
+  const result = learn(ctx, { repoPath, days, profile: CLI_LEARN });
+  if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);
     return { added: 0, skipped: 0, lowInfo: 0 };
   }
-
-  const gitLog = fetchGitLog(repoPath, days);
-  if (!gitLog.trim()) {
+  if (result.status !== 'scanned') {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
     return { added: 0, skipped: 0, lowInfo: 0 };
   }
-
-  // Same patterns as MCP hippo_learn: config.gitLearnPatterns (whose default
-  // equals extractLessons' built-in list) so a custom list applies everywhere.
-  const config = loadConfig(hippoRoot);
-  const parsedLessons = extractLessons(gitLog, config.gitLearnPatterns);
-  if (parsedLessons.length === 0) {
-    console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0, lowInfo: 0 };
+  const { added, skipped, rejected, lowInfo } = result;
+  for (const { from, count } of result.invalidations) {
+    console.log(`${prefix}   Invalidated ${count} memories referencing "${from}"`);
   }
-
-  // The admission gate lives at the write path, not in extractLessons
-  // (a published API surface that only parses). Bare subjects like "fixed
-  // signals" are dropped here, before they ever become a memory.
-  // The gate filters the loop INPUT, so a dropped lesson neither stores nor
-  // invalidates. That is deliberate, and it was argued both ways.
-  //
-  // One review called the lost invalidation serious: a migration subject
-  // too thin to store ("replace webpack with vite") would stop weakening
-  // stale webpack memories. True. So the loop was widened to walk every
-  // parsed lesson with the gate on the write alone.
-  //
-  // A second review found the cure was worse. STORAGE is what makes invalidation
-  // idempotent here: a stored lesson is recognised by its same-text key on
-  // the next scan and short-circuits before invalidating again. A lesson that
-  // invalidates but is never stored has no such record, so every rescan
-  // re-invalidates, and invalidateMatching halves half_life_days each time.
-  // Measured: 7 -> 3 -> 1 over two runs. That is compounding data damage.
-  //
-  // Measured frequency decided it. Across 413 real auto-learn rows in 4
-  // stores, 24 are gated and ZERO of those carry an invalidation target; the
-  // 45 lessons that do carry targets all pass the gate and are unaffected
-  // either way. Both failure modes are empty on real data, so the tie breaks
-  // on which one is benign if it ever fires: not invalidating is a missed
-  // improvement, re-invalidating forever is damage.
-  //
-  // Documented limitation, pinned by test: a migration subject too thin to
-  // store also does not invalidate. Making invalidateMatching idempotent
-  // would allow both, and is backlogged - it is a latent issue for the manual
-  // `hippo invalidate` path too, not just this one.
-  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
-  const lowInfo = dropped.length;
-
-  let added = 0;
-  let skipped = 0;
-  // Containment: per-lesson refusal must not abort the rest
-  // of the git-log scan. No signature change (added/skipped return shape
-  // used by cmdLearn + cmdSleepCore callers) — counted locally, folded into
-  // the existing summary line.
-  let rejected = 0;
-  const gitLearnTags = ['error', 'git-learned'];
-  const existingForSchema = loadAllEntries(hippoRoot, resolveTenantId({}));
-  const keys = storedTextKeys(existingForSchema);
-
-  for (const lesson of lessons) {
-    if (keys.has(duplicateKey(lesson))) {
-      skipped++;
-      continue;
-    }
-
-    const target = extractInvalidationTarget(lesson);
-    if (target) {
-      const invResult = invalidateMatching(hippoRoot, target, resolveTenantId({}));
-      if (invResult.invalidated > 0) {
-        console.log(`${prefix}   Invalidated ${invResult.invalidated} memories referencing "${target.from}"`);
-      }
-    }
-
-    const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
-
-    const entry = createMemory(lesson, {
-      layer: Layer.Episodic,
-      tags: [...gitLearnTags],
-      source: 'git-learn',
-      confidence: 'observed',
-      schema_fit: schemaFitVal,
-      tenantId: resolveTenantId({}),
-      baseHalfLifeDays: config.defaultHalfLifeDays,
-    });
-
-    // Auto-tag with path context from the repo being learned
-    const learnPathTags = extractPathTags(repoPath);
-    for (const pt of learnPathTags) {
-      if (!entry.tags.includes(pt)) entry.tags.push(pt);
-    }
-
-    try {
-      writeEntry(hippoRoot, entry);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejected++;
-        continue;
-      }
-      throw err;
-    }
-    updateStats(hippoRoot, { remembered: 1 });
-    keys.add(duplicateKey(lesson));
-    void embedMemory(hippoRoot, entry);
-
-    added++;
-  }
-
   console.log(
     `${prefix}${added} new lessons added, ${skipped} duplicates skipped` +
       (rejected > 0 ? `, ${rejected} rejected value(s) skipped` : '') +
@@ -634,226 +539,6 @@ export function learnFromRepo(
   return { added, skipped, lowInfo };
 }
 
-export const HOOK_MARKERS = {
-  start: '<!-- hippo:start -->',
-  end: '<!-- hippo:end -->',
-};
-
-export const HOOKS: Record<string, { file: string; content: string; description: string }> = {
-  'claude-code': {
-    file: 'CLAUDE.md',
-    description: 'Claude Code',
-    content: `
-## Project Memory (Hippo)
-
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-
-When you find out why something failed, record it right then, while you
-work, never as a closing step:
-\`\`\`bash
-hippo remember "<what went wrong and why>" --error
-\`\`\`
-
-The installed hooks store failed tool calls and capture the session when it
-ends, so there is nothing to run before you finish.
-`.trim(),
-  },
-  'codex': {
-    file: 'AGENTS.md',
-    description: 'OpenAI Codex',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When Hippo's Codex wrapper is installed, session-end capture runs automatically.
-If the wrapper is not installed, capture a brief summary manually:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'cursor': {
-    file: 'AGENTS.md',
-    description: 'Cursor',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'openclaw': {
-    file: 'AGENTS.md',
-    description: 'OpenClaw',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every session, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'opencode': {
-    file: 'AGENTS.md',
-    description: 'OpenCode',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When stuck or repeating yourself, check if this happened before:
-\`\`\`bash
-hippo recall "<what's going wrong>" --budget 2000
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'pi': {
-    file: 'AGENTS.md',
-    description: 'Pi',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every session, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-
-For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extensions/hippo-memory/\`.
-`.trim(),
-  },
-};
-
-// sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash when a block changes.
-const SHIPPED_HOOK_HASHES = new Map([
-  ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
-  ['e6b12bd8983c032e5ca8e95a97aeff4178a5a05026d10acad5b2e1b25d5656dd', 'claude-code'],
-  ['4c64e11d3e5be68fa547c9248d7553feb645a02f7cf13ba02f7275e1854baf44', 'claude-code'],
-  ['293bd319bbc86225a0ee027490a3322a0336257f5832f7fade65e4ffb2530654', 'claude-code'],
-  ['15abcece9712279fb4721f7a8f0ba117457400278977beb5cf5b5d7ba49f7b1a', 'codex'],
-  ['0c81a6b2c21473313001f624b80ea870e661aecbfda9bfe8503febc0d5f34533', 'codex'],
-  ['88e45358aba4f17912f113221c991dc758275991335d1daa4aa1974a69c46769', 'codex'],
-  ['e61632fe177450a06541c148a9a4f9182530d8df667806927a99792825903298', 'codex'],
-  ['a1415ecda9b2f8f317c233738e4a5ac16e6b2cc385a017c0c8ecfbfacbcab6a3', 'cursor'],
-  ['a38c428bbdfc14ec50f6f7b9183785170a4eae1ce9cde60257cca6efc7206b3a', 'cursor'],
-  ['0ec9f556abfd55e94f9e6fb47ece0fc5acb841977d144b35a2371e03645d8636', 'cursor'],
-  ['40524c3bd5a2eb04036567cc761451961d950995768bccd93a9900b0f75eafea', 'openclaw'],
-  ['7b3518e8c0feaa7b8b454cde7743f7598ad14cd9979e1680d0954484e2464aae', 'openclaw'],
-  ['1137dcf04568caf011e41db77bc55324faee88bc29c3a5fcc98ab687cd952a16', 'openclaw'],
-  ['4601c67c31f41cd5b1324cfccdb1afc66872b7fb0bc1e7c5789ecabb1f6bd942', 'opencode'],
-  ['90d9e21d8d1ecbe99a0fc7b7f2d9f8af7b5315a6b4b0203df4f7a9bdc0699b98', 'opencode'],
-  ['ca4e00284f1397ed2f2fcc53210c27f63b90edf6b37fd66dad5ee58b94ea3eee', 'opencode'],
-  ['8b8f5986d7f7ed15f06e68720d8913c3cab23d94366b411935ca2bbaa334553b', 'pi'],
-  ['37767b355e18beac726b05b9e2b898dab8c6135fd7b98f3aa52edc734d5dd283', 'pi'],
-  ['6e85a5cccb3cfeaa9a080713754936db730f96376f94cc9a9888a746149c7268', 'pi'],
-]);
-
 export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
   if (flags['global']) {
     initGlobal();
@@ -861,4 +546,30 @@ export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string 
   }
   requireInit(hippoRoot);
   return hippoRoot;
+}
+
+/** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
+export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
+  try {
+    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
+  } catch (error) {
+    if (!isSqliteBusy(error)) throw error;
+    noteStoreBusy('hook skipped');
+    return undefined;
+  }
+}
+
+/**
+ * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
+ * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
+ */
+export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
+  if (sessionId === undefined || sessionId.trim() === '') return false;
+  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
+  if (root === null) return false;
+  const rate = loadConfig(root).pilot.holdoutRateBp;
+  if (rate <= 0) return false;
+  const arm = withLedgerDb(hippoRoot, (db) =>
+    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
+  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
 }

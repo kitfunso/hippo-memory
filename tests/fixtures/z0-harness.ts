@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
-import type { Z0Record, Z0PlanCell } from './z0-contract';
+import type { Z0Record, Z0PlanCell } from './z0-contract.js';
 
 export const FAKE = resolve(__dirname, 'fake-claude.mjs');
 export const CLAUDE = `"${process.execPath}" "${FAKE}"`;
@@ -116,7 +116,7 @@ export interface VoidHit { reason: string; class: string | null; tool: string | 
 export interface LeakHit { lessonId: string | null; surface: string; path: string | null }
 export interface InjectedRows { rows: number; importedRows: number; chars: number; importedChars: number; unmatched: number; ambiguous: number }
 export type RunRecord = Z0Record & {
-  voidHits?: VoidHit[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string };
+  voidHits?: VoidHit[]; resumeVoidHits?: VoidHit[]; resumeAncestorHits?: string[]; turnsSource?: string; leakHits?: LeakHit[]; leakFrom?: { arm: string; position: number; taskId: string };
   chain?: { capturedAny: boolean | null }; injectedRows?: InjectedRows;
 };
 export const readRecords = (out: string): RunRecord[] => jsonl<RunRecord>(join(out, 'runs.jsonl'));

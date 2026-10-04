@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { remember, recall, type Context } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';

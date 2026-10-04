@@ -5,17 +5,15 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, statSync, mkdirSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
+import { initStore } from '../src/store/open.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, closeTaskSnapshotsForSession } from '../src/store/sessions.js';
 import {
-  initStore,
-  saveActiveTaskSnapshot,
   saveSessionHandoff,
   loadHandoffById,
   loadLatestHandoff,
   stampHandoffOutcome,
   writeSessionEndHandoff,
-  appendSessionEvent,
-  closeTaskSnapshotsForSession,
-} from '../src/store.js';
+} from '../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { getContext, adminActor } from '../src/api.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
@@ -475,8 +473,8 @@ describe('test 8: scope filtering on the continuity read paths', () => {
 });
 
 describe('test 9: helper swap leaves no local passesScopeFilter clone', () => {
-  it('src/api.ts, src/cli.ts and src/mcp/server.ts declare no local passesScopeFilter const', () => {
-    for (const rel of ['api.ts', 'cli.ts', 'mcp/server.ts']) {
+  it('src/api.ts, the CLI recall path and src/mcp/server.ts declare no local passesScopeFilter const', () => {
+    for (const rel of ['api.ts', 'cli.ts', 'cli/recall.ts', 'mcp/server.ts']) {
       const content = readFileSync(join(__dirname, '..', 'src', rel), 'utf8');
       expect(content).not.toMatch(/const passesScopeFilter\b/);
     }

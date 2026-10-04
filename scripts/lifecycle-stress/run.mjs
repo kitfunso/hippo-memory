@@ -42,12 +42,15 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/memory.js';
-import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
-import { embedMemory, isEmbeddingAvailable, loadEmbeddingIndex } from '../../dist/embeddings.js';
-import { physicsSearch } from '../../dist/search.js';
-import { consolidate } from '../../dist/consolidate.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
+import { loadAllEntries } from '../../dist/store/entry-reads.js';
+import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
+import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
+import { physicsSearch } from '../../dist/search/physics-search.js';
+import { consolidate } from '../../dist/consolidate/sleep.js';
 import { resetAllPhysicsState } from '../../dist/physics-state.js';
-import { openHippoDb, closeHippoDb } from '../../dist/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';
 
 import { injectStream, writeLabelSidecar, mulberry32 } from './inject.mjs';
@@ -129,11 +132,14 @@ async function buildStore(memories) {
   // replay.count; decayBasis and the rest keep their defaults.
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }, null, 2));
   const createdOrder = [];
-  for (const m of memories) {
-    const e = createMemory(m.content, { tags: m.tags, source: 'lse' });
-    writeEntry(root, e);
-    createdOrder.push(e.id);
-  }
+  // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+  await withSharedStoreHandles(() => {
+    for (const m of memories) {
+      const e = createMemory(m.content, { tags: m.tags, source: 'lse' });
+      writeEntry(root, e);
+      createdOrder.push(e.id);
+    }
+  });
   for (const e of loadAllEntries(root)) await embedMemory(root, e);
   return { base, root, createdOrder };
 }

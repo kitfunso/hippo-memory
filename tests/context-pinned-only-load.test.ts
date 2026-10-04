@@ -5,11 +5,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, writeEntry, loadAmbientCandidates } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAmbientCandidates } from '../src/store/candidates.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { isContentWorthStoring } from '../src/audit.js';
 import { getContext, type Context } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { withSharedStoreHandles } from '../src/db.js';
 
 const PROJECT = 'proj-a';
 
@@ -19,7 +22,7 @@ let globalRoot: string;
 let ctx: Context;
 
 function seed(root: string, content: string, extra: Record<string, unknown> = {}) {
-  const entry = { ...createMemory(content), origin_project: PROJECT, ...extra };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
   writeEntry(root, entry);
   return entry;
 }
@@ -49,11 +52,14 @@ afterEach(() => {
 
 describe('pinned-only context loads a slice, not the corpus', () => {
   it('returns a pin that sits far outside the recent window', async () => {
-    for (let i = 0; i < 60; i++) {
-      seed(local, `filler row number ${i} with enough words to be worth storing`, {
-        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-      });
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 60; i++) {
+        seed(local, `filler row number ${i} with enough words to be worth storing`, {
+          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+        });
+      }
+    });
     const oldPin = seed(local, 'the pinned decision that predates every filler row', {
       pinned: true,
       created: '2020-01-01T00:00:00.000Z',
@@ -65,10 +71,12 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('returns the newest admissible rows for the recent-N backfill', async () => {
-    const rows = Array.from({ length: 40 }, (_, i) =>
-      seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
-        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-      }),
+    const rows = await withSharedStoreHandles(() =>
+      Array.from({ length: 40 }, (_, i) =>
+        seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
+          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+        }),
+      ),
     );
 
     const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
@@ -78,12 +86,14 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('falls back to the whole store when the window is all cross-project', async () => {
-    for (let i = 0; i < 50; i++) {
-      seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
-        origin_project: 'proj-b',
-        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
-      });
-    }
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 50; i++) {
+        seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
+          origin_project: 'proj-b',
+          created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+        });
+      }
+    });
     const buried = seed(local, 'the only row this project owns, far behind the window', {
       created: '2026-01-01T00:00:00.000Z',
     });
@@ -251,8 +261,8 @@ describe('pinned-only context loads a slice, not the corpus', () => {
 
 describe('loadAmbientCandidates', () => {
   it('scopes to the caller tenant', () => {
-    const mine = { ...createMemory('a row belonging to tenant a', { tenantId: 'tenant-a' }), pinned: true };
-    const theirs = { ...createMemory('a row belonging to tenant b', { tenantId: 'tenant-b' }), pinned: true };
+    const mine = { ...createMemory('a row belonging to tenant a', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant-a' }), pinned: true };
+    const theirs = { ...createMemory('a row belonging to tenant b', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant-b' }), pinned: true };
     writeEntry(local, mine);
     writeEntry(local, theirs);
 
@@ -265,7 +275,7 @@ describe('loadAmbientCandidates', () => {
   it('breaks a same-created tie on id descending, matching the caller comparator', () => {
     const created = '2026-05-05T05:05:05.000Z';
     for (let i = 0; i < 40; i++) {
-      writeEntry(local, { ...createMemory(`tied row ${i}`), created, id: `id-${String(i).padStart(3, '0')}` });
+      writeEntry(local, { ...createMemory(`tied row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created, id: `id-${String(i).padStart(3, '0')}` });
     }
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 3, () => true);
@@ -277,7 +287,7 @@ describe('loadAmbientCandidates', () => {
   it('returns rows in loadAllEntries order so a stable sort downstream sees the same input', () => {
     for (let i = 0; i < 10; i++) {
       writeEntry(local, {
-        ...createMemory(`ordered row ${i}`),
+        ...createMemory(`ordered row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
         pinned: true,
         created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
       });
@@ -292,8 +302,8 @@ describe('loadAmbientCandidates', () => {
   });
 
   it('asks for nothing recent when the caller wants no backfill', () => {
-    writeEntry(local, { ...createMemory('an unpinned row nobody asked for'), created: '2026-08-08T00:00:00.000Z' });
-    const pin = { ...createMemory('the only pin in the store'), pinned: true };
+    writeEntry(local, { ...createMemory('an unpinned row nobody asked for', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created: '2026-08-08T00:00:00.000Z' });
+    const pin = { ...createMemory('the only pin in the store', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true };
     writeEntry(local, pin);
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 0, () => true);
@@ -306,12 +316,12 @@ describe('loadAmbientCandidates', () => {
   it('does not lose a chronologically newer row written with a UTC offset', () => {
     for (let i = 0; i < 32; i++) {
       writeEntry(local, {
-        ...createMemory(`canonical filler row ${i} with enough words to be worth storing`),
+        ...createMemory(`canonical filler row ${i} with enough words to be worth storing`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
         created: new Date(Date.UTC(2026, 5, 1, 12, i)).toISOString(),
       });
     }
     const drifted = {
-      ...createMemory('a legacy row whose frontmatter recorded a local offset'),
+      ...createMemory('a legacy row whose frontmatter recorded a local offset', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       created: '2026-06-01T09:00:00-04:00',
     };
     writeEntry(local, drifted);
@@ -326,7 +336,7 @@ describe('loadAmbientCandidates', () => {
   it('truncates a fractional recent count the way the slice it replaced did', () => {
     for (let i = 0; i < 40; i++) {
       writeEntry(local, {
-        ...createMemory(`fractional filler row ${i} with enough words to be worth storing`),
+        ...createMemory(`fractional filler row ${i} with enough words to be worth storing`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
         created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
       });
     }

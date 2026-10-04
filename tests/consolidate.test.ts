@@ -2,12 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { consolidate } from '../src/consolidate.js';
-import { initStore, writeEntry, loadAllEntries, readEntry, listMemoryConflicts } from '../src/store.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
+import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
 
@@ -229,15 +232,15 @@ describe('Merge pass', () => {
     // days out, the merged source decays below an unmerged peer written at
     // the same time with the same default half-life.
     const later = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
-    const unmergedPeer = { ...createMemory('completely unrelated standalone topic'), half_life_days: e1.half_life_days };
+    const unmergedPeer = { ...createMemory('completely unrelated standalone topic', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), half_life_days: e1.half_life_days };
     expect(calculateStrength(m1!, later)).toBeLessThan(calculateStrength(unmergedPeer, later));
   });
 
   it('half-life demotion floors at 1 day', async () => {
     initStore(tmpDir);
 
-    const e1 = { ...createMemory('cache refresh failure data pipeline error', { layer: Layer.Episodic }), half_life_days: 2 };
-    const e2 = { ...createMemory('cache refresh failure data pipeline problem', { layer: Layer.Episodic }), half_life_days: 2 };
+    const e1 = { ...createMemory('cache refresh failure data pipeline error', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), half_life_days: 2 };
+    const e2 = { ...createMemory('cache refresh failure data pipeline problem', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), half_life_days: 2 };
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 

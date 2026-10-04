@@ -13,13 +13,26 @@ const lexists = (p) => fs.lstatSync(p, { throwIfNoEntry: false }) !== undefined;
 const errCode = (err) => err.code ?? 'EIO';
 export const cellName = (run, t) => `${run.s.id} ${t.id} ${run.arm} seed${run.seed}`;
 
-/** Each surface's roots now, as `{name, abs}`; a root may be absent, so a restore deletes what the attempt made there. */
+/** stat through links; undefined for a dangling link or a loop, which hold nothing to read; any other error throws. */
+export function followStat(abs) {
+  try {
+    return fs.statSync(abs, { throwIfNoEntry: false });
+  } catch (err) {
+    if (err.code === 'ELOOP') return undefined;
+    throw err;
+  }
+}
+
+/** Each surface's roots now, as `{name, abs, linked}`; a root may be absent, so a restore deletes what the attempt made there. */
 function surfaceRoots(run) {
   const { claudeConfig, codexHome, hippoHome, work } = run.dirs;
   const projects = path.join(claudeConfig, 'projects');
-  const folders = fs.existsSync(projects) ? fs.readdirSync(projects, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() : [];
+  const entries = fs.existsSync(projects) ? fs.readdirSync(projects, { withFileTypes: true }) : [];
+  // Claude Code loads the memory under a linked project folder too; `linked` keeps a retry from copying or deleting through it.
+  const linked = new Set(entries.filter((e) => e.isSymbolicLink() && followStat(path.join(projects, e.name))?.isDirectory()).map((e) => e.name));
+  const folders = entries.filter((e) => e.isDirectory() || linked.has(e.name)).map((e) => e.name).sort();
   return {
-    autoMemory: folders.map((name) => ({ name, abs: path.join(projects, name, 'memory') })),
+    autoMemory: folders.map((name) => ({ name, abs: path.join(projects, name, 'memory'), linked: linked.has(name) })),
     userInstructions: [{ name: 'CLAUDE.md', abs: path.join(claudeConfig, 'CLAUDE.md') }, { name: 'rules', abs: path.join(claudeConfig, 'rules') }],
     codexMemories: [{ name: 'memories', abs: path.join(codexHome, 'memories') }],
     hippoGlobal: [{ name: 'hippo-home', abs: hippoHome }],
@@ -100,8 +113,9 @@ export function snapshotSurfaces(ctx, run, when, step) {
   }
   for (const key of copyErrors.length ? [] : RESTORABLE) {
     try {
-      for (const r of roots[key]) if (lexists(r.abs)) copyRoot(r.abs, path.join(copyDir, key, r.name));
-      copied.set(key, roots[key]);
+      const own = roots[key].filter((r) => !r.linked);
+      for (const r of own) if (lexists(r.abs)) copyRoot(r.abs, path.join(copyDir, key, r.name));
+      copied.set(key, own);
     } catch (err) {
       fail(key, err);
     }
@@ -129,6 +143,16 @@ function bulletEntries(byContent, bullet) {
   return [...byContent].filter(([k]) => k.startsWith(head)).flatMap(([, es]) => es);
 }
 
+/** The bullet a part opens with: the longest blank-line-bounded prefix that parses, since a memory may hold blank lines itself. */
+function wholeBullet(part) {
+  const cuts = [...part.matchAll(/\n\n/g)].map((m) => m.index).reverse();
+  for (const end of [part.length, ...cuts]) {
+    const head = part.slice(0, end).trim();
+    if (BULLET.test(head)) return head;
+  }
+  return part.split('\n\n')[0].trim();
+}
+
 /** Hippo rows in hook-added texts, matched by content to `entries` (each with `global`); every repeat counts, as it is paid again (prereg 93). */
 export function injectedRows(texts, entries) {
   const byContent = new Map();
@@ -137,7 +161,7 @@ export function injectedRows(texts, entries) {
   const rows = [];
   for (const part of texts.flatMap((t) => t.split(/\n(?=- \*\*\[)/))) {
     if (!part.startsWith('- **[')) continue;
-    const bullet = part.split('\n\n')[0].trim();
+    const bullet = wholeBullet(part);
     counts.rows++;
     counts.chars += bullet.length;
     const hits = bulletEntries(byContent, bullet);
@@ -166,9 +190,12 @@ const sameFiles = (a = [], b = []) => JSON.stringify(a) === JSON.stringify(b);
 export function restoreSurfaces(ctx, run, snap, when, step) {
   let ok = snap.restorable;
   const now = surfaceRoots(run);
-  for (const [key, roots] of snap.copied) {
+  // A folder linked now leads outside the run, so nothing is deleted or written through it; the hash check then fails.
+  const through = new Set(now.autoMemory.filter((r) => r.linked).map((r) => r.abs));
+  for (const [key, all] of snap.copied) {
+    const roots = all.filter((r) => !through.has(r.abs));
     // The cut-off attempt can start a memory dir for a project folder the snapshot never saw.
-    const extra = key === 'autoMemory' ? now.autoMemory.filter((r) => !roots.some((s) => s.abs === r.abs)) : [];
+    const extra = key === 'autoMemory' ? now.autoMemory.filter((r) => !r.linked && !roots.some((s) => s.abs === r.abs)) : [];
     try {
       for (const r of [...roots, ...extra]) fs.rmSync(r.abs, { recursive: true, force: true, maxRetries: 3 });
       for (const r of roots) {

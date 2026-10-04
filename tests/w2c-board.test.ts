@@ -4,16 +4,14 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import {
-  initStore,
-  saveSessionHandoff,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   createCard,
   claimCard,
@@ -26,6 +24,8 @@ import {
 import { serveDashboard } from '../src/dashboard.js';
 import { resolveTenantId } from '../src/tenant.js';
 
+const DASHBOARD_TOKEN = 'test-dashboard-token';
+
 function dashboardRequest(
   port: number,
   path: string,
@@ -35,7 +35,7 @@ function dashboardRequest(
 ): Promise<{ status: number; body: string; acaoPresent: boolean }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method, headers: { Host: host, ...extraHeaders } },
+      { host: '127.0.0.1', port, path, method, headers: { Host: host, cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}`, ...extraHeaders } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -72,7 +72,7 @@ function listenAndGetPort(server: Server): Promise<number> {
 function rawHttp10Get(port: number, path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1', () => {
-      socket.write(`GET ${path} HTTP/1.0\r\n\r\n`);
+      socket.write(`GET ${path} HTTP/1.0\r\nCookie: hippo_dashboard_${port}=${DASHBOARD_TOKEN}\r\n\r\n`);
     });
     let data = '';
     socket.on('data', (chunk) => {
@@ -99,7 +99,7 @@ describe('dashboard entry', () => {
     prevTenant = process.env.HIPPO_TENANT;
     prevHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(home, '.hippo-global');
-    server = serveDashboard(hippoRoot, 0);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     port = await listenAndGetPort(server);
   });
 
@@ -118,7 +118,7 @@ describe('dashboard entry', () => {
   });
 
   it('E1: a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
-    const stats = await dashboardRequest(port, '/api/stats', `127.0.0.1:${port}`);
+    const stats = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(stats.status).toBe(200);
     expect(stats.acaoPresent).toBe(false);
 
@@ -126,8 +126,8 @@ describe('dashboard entry', () => {
     expect(root.acaoPresent).toBe(false);
   });
 
-  it('E2: a foreign Host gets 403 Forbidden, on API, static and star POST paths', async () => {
-    const stats = await dashboardRequest(port, '/api/stats', `evil.example:${port}`);
+  it('E2: a foreign Host gets 403 Forbidden, on API, static and pin POST paths', async () => {
+    const stats = await dashboardRequest(port, '/api/overview', `evil.example:${port}`);
     expect(stats.status).toBe(403);
     expect(stats.body).toBe('Forbidden');
 
@@ -135,74 +135,58 @@ describe('dashboard entry', () => {
     expect(root.status).toBe(403);
     expect(root.body).toBe('Forbidden');
 
-    const star = await dashboardRequest(port, '/api/star/mem_x', `evil.example:${port}`, 'POST');
-    expect(star.status).toBe(403);
-    expect(star.body).toBe('Forbidden');
+    const pin = await dashboardRequest(port, '/api/memory/mem_x/pin', `evil.example:${port}`, 'POST');
+    expect(pin.status).toBe(403);
+    expect(pin.body).toBe('Forbidden');
   });
 
-  it('E2b: a star POST from another site is 403 even with a loopback Host', async () => {
+  it('E2b: a wrong POST from another site is 403 even with a loopback Host', async () => {
     const host = `127.0.0.1:${port}`;
-    const star = (headers: Record<string, string>) =>
-      dashboardRequest(port, '/api/star/mem_x', host, 'POST', headers);
-    expect((await star({ Origin: 'http://evil.example' })).status).toBe(403);
-    expect((await star({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
-    expect((await star({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404);
-    expect((await star({})).status).toBe(404);
+    const json = { 'Content-Type': 'application/json' };
+    const wrong = (headers: Record<string, string>) =>
+      dashboardRequest(port, '/api/memory/mem_x/wrong', host, 'POST', { ...json, ...headers });
+    expect((await wrong({ Origin: 'http://evil.example' })).status).toBe(403);
+    expect((await wrong({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+    expect((await wrong({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404);
+    expect((await wrong({})).status).toBe(404);
   });
 
   it('E3: localhost, LOCALHOST and a portless 127.0.0.1 all get 200', async () => {
-    const lower = await dashboardRequest(port, '/api/stats', `localhost:${port}`);
+    const lower = await dashboardRequest(port, '/api/overview', `localhost:${port}`);
     expect(lower.status).toBe(200);
 
-    const upper = await dashboardRequest(port, '/api/stats', `LOCALHOST:${port}`);
+    const upper = await dashboardRequest(port, '/api/overview', `LOCALHOST:${port}`);
     expect(upper.status).toBe(200);
 
-    const noPort = await dashboardRequest(port, '/api/stats', '127.0.0.1');
+    const noPort = await dashboardRequest(port, '/api/overview', '127.0.0.1');
     expect(noPort.status).toBe(200);
   });
 
   it('E4: a Host with a space gets 403, and the server keeps serving', async () => {
-    const bad = await dashboardRequest(port, '/api/stats', 'a b');
+    const bad = await dashboardRequest(port, '/api/overview', 'a b');
     expect(bad.status).toBe(403);
 
-    const after = await dashboardRequest(port, '/api/stats', `127.0.0.1:${port}`);
+    const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);
   });
 
   it('E5: GET // answers 500 and the server keeps serving', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     const broken = await dashboardRequest(port, '//', `127.0.0.1:${port}`);
     expect(broken.status).toBe(500);
     expect(broken.body).toBe('{"error":"Internal error"}');
-    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dashboard request failed'));
 
-    const after = await dashboardRequest(port, '/api/stats', `127.0.0.1:${port}`);
+    const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);
 
     errorSpy.mockRestore();
   });
 
   it('E6: an HTTP/1.0 request with no Host header is routed as today', async () => {
-    const raw = await rawHttp10Get(port, '/api/stats');
+    const raw = await rawHttp10Get(port, '/api/overview');
     expect(raw).toMatch(/^HTTP\/1\.[01] 200 /);
-  });
-
-  it("E7: /api/config lists the home folder's path tags, read per request", async () => {
-    const prevHomeEnv = process.env.HOME;
-    const prevProfile = process.env.USERPROFILE;
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
-    try {
-      const res = await dashboardRequest(port, '/api/config', `127.0.0.1:${port}`);
-      expect(res.status).toBe(200);
-      expect(JSON.parse(res.body).homePathTags).toContain(`path:${basename(home).toLowerCase()}`);
-    } finally {
-      if (prevHomeEnv === undefined) delete process.env.HOME;
-      else process.env.HOME = prevHomeEnv;
-      if (prevProfile === undefined) delete process.env.USERPROFILE;
-      else process.env.USERPROFILE = prevProfile;
-    }
   });
 });
 
@@ -230,7 +214,7 @@ describe('card routes', () => {
     mkdirSync(cwd, { recursive: true });
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
-    const cliEnv = { ...process.env, HIPPO_HOME: globalDir, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    const cliEnv: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: globalDir, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     delete cliEnv.HIPPO_TENANT;
     execFileSync(process.execPath, [CLI_PATH, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
       cwd,
@@ -287,7 +271,7 @@ describe('card routes', () => {
       encoding: 'utf8',
     });
 
-    server = serveDashboard(hippoRoot, 0);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     port = await listenAndGetPort(server);
   });
 
@@ -381,7 +365,7 @@ describe('card routes', () => {
   });
 
   it('R7: a broken tenant answers 500 and the server keeps serving', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     process.env.HIPPO_TENANT = 'sess_x';
     const broken = await dashboardRequest(port, '/api/cards', host());
     expect(broken.status).toBe(500);

@@ -22,14 +22,16 @@
  * closed (retired).
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry } from './store.js';
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
+import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -95,6 +97,8 @@ export interface ListProjectBriefsOpts {
   /** Filter to a single repo. */
   repo?: string;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 /** A receipt row gathered for the refresh assembler. */
@@ -129,21 +133,21 @@ function validateBriefFields(
   changeSummary: string | undefined,
 ) {
   const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new Error('saveProjectBrief: repo is required');
+  if (normalizedRepo.length === 0) throw new BadRequestError('saveProjectBrief: repo is required');
   if (/[\r\n]/.test(normalizedRepo)) {
-    throw new Error('saveProjectBrief: repo must be a single line (no newlines)');
+    throw new BadRequestError('saveProjectBrief: repo must be a single line (no newlines)');
   }
   if (normalizedRepo.length > MAX_REPO_LEN) {
-    throw new Error(`saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`);
+    throw new BadRequestError(`saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`);
   }
   if (!summary || summary.trim().length === 0) {
-    throw new Error('saveProjectBrief: summary is required');
+    throw new BadRequestError('saveProjectBrief: summary is required');
   }
   if (summary.length > MAX_BRIEF_SUMMARY_LEN) {
-    throw new Error(`saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`);
+    throw new BadRequestError(`saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`);
   }
   if (changeSummary !== undefined && changeSummary.length > MAX_CHANGE_SUMMARY_LEN) {
-    throw new Error(`saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
+    throw new BadRequestError(`saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
   }
   return { repo: normalizedRepo };
 }
@@ -201,6 +205,116 @@ function buildBriefContent(repo: string, summary: string): string {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
+interface BriefWrite {
+  tenantId: string;
+  actor: string;
+  repo: string;
+  summary: string;
+  changeSummary: string | null;
+  supersedesId: number | undefined;
+  isRefresh: boolean;
+  refreshAuditExtra: RefreshAuditMetadata;
+  now: string;
+}
+
+// Preflight the supersede target BEFORE inserting the new row (so the new
+// autoincrement id can never be its own supersede target); read the
+// predecessor version in the same SELECT for server-derived versioning.
+// Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
+function preflightBriefSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
+  // SAFETY: SELECT projects exactly status, version; .get() returns that
+  // shape for the matching row, or undefined when no brief/tenant pair matches.
+  const pred = db.prepare(
+    `SELECT status, version FROM project_briefs WHERE id = ? AND tenant_id = ?`,
+  ).get(supersedesId, tenantId) as
+    | { status: string; version: number }
+    | undefined;
+  if (!pred) {
+    throw new NotFoundError(
+      `saveProjectBrief: brief ${supersedesId} to supersede not found for tenant ${tenantId}`,
+    );
+  }
+  if (pred.status !== 'active') {
+    throw new ConflictError(
+      `saveProjectBrief: brief ${supersedesId} is not active (status='${pred.status}'); only active briefs can be superseded.`,
+    );
+  }
+  return pred.version + 1;
+}
+
+function insertBriefRow(db: DatabaseSyncLike, memoryId: string, w: BriefWrite, version: number): number {
+  const result = db.prepare(`
+    INSERT INTO project_briefs(
+      memory_id, tenant_id, repo, summary, version,
+      status, superseded_by, superseded_at, change_summary, closed_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
+  `).run(memoryId, w.tenantId, w.repo, w.summary, version, w.changeSummary, w.now);
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+function supersedeBriefRow(
+  db: DatabaseSyncLike,
+  w: BriefWrite,
+  supersedesId: number,
+  briefId: number,
+  version: number,
+): void {
+  const sup = db.prepare(`
+    UPDATE project_briefs
+    SET status = 'superseded', superseded_by = ?, superseded_at = ?
+    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
+  `).run(briefId, w.now, supersedesId, w.tenantId, briefId);
+  if (sup.changes === 0) {
+    throw new ConflictError(
+      `saveProjectBrief: brief ${supersedesId} could not be superseded (no longer active or self-reference).`,
+    );
+  }
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'project_brief_supersede',
+    targetId: String(supersedesId),
+    metadata: {
+      brief_id: supersedesId,
+      superseded_by: briefId,
+      new_version: version,
+      refreshed: w.isRefresh,
+      ...w.refreshAuditExtra,
+    },
+  });
+}
+
+/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
+function writeBriefRow(db: DatabaseSyncLike, memoryId: string, w: BriefWrite): ProjectBriefRow {
+  const version = w.supersedesId !== undefined ? preflightBriefSupersede(db, w.tenantId, w.supersedesId) : 1;
+  const briefId = insertBriefRow(db, memoryId, w, version);
+  if (w.supersedesId !== undefined) supersedeBriefRow(db, w, w.supersedesId, briefId, version);
+
+  // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
+  // columns; .get() returns that row, or undefined only if the
+  // just-inserted id can't be found.
+  const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ?`)
+    .get(briefId) as ProjectBriefRow | undefined;
+  if (!row) throw new Error('saveProjectBrief: failed to reload saved brief row');
+
+  // GDPR-light metadata: ids + flags only, no brief text.
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'project_brief_create',
+    targetId: String(briefId),
+    metadata: {
+      brief_id: briefId,
+      repo: w.repo,
+      version,
+      refreshed: w.isRefresh,
+      ...w.refreshAuditExtra,
+    },
+  });
+  return row;
+}
+
 /**
  * Create a project_brief (or a new version that supersedes an existing one). Writes
  * the memory mirror + the project_briefs row atomically inside writeEntry's
@@ -233,102 +347,24 @@ export function saveProjectBrief(
     baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
+  const w: BriefWrite = {
+    tenantId,
+    actor,
+    repo,
+    summary: opts.summary,
+    changeSummary,
+    supersedesId: opts.supersedesBriefId,
+    isRefresh,
+    refreshAuditExtra,
+    now,
+  };
 
   let savedRow: ProjectBriefRow | undefined;
 
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Preflight the supersede target BEFORE inserting the new row (so the new
-      // autoincrement id can never be its own supersede target); read the
-      // predecessor version in the same SELECT for server-derived versioning.
-      // Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
-      let version = 1;
-      if (opts.supersedesBriefId !== undefined) {
-        // SAFETY: SELECT projects exactly status, version; .get() returns that
-        // shape for the matching row, or undefined when no brief/tenant pair matches.
-        const pred = db.prepare(
-          `SELECT status, version FROM project_briefs WHERE id = ? AND tenant_id = ?`,
-        ).get(opts.supersedesBriefId, tenantId) as
-          | { status: string; version: number }
-          | undefined;
-        if (!pred) {
-          throw new Error(
-            `saveProjectBrief: brief ${opts.supersedesBriefId} to supersede not found for tenant ${tenantId}`,
-          );
-        }
-        if (pred.status !== 'active') {
-          throw new Error(
-            `saveProjectBrief: brief ${opts.supersedesBriefId} is not active (status='${pred.status}'); only active briefs can be superseded.`,
-          );
-        }
-        version = pred.version + 1;
-      }
-
-      const result = db.prepare(`
-        INSERT INTO project_briefs(
-          memory_id, tenant_id, repo, summary, version,
-          status, superseded_by, superseded_at, change_summary, closed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        repo,
-        opts.summary,
-        version,
-        changeSummary,
-        now,
-      );
-      const briefId = Number(result.lastInsertRowid ?? 0);
-
-      if (opts.supersedesBriefId !== undefined) {
-        const sup = db.prepare(`
-          UPDATE project_briefs
-          SET status = 'superseded', superseded_by = ?, superseded_at = ?
-          WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-        `).run(briefId, now, opts.supersedesBriefId, tenantId, briefId);
-        if (sup.changes === 0) {
-          throw new Error(
-            `saveProjectBrief: brief ${opts.supersedesBriefId} could not be superseded (no longer active or self-reference).`,
-          );
-        }
-        appendAuditEvent(db, {
-          tenantId,
-          actor,
-          op: 'project_brief_supersede',
-          targetId: String(opts.supersedesBriefId),
-          metadata: {
-            brief_id: opts.supersedesBriefId,
-            superseded_by: briefId,
-            new_version: version,
-            refreshed: isRefresh,
-            ...refreshAuditExtra,
-          },
-        });
-      }
-
-      // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
-      // columns; .get() returns that row, or undefined only if the
-      // just-inserted id can't be found.
-      const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ?`)
-        .get(briefId) as ProjectBriefRow | undefined;
-      if (!row) throw new Error('saveProjectBrief: failed to reload saved brief row');
-      savedRow = row;
-
-      // GDPR-light metadata: ids + flags only, no brief text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'project_brief_create',
-        targetId: String(briefId),
-        metadata: {
-          brief_id: briefId,
-          repo,
-          version,
-          refreshed: isRefresh,
-          ...refreshAuditExtra,
-        },
-      });
+      savedRow = writeBriefRow(db, memoryId, w);
     },
     // afterCommit covers refreshBrief (delegates here) + brief new/supersede.
     afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
@@ -369,9 +405,9 @@ export function closeProjectBrief(
           `SELECT status FROM project_briefs WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeProjectBrief: brief ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeProjectBrief: brief ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeProjectBrief: brief ${id} is not active (status='${existing.status}'); only active briefs can be closed.`,
         );
       }
@@ -381,7 +417,7 @@ export function closeProjectBrief(
       // only in an impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as ProjectBriefRow | undefined;
-      if (!row) throw new Error(`closeProjectBrief: brief ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeProjectBrief: brief ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -442,8 +478,9 @@ export function loadProjectBriefs(
 ): ProjectBrief[] {
   assertTenantId('loadProjectBriefs', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   if (opts.status && !VALID_BRIEF_STATES.has(opts.status)) {
-    throw new Error(
+    throw new BadRequestError(
       `loadProjectBriefs: status must be one of ${Array.from(VALID_BRIEF_STATES).join('|')}; got ${opts.status}`,
     );
   }
@@ -459,13 +496,13 @@ export function loadProjectBriefs(
       clauses.push('repo = ?');
       params.push(opts.repo);
     }
-    params.push(limit);
+    params.push(...after.params, limit);
     // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow columns
     // regardless of the dynamic WHERE clause built above; .all() returns rows
     // in that shape.
     const rows = db.prepare(`
       SELECT ${BRIEF_COLS} FROM project_briefs
-      WHERE ${clauses.join(' AND ')}
+      WHERE ${clauses.join(' AND ')}${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(...params) as ProjectBriefRow[];
@@ -507,7 +544,7 @@ export function loadActiveBriefForRepo(
 // Refresh assembler (the distinguishing deliverable)
 // ---------------------------------------------------------------------------
 
-/** Escape LIKE wildcards in operator-supplied text (mirror of store.ts:782). */
+/** Escape LIKE wildcards in operator-supplied text (mirror of store/search-rows.ts). */
 function escapeLike(term: string): string {
   return term.replace(/[%_\\]/g, '\\$&');
 }
@@ -520,6 +557,93 @@ function receiptHeadline(content: string): string {
   return trimmed.length > MAX_RECEIPT_HEADLINE_LEN
     ? `${trimmed.slice(0, MAX_RECEIPT_HEADLINE_LEN)}...`
     : trimmed;
+}
+
+/** The repo's receipt rows, newest first, capped at MAX_BRIEF_RECEIPTS. */
+function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: string): ReceiptRow[] {
+  const tag = `path:${normalizedRepo.toLowerCase()}`;
+  const likeParam = `%"${escapeLike(tag)}"%`;
+  const denyPlaceholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: SELECT projects exactly id, created, source, content (the
+    // ReceiptRow columns); .all() returns rows in that shape.
+    return db.prepare(`
+      SELECT id, created, source, content FROM memories
+      WHERE tenant_id = ?
+        AND source != 'project_brief'
+        AND LOWER(tags_json) LIKE ? ESCAPE '\\'
+        AND (scope IS NULL OR (scope NOT IN (${denyPlaceholders}) AND scope NOT LIKE '%:private:%'))
+      ORDER BY created DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, likeParam, ...RECALL_DEFAULT_DENY_SCOPES, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id
+// (e.g. `sem_<hex>`), NOT chronological — within the same `created` timestamp the
+// order is stable-but-arbitrary, not insertion order. `created DESC` is the real
+// recency ordering. (plan-eng-critic 2026-05-30, med.)
+//
+// Budget-aware assembly (codex-review-critic 2026-05-30, P2): the digest is the
+// brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The
+// receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the
+// store then REJECTS, breaking refresh for inputs within the advertised caps. So
+// include receipt lines newest-first only while they fit under the cap (reserving
+// slack for the header + an omission footer), and note the omitted remainder.
+function fitReceiptLines(receipts: ReceiptRow[]): string[] {
+  const buildReceiptLine = (r: ReceiptRow): string =>
+    `- ${(r.created ?? '').slice(0, 10)} [${r.source}] ${receiptHeadline(r.content)}`;
+
+  const receiptLines: string[] = [];
+  if (receipts.length > 0) {
+    // Header + "## Recent receipts" + a worst-case omission footer cost; keep slack
+    // so the joined markdown stays <= MAX_BRIEF_SUMMARY_LEN even after the footer.
+    const SLACK = 400;
+    let bodyBudget = MAX_BRIEF_SUMMARY_LEN - SLACK;
+    for (const r of receipts) {
+      const line = buildReceiptLine(r);
+      if (line.length + 1 > bodyBudget) break;
+      receiptLines.push(line);
+      bodyBudget -= line.length + 1;
+    }
+  }
+  return receiptLines;
+}
+
+function renderBriefDigest(normalizedRepo: string, receiptCount: number, receiptLines: string[]): string {
+  const omitted = receiptCount - receiptLines.length;
+  const lines: string[] = [];
+  lines.push(`# Project Brief: ${normalizedRepo}`);
+  lines.push('');
+  lines.push(
+    omitted > 0
+      ? `_Auto-assembled from ${receiptLines.length} of ${receiptCount} receipt(s)._`
+      : `_Auto-assembled from ${receiptCount} receipt(s)._`,
+  );
+  lines.push('');
+  lines.push('## Recent receipts');
+  lines.push('');
+  if (receiptCount === 0) {
+    lines.push(`_No receipts found for ${normalizedRepo}._`);
+  } else {
+    lines.push(...receiptLines);
+    if (omitted > 0) {
+      lines.push('');
+      lines.push(`_... ${omitted} more receipt(s) omitted (summary cap)._`);
+    }
+  }
+  // Belt-and-suspenders: the budget loop keeps us under the cap, but hard-clamp the
+  // joined string so the store's NOT-NULL/<=cap contract can never be violated even
+  // for a pathological single oversized line.
+  let markdown = lines.join('\n');
+  if (markdown.length > MAX_BRIEF_SUMMARY_LEN) {
+    markdown = markdown.slice(0, MAX_BRIEF_SUMMARY_LEN);
+  }
+  return markdown;
 }
 
 /**
@@ -543,86 +667,10 @@ export function assembleBriefFromReceipts(
   assertTenantId('assembleBriefFromReceipts', tenantId);
   const normalizedRepo = (repo ?? '').trim();
   if (normalizedRepo.length === 0) {
-    throw new Error('assembleBriefFromReceipts: repo is required');
+    throw new BadRequestError('assembleBriefFromReceipts: repo is required');
   }
-  const tag = `path:${normalizedRepo.toLowerCase()}`;
-  const likeParam = `%"${escapeLike(tag)}"%`;
-  const denyPlaceholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-
-  const db = openHippoDb(hippoRoot);
-  let receipts: ReceiptRow[];
-  try {
-    // SAFETY: SELECT projects exactly id, created, source, content (the
-    // ReceiptRow columns); .all() returns rows in that shape.
-    receipts = db.prepare(`
-      SELECT id, created, source, content FROM memories
-      WHERE tenant_id = ?
-        AND source != 'project_brief'
-        AND LOWER(tags_json) LIKE ? ESCAPE '\\'
-        AND (scope IS NULL OR (scope NOT IN (${denyPlaceholders}) AND scope NOT LIKE '%:private:%'))
-      ORDER BY created DESC, id DESC
-      LIMIT ?
-    `).all(tenantId, likeParam, ...RECALL_DEFAULT_DENY_SCOPES, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
-  } finally {
-    closeHippoDb(db);
-  }
-
-  // NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id
-  // (e.g. `sem_<hex>`), NOT chronological — within the same `created` timestamp the
-  // order is stable-but-arbitrary, not insertion order. `created DESC` is the real
-  // recency ordering. (plan-eng-critic 2026-05-30, med.)
-  //
-  // Budget-aware assembly (codex-review-critic 2026-05-30, P2): the digest is the
-  // brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The
-  // receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the
-  // store then REJECTS, breaking refresh for inputs within the advertised caps. So
-  // include receipt lines newest-first only while they fit under the cap (reserving
-  // slack for the header + an omission footer), and note the omitted remainder.
-  const buildReceiptLine = (r: ReceiptRow): string =>
-    `- ${(r.created ?? '').slice(0, 10)} [${r.source}] ${receiptHeadline(r.content)}`;
-
-  const receiptLines: string[] = [];
-  if (receipts.length > 0) {
-    // Header + "## Recent receipts" + a worst-case omission footer cost; keep slack
-    // so the joined markdown stays <= MAX_BRIEF_SUMMARY_LEN even after the footer.
-    const SLACK = 400;
-    let bodyBudget = MAX_BRIEF_SUMMARY_LEN - SLACK;
-    for (const r of receipts) {
-      const line = buildReceiptLine(r);
-      if (line.length + 1 > bodyBudget) break;
-      receiptLines.push(line);
-      bodyBudget -= line.length + 1;
-    }
-  }
-  const omitted = receipts.length - receiptLines.length;
-
-  const lines: string[] = [];
-  lines.push(`# Project Brief: ${normalizedRepo}`);
-  lines.push('');
-  lines.push(
-    omitted > 0
-      ? `_Auto-assembled from ${receiptLines.length} of ${receipts.length} receipt(s)._`
-      : `_Auto-assembled from ${receipts.length} receipt(s)._`,
-  );
-  lines.push('');
-  lines.push('## Recent receipts');
-  lines.push('');
-  if (receipts.length === 0) {
-    lines.push(`_No receipts found for ${normalizedRepo}._`);
-  } else {
-    lines.push(...receiptLines);
-    if (omitted > 0) {
-      lines.push('');
-      lines.push(`_... ${omitted} more receipt(s) omitted (summary cap)._`);
-    }
-  }
-  // Belt-and-suspenders: the budget loop keeps us under the cap, but hard-clamp the
-  // joined string so the store's NOT-NULL/<=cap contract can never be violated even
-  // for a pathological single oversized line.
-  let markdown = lines.join('\n');
-  if (markdown.length > MAX_BRIEF_SUMMARY_LEN) {
-    markdown = markdown.slice(0, MAX_BRIEF_SUMMARY_LEN);
-  }
+  const receipts = loadBriefReceipts(hippoRoot, tenantId, normalizedRepo);
+  const markdown = renderBriefDigest(normalizedRepo, receipts.length, fitReceiptLines(receipts));
   return { markdown, receiptCount: receipts.length };
 }
 
@@ -645,7 +693,7 @@ export function refreshBrief(
 ): ProjectBrief {
   assertTenantId('refreshBrief', tenantId);
   const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new Error('refreshBrief: repo is required');
+  if (normalizedRepo.length === 0) throw new BadRequestError('refreshBrief: repo is required');
 
   const { markdown, receiptCount } = assembleBriefFromReceipts(hippoRoot, tenantId, normalizedRepo);
   const active = loadActiveBriefForRepo(hippoRoot, tenantId, normalizedRepo);

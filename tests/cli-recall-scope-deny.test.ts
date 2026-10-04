@@ -15,13 +15,18 @@
  * bin). Global-store rows are seeded in-process against the same SQLite.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { withSharedStoreHandles } from '../src/db.js';
+import { cmdExplain } from '../src/cli/explain.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -61,6 +66,7 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
@@ -108,8 +114,8 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
   it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', () => {
     const globalDir = env.HIPPO_HOME;
     initStore(globalDir);
-    writeEntry(globalDir, createMemory('global clean deploykey note'));
-    writeEntry(globalDir, createMemory('global private deploykey note', { scope: 'slack:private:CG' }));
+    writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
 
     const out = hippo(home, env, 'recall', 'deploykey', '--limit', '10');
     expect(out).toContain('global clean deploykey note');
@@ -122,8 +128,8 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     // covered on the local-only path.
     const globalDir = env.HIPPO_HOME;
     initStore(globalDir);
-    writeEntry(globalDir, createMemory('global clean deploykey note'));
-    writeEntry(globalDir, createMemory('global private deploykey note', { scope: 'slack:private:CG' }));
+    writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
 
     const out = hippo(home, env, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
     expect(out).toContain('global private deploykey note');
@@ -133,16 +139,19 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).not.toContain(PRIV_GITHUB);
   });
 
-  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', () => {
+  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', async () => {
     // 220 matching private rows > the 200-row default window. Pre-fix, the
     // window filled with private rows in SQL and the JS filter then emptied
     // it, so the one admitted row never surfaced. The SQL pre-window
     // NOT LIKE '%:private:%' exclusion keeps the window for admitted rows.
     const hippoDir = join(home, '.hippo');
-    for (let i = 0; i < 220; i++) {
-      writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { scope: 'slack:private:Cbulk' }));
-    }
-    writeEntry(hippoDir, createMemory('windowstarve admitted public row'));
+    // One connection for all 221 writes: a close per write checkpoints the WAL, which timed this out on Windows CI.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 220; i++) {
+        writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:Cbulk' }));
+      }
+      writeEntry(hippoDir, createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    });
 
     const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', undefined, 'default');
     const contents = entries.map((e) => e.content);
@@ -155,12 +164,10 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).not.toContain('private filler');
   });
 
-  it('hippo explain applies the same rule and prints an honest note', () => {
-    const res = spawnSync('node', [HIPPO_BIN, 'explain', 'deploykey'], {
-      cwd: home,
-      env: { ...process.env, ...env },
-      encoding: 'utf-8',
-    });
+  it('hippo explain applies the same rule and prints an honest note', async () => {
+    vi.stubEnv('HIPPO_HOME', env.HIPPO_HOME);
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', env.HIPPO_SKIP_AUTO_INTEGRATIONS);
+    const res = await runInProcess(() => cmdExplain(join(home, '.hippo'), 'deploykey', {}));
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);
     expect(res.stdout).not.toContain(PRIV_GITHUB);

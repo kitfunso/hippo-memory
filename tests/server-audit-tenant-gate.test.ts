@@ -1,19 +1,10 @@
 // GET /v1/audit?tenant=<other> is admin-only; real HTTP server, real DB.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-audit-tenant-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('GET /v1/audit?tenant= admin gate', () => {
   let home: string;
@@ -22,8 +13,8 @@ describe('GET /v1/audit?tenant= admin gate', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('audit-tenant');
+    globalHome = makeRoot('audit-tenant');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -37,10 +28,10 @@ describe('GET /v1/audit?tenant= admin gate', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  function key(role: 'admin' | 'member'): string {
+  function key(role: 'admin' | 'member', tenantId = 'acme'): string {
     const db = openHippoDb(home);
     try {
-      return createApiKey(db, { tenantId: 'acme', label: `${role}-test`, role }).plaintext;
+      return createApiKey(db, { tenantId, label: `${role}-test`, role }).plaintext;
     } finally {
       closeHippoDb(db);
     }
@@ -67,7 +58,11 @@ describe('GET /v1/audit?tenant= admin gate', () => {
     expect((await get('', k)).status).toBe(200);
   });
 
-  it('admin reading another tenant gets 200', async () => {
-    expect((await get('?tenant=other', key('admin'))).status).toBe(200);
+  it('a tenant admin reading another tenant gets 403', async () => {
+    expect((await get('?tenant=other', key('admin'))).status).toBe(403);
+  });
+
+  it('a host-tenant admin reading another tenant gets 200', async () => {
+    expect((await get('?tenant=other', key('admin', 'default'))).status).toBe(200);
   });
 });

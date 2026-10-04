@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getContext, type Context, type ContextOpts } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
@@ -20,7 +21,7 @@ let globalRoot: string;
 let ctx: Context;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(content), origin_project: PROJECT, ...extra };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
   writeEntry(root, entry);
   return entry;
 }
@@ -150,7 +151,7 @@ describe('the observer never changes getContext', () => {
 
   it("lets admit's own throw through and counts a rejected row once however often it is admitted", () => {
     const rec = recorder();
-    const entry = createMemory('a memory the admit predicate will see twice');
+    const entry = createMemory('a memory the admit predicate will see twice', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     expect(() => rec.watchAdmit(() => { throw new Error('admit failed'); })(entry)).toThrow('admit failed');
     const refuse = rec.watchAdmit(() => false);
     expect([refuse(entry), refuse(entry)]).toEqual([false, false]);

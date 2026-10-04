@@ -6,7 +6,7 @@ let saved: string | undefined;
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 function lines(): string[] {
-  return stderrSpy.mock.calls.map((c) => String(c[0]));
+  return stderrSpy.mock.calls.map((c: unknown[]) => String(c[0]));
 }
 
 beforeEach(() => {

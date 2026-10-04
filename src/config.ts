@@ -7,6 +7,7 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
+import { log } from './log.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -151,6 +152,11 @@ export interface HippoConfig {
   deliveryLedger: {
     enabled: boolean;
   };
+  /** Pilot holdout (src/pilot-arm.ts): share of sessions, in basis points 0-10000, that get no memories pushed.
+   *  Default 0 = off. Read from the store the token ledger writes to. */
+  pilot: {
+    holdoutRateBp: number;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -236,6 +242,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   deliveryLedger: {
     enabled: false,
   },
+  pilot: {
+    holdoutRateBp: 0,
+  },
 };
 
 function isMemoryValueConfig(
@@ -269,18 +278,31 @@ function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined)
   const enabled = isObject ? value.enabled : undefined;
   if (enabled === true || enabled === false) return enabled;
   if (isObject && enabled === undefined) return false;
-  console.error(
-    `Warning: config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
+  log.warn(
+    `config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
     `(got ${JSON.stringify(value)}) - using false.`,
   );
   return false;
 }
 
+// Only an integer 0..10000 counts; anything else warns and turns the pilot off.
+function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
+  if (value === undefined) return 0;
+  const rate = value?.holdoutRateBp;
+  if (rate === undefined && value !== null && value.constructor === Object) return 0;
+  if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
+  log.warn(
+    `config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
+    `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
+  );
+  return 0;
+}
+
 function agentMemoryTools(value: string[] | null | undefined): string[] | null {
   if (value === undefined || value === null) return null;
   if (Array.isArray(value) && value.every((t) => String(t) === t)) return value;
-  console.error(
-    `Warning: config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
+  log.warn(
+    `config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
     `(got ${JSON.stringify(value)}) - importing none.`,
   );
   return [];
@@ -303,8 +325,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     const memoryValueRaw = raw.memoryValue;
     const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
     if (!validMemoryValueConfig) {
-      console.error(
-        `Warning: config.json's "memoryValue" must be an object like {"enabled": true} ` +
+      log.warn(
+        `config.json's "memoryValue" must be an object like {"enabled": true} ` +
         `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
       );
     }
@@ -315,8 +337,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     // warns and falls back to the default, which keeps faded memories.
     const dormantRaw = raw.dormant;
     if (dormantRaw !== undefined && !isDormantConfig(dormantRaw)) {
-      console.error(
-        `Warning: config.json's "dormant" must be an object like {"enabled": false} ` +
+      log.warn(
+        `config.json's "dormant" must be an object like {"enabled": false} ` +
         `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
       );
     }
@@ -325,16 +347,16 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     // Only a real boolean counts: {"enabled": "false"} is a truthy string.
     let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
     if (dormantEnabled !== true && dormantEnabled !== false) {
-      console.error(
-        `Warning: config.json's "dormant.enabled" must be true or false ` +
+      log.warn(
+        `config.json's "dormant.enabled" must be true or false ` +
         `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
       );
       dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
     }
     let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
     if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
-      console.error(
-        `Warning: config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
+      log.warn(
+        `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
         `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
       );
       dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
@@ -343,8 +365,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     const churnStalenessRaw = raw.churnStaleness;
     const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
     if (!validChurnStalenessConfig) {
-      console.error(
-        `Warning: config.json's "churnStaleness" must be an object like {"enabled": true} ` +
+      log.warn(
+        `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
         `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
       );
     }
@@ -353,8 +375,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
         ? churnStalenessRaw.enabled
         : DEFAULT_CONFIG.churnStaleness.enabled;
     if (churnStalenessEnabled !== true && churnStalenessEnabled !== false) {
-      console.error(
-        `Warning: config.json's "churnStaleness.enabled" must be true or false ` +
+      log.warn(
+        `config.json's "churnStaleness.enabled" must be true or false ` +
         `(got ${JSON.stringify(churnStalenessEnabled)}) - using false.`,
       );
       churnStalenessEnabled = false;
@@ -362,8 +384,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
     let defaultHalfLifeDays = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
     if (!Number.isFinite(defaultHalfLifeDays) || defaultHalfLifeDays <= 0) {
-      console.error(
-        `Warning: config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
+      log.warn(
+        `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
         `(got ${JSON.stringify(defaultHalfLifeDays)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
       );
       defaultHalfLifeDays = DEFAULT_CONFIG.defaultHalfLifeDays;
@@ -404,10 +426,11 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       },
       agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
       deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
+      pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
-      console.error(`Warning: failed to parse ${configPath}: ${err instanceof Error ? err.message : err}`);
+      log.warn(`failed to parse ${configPath}: ${err instanceof Error ? err.message : err}`);
     }
     return { ...DEFAULT_CONFIG };
   }

@@ -9,7 +9,9 @@ import { replayCompactionsAt } from '../compaction-record.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { renderAmbientSummary } from '../ambient.js';
+import { log } from '../log.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport } from './shared.js';
+import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
 export async function cmdSleep(
@@ -48,7 +50,7 @@ export async function cmdSleep(
         process.stderr.write = origStderrWrite;
       };
     } catch (err) {
-      console.error(`[hippo] warning: could not open log file ${logFile}: ${(err as Error).message}`);
+      log.warn(`could not open log file ${logFile}: ${(err as Error).message}`);
     }
   }
 
@@ -154,7 +156,7 @@ async function cmdSleepCore(
     if (config.churnStaleness.enabled && isGitRepo(process.cwd())) {
       for (const { root, result } of runChurnStaleForRepo(hippoRoot, false)) {
         if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
-        if (result.error) console.error(`Churn-staleness check failed for ${root}: ${result.error}`);
+        if (result.error) printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       }
     }
 
@@ -163,7 +165,7 @@ async function cmdSleepCore(
 
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!flags['dry-run']) {
-    const finished = replayCompactionsAt(hippoRoot, (message) => console.error(`compaction replay: ${message}`));
+    const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
   }
 

@@ -5,13 +5,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import {
-  initStore,
-  loadAllEntries,
-  loadActiveTaskSnapshot,
-  loadLatestHandoff,
-  saveActiveTaskSnapshot,
-} from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { loadLatestHandoff } from '../src/store/handoffs.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const RULE = 'Never run npm install in the billing service';

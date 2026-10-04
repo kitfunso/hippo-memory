@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { apply, cleanup, family, find, isolate, lesson, makeRepo, oneLesson, plain, readRecords, run, spec, teach, tmp } from './fixtures/z0-harness';
+import { apply, cleanup, family, find, isolate, lesson, makeRepo, oneLesson, plain, readRecords, run, spec, teach, tmp } from './fixtures/z0-harness.js';
 
 describe('per-cell grading save', () => {
   afterEach(cleanup);

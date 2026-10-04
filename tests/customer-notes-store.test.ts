@@ -17,11 +17,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   saveCustomerNote,
@@ -32,13 +31,8 @@ import {
   VALID_NOTE_STATES,
   MAX_NOTE_LEN,
 } from '../src/customer-notes.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -57,7 +51,7 @@ function memTags(home: string, memoryId: string): string[] {
     // it exists and its tags_json column is always a JSON array string.
     const r = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(memoryId) as { tags_json: string };
     // SAFETY: tags_json is always written as a JSON array of strings (see
-    // src/store.ts writeEntry serialization); never any other JSON shape.
+    // src/store/entry-writes.ts writeEntry serialization); never any other JSON shape.
     return JSON.parse(r.tags_json) as string[];
   } finally { closeHippoDb(db); }
 }
@@ -110,6 +104,7 @@ describe('customer_notes store (E2 entity-scoped first-class object)', () => {
   it('SAVEPOINT atomicity: writeEntry throw rolls back both', () => {
     const m0 = countRows(home, 'memories'); const c0 = countRows(home, 'customer_notes');
     const mem = createMemory('throwing note', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['customer_note'], layer: Layer.Semantic, confidence: 'verified', source: 'customer_note', tenantId: 'default',
     });
     expect(() => writeEntry(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
@@ -154,6 +149,7 @@ describe('customer_notes store (E2 entity-scoped first-class object)', () => {
 
   it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', () => {
     const mem = createMemory('tenant-a', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['customer_note'], layer: Layer.Semantic, confidence: 'verified', source: 'customer_note', tenantId: 'tenant-a',
     });
     writeEntry(home, mem);
@@ -176,8 +172,8 @@ describe('customer_notes store (E2 entity-scoped first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the note; old versions loadable', () => {
     const v1 = saveCustomerNote(home, 'default', { customer: 'd', note: 'a' });
     const v2 = saveCustomerNote(home, 'default', { customer: 'd', note: 'b', supersedesNoteId: v1.id });
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     expect(loadCustomerNoteById(home, 'default', v1.id)!.memoryId).toBeNull();
     expect(loadCustomerNoteById(home, 'default', v1.id)!.status).toBe('superseded');
     expect(loadCustomerNoteById(home, 'default', v2.id)!.status).toBe('active');

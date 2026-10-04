@@ -8,37 +8,33 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   insertEntity,
   insertRelation,
+  enqueueExtraction,
+  markExtractionProcessed,
+} from '../src/graph/write.js';
+import {
   loadEntityById,
   loadEntities,
   loadRelations,
-  enqueueExtraction,
   loadExtractionQueue,
-  markExtractionProcessed,
-  MAX_ENTITY_NAME_LEN,
-} from '../src/graph.js';
+} from '../src/graph/read.js';
+import { MAX_ENTITY_NAME_LEN } from '../src/graph/types.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 /** Write a memory and force its kind (default writes are 'distilled'). Setting kind
  *  to 'raw' is allowed (the append-only trigger is BEFORE DELETE, not UPDATE). */
 function addMemory(home: string, tenant: string, kind: 'distilled' | 'superseded' | 'raw'): string {
-  const mem = createMemory('graph source memory for guard tests', { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
+  const mem = createMemory('graph source memory for guard tests', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
   writeEntry(home, mem, { actor: 'test' });
   if (kind !== 'distilled') {
     const db = openHippoDb(home);
@@ -58,7 +54,7 @@ function countRows(home: string, table: string): number {
 
 describe('graph store (E3.3 graph-on-consolidated guard)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph'); });
   afterEach(() => safeRmSync(home));
 
   it('insertEntity from a distilled / superseded memory sets source_kind; insertRelation links them', () => {

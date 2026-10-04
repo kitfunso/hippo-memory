@@ -17,8 +17,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { initStore, loadIndex, saveIndex } from '../src/store.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, type DatabaseSyncLike } from '../src/db.js';
+import { initStore } from '../src/store/open.js';
+import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
 import { remember, recall, outcome, outcomeForLastRecall, type Context } from '../src/api.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -161,7 +162,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
 });
 
 describe('storage overhead smoke (success criterion 3)', () => {
-  it('100 traced recalls of 10 results grow the DB by less than ~250KB', () => {
+  it('100 traced recalls of 10 results grow the DB by less than ~250KB', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
@@ -181,9 +182,12 @@ describe('storage overhead smoke (success criterion 3)', () => {
       };
 
       const before = dbSizeBytes();
-      for (let i = 0; i < 100; i++) {
-        recall(ctx, { query: 'storage-smoke-target', limit: 10 });
-      }
+      // One handle for the 100 recalls: each fresh open repeats the pragmas and migration check, which is not what this measures.
+      await withSharedStoreHandles(() => {
+        for (let i = 0; i < 100; i++) {
+          recall(ctx, { query: 'storage-smoke-target', limit: 10 });
+        }
+      });
       const after = dbSizeBytes();
 
       const growth = after - before;

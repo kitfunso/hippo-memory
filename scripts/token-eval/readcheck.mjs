@@ -2,15 +2,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_ARMS } from './arms.mjs';
-import { toolInputs, toolResultTexts, hookContexts } from './records.mjs';
+import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment } from './records.mjs';
 
 /** Void reasons in precedence order: the record's `void` is the first one hit. */
 export const VOID_ORDER = ['operator-canary', 'read', 'auto-memory', 'user-instructions', 'hippo-text'];
 const ENV_KEYS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP'];
 const FLOOR_ARMS = new Set(['A0', 'A4']);
 const HIPPO_MARK = '<!-- hippo:start -->';
+const HOME_PAIR = { HOME: 'USERPROFILE', USERPROFILE: 'HOME' };
 const ENV_FORM = /\$\{?\w+\}?|\$env:\w+|%\w+%/i;
-const TOKEN = /"([^"]*)"|'([^']*)'|([^\s"'<>()]+)/g;
+const WORD_PART = /(\s+|[<>()])|"([^"]*)"|'([^']*)'|([^\s"'<>()]+)/g;
 const SEARCH_ALWAYS = new Set(['rg', 'ag', 'ack', 'find', 'fd', 'tree', 'du']);
 const GREP_R = /^-[a-z]*r|^--(?:dereference-)?recursive$/i;
 const PS_R = /^-r(?:ecurse)?$/i;
@@ -27,10 +28,12 @@ function envValue(env, name, win) {
 /** A path token as the agent's shell sees it: env forms expanded, a Git Bash drive path mapped on win32, resolved against cwd, forward slashes. */
 export function resolveToken(token, { env, cwd, platform }) {
   const win = platform === 'win32';
-  const known = (name) => (ENV_KEYS.includes(win ? name.toUpperCase() : name) ? envValue(env, name, win) : undefined);
+  const value = (name) => (ENV_KEYS.includes(win ? name.toUpperCase() : name) ? envValue(env, name, win) : undefined);
+  // Git Bash fills HOME from USERPROFILE, so on win32 either one stands in for the other.
+  const known = (name) => value(name) ?? (win && HOME_PAIR[name.toUpperCase()] ? value(HOME_PAIR[name.toUpperCase()]) : undefined);
   const sub = (whole, name) => known(name) ?? whole;
   let p = token
-    .replace(/^~(?=$|[\\/])/, () => known('HOME') ?? (win ? known('USERPROFILE') : undefined) ?? '~')
+    .replace(/^~(?=$|[\\/])/, () => known('HOME') ?? '~')
     .replace(/\$env:(\w+)/gi, sub)
     .replace(/\$\{(\w+)\}/g, sub)
     .replace(/\$(\w+)/g, sub)
@@ -47,12 +50,27 @@ function cutWildcard(p) {
   return wild < 0 ? p : p.slice(0, p.lastIndexOf('/', wild) + 1) || p.slice(0, wild);
 }
 
+/** Shell words, with quoted and bare parts that touch joined as the shell joins them, so `"$HOME"/x` is one word. */
+function shellWords(seg) {
+  const words = [];
+  let cur = null;
+  for (const m of seg.matchAll(WORD_PART)) {
+    if (m[1] === undefined) {
+      cur = (cur ?? '') + (m[2] ?? m[3] ?? m[4]);
+      continue;
+    }
+    if (cur !== null) words.push(cur);
+    cur = null;
+  }
+  return cur === null ? words : [...words, cur];
+}
+
 /** Path tokens of a shell command as `{token, search, cwd}`; a `cd` target counts as a read and moves cwd for the rest of the command. */
 function shellPaths(command, work, opts) {
   const out = [];
   let cwd = work;
   for (const seg of String(command ?? '').split(/&&|\|\||[;|&\n]/)) {
-    const words = [...seg.matchAll(TOKEN)].map((m) => m[1] ?? m[2] ?? m[3]);
+    const words = shellWords(seg);
     const cmd = (words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
     const args = words.slice(1).filter((a) => !a.startsWith('-'));
     const flags = words.slice(1).filter((a) => a.startsWith('-') || a.startsWith('/'));
@@ -82,13 +100,37 @@ function toolPaths(name, input, work, opts) {
   return key && input[key] ? [{ token: String(input[key]), search: false, cwd: work }] : [];
 }
 
-/** The cell's bounds, folded for comparison (case-insensitive on win32). */
+// Errors an agent-written path can raise, so the walk takes the parent; any other, such as EMFILE or ENOMEM, is a runner fault.
+const UNRESOLVED = new Set([
+  'ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP', 'EINVAL', 'ENAMETOOLONG', 'EBUSY', 'EIO', 'ENXIO', 'ENODEV', 'UNKNOWN', 'ERR_INVALID_ARG_VALUE',
+]);
+
+/** p with its deepest existing prefix resolved by the filesystem, so a short name or a link alias equals its target. */
+function canonical(p) {
+  const tail = [];
+  for (let cur = path.resolve(p); ; cur = path.dirname(cur)) {
+    try {
+      return path.join(fs.realpathSync.native(cur), ...tail);
+    } catch (err) {
+      if (!UNRESOLVED.has(err.code)) throw err;
+    }
+    if (path.dirname(cur) === cur) return path.resolve(p);
+    tail.unshift(path.basename(cur));
+  }
+}
+
+const WIN = process.platform === 'win32';
+
+/** A path as every G1 comparison sees it: canonical, forward slashes, no trailing slash, lower case on win32. */
+export function foldPath(p) {
+  const s = canonical(p).replaceAll('\\', '/');
+  return (WIN ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
+}
+
+/** The cell's bounds, folded for comparison. */
 function bounds(ctx, run, step, ownIds) {
-  const win = process.platform === 'win32';
-  const fold = (p) => {
-    const s = path.resolve(p).replaceAll('\\', '/');
-    return (win ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
-  };
+  const win = WIN;
+  const fold = foldPath;
   const d = run.dirs;
   const homes = [...new Set(['HOME', 'USERPROFILE'].map((k) => envValue(run.env, k, win)).filter(Boolean))];
   const appData = envValue(run.env, 'APPDATA', win);
@@ -103,7 +145,7 @@ function bounds(ctx, run, step, ownIds) {
   };
 }
 
-const under = (p, root) => p === root || p.startsWith(root.endsWith('/') ? root : `${root}/`);
+export const under = (p, root) => p === root || p.startsWith(root.endsWith('/') ? root : `${root}/`);
 const relTo = (root, p) => (p === root ? '' : p.slice(root.length + 1));
 
 /** Files under claude-config a session may read: its arm's memory and instructions, and its own transcripts. */
@@ -165,15 +207,47 @@ function pathHits(run, b, files, fileName) {
   return hits;
 }
 
+/** Each `{...}` at any depth as its own keys and values only, nested objects and arrays cut out; string-aware, a string ends at a newline, unclosed objects kept. */
+function ownObjects(text) {
+  const done = [];
+  const stack = [];
+  let inStr = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const top = stack[stack.length - 1];
+    if (inStr) {
+      if (ch === '\\') {
+        if (top) top.own.push(text.slice(i, i + 2));
+        i++;
+        continue;
+      }
+      if (ch === '"' || ch === '\n') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === '{' || ch === '[') {
+      stack.push({ obj: ch === '{', own: [] });
+      continue;
+    } else if ((ch === '}' || ch === ']') && top) {
+      if (stack.pop().obj) done.push(top.own.join(''));
+      continue;
+    }
+    if (top) top.own.push(ch);
+  }
+  return [...done, ...stack.filter((f) => f.obj).map((f) => f.own.join(''))];
+}
+
 /** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
 function contentHits(ctx, run, b, files, fileName) {
   const hits = [];
   for (const { file, text } of toolResultTexts(files)) {
-    const ids = [...text.matchAll(/"sessionId"\s*:\s*"([^"]+)"/g)].map((m) => (b.win ? m[1].toLowerCase() : m[1]));
+    // Only a Claude Code transcript line holds type, uuid and sessionId together; hippo output has no uuid, so no arm voids on its own output.
+    // Per object, not per line: a pretty-printer (`jq .`) spreads one record over many lines, and keys from sibling objects are no record.
+    const lines = ownObjects(text).filter((l) => /"uuid"\s*:/.test(l) && /"type"\s*:/.test(l));
+    const ids = lines.flatMap((l) => [...l.matchAll(/"sessionId"\s*:\s*"([^"]+)"/g)]).map((m) => (b.win ? m[1].toLowerCase() : m[1]));
     if (ids.some((id) => !b.ownIds.has(id)) || /"type"\s*:\s*"session_meta"/.test(text)) hits.push(hit('read', 'transcript-content', null, null, fileName(file)));
   }
-  for (const file of new Set(files)) {
-    const raw = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  for (const seg of files) {
+    const { file } = asSegment(seg);
+    const raw = fs.existsSync(file) ? segmentText(seg) : '';
     for (const c of ctx.canaries) if (raw.includes(c)) hits.push(hit('operator-canary', null, null, null, fileName(file)));
   }
   if (!HIPPO_ARMS.has(run.arm)) for (const { file } of hookContexts(files)) hits.push(hit('hippo-text', 'hook', null, null, fileName(file)));
@@ -184,7 +258,9 @@ function contentHits(ctx, run, b, files, fileName) {
 export function sessionVoid(ctx, run, step, { files, ownIds, delivery }) {
   const b = bounds(ctx, run, step, ownIds);
   const fileName = (f) => path.relative(ctx.outDir, f).split(path.sep).join('/');
-  const hits = [...delivery, ...pathHits(run, b, files, fileName), ...contentHits(ctx, run, b, files, fileName)];
-  hits.sort((x, y) => VOID_ORDER.indexOf(x.reason) - VOID_ORDER.indexOf(y.reason));
+  const hits = byPrecedence([...delivery, ...pathHits(run, b, files, fileName), ...contentHits(ctx, run, b, files, fileName)]);
   return { void: hits[0]?.reason ?? null, voidHits: hits };
 }
+
+/** Hits in VOID_ORDER, stable within a reason. */
+export const byPrecedence = (hits) => [...hits].sort((x, y) => VOID_ORDER.indexOf(x.reason) - VOID_ORDER.indexOf(y.reason));

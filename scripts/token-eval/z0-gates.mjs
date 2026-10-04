@@ -8,12 +8,15 @@ const EPS = 1e-9;
 
 /** G1 (reading 3): an operator canary invalidates the run; other voids drop sessions, with per-arm shares printed. */
 export function g1(records, counts) {
-  const canaries = records.filter((r) => r.void === OPERATOR_CANARY).length;
+  // Prereg 161: a canary anywhere fails the run, so one an apply's resume saw counts though it never sets that cell's void.
+  const seen = (r) => r.void === OPERATOR_CANARY || (r.resumeVoidHits ?? []).some((h) => h.reason === OPERATOR_CANARY);
+  const canaries = records.filter(seen).length;
   const perArm = Object.fromEntries(Object.entries(counts).map(([arm, c]) => [arm, { voids: c.voids, share: c.planned === 0 ? 0 : c.voids / c.planned }]));
   return { pass: canaries === 0, operatorCanaries: canaries, perArm };
 }
 
-/** One G2 half: under both codings, estimate at most -0.30 and the CI's high below zero (reading 5). */
+/** One G2 half: under both codings, estimate at most -0.30 and the CI's high below zero (reading 5).
+ * @returns {{status: string, required: boolean, pass: boolean} & Partial<ReturnType<typeof bothCodings>>} the per-coding estimates only when the half ran */
 function g2Half(filtered, armT, armC, keep, required, opts) {
   const planned = new Set(filtered.arms);
   if (!planned.has(armT) || !planned.has(armC)) return { status: NOT_RUN, required, pass: !required };

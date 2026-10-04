@@ -16,8 +16,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { pushGoal } from '../src/goals.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
@@ -59,7 +59,7 @@ describe('A7 recall --why rerankTrace', () => {
 
     // peer: matches the query and is referenced by the hero's conflicts_with,
     // so --filter-conflicts fires the interference stage on the hero.
-    const peer = createMemory('auth token refresh peer', { tags: ['ui'], tenantId });
+    const peer = createMemory('auth token refresh peer', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['ui'], tenantId });
     peerId = peer.id;
     writeEntry(localRoot, peer);
 
@@ -67,6 +67,7 @@ describe('A7 recall --why rerankTrace', () => {
     // (goal-tagged + active goal), retrieval-count-downweight (low count), and
     // interference (conflicts_with references the peer, also in results).
     const hero = createMemory('auth token refresh hero details', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['fix-auth'],
       tenantId,
     });

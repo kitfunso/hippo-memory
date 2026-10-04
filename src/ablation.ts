@@ -85,6 +85,11 @@
  * beforeEach AND afterEach.
  */
 
+import {
+  envAblateDecay, envAblateOutcome, envAblateOutcomeFast, envAblateOutcomeSlow, envAblateRecallBoost, envAblateRecency,
+  envEvalRecencyDays, envFakeNowMs,
+} from './env.js';
+
 interface AblationFlags {
   decay: boolean;
   recallBoost: boolean;
@@ -99,37 +104,17 @@ interface AblationFlags {
 
 let _cache: AblationFlags | undefined;
 
-function isTruthy(value: string | undefined): boolean {
-  return value === '1' || value === 'true';
-}
-
 function readFlags(): AblationFlags {
   if (_cache !== undefined) return _cache;
-  const outcomeBoth = isTruthy(process.env.HIPPO_ABLATE_OUTCOME);
-  let fakeNowMs: number | null = null;
-  const rawNow = process.env.HIPPO_FAKE_NOW;
-  if (rawNow !== undefined && rawNow !== '') {
-    // STRICT canonical form only: exactly what Date.prototype.toISOString
-    // emits (YYYY-MM-DDTHH:mm:ss.sssZ), verified by ROUND-TRIP equality.
-    // Two codex P2s drove this: (1) Date.parse accepts junk like '1' or
-    // locale-dependent '06/11/2026'; (2) a regex alone still admits
-    // rolled-over dates ('2026-02-31T...Z' silently becomes March 3). A
-    // value that does not round-trip byte-identical falls back to the real
-    // clock, exactly as documented.
-    const parsed = Date.parse(rawNow);
-    if (Number.isFinite(parsed) && new Date(parsed).toISOString() === rawNow) {
-      fakeNowMs = parsed;
-    }
-  }
-  const recencyDays = Number(process.env.HIPPO_EVAL_RECENCY_DAYS);
+  const outcomeBoth = envAblateOutcome();
   _cache = {
-    decay: isTruthy(process.env.HIPPO_ABLATE_DECAY),
-    recallBoost: isTruthy(process.env.HIPPO_ABLATE_RECALL_BOOST),
-    outcomeSlow: outcomeBoth || isTruthy(process.env.HIPPO_ABLATE_OUTCOME_SLOW),
-    outcomeFast: outcomeBoth || isTruthy(process.env.HIPPO_ABLATE_OUTCOME_FAST),
-    recency: isTruthy(process.env.HIPPO_ABLATE_RECENCY),
-    recencyDays: Number.isFinite(recencyDays) && recencyDays > 0 ? recencyDays : null,
-    fakeNowMs,
+    decay: envAblateDecay(),
+    recallBoost: envAblateRecallBoost(),
+    outcomeSlow: outcomeBoth || envAblateOutcomeSlow(),
+    outcomeFast: outcomeBoth || envAblateOutcomeFast(),
+    recency: envAblateRecency(),
+    recencyDays: envEvalRecencyDays(),
+    fakeNowMs: envFakeNowMs(),
   };
   return _cache;
 }

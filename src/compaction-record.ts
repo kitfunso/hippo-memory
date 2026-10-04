@@ -1,7 +1,6 @@
 // One record per Claude Code compaction, and what turns its summary into kept memories.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, readTranscriptTail, truncateCodePointSafe } from './capture.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { loadConfig } from './config.js';
@@ -10,15 +9,19 @@ import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
-import { strengthenRetrievedOn, updateStats, writeEntryMirrors } from './store.js';
+import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
+import { isRecallBoostAblated } from './ablation.js';
+import { updateStats } from './store/index-and-stats.js';
 import { resolveTenantId } from './tenant.js';
+import { errorMessage, log as logger } from './log.js';
+import { readTranscriptTail, truncateCodePointSafe } from './transcript-tail.js';
 
 /** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */
 export const COMPACTION_DB_WAIT_MS = 2000;
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
-  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo'. Write '- none' if nothing new remains.";
+  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' if nothing new remains.";
 
 const SUMMARY_MAX_CHARS = 256 * 1024;
 /** Long enough that a live hook has finished with its own record. */
@@ -70,7 +73,7 @@ interface CompactionRow {
 export type Log = (message: string) => void;
 
 /** Where the session ran: rows written through the global store keep the project the session was in. */
-export function compactionOrigin(hippoRoot: string, cwd: string | null): string {
+function compactionOrigin(hippoRoot: string, cwd: string | null): string {
   if (!isGlobalStoreRoot(hippoRoot)) return deriveOriginProject(path.dirname(hippoRoot));
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
   return cwd === null ? '' : deriveOriginProject(cwd);
@@ -329,7 +332,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
       }
     }
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, [...restated], ctx.tenantId);
+    strengthenRetrievedOn(db, [...restated], { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
       db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.length, ctx.tenantId, ctx.recordId);
     }
@@ -367,7 +370,7 @@ export function parsePostCompactPayload(stdinText: string | undefined): PostComp
   try {
     raw = JSON.parse((stdinText ?? '').trim());
   } catch {
-    return null;
+    return null; // non-JSON stdin is not a PostCompact payload; the caller skips it
   }
   if (!isObjectLike(raw) || !('session_id' in raw) || !isStringValue(raw.session_id) || raw.session_id === '') return null;
   return {
@@ -422,7 +425,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
     } catch (err) {
       if (isSqliteBusy(err)) throw err;
       log(`record step failed: ${errorMessage(err)}`);
-      console.error(`hippo post-compact: record step failed: ${errorMessage(err)}`);
+      logger.error(`post-compact: record step failed: ${errorMessage(err)}`);
     }
     try {
       result.written = saveItems(db, hippoRoot, {
@@ -446,11 +449,11 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
         log(`store busy, summary spooled: ${errorMessage(err)}`);
       } catch (spoolErr) {
         log(`spool failed: ${errorMessage(spoolErr)}`);
-        console.error(`hippo post-compact: spool failed: ${errorMessage(spoolErr)}`);
+        logger.error(`post-compact: spool failed: ${errorMessage(spoolErr)}`);
       }
     } else {
       log(`items step failed: ${errorMessage(err)}`);
-      console.error(`hippo post-compact: items step failed: ${errorMessage(err)}`);
+      logger.error(`post-compact: items step failed: ${errorMessage(err)}`);
     }
   } finally {
     if (db) closeHippoDb(db);
@@ -489,7 +492,7 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
       try {
         lines.push(JSON.parse(raw));
       } catch {
-        continue;
+        continue; // the tail can start mid-line; a torn line holds no summary
       }
     }
     const stamp = (line: TranscriptLine): number => (isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN);
@@ -524,7 +527,7 @@ function readSpooled(file: string, fallbackTenantId: string): SpooledCompaction 
   try {
     raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    return null;
+    return null; // a half-written or vanished spool file is skipped; the caller treats null as unreadable
   }
   if (!isObjectLike(raw) || !('sessionId' in raw) || !isStringValue(raw.sessionId) || !('summary' in raw) || !isStringValue(raw.summary)) return null;
   if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;

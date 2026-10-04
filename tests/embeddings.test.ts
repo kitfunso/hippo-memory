@@ -46,7 +46,7 @@ describe('cosineSimilarity', () => {
 
 describe('isEmbeddingAvailable', () => {
   it('returns a boolean', async () => {
-    const { isEmbeddingAvailable } = await import('../src/embeddings.js');
+    const { isEmbeddingAvailable } = await import('../src/local-embedding.js');
     const available = await isEmbeddingAvailable();
     expect(available).toEqual(expect.any(Boolean));
     // We don't assert true/false since the test env may or may not have the lib
@@ -74,8 +74,9 @@ describe('embedding index persistence', () => {
     saveEmbeddingIndex(tmpDir, index);
     const loaded = loadEmbeddingIndex(tmpDir);
 
-    expect(loaded['mem_abc']).toEqual([0.1, 0.2, 0.3]);
-    expect(loaded['mem_def']).toEqual([0.4, 0.5, 0.6]);
+    // Vectors are stored as float32.
+    expect(loaded['mem_abc']).toEqual([0.1, 0.2, 0.3].map(Math.fround));
+    expect(loaded['mem_def']).toEqual([0.4, 0.5, 0.6].map(Math.fround));
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

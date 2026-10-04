@@ -2,12 +2,14 @@
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so
  *  every captured memory currently lands on a flat schema_fit of 0.5. */
 
+import { envTypesafeApiKey } from './env.js';
 import { ConfidenceLevel, EmotionalValence } from './memory.js';
+import { fetchWithRetry } from './http-retry.js';
+import { log } from './log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';
 const MAX_CONCURRENCY = 8;
-const RETRY_STATUS = new Set([429, 529]);
 
 export type JudgedKind = 'error' | 'decision' | 'convention' | 'preference' | 'trivia';
 
@@ -74,7 +76,7 @@ const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive
 
 /** Absent key means hippo keeps its pre-Jev behaviour and makes no HTTP call. */
 export function judgmentApiKey(): string | undefined {
-  const key = process.env.TYPESAFE_API_KEY?.trim();
+  const key = envTypesafeApiKey()?.trim();
   return key ? key : undefined;
 }
 
@@ -88,14 +90,13 @@ function toConfidenceTier(kindConfidence: number): ConfidenceLevel {
   return 'inferred';
 }
 
-async function postOnce(
-  content: string,
-  opts: JudgeOptions,
-): Promise<{ res: Response } | { retryable: true } | null> {
-  const fetchFn = opts.fetcher ?? fetch;
+/** Capture-time judging must not hold a write for long: one budget per attempt, shorter than the LLM calls. */
+const JUDGE_TIMEOUT_MS = 15_000;
+
+async function post(content: string, opts: JudgeOptions): Promise<Response | null> {
   let res: Response;
   try {
-    res = await fetchFn(ENDPOINT, {
+    res = await fetchWithRetry(ENDPOINT, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -106,13 +107,12 @@ async function postOnce(
         model: opts.model ?? DEFAULT_MODEL,
         questions: QUESTIONS,
       }),
-    });
-  } catch {
+    }, { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher });
+  } catch (err) {
+    log.debug(`judge: request failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
-  if (RETRY_STATUS.has(res.status)) return { retryable: true };
-  if (!res.ok) return null;
-  return { res };
+  return res.ok ? res : null;
 }
 
 /** `null` on any failure, so a Jev outage degrades capture to today's
@@ -121,20 +121,17 @@ export async function judge(content: string, opts: JudgeOptions): Promise<Judgme
   const trimmed = content.trim();
   if (trimmed.length < 3) return null;
 
-  let attempt = await postOnce(trimmed, opts);
-  if (attempt && 'retryable' in attempt) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    attempt = await postOnce(trimmed, opts);
-  }
-  if (!attempt || 'retryable' in attempt) return null;
+  const res = await post(trimmed, opts);
+  if (!res) return null;
 
   let data: JevResponse;
   try {
     // SAFETY: the documented Jev response is `{ answers: { <name>: Answer } }`
     // keyed by the question names posted above; every field read below is
     // optional-chained and range-checked before use, so a lie here returns null.
-    data = await attempt.res.json() as JevResponse;
-  } catch {
+    data = await res.json() as JevResponse;
+  } catch (err) {
+    log.debug(`judge: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 

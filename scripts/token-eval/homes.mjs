@@ -51,7 +51,9 @@ export function homeFiles(dirs) {
 
 const ANCESTOR_FILES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', path.join('.claude', 'CLAUDE.md'), path.join('.claude', 'rules')];
 
-/** Instruction files held by `dir` or any ancestor up to `stopAt` (inclusive; default the filesystem root). */
+/** Instruction files held by `dir` or any ancestor up to `stopAt` (inclusive; default the filesystem root).
+ * @param {string} dir
+ * @param {{stopAt?: string | null}} [options] */
 export function ancestorInstructionFiles(dir, { stopAt = null } = {}) {
   const hits = [];
   for (let cur = path.resolve(dir); ; cur = path.dirname(cur)) {

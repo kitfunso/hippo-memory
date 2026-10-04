@@ -10,7 +10,8 @@ import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { createMemory } from '../src/memory.js';
 import { isContentWorthStoring } from '../src/audit.js';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
-import { isInitialized, writeEntry } from '../src/store.js';
+import { isInitialized } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import {
   auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, tally, toolTally, userNotes,
   writeConfig, type World,

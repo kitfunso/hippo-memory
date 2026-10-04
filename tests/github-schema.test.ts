@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getMeta, type DatabaseSyncLike } from '../src/db.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface TableColumnInfo {
   cid: number;
@@ -18,13 +16,6 @@ function tableColumns(db: DatabaseSyncLike, table: string): TableColumnInfo[] {
   // SAFETY: PRAGMA table_info() always returns rows in this fixed SQLite
   // pragma shape (cid, name, type, notnull, dflt_value, pk).
   return db.prepare(`PRAGMA table_info(${table})`).all() as TableColumnInfo[];
-}
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
 }
 
 describe('schema v24 — github connector tables', () => {

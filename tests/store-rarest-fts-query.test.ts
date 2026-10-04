@@ -4,14 +4,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import {
-  initStore,
-  writeEntry,
   loadRecallSearchEntries,
   loadRecallSearchEntriesFromDb,
   pickRarestFtsQuery,
-} from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+} from '../src/store/search-rows.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
 
 let tmpRoot: string;

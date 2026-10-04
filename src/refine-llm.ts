@@ -14,8 +14,11 @@
  */
 
 import { MemoryEntry, Layer } from './memory.js';
-import { loadAllEntries, readEntry, writeEntry } from './store.js';
-import { redactSecrets } from './secret-detect.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries, readEntry } from './store/entry-reads.js';
+import { redactSecretsStrict } from './secret-detect.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
+import { log } from './log.js';
 
 const REFINED_TAG = 'llm-refined';
 const CONSOLIDATED_MARKERS = [
@@ -65,7 +68,7 @@ export async function refineSemanticMemory(
 
   const sourceBlock = sources
     .slice(0, 8)
-    .map((s, i) => `[source ${i + 1}] ${redactSecrets(s.content).slice(0, 400)}`)
+    .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, 400)}`)
     .join('\n\n');
 
   const prompt = `You are refining a semantic memory in an agent's memory store. The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. Produce a single coherent semantic memory that captures the underlying principle.
@@ -78,14 +81,14 @@ Rules:
 - Do NOT include the "[Consolidated from N ...]" marker.
 
 Current merged content:
-${redactSecrets(merged)}
+${redactSecretsStrict(merged)}
 
 Source memories (up to 8 shown):
 ${sourceBlock}`;
 
   let res: Response;
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -97,24 +100,33 @@ ${sourceBlock}`;
         max_tokens: 800,
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
-  } catch {
+    }, { timeoutMs: llmTimeoutMs(), fetchFn });
+  } catch (err) {
+    log.warn(`refine: request failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    log.warn(`refine: API answered HTTP ${res.status}`);
+    return null;
+  }
 
+  let text: string;
   try {
     // SAFETY: data is the Anthropic Messages API response body; the
     // documented response shape is `{ content: [{ type, text, ... }] }`
     // for a text-generating request like this one.
     const data = await res.json() as { content?: Array<{ text?: string }> };
-    const text = data.content?.[0]?.text?.trim() ?? '';
-    if (text.length < 10) return null;
-    return text;
-  } catch {
+    text = data.content?.[0]?.text?.trim() ?? '';
+  } catch (err) {
+    log.warn(`refine: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
+  if (text.length < 10) {
+    log.warn('refine: response was empty or too short to use');
+    return null;
+  }
+  return text;
 }
 
 function isConsolidated(entry: MemoryEntry): boolean {

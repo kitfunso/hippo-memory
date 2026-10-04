@@ -29,10 +29,12 @@ describe('budget curve (TE3)', () => {
     expect(r.perBudget[100].hippo.hit).toBe(true);
     expect(r.perBudget[100].recency.hit).toBe(false);
     expect(r.perBudget[2000].recency.hit).toBe(true);
-    expect(r.minToAnswer.hippo.budget).toBe(100);
-    expect(r.minToAnswer.recency.budget).toBe(2000);
+    const { hippo: hippoMin, recency: recencyMin } = r.minToAnswer;
+    if (!hippoMin || !recencyMin) throw new Error('both arms should answer within the budgets');
+    expect(hippoMin.budget).toBe(100);
+    expect(recencyMin.budget).toBe(2000);
     expect(r.fullContextHit).toBe(true);
-    expect(r.minToAnswer.hippo.tokens).toBeLessThan(r.fullContextTokens / 5);
+    expect(hippoMin.tokens).toBeLessThan(r.fullContextTokens / 5);
 
     const s = summarize([r], budgets);
     expect(s.curve[0].hippo.evidenceRecall).toBe(1);

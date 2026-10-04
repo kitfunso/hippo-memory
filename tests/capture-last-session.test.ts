@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
-import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture.js';
+import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
 
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.

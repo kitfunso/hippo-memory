@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { extractInvalidationTarget, invalidateMatching } from '../src/invalidation.js';
-import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

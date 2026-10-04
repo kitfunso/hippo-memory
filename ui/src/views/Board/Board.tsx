@@ -3,12 +3,11 @@ import type { Card, CardStatus } from "../../types.js";
 import { fetchCards, errorMessage } from "../../api/client.js";
 import { isLeaseExpired } from "./lease.js";
 import { CardDialog } from "./CardDialog.js";
+import { BOARD_TOOLBAR_H } from "./layout.js";
+
+export { BOARD_TOOLBAR_H };
 
 const STATUSES: readonly CardStatus[] = ["backlog", "ready", "running", "blocked", "review", "done", "shelved"];
-
-interface BoardProps {
-  viewSwitch: React.ReactNode;
-}
 
 function formatLeaseTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -32,7 +31,7 @@ function tileMeta(card: Card, now: number): React.ReactNode {
 }
 
 /** Every card in the work queue, laid out in one column per status (CONTEXT.md "Board"). */
-export function Board({ viewSwitch }: BoardProps) {
+export function Board() {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,23 +75,15 @@ export function Board({ viewSwitch }: BoardProps) {
   const total = cards?.length ?? 0;
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      <div className="dashboard-bar" style={barStyle}>
-        <div style={{ flex: "0 0 auto", display: "flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-serif)", letterSpacing: "0.3px" }}>
-            hippo
-          </span>
-          <span className="bar-decorative" style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>
-            brain observatory
-          </span>
-        </div>
-        {viewSwitch}
-        <span aria-live="polite" className="bar-live" style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+    <div style={containerStyle}>
+      <h1 className="sr-only">Card board</h1>
+      <div style={barStyle}>
+        <span aria-live="polite" className="bar-live" style={{ color: "var(--text-3)", fontSize: 12, fontFamily: "var(--mono)" }}>
           {cards !== null ? `${total} ${total === 1 ? "card" : "cards"}` : ""}
         </span>
         <div style={{ flex: 1 }} />
         {cards !== null && error !== null && (
-          <span role="alert" style={{ color: "var(--red)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+          <span role="alert" style={{ color: "var(--risk)", fontSize: 12, fontFamily: "var(--mono)" }}>
             {error}
           </span>
         )}
@@ -142,8 +133,8 @@ export function Board({ viewSwitch }: BoardProps) {
                           onClick={() => setSelectedId(card.id)}
                           style={{
                             ...tileStyle,
-                            background: card.id === selectedId ? "rgba(196, 92, 60, 0.10)" : "transparent",
-                            borderColor: card.id === selectedId ? "var(--accent)" : "var(--glass-border)",
+                            background: card.id === selectedId ? "var(--accent-weak)" : "transparent",
+                            borderColor: card.id === selectedId ? "var(--accent)" : "var(--line)",
                           }}
                         >
                           <div style={tileTitleStyle}>{card.title}</div>
@@ -166,23 +157,25 @@ export function Board({ viewSwitch }: BoardProps) {
   );
 }
 
+const containerStyle: React.CSSProperties = {
+  width: "100%", height: "100%", position: "relative", display: "flex", flexDirection: "column",
+};
+
 const barStyle: React.CSSProperties = {
-  position: "absolute", top: 0, left: 0, right: 0, height: 48, zIndex: 20,
-  background: "var(--glass-bg)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-  borderBottom: "1px solid var(--glass-border)",
+  height: BOARD_TOOLBAR_H, flex: "0 0 auto",
+  background: "var(--surface)",
+  borderBottom: "1px solid var(--line)",
+  padding: "0 16px", gap: 12,
   display: "flex", alignItems: "center",
-  pointerEvents: "auto",
 };
 
 const frameStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 48 + 24,
-  left: 24,
-  right: 24,
-  bottom: 24,
-  border: "1px solid var(--border)",
+  flex: 1,
+  minHeight: 0,
+  margin: 16,
+  border: "1px solid var(--line-2)",
   borderRadius: 2,
-  background: "var(--map-bg)",
+  background: "var(--surface)",
   display: "flex",
   gap: 12,
   padding: 16,
@@ -190,14 +183,14 @@ const frameStyle: React.CSSProperties = {
 };
 
 const refreshButtonStyle: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  letterSpacing: "0.8px",
+  fontFamily: "var(--mono)",
+  fontSize: 12,
   textTransform: "uppercase",
   background: "transparent",
-  border: "1px solid var(--glass-border)",
-  color: "var(--dim)",
+  border: "1px solid var(--line)",
+  color: "var(--text-3)",
   padding: "5px 12px",
+  minHeight: 44,
   borderRadius: 4,
   cursor: "pointer",
   transition: "color 150ms ease, border-color 150ms ease, background 150ms ease",
@@ -213,54 +206,52 @@ const frameCenterStyle: React.CSSProperties = {
 };
 
 const loadingTextStyle: React.CSSProperties = {
-  color: "var(--dim)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
+  color: "var(--text-3)",
+  fontFamily: "var(--mono)",
+  fontSize: 12,
   letterSpacing: "2px",
 };
 
 const errorTextStyle: React.CSSProperties = {
-  color: "var(--red)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
+  color: "var(--risk)",
+  fontFamily: "var(--mono)",
+  fontSize: 12,
   marginBottom: 8,
 };
 
 const emptyTextStyle: React.CSSProperties = {
-  color: "var(--dim)",
+  color: "var(--text-3)",
   fontSize: 12,
-  fontFamily: "var(--font-mono)",
+  fontFamily: "var(--mono)",
   marginBottom: 8,
 };
 
 const hintTextStyle: React.CSSProperties = {
-  color: "var(--text-faint)",
-  fontSize: 10,
-  fontFamily: "var(--font-mono)",
+  color: "var(--text-3)",
+  fontSize: 12,
+  fontFamily: "var(--mono)",
 };
 
 const columnStyle: React.CSSProperties = {
-  flex: "1 0 160px",
+  flex: "1 0 180px",
   minWidth: 0,
   display: "flex",
   flexDirection: "column",
 };
 
 const columnTitleStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontVariant: "small-caps",
-  letterSpacing: "1px",
+  fontSize: 12,
   fontWeight: 400,
   color: "var(--text)",
   marginBottom: 4,
   paddingBottom: 6,
-  borderBottom: "1px solid var(--glass-border)",
+  borderBottom: "1px solid var(--line)",
 };
 
 const columnCountStyle: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  color: "var(--dim)",
+  fontFamily: "var(--mono)",
+  fontSize: 12,
+  color: "var(--text-3)",
 };
 
 const columnListStyle: React.CSSProperties = {
@@ -274,17 +265,17 @@ const columnListStyle: React.CSSProperties = {
 };
 
 const noneStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: "var(--text-faint)",
+  fontSize: 12,
+  color: "var(--text-3)",
   fontStyle: "italic",
-  fontFamily: "var(--font-serif)",
+  fontFamily: "var(--sans)",
 };
 
 const tileStyle: React.CSSProperties = {
   display: "block",
   padding: "8px 10px",
   background: "transparent",
-  border: "1px solid var(--glass-border)",
+  border: "1px solid var(--line)",
   borderRadius: 3,
   cursor: "pointer",
   transition: "background 150ms ease",
@@ -293,25 +284,25 @@ const tileStyle: React.CSSProperties = {
 };
 
 const tileTitleStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 13,
   lineHeight: 1.5,
   color: "var(--text)",
-  fontFamily: "var(--font-serif)",
+  fontFamily: "var(--sans)",
   marginBottom: 4,
 };
 
 const tileIdStyle: React.CSSProperties = {
   marginBottom: 4,
-  color: "var(--dim)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
+  color: "var(--text-3)",
+  fontFamily: "var(--mono)",
+  fontSize: 12,
   wordBreak: "break-word",
 };
 
 const tileMetaStyle: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  color: "var(--dim)",
+  fontFamily: "var(--mono)",
+  fontSize: 12,
+  color: "var(--text-3)",
 };
 
 const expiredDotStyle: React.CSSProperties = {
@@ -320,6 +311,6 @@ const expiredDotStyle: React.CSSProperties = {
   height: 8,
   borderRadius: "50%",
   background: "var(--accent)",
-  boxShadow: "0 0 8px var(--accent-focus)",
+  boxShadow: "0 0 0 3px var(--accent-weak)",
   verticalAlign: "middle",
 };

@@ -12,7 +12,8 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
 } from '../src/memory.js';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { getContext, recall, type Context } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 

@@ -11,12 +11,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { applyGoalStackBoost, pushGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { MemoryEntry } from '../src/memory.js';
-import type { RerankStep } from '../src/search.js';
+import type { RerankStep } from '../src/search/types.js';
 
 describe('A7 applyGoalStackBoost trace parity (side-channel)', () => {
   let hippoRoot: string;
@@ -29,7 +30,7 @@ describe('A7 applyGoalStackBoost trace parity (side-channel)', () => {
   });
 
   function seed(content: string, tags: string[]): MemoryEntry {
-    const entry = createMemory(content, { tags, tenantId });
+    const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags, tenantId });
     writeEntry(hippoRoot, entry);
     return entry;
   }

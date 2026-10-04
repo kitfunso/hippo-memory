@@ -23,15 +23,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import {
-  initStore,
-  deleteEntry,
-  writeEntry,
-} from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   saveProcess,
@@ -44,13 +40,7 @@ import {
   MAX_PROCESS_STEPS,
   MAX_PROCESS_STEP_LEN,
 } from '../src/processes.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -99,7 +89,7 @@ describe('processes store (E2 first-class object)', () => {
       expect(memRow!.content).toContain('Description: the npm release ritual');
       expect(memRow!.source).toBe('process');
       // SAFETY: tags_json is always written as a JSON array of strings (see
-      // src/store.ts writeEntry serialization); never any other JSON shape.
+      // src/store/entry-writes.ts writeEntry serialization); never any other JSON shape.
       expect((JSON.parse(memRow!.tags_json) as string[])).toContain('process');
 
       // SAFETY: metadata_json for a process_create audit row is always a JSON
@@ -280,8 +270,8 @@ describe('processes store (E2 first-class object)', () => {
     const v1 = saveProcess(home, 'default', { processName: 'Durable', steps: ['a'] });
     const v2 = saveProcess(home, 'default', { processName: 'Durable', steps: ['a', 'b'], supersedesProcessId: v1.id });
     // Forget both versions' memory mirrors; the canonical rows must survive.
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     const reV1 = loadProcessById(home, 'default', v1.id);
     const reV2 = loadProcessById(home, 'default', v2.id);
     expect(reV1).not.toBeNull();
@@ -323,9 +313,7 @@ describe('processes store (E2 first-class object)', () => {
   });
 
   it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', () => {
-    // @ts-expect-error — runtime validation test
     expect(() => validateProcessSteps('not an array')).toThrow(/must be an array/);
-    // @ts-expect-error — runtime validation test
     expect(() => validateProcessSteps([1, 2])).toThrow(/not a string/);
     expect(() => validateProcessSteps(['ok', '   '])).toThrow(/is empty/);
     expect(() => validateProcessSteps(Array(MAX_PROCESS_STEPS + 1).fill('x'))).toThrow(/step cap/);

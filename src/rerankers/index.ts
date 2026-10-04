@@ -1,9 +1,12 @@
+import { clefFlashReranker, clefReranker } from './clef.js';
 import { crossEncoderReranker } from './cross-encoder.js';
 import { jevReranker } from './jev.js';
 import { llmReranker } from './llm.js';
 import type { RerankerFn } from './types.js';
 
 const REGISTRY = {
+  clef: clefReranker,
+  'clef-flash': clefFlashReranker,
   'cross-encoder': crossEncoderReranker,
   jev: jevReranker,
   llm: llmReranker,

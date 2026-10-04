@@ -9,12 +9,15 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
-import { isInitialized } from './store.js';
+import { isInitialized } from './store/open.js';
+import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
-import { isEmbeddingAvailable } from './embeddings.js';
-import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks.js';
+import { isEmbeddingAvailable } from './local-embedding.js';
+import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
 import type { JsonValue } from './working-memory.js';
+import { planProjectRepair } from './project-merge.js';
+import { resolveTenantId } from './tenant.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -66,6 +69,7 @@ function readJson(file: string): JsonValue | null {
     // SAFETY: JSON.parse returns a JSON value by definition.
     return JSON.parse(fs.readFileSync(file, 'utf8')) as JsonValue;
   } catch {
+    // A missing or corrupt file is the finding doctor reports, so null is the answer.
     return null;
   }
 }
@@ -163,6 +167,27 @@ function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
+/** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
+function projectsCheck(globalRoot: string): DoctorCheck {
+  let db: DatabaseSyncLike | null = null;
+  try {
+    db = openHippoDbReadOnly(globalRoot);
+    const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
+    const found = [
+      r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
+      r.folds.length > 0 ? `${r.folds.length} old project names that now resolve to another project` : '',
+      r.toProject.length + r.setAside.length > 0 ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global` : '',
+    ].filter((s) => s !== '');
+    return found.length === 0
+      ? { id: 'projects', status: 'pass', detail: 'no duplicate or out-of-date project tags in the global store' }
+      : { id: 'projects', status: 'warn', detail: `global store: ${found.join('; ')}`, fix: 'hippo projects repair --global   (dry run; add --apply to write)' };
+  } catch (err) {
+    return { id: 'projects', status: 'info', detail: `project tags not checked (${err instanceof Error ? err.message : String(err)})` };
+  } finally {
+    if (db !== null) closeHippoDb(db);
+  }
+}
+
 /** Run every check. Never throws for a broken install; broken parts become failed checks. */
 export function runDoctor(opts: DoctorOpts): DoctorReport {
   const cwd = opts.cwd ?? process.cwd();
@@ -242,6 +267,12 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
       if (db !== null) closeHippoDb(db);
     }
   }
+
+  const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
+  if (holdoutRateBp > 0) {
+    checks.push({ id: 'pilot', status: 'info', detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo (pilot.holdoutRateBp=${holdoutRateBp})` });
+  }
+  if (hasGlobal) checks.push(projectsCheck(globalRoot));
 
   const claudeDir = path.join(home, '.claude');
   if (fs.existsSync(claudeDir)) {

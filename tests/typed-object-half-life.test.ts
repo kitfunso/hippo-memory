@@ -4,7 +4,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, readEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import type { HippoConfig } from '../src/config.js';
 import { deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { saveDecision } from '../src/decisions.js';
@@ -14,7 +15,7 @@ import { savePolicy } from '../src/policies.js';
 import { saveSkill } from '../src/skills.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
-import { savePrediction } from '../src/predictions.js';
+import { savePrediction } from '../src/predictions/store.js';
 
 const dirs: string[] = [];
 afterEach(() => {

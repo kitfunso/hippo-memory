@@ -1,0 +1,264 @@
+import { MemoryEntry, Layer, calculateStrength, createMemory } from '../memory.js';
+import { tokenize } from '../tokenize.js';
+import { jaccardMinShared, overlapPartners } from '../overlap-index.js';
+import { compareEntryIdentity } from '../compare.js';
+import { duplicateKey, mergedText } from '../same-text.js';
+import { successorAfterRetirement } from '../merged-row.js';
+import { rejectionDigest, findRejectedValue } from '../rejection.js';
+import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
+import { derivationScope, derivationPartitionKey } from '../recall-scope.js';
+import { jaccardSets } from './conflicts.js';
+import { keptAsWritten, type SleepRun } from './run.js';
+
+const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
+const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
+const MERGE_MAX_SOURCES = 5;            // with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context budget
+const MERGE_MAX_CHARS = 2000;           // total source text; sources past either cap stay unmerged and keep their half-life
+// Half-life scale for merged source episodics. Demotion must go through
+// half_life_days: calculateStrength() recomputes live strength from
+// last_retrieved/half_life and never reads the stored strength field, so a
+// stored-strength write is inert for ranking and gets overwritten by the
+// next sleep's decay pass anyway.
+const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
+
+export function retireHeldTexts(run: SleepRun): void {
+  const { survivors } = run;
+  const byId = new Map(run.all.map((e) => [e.id, e]));
+  const rejectedIn = (tenantId: string) => (text: string): boolean => {
+    const db = run.getConsolidateDb();
+    return db !== null && findRejectedValue(db, tenantId, rejectionDigest(text)) !== null;
+  };
+  for (let i = survivors.length - 1; i >= 0; i--) {
+    const row = survivors[i];
+    const successor = run.retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenantId)) : undefined;
+    if (successor === undefined) continue;
+    run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
+    if (run.dryRun) continue;
+    run.pendingDeletes.push(row.id);
+    if (successor) {
+      run.pendingWrites.push(successor);
+      survivors[i] = successor;
+    } else {
+      survivors.splice(i, 1);
+    }
+  }
+}
+
+/** The tenant, scope and origin every row merged out of one partition inherits. */
+interface MergePartition {
+  tenantId: string;
+  scope: ReturnType<typeof derivationScope>;
+  origin: MemoryEntry['origin_project'];
+}
+
+// -------------------------------------------------------------------------
+// 3. Merge pass  - episodic entries only
+// -------------------------------------------------------------------------
+/** Returns how many clusters were skipped because their merged text matches a rejected value. */
+export function mergePass(run: SleepRun): number {
+  const alreadyMergedIds = new Set(run.survivors.flatMap((e) => e.parents));
+  const mergeCandidates = run.survivors.filter(
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
+      && !e.pinned // a pin merged with a look-alike would read as one of two values
+      && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
+  );
+  const used = new Set<string>();
+
+  // T1 fix (2026-08-15 hardening pass): partition by tenantId BEFORE the
+  // overlap loop so a cluster can never span tenants. Previously textOverlap
+  // clustered across the whole host-wide `survivors` list with no tenant
+  // boundary, and mergeContents concatenated cross-tenant content into one
+  // row. Map preserves insertion order, so single-tenant stores (every row
+  // 'default') get exactly one partition and iterate in the same order as
+  // before this fix — byte-identical behavior there.
+  const mergeCandidatesByTenant = new Map<string, MemoryEntry[]>();
+  for (const entry of mergeCandidates) {
+    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
+    const bucket = mergeCandidatesByTenant.get(key);
+    if (bucket) bucket.push(entry);
+    else mergeCandidatesByTenant.set(key, [entry]);
+  }
+
+  // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+  // reuses the single consolidateDb handle opened lazily in consolidate()
+  // for the whole non-dry-run consolidate — see that
+  // declaration's comment. Only needed for real writes — a dry-run preview
+  // never reaches batchWriteAndDelete's guard bypass, so there is nothing
+  // here for it to protect against.
+  let mergesSkippedRejected = 0;
+  for (const [, tenantCandidates] of mergeCandidatesByTenant) {
+    const partition: MergePartition = {
+      tenantId: tenantCandidates[0].tenantId,
+      scope: derivationScope(tenantCandidates[0].scope),
+      origin: tenantCandidates[0].origin_project,
+    };
+    const partnersOf = mergePartners(tenantCandidates.map((e) => e.content));
+    for (let i = 0; i < tenantCandidates.length; i++) {
+      if (used.has(tenantCandidates[i].id) || tenantCandidates[i].content.length > MERGE_MAX_CHARS) continue;
+
+      const related: MemoryEntry[] = [tenantCandidates[i]];
+
+      for (const j of partnersOf(i)) {
+        if (!used.has(tenantCandidates[j].id)) related.push(tenantCandidates[j]);
+      }
+
+      const cluster: MemoryEntry[] = [];
+      let clusterChars = 0;
+      for (const e of related) {
+        if (cluster.length === MERGE_MAX_SOURCES || clusterChars + e.content.length > MERGE_MAX_CHARS) continue;
+        cluster.push(e);
+        clusterChars += e.content.length;
+      }
+
+      if (cluster.length < MERGE_MIN_CLUSTER) continue;
+      if (!mergeCluster(run, partition, cluster, related, used)) mergesSkippedRejected++;
+    }
+  }
+  return mergesSkippedRejected;
+}
+
+/** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged text. */
+function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryEntry[], related: MemoryEntry[], used: Set<string>): boolean {
+  const { result, dryRun } = run;
+  // Create a semantic summary
+  const mergedContent = mergeContents(cluster);
+  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
+  const maxValence = pickStrongestValence(cluster);
+
+  // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
+  // and pure — so the tombstone check below runs under the tenant the
+  // row will ACTUALLY land in.
+  // T1 fix: createMemory now receives tenantId: mergeTenant (the
+  // partition's tenant — every member of `cluster` shares it by
+  // construction), so the row lands in its source tenant instead of
+  // always 'default'.
+  let semantic: MemoryEntry | null = null;
+  if (!dryRun) {
+    semantic = {
+      ...createMemory(mergedContent, {
+        layer: Layer.Semantic,
+        tags: allTags,
+        emotional_valence: maxValence,
+        schema_fit: 0.7,
+        source: 'consolidation',
+        confidence: 'inferred',
+        tenantId: partition.tenantId,
+        scope: partition.scope,
+        baseHalfLifeDays: run.config.defaultHalfLifeDays,
+      }),
+      origin_project: partition.origin,
+      parents: cluster.map((e) => e.id),
+    };
+  }
+
+  if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
+
+  // Mark cluster members as used
+  for (const e of cluster) used.add(e.id);
+  result.merged += cluster.length;
+
+  result.details.push(
+    `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+  );
+
+  if (!dryRun && semantic) {
+    run.pendingWrites.push(semantic);
+    result.semanticCreated++;
+
+    // Demote source episodics (they've been compressed into neocortex):
+    // scale half_life_days so they decay sooner while staying recoverable.
+    // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
+    // slice-1 eval measured that dropping children below a worse-retrieving
+    // summary regresses budget-bounded QA (docs/evals/). The stored
+    // strength is refreshed to the live value so inspect, replay sampling,
+    // and strength-sorted assembly see the truth instead of a fake 0.3.
+    // Mutate in place (not a copy): `cluster` holds the same object
+    // references as `survivors`, and the later detectConflicts(survivors)
+    // pass in this same run must see the post-demotion half-life, or it
+    // can persist conflicts for entries the just-written state excludes.
+    for (const e of cluster) {
+      e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+      e.strength = calculateStrength(e, run.now, run.decayOpts);
+      run.pendingWrites.push(e);
+    }
+  }
+  return true;
+}
+
+// mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)
+// — if a human rejected exactly this byte-identical rollup before, an
+// unguarded sleep would regenerate it every cycle and
+// batchWriteAndDelete's guard bypass (store.ts) would silently
+// re-assert it forever. This producer-side check is what makes that
+// bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
+// not demoted, not deleted — so a later sleep gets another chance if
+// the tombstone is lifted.
+function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntry[], related: MemoryEntry[], used: Set<string>): boolean {
+  const consolidateDb = run.getConsolidateDb();
+  if (!consolidateDb) return false;
+  const newDigest = rejectionDigest(semantic.content);
+  const oldDigest = rejectionDigest(legacyMergeContents(related)); // tombstones from older releases hold this format's digest
+  const newHit = findRejectedValue(consolidateDb, semantic.tenantId, newDigest);
+  const tombstone = newHit ?? findRejectedValue(consolidateDb, semantic.tenantId, oldDigest);
+  const mergeDigest = newHit ? newDigest : oldDigest;
+  if (!tombstone) return false;
+  // Still mark used — these members are not re-tried against a
+  // DIFFERENT cluster within this same pass; next sleep re-clusters
+  // them fresh.
+  const rejected = newHit ? cluster : related; // the old format digested the uncapped list, so rows past the cap were rejected too
+  for (const e of rejected) used.add(e.id);
+  try {
+    appendAuditEvent(consolidateDb, {
+      tenantId: semantic.tenantId,
+      actor: 'sleep',
+      op: 'reject_refusal',
+      metadata: {
+        digest: mergeDigest,
+        reason: tombstone.reason,
+        sourceIds: rejected.map((e) => e.id),
+      },
+    });
+  } catch (error) {
+    reportAuditWriteFailure('reject_refusal', String(error));
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function mergeContents(entries: MemoryEntry[]): string {
+  // Each distinct text goes in once and in full (the merge demotes every source), one bullet with its lines indented, so heldTextKeys can read it back.
+  // Newest first says which version is current; compareEntryIdentity settles ties, so the row and its rejection digest depend only on the sources.
+  const sorted = [...entries].sort((a, b) => (Date.parse(b.created) - Date.parse(a.created)) || compareEntryIdentity(a, b));
+  const texts = new Map<string, string>();
+  for (const e of sorted) {
+    if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content);
+  }
+  const header = entries.length === 2 ? '[Consolidated from 2 related memories, newest first]' : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
+  return mergedText(header, [...texts.values()]);
+}
+
+function legacyMergeContents(entries: MemoryEntry[]): string {
+  // The old format dropped text, so it is only ever digested to match rejections recorded against it, never written.
+  const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
+  if (entries.length === 2) return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
+  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
+  return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
+}
+
+function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotional_valence'] {
+  const order = ['critical', 'negative', 'positive', 'neutral'] as const;
+  for (const v of order) {
+    if (entries.some((e) => e.emotional_valence === v)) return v;
+  }
+  return 'neutral';
+}
+
+/** Maps i to each j > i, ascending, whose text overlap with i reaches the merge threshold; every text needs at least one token. */
+export function mergePartners(contents: readonly string[]): (i: number) => number[] {
+  const sets = contents.map((text) => new Set(tokenize(text)));
+  const candidatesOf = overlapPartners(sets, jaccardMinShared(MERGE_OVERLAP_THRESHOLD));
+  return (i) => candidatesOf(i).filter((j) => jaccardSets(sets[i], sets[j]) >= MERGE_OVERLAP_THRESHOLD);
+}

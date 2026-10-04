@@ -37,13 +37,14 @@ function assertFreshBuild(): void {
   }
 }
 
-// Spawn latency alone staggers the workers too far apart to collide, so they
-// spin on a barrier file and the parent releases them all at once.
-function workerScript(hippoRoot: string, barrier: string): string {
+// Spawn latency alone staggers the workers too far apart to collide, so each one
+// reports ready, spins on a barrier file, and the parent releases them all at once.
+function workerScript(hippoRoot: string, barrier: string, ready: string): string {
   return `
-    import { existsSync } from 'node:fs';
+    import { existsSync, writeFileSync } from 'node:fs';
     import { openHippoDb, getSchemaVersion, closeHippoDb } from ${JSON.stringify(DB_URL)};
-    const deadline = Date.now() + 30000;
+    writeFileSync(${JSON.stringify(ready)}, 'ready');
+    const deadline = Date.now() + 60000;
     while (existsSync(${JSON.stringify(barrier)})) {
       if (Date.now() > deadline) { console.log('barrier-timeout'); process.exit(3); }
     }
@@ -54,11 +55,25 @@ function workerScript(hippoRoot: string, barrier: string): string {
   `;
 }
 
+function readyFile(i: number): string {
+  return join(root, `ready-${i}`);
+}
+
+async function waitForReady(count: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const missing = Array.from({ length: count }, (_, i) => i).filter((i) => !existsSync(readyFile(i)));
+    if (missing.length === 0) return;
+    if (Date.now() > deadline) throw new Error(`workers ${missing.join(', ')} never reached the barrier within ${timeoutMs} ms`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 function runWorkers(count: number, barrier: string): Promise<Array<{ code: number | null; stdout: string; stderr: string }>> {
   const children = [];
   for (let i = 0; i < count; i++) {
     const file = join(root, `open-worker-${i}.mjs`);
-    writeFileSync(file, workerScript(root, barrier), 'utf8');
+    writeFileSync(file, workerScript(root, barrier, readyFile(i)), 'utf8');
     children.push(new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
       const child = spawn(process.execPath, [file], { stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
@@ -79,8 +94,11 @@ describe('openHippoDb on a cold store under concurrent processes', () => {
     writeFileSync(barrier, 'x', 'utf8');
 
     const pending = runWorkers(8, barrier);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    rmSync(barrier);
+    try {
+      await waitForReady(8, 60000);
+    } finally {
+      rmSync(barrier, { force: true });
+    }
     const results = await pending;
 
     const failed = results.filter((r) => r.code !== 0);

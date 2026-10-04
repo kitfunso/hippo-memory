@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { adminActor } from '../src/api.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
@@ -49,7 +49,7 @@ describe('ingestMessage empty-body replay status consistency (B3 v1.12.6)', () =
       teamId: 'T01',
       channel,
       // Use a message shape that messageToRememberOpts rejects (empty text + no thread_ts).
-      message: { type: 'message', user: 'U01', ts: '1716553200.000100', text: '' },
+      message: { type: 'message', channel: channel.id, user: 'U01', ts: '1716553200.000100', text: '' },
       eventId: 'Ev_empty_001',
     });
     expect(result.status).toBe('skipped');
@@ -61,7 +61,7 @@ describe('ingestMessage empty-body replay status consistency (B3 v1.12.6)', () =
     const opts = {
       teamId: 'T01',
       channel,
-      message: { type: 'message' as const, user: 'U01', ts: '1716553200.000200', text: '' },
+      message: { type: 'message' as const, channel: channel.id, user: 'U01', ts: '1716553200.000200', text: '' },
       eventId: 'Ev_empty_002',
     };
     const first = ingestMessage(ctx(hippoRoot), opts);
@@ -81,6 +81,7 @@ describe('ingestMessage empty-body replay status consistency (B3 v1.12.6)', () =
       channel,
       message: {
         type: 'message' as const,
+        channel: channel.id,
         user: 'U02',
         ts: '1716553200.000300',
         text: 'a real message that gets ingested',

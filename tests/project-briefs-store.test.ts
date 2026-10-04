@@ -22,12 +22,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
 import {
   saveProjectBrief,
   closeProjectBrief,
@@ -40,13 +40,8 @@ import {
   MAX_BRIEF_SUMMARY_LEN,
   MAX_RECEIPT_HEADLINE_LEN,
 } from '../src/project-briefs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -186,8 +181,8 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
   it('ON DELETE SET NULL: forgetting the memory orphans the brief; old versions loadable', () => {
     const v1 = saveProjectBrief(home, 'default', { repo: 'd', summary: 'a' });
     const v2 = saveProjectBrief(home, 'default', { repo: 'd', summary: 'b', supersedesBriefId: v1.id });
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     expect(loadProjectBriefById(home, 'default', v1.id)!.memoryId).toBeNull();
     expect(loadProjectBriefById(home, 'default', v1.id)!.status).toBe('superseded');
     expect(loadProjectBriefById(home, 'default', v2.id)!.status).toBe('active');
@@ -338,13 +333,16 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     } finally { closeHippoDb(db2); }
   });
 
-  it('refresh stays within the summary cap with many long receipts (codex P2 regression)', () => {
+  it('refresh stays within the summary cap with many long receipts (codex P2 regression)', async () => {
     // 50 receipts (the MAX_BRIEF_RECEIPTS scan cap) with long headlines would build
     // an ~11KB digest if rendered naively, exceeding MAX_BRIEF_SUMMARY_LEN (8192) and
     // making saveProjectBrief reject it. Budget-aware assembly must keep it bounded.
-    for (let i = 0; i < 50; i++) {
-      addReceipt(home, 'default', 'big', `receipt ${i} ` + 'x'.repeat(300));
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 50; i++) {
+        addReceipt(home, 'default', 'big', `receipt ${i} ` + 'x'.repeat(300));
+      }
+    });
     const assembled = assembleBriefFromReceipts(home, 'default', 'big');
     expect(assembled.receiptCount).toBe(50);
     expect(assembled.markdown.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);

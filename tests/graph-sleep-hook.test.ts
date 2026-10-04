@@ -14,7 +14,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, deleteEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveProjectBrief, refreshBrief } from '../src/project-briefs.js';
@@ -23,10 +24,8 @@ import {
   loadEntities,
   loadRelations,
   loadPendingExtractionTenants,
-  markGraphDirty,
-  runGraphRebuildTransaction,
-  insertEntity,
-} from '../src/graph.js';
+} from '../src/graph/read.js';
+import { markGraphDirty, runGraphRebuildTransaction, insertEntity } from '../src/graph/write.js';
 import { extractGraph as realExtractGraph } from '../src/graph-extract.js';
 import {
   sleep,
@@ -211,7 +210,7 @@ describe('E3 sleep enqueue-hook', () => {
     // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
       deduplicateStore: (root) => {
-        deleteEntry(root, d.memoryId!, T);
+        deleteEntry(root, d.memoryId!);
         return { removed: 1, pairs: [] };
       },
     };

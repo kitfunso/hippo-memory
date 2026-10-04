@@ -8,19 +8,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry, loadSessionRawMemories } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadSessionRawMemories } from '../src/store/entry-reads.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): Context {
   return { hippoRoot: root, tenantId, actor: { subject: 'test:assemble', role: 'admin' } };
@@ -28,6 +22,7 @@ function ctxFor(root: string, tenantId: string = 'default'): Context {
 
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',
@@ -36,7 +31,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     source_session_id: sessionId,
     tags: opts.tags ?? [],
     dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id,
+    dag_parent_id: opts.dag_parent_id ?? undefined,
   });
   if (opts.created) e.created = opts.created;
   if (opts.strength !== undefined) e.strength = opts.strength;
@@ -45,6 +40,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
 
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const s = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     confidence: 'inferred',
     dag_level: 2,

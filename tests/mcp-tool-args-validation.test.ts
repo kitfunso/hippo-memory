@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { validateToolArgs, type ToolInputSchema } from '../src/mcp/tool-args.js';
 

@@ -18,15 +18,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import {
-  initStore,
-  deleteEntry,
-  writeEntry,
-} from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   savePrediction,
@@ -35,14 +31,8 @@ import {
   loadPredictionsByClass,
   loadOpenPredictions,
   VALID_CLOSURE_STATES,
-} from '../src/predictions.js';
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+} from '../src/predictions/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -228,7 +218,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
 
     // Forget the backing memory via deleteEntry (one of the 4 deletion paths
     // round-1 CRIT identified)
-    deleteEntry(home, pred.memoryId!, 'default');
+    deleteEntry(home, pred.memoryId!);
 
     // Prediction row still exists, memory_id is now NULL
     const reloaded = loadPredictionById(home, 'default', pred.id);
@@ -276,7 +266,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     expect(VALID_CLOSURE_STATES.has('open')).toBe(true);
     expect(VALID_CLOSURE_STATES.has('closed')).toBe(true);
     expect(VALID_CLOSURE_STATES.has('closed-unknown')).toBe(true);
-    // @ts-expect-error
+    // @ts-expect-error - 'closed-clean' is deliberately outside the closure-state set
     expect(VALID_CLOSURE_STATES.has('closed-clean')).toBe(false);
   });
 

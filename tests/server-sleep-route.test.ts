@@ -18,19 +18,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import type { Context } from '../src/api.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-slp-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createApiKey } from '../src/auth.js';
+import { presentConnectionsAsRemote } from './_helpers/listen.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets POST /v1/sleep under test in this
@@ -46,8 +41,8 @@ describe('POST /v1/sleep', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-slp');
+    globalHome = makeRoot('srv-slp');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -82,7 +77,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('dry_run=true previews dedup/audit and skips share/ambient', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'dry-run-canary' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -106,7 +101,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('runs the full pipeline on a populated store', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 5; i++) {
       remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
     }
@@ -123,7 +118,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('no_share=true keeps shared undefined', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'high-value would-trigger-share' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -151,8 +146,8 @@ describe('POST /v1/sleep', () => {
     // Seed near-duplicate memories under two tenants. Run /v1/sleep (default
     // Bearer). Verify both tenants' rows are visible to dedupe (they share
     // hippoRoot).
-    const tenantA = { hippoRoot: home, tenantId: 'tenant_a', actor: { subject: 'localhost:cli', role: 'admin' } };
-    const tenantB = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantA: Context = { hippoRoot: home, tenantId: 'tenant_a', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantB: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     const dupContent = 'highly similar content x'.repeat(20);
     remember(tenantA, { content: dupContent + ' tenant_a marker' });
     remember(tenantB, { content: dupContent + ' tenant_b marker' });
@@ -171,10 +166,21 @@ describe('POST /v1/sleep', () => {
     // cross-tenant rows, confirming the host-wide design.
   });
 
-  // Note: a non-loopback origin test is conceptually correct but hard to
-  // simulate with vitest+serve(port:0) which always binds 127.0.0.1. The
-  // 3-line per-request guard is exercised on every request — verified by
-  // the loopback-origin tests above passing (a non-loopback origin would
-  // throw 403). Future test: spawn serve with a non-loopback bind via
-  // HIPPO_BIND_ALL (when that env knob exists), assert /v1/sleep -> 403.
+  it('non-loopback origin with a valid admin Bearer: 403 from the per-request guard', async () => {
+    const db = openHippoDb(home);
+    let plaintext: string;
+    try {
+      ({ plaintext } = createApiKey(db, { tenantId: 'default', label: 'remote-sleep', role: 'admin' }));
+    } finally {
+      closeHippoDb(db);
+    }
+    presentConnectionsAsRemote(handle.server!);
+    const res = await fetch(`${handle.url}/v1/sleep`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${plaintext}` },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(403);
+    expect((await jsonAs<{ error: string }>(res)).error).toMatch(/loopback-only/);
+  });
 });

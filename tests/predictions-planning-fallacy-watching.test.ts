@@ -19,24 +19,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
-import {
-  computePlanningFallacyOutput,
-  savePrediction,
-  closePrediction,
-} from '../src/predictions.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { computePlanningFallacyOutput } from '../src/predictions/planning-fallacy.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
 import { recall, type Context } from '../src/api.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -53,12 +44,10 @@ function seedClosedPredictions(root: string, classTag: string, n: number): void 
       classTag,
       estimateValue: 2,
       estimateUnit: 'days',
-      actor: 'cli',
     });
     closePrediction(root, 'default', p.id, {
       closureState: 'closed',
       actualValue: 4,
-      actor: 'cli',
     });
   }
 }

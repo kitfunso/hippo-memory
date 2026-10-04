@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { claudeCodeAdapter, claudeFolderName, claudeMemoryFolderNames } from '../src/agent-memories/claude-code.js';
+import { claudeCodeAdapter, claudeFolderName, claudeMemoryFolderNames, claudeTranscriptListing, transcriptNotesOrigin } from '../src/agent-memories/claude-code.js';
 import type { AdapterContext, Container } from '../src/agent-memories/types.js';
 import type { JsonObject } from '../src/working-memory.js';
 
@@ -232,21 +232,50 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     for (const name of ['../out', 'a/b', 'a b', 'x'.repeat(65), '']) expect(found(name)).toEqual([]);
   });
 
-  it('lists the transcript folder memory without a project root, and once when it repeats a project folder', () => {
-    const home = tmp();
+  it('lists the session folder memory alone', () => {
     const session = path.join(tmp(), 'projects', 'sess');
     writeIn(path.join(session, 'memory'), 'a.md', note('A note the session wrote for itself.'));
-    const alone = claudeCodeAdapter.list(ctxOf(home, { transcriptPath: path.join(session, 't.jsonl') }), 'project');
+    const alone = claudeTranscriptListing(ctxOf(tmp()), path.join(session, 't.jsonl'));
     expect(alone.containers.map((c) => c.path)).toEqual([path.join(session, 'memory')]);
-    expect(claudeCodeAdapter.list(ctxOf(home, { transcriptPath: path.join(session, 't.jsonl') }), 'user').containers).toEqual([]);
-
-    const project = tmp();
-    writeLesson(home, project, 'own.md', 'The project folder holds this note for the session.');
-    const transcriptPath = path.join(path.dirname(memDirOf(configOf(home), project)), 't.jsonl');
-    expect(claudeCodeAdapter.list(ctxOf(home, { projectRoot: project, transcriptPath }), 'project').containers).toHaveLength(1);
   });
 
-  it('lists nothing for a project scope without a project root, name or transcript', () => {
+  it('gives session folder notes the project of the folder Claude filed them for, cwd or a parent', () => {
+    const launch = tmp();
+    const repo = path.join(launch, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    const transcriptOf = (dir: string) => path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
+
+    expect(transcriptNotesOrigin(transcriptOf(launch), repo, { platform: process.platform, env: {} })).toBe('');
+    expect(transcriptNotesOrigin(transcriptOf(repo), path.join(repo, 'src'), { platform: process.platform, env: {} })).toBe('repo');
+    expect(transcriptNotesOrigin(transcriptOf(repo), tmp(), { platform: process.platform, env: {} })).toBeNull();
+    expect(transcriptNotesOrigin(transcriptOf(repo), null, { platform: process.platform, env: {} })).toBeNull();
+  });
+
+  it('reads the start folder from the transcript, which the lossy folder name cannot give back, and decides nothing for a folder gone from disk', () => {
+    const launch = tmp();
+    const [dash, under] = [path.join(launch, 'my-repo'), path.join(launch, 'my_repo')];
+    for (const repo of [dash, under]) fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    const transcript = path.join(tmp(), 'projects', claudeFolder(under), 't.jsonl');
+    writeIn(path.dirname(transcript), 't.jsonl', `{"type":"summary"}\n${JSON.stringify({ type: 'user', cwd: under })}\n`);
+    const gone = path.join(launch, 'gone');
+    const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
+
+    expect(transcriptNotesOrigin(transcript, dash, { platform: process.platform, env: {} })).toBe('my_repo');
+    expect(transcriptNotesOrigin(goneTranscript, path.join(gone, 'src'), { platform: process.platform, env: {} })).toBeNull();
+  });
+
+  it('gives a pinned session folder the project the session started in', () => {
+    const repo = path.join(tmp(), 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    const transcript = path.join(tmp(), 'projects', 'pinned-name', 't.jsonl');
+    writeIn(path.dirname(transcript), 't.jsonl', `${JSON.stringify({ cwd: repo })}\n`);
+    const env = { CLAUDE_CONFIG_DIR: tmp(), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-name' };
+
+    expect(transcriptNotesOrigin(transcript, tmp(), { platform: process.platform, env })).toBe('repo');
+    expect(transcriptNotesOrigin(transcript, tmp(), { platform: process.platform, env: {} })).toBeNull();
+  });
+
+  it('lists nothing for a project scope without a project root or name', () => {
     expect(claudeCodeAdapter.list(ctxOf(tmp()), 'project').containers).toEqual([]);
   });
 });
@@ -324,8 +353,7 @@ describe('claudeCodeAdapter user folder from autoMemoryDirectory', () => {
 
 describe('claudeCodeAdapter items', () => {
   const containerIn = (dir: string): Container => {
-    const transcriptPath = path.join(path.dirname(dir), 't.jsonl');
-    return claudeCodeAdapter.list(ctxOf(tmp(), { transcriptPath }), 'project').containers[0];
+    return claudeTranscriptListing(ctxOf(tmp()), path.join(path.dirname(dir), 't.jsonl')).containers[0];
   };
   const memoryDir = () => path.join(tmp(), 'projects', 'p', 'memory');
 
@@ -386,7 +414,6 @@ describe('claudeCodeAdapter items', () => {
   });
 
   it('lists no container for a missing folder', () => {
-    const transcriptPath = path.join(tmp(), 'projects', 'p', 't.jsonl');
-    expect(claudeCodeAdapter.list(ctxOf(tmp(), { transcriptPath }), 'project')).toMatchObject({ containers: [], warnings: [] });
+    expect(claudeTranscriptListing(ctxOf(tmp()), path.join(tmp(), 'projects', 'p', 't.jsonl'))).toMatchObject({ containers: [], warnings: [] });
   });
 });

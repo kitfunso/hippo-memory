@@ -3,10 +3,10 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { preflight } from '../scripts/token-eval/ab-run.mjs';
-import { abandonedTail, validateCorpus } from './fixtures/z0-contract';
+import { abandonedTail, validateCorpus } from './fixtures/z0-contract.js';
 import {
   cleanup, tmp, isolate, makeRepo, task, teach, apply, plain, lesson, family, spec, run, readRecords, readPlan, find, logLines,
-} from './fixtures/z0-harness';
+} from './fixtures/z0-harness.js';
 
 const b64 = (text: string) => Buffer.from(text, 'utf8').toString('base64');
 const sessions = (log: string) => logLines(log).filter((l) => l.startsWith('session '));

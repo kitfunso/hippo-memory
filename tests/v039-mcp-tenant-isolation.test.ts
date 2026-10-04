@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // v0.39 commit 2 regressions:
 //  - lastRecalledIds keyed per-client so two HTTP-MCP clients on the same
@@ -18,13 +16,6 @@ import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/
 //  - hippo_share passes ctx.tenantId so a Bearer for tenant A cannot share
 //    tenant B's memory to the global store (Fix 2.4)
 //  - hippo_outcome reads with ctx.tenantId (Fix 2.5)
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 
 function callTool(
   reqId: number,

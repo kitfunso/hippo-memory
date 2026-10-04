@@ -1,6 +1,8 @@
+import { envHippoHome, envXdgDataHome } from './env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { log } from './log.js';
 
 /**
  * Project identity resolution for memory scope isolation (ROADMAP.md Part I
@@ -11,7 +13,7 @@ import * as path from 'path';
  *   directory is the project root; if none exists, the nearest ancestor
  *   containing `.git` (directory or worktree file).
  * - The user home directory is NEVER a project, even though it contains the
- *   global store at `~/.hippo`. Reaching home ends the walk.
+ *   global store at `~/.hippo`. Reaching home or the temp root (inside home on Windows) ends the walk.
  * - A directory with no marker anywhere up the walk is NOT a project: it
  *   resolves to the user-global identity (empty name), so memories written
  *   there stay injectable everywhere (matches pre-isolation behavior).
@@ -24,7 +26,7 @@ import * as path from 'path';
 export interface ProjectIdentity {
   /** Realpath-resolved root directory of the project (the start dir when not in a project). */
   root: string;
-  /** Lowercased basename of the project root; empty string when not in a project. */
+  /** Lowercased basename of the project root, or of its repo for a linked worktree with no `.hippo` (a store keeps the name its rows carry); '' outside a project. */
   name: string;
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
@@ -56,7 +58,8 @@ export function clearProjectIdentityCache(): void {
 export function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);
-  } catch {
+  } catch (err) {
+    log.debug(`project identity: realpath fell back to resolve for ${p}: ${err instanceof Error ? err.message : String(err)}`);
     return path.resolve(p);
   }
 }
@@ -84,7 +87,8 @@ function isUnder(child: string, parent: string): boolean {
 function isDirectoryAt(p: string): boolean {
   try {
     return fs.statSync(p).isDirectory();
-  } catch {
+  } catch (err) {
+    log.debug(`project identity: no marker at ${p}: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -105,15 +109,17 @@ export function resolveProjectIdentity(
   }
 
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
-  const stopDir = opts?.stopDir ? realpathOrResolve(opts.stopDir) : null;
+  const stops = [realpathOrResolve(os.tmpdir())];
+  if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
   const start = realpathOrResolve(startInput);
 
-  const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(start, home, stopDir === null ? [] : [stopDir]);
+  const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(start, home, stops);
 
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
-    identity = { root, name: path.basename(root).toLowerCase(), isHome: false };
+    const name = (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
+    identity = { root, name, isHome: false };
   } else if (reachedHome || isUnder(start, home)) {
     identity = { root: home, name: '', isHome: true };
   } else {
@@ -124,6 +130,25 @@ export function resolveProjectIdentity(
 
   if (cacheable) identityCache.set(startInput, identity);
   return identity;
+}
+
+/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for a bare repo), so one repo is one project; null for any other checkout. */
+function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
+  const marker = path.join(gitRoot, '.git');
+  if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
+  try {
+    const gitDir = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(marker, 'utf8'))?.[1]?.trim();
+    if (!gitDir) return null;
+    const linkDir = path.resolve(gitRoot, gitDir);
+    const commondir = path.join(linkDir, 'commondir');
+    if (!fs.existsSync(commondir)) return null; // a submodule's or a separate git dir's own checkout
+    const common = realpathOrResolve(path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()));
+    const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
+    if (samePath(repo, home)) return null; // a dotfiles repo at home must not make its worktrees user-global
+    return path.basename(repo).replace(/\.git$/i, '').toLowerCase() || null;
+  } catch {
+    return null; // an unreadable link is still a checkout, named after its own folder
+  }
 }
 
 interface MarkerWalk {
@@ -194,9 +219,9 @@ export function classifyOriginProject(
  * shared.getGlobalRoot delegates to this.
  */
 export function resolveGlobalRootDir(): string {
-  const hippoHome = process.env.HIPPO_HOME?.trim();
+  const hippoHome = envHippoHome();
   if (hippoHome) return hippoHome;
-  const xdgData = process.env.XDG_DATA_HOME?.trim();
+  const xdgData = envXdgDataHome();
   if (xdgData) return path.join(xdgData, 'hippo');
   return path.join(os.homedir(), '.hippo');
 }

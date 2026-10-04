@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
-import { initStore, writeEntry, readEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -21,6 +23,7 @@ describe('decision memory', () => {
 
   it('creates a decision memory on the default half-life', () => {
     const mem = createMemory('Use PostgreSQL over MySQL for JSONB support', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision', 'database'],
       layer: Layer.Semantic,
       confidence: 'verified',
@@ -39,6 +42,7 @@ describe('decision memory', () => {
 
   it('decision can be superseded by halving half-life', () => {
     const mem = createMemory('Use REST for all public APIs', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision', 'api'],
       layer: Layer.Semantic,
       confidence: 'verified',

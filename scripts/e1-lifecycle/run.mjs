@@ -50,8 +50,12 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, applyOutcome } from '../../dist/memory.js';
-import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
-import { hybridSearch, outcomeMultiplier } from '../../dist/search.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
+import { loadAllEntries } from '../../dist/store/entry-reads.js';
+import { withSharedStoreHandles } from '../../dist/db.js';
+import { hybridSearch } from '../../dist/search/hybrid.js';
+import { outcomeMultiplier } from '../../dist/search/boosts.js';
 import { markRetrieved } from '../../dist/memory.js';
 import { isRecallBoostAblated, _resetAblationCacheForTests } from '../../dist/ablation.js';
 import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
@@ -235,49 +239,52 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
       outcomesBySession.get(o.session).push(o);
     }
 
-    for (const session of protocol.sessions) {
-      setSimulatedNow(session.date); // mutators stamp simulated time
+    // One connection for the whole arm: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(async () => {
+      for (const session of protocol.sessions) {
+        setSimulatedNow(session.date); // mutators stamp simulated time
 
-      // 1. Ingest this session's memories (created/last_retrieved = fake now).
-      //    Entry ids are DERIVED from (seed, protocol id), not random UUIDs:
-      //    the protocol intentionally creates score TIES (identical-form
-      //    negatives), and same-timestamp rows order by id - random ids would
-      //    make identical (arm, seed) runs produce different top-5 metrics
-      //    (codex P1). sha256 prefix keeps the mem_<12 hex> format.
-      for (const m of bySession.get(session.index) ?? []) {
-        const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
-        entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
-        writeEntry(hippoRoot, entry);
-        idMap.set(m.id, entry.id);
-      }
-
-      // 2. Scheduled mutating retrievals - CLI-parity block: hybridSearch ->
-      //    markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
-      const entriesNow = () => loadAllEntries(hippoRoot);
-      for (const r of retrievalsBySession.get(session.index) ?? []) {
-        const entries = entriesNow();
-        const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
-        const topEntries = results.slice(0, PROBE_TOP_K).map((x) => x.entry);
-        const updated = markRetrieved(topEntries); // default now = evalNow() (fake)
-        if (!isRecallBoostAblated()) {
-          for (const u of updated) writeEntry(hippoRoot, u);
+        // 1. Ingest this session's memories (created/last_retrieved = fake now).
+        //    Entry ids are DERIVED from (seed, protocol id), not random UUIDs:
+        //    the protocol intentionally creates score TIES (identical-form
+        //    negatives), and same-timestamp rows order by id - random ids would
+        //    make identical (arm, seed) runs produce different top-5 metrics
+        //    (codex P1). sha256 prefix keeps the mem_<12 hex> format.
+        for (const m of bySession.get(session.index) ?? []) {
+          const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
+          entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
+          writeEntry(hippoRoot, entry);
+          idMap.set(m.id, entry.id);
         }
-      }
 
-      // 3. Scheduled outcomes on EXPLICIT ids (never last_retrieval_ids).
-      for (const o of outcomesBySession.get(session.index) ?? []) {
-        const hippoId = idMap.get(o.memoryRef);
-        if (!hippoId) throw new Error(`outcome before ingestion: ${o.memoryRef} at session ${session.index}`);
-        const entry = loadAllEntries(hippoRoot).find((e) => e.id === hippoId);
-        if (!entry) throw new Error(`outcome target missing from store: ${hippoId}`);
-        const updated = applyOutcome(entry, o.good);
-        writeEntry(hippoRoot, updated);
-      }
+        // 2. Scheduled mutating retrievals - CLI-parity block: hybridSearch ->
+        //    markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
+        const entriesNow = () => loadAllEntries(hippoRoot);
+        for (const r of retrievalsBySession.get(session.index) ?? []) {
+          const entries = entriesNow();
+          const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
+          const topEntries = results.slice(0, PROBE_TOP_K).map((x) => x.entry);
+          const updated = markRetrieved(topEntries); // default now = evalNow() (fake)
+          if (!isRecallBoostAblated()) {
+            for (const u of updated) writeEntry(hippoRoot, u);
+          }
+        }
 
-      // 4. READ-ONLY probes (explicit now; no markRetrieved; no writes).
-      const entries = loadAllEntries(hippoRoot);
-      epochs.push(await probeEpoch(protocol, entries, session.index, session.date, arm));
-    }
+        // 3. Scheduled outcomes on EXPLICIT ids (never last_retrieval_ids).
+        for (const o of outcomesBySession.get(session.index) ?? []) {
+          const hippoId = idMap.get(o.memoryRef);
+          if (!hippoId) throw new Error(`outcome before ingestion: ${o.memoryRef} at session ${session.index}`);
+          const entry = loadAllEntries(hippoRoot).find((e) => e.id === hippoId);
+          if (!entry) throw new Error(`outcome target missing from store: ${hippoId}`);
+          const updated = applyOutcome(entry, o.good);
+          writeEntry(hippoRoot, updated);
+        }
+
+        // 4. READ-ONLY probes (explicit now; no markRetrieved; no writes).
+        const entries = loadAllEntries(hippoRoot);
+        epochs.push(await probeEpoch(protocol, entries, session.index, session.date, arm));
+      }
+    });
     // Only the final epoch is judged, so only it keeps per-probe rows (compare.mjs hierarchical CI).
     for (const e of epochs.slice(0, -1)) delete e.probes;
 

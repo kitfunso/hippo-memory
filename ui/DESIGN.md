@@ -1,121 +1,78 @@
-# Hippo Brain Observatory — Design System
+# Hippo dashboard design system
 
 ## Identity
 
-A developer tool that feels like peering into a living brain. The biological metaphor is the product, not decoration. Every visual choice reinforces organic, neural, alive.
+A calm instrument for reading memory health. Light surfaces, one blue accent, one orange for risk, IBM Plex type. The mockup `designs/dashboard-revamp-20261003/B-ledger-2d.html` is the visual spec; `ui/src/tokens.css` and `ui/src/views/Health/health.css` are its port.
 
-## Color Palette
+## Words
 
-### Backgrounds
-- `--bg: #0a0c10` — deep void (darker than generic #0f1117)
-- `--surface: #14161e` — glass panels
-- `--border: rgba(255, 255, 255, 0.06)` — subtle separation
+Health view (never "Ledger"), Global, Unassigned, at-risk memory, origin project, Board, card.
 
-### Text
-- `--text: #e1e4ed` — primary
-- `--muted: #6b7084` — secondary (slightly darker than default for more contrast)
+## Tokens
 
-### Accent
-- `--accent: #7c5cff` — violet (neural, distinctive, not corporate blue)
+All tokens live in `ui/src/tokens.css` at `:root`. A test (T10) fails when any custom property used under `ui/src` has no definition.
 
-### Layer Colors
-- Buffer: `#7c5cff` (violet — active, working memory)
-- Episodic: `#f0a030` (warm amber — time-bound)
-- Semantic: `#34d399` (emerald — stable knowledge)
+| Token | Value | Use |
+| --- | --- | --- |
+| `--bg` | `#f3f5f8` | page background |
+| `--surface` | `#fff` | cards, header, panels |
+| `--line` | `#e1e5eb` | hairlines, card borders |
+| `--line-2` | `#cbd2db` | stronger borders, frames |
+| `--text` | `#111827` | primary text |
+| `--text-2` | `#3f4856` | secondary text |
+| `--text-3` | `#5b6574` | labels, hints (4.5:1 on `--bg`) |
+| `--accent` | `#2f6fed` | focus, selection, primary action |
+| `--accent-ink` | `#1f55c9` | accent text on light fills |
+| `--accent-weak` | `#eaf1fe` | selected row, chip fill |
+| `--risk` | `#b5451b` | at-risk text and errors |
+| `--risk-weak` | `#fff1e8` | at-risk fill |
+| `--sans` | IBM Plex Sans | body and UI |
+| `--mono` | IBM Plex Mono | ids, numbers, code |
 
-### Semantic
-- `--green: #34d399`
-- `--yellow: #f0a030`
-- `--red: #f87171`
-- `--purple: #a78bfa`
+### Old to new
 
-## Typography
+The dark "brain observatory" tokens are gone. Nothing aliases them.
 
-### Fonts
-- **Display/Header**: `'JetBrains Mono', 'Fira Code', monospace` — signals "developer tool"
-- **Body**: `-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`
-- **Data/Stats**: Same monospace as header
+| Old | New |
+| --- | --- |
+| `--glass-bg`, `--glass-bg-strong`, `--map-bg` | `--surface` |
+| `--glass-border`, `--border` | `--line` (frames: `--line-2`) |
+| `--dim`, `--text-faint`, `--ink-faint` (as text) | `--text-3` |
+| `--ink-faint` (as fill) | `--bg` |
+| `--text` | `--text` (value changed) |
+| `--accent` | `--accent` (violet to blue) |
+| `--accent-focus` | `--accent-weak` |
+| `--red` | `--risk` |
+| `--font-serif`, `--font-body` | `--sans` |
+| `--font-mono` | `--mono` |
 
-### Scale
-- Title: 15px, weight 600, monospace, letter-spacing 0.5px
-- Subtitle: 11px, weight 400, monospace
-- Body: 13px, system
-- Small: 11px, system
-- Tiny: 10px, system
+## Type
 
-## Spacing
+Fonts are bundled from `@fontsource/ibm-plex-sans` and `@fontsource/ibm-plex-mono` (latin 400, 500, 600) and imported in `main.tsx`; the page makes no request to a font host. Numbers use tabular figures. The smallest text is 12px.
 
-4px base unit: 4, 8, 12, 16, 20, 24, 32, 40
+## Colour in the treemap
 
-## Radius
-- Inputs: 6px
-- Tooltips/cards: 8px
-- Panels: 12px
+Cells are the strength bands of a project: pinned, strong, fading, at risk. The wire carries counts per band, not each memory's strength, so a band has a fixed tint. Colours and names are in `views/Health/canvas/riskColor.ts`. At-risk share uses a sequential ramp, never red against green, and the legend names every step.
 
-## Glass Effect
+## Layout
 
-Used for header bar, tooltips, detail panel:
-```css
-background: rgba(10, 12, 16, 0.82);
-backdrop-filter: blur(16px);
--webkit-backdrop-filter: blur(16px);
-border: 1px solid rgba(255, 255, 255, 0.06);
-```
+- Header 64px: crumbs, search, range, view switch, Updated label, Refresh. Phone width (`max-width: 760px`) wraps it into two rows.
+- Health overview: KPI strip, then a map card (Map or Table) with a rail beside it. Below 1240px the rail narrows to 232px; at phone width it drops under the map.
+- Board: a 44px toolbar, then one column per status. A card opens a side panel; on phones it is a modal bottom sheet.
+- `main` holds one view at a time. Its first child is the `h1` (screen-reader only on the overview).
 
-## Particle Rendering
+## Interaction
 
-### Three-layer structure (per particle)
-1. **Outer halo**: radialGradient, radius × 4, layer color at 15% opacity → transparent
-2. **Body**: filled circle at layer color, opacity = 0.2 + strength × 0.8
-3. **Inner core**: filled circle at radius × 0.35, white at 40% opacity (gives 3D presence)
-4. **Rim highlight**: 1px arc on top-left quadrant (-0.8π to -0.2π), white at 15% opacity
-
-### Neural mesh
-- Faint lines between particles within 120px distance
-- Color: `rgba(255, 255, 255, 0.03)`
-- Line width: 0.5px
-- Skip if > 500 particles (performance)
-
-### Canvas atmosphere
-- Radial gradient background: center `#0d0f15`, edge `#080a0e`
-- Dot grid: `rgba(255, 255, 255, 0.025)` dots, 1px radius, 50px spacing
-- Film grain: randomized 1px dots at `rgba(255, 255, 255, 0.012)`, refreshed every 3 frames
-
-### Zone labels
-- Layer names rendered at their y-position zones
-- Font: 11px monospace, `rgba(255, 255, 255, 0.05)`
-- Letter-spacing: 4px, uppercase
-
-## Interaction States
-
-### Particle hover
-- Radius grows to 1.3× over 150ms
-- Outer halo brightens to 25% opacity
-- Cursor changes from crosshair to pointer
-
-### Particle selected
-- White ring at radius + 3, pulsing
-- Detail panel slides in from right (200ms ease-out)
-
-### Search dimmed
-- Non-matching particles: opacity × 0.08
-- Matching particles: slight glow boost
-- Zero results: "No matches" pill appears below search bar
-
-### First-visit nudge
-- One particle near center pulses brighter for 3 seconds
-- Small label "hover to explore" fades in/out
-- Only shown on first canvas render, not on subsequent data refreshes
-
-## Responsive
-
-- Detail panel: `width: min(340px, 45vw)`
-- Below 640px viewport: panel becomes bottom sheet (full width, max 50vh)
-- Glass header: always full width, height 52px
+- Hash routes: `#/`, `#/p/<key>`, `#/p/<key>/m/<id>`, `#/board`.
+- One Refresh per view, none on the Board header. It rebuilds the snapshot once; other panels follow the new `snapshotId`.
+- The tab refetches the overview when it becomes visible and the data is over 30 s old.
+- Search waits 200 ms, aborts the previous request and shows "Searching" until the answer for the typed query arrives.
+- Treemap touch: `touch-action: pan-y`, pinch to zoom, taps ignored for 350 ms after a pinch, first tap shows a closable tip, second tap opens.
+- Reduced motion turns every tween and transition off.
 
 ## Accessibility
 
-- Detail panel: `role="dialog"`, `aria-label="Memory details"`, `aria-live="polite"`
-- Escape key closes detail panel
-- Tab key cycles through particles (via hidden button list overlaying canvas)
-- Touch: tap = select (shows detail panel), no long-press needed
+- The treemap has a keyboard twin: the Table toggle shows the same numbers in a grid with `aria-rowcount` and `aria-rowindex`.
+- Every state has text: loading (`role="status"`), error (`role="alert"` with Retry), empty store.
+- Focus ring is a 2px `--accent` outline.
+- Touch targets are 44px on phones.

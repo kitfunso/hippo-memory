@@ -11,7 +11,7 @@
  * (tests/github-provenance-parity.test.ts, tests/slack-provenance-parity.test.ts)
  * cover the wide matrix.
  *
- * cwd routing: src/store.ts:193's getHippoRoot is `path.join(cwd, '.hippo')`
+ * cwd routing: src/store/open.ts's getHippoRoot is `path.join(cwd, '.hippo')`
  * unconditionally. The CLI does NOT honor HIPPO_HOME for the local store,
  * only the global/shared path. So we spawn the CLI with `cwd: root`, not via
  * env var (codex round 1 P0 on docs/plans/2026-05-05-provenance-ci-gate.md).
@@ -21,7 +21,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initStore } from '../dist/store.js';
+import { initStore } from '../dist/store/open.js';
 import { ingestEvent } from '../dist/connectors/github/ingest.js';
 import { ingestMessage } from '../dist/connectors/slack/ingest.js';
 
@@ -30,7 +30,7 @@ const repoRoot = resolve(scriptDir, '..');
 
 // `root` is the cwd we'll launch the CLI from; the actual store data lives
 // inside `root/.hippo` because the CLI's getHippoRoot is `path.join(cwd, '.hippo')`.
-// (src/store.ts:193). Both writers and the CLI read MUST agree.
+// (src/store/open.ts). Both writers and the CLI read MUST agree.
 const root = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'hippo-ci-prov-'));
 const dataDir = join(root, '.hippo');
 mkdirSync(dataDir, { recursive: true });

@@ -23,8 +23,8 @@ import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
@@ -191,6 +191,7 @@ describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', 
     const hippoDir = join(home, '.hippo');
     const sessionId = 'sess-scope-pin';
     const mkRaw = (text: string, scope: string | null) => createMemory(text, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       kind: 'raw',
       tenantId: 'default',
       source_session_id: sessionId,

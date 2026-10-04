@@ -7,14 +7,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { remember } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number {
   // SAFETY: `SELECT COUNT(*) AS c ...` always returns exactly one row with a
@@ -24,20 +22,13 @@ function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number
   ).get(sessionId) as { c: number }).c;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-goal-boost-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 let home: string;
 let handle: ServerHandle;
 const tenantId = 'default';
 const sessionId = 'sess-http-1.7.4';
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-goal-boost');
   remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
     content: 'auth bug fix details',
     tags: ['fix-auth'],

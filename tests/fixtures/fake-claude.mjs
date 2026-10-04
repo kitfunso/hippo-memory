@@ -114,15 +114,17 @@ const lessonState = () => {
 // The run's out dir and root: claude-config sits at <out>/runs/<seq>/<arm>/seed<n>/claude-config.
 const OUT = path.resolve(process.env.CLAUDE_CONFIG_DIR, '..', '..', '..', '..', '..');
 const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.dirname(process.env.CLAUDE_CONFIG_DIR))
-  .replaceAll('{WT}', process.env.FAKE_WT_DIR ?? '').replaceAll('{HOME}', process.env.HOME ?? '');
+  .replaceAll('{WT}', process.env.FAKE_WT_DIR ?? '').replaceAll('{HOME}', process.env.HOME ?? '')
+  // {B64:...} lets a probe emit a canary the prompt, which session 1's transcript holds, never spells out.
+  .replace(/\{B64:([^}]+)\}/g, (_, b64) => Buffer.from(b64, 'base64').toString('utf8'));
 // What the hooks added, as the attachment line Claude Code writes after the prompt (z1-replay.mjs reads the same shape).
 const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'hook_additional_context', content: [injected], hookEvent: 'UserPromptSubmit' } }] : []);
 const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
 
-/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT. */
-function probes() {
+/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
+function probes(text = prompt) {
   const lines = [];
-  for (const m of prompt.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT)$/gm)) {
+  for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT(?:_PRETTY)?)$/gm)) {
     const [kind, ...rest] = m[1].split(':');
     const arg = fill(rest.join(':'));
     if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
@@ -130,7 +132,11 @@ function probes() {
     else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
     else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg }));
     else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));
-    else lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${JSON.stringify({ type: 'user', sessionId: randomUUID(), message: { content: 'old' } })}\n`));
+    else {
+      const old = { type: 'user', uuid: randomUUID(), sessionId: randomUUID(), message: { content: 'old' } };
+      // The pretty form is what `jq .` prints: no single line holds type, uuid and sessionId together.
+      lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${kind === 'ECHO_TRANSCRIPT_PRETTY' ? JSON.stringify(old, null, 2) : JSON.stringify(old)}\n`));
+    }
   }
   return lines;
 }
@@ -144,7 +150,8 @@ function hang(tag) {
     { type: 'user', message: { role: 'user', content: input } },
     said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
   ]);
-  const tick = `const fs=require('fs');const end=Date.now()+20000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  // Outlives any run, so only the runner's tree kill can stop it; a test that finds it alive kills it itself.
+  const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
   fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
   log(`hang ${tag}`);
@@ -210,6 +217,7 @@ function firstSession() {
     toolUse('Bash', { command: 'git status && cat lib.js' }),
     ...commands.map((command) => toolUse('Bash', { command })),
     ...(/\bSUBAGENT\b/.test(prompt) ? [] : probes()),
+    ...(prompt.includes('S1_USAGE') ? [{ type: 'assistant', message: { id: 'm-s1', usage: { input_tokens: 0, output_tokens: 500 } } }] : []),
   ]);
   const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
   if (delegated.length) writeSubagent('agent-a1', delegated);
@@ -257,8 +265,15 @@ function resumeTurn() {
   }
   log(`transcript-bytes ${fs.existsSync(transcript) ? fs.statSync(transcript).size : 0}`);
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
+  // FORK_COPY: a resume under a new id starts its file with a copy of session 1's lines, usage included.
+  if (prompt.includes('FORK_COPY') && sessionId !== resumeId) fs.copyFileSync(path.join(path.dirname(transcript), `${resumeId}.jsonl`), transcript);
   for (const m of prompt.matchAll(/MEMWRITE_ON_RESUME:([^\n]+)/g)) memWrite(m[1].trim());
   cutOff();
+  // RESUME_SUBAGENT_USAGE: the resume bills 1000 output tokens into a subagent file session 1 wrote.
+  if (prompt.includes('RESUME_SUBAGENT_USAGE')) {
+    const usage = { input_tokens: 0, output_tokens: 1000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    fs.appendFileSync(path.join(path.dirname(transcript), sessionId, 'subagents', 'agent-a1.jsonl'), `\n${JSON.stringify({ type: 'assistant', message: { id: 'm-sub-r', usage } })}`);
+  }
   if (/\bHANG_ON_RESUME\b/.test(prompt)) hang('r');
   if (prompt.includes('NO_RESULT_ON_RESUME')) process.exit(0);
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
@@ -268,7 +283,9 @@ function resumeTurn() {
   if (prompt.includes('GC_ON_RESUME')) sh('git gc -q --prune=now');
   // CAPTURE_TEACH: the agent saves the teach message to hippo itself.
   if (prompt.includes('CAPTURE_TEACH')) sh(`hippo remember "${input.replaceAll('"', '')}"`);
-  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` })]);
+  // RESUME_<probe> lines are probes only the resume makes.
+  const later = [...prompt.matchAll(/^RESUME_(\S.*)$/gm)].map((m) => m[1]).join('\n');
+  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` }), ...probes(later)]);
 }
 
 log(`${resumeId ? 'resume' : 'session'} ${sessionId}`);

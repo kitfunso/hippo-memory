@@ -259,7 +259,7 @@ export function runCli(argv, cwd = process.cwd()) {
   return { code: 0, stdout: renderText(report), stderr: '' };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { code, stdout, stderr } = runCli(process.argv.slice(2));
   process.stdout.write(stdout);
   process.stderr.write(stderr);

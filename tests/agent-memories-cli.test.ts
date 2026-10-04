@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { deriveOriginProject } from '../src/project-identity.js';
-import { isInitialized, loadAllEntries } from '../src/store.js';
+import { isInitialized } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const HIPPO_BIN = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
@@ -202,14 +203,16 @@ describe('hooks in a folder without a store', () => {
     hippo(b, b.project, ['init', '--global', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
-    const session = join(b.home, '.claude', 'projects', 'transcript-folder');
+    const sub = join(b.project, 'packages', 'api');
+    mkdirSync(sub, { recursive: true });
+    const session = join(b.home, '.claude', 'projects', claudeFolderName(sub));
     const transcriptNote = 'The session folder note says the queue drains at midnight.';
     note(join(session, 'memory'), 'queue.md', transcriptNote);
     const transcript = join(session, 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: b.project, trigger: 'auto' });
-    hippo(b, b.project, ['post-compact'], { input: payload });
+    const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: sub, trigger: 'auto' });
+    hippo(b, sub, ['post-compact'], { input: payload });
 
     const rows = loadAllEntries(b.global).filter((e) => e.source?.startsWith('agent-memory:'));
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
@@ -223,13 +226,15 @@ describe('hooks in a folder without a store', () => {
     hippo(b, b.project, ['init', '--global', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
-    const session = join(b.home, '.claude', 'projects', 'transcript-folder');
+    const sub = join(b.project, 'packages', 'api');
+    mkdirSync(sub, { recursive: true });
+    const session = join(b.home, '.claude', 'projects', claudeFolderName(sub));
     const transcriptNote = 'The session folder note says the queue drains at midnight.';
     note(join(session, 'memory'), 'queue.md', transcriptNote);
     const transcript = join(session, 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    hippo(b, b.project, ['__session-end-worker', '--transcript', transcript, '--session-id', 's1']);
+    hippo(b, sub, ['__session-end-worker', '--transcript', transcript, '--session-id', 's1']);
 
     const rows = loadAllEntries(b.global).filter((e) => e.source?.startsWith('agent-memory:'));
     const origin = deriveOriginProject(b.project);
@@ -241,7 +246,7 @@ describe('hooks in a folder without a store', () => {
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
   });
 
-  it('a worktree and its main checkout keep their own global rows of the Claude folder they share, and handover retires only its own', () => {
+  it('a worktree and its main checkout share one global row of the Claude folder they share, and a worktree that gets a store leaves it to the main checkout', () => {
     const b = box();
     const git = (cwd: string, ...args: string[]): void => { execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'ignore' }); };
     git(b.project, 'commit', '-q', '--allow-empty', '-m', 'base');
@@ -249,13 +254,13 @@ describe('hooks in a folder without a store', () => {
     git(b.project, 'worktree', 'add', '-q', worktree);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     const [main, wt] = [deriveOriginProject(b.project), deriveOriginProject(worktree)];
-    expect(main).not.toBe(wt);
+    expect(wt).toBe(main);
 
     hippo(b, b.project, ['import', '--agents']);
     hippo(b, worktree, ['import', '--agents']);
     const origins = (): string[] => (isInitialized(b.global) ? loadAllEntries(b.global) : [])
       .filter((e) => e.content === PROJECT_NOTE).map((e) => e.origin_project ?? '').sort();
-    expect(origins()).toEqual([main, wt].sort());
+    expect(origins()).toEqual([main]);
 
     hippo(b, worktree, ['init', '--no-hooks', '--no-schedule']);
     expect(origins()).toEqual([main]);

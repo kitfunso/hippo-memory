@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFromText } from '../src/capture.js';
+import { extractFromText } from '../src/capture/extract.js';
 import { isContentWorthStoring } from '../src/audit.js';
 
 /**

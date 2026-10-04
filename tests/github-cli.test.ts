@@ -13,7 +13,8 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeToDlq } from '../src/connectors/github/dlq.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { cmdGithubBackfill } from '../src/connectors/github/cli-impl.js';
@@ -90,7 +91,7 @@ describe('hippo github CLI', () => {
   });
 
   it('backfill --repo without GITHUB_TOKEN exits 2 with actionable error', () => {
-    const env = { ...process.env, HIPPO_HOME: hippoRoot };
+    const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
     delete env.GITHUB_TOKEN;
     let status = 0;
     let stderr = '';

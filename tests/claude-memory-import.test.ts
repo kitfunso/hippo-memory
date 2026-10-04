@@ -5,7 +5,8 @@ import * as os from 'os';
 import { execFileSync } from 'child_process';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(importProjectMemories(hippoRoot, { machine: { home, env: {}, platform: process.platform } })).imported;

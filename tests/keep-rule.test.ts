@@ -6,12 +6,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/agent-memories/tools.js';
 import {
-  AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, createMemory, type MemoryEntry,
+  AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
 } from '../src/memory.js';
-import {
-  batchWriteAndDelete, deleteEntry, initStore, listMemoryConflicts, loadAllEntries, readEntry, writeEntry,
-} from '../src/store.js';
-import { consolidate } from '../src/consolidate.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
+import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { auditMemory } from '../src/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';

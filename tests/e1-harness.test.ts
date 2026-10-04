@@ -9,11 +9,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { generateProtocol } from '../scripts/e1-lifecycle/generate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { runArmSeed } from '../scripts/e1-lifecycle/run.mjs';
-import { loadAllEntries } from '../src/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 
 const ABLATION_ENV_VARS = [
@@ -63,10 +61,10 @@ describe('E1 generator', () => {
       for (let i = 1; i < sessions.length; i++) expect(sessions[i]).toBeGreaterThan(sessions[i - 1]);
     }
     // Every outcome target exists and is scheduled at/after its ingestion session.
-    const memById = new Map(p.memories.map((m: any) => [m.id, m]));
+    const memById = new Map<string, { session: number }>(p.memories.map((m: any) => [m.id, m]));
     for (const o of p.outcomeSchedule) {
       const m = memById.get(o.memoryRef);
-      expect(m).toBeDefined();
+      if (m === undefined) throw new Error(`outcome targets missing memory ${o.memoryRef}`);
       expect(o.session).toBeGreaterThanOrEqual(m.session);
     }
     // Traps are bad-marked; some positive outcomes exist.
@@ -87,6 +85,7 @@ describe('E1 generator', () => {
     const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
     expect(negs.length).toBeGreaterThan(0);
     expect(negs.every((m: any) => m.session < floor)).toBe(true);
+    // @ts-expect-error - 'junk' is deliberately outside the lookalikeWindow union to reach the runtime validation
     expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(/lookalikeWindow/);
   });
 });

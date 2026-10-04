@@ -22,7 +22,8 @@ const P95_BOUND_MS = 30;
 
 const load = (file) => import(pathToFileURL(path.join(REPO, 'dist', file)));
 const { createMemory } = await load('memory.js');
-const { initStore, writeEntry } = await load('store.js');
+const { initStore } = await load('store/open.js');
+const { writeEntry } = await load('store/entry-writes.js');
 const api = await load('api.js');
 const { contextCost } = await load('context-render.js');
 const { createDeliveryRecorder } = await load('delivery-recorder.js');

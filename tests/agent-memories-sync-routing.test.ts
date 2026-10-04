@@ -6,15 +6,19 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { restoreDormant } from '../src/api.js';
 import { gitLayout } from '../src/agent-memories/git.js';
-import { importAtCompaction, importAtSessionEnd, importForStore, importProjectMemories } from '../src/agent-memories/sync.js';
+import { containerId, containerPrefix } from '../src/agent-memories/source.js';
+import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../src/agent-memories/sync.js';
+import { repairProjects } from '../src/project-merge.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { deriveOriginProject } from '../src/project-identity.js';
 import { autoShare, syncGlobalToLocal } from '../src/shared.js';
-import { initStore, isInitialized, loadAllEntries, writeEntry } from '../src/store.js';
+import { initStore, isInitialized } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
   agentRows, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, toolTally,
-  userNotes, writeConfig, type World,
+  userNotes, withDb, writeConfig, type World,
 } from './_helpers/agent-memories-world.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
@@ -86,22 +90,82 @@ describe('agent memory sync: routing and sharing', () => {
     expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, origin_project: deriveOriginProject(hx) }]);
   });
 
-  it('post-compact reads the transcript folder only and runs no git call', () => {
+  it('post-compact reads the session folder only and runs no git call', () => {
     const Q = 'The session folder note says the queue drains at midnight.';
-    note(projectNotes(w), 'p.md', 'The project folder note is read by sleep, not by the compaction hook.');
+    note(projectNotes(w, join(w.dir, 'other')), 'p.md', 'A note in another project folder is read by its own sleep, not by this compaction hook.');
     note(userNotes(w), 'u.md', USER_NOTE);
     codexSummary(w, '- The compaction hook must not read this Codex bullet.');
-    const session = join(w.home, '.claude', 'projects', 'compact-session');
-    note(join(session, 'memory'), 'q.md', Q);
-    const transcript = join(session, 's.jsonl');
+    const transcript = join(dirname(note(projectNotes(w), 'q.md', Q)), '..', 's.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    const compaction = spawnsDuring(() => importAtCompaction(w.local, transcript, 'proj', opts()));
+    const compaction = spawnsDuring(() => importSessionFolder(w.local, transcript, w.project, opts()));
     expect(compaction.spawns).toBe(0);
     expect(claude(compaction.result).imported).toBe(1);
     expect(liveRows(w.local)).toMatchObject([{ content: Q, origin_project: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
     expect(spawnsDuring(() => importProjectMemories(w.local, opts())).spawns).toBeGreaterThan(0);
+  });
+
+  it('a session begun above two repos keeps its folder notes user-global, one copy wherever it ends', () => {
+    const HOME_NOTE = 'A note the session filed under the folder it began in.';
+    const transcript = join(dirname(note(projectNotes(w, w.dir), 'h.md', HOME_NOTE)), '..', 's.jsonl');
+    const [a, b] = [join(w.dir, 'repoa'), join(w.dir, 'repob')];
+    for (const repo of [a, b]) mkdirSync(join(repo, '.git'), { recursive: true });
+
+    importAtSessionEnd(a, transcript, opts());
+    importAtSessionEnd(b, transcript, opts());
+    expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, origin_project: '' }]);
+    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(liveTexts(w.local)).toEqual([]);
+  });
+
+  it('a session begun in one repo and compacted in another files its folder notes under the first, in the global store', () => {
+    const x = join(w.dir, 'repox');
+    mkdirSync(join(x, '.git'), { recursive: true });
+    const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
+    writeFileSync(transcript, `${JSON.stringify({ type: 'user', cwd: x })}\n`, 'utf8');
+
+    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(1);
+    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, origin_project: deriveOriginProject(x) }]);
+    expect(liveTexts(w.local)).toEqual([]);
+  });
+
+  it('a project store that opts out of imports keeps another repo\'s session notes out of the global store too', () => {
+    const x = join(w.dir, 'repox');
+    mkdirSync(join(x, '.git'), { recursive: true });
+    const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
+    writeFileSync(transcript, `${JSON.stringify({ cwd: x })}\n`, 'utf8');
+    writeConfig(w.local, []);
+
+    expect(claude(importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(isInitialized(w.global)).toBe(false);
+  });
+
+  it('repair sets aside a home note filed under a project and edited since, and the next compaction does not bring it back', () => {
+    const HOME_NOTE = 'A note the session filed under the folder it began in.';
+    const notes = projectNotes(w, w.dir);
+    const transcript = join(dirname(note(notes, 'h.md', HOME_NOTE)), '..', 's.jsonl');
+    writeFileSync(transcript, `${JSON.stringify({ cwd: w.dir })}\n`, 'utf8');
+    initStore(w.global);
+    const stray = {
+      ...createMemory('An older wording of the home note.', { tenantId: 'default', baseHalfLifeDays: 30 }),
+      origin_project: 'repoa',
+      source: `${containerPrefix('claude-code', containerId(notes, 'project', process.platform, 'repoa'))}h.md#abc`,
+      tags: ['claude-code-memory'],
+    };
+    writeEntry(w.global, stray);
+    withDb(w.global, (db) => db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES ('default', 'c1', 's1', 'repoa', 'auto', ?, ?, ?)`)
+      .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()));
+    const repair = (dryRun: boolean) => withDb(w.global, (db) => repairProjects(db, w.global, { tenantId: 'default', dryRun }));
+
+    expect(repair(true).copies).toEqual([stray.id]);
+    expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);
+    expect(repair(false).copies).toEqual([stray.id]);
+    expect(repair(false).copies).toEqual([]);
+
+    importSessionFolder(w.local, transcript, join(w.dir, 'repoa'), opts());
+    expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, origin_project: '' }]);
+    expect(dormantRows(w.global).map((d) => d.id)).toEqual([stray.id]);
   });
 
   it('a global-store sleep runs the user pass only', () => {

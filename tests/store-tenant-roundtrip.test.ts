@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 describe('store roundtrip with tenant_id', () => {
   it('writeEntry persists tenant_id, readEntry returns it', () => {

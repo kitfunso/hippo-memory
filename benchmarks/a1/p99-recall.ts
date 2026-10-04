@@ -25,12 +25,15 @@
  *
  * Run:
  *   node --experimental-strip-types benchmarks/a1/p99-recall.ts \
- *     --store-size 10000 --queries 1000
+ *     --store-size 10000 --queries 1000 [--gate-ms 50] [--warmup N] [--rounds R]
+ *
+ * --warmup sends N untimed queries first; --rounds repeats the timed pass and
+ * gates on the median round's p99. Defaults (0, 1) keep the cold single pass.
  *
  * Or via vitest harness (downsized) — see tests/server-p99.test.ts.
  *
  * Output JSON lands in benchmarks/a1/results/p99-<timestamp>.json.
- * Exit code 0 if p99 < 50ms, else 1 (CI gate).
+ * Exit code 0 if the gated p99 < --gate-ms, else 1 (CI gate).
  */
 
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
@@ -40,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 
 // Imports resolve against the compiled dist/ output. Run `npm run build` first,
 // then `node --experimental-strip-types benchmarks/a1/p99-recall.ts`.
-import { initStore } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
 import { remember as apiRemember } from '../../dist/api.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
 
@@ -48,6 +51,9 @@ interface CliArgs {
   storeSize: number;
   queries: number;
   port: number;
+  gateMs: number;
+  warmup: number;
+  rounds: number;
 }
 
 interface Stats {
@@ -67,6 +73,9 @@ interface Result {
   query_count: number;
   total_wall_ms: number;
   stats_ms: Stats;
+  warmup_queries: number;
+  round_p99_ms: number[];
+  gated_p99_ms: number;
   gate_pass: boolean;
   gate_threshold_ms: number;
   notes: string[];
@@ -74,12 +83,15 @@ interface Result {
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { storeSize: 10000, queries: 1000, port: 6789 };
+  const args: CliArgs = { storeSize: 10000, queries: 1000, port: 6789, gateMs: 50, warmup: 0, rounds: 1 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--store-size') args.storeSize = Number(argv[++i]);
     else if (a === '--queries') args.queries = Number(argv[++i]);
     else if (a === '--port') args.port = Number(argv[++i]);
+    else if (a === '--gate-ms') args.gateMs = Number(argv[++i]);
+    else if (a === '--warmup') args.warmup = Number(argv[++i]);
+    else if (a === '--rounds') args.rounds = Math.max(1, Number(argv[++i]));
   }
   return args;
 }
@@ -200,9 +212,40 @@ function computeStats(samples: number[]): Stats {
   };
 }
 
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
+}
+
+/** Sends `count` sequential recalls starting at query index `offset`; samples are full-response latencies. */
+async function runQueries(
+  baseUrl: string,
+  queries: ReadonlyArray<string>,
+  offset: number,
+  count: number,
+): Promise<{ samples: number[]; errors: number }> {
+  const samples: number[] = [];
+  let errors = 0;
+  for (let i = offset; i < offset + count; i++) {
+    const url = `${baseUrl}/v1/memories?q=${encodeURIComponent(queries[i % queries.length]!)}&limit=10`;
+    const t0 = performance.now();
+    try {
+      const res = await fetch(url);
+      await res.text();
+      const dt = performance.now() - t0;
+      if (res.ok) samples.push(dt);
+      else errors++;
+    } catch (err) {
+      errors++;
+      if (errors <= 3) console.error(`[p99-recall] fetch error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { samples, errors };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  console.log(`[p99-recall] storeSize=${args.storeSize} queries=${args.queries} port=${args.port}`);
+  console.log(`[p99-recall] storeSize=${args.storeSize} queries=${args.queries} rounds=${args.rounds} warmup=${args.warmup} port=${args.port}`);
 
   const home = mkdtempSync(join(tmpdir(), 'hippo-p99-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
@@ -230,37 +273,22 @@ async function main(): Promise<void> {
   const queries = loadTier1Queries();
   console.log(`[p99-recall] loaded ${queries.length} tier-1 queries`);
 
-  // Server start AFTER seed so the bench measures cold-cache fetch latency
-  // (no warmup query). Port 0 = ephemeral to avoid collisions.
+  // Server start AFTER seed so the default run measures cold-cache fetch latency.
+  // Port 0 = ephemeral to avoid collisions.
+  // The bench measures recall, not the per-IP limiter, which would 429 most queries and drop them from the stats.
+  process.env.HIPPO_V1_RPS = '0';
   const server: ServerHandle = await serve({ hippoRoot: home, port: 0 });
   console.log(`[p99-recall] server listening on ${server.url}`);
 
-  const samples: number[] = [];
-  let errorCount = 0;
   const wallStart = Date.now();
-
+  let errorCount = 0;
+  const rounds: number[][] = [];
   try {
-    for (let i = 0; i < args.queries; i++) {
-      const q = queries[i % queries.length]!;
-      const url = `${server.url}/v1/memories?q=${encodeURIComponent(q)}&limit=10`;
-      const t0 = performance.now();
-      try {
-        const res = await fetch(url);
-        // Drain body — fetch latency includes full response read.
-        await res.text();
-        const dt = performance.now() - t0;
-        if (!res.ok) {
-          errorCount++;
-        } else {
-          samples.push(dt);
-        }
-      } catch (err) {
-        errorCount++;
-        if (errorCount <= 3) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`[p99-recall] fetch error: ${message}`);
-        }
-      }
+    await runQueries(server.url, queries, 0, args.warmup);
+    for (let r = 0; r < args.rounds; r++) {
+      const round = await runQueries(server.url, queries, args.warmup + r * args.queries, args.queries);
+      errorCount += round.errors;
+      rounds.push(round.samples);
     }
   } finally {
     await server.stop();
@@ -268,21 +296,28 @@ async function main(): Promise<void> {
 
   const wallMs = Date.now() - wallStart;
 
+  const samples = rounds.flat();
   const stats = computeStats(samples);
-  const gateThreshold = 50;
-  const gatePass = stats.p99 < gateThreshold;
+  const roundP99 = rounds.map((r) => computeStats(r).p99);
+  const gatedP99 = median(roundP99);
+  const gateThreshold = args.gateMs;
+  const gatePass = errorCount === 0 && gatedP99 < gateThreshold;
 
   const notes: string[] = [];
   if (errorCount > 0) notes.push(`${errorCount} fetch errors (excluded from stats)`);
   notes.push('BM25 only — src/api.ts:recall does not yet wire hybrid embeddings');
   notes.push('Single SQLite connection (server default)');
-  notes.push('Cold cache: no warmup query');
+  notes.push(args.warmup > 0 ? `Warm: ${args.warmup} untimed queries first` : 'Cold cache: no warmup query');
+  if (args.rounds > 1) notes.push(`Gate on the median p99 of ${args.rounds} rounds`);
 
   const result: Result = {
     store_size: args.storeSize,
     query_count: samples.length,
     total_wall_ms: wallMs,
     stats_ms: stats,
+    warmup_queries: args.warmup,
+    round_p99_ms: roundP99,
+    gated_p99_ms: gatedP99,
     gate_pass: gatePass,
     gate_threshold_ms: gateThreshold,
     notes,
@@ -299,12 +334,14 @@ async function main(): Promise<void> {
   console.log('');
   console.log('━━━ p99 recall benchmark ━━━');
   console.log(`  store size:     ${args.storeSize}`);
-  console.log(`  successful:     ${samples.length}/${args.queries}`);
+  console.log(`  successful:     ${samples.length}/${args.queries * args.rounds} (+${args.warmup} warm-up)`);
   console.log(`  wall:           ${wallMs}ms`);
   console.log(`  min / mean:     ${stats.min.toFixed(2)} / ${stats.mean.toFixed(2)}ms`);
   console.log(`  p50 / p95:      ${stats.p50.toFixed(2)} / ${stats.p95.toFixed(2)}ms`);
   console.log(`  p99 / p999:     ${stats.p99.toFixed(2)} / ${stats.p999.toFixed(2)}ms`);
   console.log(`  max / stddev:   ${stats.max.toFixed(2)} / ${stats.stddev.toFixed(2)}ms`);
+  console.log(`  round p99s:     ${roundP99.map((v) => v.toFixed(2)).join(' / ')}ms`);
+  console.log(`  gated p99:      ${gatedP99.toFixed(2)}ms (median round)`);
   console.log(`  gate (<${gateThreshold}ms): ${gatePass ? 'PASS' : 'FAIL'}`);
   console.log(`  output:         ${outPath}`);
   console.log('');

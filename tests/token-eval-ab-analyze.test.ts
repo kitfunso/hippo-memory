@@ -33,17 +33,21 @@ describe('A/B analyzer (TE5)', () => {
   it('reports a cheaper cost per resolved task and less work for the hippo arm', () => {
     const result = analyze(parseRuns(records()), { prices });
     const hippo = result.comparisons.find((c: { arm: string }) => c.arm === 'hippo');
+    if (!hippo) throw new Error('no hippo comparison');
+    const fileReads = hippo.work.fileReads;
+    if (!fileReads) throw new Error('no fileReads estimate');
     expect(hippo.tasks).toBe(40);
     expect(hippo.costPerResolved.relative.estimate).toBeLessThan(-0.2);
     expect(hippo.costPerResolved.relative.high).toBeLessThan(0);
     expect(hippo.resolveRate.arm).toBeGreaterThan(hippo.resolveRate.control);
-    expect(hippo.work.fileReads.estimate).toBeCloseTo(-4, 10);
+    expect(fileReads.estimate).toBeCloseTo(-4, 10);
     expect(hippo.passHatK.arm).toBeGreaterThanOrEqual(hippo.passHatK.control);
   });
 
   it('does not credit a control arm that only adds tokens', () => {
     const result = analyze(parseRuns(records()), { prices });
     const random = result.comparisons.find((c: { arm: string }) => c.arm === 'random-text');
+    if (!random) throw new Error('no random-text comparison');
     expect(random.costPerResolved.relative.estimate).toBeGreaterThan(0);
     expect(random.resolveRate.delta.estimate).toBe(0);
   });

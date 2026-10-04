@@ -23,7 +23,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, loadIndex } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
 import { remember, recall, getContext, type Context } from '../src/api.js';
 
 function tmpHome() {

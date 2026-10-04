@@ -14,10 +14,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import type { DatabaseSyncLike } from '../src/db.js';
-// @ts-expect-error - .mjs adapter module without .d.ts
 import { createAdapter } from '../benchmarks/sequential-learning/adapters/interface.mjs';
-// @ts-expect-error - .mjs adapter module without .d.ts
 import hippoAdapter from '../benchmarks/sequential-learning/adapters/hippo.mjs';
+import { storeDirOf } from './fixtures/sl-adapter/store-dir.js';
 
 describe('sequential-learning adapter contract (v1.7.5)', () => {
   const baseAdapter = {
@@ -73,6 +72,7 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
     // We use the public adapter so any wiring bug surfaces. The adapter
     // creates its own temp HIPPO_HOME and sets HIPPO_SESSION_ID for us.
     await hippoAdapter.init();
+    if (!hippoAdapter.pushGoal || !hippoAdapter.completeGoal) throw new Error('the hippo adapter must supply the goal hooks');
     try {
       // Push a goal whose name MATCHES a tag we will store.
       const goalId = await hippoAdapter.pushGoal('bare_except');
@@ -91,10 +91,9 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       expect(recalled.length).toBeGreaterThan(0);
 
       // Query the temp store directly. The adapter exposes _storeDir.
-      // SAFETY: adapters/hippo.mjs sets `this._storeDir` to the mkdtemp path
-      // in init() (see hippo.mjs:87) before any test can reach this line.
-      const storeDir = (hippoAdapter as { _storeDir: string })._storeDir;
-      expect(storeDir && existsSync(storeDir)).toBeTruthy();
+      const storeDir = storeDirOf(hippoAdapter);
+      if (!storeDir) throw new Error('init() left no store dir');
+      expect(existsSync(storeDir)).toBe(true);
 
       // hippo doesn't ship a `goal recall-log` subcommand, so we open the db
       // directly via node's native `node:sqlite` (same module hippo uses).

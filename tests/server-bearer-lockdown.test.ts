@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));

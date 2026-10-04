@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory } from '../src/memory.js';
-import { initStore, writeEntry, readEntry, strengthenRetrieved } from '../src/store.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
 
 const roots: string[] = [];
 
@@ -28,7 +30,7 @@ describe('strengthenRetrieved', () => {
     const returned = readEntry(root, e.id)!;
     writeEntry(root, { ...returned, tags: ['edited-meanwhile'] });
 
-    const found = strengthenRetrieved(root, [e.id, 'no-such-id']);
+    const found = strengthenRetrieved(root, [e.id, 'no-such-id'], { recallBoostAblated: false });
 
     expect([...found]).toEqual([e.id]);
     const after = readEntry(root, e.id)!;
@@ -42,17 +44,26 @@ describe('strengthenRetrieved', () => {
     const e = createMemory('the staging cluster restarts every sunday');
     writeEntry(root, e);
 
-    expect(strengthenRetrieved(root, [e.id], 'some-other-tenant').size).toBe(0);
+    expect(strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }).size).toBe(0);
+    expect(readEntry(root, e.id)!.retrieval_count).toBe(0);
+  });
+
+  it('changes nothing when the caller passes the recall-boost ablation switch', () => {
+    const root = newRoot();
+    const e = createMemory('the release train leaves on tuesdays');
+    writeEntry(root, e);
+
+    expect(strengthenRetrieved(root, [e.id], { recallBoostAblated: true }).size).toBe(0);
     expect(readEntry(root, e.id)!.retrieval_count).toBe(0);
   });
 
   it('logs one line and never throws when the store cannot be opened', () => {
     const notAStore = join(newRoot(), 'not-a-store');
     writeFileSync(notAStore, 'a plain file where the store should be');
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errors = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(strengthenRetrieved(notAStore, ['any-id']).size).toBe(0);
+    expect(strengthenRetrieved(notAStore, ['any-id'], { recallBoostAblated: false }).size).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);
-    expect(String(errors.mock.calls[0]![0])).toMatch(/^hippo: retrieval stats not saved \(/);
+    expect(String(errors.mock.calls[0]![0])).toMatch(/^\[hippo\] warn: retrieval stats not saved \(/);
   });
 });

@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory } from '../src/memory.js';
-import { initStore, writeEntry, readEntry, countCreatedSinceLastSleep } from '../src/store.js';
-import { consolidate } from '../src/consolidate.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { remember, type Context } from '../src/api.js';
 
 const DAY = 86_400_000;
@@ -63,7 +66,7 @@ describe('H3: the sleep LLM gate', () => {
   it('an LLM failure lands in the sleep details', async () => {
     const root = newRoot();
     writeEntry(root, createMemory('the release train leaves every second thursday'));
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const fetcher = llmReturning(() => new Response('error', { status: 500 }));
 
     const result = await consolidate(root, { fetcher });

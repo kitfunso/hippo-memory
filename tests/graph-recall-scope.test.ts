@@ -11,23 +11,19 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { estimateTokens, type SearchResult } from '../src/search.js';
-import { insertEntity, insertRelation } from '../src/graph.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { estimateTokens } from '../src/token-ledger.js';
+import type { SearchResult } from '../src/search/types.js';
+import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graphrecall-scope-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -36,6 +32,7 @@ function safeRmSync(p: string): void {
 function mem(home: string, tenant: string, text: string, opts: { scope?: string | null } = {}): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
   const m = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test',
     tenantId: tenant, scope: opts.scope ?? null,
   });
@@ -55,7 +52,7 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
 describe('graph-recall scope parity (v1.26.1)', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graphrecall-scope'); });
   afterEach(() => safeRmSync(home));
 
   it('core: a graph-reached private-scoped memory is default-denied (no recallScope = fail-closed)', () => {
@@ -116,7 +113,7 @@ describe('graph-recall scope parity (v1.26.1)', () => {
   });
 
   it('global-root: a private-scoped memory reachable only via the GLOBAL store graph is dropped by default', () => {
-    const glob = makeRoot();
+    const glob = makeRoot('graphrecall-scope');
     try {
       // Seed + graph live entirely in the GLOBAL store; `home` (local) has no entities.
       const seed = mem(glob, T, 'globally-stored seed decision about cache invalidation');

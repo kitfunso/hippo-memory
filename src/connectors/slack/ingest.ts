@@ -1,4 +1,4 @@
-import { remember, type Context } from '../../api.js';
+import { remember, type Context, type RememberOpts } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { RejectedValueError } from '../../rejection.js';
 import {
@@ -77,58 +77,70 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
   // together. Slack's 1-minute retry window can no longer produce a duplicate
   // via the crash-between-handles race.
   try {
-    // v1.12.0: drop the legacy `|| 'connector:slack'` fallback — ctx is always
-    // provided by server.ts:1039 which constructs it with the connector subject.
-    // Under the new object-shaped Context.actor, an OR-fallback would evaluate
-    // an object as truthy and skip the fallback anyway (logic bug if ctx were
-    // ever missing); explicit reliance on the caller is safer.
-    const result = remember(
-      ctx,
-      {
-        ...opts,
-        untrusted: true,
-        afterWrite: (innerDb, memoryId) => {
-          const inserted = innerDb
-            .prepare(
-              `INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
-            )
-            .run(input.eventId, new Date().toISOString(), memoryId);
-          if ((Number(inserted.changes ?? 0)) === 0) {
-            // Two-worker race: another writer reserved this event_id between
-            // the pre-check and the write. Throw to roll back the SAVEPOINT
-            // in writeEntry — the memory row gets discarded, idempotency
-            // holds, exactly one memory exists for this event_id.
-            throw new DuplicateEventError(input.eventId);
-          }
-        },
-      },
-    );
-    return { status: 'ingested', memoryId: result.id };
+    return rememberWithEventLog(ctx, input.eventId, opts);
   } catch (e) {
-    if (e instanceof DuplicateEventError) {
-      // The other worker's memory row is already committed. Return its id
-      // so the caller behaves identically to the fast-path 'duplicate' branch.
-      const db3 = openHippoDb(ctx.hippoRoot);
-      try {
-        const cachedId = lookupMemoryByEvent(db3, input.eventId);
-        return { status: 'skipped_duplicate', memoryId: cachedId };
-      } finally {
-        closeHippoDb(db3);
-      }
-    }
-    if (e instanceof RejectedValueError) {
-      // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
-      // a transient failure — never DLQ-retry it (retrying would just hit
-      // the same refusal forever). Mark the event seen exactly like the
-      // empty-body branch above so a Slack retry acks as done, not error.
-      const db4 = openHippoDb(ctx.hippoRoot);
-      try {
-        markEventSeen(db4, input.eventId, null);
-      } finally {
-        closeHippoDb(db4);
-      }
-      return { status: 'skipped', memoryId: null };
-    }
+    if (e instanceof DuplicateEventError) return lostRaceResult(ctx, input.eventId);
+    if (e instanceof RejectedValueError) return rejectedValueResult(ctx, input.eventId);
     throw e;
   }
+}
+
+function rememberWithEventLog(
+  ctx: Context,
+  eventId: string,
+  opts: RememberOpts,
+): IngestResult {
+  // v1.12.0: drop the legacy `|| 'connector:slack'` fallback — ctx is always
+  // provided by server.ts:1039 which constructs it with the connector subject.
+  // Under the new object-shaped Context.actor, an OR-fallback would evaluate
+  // an object as truthy and skip the fallback anyway (logic bug if ctx were
+  // ever missing); explicit reliance on the caller is safer.
+  const result = remember(
+    ctx,
+    {
+      ...opts,
+      untrusted: true,
+      afterWrite: (innerDb, memoryId) => {
+        const inserted = innerDb
+          .prepare(
+            `INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
+          )
+          .run(eventId, new Date().toISOString(), memoryId);
+        if ((Number(inserted.changes ?? 0)) === 0) {
+          // Two-worker race: another writer reserved this event_id between
+          // the pre-check and the write. Throw to roll back the SAVEPOINT
+          // in writeEntry — the memory row gets discarded, idempotency
+          // holds, exactly one memory exists for this event_id.
+          throw new DuplicateEventError(eventId);
+        }
+      },
+    },
+  );
+  return { status: 'ingested', memoryId: result.id };
+}
+
+function lostRaceResult(ctx: Context, eventId: string): IngestResult {
+  // The other worker's memory row is already committed. Return its id
+  // so the caller behaves identically to the fast-path 'duplicate' branch.
+  const db3 = openHippoDb(ctx.hippoRoot);
+  try {
+    const cachedId = lookupMemoryByEvent(db3, eventId);
+    return { status: 'skipped_duplicate', memoryId: cachedId };
+  } finally {
+    closeHippoDb(db3);
+  }
+}
+
+function rejectedValueResult(ctx: Context, eventId: string): IngestResult {
+  // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
+  // a transient failure — never DLQ-retry it (retrying would just hit
+  // the same refusal forever). Mark the event seen exactly like the
+  // empty-body branch above so a Slack retry acks as done, not error.
+  const db4 = openHippoDb(ctx.hippoRoot);
+  try {
+    markEventSeen(db4, eventId, null);
+  } finally {
+    closeHippoDb(db4);
+  }
+  return { status: 'skipped', memoryId: null };
 }

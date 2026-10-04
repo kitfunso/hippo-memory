@@ -20,13 +20,15 @@
  * Lifecycle: active -> superseded (a corrected version) or active -> closed (retired).
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry } from './store.js';
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
+import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -83,6 +85,8 @@ export interface ListCustomerNotesOpts {
   /** Filter to a single customer. */
   customer?: string;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,21 +104,21 @@ function validateNoteFields(
   changeSummary: string | undefined,
 ) {
   const normalizedCustomer = (customer ?? '').trim();
-  if (normalizedCustomer.length === 0) throw new Error('saveCustomerNote: customer is required');
+  if (normalizedCustomer.length === 0) throw new BadRequestError('saveCustomerNote: customer is required');
   if (/[\r\n]/.test(normalizedCustomer)) {
-    throw new Error('saveCustomerNote: customer must be a single line (no newlines)');
+    throw new BadRequestError('saveCustomerNote: customer must be a single line (no newlines)');
   }
   if (normalizedCustomer.length > MAX_CUSTOMER_LEN) {
-    throw new Error(`saveCustomerNote: customer exceeds the ${MAX_CUSTOMER_LEN}-char cap`);
+    throw new BadRequestError(`saveCustomerNote: customer exceeds the ${MAX_CUSTOMER_LEN}-char cap`);
   }
   if (!note || note.trim().length === 0) {
-    throw new Error('saveCustomerNote: note is required');
+    throw new BadRequestError('saveCustomerNote: note is required');
   }
   if (note.length > MAX_NOTE_LEN) {
-    throw new Error(`saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`);
+    throw new BadRequestError(`saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`);
   }
   if (changeSummary !== undefined && changeSummary.length > MAX_CHANGE_SUMMARY_LEN) {
-    throw new Error(`saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
+    throw new BadRequestError(`saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
   }
   return { customer: normalizedCustomer };
 }
@@ -172,6 +176,110 @@ function buildNoteContent(customer: string, note: string): string {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
+interface NoteWrite {
+  tenantId: string;
+  actor: string;
+  customer: string;
+  note: string;
+  changeSummary: string | null;
+  supersedesId: number | undefined;
+  now: string;
+}
+
+// Preflight the supersede target BEFORE inserting the new row (so the new
+// autoincrement id can never be its own supersede target); read the
+// predecessor version in the same SELECT for server-derived versioning.
+// Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
+function preflightNoteSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
+  // SAFETY: SELECT projects exactly status, version; .get() returns that
+  // shape for the matching row, or undefined when no note/tenant pair matches.
+  const pred = db.prepare(
+    `SELECT status, version FROM customer_notes WHERE id = ? AND tenant_id = ?`,
+  ).get(supersedesId, tenantId) as
+    | { status: string; version: number }
+    | undefined;
+  if (!pred) {
+    throw new NotFoundError(
+      `saveCustomerNote: note ${supersedesId} to supersede not found for tenant ${tenantId}`,
+    );
+  }
+  if (pred.status !== 'active') {
+    throw new ConflictError(
+      `saveCustomerNote: note ${supersedesId} is not active (status='${pred.status}'); only active notes can be superseded.`,
+    );
+  }
+  return pred.version + 1;
+}
+
+function insertNoteRow(db: DatabaseSyncLike, memoryId: string, w: NoteWrite, version: number): number {
+  const result = db.prepare(`
+    INSERT INTO customer_notes(
+      memory_id, tenant_id, customer, note, version,
+      status, superseded_by, superseded_at, change_summary, closed_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
+  `).run(memoryId, w.tenantId, w.customer, w.note, version, w.changeSummary, w.now);
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+function supersedeNoteRow(
+  db: DatabaseSyncLike,
+  w: NoteWrite,
+  supersedesId: number,
+  noteId: number,
+  version: number,
+): void {
+  const sup = db.prepare(`
+    UPDATE customer_notes
+    SET status = 'superseded', superseded_by = ?, superseded_at = ?
+    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
+  `).run(noteId, w.now, supersedesId, w.tenantId, noteId);
+  if (sup.changes === 0) {
+    throw new ConflictError(
+      `saveCustomerNote: note ${supersedesId} could not be superseded (no longer active or self-reference).`,
+    );
+  }
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'customer_note_supersede',
+    targetId: String(supersedesId),
+    metadata: {
+      note_id: supersedesId,
+      superseded_by: noteId,
+      new_version: version,
+    },
+  });
+}
+
+/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
+function writeNoteRow(db: DatabaseSyncLike, memoryId: string, w: NoteWrite): CustomerNoteRow {
+  const version = w.supersedesId !== undefined ? preflightNoteSupersede(db, w.tenantId, w.supersedesId) : 1;
+  const noteId = insertNoteRow(db, memoryId, w, version);
+  if (w.supersedesId !== undefined) supersedeNoteRow(db, w, w.supersedesId, noteId, version);
+
+  // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
+  // .get() returns that row, or undefined only if the just-inserted id can't
+  // be found.
+  const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ?`)
+    .get(noteId) as CustomerNoteRow | undefined;
+  if (!row) throw new Error('saveCustomerNote: failed to reload saved note row');
+
+  // GDPR-light metadata: ids + flags only, no note text.
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'customer_note_create',
+    targetId: String(noteId),
+    metadata: {
+      note_id: noteId,
+      customer: w.customer,
+      version,
+    },
+  });
+  return row;
+}
+
 /**
  * Create a customer_note (or a new version that supersedes an existing one). Writes
  * the memory mirror + the customer_notes row atomically inside writeEntry's SAVEPOINT.
@@ -206,98 +314,16 @@ export function saveCustomerNote(
     baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
+  const w: NoteWrite = {
+    tenantId, actor, customer, note: opts.note, changeSummary, supersedesId: opts.supersedesNoteId, now,
+  };
 
   let savedRow: CustomerNoteRow | undefined;
 
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Preflight the supersede target BEFORE inserting the new row (so the new
-      // autoincrement id can never be its own supersede target); read the
-      // predecessor version in the same SELECT for server-derived versioning.
-      // Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
-      let version = 1;
-      if (opts.supersedesNoteId !== undefined) {
-        // SAFETY: SELECT projects exactly status, version; .get() returns that
-        // shape for the matching row, or undefined when no note/tenant pair matches.
-        const pred = db.prepare(
-          `SELECT status, version FROM customer_notes WHERE id = ? AND tenant_id = ?`,
-        ).get(opts.supersedesNoteId, tenantId) as
-          | { status: string; version: number }
-          | undefined;
-        if (!pred) {
-          throw new Error(
-            `saveCustomerNote: note ${opts.supersedesNoteId} to supersede not found for tenant ${tenantId}`,
-          );
-        }
-        if (pred.status !== 'active') {
-          throw new Error(
-            `saveCustomerNote: note ${opts.supersedesNoteId} is not active (status='${pred.status}'); only active notes can be superseded.`,
-          );
-        }
-        version = pred.version + 1;
-      }
-
-      const result = db.prepare(`
-        INSERT INTO customer_notes(
-          memory_id, tenant_id, customer, note, version,
-          status, superseded_by, superseded_at, change_summary, closed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        customer,
-        opts.note,
-        version,
-        changeSummary,
-        now,
-      );
-      const noteId = Number(result.lastInsertRowid ?? 0);
-
-      if (opts.supersedesNoteId !== undefined) {
-        const sup = db.prepare(`
-          UPDATE customer_notes
-          SET status = 'superseded', superseded_by = ?, superseded_at = ?
-          WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-        `).run(noteId, now, opts.supersedesNoteId, tenantId, noteId);
-        if (sup.changes === 0) {
-          throw new Error(
-            `saveCustomerNote: note ${opts.supersedesNoteId} could not be superseded (no longer active or self-reference).`,
-          );
-        }
-        appendAuditEvent(db, {
-          tenantId,
-          actor,
-          op: 'customer_note_supersede',
-          targetId: String(opts.supersedesNoteId),
-          metadata: {
-            note_id: opts.supersedesNoteId,
-            superseded_by: noteId,
-            new_version: version,
-          },
-        });
-      }
-
-      // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
-      // .get() returns that row, or undefined only if the just-inserted id can't
-      // be found.
-      const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ?`)
-        .get(noteId) as CustomerNoteRow | undefined;
-      if (!row) throw new Error('saveCustomerNote: failed to reload saved note row');
-      savedRow = row;
-
-      // GDPR-light metadata: ids + flags only, no note text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'customer_note_create',
-        targetId: String(noteId),
-        metadata: {
-          note_id: noteId,
-          customer,
-          version,
-        },
-      });
+      savedRow = writeNoteRow(db, memoryId, w);
     },
     afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });
@@ -337,9 +363,9 @@ export function closeCustomerNote(
           `SELECT status FROM customer_notes WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeCustomerNote: note ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeCustomerNote: note ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeCustomerNote: note ${id} is not active (status='${existing.status}'); only active notes can be closed.`,
         );
       }
@@ -349,7 +375,7 @@ export function closeCustomerNote(
       // impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as CustomerNoteRow | undefined;
-      if (!row) throw new Error(`closeCustomerNote: note ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeCustomerNote: note ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -409,8 +435,9 @@ export function loadCustomerNotes(
 ): CustomerNote[] {
   assertTenantId('loadCustomerNotes', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   if (opts.status && !VALID_NOTE_STATES.has(opts.status)) {
-    throw new Error(
+    throw new BadRequestError(
       `loadCustomerNotes: status must be one of ${Array.from(VALID_NOTE_STATES).join('|')}; got ${opts.status}`,
     );
   }
@@ -426,13 +453,13 @@ export function loadCustomerNotes(
       clauses.push('customer = ?');
       params.push(opts.customer);
     }
-    params.push(limit);
+    params.push(...after.params, limit);
     // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns
     // regardless of the dynamic WHERE clause built above; .all() returns rows
     // in that shape.
     const rows = db.prepare(`
       SELECT ${NOTE_COLS} FROM customer_notes
-      WHERE ${clauses.join(' AND ')}
+      WHERE ${clauses.join(' AND ')}${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(...params) as CustomerNoteRow[];
