@@ -8,52 +8,47 @@ td,th{border:1px solid #dde;padding:.35rem .5rem;text-align:left;vertical-align:
 .ask{background:#fff7e6;border-left:4px solid #f0a020;padding:.5rem .8rem}
 </style></head><body>
 <h1>A project identity that two repos cannot share</h1>
-<p>Status: draft, 2026-10-03. Not built. It needs a schema change (a new table), so it needs Keith's yes before code. Follows <code>2026-10-03-project-tag-repair.html</code> section 5.</p>
+<p>Status: revised 2026-10-04 after outside review; approved by Keith to build. The revision drops the alias table, so there is no schema change. Follows <code>2026-10-03-project-tag-repair.html</code> section 5.</p>
 
 <h2>1. Problem</h2>
-<p>A memory's project is a folder name: <code>resolveProjectIdentity</code> (<code>src/project-identity.ts:96</code>) takes the basename of the nearest <code>.hippo</code> or <code>.git</code> folder, lowercased, or the repo's name for a linked worktree. Two different repos in folders with the same name get the same project. In the global store, each then sees the other's memories in its ambient context. Ambient context is the memory hippo adds to every prompt without being asked. Cases this hits:</p>
-<ul>
-<li>Agent sandboxes and dev containers that check every repo out to <code>/workspace</code>, <code>/app</code> or <code>/src</code>.</li>
-<li>Common repo names across orgs or teams: <code>api</code>, <code>web</code>, <code>infra</code>, <code>docs</code>.</li>
-<li>A fork and its upstream, cloned side by side under one name in two parent folders.</li>
-</ul>
-<p>Tenants keep users and orgs apart; this is a leak inside one tenant's store. A project store (<code>.hippo</code> in the repo) does not have the problem, because only that repo writes to it.</p>
+<p>A memory's project is a folder name: <code>resolveProjectIdentity</code> (<code>src/project-identity.ts</code>) takes the basename of the nearest <code>.hippo</code> or <code>.git</code> folder, lowercased, or the repo's name for a linked worktree. Two different repos in folders with the same name get the same project. In the global store each then sees the other's memories in its ambient context, the memory hippo adds to every prompt unasked. It hits agent sandboxes that check every repo out to <code>/workspace</code> or <code>/app</code>, common names across teams (<code>api</code>, <code>web</code>, <code>infra</code>), and a fork cloned beside its upstream.</p>
 
-<h2>2. Proposed identity, first match wins</h2>
+<h2>2. Identity, first match wins</h2>
 <table><tr><th>Source</th><th>Example id</th><th>Why</th></tr>
-<tr><td><code>.hippo/project.json</code> <code>{"id": "..."}</code>, committed by the team</td><td><code>acme-billing</code></td><td>Explicit and stable across renames, forks and remote moves. An admin can set it fleet-wide.</td></tr>
-<tr><td>The <code>origin</code> remote in git config, normalised: host plus path, lowercased, <code>.git</code> and user info (tokens) stripped, so ssh and https forms match</td><td><code>github.com/acme/api</code></td><td>Unique per repo, with no setup. Read from the config file, so no git process is spawned in the per-prompt hook. A worktree reads its repo's config through <code>commondir</code>, as <code>linkedWorktreeRepoName</code> already does.</td></tr>
-<tr><td>Folder name (today's rule)</td><td><code>api</code></td><td>Fallback for a repo with no remote and no file.</td></tr>
-</table>
-<p>User-global (<code>''</code>) and unknown (null) keep their meaning. Home and markerless folders stay user-global.</p>
+<tr><td><code>.hippo-project.json</code> at the repo root, <code>{"id": "..."}</code>, committed by the team</td><td><code>acme-billing</code></td><td>Explicit, stable across renames, forks and remote moves. At the repo root, never inside <code>.hippo/</code>: a <code>.hippo</code> folder alone makes a folder a store root, so MCP and <code>getHippoRoot</code> would route to an empty local store, and <code>.hippo/</code> is often gitignored.</td></tr>
+<tr><td>The <code>origin</code> remote, read from the git config file</td><td><code>github.com/acme/api</code></td><td>Unique per repo with no setup. <code>origin</code> only: picking <code>upstream</code> would join a fork to its upstream. No git process in the prompt hook.</td></tr>
+<tr><td>Folder name (today's rule)</td><td><code>api</code></td><td>No remote and no file.</td></tr></table>
+<p>User-global (<code>''</code>) and unknown (null) keep their meaning; home and markerless folders stay user-global.</p>
+<p><b>Normalising the remote.</b> Strip userinfo (tokens), port, a trailing <code>.git</code> and <code>/</code>; lowercase; turn the scp form <code>host:org/repo</code> into <code>host/org/repo</code>, so ssh and https agree. Local-path and <code>file://</code> remotes fall back to the folder name, since they would put user paths into rows. Azure DevOps ssh and https paths differ; normalise both to <code>dev.azure.com/org/project/repo</code>. Ignore <code>include</code>, <code>includeIf</code> and <code>insteadOf</code>: the raw URL is stable on one machine, and the file covers fleets. The parser handles quoted values, <code>#</code> and <code>;</code> comments, and the case-sensitive subsection name. A linked worktree reads <code>&lt;commondir&gt;/config</code>; a submodule (a <code>.git</code> file with no <code>commondir</code>) reads <code>&lt;gitdir&gt;/config</code>.</p>
+<p><b>Switch.</b> On by default, with <code>projectIdentity.remote: false</code> in config as the off switch for one release. An opt-in reaches no fleet and would mean switching identity twice.</p>
 
-<h2>3. Existing rows: an alias table, never a silent rewrite</h2>
+<h2>3. Existing rows: two names on read, a fold to finish</h2>
+<p><code>ProjectIdentity</code> gains <code>legacyName</code>, today's folder rule, which costs nothing extra to compute. Every read that compares <code>origin_project</code> to the current project admits <code>{id, legacyName}</code>, so old rows stay exactly as visible as today and no new row leaks, since new rows carry the id. No table, no migration, no write from the prompt hook.</p>
+<p>Read sites that take the two-name set: <code>classifyOriginProject</code> and its callers (<code>context.ts</code>, <code>capture.ts</code>, <code>shared.ts</code>), <code>ambientSecretAdmit</code>, <code>invalidation.ts</code>, and the SQL filters in <code>ambient-store.ts</code>, <code>store/candidates.ts</code>, <code>agent-memories/sync.ts</code> and <code>compaction-record.ts</code>. MCP and HTTP recall take the identity from the same resolver.</p>
+<p>The permanent move is <code>hippo projects repair</code>: its fold step (<code>planFolds</code>) already folds a name whose every recorded folder resolves to one other project today, so <code>api</code> folds into <code>github.com/acme/api</code>. Where folders resolve to two ids it refuses, and that refusal is the collision report: doctor names the shared legacy name from the same plan. Sleep partitions (consolidation, DAG, dedupe) key on <code>origin_project</code>, so old and new rows only consolidate together after a fold.</p>
+<p><b>Project stores.</b> Only one repo writes a project store, so its legacy name cannot collide. The two-name read keeps its rows visible; repair in a project store folds the store's own legacy name into its id, which is safe there.</p>
+
+<h2>4. Agent-memory imports: adopt, never copy</h2>
+<p>In the global store's project pass the container id hashes folder plus origin (<code>source.ts</code>), so a new id is a new prefix and every note would import again; the duplicate check skips agent-memory sources, so nothing would catch it. Local stores hash the folder alone and need no change.</p>
+<p>Fix: inside each container's transaction, when the new prefix holds no rows and the legacy prefix (<code>containerId(path, scope, platform, legacyName)</code>) does, rename the prefix on live rows and dormant snapshots and set the new origin; rewrite mirrors after commit. The folder path is in the hash, so two <code>api</code> checkouts each adopt only their own rows. <code>legacyName</code> joins the handover origins and the unlisted-rows partition. <code>foldInTx</code> uses the same prefix rename for imports instead of setting them aside, so a fold stops churning rows through dormant.</p>
+
+<h2>5. Rollout notes</h2>
 <ul>
-<li>New table <code>project_aliases(tenant_id, legacy_name, project_id, first_seen)</code>. The first time a checkout resolves to an id whose folder-name form differs, hippo records <code>legacy_name → project_id</code>.</li>
-<li>Ambient context treats rows tagged with a legacy name the table maps to the current id as the project's own. Old memories stay visible with no rewrite.</li>
-<li><b>Collision detection:</b> if a second, different id later claims the same legacy name, it gets no alias. <code>hippo doctor</code> then warns that two repos share the name, and new rows stop leaking from then on. Today the collision is silent.</li>
-<li>An operator who wants the old rows moved for good runs <code>hippo projects merge &lt;legacy&gt; &lt;id&gt;</code> (already built), and the alias is then no longer needed.</li>
+<li>An older binary sees id-tagged rows as another project's, so a downgrade hides them until upgrade. Release notes say so.</li>
+<li>Doctor's projects check flags each upgraded global store until <code>hippo projects repair --global</code> runs; the warning names the fold.</li>
+<li>Org and repo names appear in rows and audit events. They already appear in <code>shared:</code> sources and folder names, so this is no new class of data; the SIEM export docs say so.</li>
+<li>hippo-enterprise reports that group by <code>origin_project</code> show the id after upgrade; check them before release.</li>
 </ul>
 
-<h2>4. Open design points</h2>
+<h2>6. Checks that close it</h2>
 <ul>
-<li><b>Agent-memory imports.</b> The container id hashes folder plus project (<code>source.ts:13</code>), so a new id re-imports every note once. The sync should adopt rows of an aliased legacy container the way <code>legacy.ts</code> adopts old Claude imports, instead of creating copies. This must ship in the same change, or each user gets one more full set of duplicates.</li>
-<li><b>Mixed fleets.</b> An old binary keeps writing folder names. The alias covers reads, so the rollout order matters less than in the repair, but doctor should report rows written under a legacy name after the alias was recorded.</li>
-<li><b>Remote changes.</b> A repo moved to a new org gets a new id. The alias chain (old id to new id) uses the same table; <code>project.json</code> is the stable answer for teams that move repos.</li>
-<li><b>Privacy.</b> Org and repo names appear in rows and in audit events. They already appear in <code>shared:</code> sources and folder names, so this adds no new class of data, but the SIEM export docs should say so.</li>
+<li>Identity matrix: file, ssh remote, scp form, https with a token and port, Azure DevOps both forms, file remote, no remote, worktree, submodule, bare repo, home, <code>remote: false</code>.</li>
+<li>Two repos named <code>api</code> with different remotes, one global store: neither sees the other's new rows; old rows stay visible to each through the legacy name; repair refuses to fold <code>api</code> and doctor names it.</li>
+<li>Upgrade: rows under the folder name stay visible; the agent-memory sync adopts the legacy container and creates no copies; dormant snapshots move with it.</li>
+<li>Tests that resolve <code>process.cwd()</code> inside a checkout with an <code>origin</code> get the id; fixtures without a remote keep the folder name.</li>
+<li>Per-prompt hook: one to three small file reads more, inside the existing p95 gate.</li>
 </ul>
 
-<h2>5. Checks that close it</h2>
-<ul>
-<li>Identity matrix tests: file, ssh remote, https remote with a token, no remote, worktree, bare repo, submodule, home.</li>
-<li>Two repos named <code>api</code> with different remotes, one global store: neither sees the other's new rows in ambient context; doctor warns about the shared legacy name.</li>
-<li>Upgrade test: rows under the folder name stay visible through the alias, and the agent-memory sync creates no copies.</li>
-<li>Per-prompt hook latency stays within the existing p95 gate (one extra file read).</li>
-</ul>
-
-<h2>6. Needs Keith</h2>
-<div class="ask"><ol>
-<li>Yes or no to the identity order (file, remote, folder name) and the alias table. The table is a schema change, so it needs a migration.</li>
-<li>Whether the remote rule is on by default or behind config for one release.</li>
-</ol></div>
+<h2>7. Still Keith's call</h2>
+<p class="ask">Whether <code>hippo projects repair</code> runs on its own once per store during sleep. That rewrites live data for every user, so it stays off until he says yes; until then it is one command, and doctor tells the user to run it.</p>
 </body></html>
