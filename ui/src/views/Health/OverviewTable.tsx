@@ -78,7 +78,7 @@ export function OverviewTable({ projects, hits, query, onOpen }: OverviewTablePr
       onSort={onSort}
       resetKey={`${sortKey}:${dir}:${query}`}
       onActivate={(i) => onOpen(rows[i].key)}
-      rowState={() => ({ selected: hits !== null })}
+      rowState={() => ({ hit: hits !== null })}
       empty={query ? `No projects match "${query}"` : "No projects"}
       renderRow={(i) => {
         const p = rows[i];

@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { ViewSwitch, type View } from "../../components/ViewSwitch";
+import { useIsPhone } from "../../hooks/useMediaQuery";
 import { navigate, useRoute } from "../../router";
 import { keyLabel, projectLabel, relSince } from "./format";
-import { type Range, useHealth } from "./HealthContext";
+import { useHealth } from "./HealthContext";
+import { RangeSelect } from "./RangeSelect";
 import { SearchBox } from "./SearchBox";
 
-const RANGES: readonly Range[] = [7, 30, 90];
-
-const toRange = (value: string): Range => RANGES.find((r) => String(r) === value) ?? 30;
 const TICK_MS = 15_000;
 
 function useNow(): number {
@@ -72,13 +71,22 @@ function Crumbs() {
 interface HeaderProps {
   view: View;
   onViewChange: (view: View) => void;
-  autoFocusSwitch: boolean;
 }
 
-/** Shared header: brand, then (Health only) crumbs, search, range; the view switch, Updated and Refresh sit at the right. */
-export function Header({ view, onViewChange, autoFocusSwitch }: HeaderProps) {
-  const { overview, range, setRange, refresh, refreshing } = useHealth();
+function RefreshIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M15 9a6 6 0 1 1-1.8-4.3" />
+      <path d="M15 2.5v3.6h-3.6" />
+    </svg>
+  );
+}
+
+/** Shared header: brand, then (Health only) crumbs, search, range; the view switch, Updated and Refresh sit at the right. Phones drop crumbs, Updated and range, which the view carries instead. */
+export function Header({ view, onViewChange }: HeaderProps) {
+  const { overview, refresh, refreshing } = useHealth();
   const now = useNow();
+  const phone = useIsPhone();
   const health = view === "health";
   return (
     <header className="top">
@@ -92,32 +100,19 @@ export function Header({ view, onViewChange, autoFocusSwitch }: HeaderProps) {
         <span>hippo</span>
         <small>Memory</small>
       </div>
-      {health ? <Crumbs /> : <span className="spacer" />}
+      {health && !phone ? <Crumbs /> : <span className="spacer" />}
       {health && <SearchBox />}
-      {health && (
-        <>
-          <label className="sr-only" htmlFor="range">
-            Date range
-          </label>
-          <select id="range" className="ctl range" value={range} onChange={(e) => setRange(toRange(e.target.value))}>
-            {RANGES.map((r) => (
-              <option key={r} value={r}>
-                Last {r} days
-              </option>
-            ))}
-          </select>
-        </>
-      )}
+      {health && !phone && <RangeSelect />}
       <div className="top-right">
-        <ViewSwitch view={view} onChange={onViewChange} autoFocus={autoFocusSwitch} />
-        {health && overview.data && <span className="updated">Updated {relSince(overview.data.generatedAt, now)}</span>}
+        <ViewSwitch view={view} onChange={onViewChange} />
+        {health && !phone && overview.data && <span className="updated">Updated {relSince(overview.data.generatedAt, now)}</span>}
         {health && (
-          <button type="button" className="btn" aria-label="Refresh" aria-busy={refreshing} onClick={refresh}>
-            {refreshing ? "Refreshing" : "Refresh"}
+          <button type="button" className={phone ? "btn icon" : "btn"} aria-label="Refresh" aria-busy={refreshing} onClick={refresh}>
+            {phone ? <RefreshIcon /> : refreshing ? "Refreshing" : "Refresh"}
           </button>
         )}
       </div>
-      <span className="top-break" aria-hidden="true" />
+      {health && <span className="top-break" aria-hidden="true" />}
     </header>
   );
 }

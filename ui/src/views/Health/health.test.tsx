@@ -84,6 +84,25 @@ describe("OverviewTable grid", () => {
   });
 });
 
+describe("VTable access", () => {
+  it("keeps the sort header buttons in the Tab order", () => {
+    render(<OverviewTable projects={[makeProject("alpha")]} hits={null} query="" onOpen={vi.fn()} />);
+    const buttons = within(screen.getByRole("grid", { name: "Projects table" })).getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(1);
+    for (const b of buttons) expect(b.tabIndex).toBe(0);
+  });
+
+  it("highlights search hits without marking any row aria-selected", () => {
+    render(<OverviewTable projects={[makeProject("alpha")]} hits={new Map([["p:alpha", 3]])} query="abc" onOpen={vi.fn()} />);
+    const rows = within(screen.getByRole("grid", { name: "Projects table" })).getAllByRole("row").filter((r) => r.classList.contains("vt-tr"));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row).toHaveClass("sel");
+      expect(row).not.toHaveAttribute("aria-selected");
+    }
+  });
+});
+
 describe("T10: token coverage", () => {
   const src = join(__dirname, "..", "..");
 
@@ -95,19 +114,30 @@ describe("T10: token coverage", () => {
     });
   }
 
-  it("defines every var(--x) used under ui/src", () => {
+  it("defines every var(--x) used under ui/src in tokens.css :root, in the same rule, or inline from a component", () => {
+    const names = (text: string) => [...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]);
+    const root = new Set(names(/:root\s*\{([^}]*)\}/.exec(readFileSync(join(src, "tokens.css"), "utf8"))?.[1] ?? ""));
     const files = walk(src);
-    const defined = new Set<string>();
-    const used = new Map<string, string>();
+    const inline = new Set<string>();
+    for (const file of files.filter((f) => /\.tsx?$/.test(f))) {
+      for (const m of readFileSync(file, "utf8").matchAll(/["'](--[a-z0-9-]+)["']/g)) inline.add(m[1]);
+    }
+    const missing: string[] = [];
+    let used = 0;
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      for (const m of text.matchAll(/(--[a-z0-9-]+)\s*:/g)) defined.add(m[1]);
-      for (const m of text.matchAll(/["'](--[a-z0-9-]+)["']/g)) defined.add(m[1]);
-      for (const m of text.matchAll(/var\((--[a-z0-9-]+)/g)) if (!used.has(m[1])) used.set(m[1], file);
+      const rules = file.endsWith(".css") ? [...text.matchAll(/[^{}]+\{([^{}]*)\}/g)].map((m) => m[1]) : [text];
+      for (const body of rules) {
+        const own = new Set(file.endsWith(".css") ? names(body) : []);
+        for (const m of body.matchAll(/var\((--[a-z0-9-]+)/g)) {
+          used++;
+          if (!root.has(m[1]) && !own.has(m[1]) && !inline.has(m[1])) missing.push(`${m[1]} in ${file}`);
+        }
+      }
     }
-    const missing = [...used].filter(([name]) => !defined.has(name)).map(([name, file]) => `${name} in ${file}`);
     expect(missing).toEqual([]);
-    expect(used.size).toBeGreaterThan(10);
+    expect(root.size).toBeGreaterThan(10);
+    expect(used).toBeGreaterThan(10);
   });
 
   it("defines every token in tokens.css exactly once at :root", () => {

@@ -258,6 +258,18 @@ export function Treemap({ projects, hits, query, memory, tip, onOpen, ref }: Tre
       hideTip();
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
+    // A window dragged to a screen with another density changes dpr without resizing the box.
+    let density: MediaQueryList | undefined;
+    const onDensity = () => {
+      resize();
+      watchDensity();
+    };
+    const watchDensity = () => {
+      density?.removeEventListener("change", onDensity);
+      density = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      density?.addEventListener("change", onDensity);
+    };
+    watchDensity();
     void document.fonts?.ready.then(() => {
       clearFitCache();
       schedule();
@@ -265,6 +277,7 @@ export function Treemap({ projects, hits, query, memory, tip, onOpen, ref }: Tre
     return () => {
       ro.disconnect();
       canvas.removeEventListener("wheel", onWheel);
+      density?.removeEventListener("change", onDensity);
       if (m.raf) cancelAnimationFrame(m.raf);
       m.tween?.();
       if (!m.drilling) memory.current.cam = m.cam;
@@ -453,7 +466,8 @@ export function Treemap({ projects, hits, query, memory, tip, onOpen, ref }: Tre
       <canvas
         ref={cv}
         tabIndex={0}
-        role="img"
+        role="application"
+        aria-roledescription="treemap"
         aria-label="Treemap of projects. The Table view lists the same numbers."
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

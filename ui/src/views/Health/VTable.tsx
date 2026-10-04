@@ -19,7 +19,10 @@ export interface VTableHandle {
 
 /** Per-row presentation state. */
 export interface VRowState {
+  /** The row is the open one: highlighted and exposed as `aria-selected`. */
   selected?: boolean;
+  /** Highlight only (a search hit); the row is not a selection, so no `aria-selected`. */
+  hit?: boolean;
   className?: string;
 }
 
@@ -61,7 +64,7 @@ export function VTable(props: VTableProps) {
   const rows: ReactNode[] = [];
   for (let i = t.first; i < t.last; i++) {
     const state = rowState?.(i) ?? {};
-    const cls = ["vt-tr", i === t.active ? "act" : "", state.selected ? "sel" : "", state.className ?? ""].filter(Boolean).join(" ");
+    const cls = ["vt-tr", i === t.active ? "act" : "", state.selected || state.hit ? "sel" : "", state.className ?? ""].filter(Boolean).join(" ");
     rows.push(
       <div
         key={i}
@@ -111,7 +114,7 @@ export function VTable(props: VTableProps) {
               {c.nosort || !onSort ? (
                 <span className="h">{c.label}</span>
               ) : (
-                <button type="button" tabIndex={-1} onClick={() => onSort(c.key)}>
+                <button type="button" onClick={() => onSort(c.key)}>
                   {c.label}
                   <span className="ar" aria-hidden="true">
                     {on ? (sortDir === "asc" ? "▲" : "▼") : ""}

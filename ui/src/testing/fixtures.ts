@@ -1,3 +1,4 @@
+import { PHONE_QUERY } from "../hooks/useMediaQuery";
 import type { Kpi, Overview, ProjectDetail, ProjectSummary } from "../types";
 
 /** Test builders and a path-routed fetch stub for the Health view; not imported by app code. */
@@ -70,4 +71,13 @@ export function fetchRouter(routes: Record<string, Handler>) {
     return handler(url, init);
   };
   return { stub, calls };
+}
+
+/** Makes `matchMedia` report the phone width; remove it again with `Reflect.deleteProperty(window, "matchMedia")`. */
+export function stubPhone(): void {
+  window.matchMedia = (query: string) => {
+    const list: Partial<MediaQueryList> = { matches: query === PHONE_QUERY, media: query, addEventListener() {}, removeEventListener() {} };
+    // SAFETY: the app reads only matches and the two listener methods.
+    return list as MediaQueryList;
+  };
 }

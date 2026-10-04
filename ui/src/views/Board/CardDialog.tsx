@@ -74,7 +74,7 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
     escRef.current?.focus();
   }, []);
 
-  // Nothing else in board view listens for Escape, so a plain window listener is enough.
+  // Window-level so Escape closes the dialog wherever focus is; the shell's own Escape handler only hides the Health tip.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -96,7 +96,7 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
       {phone && <SheetHandle onClose={onClose} />}
       <div style={headerRowStyle}>
         <span style={statusLabelStyle}>{detail?.card.status ?? ""}</span>
-        <button ref={escRef} type="button" aria-label="esc, close card details" onClick={onClose} style={escButtonStyle}>
+        <button ref={escRef} type="button" aria-label="esc, close card details" onClick={onClose} style={phone ? escButtonSheetStyle : escButtonStyle}>
           esc
         </button>
       </div>
@@ -184,6 +184,8 @@ const escButtonStyle: React.CSSProperties = {
   background: "var(--bg)", border: "none", borderRadius: 4,
   color: "var(--text-3)", cursor: "pointer", padding: "4px 10px", fontSize: 12, fontFamily: "var(--mono)",
 };
+
+const escButtonSheetStyle: React.CSSProperties = { ...escButtonStyle, minHeight: 44, minWidth: 44 };
 
 const bodyStyle: React.CSSProperties = { padding: "20px 24px" };
 

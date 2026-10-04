@@ -1159,7 +1159,7 @@ main > :last-child {
   }
 }
 
-/* Phone: two header rows (brand, search, switch, Refresh; then crumbs, Updated, range); the page scrolls */
+/* Phone: header row 1 is brand, view switch, icon Refresh; row 2 is the search; the page scrolls */
 @media (max-width: 760px) {
   .top {
     height: auto;
@@ -1178,13 +1178,8 @@ main > :last-child {
   .search kbd {
     display: none;
   }
-  .search {
+  .top > .spacer {
     order: 2;
-    flex: 1 1 120px;
-    min-width: 96px;
-  }
-  .search input {
-    padding-right: 8px;
   }
   .view-switch {
     order: 3;
@@ -1193,23 +1188,27 @@ main > :last-child {
     order: 4;
     padding: 0 12px;
   }
+  .top .btn.icon {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .top .btn[aria-busy="true"] {
+    opacity: 0.6;
+  }
   .top-break {
     display: block;
     order: 5;
     flex: 0 0 100%;
     height: 0;
   }
-  .crumbs {
+  .search {
     order: 6;
+    flex: 1 1 100%;
+    min-width: 0;
   }
-  .updated {
-    order: 7;
-  }
-  .top .range {
-    order: 8;
-  }
-  .top > .spacer {
-    order: 6;
+  .search input {
+    padding-right: 8px;
   }
   .view {
     overflow: auto;
@@ -1218,16 +1217,20 @@ main > :last-child {
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .kpis-range {
+    grid-column: 1 / -1;
+    padding: 8px 12px;
+  }
+  .kpis-range .range {
+    width: 100%;
+  }
   .kpi {
     border-top: 1px solid var(--line);
   }
-  .kpi:nth-child(-n + 2) {
-    border-top: 0;
-  }
-  .kpi:nth-child(odd) {
+  .kpi:nth-child(even) {
     border-left: 0;
   }
-  .kpi:last-child:nth-child(odd) {
+  .kpi:last-child:nth-child(even) {
     grid-column: 1 / -1;
   }
   .kpi .v {

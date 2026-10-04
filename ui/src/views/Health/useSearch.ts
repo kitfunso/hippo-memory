@@ -30,12 +30,13 @@ interface Settled {
   error: string | null;
 }
 
-/** Debounced, abortable search; only a response for the query now typed is ever exposed. */
+/** Debounced, abortable search; only a response for the query now typed is ever exposed, and a newer snapshot refetches it. */
 export function useSearch(clock: SnapshotClock): SearchState {
   const [input, setInput] = useState("");
   const debounced = useDebouncedValue(input, SEARCH_DEBOUNCE_MS);
   const [settled, setSettled] = useState<Settled | null>(null);
-  const { report } = clock;
+  const [nonce, setNonce] = useState(0);
+  const { report, epoch } = clock;
 
   const typed = input.trim();
   const sent = debounced.trim();
@@ -47,7 +48,10 @@ export function useSearch(clock: SnapshotClock): SearchState {
     fetchSearch(sent, { signal: ctrl.signal })
       .then((result) => {
         if (ctrl.signal.aborted) return;
-        report(result.snapshotId);
+        if (!report(result.snapshotId)) {
+          setNonce((n) => n + 1);
+          return;
+        }
         setSettled({ q: sent, result, error: null });
       })
       .catch((err: Error) => {
@@ -55,7 +59,7 @@ export function useSearch(clock: SnapshotClock): SearchState {
         setSettled({ q: sent, result: null, error: err.message });
       });
     return () => ctrl.abort();
-  }, [sent, report]);
+  }, [sent, report, epoch, nonce]);
 
   const clear = useCallback(() => setInput(""), []);
 

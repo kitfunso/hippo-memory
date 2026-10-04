@@ -1,6 +1,8 @@
+import { useIsPhone } from "../../hooks/useMediaQuery";
 import type { Kpi, Overview } from "../../types";
 import { fmt, fmtK, pct } from "./format";
 import type { Range } from "./HealthContext";
+import { RangeSelect } from "./RangeSelect";
 
 const SPARK_W = 84;
 const SPARK_H = 30;
@@ -41,13 +43,20 @@ function valueText(kpi: Kpi, data: Overview): string {
   return kpi.id === "atRiskShare" || kpi.id === "embeddingCoverage" ? pct(kpi.value) : fmt(kpi.value);
 }
 
-/** Five KPI cards; a card draws a sparkline only when the server recorded a series for it. */
+/** Five KPI cards; a card draws a sparkline only when the server recorded a series for it. On phones the range select is the strip first row. */
 export function Kpis({ data, range }: { data: Overview | null; range: Range }) {
+  const phone = useIsPhone();
+  const rangeRow = phone && (
+    <div className="kpis-range">
+      <RangeSelect />
+    </div>
+  );
   if (!data) {
     return (
-      <div className="kpis" aria-hidden="true">
+      <div className="kpis">
+        {rangeRow}
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="kpi">
+          <div key={i} className="kpi" aria-hidden="true">
             <div className="skel skel-l" />
             <div className="skel skel-v" />
             <div className="skel skel-d" />
@@ -58,6 +67,7 @@ export function Kpis({ data, range }: { data: Overview | null; range: Range }) {
   }
   return (
     <div className="kpis">
+      {rangeRow}
       {data.kpis.map((kpi) => {
         const part = rangeSeries(kpi.series, range);
         return (

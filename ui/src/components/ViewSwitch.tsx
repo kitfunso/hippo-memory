@@ -9,15 +9,14 @@ const VIEWS = [
 interface ViewSwitchProps {
   view: View;
   onChange: (view: View) => void;
-  /** Focus the checked radio on mount; only true right after a switch, never on first load. */
-  autoFocus?: boolean;
 }
 
-/** Health/board radiogroup: a two-way roving-tabindex switch, arrow keys toggle. */
-export function ViewSwitch({ view, onChange, autoFocus }: ViewSwitchProps) {
+/** Health/board radiogroup: a two-way roving-tabindex switch, arrow keys toggle and move focus to the newly checked radio. */
+export function ViewSwitch({ view, onChange }: ViewSwitchProps) {
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
+    e.currentTarget.querySelector<HTMLElement>('[role="radio"][aria-checked="false"]')?.focus();
     onChange(view === "health" ? "board" : "health");
   }
 
@@ -33,7 +32,6 @@ export function ViewSwitch({ view, onChange, autoFocus }: ViewSwitchProps) {
             aria-checked={checked}
             aria-label={aria}
             tabIndex={checked ? 0 : -1}
-            autoFocus={autoFocus && checked}
             onClick={() => {
               if (!checked) onChange(key);
             }}

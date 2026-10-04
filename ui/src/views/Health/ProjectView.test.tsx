@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../../App";
-import { PHONE_QUERY } from "../../hooks/useMediaQuery";
-import { type Handler, fetchRouter, json, makeDetail, makeOverview, makeProject } from "../../testing/fixtures";
+import { type Handler, fetchRouter, json, makeDetail, makeOverview, makeProject, stubPhone } from "../../testing/fixtures";
 import { makePage, makePointsDetail, makeRow, pageHandler } from "../../testing/memories";
 import { makeRows, openHippo } from "../../testing/openHippo";
 import { maxLogFor, plotX, plotY } from "./canvas/scatter";
@@ -210,16 +209,8 @@ describe("ProjectView: scatter", () => {
 });
 
 describe("ProjectView: phone", () => {
-  function phone() {
-    window.matchMedia = (query: string) => {
-      const list: Partial<MediaQueryList> = { matches: query === PHONE_QUERY, media: query, addEventListener() {}, removeEventListener() {} };
-      // SAFETY: the app reads only matches and the two listener methods.
-      return list as MediaQueryList;
-    };
-  }
-
   it("renders a card list with Sort by, a direction toggle, the Brush toggle and crumbs as the first line", async () => {
-    phone();
+    stubPhone();
     openHippo(makeRows(3));
     const list = await screen.findByRole("listbox", { name: "Memories" });
     expect(await within(list).findAllByRole("option")).toHaveLength(3);
@@ -232,8 +223,19 @@ describe("ProjectView: phone", () => {
     expect(view.firstElementChild).toHaveClass("pv-top");
   });
 
+  it("has one Breadcrumb and one Refresh, with the header holding neither crumbs nor Updated", async () => {
+    stubPhone();
+    openHippo(makeRows(2));
+    await screen.findByRole("listbox", { name: "Memories" });
+    expect(screen.getAllByRole("navigation", { name: "Breadcrumb" })).toHaveLength(1);
+    const refresh = screen.getAllByRole("button", { name: /^refresh/i });
+    expect(refresh).toHaveLength(1);
+    expect(refresh[0]).toHaveAttribute("aria-label", "Refresh");
+    expect(within(document.querySelector<HTMLElement>("header.top")!).queryByText(/^Updated /)).toBeNull();
+  });
+
   it("opens a modal bottom sheet and Escape closes it", async () => {
-    phone();
+    stubPhone();
     openHippo(makeRows(2));
     const list = await screen.findByRole("listbox", { name: "Memories" });
     fireEvent.click((await within(list).findAllByRole("option"))[0]);

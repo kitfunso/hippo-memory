@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "./App";
-import { fetchRouter, json, makeDetail, makeOverview, makeProject } from "./testing/fixtures";
+import { fetchRouter, json, makeDetail, makeOverview, makeProject, stubPhone } from "./testing/fixtures";
 
 const hippo = makeProject("hippo", { live: 500, atRisk: 50 });
 const mure = makeProject("mure", { live: 200, atRisk: 4 });
@@ -12,6 +12,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(window, "matchMedia");
 });
 
 function overviewRoutes() {
@@ -79,6 +80,39 @@ describe("App: Health overview", () => {
     render(<App />);
     expect(await screen.findByText(/^Updated /)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^refresh/i })).toHaveLength(1);
+  });
+});
+
+describe("App: phone header", () => {
+  it("overview at phone width has one Breadcrumb, one Refresh, and the range select in the KPI strip", async () => {
+    stubPhone();
+    vi.stubGlobal("fetch", overviewRoutes().stub);
+    render(<App />);
+    await screen.findByText("Total memories");
+
+    expect(screen.getAllByRole("navigation", { name: "Breadcrumb" })).toHaveLength(1);
+    const refresh = screen.getAllByRole("button", { name: /^refresh/i });
+    expect(refresh).toHaveLength(1);
+    expect(refresh[0]).toHaveAttribute("aria-label", "Refresh");
+
+    const header = document.querySelector<HTMLElement>("header.top")!;
+    expect(within(header).queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
+    expect(within(header).queryByText(/^Updated /)).toBeNull();
+    expect(within(header).queryByRole("combobox", { name: "Date range" })).toBeNull();
+    expect(screen.getAllByText(/^Updated /)).toHaveLength(1);
+    const view = screen.getByRole("region", { name: "All projects" });
+    expect(view.firstElementChild).toHaveClass("pv-top");
+    expect(screen.getByRole("combobox", { name: "Date range" }).closest(".kpis")).not.toBeNull();
+  });
+
+  it("board at phone width has exactly one Refresh and no Breadcrumb", async () => {
+    stubPhone();
+    window.history.replaceState(null, "", "#/board");
+    vi.stubGlobal("fetch", fetchRouter({ "/api/cards": () => json({ cards: [] }) }).stub);
+    render(<App />);
+    expect(await screen.findByText("no cards yet")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^refresh/i })).toHaveLength(1);
+    expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
   });
 });
 
@@ -186,6 +220,30 @@ describe("App: search", () => {
   });
 });
 
+describe("App: search refetch", () => {
+  it("a snapshot epoch bump refetches the active search", async () => {
+    let id = 0;
+    let searches = 0;
+    const { stub } = fetchRouter({
+      "/api/overview": () => json(makeOverview([hippo, mure], { snapshotId: ++id })),
+      "/api/search": (url) => {
+        searches++;
+        return json({ snapshotId: id, q: url.searchParams.get("q") ?? "", total: 2, hits: { "p:mure": 2 }, nameMatches: [] });
+      },
+    });
+    vi.stubGlobal("fetch", stub);
+    render(<App />);
+    await screen.findByText("Total memories");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Search memories" }), { target: { value: "abc" } });
+    await waitFor(() => expect(searches).toBe(1), { timeout: 2000 });
+    await screen.findByRole("option", { name: /mure/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(searches).toBe(2), { timeout: 2000 });
+  });
+});
+
 describe("App: Board", () => {
   it("T9: #/board shows the Board with exactly one Refresh and no Health search", async () => {
     window.history.replaceState(null, "", "#/board");
@@ -197,6 +255,23 @@ describe("App: Board", () => {
     expect(screen.getAllByRole("button", { name: /^refresh/i })).toHaveLength(1);
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByText(/^Updated /)).toBeNull();
+  });
+
+  it("ArrowRight on the view switch moves focus to the newly checked radio", async () => {
+    const router = fetchRouter({
+      "/api/overview": () => json(makeOverview([hippo])),
+      "/api/cards": () => json({ cards: [] }),
+    });
+    vi.stubGlobal("fetch", router.stub);
+    render(<App />);
+    await screen.findByText("Total memories");
+
+    const health = screen.getByRole("radio", { name: "Memory health" });
+    health.focus();
+    fireEvent.keyDown(health, { key: "ArrowRight" });
+    await waitFor(() => expect(window.location.hash).toBe("#/board"));
+    expect(screen.getByRole("radio", { name: "Card board" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Card board" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("switches from Health to the Board and back through the view switch", async () => {

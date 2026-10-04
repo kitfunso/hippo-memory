@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Chip } from "../../api/client";
+import { useIsPhone } from "../../hooks/useMediaQuery";
 import { navigate } from "../../router";
 import type { Overview as OverviewData } from "../../types";
 import { treemapOrder } from "./canvas/squarify";
 import { useHealth } from "./HealthContext";
 import { Kpis } from "./Kpis";
 import { OverviewTable } from "./OverviewTable";
+import { PhoneTop } from "./PhoneTop";
 import { Rail } from "./Rail";
 import { type TreemapHandle, Treemap } from "./Treemap";
 
@@ -32,6 +34,7 @@ export function Overview() {
   const { overview, range, search, tip, treemap, intent } = useHealth();
   const [mode, setMode] = useState<Mode>("map");
   const zoom = useRef<TreemapHandle>(null);
+  const phone = useIsPhone();
   const data = overview.data;
   const projects = useMemo(() => treemapOrder(data?.projects ?? []), [data]);
 
@@ -46,6 +49,7 @@ export function Overview() {
   if (!data && overview.error) {
     return (
       <section className="view" aria-label="All projects">
+        {phone && <PhoneTop projectKey={null} name="" memoryId={null} />}
         <StateCard role="alert">
           <h3>Could not load memories</h3>
           <p className="mono">{overview.error.message}</p>
@@ -61,6 +65,7 @@ export function Overview() {
   if (!data) {
     return (
       <section className="view" aria-label="All projects">
+        {phone && <PhoneTop projectKey={null} name="" memoryId={null} />}
         <Kpis data={null} range={range} />
         <div className="ov-body">
           <div className="card">
@@ -81,6 +86,7 @@ export function Overview() {
   if (data.total === 0 || data.projects.length === 0) {
     return (
       <section className="view" aria-label="All projects">
+        {phone && <PhoneTop projectKey={null} name="" memoryId={null} />}
         <Kpis data={data} range={range} />
         <StateCard>
           <p>
@@ -94,6 +100,7 @@ export function Overview() {
   const noMatch = search.status === "done" && search.hits !== null && ![...search.hits.values()].some((n) => n > 0);
   return (
     <section className="view" aria-label="All projects">
+      {phone && <PhoneTop projectKey={null} name="" memoryId={null} />}
       <Kpis data={data} range={range} />
       {overview.error && (
         <div className="notice" role="alert">

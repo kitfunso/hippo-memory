@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { type View } from "./components/ViewSwitch";
 import { OVERVIEW_ROUTE, navigate, useRoute } from "./router";
 import { Board } from "./views/Board/Board";
@@ -15,10 +15,8 @@ function Shell() {
   const { notice, setNotice, tip } = useHealth();
   const view: View = route.view === "board" ? "board" : "health";
   const projectKey = route.view === "health" ? route.projectKey : null;
-  const [focusSwitch, setFocusSwitch] = useState(false);
 
   const changeView = useCallback((next: View) => {
-    setFocusSwitch(true);
     navigate(next === "board" ? { view: "board" } : OVERVIEW_ROUTE);
   }, []);
 
@@ -36,7 +34,7 @@ function Shell() {
 
   return (
     <div className="app">
-      <Header view={view} onViewChange={changeView} autoFocusSwitch={focusSwitch} />
+      <Header view={view} onViewChange={changeView} />
       <main>
         {view === "health" && projectKey === null && <h1 className="sr-only">Memory health</h1>}
         {view === "health" && notice && (

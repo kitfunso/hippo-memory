@@ -36,12 +36,13 @@ describe("ViewSwitch", () => {
     }
   });
 
-  it("V4: autoFocus focuses the checked radio; without it, focus stays on document.body", () => {
-    const { unmount } = render(<ViewSwitch view="health" onChange={vi.fn()} autoFocus />);
-    expect(screen.getByRole("radio", { name: "Memory health" })).toHaveFocus();
-    unmount();
-
+  it("V4: an arrow key moves focus to the radio that is about to be checked, and nothing steals focus on mount", () => {
     render(<ViewSwitch view="health" onChange={vi.fn()} />);
     expect(document.body).toHaveFocus();
+
+    const healthRadio = screen.getByRole("radio", { name: "Memory health" });
+    healthRadio.focus();
+    fireEvent.keyDown(healthRadio, { key: "ArrowRight" });
+    expect(screen.getByRole("radio", { name: "Card board" })).toHaveFocus();
   });
 });

@@ -4,7 +4,7 @@ import { type ReactNode, type Ref, useImperativeHandle, useLayoutEffect, useRef,
 export interface TipHandle {
   /** Shows `content` near viewport point (x, y); `closable` adds a close button (touch tips). */
   show(content: ReactNode, x: number, y: number, opts?: { closable?: boolean; onClose?: () => void }): void;
-  /** Hides the tip. */
+  /** Hides the tip and runs the `onClose` it was shown with. */
   hide(): void;
 }
 
@@ -25,15 +25,20 @@ export function Tip({ ref }: TipProps) {
   const [state, setState] = useState<TipState | null>(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
   const box = useRef<HTMLDivElement>(null);
+  const shown = useRef<TipState | null>(null);
 
   useImperativeHandle(
     ref,
     () => ({
       show(content, x, y, opts) {
-        setState({ content, x, y, closable: opts?.closable === true, onClose: opts?.onClose });
+        shown.current = { content, x, y, closable: opts?.closable === true, onClose: opts?.onClose };
+        setState(shown.current);
       },
       hide() {
+        const onClose = shown.current?.onClose;
+        shown.current = null;
         setState(null);
+        onClose?.();
       },
     }),
     [],
@@ -59,8 +64,10 @@ export function Tip({ ref }: TipProps) {
           className="tip-close"
           aria-label="Close tip"
           onClick={() => {
-            state.onClose?.();
+            const onClose = shown.current?.onClose;
+            shown.current = null;
             setState(null);
+            onClose?.();
           }}
         >
           &times;

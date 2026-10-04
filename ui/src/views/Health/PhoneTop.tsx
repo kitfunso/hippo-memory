@@ -6,12 +6,13 @@ import { useHealth } from "./HealthContext";
 const TICK_MS = 15_000;
 
 interface PhoneTopProps {
-  projectKey: string;
+  /** The open project, or null on the overview. */
+  projectKey: string | null;
   name: string;
   memoryId: string | null;
 }
 
-/** Phone only: the crumbs and the Updated label as the first line of the project view, where the header no longer holds them. */
+/** Phone only: the crumbs and the Updated label as the first line of a Health view, where the header no longer holds them. */
 export function PhoneTop({ projectKey, name, memoryId }: PhoneTopProps) {
   const { overview } = useHealth();
   const [now, setNow] = useState(() => Date.now());
@@ -25,30 +26,37 @@ export function PhoneTop({ projectKey, name, memoryId }: PhoneTopProps) {
       <nav className="crumbs" aria-label="Breadcrumb">
         <ol>
           <li>
-            <button type="button" onClick={() => navigate({ view: "health", projectKey: null, memoryId: null })}>
-              All projects
-            </button>
+            {projectKey === null ? (
+              <span className="cur ell" aria-current="page">
+                All projects
+              </span>
+            ) : (
+              <button type="button" onClick={() => navigate({ view: "health", projectKey: null, memoryId: null })}>
+                All projects
+              </button>
+            )}
           </li>
-          {memoryId !== null ? (
-            <>
+          {projectKey !== null &&
+            (memoryId !== null ? (
+              <>
+                <li>
+                  <button type="button" className="ell" title={name} onClick={() => navigate({ view: "health", projectKey, memoryId: null })}>
+                    {name}
+                  </button>
+                </li>
+                <li>
+                  <span className="cur ell mono" aria-current="page">
+                    {memoryId}
+                  </span>
+                </li>
+              </>
+            ) : (
               <li>
-                <button type="button" className="ell" title={name} onClick={() => navigate({ view: "health", projectKey, memoryId: null })}>
+                <span className="cur ell" aria-current="page" title={name}>
                   {name}
-                </button>
-              </li>
-              <li>
-                <span className="cur ell mono" aria-current="page">
-                  {memoryId}
                 </span>
               </li>
-            </>
-          ) : (
-            <li>
-              <span className="cur ell" aria-current="page" title={name}>
-                {name}
-              </span>
-            </li>
-          )}
+            ))}
         </ol>
       </nav>
       {generatedAt && <span className="updated">Updated {relSince(generatedAt, now)}</span>}
