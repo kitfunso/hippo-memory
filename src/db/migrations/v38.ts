@@ -1,43 +1,7 @@
+import type { DatabaseSyncLike } from '../sqlite.js';
 import type { Migration } from './types.js';
 
-export const v38: Migration = {
-    version: 38,
-    up: (db) => {
-      // E2-provenance: anchor graph entity/relation provenance to the authoritative E2
-      // object (decision/policy/customer-note/project-brief) instead of the decaying
-      // memory mirror (docs/plans/2026-06-03-graph-e2-provenance.md). An in-force E2
-      // object must STAY in the graph after its mirror memory is forgotten or
-      // consolidation-pruned. The graph is a PURE DERIVED CACHE (clearGraph + rebuild on
-      // every `graph extract` / `sleep`), so v38 DROPs+recreates entities/relations (no
-      // data copy) and the next extract repopulates. graph_extraction_queue is untouched.
-      //
-      // Two provenance paths, "at least one, no raw":
-      //  - memory path (memory_id NOT NULL): source_kind must equal the FK'd memory's live
-      //    kind and that kind is distilled|superseded (raw still ABORTs) + tenant-match.
-      //  - object path (memory_id NULL): source_object_type/id must reference an EXISTING
-      //    same-tenant E2 row whose status is active|superseded (not closed). E2 objects
-      //    are consolidated BY CONSTRUCTION, so the no-raw invariant still holds.
-      //  - all-null is rejected.
-      //
-      // memory_id is now NULLABLE with ON DELETE SET NULL (was NOT NULL / CASCADE), so a
-      // mirror forget/consolidate nulls the recall pointer without dropping the row. NOTE
-      // (empirically verified, contradicts the SQLite docs): node:sqlite DOES fire the
-      // BEFORE UPDATE guard from the FK SET NULL action even with recursive_triggers OFF.
-      // So the *_consolidated_only_UPDATE triggers deliberately OMIT the all-null ABORT
-      // (kept on INSERT) - otherwise a mirror delete of a memory-only row would be blocked.
-      // See the per-trigger comments below. A SET NULL leaves source_kind at its old value
-      // by design (the object path is distilled-by-construction; source_kind is only
-      // re-checked when memory_id NOT NULL).
-      // source_object_id is a SOFT (type,id) pointer (no hard FK) the rebuild re-validates,
-      // so a legitimate E2 hard-delete is never blocked; a `closed` E2 row drops at next
-      // extract. SQLite cannot parametrize a table name in a trigger, so the object-path
-      // validation is an explicit 4-way CASE (one arm per E2 table).
-
-      // Drop child (relations FK entities) first, then parent.
-      db.exec('DROP TABLE IF EXISTS relations');
-      db.exec('DROP TABLE IF EXISTS entities');
-
-      db.exec(`
+const ENTITIES_TABLE = `
         CREATE TABLE entities (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           tenant_id TEXT NOT NULL,
@@ -52,12 +16,9 @@ export const v38: Migration = {
           created_at TEXT NOT NULL,
           FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE SET NULL
         )
-      `);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_source_object ON entities(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`);
+      `;
 
-      db.exec(`
+const RELATIONS_TABLE = `
         CREATE TABLE relations (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           tenant_id TEXT NOT NULL,
@@ -75,22 +36,15 @@ export const v38: Migration = {
           FOREIGN KEY (to_entity_id) REFERENCES entities(id) ON DELETE CASCADE,
           FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE SET NULL
         )
-      `);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
-      // Mirrors idx_entities_source_object: removeGraphEntitiesForObject (close-time cleanup)
-      // deletes relations by (source_object_type, source_object_id), so index that pair.
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_source_object ON relations(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`);
+      `;
 
-      // entities guard (dual-provenance): at least one valid provenance, no raw.
-      //  - all-null  -> ABORT.
-      //  - memory path (memory_id NOT NULL): source_kind == the FK'd memory's kind
-      //    (raw / lying source_kind ABORT) AND tenant-match.
-      //  - object path (memory_id NULL): the (type,id) points at an EXISTING same-tenant
-      //    E2 row whose status is active|superseded (explicit 4-way CASE per table).
-      db.exec(`
+// entities guard (dual-provenance): at least one valid provenance, no raw.
+//  - all-null  -> ABORT.
+//  - memory path (memory_id NOT NULL): source_kind == the FK'd memory's kind
+//    (raw / lying source_kind ABORT) AND tenant-match.
+//  - object path (memory_id NULL): the (type,id) points at an EXISTING same-tenant
+//    E2 row whose status is active|superseded (explicit 4-way CASE per table).
+const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
         BEFORE INSERT ON entities
         BEGIN
@@ -118,8 +72,9 @@ export const v38: Migration = {
             THEN RAISE(ABORT, 'entities.source_object must reference an active/superseded project_brief in the same tenant')
           END;
         END
-      `);
-      db.exec(`
+      `;
+
+const TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_update
         BEFORE UPDATE ON entities
         WHEN NEW.memory_id IS NOT OLD.memory_id
@@ -167,10 +122,10 @@ export const v38: Migration = {
             THEN RAISE(ABORT, 'entities.source_object must reference an active/superseded project_brief in the same tenant')
           END;
         END
-      `);
+      `;
 
-      // relations guard (dual-provenance) + the existing from/to endpoint same-tenant checks.
-      db.exec(`
+// relations guard (dual-provenance) + the existing from/to endpoint same-tenant checks.
+const TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT = `
         CREATE TRIGGER IF NOT EXISTS trg_relations_consolidated_only_insert
         BEFORE INSERT ON relations
         BEGIN
@@ -202,8 +157,9 @@ export const v38: Migration = {
             THEN RAISE(ABORT, 'relations.tenant_id must match the to_entity tenant (no cross-tenant edges)')
           END;
         END
-      `);
-      db.exec(`
+      `;
+
+const TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE = `
         CREATE TRIGGER IF NOT EXISTS trg_relations_consolidated_only_update
         BEFORE UPDATE ON relations
         WHEN NEW.memory_id IS NOT OLD.memory_id
@@ -252,13 +208,13 @@ export const v38: Migration = {
             THEN RAISE(ABORT, 'relations.tenant_id must match the to_entity tenant (no cross-tenant edges)')
           END;
         END
-      `);
+      `;
 
-      // Recreated VERBATIM from v37 (logic unchanged): an entity that is a relation
-      // endpoint cannot be moved cross-tenant while referenced. trg_memories_graph_referenced_guard
-      // (on memories) and trg_graph_queue_* (on graph_extraction_queue) are NOT recreated
-      // here: those tables are not dropped by v38, so the triggers survive.
-      db.exec(`
+// Recreated VERBATIM from v37 (logic unchanged): an entity that is a relation
+// endpoint cannot be moved cross-tenant while referenced. trg_memories_graph_referenced_guard
+// (on memories) and trg_graph_queue_* (on graph_extraction_queue) are NOT recreated
+// here: those tables are not dropped by v38, so the triggers survive.
+const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
         BEFORE UPDATE ON entities
         WHEN NEW.tenant_id IS NOT OLD.tenant_id
@@ -266,6 +222,71 @@ export const v38: Migration = {
         BEGIN
           SELECT RAISE(ABORT, 'cannot move an entity cross-tenant while a relation references it as an endpoint (E3.3 graph-on-consolidated guard); rebuild/remove the relations first');
         END
-      `);
+      `;
+
+export const v38: Migration = {
+    version: 38,
+    up: (db) => {
+      // E2-provenance: anchor graph entity/relation provenance to the authoritative E2
+      // object (decision/policy/customer-note/project-brief) instead of the decaying
+      // memory mirror (docs/plans/2026-06-03-graph-e2-provenance.md). An in-force E2
+      // object must STAY in the graph after its mirror memory is forgotten or
+      // consolidation-pruned. The graph is a PURE DERIVED CACHE (clearGraph + rebuild on
+      // every `graph extract` / `sleep`), so v38 DROPs+recreates entities/relations (no
+      // data copy) and the next extract repopulates. graph_extraction_queue is untouched.
+      //
+      // Two provenance paths, "at least one, no raw":
+      //  - memory path (memory_id NOT NULL): source_kind must equal the FK'd memory's live
+      //    kind and that kind is distilled|superseded (raw still ABORTs) + tenant-match.
+      //  - object path (memory_id NULL): source_object_type/id must reference an EXISTING
+      //    same-tenant E2 row whose status is active|superseded (not closed). E2 objects
+      //    are consolidated BY CONSTRUCTION, so the no-raw invariant still holds.
+      //  - all-null is rejected.
+      //
+      // memory_id is now NULLABLE with ON DELETE SET NULL (was NOT NULL / CASCADE), so a
+      // mirror forget/consolidate nulls the recall pointer without dropping the row. NOTE
+      // (empirically verified, contradicts the SQLite docs): node:sqlite DOES fire the
+      // BEFORE UPDATE guard from the FK SET NULL action even with recursive_triggers OFF.
+      // So the *_consolidated_only_UPDATE triggers deliberately OMIT the all-null ABORT
+      // (kept on INSERT) - otherwise a mirror delete of a memory-only row would be blocked.
+      // See the per-trigger comments below. A SET NULL leaves source_kind at its old value
+      // by design (the object path is distilled-by-construction; source_kind is only
+      // re-checked when memory_id NOT NULL).
+      // source_object_id is a SOFT (type,id) pointer (no hard FK) the rebuild re-validates,
+      // so a legitimate E2 hard-delete is never blocked; a `closed` E2 row drops at next
+      // extract. SQLite cannot parametrize a table name in a trigger, so the object-path
+      // validation is an explicit 4-way CASE (one arm per E2 table).
+      recreateGraphTables(db);
+      createGraphGuards(db);
     },
 };
+
+function recreateGraphTables(db: DatabaseSyncLike): void {
+  // Drop child (relations FK entities) first, then parent.
+  db.exec('DROP TABLE IF EXISTS relations');
+  db.exec('DROP TABLE IF EXISTS entities');
+
+  db.exec(ENTITIES_TABLE);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_source_object ON entities(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`);
+
+  db.exec(RELATIONS_TABLE);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
+  // Mirrors idx_entities_source_object: removeGraphEntitiesForObject (close-time cleanup)
+  // deletes relations by (source_object_type, source_object_id), so index that pair.
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_source_object ON relations(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`);
+}
+
+function createGraphGuards(db: DatabaseSyncLike): void {
+  db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT);
+  db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE);
+
+  db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT);
+  db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE);
+
+  db.exec(TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED);
+}

@@ -1,23 +1,7 @@
 import { tableExists } from '../tables.js';
 import type { Migration } from './types.js';
 
-export const v35: Migration = {
-    version: 35,
-    up: (db) => {
-      // E2 project_brief first-class object
-      // (docs/plans/2026-05-30-e2-project-brief-object.md). A project_brief is the
-      // living, repo-scoped summary of a repository's state: a `summary` body
-      // scoped to a `repo`, evolving via the v34 skills supersede machinery
-      // (superseded_by self-FK + supersede tenant-match trigger + version +
-      // change_summary). This table = the v34 skills table with
-      // skill_name/trigger_text replaced by `repo` (the repo-scoping dimension)
-      // PLUS `summary` (the brief body). The distinguishing op (refreshBrief, in
-      // src/project-briefs.ts) auto-assembles the summary from the repo's receipts
-      // (memory rows tagged path:<repo>); it needs no schema support beyond `repo`.
-      // All column names were checked against SQLite reserved words (skill-episode
-      // lesson re: `trigger`): repo/summary/version/status/etc. are non-reserved.
-      if (!tableExists(db, 'project_briefs')) {
-        db.exec(`
+const PROJECT_BRIEFS_TABLE = `
           CREATE TABLE project_briefs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             memory_id TEXT,
@@ -35,22 +19,26 @@ export const v35: Migration = {
             FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE SET NULL,
             FOREIGN KEY (superseded_by) REFERENCES project_briefs(id) ON DELETE SET NULL
           )
-        `);
-        db.exec(`
+        `;
+
+const IDX_PROJECT_BRIEFS_TENANT_STATUS = `
           CREATE INDEX IF NOT EXISTS idx_project_briefs_tenant_status
           ON project_briefs(tenant_id, status)
-        `);
-        db.exec(`
+        `;
+
+const IDX_PROJECT_BRIEFS_MEMORY = `
           CREATE INDEX IF NOT EXISTS idx_project_briefs_memory
           ON project_briefs(memory_id) WHERE memory_id IS NOT NULL
-        `);
-        db.exec(`
+        `;
+
+const IDX_PROJECT_BRIEFS_REPO = `
           CREATE INDEX IF NOT EXISTS idx_project_briefs_repo
           ON project_briefs(tenant_id, repo, status)
-        `);
-        // Cross-tenant safety vs the referenced memory (verbatim mirror of the
-        // v34 skills tenant-match triggers).
-        db.exec(`
+        `;
+
+// Cross-tenant safety vs the referenced memory (verbatim mirror of the
+// v34 skills tenant-match triggers).
+const TRG_PROJECT_BRIEFS_TENANT_MATCH_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_project_briefs_tenant_match_insert
           BEFORE INSERT ON project_briefs
           WHEN NEW.memory_id IS NOT NULL
@@ -60,8 +48,9 @@ export const v35: Migration = {
               THEN RAISE(ABORT, 'project_briefs.tenant_id must match memories.tenant_id for the referenced memory')
             END;
           END
-        `);
-        db.exec(`
+        `;
+
+const TRG_PROJECT_BRIEFS_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_project_briefs_tenant_match_update
           BEFORE UPDATE ON project_briefs
           WHEN NEW.memory_id IS NOT NULL
@@ -72,10 +61,11 @@ export const v35: Migration = {
               THEN RAISE(ABORT, 'project_briefs.tenant_id must match memories.tenant_id for the referenced memory')
             END;
           END
-        `);
-        // Cross-tenant safety vs the successor brief (self-FK; verbatim mirror of
-        // the v34 skills supersede trigger).
-        db.exec(`
+        `;
+
+// Cross-tenant safety vs the successor brief (self-FK; verbatim mirror of
+// the v34 skills supersede trigger).
+const TRG_PROJECT_BRIEFS_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_project_briefs_supersede_tenant_match_update
           BEFORE UPDATE ON project_briefs
           WHEN NEW.superseded_by IS NOT NULL
@@ -86,7 +76,31 @@ export const v35: Migration = {
               THEN RAISE(ABORT, 'project_briefs.superseded_by must reference a project_brief in the same tenant')
             END;
           END
-        `);
+        `;
+
+export const v35: Migration = {
+    version: 35,
+    up: (db) => {
+      // E2 project_brief first-class object
+      // (docs/plans/2026-05-30-e2-project-brief-object.md). A project_brief is the
+      // living, repo-scoped summary of a repository's state: a `summary` body
+      // scoped to a `repo`, evolving via the v34 skills supersede machinery
+      // (superseded_by self-FK + supersede tenant-match trigger + version +
+      // change_summary). This table = the v34 skills table with
+      // skill_name/trigger_text replaced by `repo` (the repo-scoping dimension)
+      // PLUS `summary` (the brief body). The distinguishing op (refreshBrief, in
+      // src/project-briefs.ts) auto-assembles the summary from the repo's receipts
+      // (memory rows tagged path:<repo>); it needs no schema support beyond `repo`.
+      // All column names were checked against SQLite reserved words (skill-episode
+      // lesson re: `trigger`): repo/summary/version/status/etc. are non-reserved.
+      if (!tableExists(db, 'project_briefs')) {
+        db.exec(PROJECT_BRIEFS_TABLE);
+        db.exec(IDX_PROJECT_BRIEFS_TENANT_STATUS);
+        db.exec(IDX_PROJECT_BRIEFS_MEMORY);
+        db.exec(IDX_PROJECT_BRIEFS_REPO);
+        db.exec(TRG_PROJECT_BRIEFS_TENANT_MATCH_INSERT);
+        db.exec(TRG_PROJECT_BRIEFS_TENANT_MATCH_UPDATE);
+        db.exec(TRG_PROJECT_BRIEFS_SUPERSEDE_TENANT_MATCH_UPDATE);
       }
     },
 };

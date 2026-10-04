@@ -17,10 +17,7 @@ export const MEMORY_QUARANTINE_DDL = `
       ON memory_quarantine(tenant_id, status, quarantined_at DESC);
 `;
 
-// Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15
-// incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Fresh stores use the chain.
-export function ensureContinuityTables(db: DatabaseSyncLike): void {
-  db.exec(`
+const TASK_SNAPSHOTS_DDL = `
     CREATE TABLE IF NOT EXISTS task_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       task TEXT NOT NULL,
@@ -34,8 +31,9 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       tenant_id TEXT NOT NULL DEFAULT 'default',
       scope TEXT
     )
-  `);
-  db.exec(`
+  `;
+
+const SESSION_EVENTS_DDL = `
     CREATE TABLE IF NOT EXISTS session_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL,
@@ -48,8 +46,9 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       tenant_id TEXT NOT NULL DEFAULT 'default',
       scope TEXT
     )
-  `);
-  db.exec(`
+  `;
+
+const SESSION_HANDOFFS_DDL = `
     CREATE TABLE IF NOT EXISTS session_handoffs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL,
@@ -67,8 +66,9 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       target_runtime TEXT,
       card_id TEXT
     )
-  `);
-  db.exec(`
+  `;
+
+const CARDS_DDL = `
     CREATE TABLE IF NOT EXISTS cards (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -84,8 +84,9 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       tenant_id TEXT NOT NULL DEFAULT 'default',
       scope TEXT
     ) WITHOUT ROWID
-  `);
-  db.exec(`
+  `;
+
+const CARD_DEPS_DDL = `
     CREATE TABLE IF NOT EXISTS card_deps (
       parent TEXT NOT NULL REFERENCES cards(id),
       child TEXT NOT NULL REFERENCES cards(id),
@@ -93,8 +94,9 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       created_at TEXT NOT NULL,
       PRIMARY KEY (parent, child)
     ) WITHOUT ROWID
-  `);
-  db.exec(`
+  `;
+
+const CARD_RUNS_DDL = `
     CREATE TABLE IF NOT EXISTS card_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       card TEXT NOT NULL REFERENCES cards(id),
@@ -107,8 +109,9 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       updated_at TEXT NOT NULL,
       tenant_id TEXT NOT NULL DEFAULT 'default'
     )
-  `);
-  db.exec(`
+  `;
+
+const CARD_COMMENTS_DDL = `
     CREATE TABLE IF NOT EXISTS card_comments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       card_id TEXT NOT NULL REFERENCES cards(id),
@@ -117,7 +120,18 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
       created_at TEXT NOT NULL,
       tenant_id TEXT NOT NULL DEFAULT 'default'
     )
-  `);
+  `;
+
+// Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15
+// incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Fresh stores use the chain.
+export function ensureContinuityTables(db: DatabaseSyncLike): void {
+  db.exec(TASK_SNAPSHOTS_DDL);
+  db.exec(SESSION_EVENTS_DDL);
+  db.exec(SESSION_HANDOFFS_DDL);
+  db.exec(CARDS_DDL);
+  db.exec(CARD_DEPS_DDL);
+  db.exec(CARD_RUNS_DDL);
+  db.exec(CARD_COMMENTS_DDL);
   db.exec(MEMORY_QUARANTINE_DDL);
 }
 

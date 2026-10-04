@@ -1,24 +1,7 @@
 import { tableExists } from '../tables.js';
 import type { Migration } from './types.js';
 
-export const v37: Migration = {
-    version: 37,
-    up: (db) => {
-      // E3.3 graph-on-consolidated guard (docs/plans/2026-06-01-e3-graph-guard.md).
-      // The graph layer (entities + relations) sits ON TOP OF consolidated state and
-      // must NEVER index the raw layer. The substrate: entities + relations +
-      // graph_extraction_queue, each FK-ing to memories and guarded so they can only
-      // reference CONSOLIDATED memories (kind IN ('distilled','superseded')), never
-      // kind='raw'. New tables -> real CHECK constraints (unlike the ALTER'd memories,
-      // whose kind CHECK lives in triggers). The kind/source MATCH (source_kind ==
-      // the FK'd memory's actual kind) cannot be a CHECK (CHECK can't subquery), so it
-      // is a BEFORE INSERT *and* BEFORE UPDATE trigger (the subquery-capable pattern
-      // from the v30 decisions / predictions tenant-match triggers). Both INSERT and
-      // UPDATE are guarded: an INSERT-only guard is bypassable via a raw SQL UPDATE
-      // that moves a row onto a raw memory (plan-eng-critic 2026-06-01). All column
-      // names checked vs SQL reserved words (rule 10): rel_type avoids REFERENCES.
-      if (!tableExists(db, 'entities')) {
-        db.exec(`
+const ENTITIES_TABLE = `
           CREATE TABLE entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tenant_id TEXT NOT NULL,
@@ -30,10 +13,9 @@ export const v37: Migration = {
             created_at TEXT NOT NULL,
             FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
           )
-        `);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
-        db.exec(`
+        `;
+
+const RELATIONS_TABLE = `
           CREATE TABLE relations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tenant_id TEXT NOT NULL,
@@ -48,12 +30,9 @@ export const v37: Migration = {
             FOREIGN KEY (to_entity_id) REFERENCES entities(id) ON DELETE CASCADE,
             FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
           )
-        `);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
-        db.exec(`
+        `;
+
+const GRAPH_EXTRACTION_QUEUE_TABLE = `
           CREATE TABLE graph_extraction_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tenant_id TEXT NOT NULL,
@@ -65,13 +44,12 @@ export const v37: Migration = {
             processed_at TEXT,
             FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
           )
-        `);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_graph_queue_status ON graph_extraction_queue(tenant_id, status)`);
+        `;
 
-        // entities guard: source_kind must equal the FK'd memory's actual kind (so a
-        // raw memory or a lying source_kind both ABORT), and tenant must match. Both
-        // INSERT and UPDATE (UPDATE fires when memory_id/source_kind/tenant_id change).
-        db.exec(`
+// entities guard: source_kind must equal the FK'd memory's actual kind (so a
+// raw memory or a lying source_kind both ABORT), and tenant must match. Both
+// INSERT and UPDATE (UPDATE fires when memory_id/source_kind/tenant_id change).
+const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
           BEFORE INSERT ON entities
           BEGIN
@@ -82,8 +60,9 @@ export const v37: Migration = {
               THEN RAISE(ABORT, 'entities.tenant_id must match memories.tenant_id for the referenced memory')
             END;
           END
-        `);
-        db.exec(`
+        `;
+
+const TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_update
           BEFORE UPDATE ON entities
           WHEN NEW.memory_id IS NOT OLD.memory_id
@@ -97,11 +76,11 @@ export const v37: Migration = {
               THEN RAISE(ABORT, 'entities.tenant_id must match memories.tenant_id for the referenced memory')
             END;
           END
-        `);
+        `;
 
-        // relations guard: source_kind must equal the FK'd memory's kind; tenant must
-        // match the memory AND both endpoint entities (no cross-tenant edges).
-        db.exec(`
+// relations guard: source_kind must equal the FK'd memory's kind; tenant must
+// match the memory AND both endpoint entities (no cross-tenant edges).
+const TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_relations_consolidated_only_insert
           BEFORE INSERT ON relations
           BEGIN
@@ -116,8 +95,9 @@ export const v37: Migration = {
               THEN RAISE(ABORT, 'relations.tenant_id must match the to_entity tenant (no cross-tenant edges)')
             END;
           END
-        `);
-        db.exec(`
+        `;
+
+const TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_relations_consolidated_only_update
           BEFORE UPDATE ON relations
           WHEN NEW.memory_id IS NOT OLD.memory_id
@@ -137,11 +117,11 @@ export const v37: Migration = {
               THEN RAISE(ABORT, 'relations.tenant_id must match the to_entity tenant (no cross-tenant edges)')
             END;
           END
-        `);
+        `;
 
-        // graph_extraction_queue guard: kind must equal the FK'd memory's actual kind
-        // (so a raw memory ABORTs), and tenant must match. INSERT and UPDATE.
-        db.exec(`
+// graph_extraction_queue guard: kind must equal the FK'd memory's actual kind
+// (so a raw memory ABORTs), and tenant must match. INSERT and UPDATE.
+const TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_graph_queue_consolidated_only_insert
           BEFORE INSERT ON graph_extraction_queue
           BEGIN
@@ -152,8 +132,9 @@ export const v37: Migration = {
               THEN RAISE(ABORT, 'graph_extraction_queue.tenant_id must match memories.tenant_id for the referenced memory')
             END;
           END
-        `);
-        db.exec(`
+        `;
+
+const TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_graph_queue_consolidated_only_update
           BEFORE UPDATE ON graph_extraction_queue
           WHEN NEW.memory_id IS NOT OLD.memory_id
@@ -167,19 +148,19 @@ export const v37: Migration = {
               THEN RAISE(ABORT, 'graph_extraction_queue.tenant_id must match memories.tenant_id for the referenced memory')
             END;
           END
-        `);
+        `;
 
-        // Reverse guard (codex-review-critic 2026-06-01, P1): the graph-table triggers
-        // only fire on writes to the GRAPH tables. They do NOT fire when an
-        // already-indexed memory is later mutated. So 'UPDATE memories SET kind=raw'
-        // (or a tenant change) on a memory the graph references would silently leave
-        // entity/relation/queue rows pointing at a raw / cross-tenant memory while
-        // their source_kind stays 'distilled' - bypassing the central 'graph never
-        // indexes raw' invariant after insertion. This trigger closes that direction:
-        // a memory cannot be reclassified to raw, nor moved cross-tenant, WHILE the
-        // graph references it (rebuild/remove the graph rows first). Cheap: the EXISTS
-        // checks are only evaluated when kind actually becomes raw or tenant changes.
-        db.exec(`
+// Reverse guard (codex-review-critic 2026-06-01, P1): the graph-table triggers
+// only fire on writes to the GRAPH tables. They do NOT fire when an
+// already-indexed memory is later mutated. So 'UPDATE memories SET kind=raw'
+// (or a tenant change) on a memory the graph references would silently leave
+// entity/relation/queue rows pointing at a raw / cross-tenant memory while
+// their source_kind stays 'distilled' - bypassing the central 'graph never
+// indexes raw' invariant after insertion. This trigger closes that direction:
+// a memory cannot be reclassified to raw, nor moved cross-tenant, WHILE the
+// graph references it (rebuild/remove the graph rows first). Cheap: the EXISTS
+// checks are only evaluated when kind actually becomes raw or tenant changes.
+const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
           CREATE TRIGGER IF NOT EXISTS trg_memories_graph_referenced_guard
           BEFORE UPDATE ON memories
           WHEN (NEW.kind IS NOT OLD.kind OR NEW.tenant_id IS NOT OLD.tenant_id)
@@ -191,15 +172,16 @@ export const v37: Migration = {
           BEGIN
             SELECT RAISE(ABORT, 'cannot change the kind or tenant of a memory while the graph references it (E3.3 graph-on-consolidated guard); a graph-referenced memory is immutable in kind/tenant - rebuild/remove the graph rows first, or rebuild them after supersession');
           END
-        `);
-        // Reverse guard #2 (codex-review-critic 2026-06-01 retry, P2): an entity that is
-        // a relation endpoint cannot be moved cross-tenant. The entity UPDATE trigger
-        // validates the entity against its source memory, but an existing relation
-        // pointing at the entity is NOT re-validated, so a raw 'UPDATE entities SET
-        // tenant_id=?, memory_id=?' to another tenant would leave a tenant-A relation
-        // pointing at a tenant-B entity. Block the tenant move while the entity is
-        // referenced by any relation (rebuild the relations first).
-        db.exec(`
+        `;
+
+// Reverse guard #2 (codex-review-critic 2026-06-01 retry, P2): an entity that is
+// a relation endpoint cannot be moved cross-tenant. The entity UPDATE trigger
+// validates the entity against its source memory, but an existing relation
+// pointing at the entity is NOT re-validated, so a raw 'UPDATE entities SET
+// tenant_id=?, memory_id=?' to another tenant would leave a tenant-A relation
+// pointing at a tenant-B entity. Block the tenant move while the entity is
+// referenced by any relation (rebuild the relations first).
+const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
           BEFORE UPDATE ON entities
           WHEN NEW.tenant_id IS NOT OLD.tenant_id
@@ -207,7 +189,47 @@ export const v37: Migration = {
           BEGIN
             SELECT RAISE(ABORT, 'cannot move an entity cross-tenant while a relation references it as an endpoint (E3.3 graph-on-consolidated guard); rebuild/remove the relations first');
           END
-        `);
+        `;
+
+export const v37: Migration = {
+    version: 37,
+    up: (db) => {
+      // E3.3 graph-on-consolidated guard (docs/plans/2026-06-01-e3-graph-guard.md).
+      // The graph layer (entities + relations) sits ON TOP OF consolidated state and
+      // must NEVER index the raw layer. The substrate: entities + relations +
+      // graph_extraction_queue, each FK-ing to memories and guarded so they can only
+      // reference CONSOLIDATED memories (kind IN ('distilled','superseded')), never
+      // kind='raw'. New tables -> real CHECK constraints (unlike the ALTER'd memories,
+      // whose kind CHECK lives in triggers). The kind/source MATCH (source_kind ==
+      // the FK'd memory's actual kind) cannot be a CHECK (CHECK can't subquery), so it
+      // is a BEFORE INSERT *and* BEFORE UPDATE trigger (the subquery-capable pattern
+      // from the v30 decisions / predictions tenant-match triggers). Both INSERT and
+      // UPDATE are guarded: an INSERT-only guard is bypassable via a raw SQL UPDATE
+      // that moves a row onto a raw memory (plan-eng-critic 2026-06-01). All column
+      // names checked vs SQL reserved words (rule 10): rel_type avoids REFERENCES.
+      if (!tableExists(db, 'entities')) {
+        db.exec(ENTITIES_TABLE);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
+        db.exec(RELATIONS_TABLE);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
+        db.exec(GRAPH_EXTRACTION_QUEUE_TABLE);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_graph_queue_status ON graph_extraction_queue(tenant_id, status)`);
+
+        db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT);
+        db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE);
+
+        db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT);
+        db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE);
+
+        db.exec(TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_INSERT);
+        db.exec(TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE);
+
+        db.exec(TRG_MEMORIES_GRAPH_REFERENCED_GUARD);
+        db.exec(TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED);
       }
     },
 };
