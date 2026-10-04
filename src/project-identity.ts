@@ -75,7 +75,7 @@ function namesAt(root: string, legacyName: string): Pick<ProjectIdentity, 'name'
   const remoteId = originRemoteId(root);
   const name = fileId ?? (remoteRuleOn() ? remoteId : null) ?? legacyName;
   const aliases = [...new Set([fileId, remoteId, legacyName])].filter((n): n is string => n !== null && n !== name);
-  return { name, aliases };
+  return aliases.length > 0 ? { name, aliases } : { name };
 }
 
 /**
