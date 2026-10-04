@@ -64,6 +64,7 @@ import { loadAllEntries, readEntry } from '../../dist/store/entry-reads.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { buildCorpus } from '../../dist/search/bm25.js';
 import { markRetrieved } from '../../dist/memory.js';
+import { withSharedStoreHandles } from '../../dist/db/open.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';
 
@@ -118,9 +119,14 @@ function stableReorderByProvenance(results, provenanceByMemoryId) {
  *   meta.questionDate, or memories from haystack sessions postdating the
  *   question can get negative age_days.
  * @param {{ rounds?: number, topK?: number, seed?: number, recordRounds?: boolean }} [opts]
- * @returns {{ rounds: number, roundLog: Array<object> }}
+ * @returns {Promise<{ rounds: number, roundLog: Array<object> }>}
  */
-export async function simulateQuestion(questionId, questionDateIso, opts = {}) {
+export function simulateQuestion(questionId, questionDateIso, opts = {}) {
+  // One store handle for the whole run: a fresh open per read or write repeats the pragmas, migration check and mirror sweep 12 times a round.
+  return withSharedStoreHandles(() => simulateOnSharedHandle(questionId, questionDateIso, opts));
+}
+
+async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
   const rounds = opts.rounds ?? CONFIG.SIM_ROUNDS;
   const topK = opts.topK ?? CONFIG.SIM_TOP_K;
   const seed = opts.seed ?? CONFIG.GLOBAL_SEED;
