@@ -385,6 +385,68 @@ export async function embedMemory(
   });
 }
 
+/** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */
+function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvider): void {
+  // A configured (non-disabled) API provider with a missing key is a
+  // misconfiguration, not a no-op: surface it so programmatic callers of the
+  // exported embedAll() learn nothing was written. Local-not-installed and an
+  // explicit enabled=false stay silent no-ops (best-effort / intentional).
+  const cfg = loadConfig(hippoRoot).embeddings;
+  if (
+    provider.kind !== 'local' &&
+    cfg.enabled !== false &&
+    provider.keyEnv &&
+    !envByName(provider.keyEnv)?.trim()
+  ) {
+    throw new Error(
+      `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,
+    );
+  }
+}
+
+// Embed entries without a cached vector in save-checkpointed chunks.
+// provider.embed batches internally (one HTTP request per batchSize for API
+// providers; sequential for local). A `[]` row means that single item could
+// not be embedded and is left for a later run (resumable). On a hard provider
+// failure mid-backfill we persist the chunks already embedded this run rather
+// than discarding paid progress, then stop and resume on the next run.
+async function backfillPending(
+  hippoRoot: string,
+  provider: EmbeddingProvider,
+  pending: readonly MemoryEntry[],
+  model: string,
+): Promise<{ count: number; backfillError: unknown }> {
+  let count = 0;
+  // Initialized to `undefined` (not a known-evidence literal like `null`) so
+  // it stays a plain `unknown` binding for the arbitrary caught value below;
+  // falsy either way, so `if (backfillError)` behaves identically.
+  let backfillError: unknown = undefined;
+  const SAVE_CHUNK = 64;
+  for (let i = 0; i < pending.length; i += SAVE_CHUNK) {
+    const chunk = pending.slice(i, i + SAVE_CHUNK);
+    let vectors: number[][];
+    try {
+      vectors = await provider.embed(
+        chunk.map((e) => embeddingInputText(e)),
+        'passage',
+      );
+    } catch (err) {
+      // Preserve the chunks already saved this run, then surface the failure
+      // below so the explicit `hippo embed` path never reports a false success.
+      backfillError = err;
+      break;
+    }
+    const rows: Array<[string, number[]]> = [];
+    for (let j = 0; j < chunk.length; j++) {
+      const vec = vectors[j];
+      if (vec && vec.length > 0) rows.push([chunk[j].id, vec]);
+      else noteSkippedEmbedding(chunk[j].id);
+    }
+    count += withVectorDb(hippoRoot, (db) => upsertVectors(db, rows, model));
+  }
+  return { count, backfillError };
+}
+
 /**
  * Embed all entries in hippoRoot that don't already have cached vectors.
  * Prunes orphaned embeddings for memories that no longer exist.
@@ -396,21 +458,7 @@ export async function embedAll(
   provider: EmbeddingProvider = resolveEmbeddingProvider(hippoRoot, { model }),
 ): Promise<number> {
   if (!provider.isAvailable()) {
-    // A configured (non-disabled) API provider with a missing key is a
-    // misconfiguration, not a no-op: surface it so programmatic callers of the
-    // exported embedAll() learn nothing was written. Local-not-installed and an
-    // explicit enabled=false stay silent no-ops (best-effort / intentional).
-    const cfg = loadConfig(hippoRoot).embeddings;
-    if (
-      provider.kind !== 'local' &&
-      cfg.enabled !== false &&
-      provider.keyEnv &&
-      !envByName(provider.keyEnv)?.trim()
-    ) {
-      throw new Error(
-        `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,
-      );
-    }
+    throwIfProviderKeyMissing(hippoRoot, provider);
     return 0;
   }
 
@@ -434,42 +482,8 @@ export async function embedAll(
       deleteOrphanVectors(db);
       return storedVectorIds(db);
     });
-
-    // Embed entries without a cached vector in save-checkpointed chunks.
-    // provider.embed batches internally (one HTTP request per batchSize for API
-    // providers; sequential for local). A `[]` row means that single item could
-    // not be embedded and is left for a later run (resumable). On a hard provider
-    // failure mid-backfill we persist the chunks already embedded this run rather
-    // than discarding paid progress, then stop and resume on the next run.
     const pending = entries.filter((e) => !embedded.has(e.id));
-    let count = 0;
-    // Initialized to `undefined` (not a known-evidence literal like `null`) so
-    // it stays a plain `unknown` binding for the arbitrary caught value below;
-    // falsy either way, so `if (backfillError)` behaves identically.
-    let backfillError: unknown = undefined;
-    const SAVE_CHUNK = 64;
-    for (let i = 0; i < pending.length; i += SAVE_CHUNK) {
-      const chunk = pending.slice(i, i + SAVE_CHUNK);
-      let vectors: number[][];
-      try {
-        vectors = await provider.embed(
-          chunk.map((e) => embeddingInputText(e)),
-          'passage',
-        );
-      } catch (err) {
-        // Preserve the chunks already saved this run, then surface the failure
-        // below so the explicit `hippo embed` path never reports a false success.
-        backfillError = err;
-        break;
-      }
-      const rows: Array<[string, number[]]> = [];
-      for (let j = 0; j < chunk.length; j++) {
-        const vec = vectors[j];
-        if (vec && vec.length > 0) rows.push([chunk[j].id, vec]);
-        else noteSkippedEmbedding(chunk[j].id);
-      }
-      count += withVectorDb(hippoRoot, (db) => upsertVectors(db, rows, model));
-    }
+    const { count, backfillError } = await backfillPending(hippoRoot, provider, pending, model);
 
     saveStoredEmbeddingModel(hippoRoot, identity);
 

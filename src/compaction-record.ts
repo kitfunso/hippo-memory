@@ -272,6 +272,74 @@ function heldRows(db: DatabaseSyncLike, tenantId: string, originProject: string)
   return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
 }
 
+interface ItemWrites {
+  written: MemoryEntry[];
+  repeats: number;
+  refused: number;
+  restated: string[];
+}
+
+function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: number): MemoryEntry {
+  return {
+    ...createMemory(text, {
+      layer: Layer.Episodic,
+      tags: [COMPACTION_MEMORY_TAG],
+      source: `${COMPACTION_SOURCE_PREFIX}${ctx.sessionId}`,
+      confidence: 'observed',
+      kind: 'distilled',
+      source_session_id: ctx.sessionId,
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays,
+    }),
+    origin_project: ctx.originProject,
+  };
+}
+
+/** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
+function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
+  const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
+  const held = heldRows(db, ctx.tenantId, ctx.originProject);
+  const restated = new Set<string>();
+  for (const text of rows) {
+    const itemWords = words(text);
+    const match = held.find((h) => restates(itemWords, h.words));
+    if (match) {
+      out.repeats++;
+      if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
+      continue;
+    }
+    // createMemory throws below 3 chars, which would sink the whole transaction.
+    if (text.trim().length < 3) {
+      out.refused++;
+      continue;
+    }
+    const entry = compactionEntry(text, ctx, baseHalfLifeDays);
+    if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
+      out.written.push(entry);
+      held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
+    } else {
+      out.refused++;
+    }
+  }
+  out.restated = [...restated];
+  return out;
+}
+
+/** After commit: report skips, mirror the new rows, bump the counter. */
+function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void {
+  if (writes.repeats > 0) log(`skipped ${writes.repeats} item(s) the store already holds`);
+  if (writes.refused > 0) log(`skipped ${writes.refused} item(s) the write gate refused`);
+  for (const entry of writes.written) writeEntryMirrors(hippoRoot, entry);
+  if (writes.written.length > 0) {
+    try {
+      updateStats(hippoRoot, { remembered: writes.written.length });
+    } catch (err) {
+      // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
+      log(`remembered counter not updated: ${errorMessage(err)}`);
+    }
+  }
+}
+
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
 export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
   const usable = ctx.items.filter((item) => !item.includes(REDACTED));
@@ -281,9 +349,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
   if (capped > 0) log(`capped: ${capped} more kept in the record only`);
 
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
-  const written: MemoryEntry[] = [];
-  let repeats = 0;
-  let refused = 0;
+  let writes: ItemWrites;
   db.exec('BEGIN IMMEDIATE');
   try {
     if (ctx.recordId !== null) {
@@ -296,63 +362,19 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
         return current?.items_written ?? 0;
       }
     }
-    const held = heldRows(db, ctx.tenantId, ctx.originProject);
-    const restated = new Set<string>();
-    for (const text of rows) {
-      const itemWords = words(text);
-      const match = held.find((h) => restates(itemWords, h.words));
-      if (match) {
-        repeats++;
-        if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
-        continue;
-      }
-      // createMemory throws below 3 chars, which would sink the whole transaction.
-      if (text.trim().length < 3) {
-        refused++;
-        continue;
-      }
-      const entry: MemoryEntry = {
-        ...createMemory(text, {
-          layer: Layer.Episodic,
-          tags: [COMPACTION_MEMORY_TAG],
-          source: `${COMPACTION_SOURCE_PREFIX}${ctx.sessionId}`,
-          confidence: 'observed',
-          kind: 'distilled',
-          source_session_id: ctx.sessionId,
-          tenantId: ctx.tenantId,
-          baseHalfLifeDays,
-        }),
-        origin_project: ctx.originProject,
-      };
-      if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
-        written.push(entry);
-        held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
-      } else {
-        refused++;
-      }
-    }
+    writes = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, [...restated], { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
+    strengthenRetrievedOn(db, writes.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
-      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.length, ctx.tenantId, ctx.recordId);
+      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(writes.written.length, ctx.tenantId, ctx.recordId);
     }
     db.exec('COMMIT');
   } catch (err) {
     try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     throw err;
   }
-  if (repeats > 0) log(`skipped ${repeats} item(s) the store already holds`);
-  if (refused > 0) log(`skipped ${refused} item(s) the write gate refused`);
-  for (const entry of written) writeEntryMirrors(hippoRoot, entry);
-  if (written.length > 0) {
-    try {
-      updateStats(hippoRoot, { remembered: written.length });
-    } catch (err) {
-      // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
-      log(`remembered counter not updated: ${errorMessage(err)}`);
-    }
-  }
-  return written.length;
+  finishItemWrites(hippoRoot, writes, log);
+  return writes.written.length;
 }
 
 export interface PostCompactPayload {

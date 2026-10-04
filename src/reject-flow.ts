@@ -12,7 +12,7 @@
  * cli.ts and api.ts, so it introduces no cycle.
  */
 
-import { closeHippoDb } from './db.js';
+import { closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
@@ -61,16 +61,7 @@ export interface RejectFlowResult {
   dormantSuccessorIds: string[];
 }
 
-/**
- * `hippo reject` / `api.reject` core flow. ONE connection, one transaction:
- * insert the tombstone, enumerate + remove every live tenant row whose
- * normalized digest matches (kind-aware), one aggregate `reject_value`
- * audit, COMMIT. Then post-commit (mirrors the existing purge+reaper
- * pattern verbatim from api.archiveRaw, api.ts:1913-1938): best-effort
- * mirror purge per removed id, `mirror_cleaned_at` stamps for raw ids.
- * index.json itself is only refreshed by `rebuildIndex()`.
- */
-export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
+function assertRejectOpts(opts: RejectFlowOpts): void {
   if (!opts.reason.trim()) {
     throw new Error('reject requires a non-empty --reason (the tombstone stores no content; reason is its only identity).');
   }
@@ -90,29 +81,138 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     // and pollute the listing.
     throw new Error('reject --value requires non-empty content.');
   }
+}
+
+function contentToReject(db: DatabaseSyncLike, opts: RejectFlowOpts): string {
+  if (opts.memoryId === undefined) return opts.value!;
+  // SAFETY: row's shape matches the two columns named in the SELECT above.
+  const row = db
+    .prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`)
+    .get(opts.memoryId) as { content: string; tenant_id: string } | undefined;
+  if (!row || row.tenant_id !== opts.tenantId) {
+    throw new Error(`memory not found: ${opts.memoryId}`);
+  }
+  return row.content;
+}
+
+/** What one reject removed and wrote, accumulated across the live and dormant passes. */
+interface RejectRemoval {
+  removedIds: string[];
+  removedRawIds: string[];
+  successors: MemoryEntry[];
+  dormantSuccessorIds: string[];
+}
+
+type HoldsValue = (text: string) => boolean;
+
+function removeLiveRows(db: DatabaseSyncLike, opts: RejectFlowOpts, holdsValue: HoldsValue, removal: RejectRemoval): void {
+  const { removedIds, removedRawIds, successors } = removal;
+  const merged: MemoryEntry[] = [];
+  for (const row of selectAllEntries(db, opts.tenantId)) {
+    if (!holdsValue(row.content)) {
+      if (heldTexts(row).some(holdsValue)) merged.push(row);
+      continue;
+    }
+    if (row.kind === 'raw') {
+      // Append-only trigger respected — archiveRawMemory is the only
+      // legitimate removal path for kind='raw', and its inner SAVEPOINT
+      // composes safely inside this BEGIN/COMMIT.
+      archiveRawMemory(db, row.id, { reason: opts.reason, who: opts.actor });
+      removedRawIds.push(row.id);
+    } else {
+      // suppressForgetAudit: the aggregate reject_value row below is the
+      // trail for these removals, not N individual forget rows (plan
+      // §4, round-3 advisory 2 — mirrors api.ts:1873-1877).
+      deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
+    }
+    removedIds.push(row.id);
+  }
+  for (const row of merged) {
+    const successor = mergedSuccessor(row, holdsValue, new Set(removedIds));
+    deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
+    removedIds.push(row.id);
+    if (!successor) continue;
+    const kept = stampOriginProject(opts.hippoRoot, successor);
+    writeEntryDbOnly(db, kept, { actor: opts.actor });
+    successors.push(kept);
+  }
+}
+
+// Dormant copies (src/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
+// rejected value may not linger where `hippo dormant restore` could
+// bring it back. They have no markdown mirror, so the post-commit
+// mirror purge below is a no-op for them; they join removedIds for the
+// audit trail and the caller's report.
+function removeDormantCopies(db: DatabaseSyncLike, tenantId: string, digest: string, holdsValue: HoldsValue, removal: RejectRemoval): void {
+  const { removedIds, dormantSuccessorIds } = removal;
+  removedIds.push(...purgeDormantByDigest(db, tenantId, digest));
+  for (const dormant of listDormantSnapshots(db, tenantId)) {
+    const successor = mergedSuccessor(dormant.entry, holdsValue, new Set(removedIds));
+    if (successor === undefined) continue;
+    removedIds.push(dormant.entry.id);
+    if (!successor) {
+      deleteDormantRow(db, tenantId, dormant.entry.id);
+      continue;
+    }
+    replaceDormantEntry(db, tenantId, dormant.entry.id, successor);
+    dormantSuccessorIds.push(successor.id);
+  }
+}
+
+function auditRejectValue(db: DatabaseSyncLike, opts: RejectFlowOpts, digest: string, removedIds: string[]): void {
+  try {
+    appendAuditEvent(db, {
+      tenantId: opts.tenantId,
+      actor: opts.actor,
+      op: 'reject_value',
+      targetId: opts.memoryId,
+      metadata: { digest, removedIds, count: removedIds.length },
+    });
+  } catch (error) {
+    // Inside the open transaction: the reject commits without its trail row rather than rolling back over bookkeeping.
+    reportAuditWriteFailure('reject_value', String(error), opts.memoryId);
+  }
+}
+
+// Post-commit, db handle still open (same pattern as api.archiveRaw):
+// best-effort mirror purge per removed id, reaper-backstop stamp for
+// raw ids.
+function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: RejectRemoval): void {
+  for (const id of removal.removedIds) {
+    // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
+    // which cleanupArchivedMirrors' reaper never scans — reports the
+    // EXPLICIT leftover path(s) instead of the false "will retry via
+    // reaper" claim. See its own doc comment (store.ts, near
+    // removeEntryMirrors) for the full rationale.
+    const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, removal.removedRawIds.includes(id), 'hippo reject');
+    if (mirrorOk && removal.removedRawIds.includes(id)) {
+      db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+        new Date().toISOString(),
+        id,
+      );
+    }
+  }
+  for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
+}
+
+/**
+ * `hippo reject` / `api.reject` core flow. ONE connection, one transaction:
+ * insert the tombstone, enumerate + remove every live tenant row whose
+ * normalized digest matches (kind-aware), one aggregate `reject_value`
+ * audit, COMMIT. Then post-commit (mirrors the existing purge+reaper
+ * pattern verbatim from api.archiveRaw, api.ts:1913-1938): best-effort
+ * mirror purge per removed id, `mirror_cleaned_at` stamps for raw ids.
+ * index.json itself is only refreshed by `rebuildIndex()`.
+ */
+export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
+  assertRejectOpts(opts);
 
   const db = openStore(opts.hippoRoot);
   try {
-    let content: string;
-    if (opts.memoryId !== undefined) {
-      // SAFETY: row's shape matches the two columns named in the SELECT above.
-      const row = db
-        .prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`)
-        .get(opts.memoryId) as { content: string; tenant_id: string } | undefined;
-      if (!row || row.tenant_id !== opts.tenantId) {
-        throw new Error(`memory not found: ${opts.memoryId}`);
-      }
-      content = row.content;
-    } else {
-      content = opts.value!;
-    }
-
+    const content = contentToReject(db, opts);
     const digest = rejectionDigest(content);
     const now = new Date().toISOString();
-    const removedIds: string[] = [];
-    const removedRawIds: string[] = [];
-    const successors: MemoryEntry[] = [];
-    const dormantSuccessorIds: string[] = [];
+    const removal: RejectRemoval = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
 
     db.exec('BEGIN');
     try {
@@ -130,66 +230,9 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       // on ~1-5k-row stores — acceptable, documented. A digest column on
       // memories is the escape if stores grow 100x; not needed now.
       const holdsValue = (text: string): boolean => rejectionDigest(text) === digest;
-      const merged: MemoryEntry[] = [];
-      for (const row of selectAllEntries(db, opts.tenantId)) {
-        if (!holdsValue(row.content)) {
-          if (heldTexts(row).some(holdsValue)) merged.push(row);
-          continue;
-        }
-        if (row.kind === 'raw') {
-          // Append-only trigger respected — archiveRawMemory is the only
-          // legitimate removal path for kind='raw', and its inner SAVEPOINT
-          // composes safely inside this BEGIN/COMMIT.
-          archiveRawMemory(db, row.id, { reason: opts.reason, who: opts.actor });
-          removedRawIds.push(row.id);
-        } else {
-          // suppressForgetAudit: the aggregate reject_value row below is the
-          // trail for these removals, not N individual forget rows (plan
-          // §4, round-3 advisory 2 — mirrors api.ts:1873-1877).
-          deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
-        }
-        removedIds.push(row.id);
-      }
-      for (const row of merged) {
-        const successor = mergedSuccessor(row, holdsValue, new Set(removedIds));
-        deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
-        removedIds.push(row.id);
-        if (!successor) continue;
-        const kept = stampOriginProject(opts.hippoRoot, successor);
-        writeEntryDbOnly(db, kept, { actor: opts.actor });
-        successors.push(kept);
-      }
-
-      // Dormant copies (src/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
-      // rejected value may not linger where `hippo dormant restore` could
-      // bring it back. They have no markdown mirror, so the post-commit
-      // mirror purge below is a no-op for them; they join removedIds for the
-      // audit trail and the caller's report.
-      removedIds.push(...purgeDormantByDigest(db, opts.tenantId, digest));
-      for (const dormant of listDormantSnapshots(db, opts.tenantId)) {
-        const successor = mergedSuccessor(dormant.entry, holdsValue, new Set(removedIds));
-        if (successor === undefined) continue;
-        removedIds.push(dormant.entry.id);
-        if (!successor) {
-          deleteDormantRow(db, opts.tenantId, dormant.entry.id);
-          continue;
-        }
-        replaceDormantEntry(db, opts.tenantId, dormant.entry.id, successor);
-        dormantSuccessorIds.push(successor.id);
-      }
-
-      try {
-        appendAuditEvent(db, {
-          tenantId: opts.tenantId,
-          actor: opts.actor,
-          op: 'reject_value',
-          targetId: opts.memoryId,
-          metadata: { digest, removedIds, count: removedIds.length },
-        });
-      } catch (error) {
-        // Inside the open transaction: the reject commits without its trail row rather than rolling back over bookkeeping.
-        reportAuditWriteFailure('reject_value', String(error), opts.memoryId);
-      }
+      removeLiveRows(db, opts, holdsValue, removal);
+      removeDormantCopies(db, opts.tenantId, digest, holdsValue, removal);
+      auditRejectValue(db, opts, digest, removal.removedIds);
 
       db.exec('COMMIT');
     } catch (err) {
@@ -201,25 +244,9 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       throw err;
     }
 
-    // Post-commit, db handle still open (same pattern as api.archiveRaw):
-    // best-effort mirror purge per removed id, reaper-backstop stamp for
-    // raw ids.
-    for (const id of removedIds) {
-      // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
-      // which cleanupArchivedMirrors' reaper never scans — reports the
-      // EXPLICIT leftover path(s) instead of the false "will retry via
-      // reaper" claim. See its own doc comment (store.ts, near
-      // removeEntryMirrors) for the full rationale.
-      const mirrorOk = purgeMirrorBestEffort(opts.hippoRoot, id, removedRawIds.includes(id), 'hippo reject');
-      if (mirrorOk && removedRawIds.includes(id)) {
-        db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-          new Date().toISOString(),
-          id,
-        );
-      }
-    }
-    for (const successor of successors) writeEntryMirrors(opts.hippoRoot, successor);
+    purgeRemovedMirrors(db, opts.hippoRoot, removal);
 
+    const { removedIds, removedRawIds, successors, dormantSuccessorIds } = removal;
     return { digest, content, removedIds, removedRawIds, successorIds: successors.map((s) => s.id), dormantSuccessorIds };
   } finally {
     closeHippoDb(db);

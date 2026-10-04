@@ -242,6 +242,144 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
   }
 }
 
+function assertBindable(host: string): void {
+  if (!LOOPBACK_HOSTS.has(host) && !envRequireAuth()) {
+    throw new Error(
+      `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
+      `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
+      `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
+    );
+  }
+}
+
+async function assertNoLiveServer(hippoRoot: string): Promise<void> {
+  // H3: refuse to start if a live hippo server already serves this hippoRoot.
+  // detectServer probes the recorded /health — a stale pidfile is unlinked and
+  // ignored, but a live peer means a concurrent `hippo serve` would race for
+  // the port and clobber the pidfile.
+  const existing = await detectServer(hippoRoot);
+  if (existing) {
+    throw new Error(
+      `hippo serve: already running on port ${existing.port} (pid ${existing.pid}). ` +
+      `Stop that server before starting another on the same hippoRoot.`,
+    );
+  }
+}
+
+function bootRateLimiter(): RateLimiter | undefined {
+  // E3: per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
+  // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
+  // set the rate before serve(). A non-positive or non-finite value disables
+  // limiting (the opt-out knob).
+  const v1Rps = Number(envV1Rps() ?? 20);
+  return Number.isFinite(v1Rps) && v1Rps > 0
+    ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
+    : undefined;
+}
+
+interface StoreHolder {
+  hold: () => void;
+  release: () => void;
+}
+
+function createStoreHolder(hippoRoot: string): StoreHolder {
+  // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
+  // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
+  let heldDb: DatabaseSyncLike | undefined;
+  let stopHolding = false;
+  const hold = (): void => {
+    if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
+    try {
+      heldDb = openHippoDb(hippoRoot);
+    } catch (err) {
+      stopHolding = true;
+      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  const release = (): void => {
+    stopHolding = true;
+    if (heldDb) closeHippoDb(heldDb);
+    heldDb = undefined;
+  };
+  return { hold, release };
+}
+
+function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
+  const mapped = replyFor(err);
+  logRequestFailure(req, err, requestId, mapped.status);
+  if (res.headersSent) {
+    try { res.end(); } catch { /* socket already gone */ }
+    return;
+  }
+  if (isSqliteBusy(err)) res.setHeader('Retry-After', '1');
+  if (mapped.status === 500) {
+    // The id lets an operator find the logged cause without the client seeing internal text.
+    sendJson(res, 500, { error: mapped.message, requestId });
+    return;
+  }
+  // RecallContractError keeps the shared {error} shape and adds `code` so clients branch without parsing prose.
+  if (err instanceof RecallContractError) {
+    sendJson(res, 400, { error: err.message, code: err.code });
+    return;
+  }
+  sendError(res, mapped.status, mapped.message);
+  // M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
+  if (err instanceof BodyTooLargeError) req.destroy();
+}
+
+function setKeepAliveTimeouts(server: Server): void {
+  // T3b capture (v1.26.2): tests/server-concurrency.test.ts's ECONNRESET flake
+  // traced to a chunk-boundary reuse race — a kept-alive socket idled through
+  // a prior response chunk gets closed by the server's default 5s
+  // keepAliveTimeout just as a client reuses it for the next request. Raising
+  // both timeouts shrinks that idle-close/reuse window ~13x. Keep
+  // headersTimeout ABOVE the EFFECTIVE keep-alive expiry, which is
+  // keepAliveTimeout + keepAliveTimeoutBuffer (the buffer defaults to
+  // 1,000ms on Node 22.19+/24.6+ — verified 1,000 on node 24.13, so the
+  // effective expiry here is 66s; codex review caught that a 66s
+  // headersTimeout would sit exactly ON that boundary and recreate the
+  // race). The headers timer also runs while a kept-alive socket waits for
+  // its next request, so a value at or below the effective expiry would
+  // itself close idle reused sockets, and Node would not flag it (no error
+  // or warning at listen time — verified empirically).
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 70_000;
+}
+
+function listenOn(server: Server, port: number, host: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onError = (err: Error): void => {
+      server.removeListener('listening', onListening);
+      reject(err);
+    };
+    const onListening = (): void => {
+      server.removeListener('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, host);
+  });
+}
+
+function installSignalHandlers(stop: () => Promise<void>): void {
+  let shuttingDown = false;
+  const gracefulShutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log.warn(`received ${signal}, shutting down`);
+    try {
+      await stop();
+      process.exit(0);
+    } catch (err) {
+      log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`, errorFields(err));
+      process.exit(1);
+    }
+  };
+  process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
+  process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+}
+
 /**
  * Boot the HTTP daemon on host:port and write the pidfile under hippoRoot.
  *
@@ -267,120 +405,37 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
-  if (!LOOPBACK_HOSTS.has(host) && !envRequireAuth()) {
-    throw new Error(
-      `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
-      `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
-      `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
-    );
-  }
-
-  // H3: refuse to start if a live hippo server already serves this hippoRoot.
-  // detectServer probes the recorded /health — a stale pidfile is unlinked and
-  // ignored, but a live peer means a concurrent `hippo serve` would race for
-  // the port and clobber the pidfile.
-  const existing = await detectServer(opts.hippoRoot);
-  if (existing) {
-    throw new Error(
-      `hippo serve: already running on port ${existing.port} (pid ${existing.pid}). ` +
-      `Stop that server before starting another on the same hippoRoot.`,
-    );
-  }
+  assertBindable(host);
+  await assertNoLiveServer(opts.hippoRoot);
 
   // The server's start time. Single source of truth: it is returned by every
   // GET /health response and (below) written into the pidfile, so detectServer
   // can match the two and prove a pid-reusing impostor is not the real server.
   const startedAt = new Date().toISOString();
 
-  // E3: per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
-  // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
-  // set the rate before serve(). A non-positive or non-finite value disables
-  // limiting (the opt-out knob).
-  const v1Rps = Number(envV1Rps() ?? 20);
-  const limiter: RateLimiter | undefined =
-    Number.isFinite(v1Rps) && v1Rps > 0
-      ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
-      : undefined;
+  const limiter = bootRateLimiter();
 
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
-  // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
-  let heldDb: DatabaseSyncLike | undefined;
-  let stopHolding = false;
-  const holdStore = (): void => {
-    if (heldDb || stopHolding || !existsSync(getHippoDbPath(opts.hippoRoot))) return;
-    try {
-      heldDb = openHippoDb(opts.hippoRoot);
-    } catch (err) {
-      stopHolding = true;
-      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
+  const store = createStoreHolder(opts.hippoRoot);
 
   const inflight = new Set<ServerResponse>();
   const server: Server = createServer((req, res) => {
-    res.once('finish', holdStore);
+    res.once('finish', store.hold);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
     withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, streamSlots, limiter)).catch(<E>(err: E) => {
-      const mapped = replyFor(err);
-      logRequestFailure(req, err, requestId, mapped.status);
-      if (res.headersSent) {
-        try { res.end(); } catch { /* socket already gone */ }
-        return;
-      }
-      if (isSqliteBusy(err)) res.setHeader('Retry-After', '1');
-      if (mapped.status === 500) {
-        // The id lets an operator find the logged cause without the client seeing internal text.
-        sendJson(res, 500, { error: mapped.message, requestId });
-        return;
-      }
-      // RecallContractError keeps the shared {error} shape and adds `code` so clients branch without parsing prose.
-      if (err instanceof RecallContractError) {
-        sendJson(res, 400, { error: err.message, code: err.code });
-        return;
-      }
-      sendError(res, mapped.status, mapped.message);
-      // M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
-      if (err instanceof BodyTooLargeError) req.destroy();
+      replyWithFailure(req, res, err, requestId);
     });
   });
 
-  // T3b capture (v1.26.2): tests/server-concurrency.test.ts's ECONNRESET flake
-  // traced to a chunk-boundary reuse race — a kept-alive socket idled through
-  // a prior response chunk gets closed by the server's default 5s
-  // keepAliveTimeout just as a client reuses it for the next request. Raising
-  // both timeouts shrinks that idle-close/reuse window ~13x. Keep
-  // headersTimeout ABOVE the EFFECTIVE keep-alive expiry, which is
-  // keepAliveTimeout + keepAliveTimeoutBuffer (the buffer defaults to
-  // 1,000ms on Node 22.19+/24.6+ — verified 1,000 on node 24.13, so the
-  // effective expiry here is 66s; codex review caught that a 66s
-  // headersTimeout would sit exactly ON that boundary and recreate the
-  // race). The headers timer also runs while a kept-alive socket waits for
-  // its next request, so a value at or below the effective expiry would
-  // itself close idle reused sockets, and Node would not flag it (no error
-  // or warning at listen time — verified empirically).
-  server.keepAliveTimeout = 65_000;
-  server.headersTimeout = 70_000;
+  setKeepAliveTimeouts(server);
 
-  await new Promise<void>((resolve, reject) => {
-    const onError = (err: Error): void => {
-      server.removeListener('listening', onListening);
-      reject(err);
-    };
-    const onListening = (): void => {
-      server.removeListener('error', onError);
-      resolve();
-    };
-    server.once('error', onError);
-    server.once('listening', onListening);
-    server.listen(requestedPort, host);
-  });
+  await listenOn(server, requestedPort, host);
 
   const address = server.address();
   if (!isAddressInfo(address)) {
@@ -391,7 +446,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const url = `http://${host}:${actualPort}`;
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
-  holdStore();
+  store.hold();
 
   let stopping = false;
   const stop = async (): Promise<void> => {
@@ -402,28 +457,10 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     // unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
-    stopHolding = true;
-    if (heldDb) closeHippoDb(heldDb);
-    heldDb = undefined;
+    store.release();
   };
 
-  if (opts.handleSignals) {
-    let shuttingDown = false;
-    const gracefulShutdown = async (signal: string): Promise<void> => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      log.warn(`received ${signal}, shutting down`);
-      try {
-        await stop();
-        process.exit(0);
-      } catch (err) {
-        log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`, errorFields(err));
-        process.exit(1);
-      }
-    };
-    process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
-    process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
-  }
+  if (opts.handleSignals) installSignalHandlers(stop);
 
   return { port: actualPort, url, stop, server };
 }

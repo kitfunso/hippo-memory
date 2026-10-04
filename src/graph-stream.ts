@@ -27,6 +27,7 @@
 import type { MemoryEntry } from './memory.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
+import type { Relation } from './graph/types.js';
 
 /** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph-recall). */
 export const DEFAULT_GRAPH_HOPS = 2;
@@ -86,6 +87,78 @@ export function selectGraphSeeds(
     .map(([index, best]) => ({ index, strength: 1 / (best + 1) }));
 }
 
+// Pass 1: accumulate the STRONGEST reaching-seed strength per new neighbour across ALL
+// relations at this depth BEFORE committing any to `visited` (codex P2). Marking a node
+// visited mid-loop would lock it to whichever relation SQLite returned first, so a later
+// edge from a STRONGER lexical seed would be dropped and the neighbour mis-scored. A node
+// already in `visited` was committed at an earlier (shorter) depth and keeps that score.
+function bestStrengthAtDepth(
+  rels: ReadonlyArray<Relation>,
+  frontierSet: ReadonlySet<number>,
+  visited: ReadonlySet<number>,
+  frontierStrength: ReadonlyMap<number, number>,
+  originStrength: ReadonlyMap<number, number>,
+): Map<number, number> {
+  const bestStrengthThisDepth = new Map<number, number>();
+  for (const rel of rels) {
+    const fromIn = frontierSet.has(rel.fromEntityId);
+    const toIn = frontierSet.has(rel.toEntityId);
+    let neighborId: number;
+    let reacherId: number;
+    if (fromIn && !toIn) { neighborId = rel.toEntityId; reacherId = rel.fromEntityId; }
+    else if (toIn && !fromIn) { neighborId = rel.fromEntityId; reacherId = rel.toEntityId; }
+    else continue;
+    if (visited.has(neighborId)) continue;
+    const seedStrength = frontierStrength.get(reacherId) ?? originStrength.get(reacherId) ?? 0;
+    bestStrengthThisDepth.set(neighborId, Math.max(bestStrengthThisDepth.get(neighborId) ?? 0, seedStrength));
+  }
+  return bestStrengthThisDepth;
+}
+
+/** BFS from the seed entities: entityId -> best originSeedStrength x decay^depth over every reached entity. */
+function reachedEntityScores(
+  root: string,
+  tenantId: string,
+  seedIds: number[],
+  originStrength: ReadonlyMap<number, number>,
+  hops: number,
+  decay: number,
+  maxNeighbors: number,
+): Map<number, number> {
+  const visited = new Set<number>(seedIds); // seeds never re-reached
+  const reachedScore = new Map<number, number>();                 // entityId -> best score
+  let frontier: number[] = seedIds;
+  let frontierStrength = new Map<number, number>(originStrength);  // entityId -> seed strength
+
+  for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
+    const frontierSet = new Set(frontier);
+    const rels = loadNeighborRelations(root, tenantId, frontier, {
+      limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
+    });
+    const hopFactor = Math.pow(decay, depth);
+    const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
+    // Pass 2: commit strongest-first (then id asc — deterministic), so the per-hop fanout cap
+    // keeps the highest-scoring neighbours rather than whichever SQLite happened to return.
+    const nextFrontier: number[] = [];
+    const nextStrength = new Map<number, number>();
+    const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
+      const d = bestStrengthThisDepth.get(b)! - bestStrengthThisDepth.get(a)!;
+      return d !== 0 ? d : a - b;
+    });
+    for (const neighborId of ordered) {
+      if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap (strongest kept)
+      const seedStrength = bestStrengthThisDepth.get(neighborId)!;
+      visited.add(neighborId);
+      reachedScore.set(neighborId, Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor));
+      nextStrength.set(neighborId, seedStrength);
+      nextFrontier.push(neighborId);
+    }
+    frontier = nextFrontier;
+    frontierStrength = nextStrength;
+  }
+  return reachedScore;
+}
+
 /**
  * Accumulate per-entryIndex graph-proximity scores from ONE store's graph into
  * `graphScore`. Pure reads. `seeds` are the lexical seeds (index + strength); only the
@@ -125,54 +198,7 @@ function accumulateForRoot(
     originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
   }
 
-  const visited = new Set<number>(seedEntities.map((e) => e.id)); // seeds never re-reached
-  const reachedScore = new Map<number, number>();                 // entityId -> best score
-  let frontier: number[] = seedEntities.map((e) => e.id);
-  let frontierStrength = new Map<number, number>(originStrength);  // entityId -> seed strength
-
-  for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
-    const frontierSet = new Set(frontier);
-    const rels = loadNeighborRelations(root, tenantId, frontier, {
-      limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
-    });
-    const hopFactor = Math.pow(decay, depth);
-    // Pass 1: accumulate the STRONGEST reaching-seed strength per new neighbour across ALL
-    // relations at this depth BEFORE committing any to `visited` (codex P2). Marking a node
-    // visited mid-loop would lock it to whichever relation SQLite returned first, so a later
-    // edge from a STRONGER lexical seed would be dropped and the neighbour mis-scored. A node
-    // already in `visited` was committed at an earlier (shorter) depth and keeps that score.
-    const bestStrengthThisDepth = new Map<number, number>();
-    for (const rel of rels) {
-      const fromIn = frontierSet.has(rel.fromEntityId);
-      const toIn = frontierSet.has(rel.toEntityId);
-      let neighborId: number;
-      let reacherId: number;
-      if (fromIn && !toIn) { neighborId = rel.toEntityId; reacherId = rel.fromEntityId; }
-      else if (toIn && !fromIn) { neighborId = rel.fromEntityId; reacherId = rel.toEntityId; }
-      else continue;
-      if (visited.has(neighborId)) continue;
-      const seedStrength = frontierStrength.get(reacherId) ?? originStrength.get(reacherId) ?? 0;
-      bestStrengthThisDepth.set(neighborId, Math.max(bestStrengthThisDepth.get(neighborId) ?? 0, seedStrength));
-    }
-    // Pass 2: commit strongest-first (then id asc — deterministic), so the per-hop fanout cap
-    // keeps the highest-scoring neighbours rather than whichever SQLite happened to return.
-    const nextFrontier: number[] = [];
-    const nextStrength = new Map<number, number>();
-    const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
-      const d = bestStrengthThisDepth.get(b)! - bestStrengthThisDepth.get(a)!;
-      return d !== 0 ? d : a - b;
-    });
-    for (const neighborId of ordered) {
-      if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap (strongest kept)
-      const seedStrength = bestStrengthThisDepth.get(neighborId)!;
-      visited.add(neighborId);
-      reachedScore.set(neighborId, Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor));
-      nextStrength.set(neighborId, seedStrength);
-      nextFrontier.push(neighborId);
-    }
-    frontier = nextFrontier;
-    frontierStrength = nextStrength;
-  }
+  const reachedScore = reachedEntityScores(root, tenantId, seedEntities.map((e) => e.id), originStrength, hops, decay, maxNeighbors);
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.

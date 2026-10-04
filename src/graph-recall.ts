@@ -43,6 +43,7 @@ import { estimateTokens } from './token-ledger.js';
 import { compareEntryIdentity } from './compare.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from './recall-scope.js';
+import type { Entity } from './graph/types.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
  *  worst-case work and keeps the flag honest). */
@@ -102,27 +103,25 @@ function loadByIdsChunked(root: string, tenantId: string, ids: string[]): Memory
   return out;
 }
 
-/** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
- *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
-function produceHitsForRoot(
+type HitOpts = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
+  asOfDate: Date | null;
+  recallScope: { requested?: string; additive?: boolean };
+};
+
+interface RelationWalk {
+  reached: Map<number, GraphVia>;
+  originMemByEntityId: Map<number, string | null>;
+}
+
+/** BFS, both directions, up to `hops`: each reached entity's via, and the base memory it descends from. */
+function walkRelations(
   root: string,
-  baseResults: SearchResult[],
-  baseScoreByMemId: Map<string, number>,
-  seenMemoryIds: Set<string>,
-  seenContent: Set<string>,
-  hitsByOrigin: Map<string, GraphHit[]>,
-  opts: Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
-    asOfDate: Date | null;
-    recallScope: { requested?: string; additive?: boolean };
-  },
-): void {
-  const { hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope } = opts;
-
-  // Seeds = graph entities (in THIS store) whose source memory is a base result.
-  const seedEntities = loadEntitiesByMemoryId(root, tenantId, baseResults.map((r) => r.entry.id));
-  if (seedEntities.length === 0) return;
-
-  // BFS, both directions, up to `hops`. `visited` prevents re-expansion (cycle-safe).
+  tenantId: string,
+  seedEntities: readonly Entity[],
+  hops: number,
+  maxNeighbors: number,
+): RelationWalk {
+  // `visited` prevents re-expansion (cycle-safe).
   // `originMemByEntityId` propagates the base-result memory id each reached node descends
   // from (for adjacency placement + score inheritance).
   const visitedEntityIds = new Set<number>(seedEntities.map((e) => e.id));
@@ -159,6 +158,51 @@ function produceHitsForRoot(
     }
     frontier = nextFrontier;
   }
+  return { reached, originMemByEntityId };
+}
+
+/** The recall hard filters (as-of, superseded, scope) re-applied to a directly loaded graph-reached row. */
+function passesRecallFilters(mem: MemoryEntry, via: GraphVia, successorValidFrom: Map<string, string>, opts: HitOpts): boolean {
+  const { includeSuperseded, asOfDate, recallScope } = opts;
+  // A node reached as the `to` endpoint of a `supersedes` edge IS the superseded
+  // (older) version — the graph is the authoritative signal (the memory mirror's
+  // `superseded_by` is NOT set by `hippo decide`, only the decisions table is). By
+  // default recall shows current truth, so drop it unless --include-superseded; the
+  // `from` endpoint (the newer successor) is always kept.
+  const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
+  if (asOfDate) {
+    if (new Date(mem.valid_from) > asOfDate) return false;        // not yet valid at asOf
+    if (mem.superseded_by) {
+      const succVf = successorValidFrom.get(mem.superseded_by);
+      // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
+      if (succVf && new Date(succVf) <= asOfDate) return false;
+    }
+  } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
+    return false;                                                 // default recall drops superseded
+  }
+  return recallScope.additive
+    ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested)
+    : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested);
+}
+
+/** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
+ *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
+function produceHitsForRoot(
+  root: string,
+  baseResults: SearchResult[],
+  baseScoreByMemId: Map<string, number>,
+  seenMemoryIds: Set<string>,
+  seenContent: Set<string>,
+  hitsByOrigin: Map<string, GraphHit[]>,
+  opts: HitOpts,
+): void {
+  const { hops, maxNeighbors, tenantId, asOfDate } = opts;
+
+  // Seeds = graph entities (in THIS store) whose source memory is a base result.
+  const seedEntities = loadEntitiesByMemoryId(root, tenantId, baseResults.map((r) => r.entry.id));
+  if (seedEntities.length === 0) return;
+
+  const { reached, originMemByEntityId } = walkRelations(root, tenantId, seedEntities, hops, maxNeighbors);
   if (reached.size === 0) return;
 
   // Reached entities -> source memory ids -> load DIRECTLY by id (chunked), not lexical.
@@ -188,26 +232,7 @@ function produceHitsForRoot(
     if (seenMemoryIds.has(mem.id)) continue;  // another reached entity already added it
     if (seenContent.has(mem.content)) continue; // share/promote copy: same text, another id
     const via = reached.get(ent.id)!;
-    // A node reached as the `to` endpoint of a `supersedes` edge IS the superseded
-    // (older) version — the graph is the authoritative signal (the memory mirror's
-    // `superseded_by` is NOT set by `hippo decide`, only the decisions table is). By
-    // default recall shows current truth, so drop it unless --include-superseded; the
-    // `from` endpoint (the newer successor) is always kept.
-    const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
-    if (asOfDate) {
-      if (new Date(mem.valid_from) > asOfDate) continue;        // not yet valid at asOf
-      if (mem.superseded_by) {
-        const succVf = successorValidFrom.get(mem.superseded_by);
-        // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
-        if (succVf && new Date(succVf) <= asOfDate) continue;
-      }
-    } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
-      continue;                                                 // default recall drops superseded
-    }
-    const scopeOk = recallScope.additive
-      ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested)
-      : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested);
-    if (!scopeOk) continue;
+    if (!passesRecallFilters(mem, via, successorValidFrom, opts)) continue;
     const origin = originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
     seenMemoryIds.add(mem.id);

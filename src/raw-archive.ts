@@ -17,15 +17,6 @@ export interface ArchiveOpts {
   afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
-/**
- * The only legitimate path to remove a `kind='raw'` row from `memories`.
- *
- * Snapshots the full row into `raw_archive`, flips `kind` to `'archived'` so the
- * append-only trigger lets the delete through, then deletes the row. All in one
- * SAVEPOINT so it can be nested inside an outer transaction (e.g. batchWriteAndDelete).
- *
- * Throws if the row does not exist or is not `kind='raw'`.
- */
 /** The subset of `memories` columns this function reads off a `SELECT *` row. */
 interface ArchivedMemoryRow {
   kind: string;
@@ -33,7 +24,7 @@ interface ArchivedMemoryRow {
   dag_parent_id: string | null;
 }
 
-export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): void {
+function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
   // SAFETY: SELECT * FROM memories returns every column of the memories table; only
   // kind, tenant_id, and dag_parent_id are read below, all guaranteed present (possibly
   // null) by the memories schema.
@@ -44,58 +35,80 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
   if (row.kind !== 'raw') {
     throw new BadRequestError(`memory ${id} is not raw (kind=${String(row.kind)})`);
   }
+  return row;
+}
+
+function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
+  // GDPR Path A (v0.39): raw_archive stores ONLY metadata, not the original
+  // memory content. The audit_log row appended below carries op='archive_raw'
+  // for the compliance audit trail. True right-to-be-forgotten — the original
+  // content is unrecoverable from raw_archive after this point.
+  const archivedAt = new Date().toISOString();
+  const redactedPayload = JSON.stringify({
+    redacted: true,
+    archived_at: archivedAt,
+    tenant_id: row.tenant_id ?? 'default',
+    kind: row.kind,
+    reason: opts.reason,
+  });
+  db.prepare(
+    `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
+  ).run(id, archivedAt, opts.reason, opts.who, redactedPayload);
+  // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
+  db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
+  db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
+  // FTS5 is a virtual table — no FK CASCADE applies. Purge the FTS row so the
+  // archived content is not searchable after archive. Without this the original
+  // raw text remains in memories_fts until the next DB-open backfill, defeating
+  // GDPR right-to-be-forgotten.
+  if (isFtsAvailable(db)) {
+    try {
+      db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
+    } catch {
+      // Best effort only. The DELETE on memories already succeeded; FTS will
+      // self-heal on next DB open via backfillFtsIndex.
+    }
+  }
+}
+
+// A5 audit: emit archive_raw event inside the SAVEPOINT so the audit row is
+// committed atomically with the row deletion. Use the row's own tenant_id
+// (fetched above as part of SELECT *), not the env. Archives must be
+// attributed to the tenant that owns the row, not whatever HIPPO_TENANT
+// happens to be set to in the calling shell.
+function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
+  try {
+    appendAuditEvent(db, {
+      tenantId: String(row.tenant_id ?? 'default'),
+      actor: opts.who || 'cli',
+      op: 'archive_raw',
+      targetId: id,
+      metadata: { reason: opts.reason },
+    });
+  } catch (error) {
+    // The archive itself has already succeeded; an unwritable audit table must not undo it.
+    reportAuditWriteFailure('archive_raw', String(error), id);
+  }
+}
+
+/**
+ * The only legitimate path to remove a `kind='raw'` row from `memories`.
+ *
+ * Snapshots the full row into `raw_archive`, flips `kind` to `'archived'` so the
+ * append-only trigger lets the delete through, then deletes the row. All in one
+ * SAVEPOINT so it can be nested inside an outer transaction (e.g. batchWriteAndDelete).
+ *
+ * Throws if the row does not exist or is not `kind='raw'`.
+ */
+export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): void {
+  const row = loadRawRow(db, id);
 
   // SAVEPOINT (not BEGIN) so this works whether or not we're already inside a
   // transaction. SQLite refuses BEGIN within a transaction; SAVEPOINT nests safely.
   db.exec('SAVEPOINT archive_raw');
   try {
-    // GDPR Path A (v0.39): raw_archive stores ONLY metadata, not the original
-    // memory content. The audit_log row appended below carries op='archive_raw'
-    // for the compliance audit trail. True right-to-be-forgotten — the original
-    // content is unrecoverable from raw_archive after this point.
-    const archivedAt = new Date().toISOString();
-    const redactedPayload = JSON.stringify({
-      redacted: true,
-      archived_at: archivedAt,
-      tenant_id: row.tenant_id ?? 'default',
-      kind: row.kind,
-      reason: opts.reason,
-    });
-    db.prepare(
-      `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
-    ).run(id, archivedAt, opts.reason, opts.who, redactedPayload);
-    // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
-    db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
-    db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
-    // FTS5 is a virtual table — no FK CASCADE applies. Purge the FTS row so the
-    // archived content is not searchable after archive. Without this the original
-    // raw text remains in memories_fts until the next DB-open backfill, defeating
-    // GDPR right-to-be-forgotten.
-    if (isFtsAvailable(db)) {
-      try {
-        db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
-      } catch {
-        // Best effort only. The DELETE on memories already succeeded; FTS will
-        // self-heal on next DB open via backfillFtsIndex.
-      }
-    }
-    // A5 audit: emit archive_raw event inside the SAVEPOINT so the audit row is
-    // committed atomically with the row deletion. Use the row's own tenant_id
-    // (fetched above as part of SELECT *), not the env. Archives must be
-    // attributed to the tenant that owns the row, not whatever HIPPO_TENANT
-    // happens to be set to in the calling shell.
-    try {
-      appendAuditEvent(db, {
-        tenantId: String(row.tenant_id ?? 'default'),
-        actor: opts.who || 'cli',
-        op: 'archive_raw',
-        targetId: id,
-        metadata: { reason: opts.reason },
-      });
-    } catch (error) {
-      // The archive itself has already succeeded; an unwritable audit table must not undo it.
-      reportAuditWriteFailure('archive_raw', String(error), id);
-    }
+    moveRowToArchive(db, id, row, opts);
+    auditArchive(db, id, row, opts);
     // v0.30 / E2 — DAG live-coupling: archive of a child under a level-2
     // summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark
     // commits atomically with the archive. row.dag_parent_id was fetched

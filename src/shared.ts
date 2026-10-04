@@ -508,6 +508,71 @@ export function listPeers(
     .sort((a, b) => b.count - a.count);
 }
 
+type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
+
+function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>, minScore: number, stats: AutoShareStats | undefined): boolean {
+  // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
+  if (isQuarantineScope(entry.scope ?? null)) return false;
+  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
+  if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
+    if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
+    return false;
+  }
+  const score = transferScore(entry);
+  if (score < minScore) return false;
+
+  // Skip if already shared (same text apart from spacing)
+  if (globalContentSet.has(duplicateKey(entry.content))) return false;
+
+  // v39 S4 producer veto: secret rows never auto-share, regardless of
+  // transfer score. (shareMemory would throw; filtering here keeps the
+  // sleep pipeline fail-safe.) Checked LAST (v1.25.0) so the stats counter
+  // only counts rows the veto actually withheld — a row failing the score
+  // or dedupe gates was never going to share, secret or not.
+  if (detectSecret(entry).flagged) {
+    if (stats) stats.secretSkipped++;
+    return false;
+  }
+
+  return true;
+}
+
+// AT1 containment (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
+// plan §3 — sync/promote/share copy paths must not let ONE rejected
+// candidate kill the batch): shareMemory -> writeEntry hits the LIVE guard
+// against the GLOBAL store's tombstones. A matching candidate throws
+// RejectedValueError, which (uncaught) would abort this whole loop and,
+// via api.ts's sleep pipeline, the entire autoShare sleep phase. Mirrors
+// syncGlobalToLocal's per-item catch just above in this file. writeEntry's
+// own catch already writes the reject_refusal audit before rethrowing
+// (plan §3) — do not double-audit here, just count and continue.
+function shareCandidates(localRoot: string, candidates: readonly MemoryEntry[], stats: AutoShareStats | undefined): MemoryEntry[] {
+  const shared: MemoryEntry[] = [];
+  let rejectedSkipped = 0;
+  for (const entry of candidates) {
+    try {
+      // skipEmbed: batching invariant, this is a batch producer, so it embeds
+      // once via embedAll() below rather than once per row inside shareMemory.
+      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
+      if (result) shared.push(result);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejectedSkipped++;
+        if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (rejectedSkipped > 0) {
+    log.warn(
+      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
+    );
+  }
+  return shared;
+}
+
 /**
  * Auto-share: local memories with high transfer scores, not already global, no NEVER_AUTO_SHARE_TAGS tag.
  * Returns the list of shared entries.
@@ -540,7 +605,7 @@ export function autoShare(
     minScore?: number;
     dryRun?: boolean;
     tenantId?: string;
-    stats?: { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
+    stats?: AutoShareStats;
   } = {},
 ): MemoryEntry[] {
   const { minScore = 0.6, dryRun = false } = options;
@@ -555,67 +620,11 @@ export function autoShare(
   // Build set of global content hashes to avoid duplicates
   const globalContentSet = storedTextKeys(globalEntries);
 
-  const candidates = localEntries.filter((entry) => {
-    // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
-    if (isQuarantineScope(entry.scope ?? null)) return false;
-    // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
-    if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
-      if (options.stats) options.stats.neverAutoShareSkipped = (options.stats.neverAutoShareSkipped ?? 0) + 1;
-      return false;
-    }
-    const score = transferScore(entry);
-    if (score < minScore) return false;
-
-    // Skip if already shared (same text apart from spacing)
-    if (globalContentSet.has(duplicateKey(entry.content))) return false;
-
-    // v39 S4 producer veto: secret rows never auto-share, regardless of
-    // transfer score. (shareMemory would throw; filtering here keeps the
-    // sleep pipeline fail-safe.) Checked LAST (v1.25.0) so the stats counter
-    // only counts rows the veto actually withheld — a row failing the score
-    // or dedupe gates was never going to share, secret or not.
-    if (detectSecret(entry).flagged) {
-      if (options.stats) options.stats.secretSkipped++;
-      return false;
-    }
-
-    return true;
-  });
+  const candidates = localEntries.filter((entry) => isAutoShareCandidate(entry, globalContentSet, minScore, options.stats));
 
   if (dryRun) return candidates;
 
-  const shared: MemoryEntry[] = [];
-  // AT1 containment (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
-  // plan §3 — sync/promote/share copy paths must not let ONE rejected
-  // candidate kill the batch): shareMemory -> writeEntry hits the LIVE guard
-  // against the GLOBAL store's tombstones. A matching candidate throws
-  // RejectedValueError, which (uncaught) would abort this whole loop and,
-  // via api.ts's sleep pipeline, the entire autoShare sleep phase. Mirrors
-  // syncGlobalToLocal's per-item catch just above in this file. writeEntry's
-  // own catch already writes the reject_refusal audit before rethrowing
-  // (plan §3) — do not double-audit here, just count and continue.
-  let rejectedSkipped = 0;
-  for (const entry of candidates) {
-    try {
-      // skipEmbed: batching invariant, this is a batch producer, so it embeds
-      // once via embedAll() below rather than once per row inside shareMemory.
-      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
-      if (result) shared.push(result);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejectedSkipped++;
-        if (options.stats) options.stats.rejectedSkipped = (options.stats.rejectedSkipped ?? 0) + 1;
-        continue;
-      }
-      throw err;
-    }
-  }
-
-  if (rejectedSkipped > 0) {
-    log.warn(
-      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
-    );
-  }
+  const shared = shareCandidates(localRoot, candidates, options.stats);
 
   if (shared.length > 0) {
     void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));

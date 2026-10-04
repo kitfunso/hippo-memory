@@ -206,41 +206,36 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
   );
 }
 
-/**
- * The deterministic rebuild WRITES, run inside `runGraphRebuildTransaction`'s
- * transaction (`txDb` is its connection). Clears the tenant's graph then
- * re-derives entities + `supersedes` + `references` from the preloaded rows. All
- * DB access here is on `txDb` (or in-memory) — no other connection is opened.
- */
-function rebuildGraphRows(
+/** What Pass 1 leaves for Passes 2 and 3. */
+interface EntityPass {
+  byType: Record<string, number>;
+  truncated: string[];
+  allRows: ExtractRow[];
+  entityIdByKey: Map<string, number>;
+  // The mirror memory per extracted key, null once forgotten/pruned (so a supersedes
+  // edge anchors to the successor's object when the mirror is gone but still passes the
+  // memory through when it lives).
+  memoryIdByKey: Map<string, string | null>;
+  // Created entities ONLY (drives Pass 3 sources + targets), in stable insertion order.
+  created: CreatedEntity[];
+}
+
+// Pass 1: entities. Every ACTIVE/SUPERSEDED E2 row becomes an entity ANCHORED to its
+// authoritative E2 object (source_object_type/id) - it survives a forgotten mirror
+// (memory_id NULL). The mirror memory is passed through only when it still exists
+// (it remains a recall pointer until forgotten/pruned).
+function insertEntityRows(
   txDb: GraphTxDb,
   hippoRoot: string,
   tenantId: string,
   loaded: Array<{ entityType: EntityType; rows: ExtractRow[]; hitCap: boolean }>,
-): ExtractResult {
-  // Rebuild from scratch: the graph is derived, so clear then re-derive.
-  clearGraph(hippoRoot, tenantId, txDb);
-
-  const byType: Record<string, number> = {};
-  const truncated: string[] = [];
-  const allRows: ExtractRow[] = [];
-  const entityIdByKey = new Map<string, number>();
-  // The mirror memory per extracted key, null once forgotten/pruned (so a supersedes
-  // edge anchors to the successor's object when the mirror is gone but still passes the
-  // memory through when it lives).
-  const memoryIdByKey = new Map<string, string | null>();
-  // Created entities ONLY (drives Pass 3 sources + targets), in stable insertion order.
-  const created: CreatedEntity[] = [];
-
-  // Pass 1: entities. Every ACTIVE/SUPERSEDED E2 row becomes an entity ANCHORED to its
-  // authoritative E2 object (source_object_type/id) - it survives a forgotten mirror
-  // (memory_id NULL). The mirror memory is passed through only when it still exists
-  // (it remains a recall pointer until forgotten/pruned).
+): EntityPass {
+  const pass: EntityPass = { byType: {}, truncated: [], allRows: [], entityIdByKey: new Map(), memoryIdByKey: new Map(), created: [] };
   for (const { entityType, rows, hitCap } of loaded) {
-    if (hitCap) truncated.push(entityType);
-    byType[entityType] = 0;
+    if (hitCap) pass.truncated.push(entityType);
+    pass.byType[entityType] = 0;
     for (const row of rows) {
-      allRows.push(row);
+      pass.allRows.push(row);
       // Normalise the label so a long/odd-but-valid E2 name can never throw in
       // insertEntity and (because clearGraph already ran) brick the rebuild
       // unrebuildably. E2 name fields (decisionText / policyName) are UNCAPPED at
@@ -260,32 +255,45 @@ function rebuildGraphRows(
         sourceObject,
       }, txDb);
       const k = keyOf(row.entityType, row.e2Id);
-      entityIdByKey.set(k, entity.id);
-      memoryIdByKey.set(k, row.memoryId);
-      created.push({ entityId: entity.id, entityType: row.entityType, memoryId: row.memoryId, sourceObject, name, searchText: row.searchText ?? '', superseded: row.supersededBy !== null });
-      byType[entityType] += 1;
+      pass.entityIdByKey.set(k, entity.id);
+      pass.memoryIdByKey.set(k, row.memoryId);
+      pass.created.push({ entityId: entity.id, entityType: row.entityType, memoryId: row.memoryId, sourceObject, name, searchText: row.searchText ?? '', superseded: row.supersededBy !== null });
+      pass.byType[entityType] += 1;
     }
   }
+  return pass;
+}
 
-  // Pass 2: `supersedes` relations. For X superseded by Y (Y is the successor), emit
-  // "Y supersedes X" - but only when BOTH X and Y were EXTRACTED (e.g. Y may be closed
-  // and absent). The emit guard is ENTITY presence (entityIdByKey), not memory presence:
-  // a forgotten successor mirror must still emit the edge. The relation is anchored to Y's
-  // authoritative E2 object; Y's mirror memory is passed only when it still lives.
+// Pass 2: `supersedes` relations. For X superseded by Y (Y is the successor), emit
+interface SupersedesPass {
+  relations: number;
+  supersededPairs: Set<string>;
+}
+
+// "Y supersedes X" - but only when BOTH X and Y were EXTRACTED (e.g. Y may be closed
+// and absent). The emit guard is ENTITY presence (entityIdByKey), not memory presence:
+// a forgotten successor mirror must still emit the edge. The relation is anchored to Y's
+// authoritative E2 object; Y's mirror memory is passed only when it still lives.
+function insertSupersedesRelations(
+  txDb: GraphTxDb,
+  hippoRoot: string,
+  tenantId: string,
+  pass: EntityPass,
+): SupersedesPass {
   let relations = 0;
   // Entity-id pairs already related by supersedes (unordered). Pass 3 skips a references
   // edge for such a pair: a version-extends-its-predecessor's-name containment (e.g.
   // "Adopt X (managed)" contains "Adopt X") is a name artifact, not a cross-reference,
   // and supersedes already captures their relationship.
   const supersededPairs = new Set<string>();
-  for (const row of allRows) {
+  for (const row of pass.allRows) {
     if (row.supersededBy === null) continue;
     const xKey = keyOf(row.entityType, row.e2Id);
     const yKey = keyOf(row.entityType, row.supersededBy);
-    const fromId = entityIdByKey.get(yKey); // successor Y
-    const toId = entityIdByKey.get(xKey); // superseded X
+    const fromId = pass.entityIdByKey.get(yKey); // successor Y
+    const toId = pass.entityIdByKey.get(xKey); // superseded X
     if (fromId === undefined || toId === undefined) continue;
-    const yMemoryId = memoryIdByKey.get(yKey) ?? null; // successor's mirror, null if gone
+    const yMemoryId = pass.memoryIdByKey.get(yKey) ?? null; // successor's mirror, null if gone
     insertRelation(hippoRoot, tenantId, {
       fromEntityId: fromId,
       toEntityId: toId,
@@ -296,12 +304,34 @@ function rebuildGraphRows(
     supersededPairs.add(pairKey(fromId, toId));
     relations += 1;
   }
+  return { relations, supersededPairs };
+}
+
+/**
+ * The deterministic rebuild WRITES, run inside `runGraphRebuildTransaction`'s
+ * transaction (`txDb` is its connection). Clears the tenant's graph then
+ * re-derives entities + `supersedes` + `references` from the preloaded rows. All
+ * DB access here is on `txDb` (or in-memory) — no other connection is opened.
+ */
+function rebuildGraphRows(
+  txDb: GraphTxDb,
+  hippoRoot: string,
+  tenantId: string,
+  loaded: Array<{ entityType: EntityType; rows: ExtractRow[]; hitCap: boolean }>,
+): ExtractResult {
+  // Rebuild from scratch: the graph is derived, so clear then re-derive.
+  clearGraph(hippoRoot, tenantId, txDb);
+
+  const pass = insertEntityRows(txDb, hippoRoot, tenantId, loaded);
+  const { byType, truncated, created } = pass;
+  const supersedes = insertSupersedesRelations(txDb, hippoRoot, tenantId, pass);
+  let relations = supersedes.relations;
 
   // Pass 3: cross-object `references` edges via conservative name matching. A source's
   // text containing a target entity's name -> "source references target". Sources +
   // targets are CREATED entities only, each anchored to its E2 source object (so the
   // edge survives a forgotten source mirror).
-  const references = extractReferences(hippoRoot, tenantId, created, supersededPairs, truncated, txDb);
+  const references = extractReferences(hippoRoot, tenantId, created, supersedes.supersededPairs, truncated, txDb);
   relations += references;
 
   const entities = created.length;
