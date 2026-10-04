@@ -56,9 +56,9 @@ describe('per-cell grading save', () => {
   it('holds the stale and final-check commits, so an agent gc in the resume cannot prune them before the save (R21)', async () => {
     const { out } = isolate('grading-gc');
     const r = makeRepo();
-    // env-dump writes into work/dumps, so each check's commit has its own tree and the stale commit is not the first one.
+    // Both checkers write into work/dumps, so every check's commit has its own tree; else the final check rebuilds the stale commit and hides a lost hold.
     const dump = { check: { script: 'env-dump.mjs', args: ['exit=1'] } };
-    const fam = family('f1', [lesson('f1-l1', 'Write the lesson file'), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...dump })]);
+    const fam = family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'env-dump.mjs', args: [] } }), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...dump })]);
     process.env.Z0_ENV_DUMP_DIR = 'dumps';
     await run(spec(r, [fam], [
       teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'),
@@ -68,7 +68,7 @@ describe('per-cell grading save', () => {
     const dir = join(out, 'grading', 'seqF', 'A0', 'seed1');
     const grade = JSON.parse(readFileSync(join(dir, 'a3.grade.json'), 'utf8'));
     expect(grade).toMatchObject({ staleLessonId: 'f1-l1', finalChecked: true });
-    expect(grade.stale).not.toBe(grade.first);
+    expect(new Set([grade.first, grade.stale, grade.finalCheck]).size).toBe(3);
     expect(grade.commandsStale).toEqual(expect.any(Array));
     const fresh = tmp('z0-grade-gc-');
     const g = (...args: string[]) => execFileSync('git', args, { cwd: fresh, encoding: 'utf8' }).trim();
