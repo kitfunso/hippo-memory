@@ -1424,7 +1424,9 @@ Single-tenant or customer-VPC (Helm, Terraform, Postgres per A6), fully air-gapp
 
 **CLEF deployment follow-up [planned; CLF2/CLF11].** Support the shared typed decision contract on approved customer-controlled local/VPC/air-gapped endpoints, with pinned serving artifacts and working native fallback. Include decision-head compatibility, offline installation, model footprint, health/capacity, upgrade, backup and recovery in the deployment validation.
 
-#### EI11. Enterprise identity and governance [planned]
+#### EI11. Enterprise identity and governance [partly shipped: OIDC SSO, SCIM and SIEM export in hippo-enterprise, 2026-10-03/04]
+**Status (2026-10-04):** in hippo-enterprise, OIDC sign-in (#3), SCIM users with key revocation on deprovisioning (#4, #5; needs core 1.59.0) and SIEM export (#2) are merged. SAML, remote MCP with OAuth 2.1, IdP group roles and workload identity are still planned.
+
 SAML/OIDC SSO and SCIM [commercial repo] (the A5 stubs were deleted in 1.45.0, so this is new work), remote MCP over HTTP with OAuth 2.1 and an MCP-registry entry (was CD2), roles from IdP groups, OIDC workload identity for machines, SIEM export of the audit log [commercial repo], listing in internal MCP registries (Copilot "registry only" policies block unlisted servers).
 
 #### EI12. Tenant evaluation [merged into TE5: the same runner on a design partner's own history]
@@ -1627,8 +1629,10 @@ Anyone who can write a PR comment, an issue or a chat message can try to plant i
 
 **Workflow adoption [planned].** CAE5 uses `build-eval` to review independently labelled poisoning/legitimate-content cases and hard-policy regression fixtures. An optional detector/instruction `hillclimb` is a separate surface; it cannot edit ACLs, quarantine access, labels or release rules to improve an aggregate score.
 
-#### CD6. Admin dashboard [planned; part of A7 observability] [commercial repo]
+#### CD6. Admin dashboard [first view shipped 2026-10-03, hippo-enterprise #6; part of A7 observability] [commercial repo]
 One place for the buyer: what is stored per team and repository, who used what, audit log search, dormant and banned memories, and token cost from the TE0 ledger.
+
+**Status (2026-10-03):** `hippo-enterprise admin report` writes one HTML or JSON page with all five sections. It groups by tenant, repository and scope; per-team grouping waits for EV6.
 
 **Native skill follow-up [planned].** CAE9 reuses this commercial admin surface for evidence-backed promotion exceptions, version/status, managed rollout and rollback. Keep routine developer use automatic after the admin's policy setup and include administrator effort in the pilot result.
 
@@ -1637,14 +1641,16 @@ A monthly report per company: memories used, repeated errors avoided, tokens hip
 
 **Business-outcome follow-up [planned].** EI15/CD14 extend this report with agreed customer outcomes; EV9 verifies automatic population after initial configuration. Existing cost and guardrail reporting remains independently defined.
 
-#### CD11. Shadow holdout [commercial repo] [planned, next after TE5's pilot run; design in `docs/plans/2026-09-24-buyer-kpis.md`]
+#### CD11. Shadow holdout [commercial repo] [shipped 2026-10-04: core arm rows in 1.58.0 (#384), reader in CD12; design in `docs/plans/2026-09-24-buyer-kpis.md`]
 A setting, `holdout.rate`, makes a deterministic share of sessions (or of developers) skip memory injection while capture continues. Each holdout is logged, so a pilot measures hippo against a live control group on the same days, models and people.
 
-**Status (core arm rows, Oct-3):** the core half is in hippo-memory core. Config `pilot.holdoutRateBp` (default 0) assigns each session an arm by hash; the first hook call writes one `token_ledger` row (`surface='pilot'`, `event='arm'`); a holdout session gets no pushed memories. Contract and known leaks: `docs/decisions/2026-10-03-pilot-arm.md`. The pilot report reader is in the commercial repo.
+**Status (core arm rows, Oct-4):** the core half shipped in hippo-memory 1.58.0. Config `pilot.holdoutRateBp` (default 0) assigns each session an arm by hash; the first hook call writes one `token_ledger` row (`surface='pilot'`, `event='arm'`); a holdout session gets no pushed memories. Contract and known leaks: `docs/decisions/2026-10-03-pilot-arm.md`. The pilot report reader is in the commercial repo.
 
 **Workflow adoption [planned].** Use CAE5 to `build-eval` development fixtures for control assignment, capture/injection separation and leakage checks. This is eval design and correctness work; live controls, randomisation and shadow-holdout outcomes remain outside `hillclimb`.
 
-#### CD12. Agent telemetry join and pilot report [planned, with CD11] [commercial repo]
+#### CD12. Agent telemetry join and pilot report [first version shipped 2026-10-03, hippo-enterprise #7] [commercial repo]
+**Status (2026-10-03):** `hippo-enterprise report pilot` joins the ledger with Claude Code OpenTelemetry files. Not yet: Copilot and Cursor usage, and merged PRs (it counts PRs created).
+
 `hippo report --pilot` joins hippo's ledger with the agent's own cost data by session id, computed inside the customer's network:
 - **Claude Code:** its OpenTelemetry export or its organisation usage API.
 - **Copilot and Cursor:** per-developer usage.
@@ -1936,7 +1942,7 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
 
 **CLEF ownership [planned; CLF0-CLF13].** Keep the shared decision interface, hosted/private adapters, ordinary setup, basic usage controls, lifecycle validation and core grants/audit MIT. Org identity, administrator model/egress policy, managed rollout/rollback and pilot/SIEM reporting extend the public API in the commercial package. The enterprise scaffold is not an implemented CLEF offering.
 
-#### EV2. Offline licence keys [planned, 1w] [commercial repo]
+#### EV2. Offline licence keys [shipped 2026-10-03, hippo-enterprise #1; the signing key is not yet generated] [commercial repo]
 - **The key:** a licence file signed with Ed25519 (company, seats, expiry, edition), checked offline against a public key in the enterprise package.
 - **No beacon.** This keeps the no-telemetry promise.
 - **Seats:** counted on trust, with an annual true-up.
