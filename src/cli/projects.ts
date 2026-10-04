@@ -76,7 +76,7 @@ export function cmdProjects(hippoRoot: string, args: string[], flags: Flags): vo
         return;
       }
       console.log(`${apply ? 'Repaired' : 'Dry run: would repair'} ${root}:`);
-      console.log(`  ${count(r.copies.length, 'imported note copy', 'imported note copies')} set aside (the user-global copy stays, shown in every project)`);
+      console.log(`  ${count(r.copies.length, 'imported note copy', 'imported note copies')} under the wrong project set aside (the note stays under its own, or user-global)`);
       for (const f of r.folds) console.log(`  ${f.from} folded into ${f.into} (its sessions' folders resolve there now)`);
       console.log(`  sleep's user-global merged rows: ${r.toProject.length} re-tagged to their parents' project`);
       console.log(`  ${r.setAside.length} set aside (parents in two projects; sleep re-merges them per project)`);

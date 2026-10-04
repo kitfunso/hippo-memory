@@ -104,11 +104,13 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
 /** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
 export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
   const origin = transcriptNotesOrigin(transcriptPath, cwd, opts.machine.platform);
-  // A project store takes its own project's notes only; the global store parts any project's by origin.
-  if (origin === null || (!isGlobalStoreRoot(hippoRoot) && origin !== deriveOriginProject(path.dirname(hippoRoot)))) return emptyReport();
+  if (origin === null) return emptyReport();
+  // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts them by origin.
+  const own = isGlobalStoreRoot(hippoRoot) || origin === deriveOriginProject(path.dirname(hippoRoot));
+  const target = own ? hippoRoot : resolveGlobalRootDir();
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, legacy: false, originProject: origin, handover: false,
+    scope: 'project', target, invoking: target, legacy: false, originProject: origin, handover: false,
     list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
   }, opts);
 }

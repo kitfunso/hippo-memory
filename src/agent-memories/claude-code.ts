@@ -55,14 +55,38 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
 }
 
-/** The project a session folder's notes belong to: the one Claude named the folder for, which is cwd or a parent; null when it is neither. */
+/** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder, else cwd or a parent; null when none matches. */
 export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null, platform: NodeJS.Platform): string | null {
-  if (cwd === null) return null;
   const fold = (name: string) => (platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
-  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
-    if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return deriveOriginProject(dir);
-    if (path.dirname(dir) === dir) return null;
+  for (const from of [transcriptStartCwd(transcriptPath), cwd]) {
+    for (let dir = from === null ? null : path.resolve(from); dir !== null; dir = path.dirname(dir) === dir ? null : path.dirname(dir)) {
+      // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
+      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return fs.existsSync(dir) ? deriveOriginProject(dir) : null;
+    }
+  }
+  return null;
+}
+
+// Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with room to spare.
+const START_SCAN_BYTES = 64 * 1024;
+
+/** The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder name alone cannot give back. */
+function transcriptStartCwd(transcriptPath: string): string | null {
+  if (!fs.existsSync(transcriptPath)) return null;
+  const fd = fs.openSync(transcriptPath, 'r');
+  try {
+    const buf = Buffer.alloc(START_SCAN_BYTES);
+    const lines = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').split('\n');
+    for (const line of lines) {
+      const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
+      if (cwd === undefined) continue;
+      // SAFETY: the match is the body of one JSON string, so parsing it in quotes yields a string.
+      return JSON.parse(`"${cwd}"`) as string;
+    }
+    return null;
+  } finally {
+    fs.closeSync(fd);
   }
 }
 

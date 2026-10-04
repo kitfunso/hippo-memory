@@ -171,6 +171,26 @@ describe('hippo projects repair', () => {
     }
   });
 
+  it('skips a fold into a name that itself folds, so the result never depends on run order', () => {
+    const saved = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = home;
+    try {
+      for (const name of ['b', 'c']) mkdirSync(join(home, 'work', name, '.git'), { recursive: true });
+      const lesson = row('a lesson two renames back', 'a');
+      open();
+      const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
+      compaction.run(T, 'c1', 'a', join(home, 'work', 'b'), new Date().toISOString());
+      compaction.run(T, 'c2', 'b', join(home, 'work', 'c'), new Date().toISOString());
+
+      expect(repairProjects(db, home, { tenantId: T, dryRun: true }).folds).toEqual([{ from: 'b', into: 'c' }]);
+      repairProjects(db, home, { tenantId: T, dryRun: false });
+      expect(byId().get(lesson.id)!.origin_project).toBe('a');
+    } finally {
+      if (saved === undefined) delete process.env.HIPPO_HOME;
+      else process.env.HIPPO_HOME = saved;
+    }
+  });
+
   it('folds nothing in a project store, whose names never came from a cwd', () => {
     const repo = join(home, 'work', 'repo');
     mkdirSync(join(repo, '.git'), { recursive: true });

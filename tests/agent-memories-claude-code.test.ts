@@ -251,6 +251,19 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     expect(transcriptNotesOrigin(transcriptOf(repo), null, process.platform)).toBeNull();
   });
 
+  it('reads the start folder from the transcript, which the lossy folder name cannot give back, and decides nothing for a folder gone from disk', () => {
+    const launch = tmp();
+    const [dash, under] = [path.join(launch, 'my-repo'), path.join(launch, 'my_repo')];
+    for (const repo of [dash, under]) fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    const transcript = path.join(tmp(), 'projects', claudeFolder(under), 't.jsonl');
+    writeIn(path.dirname(transcript), 't.jsonl', `{"type":"summary"}\n${JSON.stringify({ type: 'user', cwd: under })}\n`);
+    const gone = path.join(launch, 'gone');
+    const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
+
+    expect(transcriptNotesOrigin(transcript, dash, process.platform)).toBe('my_repo');
+    expect(transcriptNotesOrigin(goneTranscript, path.join(gone, 'src'), process.platform)).toBeNull();
+  });
+
   it('lists nothing for a project scope without a project root or name', () => {
     expect(claudeCodeAdapter.list(ctxOf(tmp()), 'project').containers).toEqual([]);
   });

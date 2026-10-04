@@ -174,7 +174,7 @@ function projectsCheck(globalRoot: string): DoctorCheck {
     db = openHippoDbReadOnly(globalRoot);
     const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
     const found = [
-      r.copies.length > 0 ? `${r.copies.length} imported notes copied under a project name` : '',
+      r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0 ? `${r.folds.length} old project names that now resolve to another project` : '',
       r.toProject.length + r.setAside.length > 0 ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global` : '',
     ].filter((s) => s !== '');

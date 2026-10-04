@@ -92,7 +92,7 @@ describe('hippo projects', () => {
     const r = hippo('repair');
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('Dry run: would repair');
-    expect(r.stdout).toContain('0 imported note copies set aside');
+    expect(r.stdout).toContain('0 imported note copies under the wrong project set aside');
     expect(r.stdout).toMatch(/0 re-tagged to their parents' project/);
     expect(r.stdout).toContain('Nothing written');
   });

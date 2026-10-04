@@ -2,7 +2,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setAsideRow } from './agent-memories/apply.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS } from './agent-memories/tools.js';
+import { transcriptNotesOrigin } from './agent-memories/claude-code.js';
+import { containerId, containerPrefix } from './agent-memories/source.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
@@ -10,7 +12,7 @@ import { calculateStrength, type MemoryEntry } from './memory.js';
 import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
 import { removeEntryMirrors } from './store/mirrors.js';
 import { deleteEntryRowInTx, writeEntryMirrors } from './store/entry-writes.js';
-import { selectAllEntries } from './store/entry-reads.js';
+import { selectAllEntries, selectLiveEntriesBySourcePrefix } from './store/entry-reads.js';
 
 export interface ProjectSummary {
   /** '' is user-global, null is unknown; neither can be merged. */
@@ -39,7 +41,7 @@ export interface ProjectFold {
 }
 
 export interface RepairResult {
-  /** Imported notes under a project name whose text a user-global import already holds, so every project sees it: set aside. */
+  /** Imported notes filed under the wrong project, or under a project name when a user-global import holds the same text: set aside. */
   readonly copies: readonly string[];
   /** Names whose recorded session folders all resolve to one other project today, folded as `merge` would. */
   readonly folds: readonly ProjectFold[];
@@ -159,6 +161,35 @@ function importCopies(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
   return live.filter((e) => e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null && userGlobal.has(e.content));
 }
 
+/** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its notes under any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
+function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): MemoryEntry[] {
+  const copies = importCopies(db, tenantId);
+  if (!isGlobalStoreRoot(hippoRoot)) return copies;
+  const platform = process.platform;
+  // SAFETY: the SELECT names the two columns of the row type.
+  const sessions = db.prepare(`SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path IS NOT NULL`)
+    .all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
+  const owners = new Map<string, Set<string>>();
+  for (const { transcript, cwd } of sessions) {
+    const origin = transcriptNotesOrigin(transcript, cwd, platform);
+    const dir = path.join(path.dirname(transcript), 'memory');
+    if (origin !== null) owners.set(dir, (owners.get(dir) ?? new Set<string>()).add(origin));
+  }
+  const tool = toolSourcePrefix('claude-code');
+  const live = selectLiveEntriesBySourcePrefix(db, tenantId, tool).filter((e) => e.kind !== 'raw' && !e.pinned);
+  const origins = new Set(live.map((e) => e.origin_project ?? ''));
+  const right = new Set<string>();
+  const wrong = new Set<string>();
+  for (const [dir, owner] of owners) {
+    if (owner.size !== 1) continue;
+    for (const origin of origins) (owner.has(origin) ? right : wrong).add(containerPrefix('claude-code', containerId(dir, 'project', platform, origin)));
+  }
+  const prefix = (e: MemoryEntry) => e.source.slice(0, e.source.indexOf('/', tool.length) + 1);
+  const misfiled = live.filter((e) => wrong.has(prefix(e)));
+  const seen = new Set(misfiled.map((e) => e.id));
+  return [...misfiled, ...copies.filter((e) => !seen.has(e.id) && !right.has(prefix(e)))];
+}
+
 /** Global store only, where a compaction's name came from its cwd: a name whose every cwd still on disk resolves to one other project today. */
 function planFolds(db: DatabaseSyncLike, tenantId: string): ProjectFold[] {
   // SAFETY: the SELECT names the two columns of the row type.
@@ -170,16 +201,19 @@ function planFolds(db: DatabaseSyncLike, tenantId: string): ProjectFold[] {
   }
   // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
   const chosen = new Set(queryAuditEvents(db, { tenantId, op: 'project_merge', limit: 10000 }).map((e) => e.metadata.into));
-  return [...today].flatMap(([from, names]) => {
+  const folds = [...today].flatMap(([from, names]) => {
     const [into] = names;
     return names.size === 1 && into !== '' && into !== from && !chosen.has(from) ? [{ from, into }] : [];
   });
+  // A fold into a name that itself folds would land rows by run order; the next repair takes the rest of the chain.
+  const sources = new Set(folds.map((f) => f.from));
+  return folds.filter((f) => !sources.has(f.into));
 }
 
-/** Reads only, so doctor can call it on a read-only handle; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */
+/** Reads only, so doctor and a dry run take no write lock; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */
 export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): Omit<RepairResult, 'backup'> {
   const folds = isGlobalStoreRoot(hippoRoot) ? planFolds(db, tenantId) : [];
-  return { copies: importCopies(db, tenantId).map((e) => e.id), folds, ...planUserGlobalRepair(db, tenantId) };
+  return { copies: strayImports(db, hippoRoot, tenantId).map((e) => e.id), folds, ...planUserGlobalRepair(db, tenantId) };
 }
 
 function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
@@ -201,16 +235,19 @@ function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string): Pick<Repa
   return { toProject, setAside, untraced };
 }
 
-/** Sets aside the copies, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges by their parents; a dry run rolls back. */
+/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges by their parents; a dry run only plans. */
 export function repairProjects(
   db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; dryRun: boolean },
 ): RepairResult {
   const { tenantId, dryRun } = opts;
-  const backup = dryRun ? null : backupStore(db, hippoRoot, 'before-repair');
-  const { result, rewrite, purge } = inTransaction(db, dryRun, () => {
-    const copies = importCopies(db, tenantId)
-      .filter((row) => setAsideRow(db, toolTag(row.source) ?? '', row, 'project-repair').kind === 'dormant')
-      .map((row) => row.id);
+  if (dryRun) return { ...planProjectRepair(db, hippoRoot, tenantId), backup: null };
+  const backup = backupStore(db, hippoRoot, 'before-repair');
+  const { result, rewrite, purge } = inTransaction(db, false, () => {
+    const copies: string[] = [];
+    for (const row of strayImports(db, hippoRoot, tenantId)) {
+      const tag = toolTag(row.source);
+      if (tag !== null && setAsideRow(db, tag, row, 'project-repair').kind === 'dormant') copies.push(row.id);
+    }
     const folds = isGlobalStoreRoot(hippoRoot) ? planFolds(db, tenantId) : [];
     const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
     const plan = planUserGlobalRepair(db, tenantId);
@@ -229,7 +266,7 @@ export function repairProjects(
       purge: [...copies, ...plan.setAside, ...folded.flatMap((f) => f.setAside)],
     };
   });
-  if (!dryRun) refreshMirrors(db, hippoRoot, tenantId, rewrite, purge);
+  refreshMirrors(db, hippoRoot, tenantId, rewrite, purge);
   return result;
 }
 
