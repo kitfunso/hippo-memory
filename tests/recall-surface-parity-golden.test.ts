@@ -204,11 +204,22 @@ async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise
   }
 }
 
+// updated_at is datetime('now') at write time and breaks bm25 ties, so a seed loop crossing a second boundary reorders rows.
+function pinUpdatedAt(root: string): void {
+  const db = openHippoDb(root);
+  try {
+    db.prepare("UPDATE memories SET updated_at = '2026-01-31 00:00:00'").run();
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 beforeAll(() => {
   templates = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
   seedLocal(join(templates, 'local'));
   seedWide(join(templates, 'wide'));
   seedGlobal(join(templates, 'global'));
+  for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(templates, kind));
 });
 
 afterAll(() => {
@@ -271,21 +282,18 @@ describe('recall surface parity goldens', () => {
   }, 60_000);
 
   // D2: candidate windows on a store with 230 matching rows.
+  // A store per surface: a recall rewrites the rows it returns, and that write time breaks the next surface's ties.
   it('candidate window per surface', async () => {
-    const got = await onFreshStore('wide', async (s) => {
-      const cli = await viaCli(s, { query: 'deploy', cliFlags: { json: true, why: true } });
-      const mcp = await viaMcp(s, { query: 'deploy' });
-      const http = await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }]);
+    const cli = await onFreshStore('wide', async (s) => {
+      const out = await viaCli(s, { query: 'deploy', cliFlags: { json: true, why: true } });
       // SAFETY: `hippo recall --json` prints one JSON object carrying a RecallResult-shaped suppressionSummary.
-      const cliJson = JSON.parse(cli.output.stdout) as Pick<RecallResult, 'suppressionSummary'>;
-      const windowOf = ({ output: { body } }: HttpRecalled) => ({ windowSize: body.windowSize, summary: body.suppressionSummary, returned: body.results.length });
-      return {
-        cli: cliJson.suppressionSummary,
-        mcpHead: mcp.output.split('\n').slice(0, 4),
-        http: windowOf(http[0]!),
-        httpScorerWindow50: windowOf(http[1]!),
-      };
+      return (JSON.parse(out.output.stdout) as Pick<RecallResult, 'suppressionSummary'>).suppressionSummary;
     });
+    const mcpHead = await onFreshStore('wide', async (s) => (await viaMcp(s, { query: 'deploy' })).output.split('\n').slice(0, 4));
+    const windowOf = ({ output: { body } }: HttpRecalled) => ({ windowSize: body.windowSize, summary: body.suppressionSummary, returned: body.results.length });
+    const [http, httpScorerWindow50] = await onFreshStore('wide', async (s) =>
+      (await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }])).map(windowOf));
+    const got = { cli, mcpHead, http, httpScorerWindow50 };
     expect(got).toMatchSnapshot();
   }, 120_000);
 
