@@ -360,9 +360,13 @@ export function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHip
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
   const entries = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  syncChangedMirrors(hippoRoot, db, entries.map(rowToEntry));
+}
 
+/** syncMirrorFiles for a pass that changed only `changed`: the other rows' markdown is already current. */
+export function syncChangedMirrors(hippoRoot: string, db: ReturnType<typeof openHippoDb>, changed: readonly MemoryEntry[]): void {
   mirrorBestEffort('markdown mirrors', () => {
-    for (const entry of entries.map(rowToEntry)) writeMarkdownMirror(hippoRoot, entry);
+    for (const entry of changed) writeMarkdownMirror(hippoRoot, entry);
   });
 
   // SAFETY: conflicts' shape matches the eight columns named in the SELECT

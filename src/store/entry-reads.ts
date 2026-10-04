@@ -28,6 +28,62 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
   }
 }
 
+/** Ids per `IN (...)` list: far under SQLite's bound-parameter limit, with room for the tenant filter. */
+export const ID_CHUNK = 500;
+
+/** `items` in consecutive slices of at most `size`. */
+export function chunked<T>(items: readonly T[], size: number = ID_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map. */
+export function selectEntriesByIds(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+  tenantId?: string,
+): Map<string, MemoryEntry> {
+  const byId = new Map<string, MemoryEntry>();
+  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const tenantArgs = tenantId !== undefined ? [tenantId] : [];
+  for (const chunk of chunked([...new Set(ids)])) {
+    const placeholders = chunk.map(() => '?').join(',');
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders})${tenantClause}`,
+    ).all(...chunk, ...tenantArgs) as MemoryRow[];
+    for (const row of rows) byId.set(row.id, rowToEntry(row));
+  }
+  return byId;
+}
+
+/** Direct children of each parent, one query per chunk; each list is in `created ASC, id ASC` order. */
+export function selectChildrenByParent(
+  db: DatabaseSyncLike,
+  parentIds: readonly string[],
+  tenantId?: string,
+): Map<string, MemoryEntry[]> {
+  const byParent = new Map<string, MemoryEntry[]>();
+  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const tenantArgs = tenantId !== undefined ? [tenantId] : [];
+  for (const chunk of chunked([...new Set(parentIds)])) {
+    const placeholders = chunk.map(() => '?').join(',');
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${placeholders})${tenantClause} ORDER BY created ASC, id ASC`,
+    ).all(...chunk, ...tenantArgs) as MemoryRow[];
+    for (const row of rows) {
+      const entry = rowToEntry(row);
+      const parentId = entry.dag_parent_id ?? '';
+      const bucket = byParent.get(parentId);
+      if (bucket) bucket.push(entry);
+      else byParent.set(parentId, [entry]);
+    }
+  }
+  return byParent;
+}
+
 /**
  * Batched lookup. Caps at 500 ids per call to keep the IN(?,?,...) clause
  * within SQLite limits. Tenant filter is enforced when `tenantId` is passed.
@@ -216,7 +272,6 @@ export function loadFreshRawMemories(
 /**
  * Direct DAG children of a parent summary. Tenant scoped. Returns only rows
  * whose `dag_parent_id` matches `parentId`; does NOT walk recursively.
- * Used by `drillDown` (Task 3).
  */
 export function loadChildrenOf(
   hippoRoot: string,
@@ -225,16 +280,7 @@ export function loadChildrenOf(
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
-    // MemoryRow's field set.
-    const rows = tenantId !== undefined
-      ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id = ? AND tenant_id = ? ORDER BY created ASC, id ASC`,
-        ).all(parentId, tenantId) as MemoryRow[]
-      : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id = ? ORDER BY created ASC, id ASC`,
-        ).all(parentId) as MemoryRow[];
-    return rows.map(rowToEntry);
+    return selectChildrenByParent(db, [parentId], tenantId).get(parentId) ?? [];
   } finally {
     closeHippoDb(db);
   }

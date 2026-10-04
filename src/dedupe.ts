@@ -23,7 +23,9 @@
 
 import { textOverlap } from './tokenize.js';
 import { loadAllEntries } from './store/entry-reads.js';
-import { deleteEntry, memoriesBackingObjects } from './store/delete-and-batch.js';
+import { deleteEntryOn, memoriesBackingObjects } from './store/delete-and-batch.js';
+import { openStore } from './store/open.js';
+import { closeHippoDb } from './db.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
@@ -127,20 +129,21 @@ function dedupPair(kept: MemoryEntry, dropped: MemoryEntry): DedupPair {
   };
 }
 
-/** Pairs within one partition, already in survivor order; marks each loser in `removed`. */
+/** Pairs within one partition, already in survivor order, grouped by survivor; marks each loser in `removed`. */
 function partitionPairs(tenantEntries: readonly MemoryEntry[], removed: Set<string>, backing: ReadonlySet<string>): DedupPair[] {
-  const pairs: DedupPair[] = [];
-  const texts = tenantEntries.map((e) => duplicateKey(e.content));
-  for (let i = 0; i < tenantEntries.length; i++) {
-    if (removed.has(tenantEntries[i].id)) continue;
-    for (let j = i + 1; j < tenantEntries.length; j++) {
-      if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j]) || backing.has(tenantEntries[j].id)) continue;
-      if (texts[j] !== texts[i]) continue;
-      removed.add(tenantEntries[j].id);
-      pairs.push(dedupPair(tenantEntries[i], tenantEntries[j]));
+  const groups = new Map<string, { survivor: MemoryEntry; pairs: DedupPair[] }>();
+  for (const entry of tenantEntries) {
+    const key = duplicateKey(entry.content);
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, { survivor: entry, pairs: [] });
+      continue;
     }
+    if (!canAutoDelete(entry) || backing.has(entry.id)) continue;
+    removed.add(entry.id);
+    group.pairs.push(dedupPair(group.survivor, entry));
   }
-  return pairs;
+  return [...groups.values()].flatMap((group) => group.pairs);
 }
 
 /**
@@ -177,7 +180,18 @@ export function deduplicateStore(
     pairs.push(...partitionPairs(tenantEntries, removed, backing));
   }
 
-  const done = dryRun ? pairs : pairs.filter((p) =>
-    deleteEntry(hippoRoot, p.removed, { actor: options.actor, reason: `dedup: duplicate of ${p.kept}`, automatic: true }));
+  const done = dryRun ? pairs : deletePairs(hippoRoot, pairs, options.actor);
   return { removed: done.length, pairs: done };
+}
+
+/** The pairs whose loser was deleted; one store handle, one transaction per delete. */
+function deletePairs(hippoRoot: string, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
+  if (pairs.length === 0) return [];
+  const db = openStore(hippoRoot);
+  try {
+    return pairs.filter((p) =>
+      deleteEntryOn(db, hippoRoot, p.removed, { actor, reason: `dedup: duplicate of ${p.kept}`, automatic: true }));
+  } finally {
+    closeHippoDb(db);
+  }
 }

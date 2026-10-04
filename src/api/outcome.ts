@@ -1,8 +1,9 @@
 // Outcome feedback on recalled memories.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { readEntry } from '../store/entry-reads.js';
+import { closeHippoDb } from '../db.js';
+import { openStore } from '../store/open.js';
+import { writeEntryOn } from '../store/entry-writes.js';
+import { selectEntriesByIds } from '../store/entry-reads.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { applyOutcome, CHURN_STALE_TAG } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
@@ -22,8 +23,8 @@ import type { Context } from './types.js';
  * op='outcome' tagged with ctx.actor.subject.
  *
  * Returns `{applied, appliedIds}`. `appliedIds` is the tenant-filtered subset
- * of input ids that actually had `applyOutcome` run on them (i.e. ids whose
- * `readEntry(..., ctx.tenantId)` resolved). Callers that surface the id list
+ * of input ids that actually had `applyOutcome` run on them (i.e. ids found
+ * in ctx.tenantId). Callers that surface the id list
  * over a multi-tenant boundary (HTTP /v1/outcome last-recall path, Python SDK)
  * MUST return `appliedIds` instead of the raw input list — otherwise the
  * non-applied (cross-tenant) ids leak to the caller. Added in v1.11.4 to
@@ -49,16 +50,18 @@ export function outcome(
   opts?: { traceId?: number },
 ): OutcomeResult {
   const appliedIds: string[] = [];
-  const db = openHippoDb(ctx.hippoRoot);
+  const db = openStore(ctx.hippoRoot);
   try {
+    const live = selectEntriesByIds(db, ids, ctx.tenantId);
     for (const id of ids) {
-      const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
+      const entry = live.get(id);
       if (!entry) continue;
       let updated = applyOutcome(entry, good);
       if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
         updated = { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
       }
-      writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor.subject });
+      writeEntryOn(db, ctx.hippoRoot, updated, { actor: ctx.actor.subject });
+      live.set(id, updated); // a repeated id builds on its first outcome, as a fresh read would
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,
         actor: ctx.actor.subject,
@@ -94,7 +97,7 @@ export function outcome(
  *
  * Reads `loadIndex(ctx.hippoRoot).last_retrieval_ids` (per-hippoRoot local
  * state; not tenant-scoped at the index layer) and forwards to `outcome()`,
- * which DOES tenant-filter via `readEntry(..., ctx.tenantId)`. Cross-tenant
+ * which DOES tenant-filter its read by `ctx.tenantId`. Cross-tenant
  * ids in `last_retrieval_ids` are silently skipped, matching the MCP
  * `hippo_outcome` semantics.
  *

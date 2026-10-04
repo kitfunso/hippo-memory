@@ -4,7 +4,8 @@
  */
 
 import { createMemory, Layer, MemoryEntry } from '../memory.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { writeEntryOn } from '../store/entry-writes.js';
+import { openStore } from '../store/open.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../same-text.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
@@ -105,12 +106,8 @@ export function importEntries(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // AT1 P2 fix: a dry-run preview never called writeEntry, so it never
-  // checked tombstones either — every non-duplicate chunk counted as
-  // `imported` even when a real run would refuse it, making the preview's
-  // `rejected` count silently 0. Probe (read-only) via the same guard
-  // writeEntry uses internally, without ever writing.
-  const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
+  // A dry run probes the rejection guard read-only; a real run writes every chunk on this one handle.
+  const db = options.dryRun ? openHippoDb(targetRoot) : openStore(targetRoot);
   try {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
@@ -130,7 +127,7 @@ export function importEntries(
       }
 
       const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
-      if (!writeOrProbeImport(targetRoot, entry, options, dryRunDb)) {
+      if (!writeOrProbeImport(db, targetRoot, entry, options)) {
         rejected++;
         continue;
       }
@@ -144,7 +141,7 @@ export function importEntries(
 
     return { total, imported, skipped, rejected, redacted, entries };
   } finally {
-    if (dryRunDb) closeHippoDb(dryRunDb);
+    closeHippoDb(db);
   }
 }
 
@@ -189,26 +186,15 @@ function createImportEntry(
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
 function writeOrProbeImport(
+  db: DatabaseSyncLike,
   targetRoot: string,
   entry: MemoryEntry,
   options: ImportOptions,
-  dryRunDb: DatabaseSyncLike | null,
 ): boolean {
-  if (options.dryRun) {
-    if (dryRunDb) {
-      try {
-        checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
-      } catch (err) {
-        if (err instanceof RejectedValueError) return false;
-        throw err;
-      }
-    }
-    return true;
-  }
-  // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
-  // whole import batch. Caught per-item so siblings still land.
+  // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
-    writeEntry(targetRoot, entry);
+    if (options.dryRun) checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+    else writeEntryOn(db, targetRoot, entry);
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
     throw err;

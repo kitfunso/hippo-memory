@@ -1,5 +1,6 @@
-import { writeEntry } from './store/entry-writes.js';
-import { loadAllEntries, readEntry } from './store/entry-reads.js';
+import { writeEntryOn } from './store/entry-writes.js';
+import { loadAllEntries, selectEntriesByIds } from './store/entry-reads.js';
+import { openStore } from './store/open.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './memory.js';
 import {
@@ -116,6 +117,7 @@ export function invalidateMatching(
     dryRun,
     preview: [],
   };
+  const weakened: MemoryEntry[] = [];
 
   for (const entry of entries) {
     if (options?.onlyId !== undefined) {
@@ -151,10 +153,22 @@ export function invalidateMatching(
     if (!entry.tags.includes('invalidated')) {
       entry.tags.push('invalidated');
     }
-    writeEntry(hippoRoot, entry);
+    weakened.push(entry);
   }
 
+  writeEntriesOnOneHandle(hippoRoot, weakened);
   return result;
+}
+
+/** Each row commits alone, as a run of writeEntry calls would, but the store opens once. */
+function writeEntriesOnOneHandle(hippoRoot: string, entries: readonly MemoryEntry[]): void {
+  if (entries.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    for (const entry of entries) writeEntryOn(db, hippoRoot, entry);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 const STOPWORDS = new Set([
@@ -481,11 +495,20 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
 function tagChurnStale(hippoRoot: string, tenantId: string, toTag: readonly MemoryEntry[], confirmedAt: Map<string, string>): void {
   // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
   const confirmedNow = queryConfirmedAt(hippoRoot, tenantId);
-  for (const stale of toTag) {
-    if (confirmedNow.get(stale.id) !== confirmedAt.get(stale.id)) continue;
-    const entry = readEntry(hippoRoot, stale.id, tenantId);
-    if (!entry || entry.tags.includes(CHURN_STALE_TAG)) continue;
-    writeEntry(hippoRoot, { ...entry, tags: [...entry.tags, CHURN_STALE_TAG] });
+  const unconfirmed = toTag.filter((stale) => confirmedNow.get(stale.id) === confirmedAt.get(stale.id));
+  if (unconfirmed.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    const live = selectEntriesByIds(db, unconfirmed.map((stale) => stale.id), tenantId);
+    for (const stale of unconfirmed) {
+      const entry = live.get(stale.id);
+      if (!entry || entry.tags.includes(CHURN_STALE_TAG)) continue;
+      const tagged = { ...entry, tags: [...entry.tags, CHURN_STALE_TAG] };
+      writeEntryOn(db, hippoRoot, tagged);
+      live.set(stale.id, tagged); // a repeated id is already tagged, as a fresh read would show
+    }
+  } finally {
+    closeHippoDb(db);
   }
 }
 

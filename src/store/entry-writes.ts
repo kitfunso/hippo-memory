@@ -9,21 +9,24 @@ import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { openStore } from './open.js';
 
-export function writeEntry(
-  hippoRoot: string,
-  entry: MemoryEntry,
-  opts?: {
-    actor?: string;
-    afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
-    /** Runs AFTER the DB row commits (RELEASE SAVEPOINT in writeEntryDbOnly) but
-     *  BEFORE the markdown mirrors are written. Lets a caller perform a post-commit
-     *  side effect (e.g. mark the graph dirty) that must still happen even if a
-     *  mirror write then throws. Keep it best-effort — it runs on a committed,
-     *  idle connection, so opening another handle inside it is safe. */
-    afterCommit?: () => void;
-  },
-): void {
+export interface WriteEntryOptions {
+  actor?: string;
+  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+  /** Runs after the row commits and before the mirrors, on an idle connection; keep it best-effort. */
+  afterCommit?: () => void;
+}
+
+export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   const db = openStore(hippoRoot);
+  try {
+    writeEntryOn(db, hippoRoot, entry, opts);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
+export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   try {
     const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);
@@ -38,8 +41,6 @@ export function writeEntry(
       auditRejectionRefusal(db, error, opts?.actor ?? 'cli');
     }
     throw error;
-  } finally {
-    closeHippoDb(db);
   }
 }
 

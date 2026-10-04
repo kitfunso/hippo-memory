@@ -3,7 +3,8 @@ import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from
 import { archiveRawMemory } from '../raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
-import { syncMirrorFiles, purgeMirrorBestEffort } from './mirrors.js';
+import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
+import { selectEntriesByIds } from './entry-reads.js';
 import { openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 
@@ -97,10 +98,10 @@ export function replaceDetectedConflicts(
 
     resolveStaleOpenConflicts(db, canonicalDetected, sameTenant, detectedAt);
     upsertDetectedConflicts(db, canonicalDetected, sameTenant, detectedAt);
-    rebuildConflictsWithJson(db, sameTenant);
+    const changedIds = rebuildConflictsWithJson(db, sameTenant);
 
     db.exec('COMMIT');
-    syncMirrorFiles(hippoRoot, db);
+    syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
   } catch (error) {
     try {
       db.exec('ROLLBACK');
@@ -146,6 +147,7 @@ function resolveStaleOpenConflicts(
     WHERE status = 'open'
   `).all() as MemoryConflictRow[];
 
+  const resolve = db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ?`);
   for (const row of openRows) {
     const key = `${row.memory_a_id}::${row.memory_b_id}`;
     const stale = !detectedKeys.has(key);
@@ -155,9 +157,7 @@ function resolveStaleOpenConflicts(
     // re-detected cross-tenant rows lingering status='open'. The
     // sameTenant() helper is already built one block up; no extra query.
     const crossTenant = !sameTenant(row.memory_a_id, row.memory_b_id);
-    if (stale || crossTenant) {
-      db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ?`).run(detectedAt, row.id);
-    }
+    if (stale || crossTenant) resolve.run(detectedAt, row.id);
   }
 }
 
@@ -167,18 +167,19 @@ function upsertDetectedConflicts(
   sameTenant: SameTenant,
   detectedAt: string,
 ): void {
+  const upsert = db.prepare(`
+    INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at)
+    VALUES (?, ?, ?, ?, 'open', ?, ?)
+    ON CONFLICT(memory_a_id, memory_b_id) DO UPDATE SET
+      reason = excluded.reason,
+      score = excluded.score,
+      status = 'open',
+      updated_at = excluded.updated_at
+  `);
   for (const conflict of canonicalDetected) {
     // Skip cross-tenant pairs — never persist a conflict spanning tenants.
     if (!sameTenant(conflict.memory_a_id, conflict.memory_b_id)) continue;
-    db.prepare(`
-      INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at)
-      VALUES (?, ?, ?, ?, 'open', ?, ?)
-      ON CONFLICT(memory_a_id, memory_b_id) DO UPDATE SET
-        reason = excluded.reason,
-        score = excluded.score,
-        status = 'open',
-        updated_at = excluded.updated_at
-    `).run(
+    upsert.run(
       conflict.memory_a_id,
       conflict.memory_b_id,
       conflict.reason,
@@ -189,7 +190,8 @@ function upsertDetectedConflicts(
   }
 }
 
-function rebuildConflictsWithJson(db: DatabaseSyncLike, sameTenant: SameTenant): void {
+/** Rewrites only the rows whose conflicts_with_json changes, and returns their ids. */
+function rebuildConflictsWithJson(db: DatabaseSyncLike, sameTenant: SameTenant): string[] {
   // SAFETY: openConflicts' shape matches the two columns named above.
   const openConflicts = db.prepare(`
     SELECT memory_a_id, memory_b_id
@@ -208,13 +210,17 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, sameTenant: SameTenant):
     refMap.get(row.memory_b_id)!.add(row.memory_a_id);
   }
 
-  // SAFETY: memoryRows' shape matches the single `id` column selected
-  // above.
-  const memoryRows = db.prepare(`SELECT id FROM memories`).all() as Array<{ id: string }>;
+  // SAFETY: memoryRows' shape matches the two columns selected below.
+  const memoryRows = db.prepare(`SELECT id, conflicts_with_json FROM memories`).all() as Array<{ id: string; conflicts_with_json: string | null }>;
+  const update = db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`);
+  const changedIds: string[] = [];
   for (const memory of memoryRows) {
-    const refs = Array.from(refMap.get(memory.id) ?? []).sort();
-    db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(refs), memory.id);
+    const refsJson = JSON.stringify(Array.from(refMap.get(memory.id) ?? []).sort());
+    if (memory.conflicts_with_json === refsJson) continue;
+    update.run(refsJson, memory.id);
+    changedIds.push(memory.id);
   }
+  return changedIds;
 }
 
 /**
@@ -308,7 +314,7 @@ export function resolveConflict(
     auditConflictResolve(db, target, removal, tenantId);
 
     db.exec('COMMIT');
-    syncMirrorFiles(hippoRoot, db);
+    syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, [keepId, loserId]).values()]);
 
     if (removal.loserRemoved) purgeRemovedLoserMirrors(hippoRoot, db, loserId, removal);
 

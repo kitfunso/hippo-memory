@@ -102,22 +102,32 @@ export function deleteEntry(
 ): boolean {
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    let result: ReturnType<typeof deleteEntryCore>;
-    try {
-      result = deleteEntryCore(db, id, opts);
-      db.exec('COMMIT');
-    } catch (err) {
-      if (db.isTransaction !== false) db.exec('ROLLBACK');
-      throw err;
-    }
-    if (!result) return false;
-
-    purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
-    return true;
+    return deleteEntryOn(db, hippoRoot, id, opts);
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits alone. */
+export function deleteEntryOn(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  id: string,
+  opts?: { actor?: string; reason?: string; automatic?: boolean },
+): boolean {
+  db.exec('BEGIN IMMEDIATE');
+  let result: ReturnType<typeof deleteEntryCore>;
+  try {
+    result = deleteEntryCore(db, id, opts);
+    db.exec('COMMIT');
+  } catch (err) {
+    if (db.isTransaction !== false) db.exec('ROLLBACK');
+    throw err;
+  }
+  if (!result) return false;
+
+  purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
+  return true;
 }
 
 // The child fields a level-2/3 summary is built from (loadChildrenOfSummary, generateDagSummary).

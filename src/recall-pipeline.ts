@@ -14,6 +14,7 @@ import { multihopSearch } from './multihop.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { passesCliRecallScopeFilter } from './recall-scope.js';
 import type { RerankerFn } from './rerankers/types.js';
+import { currentEntries } from './search/as-of.js';
 import { hybridSearch } from './search/hybrid.js';
 import { physicsSearch } from './search/physics-search.js';
 import type { RerankStep, ResultCost, SearchResult } from './search/types.js';
@@ -172,32 +173,10 @@ function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): RecallPool {
   const passes = (e: MemoryEntry): boolean => passesCliRecallScopeFilter(e.scope ?? null, requested);
   local = local.filter(passes);
   global = global.filter(passes);
-  if (opts.asOf) {
-    local = currentAsOf(local, opts.asOf);
-    global = currentAsOf(global, opts.asOf);
-  } else if (!opts.includeSuperseded) {
-    local = local.filter((e) => !e.superseded_by);
-    global = global.filter((e) => !e.superseded_by);
-  }
+  const currentness = { asOf: opts.asOf, includeSuperseded: opts.includeSuperseded };
+  local = currentEntries(local, currentness);
+  global = currentEntries(global, currentness);
   return { local, global, total, dropped: total - (local.length + global.length) };
-}
-
-/** Rows that were true at `asOf`: valid by then, and not yet replaced by a successor in the same pool. */
-function currentAsOf(entries: MemoryEntry[], asOf: string): MemoryEntry[] {
-  const asOfDate = new Date(asOf);
-  const successorValidFrom = new Map<string, string>();
-  for (const e of entries) {
-    if (e.superseded_by) {
-      const successor = entries.find(s => s.id === e.superseded_by);
-      if (successor) successorValidFrom.set(e.id, successor.valid_from);
-    }
-  }
-  return entries.filter(e => {
-    if (new Date(e.valid_from) > asOfDate) return false;
-    if (!e.superseded_by) return true;
-    const succVf = successorValidFrom.get(e.id);
-    return succVf ? new Date(succVf) > asOfDate : true;
-  });
 }
 
 async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: RecallPool): Promise<SearchResult[]> {

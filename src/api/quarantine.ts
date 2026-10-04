@@ -3,7 +3,7 @@
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
-import { readEntry } from '../store/entry-reads.js';
+import { readEntry, selectEntriesByIds } from '../store/entry-reads.js';
 import {
   quarantineScopeFor,
   getQuarantineRow,
@@ -42,8 +42,9 @@ export function quarantineList(
   const db = openHippoDb(ctx.hippoRoot);
   try {
     const rows = listQuarantineRows(db, ctx.tenantId, opts.status ?? 'pending', opts.limit, opts.after);
+    const entries = selectEntriesByIds(db, rows.map((row) => row.memoryId), ctx.tenantId);
     return rows.map((row) => {
-      const entry = readEntry(ctx.hippoRoot, row.memoryId, ctx.tenantId);
+      const entry = entries.get(row.memoryId);
       return {
         id: row.memoryId,
         originalScope: row.originalScope,

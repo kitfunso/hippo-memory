@@ -1,6 +1,8 @@
 // DAG drill-down from a summary to its children.
 
-import { readEntry, loadChildrenOf } from '../store/entry-reads.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openStore } from '../store/open.js';
+import { selectEntriesByIds, selectChildrenByParent } from '../store/entry-reads.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
 import { passesScopeFilterForRecall } from '../recall-scope.js';
@@ -95,8 +97,24 @@ export function drillDown(
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
   // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
-  const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
-  // No unscoped cross-tenant probe here — readEntry's null return covers
+  const db = openStore(ctx.hippoRoot);
+  try {
+    return drillDownOn(db, ctx, summaryId, depth, opts, limit);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function drillDownOn(
+  db: DatabaseSyncLike,
+  ctx: Context,
+  summaryId: string,
+  depth: number,
+  opts: DrillDownOpts,
+  limit: number,
+): DrillDownOutcome {
+  const summary = selectEntriesByIds(db, [summaryId], ctx.tenantId).get(summaryId) ?? null;
+  // No unscoped cross-tenant probe here: the tenant-scoped read's miss covers
   // both "doesn't exist" and "exists in another tenant" by design.
   // Distinguishing them via an unscoped lookup would leak existence to
   // unauthorised tenants. The two cases collapse into not_found.
@@ -110,7 +128,7 @@ export function drillDown(
     return { failure: 'not_found' };
   }
 
-  const { collected, level0DirectCount } = collectDescendants(ctx, summaryId, depth);
+  const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, depth);
 
   const summaryOut: DrillDownSummary = {
     id: summary.id,
@@ -155,7 +173,8 @@ interface CappedChildren {
 // BFS with a visited set: dag_parent_id is not unique, so a misconfigured tree could emit a child twice past depth 1.
 // The level-0 count is kept apart so a legacy summary's descendantCount fallback counts direct children only.
 function collectDescendants(
-  ctx: Context,
+  db: DatabaseSyncLike,
+  tenantId: string,
   summaryId: string,
   depth: number,
 ): DescendantWalk {
@@ -165,8 +184,9 @@ function collectDescendants(
   let level0DirectCount = 0;
   for (let level = 0; level < depth; level++) {
     const nextFrontier: string[] = [];
+    const kidsByParent = selectChildrenByParent(db, frontier, tenantId);
     for (const parentId of frontier) {
-      const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
+      const kids = kidsByParent.get(parentId) ?? [];
       const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
       for (const k of eligibleKids) {
         if (visited.has(k.id)) continue;
