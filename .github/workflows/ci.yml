@@ -181,8 +181,20 @@ jobs:
         run: |
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+      - name: macOS busy-wait probe
+        if: runner.os == 'macOS'
+        run: |
+          node -e "
+          const { DatabaseSync } = require('node:sqlite'); const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
+          const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'busy-')), 'x.db');
+          const h = new DatabaseSync(f); h.exec('PRAGMA journal_mode=WAL; CREATE TABLE t(x)'); h.exec('BEGIN IMMEDIATE');
+          for (const ms of [100, 300, 1000]) { const r = new DatabaseSync(f); r.exec('PRAGMA busy_timeout=' + ms);
+            for (let i = 0; i < 3; i++) { const t = performance.now(); try { r.exec('BEGIN IMMEDIATE') } catch (e) {} console.log('busy_timeout', ms, 'waited', (performance.now() - t).toFixed(0), 'ms'); } r.close(); }
+          console.log('sqlite', new DatabaseSync(':memory:').prepare('select sqlite_version() v').get().v);
+          "
+          for i in 1 2 3; do npx vitest run tests/pilot-arm.test.ts -t 'bounded wait' 2>&1 | grep -E 'bounded wait|Tests '; done
       - name: Vitest
-        run: npx vitest run
+        run: npx vitest run ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
