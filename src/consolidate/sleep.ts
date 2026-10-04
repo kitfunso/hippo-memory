@@ -22,7 +22,7 @@ import { log } from '../log.js';
 import { type DecayOutcome, decayPass } from './decay.js';
 import { retireHeldTexts, mergePass } from './merge.js';
 import { detectConflicts } from './conflicts.js';
-import { type ConsolidationResult, lazyConsolidateDb, type SleepRun, newConsolidationResult } from './run.js';
+import { type ConsolidationResult, lazyConsolidateDb, type SleepRun, newConsolidationResult, syncFtsIndex } from './run.js';
 import { promoteSessionTraces, replayPass } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
@@ -38,6 +38,7 @@ export async function consolidate(
   const dryRun = options.dryRun ?? false;
   const result = newConsolidationResult(dryRun);
   const halfLife = migrateHalfLives(hippoRoot, dryRun, result);
+  syncFtsIndex(hippoRoot, dryRun, result);
 
   // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
   // The api.sleep audit row tags this with the admin synthetic actor.

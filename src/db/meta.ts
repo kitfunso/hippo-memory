@@ -1,13 +1,15 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 
-export function ensureMetaTable(db: DatabaseSyncLike): void {
-  db.exec(`
+export const META_TABLE_DDL = `
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-  `);
+  `;
+
+export function ensureMetaTable(db: DatabaseSyncLike): void {
+  db.exec(META_TABLE_DDL);
 }
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {

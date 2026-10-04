@@ -3,6 +3,7 @@ import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
+import { log } from './log.js';
 
 export interface ArchiveOpts {
   reason: string;
@@ -57,16 +58,13 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
   db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
   db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
-  // FTS5 is a virtual table — no FK CASCADE applies. Purge the FTS row so the
-  // archived content is not searchable after archive. Without this the original
-  // raw text remains in memories_fts until the next DB-open backfill, defeating
-  // GDPR right-to-be-forgotten.
+  // No FK cascade reaches the FTS5 table, and archived text must stop being searchable now, not at the next sleep.
   if (isFtsAvailable(db)) {
     try {
       db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
-    } catch {
-      // Best effort only. The DELETE on memories already succeeded; FTS will
-      // self-heal on next DB open via backfillFtsIndex.
+    } catch (err) {
+      // The memories DELETE already landed; the next sleep re-syncs the index, so say so instead of failing the archive.
+      log.warn(`archive ${id}: full-text row not purged, the next hippo sleep removes it (${err instanceof Error ? err.message : String(err)})`);
     }
   }
 }

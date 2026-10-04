@@ -3,7 +3,7 @@ export type { DatabaseSyncLike } from './db/sqlite.js';
 export { isSqliteBusy, STORE_BUSY_MESSAGE, execWithBusyRetry } from './db/busy.js';
 export { getSchemaVersion, getMeta, setMeta, isFtsAvailable } from './db/meta.js';
 export { countTableRows, pruneConsolidationRuns } from './db/tables.js';
-export { getCurrentSchemaVersion, IncompatibleBinaryError } from './db/migrate.js';
+export { getCurrentSchemaVersion, IncompatibleBinaryError, ftsRowCounts, repairFtsDrift } from './db/migrate.js';
 export {
   getHippoDbPath,
   HOOK_DB_WAIT_MS,

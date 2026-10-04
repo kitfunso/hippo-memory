@@ -11,7 +11,7 @@ import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
 import { loadConfig } from './config.js';
-import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
+import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, ftsRowCounts, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
 import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
@@ -234,6 +234,23 @@ function memoriesCheck(db: DatabaseSyncLike): DoctorCheck {
   return memoryCheck;
 }
 
+/** Whether the full-text index still matches `memories`; opening a current store no longer checks, so doctor reports and sleep repairs. */
+function ftsCheck(db: DatabaseSyncLike): DoctorCheck {
+  try {
+    const counts = ftsRowCounts(db);
+    if (counts === null) return { id: 'fts', status: 'info', detail: 'no full-text index; search uses slower LIKE matching' };
+    if (counts.memories === counts.fts) return { id: 'fts', status: 'pass', detail: `full-text index in sync (${counts.fts} rows)` };
+    return {
+      id: 'fts',
+      status: 'warn',
+      detail: `full-text index out of sync: ${counts.fts} indexed rows for ${counts.memories} memories, so search can miss memories or match removed ones`,
+      fix: 'hippo sleep   (re-syncs the index)',
+    };
+  } catch (err) {
+    return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
 function tokensCheck(db: DatabaseSyncLike, since: string): DoctorCheck {
   try {
     // SAFETY: COUNT/SUM aggregate row.
@@ -262,6 +279,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     const have = getSchemaVersion(db);
     checks.push(schemaCheck(have, getCurrentSchemaVersion()));
     checks.push(memoriesCheck(db));
+    checks.push(ftsCheck(db));
     const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
     checks.push(tokensCheck(db, since));
     checks.push(failuresCheck(db, since, have));

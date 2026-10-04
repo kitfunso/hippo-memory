@@ -68,12 +68,9 @@ function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
 }
 
 function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
-  // SAFETY: countRow's shape matches the single `COUNT(*) AS count` column
-  // selected above; `.get()` returns undefined only when no row exists.
-  const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
-  const memoryCount = Number(countRow?.count ?? 0);
-  if (memoryCount > 0) return false;
-  // memoryCount misses an all-rejected bootstrap (memories stays empty), which would re-run the
+  // Existence, not COUNT(*): a count walks every row on each write's open.
+  if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return false;
+  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the
   // import on every open and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
 
