@@ -30,6 +30,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     cache: 'READ:{OUT}/repo-cache/seqF/HEAD',
     quotedHome: 'BASH:cat "$HOME"/.claude/projects/p/s.jsonl',
     sessionIdOnly: 'ECHO:{"type":"delivery","sessionId":"not-a-transcript-line"}',
+    scattered: 'ECHO:{"user":{"uuid":"u"},"event":{"type":"delivery","sessionId":"s"}}',
+    nestedRecord: 'ECHO:{"wrap":{"type":"user","uuid":"u1","sessionId":"other-session"}}',
   };
 
   beforeAll(async () => {
@@ -72,6 +74,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
   it('reading the repo cache, which holds every fix ref, voids as other-arm', () => expectRead('cache', 'other-arm'));
   it('a quoted env form joined to a bare path is one shell word', () => expectRead('quotedHome', 'operator'));
   it('a sessionId in output that is not a transcript line does not void', () => expect(find(recs, 'A1', 'sessionIdOnly').void).toBeNull());
+  it('type, uuid and sessionId from different objects do not make a transcript line', () => expect(find(recs, 'A1', 'scattered').void).toBeNull());
+  it('a transcript record nested inside other output still voids', () => expectRead('nestedRecord', 'transcript-content'));
 });
 
 describe('resolveToken', () => {
