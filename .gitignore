@@ -74,3 +74,4 @@ benchmarks/public/results/*/predicted/
 benchmarks/public/results/**/answer_prompts/
 benchmarks/public/results/**/judge_prompts/
 __pycache__/
+.vitest/

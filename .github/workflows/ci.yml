@@ -82,9 +82,45 @@ jobs:
       - run: npm run build
       # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
       - name: Vitest
-        run: npx vitest run --shard=${{ matrix.shard }}/3
+        run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob
         env:
           TMPDIR: /dev/shm
+      - name: Upload blob report
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-${{ matrix.shard }}
+          path: .vitest/blob/*
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Thresholds are checked on the merged shards; one shard alone sits below the floor.
+  coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blob-*
+          path: .vitest/blob
+          merge-multiple: true
+      - name: Merged coverage gate
+        run: npx vitest --merge-reports --coverage
+      - name: Upload coverage summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 14
 
   # Commercial-only features live in a separate package; see CONTRIBUTING.md. Own job so
   # the full-history checkout it needs for the merge base does not slow the test job.
