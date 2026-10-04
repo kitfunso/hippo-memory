@@ -38,7 +38,7 @@
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
@@ -207,6 +207,122 @@ function buildPolicyContent(
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
+interface PolicyWrite {
+  tenantId: string;
+  actor: string;
+  policyName: string;
+  policyText: string;
+  validFrom: string;
+  validTo: string | null;
+  changeSummary: string | null;
+  supersedesId: number | undefined;
+  now: string;
+}
+
+// Preflight the supersede target BEFORE inserting the new row (so the new
+// autoincrement id can never be its own supersede target); read the
+// predecessor version in the same SELECT for server-derived versioning.
+// Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
+function preflightPolicySupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
+  // SAFETY: SELECT projects exactly status, version; .get() returns that
+  // shape for the matching row, or undefined when no policy/tenant pair matches.
+  const pred = db.prepare(
+    `SELECT status, version FROM policies WHERE id = ? AND tenant_id = ?`,
+  ).get(supersedesId, tenantId) as
+    | { status: string; version: number }
+    | undefined;
+  if (!pred) {
+    throw new NotFoundError(
+      `savePolicy: policy ${supersedesId} to supersede not found for tenant ${tenantId}`,
+    );
+  }
+  if (pred.status !== 'active') {
+    throw new ConflictError(
+      `savePolicy: policy ${supersedesId} is not active (status='${pred.status}'); only active policies can be superseded.`,
+    );
+  }
+  return pred.version + 1;
+}
+
+function insertPolicyRow(db: DatabaseSyncLike, memoryId: string, w: PolicyWrite, version: number): number {
+  const result = db.prepare(`
+    INSERT INTO policies(
+      memory_id, tenant_id, policy_name, policy_text, valid_from, valid_to,
+      version, status, superseded_by, superseded_at, change_summary, closed_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
+  `).run(
+    memoryId,
+    w.tenantId,
+    w.policyName,
+    w.policyText,
+    w.validFrom,
+    w.validTo,
+    version,
+    w.changeSummary,
+    w.now,
+  );
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+function supersedePolicyRow(
+  db: DatabaseSyncLike,
+  w: PolicyWrite,
+  supersedesId: number,
+  policyId: number,
+  version: number,
+): void {
+  const sup = db.prepare(`
+    UPDATE policies
+    SET status = 'superseded', superseded_by = ?, superseded_at = ?
+    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
+  `).run(policyId, w.now, supersedesId, w.tenantId, policyId);
+  if (sup.changes === 0) {
+    throw new ConflictError(
+      `savePolicy: policy ${supersedesId} could not be superseded (no longer active or self-reference).`,
+    );
+  }
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'policy_supersede',
+    targetId: String(supersedesId),
+    metadata: {
+      policy_id: supersedesId,
+      superseded_by: policyId,
+      new_version: version,
+    },
+  });
+}
+
+/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
+function writePolicyRow(db: DatabaseSyncLike, memoryId: string, w: PolicyWrite): PolicyRow {
+  const version = w.supersedesId !== undefined ? preflightPolicySupersede(db, w.tenantId, w.supersedesId) : 1;
+  const policyId = insertPolicyRow(db, memoryId, w, version);
+  if (w.supersedesId !== undefined) supersedePolicyRow(db, w, w.supersedesId, policyId, version);
+
+  // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
+  // .get() returns that row, or undefined only if the just-inserted id can't
+  // be found.
+  const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ?`)
+    .get(policyId) as PolicyRow | undefined;
+  if (!row) throw new Error('savePolicy: failed to reload saved policy row');
+
+  // GDPR-light metadata: ids + flags only, no policy text.
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'policy_create',
+    targetId: String(policyId),
+    metadata: {
+      policy_id: policyId,
+      version,
+      open_ended: w.validTo === null,
+    },
+  });
+  return row;
+}
+
 /**
  * Create a policy (or a new version that supersedes an existing one). Writes the
  * memory mirror + the policies row atomically inside writeEntry's SAVEPOINT.
@@ -251,100 +367,24 @@ export function savePolicy(
     baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
+  const w: PolicyWrite = {
+    tenantId,
+    actor,
+    policyName: opts.policyName,
+    policyText: opts.policyText,
+    validFrom,
+    validTo,
+    changeSummary,
+    supersedesId: opts.supersedesPolicyId,
+    now,
+  };
 
   let savedRow: PolicyRow | undefined;
 
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Preflight the supersede target BEFORE inserting the new row (so the new
-      // autoincrement id can never be its own supersede target); read the
-      // predecessor version in the same SELECT for server-derived versioning.
-      // Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
-      let version = 1;
-      if (opts.supersedesPolicyId !== undefined) {
-        // SAFETY: SELECT projects exactly status, version; .get() returns that
-        // shape for the matching row, or undefined when no policy/tenant pair matches.
-        const pred = db.prepare(
-          `SELECT status, version FROM policies WHERE id = ? AND tenant_id = ?`,
-        ).get(opts.supersedesPolicyId, tenantId) as
-          | { status: string; version: number }
-          | undefined;
-        if (!pred) {
-          throw new NotFoundError(
-            `savePolicy: policy ${opts.supersedesPolicyId} to supersede not found for tenant ${tenantId}`,
-          );
-        }
-        if (pred.status !== 'active') {
-          throw new ConflictError(
-            `savePolicy: policy ${opts.supersedesPolicyId} is not active (status='${pred.status}'); only active policies can be superseded.`,
-          );
-        }
-        version = pred.version + 1;
-      }
-
-      const result = db.prepare(`
-        INSERT INTO policies(
-          memory_id, tenant_id, policy_name, policy_text, valid_from, valid_to,
-          version, status, superseded_by, superseded_at, change_summary, closed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        opts.policyName,
-        opts.policyText,
-        validFrom,
-        validTo,
-        version,
-        changeSummary,
-        now,
-      );
-      const policyId = Number(result.lastInsertRowid ?? 0);
-
-      if (opts.supersedesPolicyId !== undefined) {
-        const sup = db.prepare(`
-          UPDATE policies
-          SET status = 'superseded', superseded_by = ?, superseded_at = ?
-          WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-        `).run(policyId, now, opts.supersedesPolicyId, tenantId, policyId);
-        if (sup.changes === 0) {
-          throw new ConflictError(
-            `savePolicy: policy ${opts.supersedesPolicyId} could not be superseded (no longer active or self-reference).`,
-          );
-        }
-        appendAuditEvent(db, {
-          tenantId,
-          actor,
-          op: 'policy_supersede',
-          targetId: String(opts.supersedesPolicyId),
-          metadata: {
-            policy_id: opts.supersedesPolicyId,
-            superseded_by: policyId,
-            new_version: version,
-          },
-        });
-      }
-
-      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
-      // .get() returns that row, or undefined only if the just-inserted id can't
-      // be found.
-      const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ?`)
-        .get(policyId) as PolicyRow | undefined;
-      if (!row) throw new Error('savePolicy: failed to reload saved policy row');
-      savedRow = row;
-
-      // GDPR-light metadata: ids + flags only, no policy text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'policy_create',
-        targetId: String(policyId),
-        metadata: {
-          policy_id: policyId,
-          version,
-          open_ended: validTo === null,
-        },
-      });
+      savedRow = writePolicyRow(db, memoryId, w);
     },
     afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });

@@ -25,7 +25,7 @@
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
@@ -124,6 +124,131 @@ const DECISION_COLS = `
 // Public API
 // ---------------------------------------------------------------------------
 
+/** The legacy `hippo decide` memory mirror for a decision. */
+function buildDecisionMemory(hippoRoot: string, tenantId: string, opts: SaveDecisionOpts) {
+  const content = opts.context
+    ? `${opts.decisionText}\n\nContext: ${opts.context}`
+    : opts.decisionText;
+  const tags = ['decision', ...(opts.extraTags ?? [])];
+  return createMemory(content, {
+    tags,
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'decision',
+    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
+    tenantId,
+  });
+}
+
+// Preflight the supersede target BEFORE inserting the new row. The new
+// row's autoincrement id could otherwise collide with a non-existent
+// supersedesDecisionId (e.g. superseding id 1 on an empty store, where the
+// INSERT below would itself become id 1), making the row supersede itself.
+// Validating first means the new row is never a candidate for its own
+// supersede UPDATE. codex review 2026-05-28 (P1).
+function preflightDecisionSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): void {
+  // SAFETY: row shape matches the single `status` column named in the SELECT below.
+  const pred = db.prepare(
+    `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
+  ).get(supersedesId, tenantId) as { status: string } | undefined;
+  if (!pred) {
+    throw new NotFoundError(
+      `saveDecision: decision ${supersedesId} to supersede not found for tenant ${tenantId}`,
+    );
+  }
+  if (pred.status !== 'active') {
+    throw new ConflictError(
+      `saveDecision: decision ${supersedesId} is not active (status='${pred.status}'); only active decisions can be superseded.`,
+    );
+  }
+}
+
+function insertDecisionRow(
+  db: DatabaseSyncLike,
+  memoryId: string,
+  tenantId: string,
+  opts: SaveDecisionOpts,
+  now: string,
+): number {
+  const result = db.prepare(`
+    INSERT INTO decisions(
+      memory_id, tenant_id, decision_text, context,
+      status, superseded_by, superseded_at, closed_at, created_at
+    ) VALUES (?, ?, ?, ?, 'active', NULL, NULL, NULL, ?)
+  `).run(memoryId, tenantId, opts.decisionText, opts.context ?? null, now);
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+// Supersede the (preflight-validated) prior active decision in the SAME
+// SAVEPOINT, atomic with the new row. The `id != decisionId` exclusion is
+// defense-in-depth against the self-match described above; combined with
+// the preflight, a 0-change here is unreachable in the single-writer txn.
+function supersedeDecisionRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  actor: string,
+  supersedesId: number,
+  decisionId: number,
+  now: string,
+): void {
+  const sup = db.prepare(`
+    UPDATE decisions
+    SET status = 'superseded', superseded_by = ?, superseded_at = ?
+    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
+  `).run(decisionId, now, supersedesId, tenantId, decisionId);
+  if (sup.changes === 0) {
+    throw new BadRequestError(
+      `saveDecision: decision ${supersedesId} could not be superseded (no longer active or self-reference).`,
+    );
+  }
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'decision_supersede',
+    targetId: String(supersedesId),
+    metadata: {
+      decision_id: supersedesId,
+      superseded_by: decisionId,
+    },
+  });
+}
+
+/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
+function writeDecisionRow(
+  db: DatabaseSyncLike,
+  memoryId: string,
+  tenantId: string,
+  opts: SaveDecisionOpts,
+  actor: string,
+  now: string,
+): DecisionRow {
+  if (opts.supersedesDecisionId !== undefined) {
+    preflightDecisionSupersede(db, tenantId, opts.supersedesDecisionId);
+  }
+  const decisionId = insertDecisionRow(db, memoryId, tenantId, opts, now);
+  if (opts.supersedesDecisionId !== undefined) {
+    supersedeDecisionRow(db, tenantId, actor, opts.supersedesDecisionId, decisionId, now);
+  }
+
+  // SAFETY: row's shape matches the columns named in DECISION_COLS above.
+  const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ?`)
+    .get(decisionId) as DecisionRow | undefined;
+  if (!row) throw new Error('saveDecision: failed to reload saved decision row');
+
+  // GDPR-light metadata: id + flag only, no decision_text.
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'decision_create',
+    targetId: String(decisionId),
+    metadata: {
+      decision_id: decisionId,
+      has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
+    },
+  });
+  return row;
+}
+
 /**
  * Create a decision. Writes the memory mirror + the decisions row atomically
  * inside writeEntry's SAVEPOINT 'write_entry'. When supersedesDecisionId is
@@ -146,18 +271,7 @@ export function saveDecision(
   if (!opts.decisionText) throw new BadRequestError('saveDecision: decisionText is required');
 
   const now = new Date().toISOString();
-  const content = opts.context
-    ? `${opts.decisionText}\n\nContext: ${opts.context}`
-    : opts.decisionText;
-  const tags = ['decision', ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'decision',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
-  });
+  const mem = buildDecisionMemory(hippoRoot, tenantId, opts);
 
   // Populated inside afterWrite so the INSERT, the supersede UPDATE, and the
   // memory write all share one SAVEPOINT.
@@ -166,87 +280,7 @@ export function saveDecision(
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Preflight the supersede target BEFORE inserting the new row. The new
-      // row's autoincrement id could otherwise collide with a non-existent
-      // supersedesDecisionId (e.g. superseding id 1 on an empty store, where the
-      // INSERT below would itself become id 1), making the row supersede itself.
-      // Validating first means the new row is never a candidate for its own
-      // supersede UPDATE. codex review 2026-05-28 (P1).
-      if (opts.supersedesDecisionId !== undefined) {
-        // SAFETY: row shape matches the single `status` column named in the SELECT below.
-        const pred = db.prepare(
-          `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
-        ).get(opts.supersedesDecisionId, tenantId) as { status: string } | undefined;
-        if (!pred) {
-          throw new NotFoundError(
-            `saveDecision: decision ${opts.supersedesDecisionId} to supersede not found for tenant ${tenantId}`,
-          );
-        }
-        if (pred.status !== 'active') {
-          throw new ConflictError(
-            `saveDecision: decision ${opts.supersedesDecisionId} is not active (status='${pred.status}'); only active decisions can be superseded.`,
-          );
-        }
-      }
-
-      const result = db.prepare(`
-        INSERT INTO decisions(
-          memory_id, tenant_id, decision_text, context,
-          status, superseded_by, superseded_at, closed_at, created_at
-        ) VALUES (?, ?, ?, ?, 'active', NULL, NULL, NULL, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        opts.decisionText,
-        opts.context ?? null,
-        now,
-      );
-      const decisionId = Number(result.lastInsertRowid ?? 0);
-
-      // Supersede the (preflight-validated) prior active decision in the SAME
-      // SAVEPOINT, atomic with the new row. The `id != decisionId` exclusion is
-      // defense-in-depth against the self-match described above; combined with
-      // the preflight, a 0-change here is unreachable in the single-writer txn.
-      if (opts.supersedesDecisionId !== undefined) {
-        const sup = db.prepare(`
-          UPDATE decisions
-          SET status = 'superseded', superseded_by = ?, superseded_at = ?
-          WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-        `).run(decisionId, now, opts.supersedesDecisionId, tenantId, decisionId);
-        if (sup.changes === 0) {
-          throw new BadRequestError(
-            `saveDecision: decision ${opts.supersedesDecisionId} could not be superseded (no longer active or self-reference).`,
-          );
-        }
-        appendAuditEvent(db, {
-          tenantId,
-          actor,
-          op: 'decision_supersede',
-          targetId: String(opts.supersedesDecisionId),
-          metadata: {
-            decision_id: opts.supersedesDecisionId,
-            superseded_by: decisionId,
-          },
-        });
-      }
-
-      // SAFETY: row's shape matches the columns named in DECISION_COLS above.
-      const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ?`)
-        .get(decisionId) as DecisionRow | undefined;
-      if (!row) throw new Error('saveDecision: failed to reload saved decision row');
-      savedRow = row;
-
-      // GDPR-light metadata: id + flag only, no decision_text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'decision_create',
-        targetId: String(decisionId),
-        metadata: {
-          decision_id: decisionId,
-          has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
-        },
-      });
+      savedRow = writeDecisionRow(db, memoryId, tenantId, opts, actor, now);
     },
     // Post-commit hook: mark the tenant's graph dirty AFTER the DB row commits
     // but BEFORE the markdown mirrors are written, so a mirror-write failure can

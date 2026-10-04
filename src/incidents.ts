@@ -27,7 +27,7 @@
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { createMemory, Layer } from './memory.js';
@@ -143,6 +143,72 @@ const INCIDENT_COLS = `
 // Public API
 // ---------------------------------------------------------------------------
 
+// Validate every linked receipt BEFORE inserting the row. Each must be a
+// memory in the SAME tenant; a cross-tenant or nonexistent id rejects the
+// whole write rather than recording an unverifiable receipt.
+function validateLinkedMemoryIds(db: DatabaseSyncLike, tenantId: string, linkInput: string[]): string[] {
+  const validated: string[] = [];
+  for (const linkId of linkInput) {
+    // SAFETY: row shape matches the single `id` column named in the SELECT above.
+    const exists = db.prepare(
+      `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
+    ).get(linkId, tenantId) as { id: string } | undefined;
+    if (!exists) {
+      throw new NotFoundError(
+        `saveIncident: linked memory ${linkId} not found for tenant ${tenantId}`,
+      );
+    }
+    validated.push(linkId);
+  }
+  return validated;
+}
+
+/** The afterWrite body: link validation, INSERT, reload, open audit, all in one SAVEPOINT. */
+function writeIncidentRow(
+  db: DatabaseSyncLike,
+  memoryId: string,
+  tenantId: string,
+  opts: SaveIncidentOpts,
+  actor: string,
+  now: string,
+): IncidentRow {
+  const validated = validateLinkedMemoryIds(db, tenantId, opts.linkedMemoryIds ?? []);
+
+  const result = db.prepare(`
+    INSERT INTO incidents(
+      memory_id, tenant_id, incident_text, context,
+      status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
+    ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
+  `).run(
+    memoryId,
+    tenantId,
+    opts.incidentText,
+    opts.context ?? null,
+    JSON.stringify(validated),
+    now,
+  );
+  const incidentId = Number(result.lastInsertRowid ?? 0);
+
+  // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
+  const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ?`)
+    .get(incidentId) as IncidentRow | undefined;
+  if (!row) throw new Error('saveIncident: failed to reload saved incident row');
+
+  // GDPR-light metadata: id + flag only, no incident_text.
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'incident_open',
+    targetId: String(incidentId),
+    metadata: {
+      incident_id: incidentId,
+      has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
+      linked_memory_count: validated.length,
+    },
+  });
+  return row;
+}
+
 /**
  * Create an incident. Writes the memory mirror + the incidents row atomically
  * inside writeEntry's SAVEPOINT 'write_entry'.
@@ -178,8 +244,6 @@ export function saveIncident(
     tenantId,
   });
 
-  const linkInput = opts.linkedMemoryIds ?? [];
-
   // Populated inside afterWrite so the linked-id validation, the INSERT, and the
   // memory write all share one SAVEPOINT.
   let savedRow: IncidentRow | undefined;
@@ -187,56 +251,7 @@ export function saveIncident(
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Validate every linked receipt BEFORE inserting the row. Each must be a
-      // memory in the SAME tenant; a cross-tenant or nonexistent id rejects the
-      // whole write rather than recording an unverifiable receipt.
-      const validated: string[] = [];
-      for (const linkId of linkInput) {
-        // SAFETY: row shape matches the single `id` column named in the SELECT above.
-        const exists = db.prepare(
-          `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
-        ).get(linkId, tenantId) as { id: string } | undefined;
-        if (!exists) {
-          throw new NotFoundError(
-            `saveIncident: linked memory ${linkId} not found for tenant ${tenantId}`,
-          );
-        }
-        validated.push(linkId);
-      }
-
-      const result = db.prepare(`
-        INSERT INTO incidents(
-          memory_id, tenant_id, incident_text, context,
-          status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
-        ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        opts.incidentText,
-        opts.context ?? null,
-        JSON.stringify(validated),
-        now,
-      );
-      const incidentId = Number(result.lastInsertRowid ?? 0);
-
-      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
-      const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ?`)
-        .get(incidentId) as IncidentRow | undefined;
-      if (!row) throw new Error('saveIncident: failed to reload saved incident row');
-      savedRow = row;
-
-      // GDPR-light metadata: id + flag only, no incident_text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'incident_open',
-        targetId: String(incidentId),
-        metadata: {
-          incident_id: incidentId,
-          has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
-          linked_memory_count: validated.length,
-        },
-      });
+      savedRow = writeIncidentRow(db, memoryId, tenantId, opts, actor, now);
     },
   });
 

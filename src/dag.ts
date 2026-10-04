@@ -135,6 +135,114 @@ export interface DagBuildResult {
   rejected: number;
 }
 
+// Hardening follow-up (mirrors consolidate.ts's mergeCandidatesByTenant,
+// T1): partition unparented facts by tenantId BEFORE clustering so a
+// cluster can never mix facts from different tenants into one
+// LLM-synthesized summary. Map preserves insertion order, so
+// single-tenant stores (every row 'default') get exactly one partition
+// and iterate in the same order as before this fix — byte-identical
+// behavior there.
+function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const unparentedByTenant = new Map<string, MemoryEntry[]>();
+  for (const fact of unparented) {
+    const key = derivationPartitionKey(fact.tenantId, fact.scope, fact.origin_project);
+    const bucket = unparentedByTenant.get(key);
+    if (bucket) bucket.push(fact);
+    else unparentedByTenant.set(key, [fact]);
+  }
+  return unparentedByTenant;
+}
+
+/** Where one partition's derived rows land: its members' own tenant, scope and project. */
+interface PartitionHome {
+  tenantId: string;
+  scope: string | null;
+  originProject: string | null | undefined;
+  baseHalfLifeDays: number;
+}
+
+/** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
+function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
+  const memberCreatedAts = cluster.members.map((m) => m.created).sort();
+  // Every member of `cluster` shares home.tenantId by construction (the
+  // tenant partition above), so the summary lands in the same tenant
+  // as the facts it summarizes instead of always 'default'
+  // (memory.ts:535 defaults tenantId when the option is omitted).
+  const summaryEntry = createMemory(summary, {
+    layer: Layer.Semantic,
+    tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
+    confidence: 'inferred',
+    dag_level: 2,
+    tenantId: home.tenantId,
+    scope: home.scope,
+    baseHalfLifeDays: home.baseHalfLifeDays,
+  });
+  summaryEntry.origin_project = home.originProject;
+  // Schema v25: cache descendant_count + earliest/latest_at on the summary
+  // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
+  // can reason about scope without walking the children.
+  summaryEntry.descendant_count = cluster.members.length;
+  summaryEntry.earliest_at = memberCreatedAts[0];
+  summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
+  return summaryEntry;
+}
+
+/** Summarize one eligible cluster, write the summary, then re-parent its members under it. */
+async function summarizeCluster(
+  hippoRoot: string,
+  cluster: FactCluster,
+  home: PartitionHome,
+  opts: DagSummaryOptions,
+  result: DagBuildResult,
+): Promise<void> {
+  const summary = await generateDagSummary(
+    cluster.label,
+    cluster.members.map((m) => m.content),
+    opts,
+  );
+  if (!summary) return;
+
+  const summaryEntry = createClusterSummaryEntry(summary, cluster, home);
+  // AT1 (plan §3 containment): a refused LLM-synthesized summary skips
+  // ONLY this cluster — the sleep cycle continues to the next one. The
+  // member re-parenting writes below never run for a skipped cluster
+  // (there is no summary id to parent them under).
+  //
+  // The tombstone check itself is tenant-scoped for free: writeEntry ->
+  // writeEntryDbOnly -> upsertEntryRow calls
+  // checkRejectionGuard(db, entry.tenantId ?? 'default', ...)
+  // (store/entry-writes.ts), reading tenantId off the entry being written. Now
+  // that summaryEntry carries home.tenantId instead of the implicit
+  // 'default', the guard consults that tenant's tombstones — no
+  // separate check needed here (unlike consolidate.ts's merge pass,
+  // which pre-checks via findRejectedValue because it writes through
+  // batchWriteAndDelete's bypassRejectionGuard path instead of
+  // writeEntry).
+  try {
+    writeEntry(hippoRoot, summaryEntry);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      result.rejected++;
+      log.warn(`buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`);
+      return;
+    }
+    throw err;
+  }
+  result.summariesCreated++;
+
+  for (const member of cluster.members) {
+    const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
+    writeEntry(hippoRoot, updated);
+    result.factsLinked++;
+  }
+  // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
+  // writeEntry calls (E2 hook on writeEntryDbOnly in store/entry-writes.ts).
+  // The summary we just built IS fresh, no rebuild needed. Without this,
+  // E3 in the SAME sleep cycle would re-rebuild every new summary
+  // (2x LLM cost). plan-eng-r1 HIGH must-fix.
+  clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+}
+
 export async function buildDag(
   hippoRoot: string,
   facts: MemoryEntry[],
@@ -147,95 +255,19 @@ export async function buildDag(
     (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
   );
 
-  // Hardening follow-up (mirrors consolidate.ts's mergeCandidatesByTenant,
-  // T1): partition unparented facts by tenantId BEFORE clustering so a
-  // cluster can never mix facts from different tenants into one
-  // LLM-synthesized summary. Map preserves insertion order, so
-  // single-tenant stores (every row 'default') get exactly one partition
-  // and iterate in the same order as before this fix — byte-identical
-  // behavior there.
-  const unparentedByTenant = new Map<string, MemoryEntry[]>();
-  for (const fact of unparented) {
-    const key = derivationPartitionKey(fact.tenantId, fact.scope, fact.origin_project);
-    const bucket = unparentedByTenant.get(key);
-    if (bucket) bucket.push(fact);
-    else unparentedByTenant.set(key, [fact]);
-  }
-
-  for (const [, tenantFacts] of unparentedByTenant) {
-    const factTenant = tenantFacts[0].tenantId;
-    const factScope = derivationScope(tenantFacts[0].scope);
+  for (const [, tenantFacts] of partitionFactsByTenant(unparented)) {
+    const home: PartitionHome = {
+      tenantId: tenantFacts[0].tenantId,
+      scope: derivationScope(tenantFacts[0].scope),
+      originProject: tenantFacts[0].origin_project,
+      baseHalfLifeDays,
+    };
     const clusters = clusterFacts(tenantFacts);
     const eligibleClusters = clusters.filter((c) => c.members.length >= 3);
     result.candidateClusters += eligibleClusters.length;
 
     for (const cluster of eligibleClusters) {
-      const summary = await generateDagSummary(
-        cluster.label,
-        cluster.members.map((m) => m.content),
-        opts,
-      );
-      if (!summary) continue;
-
-      const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-      // Every member of `cluster` shares factTenant by construction (the
-      // tenant partition above), so the summary lands in the same tenant
-      // as the facts it summarizes instead of always 'default'
-      // (memory.ts:535 defaults tenantId when the option is omitted).
-      const summaryEntry = createMemory(summary, {
-        layer: Layer.Semantic,
-        tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
-        confidence: 'inferred',
-        dag_level: 2,
-        tenantId: factTenant,
-        scope: factScope,
-        baseHalfLifeDays,
-      });
-      summaryEntry.origin_project = tenantFacts[0].origin_project;
-      // Schema v25: cache descendant_count + earliest/latest_at on the summary
-      // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
-      // can reason about scope without walking the children.
-      summaryEntry.descendant_count = cluster.members.length;
-      summaryEntry.earliest_at = memberCreatedAts[0];
-      summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
-      // AT1 (plan §3 containment): a refused LLM-synthesized summary skips
-      // ONLY this cluster — the sleep cycle continues to the next one. The
-      // member re-parenting writes below never run for a skipped cluster
-      // (there is no summary id to parent them under).
-      //
-      // The tombstone check itself is tenant-scoped for free: writeEntry ->
-      // writeEntryDbOnly -> upsertEntryRow calls
-      // checkRejectionGuard(db, entry.tenantId ?? 'default', ...)
-      // (store/entry-writes.ts), reading tenantId off the entry being written. Now
-      // that summaryEntry carries factTenant instead of the implicit
-      // 'default', the guard consults that tenant's tombstones — no
-      // separate check needed here (unlike consolidate.ts's merge pass,
-      // which pre-checks via findRejectedValue because it writes through
-      // batchWriteAndDelete's bypassRejectionGuard path instead of
-      // writeEntry).
-      try {
-        writeEntry(hippoRoot, summaryEntry);
-      } catch (err) {
-        if (err instanceof RejectedValueError) {
-          result.rejected++;
-          log.warn(`buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`);
-          continue;
-        }
-        throw err;
-      }
-      result.summariesCreated++;
-
-      for (const member of cluster.members) {
-        const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
-        writeEntry(hippoRoot, updated);
-        result.factsLinked++;
-      }
-      // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
-      // writeEntry calls (E2 hook on writeEntryDbOnly in store/entry-writes.ts).
-      // The summary we just built IS fresh, no rebuild needed. Without this,
-      // E3 in the SAME sleep cycle would re-rebuild every new summary
-      // (2x LLM cost). plan-eng-r1 HIGH must-fix.
-      clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+      await summarizeCluster(hippoRoot, cluster, home, opts, result);
     }
   }
 
@@ -253,6 +285,72 @@ export interface DagRebuildResult {
   zeroChildSkipped: number;     // dirty-cleared without LLM (descendants all gone)
   failed: number;               // LLM null, fetch error, or applyRebuildResult throw
   capped: boolean;              // true if queue had more than cap entries
+}
+
+/** Regenerate one dirty summary from its children and tally the outcome; throws reach the caller's isolation. */
+async function rebuildOneSummary(
+  hippoRoot: string,
+  summary: MemoryEntry,
+  opts: DagSummaryOptions,
+  result: DagRebuildResult,
+): Promise<void> {
+  const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
+
+  if (children.length === 0) {
+    // Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump.
+    const { changed } = applyRebuildResult(hippoRoot, summary, {
+      content: summary.content,
+      descendant_count: 0,
+      earliest_at: null,
+      latest_at: null,
+      bumpRebuildCount: false,
+      zeroChildren: true,
+      actor: 'sleep',
+    });
+    if (changed) result.zeroChildSkipped++;
+    // changed=false → race lost / row vanished; silently skip. `refused`
+    // is always false here — applyRebuildResult only checks the
+    // tombstone when bumpRebuildCount is true (store/summaries.ts).
+    return;
+  }
+
+  // Derive label from summary's existing entity tags (mirrors clusterFacts)
+  const entityTags = summary.tags.filter(
+    (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
+  );
+  const label = entityTags.length > 0
+    ? entityTags.map((t) => t.split(':')[1]).join(': ')
+    : summary.content.slice(0, 40);
+
+  const newContent = await generateDagSummary(
+    label,
+    children.map((c) => c.content),
+    opts,
+  );
+
+  if (!newContent) {
+    // LLM null / fetch error → leave dirty for next cycle
+    result.failed++;
+    return;
+  }
+
+  const childCreatedAts = children.map((c) => c.created).sort();
+  const { changed, refused } = applyRebuildResult(hippoRoot, summary, {
+    content: newContent,
+    descendant_count: children.length,
+    earliest_at: childCreatedAts[0],
+    latest_at: childCreatedAts[childCreatedAts.length - 1],
+    bumpRebuildCount: true,
+    zeroChildren: false,
+    actor: 'sleep',
+  });
+  if (refused) {
+    result.refused++;
+  } else if (changed) {
+    result.rebuilt++;
+  }
+  // changed=false (refused also false) → race lost; not failure, not
+  // success, silently skip
 }
 
 /**
@@ -301,63 +399,7 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
-
-      if (children.length === 0) {
-        // Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump.
-        const { changed } = applyRebuildResult(hippoRoot, summary, {
-          content: summary.content,
-          descendant_count: 0,
-          earliest_at: null,
-          latest_at: null,
-          bumpRebuildCount: false,
-          zeroChildren: true,
-          actor: 'sleep',
-        });
-        if (changed) result.zeroChildSkipped++;
-        // changed=false → race lost / row vanished; silently skip. `refused`
-        // is always false here — applyRebuildResult only checks the
-        // tombstone when bumpRebuildCount is true (store/summaries.ts).
-        continue;
-      }
-
-      // Derive label from summary's existing entity tags (mirrors clusterFacts)
-      const entityTags = summary.tags.filter(
-        (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
-      );
-      const label = entityTags.length > 0
-        ? entityTags.map((t) => t.split(':')[1]).join(': ')
-        : summary.content.slice(0, 40);
-
-      const newContent = await generateDagSummary(
-        label,
-        children.map((c) => c.content),
-        opts,
-      );
-
-      if (!newContent) {
-        // LLM null / fetch error → leave dirty for next cycle
-        result.failed++;
-        continue;
-      }
-
-      const childCreatedAts = children.map((c) => c.created).sort();
-      const { changed, refused } = applyRebuildResult(hippoRoot, summary, {
-        content: newContent,
-        descendant_count: children.length,
-        earliest_at: childCreatedAts[0],
-        latest_at: childCreatedAts[childCreatedAts.length - 1],
-        bumpRebuildCount: true,
-        zeroChildren: false,
-        actor: 'sleep',
-      });
-      if (refused) {
-        result.refused++;
-      } else if (changed) {
-        result.rebuilt++;
-      }
-      // changed=false (refused also false) → race lost; not failure, not
-      // success, silently skip
+      await rebuildOneSummary(hippoRoot, summary, opts, result);
     } catch (err) {
       // Per-summary failure isolation — one throw doesn't abort the queue.
       // independent-review MED #2 fold: log enough to triage in production
@@ -392,6 +434,96 @@ export interface EntityProfilesBuildResult {
   rejected: number;
 }
 
+// independent-review HIGH #1 fold: cluster ONLY within-tenant.
+// clusterFacts has no tenant awareness; without this partition step a
+// multi-tenant host could form a cluster spanning tenants and produce
+// a single L3 with tenantId='default' that doesn't belong to either
+// child tenant. Fix: bucket by tenantId, run clusterFacts per-tenant,
+// pass tenantId to createMemory.
+function partitionL2sByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const byTenant = new Map<string, MemoryEntry[]>();
+  for (const l2 of unparented) {
+    const tid = l2.tenantId ?? 'default';
+    const key = derivationPartitionKey(tid, l2.scope, l2.origin_project);
+    const list = byTenant.get(key) ?? [];
+    list.push(l2);
+    byTenant.set(key, list);
+  }
+  return byTenant;
+}
+
+/** The L3 profile entry for one cluster of L2 summaries. */
+function createProfileEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
+  const memberCreatedAts = cluster.members.map((m) => m.created).sort();
+  const nowIso = new Date().toISOString();
+  const profileEntry = createMemory(summary, {
+    layer: Layer.Semantic,
+    tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
+    confidence: 'inferred',
+    dag_level: 3,
+    tenantId: home.tenantId, // HIGH #1 fold: thread tenant explicitly
+    scope: home.scope,
+    baseHalfLifeDays: home.baseHalfLifeDays,
+  });
+  profileEntry.origin_project = home.originProject;
+  profileEntry.descendant_count = cluster.members.length;
+  profileEntry.earliest_at = memberCreatedAts[0];
+  profileEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
+  profileEntry.dag_level_3_built_at = nowIso;
+  return profileEntry;
+}
+
+/** Profile one eligible cluster of L2s, write it, then re-link the L2s under it. */
+async function profileCluster(
+  hippoRoot: string,
+  cluster: FactCluster,
+  home: PartitionHome,
+  opts: DagSummaryOptions,
+  result: EntityProfilesBuildResult,
+): Promise<void> {
+  const summary = await generateDagSummary(
+    cluster.label,
+    cluster.members.map((m) => m.content),
+    opts,
+  );
+  if (!summary) {
+    result.failed++;
+    return;
+  }
+
+  const profileEntry = createProfileEntry(summary, cluster, home);
+  // AT1 (plan §3 containment): per-cluster catch — skip this cluster,
+  // count, log once. The member re-linking writes below never run for a
+  // skipped cluster (mirrors buildDag above).
+  try {
+    writeEntry(hippoRoot, profileEntry);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      result.rejected++;
+      log.warn(`buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`);
+      return;
+    }
+    throw err;
+  }
+  result.profilesCreated++;
+
+  for (const member of cluster.members) {
+    const updated: MemoryEntry = { ...member, dag_parent_id: profileEntry.id };
+    writeEntry(hippoRoot, updated);
+    result.l2sLinked++;
+  }
+  // E3 born-dirty cancellation, same dance as buildDag L161-168 but for
+  // L3. Pass source='buildEntityProfiles-clean' to distinguish in audit.
+  // Args: (root, id, tenantId, actor, source).
+  clearSummaryDirtyAfterBuild(
+    hippoRoot,
+    profileEntry.id,
+    home.tenantId,
+    'buildEntityProfiles',
+    'buildEntityProfiles-clean',
+  );
+}
+
 /**
  * v0.30 / E5 — build L3 entity profiles by clustering L2 summaries with
  * shared entity tags. Threshold 2+ L2s per entity. Mirrors buildDag L1->L2
@@ -422,85 +554,19 @@ export async function buildEntityProfiles(
     (s) => s.dag_level === 2 && !s.dag_parent_id,
   );
 
-  // independent-review HIGH #1 fold: cluster ONLY within-tenant.
-  // clusterFacts has no tenant awareness; without this partition step a
-  // multi-tenant host could form a cluster spanning tenants and produce
-  // a single L3 with tenantId='default' that doesn't belong to either
-  // child tenant. Fix: bucket by tenantId, run clusterFacts per-tenant,
-  // pass tenantId to createMemory.
-  const byTenant = new Map<string, MemoryEntry[]>();
-  for (const l2 of unparented) {
-    const tid = l2.tenantId ?? 'default';
-    const key = derivationPartitionKey(tid, l2.scope, l2.origin_project);
-    const list = byTenant.get(key) ?? [];
-    list.push(l2);
-    byTenant.set(key, list);
-  }
-
-  for (const [, tenantL2s] of byTenant) {
-    const tenantId = tenantL2s[0].tenantId ?? 'default';
-    const scope = derivationScope(tenantL2s[0].scope);
+  for (const [, tenantL2s] of partitionL2sByTenant(unparented)) {
+    const home: PartitionHome = {
+      tenantId: tenantL2s[0].tenantId ?? 'default',
+      scope: derivationScope(tenantL2s[0].scope),
+      originProject: tenantL2s[0].origin_project,
+      baseHalfLifeDays,
+    };
     const clusters = clusterFacts(tenantL2s);
     const eligible = clusters.filter((c) => c.members.length >= 2);
     result.candidateClusters += eligible.length;
 
     for (const cluster of eligible) {
-      const summary = await generateDagSummary(
-        cluster.label,
-        cluster.members.map((m) => m.content),
-        opts,
-      );
-      if (!summary) {
-        result.failed++;
-        continue;
-      }
-
-      const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-      const nowIso = new Date().toISOString();
-      const profileEntry = createMemory(summary, {
-        layer: Layer.Semantic,
-        tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
-        confidence: 'inferred',
-        dag_level: 3,
-        tenantId, // HIGH #1 fold: thread tenant explicitly
-        scope,
-        baseHalfLifeDays,
-      });
-      profileEntry.origin_project = tenantL2s[0].origin_project;
-      profileEntry.descendant_count = cluster.members.length;
-      profileEntry.earliest_at = memberCreatedAts[0];
-      profileEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
-      profileEntry.dag_level_3_built_at = nowIso;
-      // AT1 (plan §3 containment): per-cluster catch — skip this cluster,
-      // count, log once. The member re-linking writes below never run for a
-      // skipped cluster (mirrors buildDag above).
-      try {
-        writeEntry(hippoRoot, profileEntry);
-      } catch (err) {
-        if (err instanceof RejectedValueError) {
-          result.rejected++;
-          log.warn(`buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`);
-          continue;
-        }
-        throw err;
-      }
-      result.profilesCreated++;
-
-      for (const member of cluster.members) {
-        const updated: MemoryEntry = { ...member, dag_parent_id: profileEntry.id };
-        writeEntry(hippoRoot, updated);
-        result.l2sLinked++;
-      }
-      // E3 born-dirty cancellation, same dance as buildDag L161-168 but for
-      // L3. Pass source='buildEntityProfiles-clean' to distinguish in audit.
-      // Args: (root, id, tenantId, actor, source).
-      clearSummaryDirtyAfterBuild(
-        hippoRoot,
-        profileEntry.id,
-        tenantId,
-        'buildEntityProfiles',
-        'buildEntityProfiles-clean',
-      );
+      await profileCluster(hippoRoot, cluster, home, opts, result);
     }
   }
 

@@ -23,7 +23,7 @@
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
 import { createMemory, Layer } from './memory.js';
@@ -202,6 +202,117 @@ function buildSkillContent(skillName: string, instructions: string, trigger: str
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
+interface SkillWrite {
+  tenantId: string;
+  actor: string;
+  name: string;
+  instructions: string;
+  trigger: string | null;
+  changeSummary: string | null;
+  supersedesId: number | undefined;
+  now: string;
+}
+
+// Preflight the supersede target BEFORE inserting the new row (so the new
+// autoincrement id can never be its own supersede target); read the
+// predecessor version in the same SELECT for server-derived versioning.
+// Mirrors saveProcess / savePolicy (codex P1 2026-05-28).
+function preflightSkillSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
+  // SAFETY: row shape matches the `status, version` columns named in the SELECT below.
+  const pred = db.prepare(
+    `SELECT status, version FROM skills WHERE id = ? AND tenant_id = ?`,
+  ).get(supersedesId, tenantId) as
+    | { status: string; version: number }
+    | undefined;
+  if (!pred) {
+    throw new NotFoundError(
+      `saveSkill: skill ${supersedesId} to supersede not found for tenant ${tenantId}`,
+    );
+  }
+  if (pred.status !== 'active') {
+    throw new ConflictError(
+      `saveSkill: skill ${supersedesId} is not active (status='${pred.status}'); only active skills can be superseded.`,
+    );
+  }
+  return pred.version + 1;
+}
+
+function insertSkillRow(db: DatabaseSyncLike, memoryId: string, w: SkillWrite, version: number): number {
+  const result = db.prepare(`
+    INSERT INTO skills(
+      memory_id, tenant_id, skill_name, instructions, trigger_text, version,
+      status, superseded_by, superseded_at, change_summary, closed_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
+  `).run(
+    memoryId,
+    w.tenantId,
+    w.name,
+    w.instructions,
+    w.trigger,
+    version,
+    w.changeSummary,
+    w.now,
+  );
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+function supersedeSkillRow(
+  db: DatabaseSyncLike,
+  w: SkillWrite,
+  supersedesId: number,
+  skillId: number,
+  version: number,
+): void {
+  const sup = db.prepare(`
+    UPDATE skills
+    SET status = 'superseded', superseded_by = ?, superseded_at = ?
+    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
+  `).run(skillId, w.now, supersedesId, w.tenantId, skillId);
+  if (sup.changes === 0) {
+    throw new ConflictError(
+      `saveSkill: skill ${supersedesId} could not be superseded (no longer active or self-reference).`,
+    );
+  }
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'skill_supersede',
+    targetId: String(supersedesId),
+    metadata: {
+      skill_id: supersedesId,
+      superseded_by: skillId,
+      new_version: version,
+    },
+  });
+}
+
+/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
+function writeSkillRow(db: DatabaseSyncLike, memoryId: string, w: SkillWrite): SkillRow {
+  const version = w.supersedesId !== undefined ? preflightSkillSupersede(db, w.tenantId, w.supersedesId) : 1;
+  const skillId = insertSkillRow(db, memoryId, w, version);
+  if (w.supersedesId !== undefined) supersedeSkillRow(db, w, w.supersedesId, skillId, version);
+
+  // SAFETY: row's shape matches the columns named in SKILL_COLS above.
+  const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ?`)
+    .get(skillId) as SkillRow | undefined;
+  if (!row) throw new Error('saveSkill: failed to reload saved skill row');
+
+  // GDPR-light metadata: ids + flags only, no skill text.
+  appendAuditEvent(db, {
+    tenantId: w.tenantId,
+    actor: w.actor,
+    op: 'skill_create',
+    targetId: String(skillId),
+    metadata: {
+      skill_id: skillId,
+      version,
+      has_trigger: w.trigger !== null,
+    },
+  });
+  return row;
+}
+
 /**
  * Create a skill (or a new version that supersedes an existing one). Writes the
  * memory mirror + the skills row atomically inside writeEntry's SAVEPOINT. When
@@ -231,96 +342,23 @@ export function saveSkill(
     baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
     tenantId,
   });
+  const w: SkillWrite = {
+    tenantId,
+    actor,
+    name,
+    instructions: opts.instructions,
+    trigger,
+    changeSummary,
+    supersedesId: opts.supersedesSkillId,
+    now,
+  };
 
   let savedRow: SkillRow | undefined;
 
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Preflight the supersede target BEFORE inserting the new row (so the new
-      // autoincrement id can never be its own supersede target); read the
-      // predecessor version in the same SELECT for server-derived versioning.
-      // Mirrors saveProcess / savePolicy (codex P1 2026-05-28).
-      let version = 1;
-      if (opts.supersedesSkillId !== undefined) {
-        // SAFETY: row shape matches the `status, version` columns named in the SELECT below.
-        const pred = db.prepare(
-          `SELECT status, version FROM skills WHERE id = ? AND tenant_id = ?`,
-        ).get(opts.supersedesSkillId, tenantId) as
-          | { status: string; version: number }
-          | undefined;
-        if (!pred) {
-          throw new NotFoundError(
-            `saveSkill: skill ${opts.supersedesSkillId} to supersede not found for tenant ${tenantId}`,
-          );
-        }
-        if (pred.status !== 'active') {
-          throw new ConflictError(
-            `saveSkill: skill ${opts.supersedesSkillId} is not active (status='${pred.status}'); only active skills can be superseded.`,
-          );
-        }
-        version = pred.version + 1;
-      }
-
-      const result = db.prepare(`
-        INSERT INTO skills(
-          memory_id, tenant_id, skill_name, instructions, trigger_text, version,
-          status, superseded_by, superseded_at, change_summary, closed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        name,
-        opts.instructions,
-        trigger,
-        version,
-        changeSummary,
-        now,
-      );
-      const skillId = Number(result.lastInsertRowid ?? 0);
-
-      if (opts.supersedesSkillId !== undefined) {
-        const sup = db.prepare(`
-          UPDATE skills
-          SET status = 'superseded', superseded_by = ?, superseded_at = ?
-          WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-        `).run(skillId, now, opts.supersedesSkillId, tenantId, skillId);
-        if (sup.changes === 0) {
-          throw new ConflictError(
-            `saveSkill: skill ${opts.supersedesSkillId} could not be superseded (no longer active or self-reference).`,
-          );
-        }
-        appendAuditEvent(db, {
-          tenantId,
-          actor,
-          op: 'skill_supersede',
-          targetId: String(opts.supersedesSkillId),
-          metadata: {
-            skill_id: opts.supersedesSkillId,
-            superseded_by: skillId,
-            new_version: version,
-          },
-        });
-      }
-
-      // SAFETY: row's shape matches the columns named in SKILL_COLS above.
-      const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ?`)
-        .get(skillId) as SkillRow | undefined;
-      if (!row) throw new Error('saveSkill: failed to reload saved skill row');
-      savedRow = row;
-
-      // GDPR-light metadata: ids + flags only, no skill text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'skill_create',
-        targetId: String(skillId),
-        metadata: {
-          skill_id: skillId,
-          version,
-          has_trigger: trigger !== null,
-        },
-      });
+      savedRow = writeSkillRow(db, memoryId, w);
     },
   });
 
