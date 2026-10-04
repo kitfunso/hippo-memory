@@ -4,7 +4,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
-import { installJsonHooks, CODEX_TRUST_LINE } from '../hooks.js';
+import { installJsonHooks } from '../hooks/json-hooks.js';
+import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel, computeSchemaFit, createMemory, Layer } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';

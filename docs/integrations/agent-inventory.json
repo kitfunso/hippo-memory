@@ -8,7 +8,7 @@
       "checked": "2026-10-03",
       "names": ["Claude Code", "claude-code"],
       "integration": ["native-hooks", "native-plugin"],
-      "sources": ["src/hooks.ts", "src/capture.ts", "src/capture-contract.ts", "src/compaction-record.ts", "src/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
+      "sources": ["src/hooks/json-hooks.ts", "src/capture.ts", "src/capture-contract.ts", "src/compaction-record.ts", "src/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
       "claims": ["README.md", "package.json", "website/src/pages/claude-code.astro"],
       "routes": {
         "promptContext": "UserPromptSubmit runs hippo context --pinned-only",
@@ -55,7 +55,7 @@
       "checked": "2026-10-03",
       "names": ["Codex", "codex"],
       "integration": ["native-hooks", "wrapper"],
-      "sources": ["src/hooks.ts", "src/codex-patch.ts", "integrations/codex.md"],
+      "sources": ["src/hooks", "src/codex-patch.ts", "integrations/codex.md"],
       "claims": ["README.md", "package.json", "website/src/pages/codex.astro"],
       "routes": {
         "promptContext": "UserPromptSubmit runs hippo context --pinned-only",
@@ -188,7 +188,7 @@
       "checked": "2026-10-03",
       "names": ["OpenCode", "opencode"],
       "integration": ["native-plugin"],
-      "sources": ["src/hooks.ts", "integrations/opencode.md"],
+      "sources": ["src/hooks/opencode.ts", "integrations/opencode.md"],
       "claims": ["README.md", "package.json"],
       "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": "session.idle runs hippo session-end", "compactResume": null },
       "upstream": { "preLossEvent": "experimental.session.compacting", "beforeTrimOrReset": null },
@@ -237,7 +237,7 @@
       "checked": "2026-10-03",
       "names": ["Pi"],
       "integration": ["native-plugin", "instruction-file"],
-      "sources": ["extensions/pi-extension", "src/hooks.ts"],
+      "sources": ["extensions/pi-extension", "src/hooks"],
       "claims": ["README.md"],
       "routes": {
         "promptContext": "session_start injects context",

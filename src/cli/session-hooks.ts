@@ -3,12 +3,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import {
-  defaultSleepLogPath,
-  resolveCodexSessionTranscript,
-  resolveCodexWrapperPaths,
-  type CodexWrapperMetadata,
-} from '../hooks.js';
+import { defaultSleepLogPath } from '../hooks/shared.js';
+import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
+import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
 import { SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import {

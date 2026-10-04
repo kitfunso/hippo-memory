@@ -8,7 +8,7 @@ import { getHippoRoot } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { writeSessionEndHandoff } from '../src/store/handoffs.js';
-import { defaultSleepLogPath } from '../src/hooks.js';
+import { defaultSleepLogPath } from '../src/hooks/shared.js';
 import {
   PRE_COMPACT_TASK_CAP,
   PRE_COMPACT_SUMMARY_CAP,

@@ -3,20 +3,15 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
+import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../hooks/json-hooks.js';
+import { detectInstalledTools, type JsonHookTarget } from '../hooks/shared.js';
 import {
-  installJsonHooks,
-  uninstallJsonHooks,
-  resolveJsonHookPaths,
-  detectInstalledTools,
   ensureCodexWrapperInstalled,
   installCodexWrapper,
   detectRealCodexPath,
   uninstallCodexWrapper,
-  installOpencodePlugin,
-  uninstallOpencodePlugin,
-  resolveOpencodePluginPath,
-  type JsonHookTarget,
-} from '../hooks.js';
+} from '../hooks/codex-wrapper.js';
+import { installOpencodePlugin, uninstallOpencodePlugin, resolveOpencodePluginPath } from '../hooks/opencode.js';
 import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../shared.js';

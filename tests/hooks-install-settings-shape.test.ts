@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks.js';
+import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 
 let env: FakeHomeHandle;

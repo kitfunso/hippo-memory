@@ -3,7 +3,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { installJsonHooks, isCodexPresent, isCodexWrapperInstalled, installOpencodePlugin } from '../hooks.js';
+import { installJsonHooks } from '../hooks/json-hooks.js';
+import { isCodexPresent } from '../hooks/shared.js';
+import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
+import { installOpencodePlugin } from '../hooks/opencode.js';
 import { isInitialized, initStore } from '../store/open.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { isGitRepo } from '../autolearn.js';

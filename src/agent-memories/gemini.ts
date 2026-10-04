@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks.js';
+import { isJsonObject } from '../hooks/shared.js';
 import type { JsonObject, JsonValue } from '../working-memory.js';
 import { readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';

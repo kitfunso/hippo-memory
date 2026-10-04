@@ -13,9 +13,9 @@ import {
   isCodexWrapperInstalled,
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
-  resolveCodexSessionTranscript,
   resolveCodexWrapperPaths,
-} from '../src/hooks.js';
+} from '../src/hooks/codex-wrapper.js';
+import { resolveCodexSessionTranscript } from '../src/hooks/codex-session.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 

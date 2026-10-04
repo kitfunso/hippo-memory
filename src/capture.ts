@@ -36,7 +36,7 @@ import {
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { embedMemory } from './embeddings.js';
 import { resolveTenantId } from './tenant.js';
-import { defaultPreCompactLogPath } from './hooks.js';
+import { defaultPreCompactLogPath } from './hooks/shared.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';

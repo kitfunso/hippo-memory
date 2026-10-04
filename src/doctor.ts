@@ -14,7 +14,7 @@ import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
-import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks.js';
+import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
 import type { JsonValue } from './working-memory.js';
 import { planUserGlobalRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';

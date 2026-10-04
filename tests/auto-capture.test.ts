@@ -18,7 +18,7 @@ import { lessonFromFailure, captureToolFailure, failureSignature } from '../src/
 import { initStore, getHippoRoot } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
-import { installJsonHooks } from '../src/hooks.js';
+import { installJsonHooks } from '../src/hooks/json-hooks.js';
 import { runDoctor } from '../src/doctor.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

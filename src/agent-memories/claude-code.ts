@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { realpathOrResolve } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks.js';
+import { isJsonObject } from '../hooks/shared.js';
 import type { JsonValue } from '../working-memory.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
