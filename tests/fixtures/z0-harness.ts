@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
-import type { Z0Record, Z0PlanCell } from './z0-contract';
+import type { Z0Record, Z0PlanCell } from './z0-contract.js';
 
 export const FAKE = resolve(__dirname, 'fake-claude.mjs');
 export const CLAUDE = `"${process.execPath}" "${FAKE}"`;

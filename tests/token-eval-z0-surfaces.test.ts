@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { runDirs, freshRunDirs } from '../scripts/token-eval/homes.mjs';
 import { snapshotSurfaces, restoreSurfaces } from '../scripts/token-eval/surfaces.mjs';
-import { validateRecord, validateCorpus, abandonedTail, type Z0Record } from './fixtures/z0-contract';
+import { validateRecord, validateCorpus, abandonedTail, type Z0Record } from './fixtures/z0-contract.js';
 import {
   cleanup, tmp, isolate, makeRepo, task, plain, teach, apply, family, lesson, spec, run,
   readRecords, readPlan, readLedger, rawResult, find, runRoot, type LedgerLine,
-} from './fixtures/z0-harness';
+} from './fixtures/z0-harness.js';
 
 afterEach(cleanup);
 
@@ -76,7 +76,7 @@ describe('the surface ledger (prereg 104)', () => {
     const entry = snap.surfaces.hippoWork.find((e: { path: string }) => e.path.endsWith('link.txt'));
     expect(entry).toMatchObject({ path: 'work/.hippo/link.txt', link: true });
     expect(entry.sha256).toBe(sha(target));
-    expect(lstatSync(join(snap.copyDir, 'hippoWork', '.hippo', 'link.txt')).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(snap.copyDir!, 'hippoWork', '.hippo', 'link.txt')).isSymbolicLink()).toBe(true);
   });
 });
 
@@ -132,7 +132,7 @@ describe('retry restores (prereg 114)', () => {
     expect(restoreSurfaces(ctx, r, snap, 'retry-restore', step)).toBe(true);
     expect(readFileSync(memory, 'utf8')).toBe('kept line\n');
     appendFileSync(memory, 'written again\n');
-    rmSync(join(snap.copyDir, 'autoMemory', 'p', 'MEMORY.md'));
+    rmSync(join(snap.copyDir!, 'autoMemory', 'p', 'MEMORY.md'));
     expect(restoreSurfaces(ctx, r, snap, 'retry-restore', step)).toBe(false);
     const lines = readLedger(out);
     expect(lines.map((l) => [l.when, l.verified])).toEqual([['pre-session', null], ['retry-restore', true], ['retry-restore', false]]);

@@ -4,10 +4,10 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { transcriptUsage, assistantTurns } from '../scripts/token-eval/records.mjs';
-import { validateCorpus } from './fixtures/z0-contract';
+import { validateCorpus } from './fixtures/z0-contract.js';
 import {
   cleanup, tmp, isolate, makeRepo, task, plain, oneLesson, spec, run, readRecords, readPlan, rawResult, logLines, find,
-} from './fixtures/z0-harness';
+} from './fixtures/z0-harness.js';
 
 afterEach(cleanup);
 

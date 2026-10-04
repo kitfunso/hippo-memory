@@ -2,10 +2,10 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { symlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
-import { validateCorpus } from './fixtures/z0-contract';
-import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness';
+import { validateCorpus } from './fixtures/z0-contract.js';
+import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness.js';
 
 const classes = (r: RunRecord) => (r.voidHits ?? []).map((h) => h.class);
 
@@ -212,5 +212,7 @@ describe('delivery voids and the worktree read', () => {
 
 /** The 8.3 short form of a dir, or the dir itself when the volume makes no short names. */
 function shortName(dir: string): string {
-  return execFileSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${dir}") do @echo %~sI"`], { windowsVerbatimArguments: true, encoding: 'utf8' }).trim();
+  const r = spawnSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${dir}") do @echo %~sI"`], { windowsVerbatimArguments: true, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`cmd.exe gave no short name for ${dir}: ${r.stderr}`);
+  return r.stdout.trim();
 }

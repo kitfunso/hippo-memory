@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { cpSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { __setSurfaceCopy } from '../scripts/token-eval/surfaces.mjs';
-import { cleanup, isolate, makeRepo, task, plain, spec, run, readRecords, readPlan, readLedger, find } from './fixtures/z0-harness';
+import { cleanup, isolate, makeRepo, task, plain, spec, run, readRecords, readPlan, readLedger, find } from './fixtures/z0-harness.js';
 
 afterEach(() => {
   __setSurfaceCopy(null);
