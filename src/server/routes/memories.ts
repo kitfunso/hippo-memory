@@ -3,10 +3,11 @@ import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, s
 import type { MemoryKind } from '../../memory.js';
 import { buildGraphModel } from '../../graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
-import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { getString, getStringArray, isJsonBoolean, isJsonString, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { type JsonValue, isJsonString } from '../../json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',

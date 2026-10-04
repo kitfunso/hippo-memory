@@ -1,10 +1,11 @@
 // /v1/policies routes.
 import { closePolicy, loadPolicies, loadPoliciesAsOf, loadPolicyById, savePolicy, VALID_POLICY_STATES } from '../../policies.js';
-import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { type JsonValue, isJsonString } from '../../json.js';
 
 // HTTP-boundary check for an optional policy date field (validFrom/validTo).
 // Type + length only; savePolicy/loadPoliciesAsOf normalize + format-validate the

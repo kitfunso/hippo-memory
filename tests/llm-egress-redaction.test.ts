@@ -11,7 +11,7 @@ import { extractFacts } from '../src/extract.js';
 import { llmReranker } from '../src/rerankers/llm.js';
 import { createJevReranker } from '../src/rerankers/jev.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import type { JsonValue } from '../src/working-memory.js';
+import type { JsonValue } from '../src/json.js';
 
 const SECRET = 'AKIA' + 'Q7'.repeat(8);
 // Bearer and JWT shapes only the strict redaction catches; a path on the store redaction would leak them.

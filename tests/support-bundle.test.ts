@@ -11,7 +11,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { buildSupportBundle } from '../src/support-bundle.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
-import type { JsonObject, JsonValue } from '../src/working-memory.js';
+import type { JsonObject } from '../src/working-memory.js';
+import type { JsonValue } from '../src/json.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];

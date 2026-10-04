@@ -25,8 +25,8 @@ import {
   isGitHubIssueCommentEvent,
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
-  type JsonValue,
 } from './types.js';
+import type { JsonValue } from '../../json.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;

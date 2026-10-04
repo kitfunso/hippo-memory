@@ -3,12 +3,12 @@ import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import { handleMcpRequest, mcpErrorResponse, type McpRequest } from '../mcp/server.js';
-import { HttpError, isJsonObjectRecord, type JsonValue, readBody, sendJson } from '../http-util.js';
+import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientIpForRateLimit } from './client-ip.js';
 import { requestIds } from './request.js';
 import type { ServeOpts } from './types.js';
-import { isJsonString } from './validation.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 /**
  * Build a per-client key for MCP state isolation under HTTP-MCP. Used by

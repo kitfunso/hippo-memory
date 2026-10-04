@@ -5,10 +5,10 @@ import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
 import type { Actor, Context } from '../api.js';
-import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http-util.js';
+import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
 import { requestIds } from './request.js';
 import type { AuthResolver, ResolvedBearer, ServeOpts } from './types.js';
-import { isJsonString } from './validation.js';
+import { isJsonString } from '../json.js';
 
 /**
  * Recognise loopback remote addresses. Node reports IPv6-mapped IPv4 as
@@ -107,8 +107,8 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   if (!isJsonString(tenantId) || tenantId.trim().length === 0) return null;
   // Core reserves `__`-prefixed tenants (`__host__`, `__unroutable__`).
   const tenant = tenantId.trim();
-  if (tenant.startsWith('__') || tenant.length > 256 || hasControlChar(tenant)) return null;
-  if (!isJsonString(subject) || subject.length < 1 || subject.length > 256) return null;
+  if (tenant.startsWith('__') || tenant.length > MAX_ID_LEN || hasControlChar(tenant)) return null;
+  if (!isJsonString(subject) || subject.length < 1 || subject.length > MAX_ID_LEN) return null;
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
   if (isReservedActor(subject)) return null;

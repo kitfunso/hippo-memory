@@ -2,6 +2,7 @@ import type { MemoryEntry } from '../memory.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
+import { escapeLike } from '../escape.js';
 
 /**
  * Read a memory entry by ID.
@@ -321,7 +322,7 @@ export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: 
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db.prepare(
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
-  ).all(tenantId, `${prefix.replace(/[%_\\]/g, '\\$&')}%`) as MemoryRow[];
+  ).all(tenantId, `${escapeLike(prefix)}%`) as MemoryRow[];
   return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
 }
 

@@ -8,7 +8,6 @@
 import { BadRequestError, NotFoundError } from './api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
 import { initStore } from './store/open.js';
@@ -21,7 +20,7 @@ import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall
 import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';
 import { fitBudget } from './search/finalize.js';
-import type { SearchResult, ResultCost } from './search/types.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
 import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
@@ -129,7 +128,7 @@ export function searchBoth(
   globalRoot: string,
   options: SearchOptions = {}
 ): SearchResult[] {
-  const { budget = 4000, now = evalNow(), minResults, tenantId } = options;
+  const { budget = DEFAULT_RECALL_BUDGET, now = evalNow(), minResults, tenantId } = options;
   const effectiveMin = minResults ?? 1;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
@@ -142,14 +141,13 @@ export function searchBoth(
   const globalResults = search(query, globalEntries, { budget, now, minResults });
 
   // Tag global results. Local memories get a configurable priority bump.
-  const syncLocalBump = 1.2;
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [
     ...localResults.map((r) => ({
       ...r,
       isGlobal: false,
-      score: r.score * syncLocalBump,
+      score: r.score * DEFAULT_LOCAL_BUMP,
       breakdown: r.breakdown
-        ? { ...r.breakdown, sourceBump: syncLocalBump, final: r.breakdown.final * syncLocalBump }
+        ? { ...r.breakdown, sourceBump: DEFAULT_LOCAL_BUMP, final: r.breakdown.final * DEFAULT_LOCAL_BUMP }
         : undefined,
     })),
     ...globalResults.map((r) => ({ ...r, isGlobal: true })),
@@ -293,7 +291,7 @@ export async function rankBothStores(
   vectorCandidates: HybridVectorCandidates,
   options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness } = options;
+  const { budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness } = options;
   if (entries.local.length === 0 && entries.global.length === 0) return [];
   const shared = { budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness, vectorCandidates };
   const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });

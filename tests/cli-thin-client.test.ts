@@ -155,7 +155,6 @@ function getActorForContent(workspace: string, contentNeedle: string): string | 
   try {
     const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember', limit: 200 });
     for (const ev of events) {
-      const meta = ev.metadata ?? {};
       const target = ev.targetId;
       if (!target) continue;
       // Check whether this audit row corresponds to a memory whose content

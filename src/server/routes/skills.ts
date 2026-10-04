@@ -1,10 +1,11 @@
 // /v1/skills routes.
-import { closeSkill, exportSkills, loadSkillById, loadSkills, saveSkill, VALID_SKILL_STATES } from '../../skills.js';
+import { closeSkill, exportSkills, loadSkillById, loadSkills, MAX_SKILL_NAME_LEN, saveSkill, VALID_SKILL_STATES } from '../../skills.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
 // ── skills (E2 first-class object, executable/exportable) ──
 //
@@ -25,8 +26,8 @@ export async function handleCreateSkill({ req, res, opts }: RouteRequest): Promi
   if (!isJsonString(skillName) || skillName.trim().length === 0) {
     throw new HttpError(400, 'skillName is required (non-empty string)');
   }
-  if (skillName.length > 256) {
-    throw new HttpError(400, 'skillName exceeds 256-character cap');
+  if (skillName.length > MAX_SKILL_NAME_LEN) {
+    throw new HttpError(400, `skillName exceeds ${MAX_SKILL_NAME_LEN}-character cap`);
   }
   const instructions = body['instructions'];
   if (!isJsonString(instructions) || instructions.trim().length === 0) {

@@ -13,7 +13,7 @@ import type { SessionHandoff } from '../handoff.js';
 import { passesScopeFilterForRecall } from '../recall-scope.js';
 import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
-import type { SearchResult } from '../search/types.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../search/types.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -236,7 +236,7 @@ export async function cmdRecall(
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
 function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
-  const budget = parseBudgetFlag(flags['budget'], 4000);
+  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
   const showWhy = Boolean(flags['why']);

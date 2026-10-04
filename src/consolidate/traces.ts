@@ -8,7 +8,8 @@ import { resolveTenantId } from '../tenant.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { commonDerivationScope } from '../recall-scope.js';
 import { log } from '../log.js';
-import { REPLAY_COUNT_DEFAULT, type JsonValue, isJsonString, type SleepRun } from './run.js';
+import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 // -------------------------------------------------------------------------
 // 1.4. Auto-promote complete sessions to traces

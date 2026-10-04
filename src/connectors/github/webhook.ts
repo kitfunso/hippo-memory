@@ -23,9 +23,9 @@ import {
   isHeaderString,
   readBody,
   sendJson,
-  type JsonValue,
   type WebhookRequest,
 } from '../../http-util.js';
+import type { JsonValue } from '../../json.js';
 
 /**
  * GitHub webhook receiver. Mirrors the Slack route shape but with

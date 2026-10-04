@@ -65,7 +65,7 @@ function newCtx() {
   };
 }
 
-function getLastConsolidateAuditRow(hippoRoot: string, tenantId = 'default'): {
+function getLastConsolidateAuditRow(hippoRoot: string): {
   metadata: AuditEvent['metadata'];
 } | null {
   const db = openHippoDb(hippoRoot);

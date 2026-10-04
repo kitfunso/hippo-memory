@@ -9,8 +9,10 @@ import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
-import { type ImportResult, type ImportOptions, type JsonValue, isJsonString } from './core.js';
+import { type ImportResult, type ImportOptions } from './core.js';
 import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles, realpathOrResolve } from './markdown-parse.js';
+import { type JsonValue, isJsonString } from '../json.js';
+import { escapeLike } from '../escape.js';
 
 // ---------------------------------------------------------------------------
 // K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
@@ -24,14 +26,6 @@ import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles
 // and escaping the kind='raw' deletion rescan) — all raw deletions route through
 // `archiveRaw` (the only trigger-legit raw delete).
 // ---------------------------------------------------------------------------
-
-/** Escape LIKE wildcards in operator-supplied text (mirror of
- *  src/project-briefs.ts:477 / src/store/search-rows.ts, kept local since neither is
- *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
- *  loader prefix and archive another vault's rows. */
-function escapeLike(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&');
-}
 
 interface VaultRow {
   id: string;

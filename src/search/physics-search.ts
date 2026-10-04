@@ -15,7 +15,7 @@ import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
 import { currentEntries } from './as-of.js';
 import { vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
-import type { ResultCost, ScoreBreakdown, SearchResult } from './types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type ScoreBreakdown, type SearchResult } from './types.js';
 
 export interface PhysicsSearchOptions {
   budget?: number;
@@ -76,7 +76,7 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
     : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
-  return fitBudget(merged, options.budget ?? 4000, options.minResults ?? 1, options.cost);
+  return fitBudget(merged, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */

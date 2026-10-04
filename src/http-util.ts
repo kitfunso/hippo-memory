@@ -1,14 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
+import type { JsonValue } from './json.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
-
-// Shared JSON-value domain type for the HTTP boundary (request bodies,
-// JSON.parse results). Runtime shape checks against it go through the
-// predicates below rather than a bare `typeof` (banned unconditionally by
-// anti-slop/no-runtime-typeof in this repo's oxlint config). Mirrors the
-// pattern already used in src/connectors/slack/types.ts.
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export function isJsonObjectRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
   return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -23,6 +17,9 @@ export function isHeaderString(value: string | string[] | undefined): value is s
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.
 const MAX_BODY_BYTES = 1024 * 1024;
+
+// Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values, small enough to bound logs and indexes.
+export const MAX_ID_LEN = 256;
 
 export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
 

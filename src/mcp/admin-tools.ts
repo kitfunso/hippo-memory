@@ -6,7 +6,8 @@ import { loadStrengthRows } from '../store/candidates.js';
 import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
 import { computePredictionBaserate } from '../predictions/store.js';
-import { isJsonString, type ToolCall } from './protocol.js';
+import { type ToolCall } from './protocol.js';
+import { isJsonString } from '../json.js';
 
 export function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
   // J3 reference-class / planning-fallacy detector. Reads from the E2

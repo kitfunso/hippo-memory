@@ -8,8 +8,8 @@ import { loadConfig } from './config.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { recordFailure, type FailureOutcome } from './failure-log.js';
 import { blockHash } from './token-ledger.js';
-import type { JsonValue } from './working-memory.js';
 import { redactSecretsStrict } from './secret-detect.js';
+import type { JsonValue } from './json.js';
 
 /** Why a failure was not stored, or `stored`. */
 export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';

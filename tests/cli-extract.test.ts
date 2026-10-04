@@ -31,7 +31,6 @@ describe('hippo remember --extract', () => {
     const env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
     hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
-    let stderr = '';
     try {
       execFileSync('node', [HIPPO_BIN, 'remember', 'John loves basketball', '--extract'], {
         cwd: home,
@@ -39,8 +38,8 @@ describe('hippo remember --extract', () => {
         encoding: 'utf-8',
         shell: process.platform === 'win32',
       });
-    } catch (e) {
-      stderr = e instanceof Error && 'stderr' in e ? String(e.stderr ?? '') : '';
+    } catch {
+      // Without an API key --extract may exit non-zero; the recall below is the check.
     }
 
     const out = hippo(home, env, 'recall', 'basketball', '--json');

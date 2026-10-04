@@ -2,8 +2,9 @@ import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareA
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../search/types.js';
-import { isJsonObjectRecord, type JsonValue } from '../http-util.js';
+import { isJsonObjectRecord } from '../http-util.js';
 import { log } from '../log.js';
+import type { JsonValue } from '../json.js';
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';

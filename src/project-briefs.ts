@@ -32,6 +32,7 @@ import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
+import { escapeLike } from './escape.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -543,11 +544,6 @@ export function loadActiveBriefForRepo(
 // ---------------------------------------------------------------------------
 // Refresh assembler (the distinguishing deliverable)
 // ---------------------------------------------------------------------------
-
-/** Escape LIKE wildcards in operator-supplied text (mirror of store/search-rows.ts). */
-function escapeLike(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&');
-}
 
 /** Single-line headline for a receipt: first non-empty line, newline-stripped,
  *  truncated. Deterministic + safe for the markdown bullet list. */

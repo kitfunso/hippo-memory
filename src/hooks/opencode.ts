@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonValue, JsonObject } from '../working-memory.js';
-import { isJsonString, isJsonObject, homeDir } from './shared.js';
+import type { JsonObject } from '../working-memory.js';
+import { isJsonObject, homeDir } from './shared.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 

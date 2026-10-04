@@ -7,6 +7,7 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search/types.js';
 import { log } from './log.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
@@ -161,7 +162,7 @@ export interface HippoConfig {
 
 const DEFAULT_CONFIG: HippoConfig = {
   defaultHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-  defaultBudget: 4000,
+  defaultBudget: DEFAULT_RECALL_BUDGET,
   defaultContextBudget: 3000,
   decayBasis: 'adaptive',
   autoLearnOnSleep: true,
@@ -189,7 +190,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     lambda: 0.7,
   },
   search: {
-    localBump: 1.2,
+    localBump: DEFAULT_LOCAL_BUMP,
   },
   replay: {
     count: 5,

@@ -22,7 +22,7 @@ import { detectAvailabilityBias } from '../availability.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { estimateTokens } from '../token-ledger.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
-import { mcpActor, isJsonString, isJsonBoolean, type JsonValue, type ToolCall } from './protocol.js';
+import { mcpActor, isJsonBoolean, type ToolCall } from './protocol.js';
 import { sessionRecallHistoryMcp, lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
   formatContinuityBlock,
@@ -38,6 +38,8 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './format.js';
+import { type JsonValue, isJsonString } from '../json.js';
+import { MAX_ID_LEN } from '../http-util.js';
 
 // Named shapes for the optional fields each api.* call only wants to pass
 // when the caller actually supplied them. Built via `const extra: T = {};
@@ -94,9 +96,9 @@ function parseRecallArgs(args: Record<string, JsonValue>, defaultBudget: number)
   const scorerWindow = args.scorer_window === undefined
     ? undefined
     : Number(args.scorer_window);
-  // session_id drives the goal-stack boost inside api.retrieve; same trim and 256-char cap as fresh_tail_session_id.
+  // session_id drives the goal-stack boost inside api.retrieve; same trim and MAX_ID_LEN cap as fresh_tail_session_id.
   const sessionIdRaw = isJsonString(args.session_id) ? args.session_id.trim() : '';
-  const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= 256
+  const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= MAX_ID_LEN
     ? sessionIdRaw
     : undefined;
   const recallExtra: RecallExtraOpts = {};

@@ -42,6 +42,7 @@ import {
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry } from './http-retry.js';
+import type { JsonValue } from './json.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -105,11 +106,6 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
 // ---------------------------------------------------------------------------
 // API providers — OpenAI / Voyage / Cohere over native fetch.
 // ---------------------------------------------------------------------------
-
-/** The full value space `JSON.parse` (via `resp.json()`) can produce. Keeps a
- *  vendor response's origin as unparsed external JSON visible in its type
- *  instead of collapsing it to `unknown`. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /** POST body for an embeddings request. Each provider's `buildBody` populates
  *  only the fields its API expects; the rest stay unset. */

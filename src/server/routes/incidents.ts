@@ -1,11 +1,14 @@
 // /v1/incidents routes.
 import { closeIncident, loadIncidentById, loadIncidents, resolveIncident, saveIncident, VALID_INCIDENT_STATES } from '../../incidents.js';
-import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../http-util.js';
 import { NotFoundError } from '../../api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { type JsonValue, isJsonString } from '../../json.js';
+
+const MAX_LINKED_MEMORY_IDS = 256;
 
 // ── incidents (E2 first-class object) ──
 //
@@ -45,8 +48,8 @@ export async function handleCreateIncident({ req, res, opts }: RouteRequest): Pr
     if (!Array.isArray(linkedRaw)) {
       throw new HttpError(400, 'linkedMemoryIds must be an array of memory ids');
     }
-    if (linkedRaw.length > 256) {
-      throw new HttpError(400, 'linkedMemoryIds exceeds 256-item cap');
+    if (linkedRaw.length > MAX_LINKED_MEMORY_IDS) {
+      throw new HttpError(400, `linkedMemoryIds exceeds ${MAX_LINKED_MEMORY_IDS}-item cap`);
     }
     const isValidMemoryId = (item: JsonValue): item is string =>
       isJsonString(item) && item.length > 0 && item.length <= 4096;

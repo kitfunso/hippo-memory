@@ -10,7 +10,7 @@ import { currentEntries } from './as-of.js';
 import { applyRankBoosts, strengthRecencyMultipliers, NO_SUMMARY_SCORING, type BoostContext } from './boosts.js';
 import { temporalContext } from './temporal.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import type { ResultCost, SearchResult } from './types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './types.js';
 
 export interface SearchOptions {
   budget?: number;
@@ -49,5 +49,5 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
     scored.push({ entry: pool[i], score, bm25, cosine: 0, tokens: estimateTokens(pool[i].content) });
   }
   scored.sort(compareScoredResults);
-  return fitBudget(withDagChildren(dedupeExtracted(scored), pool), options.budget ?? 4000, options.minResults ?? 1, options.cost);
+  return fitBudget(withDagChildren(dedupeExtracted(scored), pool), options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }

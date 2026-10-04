@@ -18,7 +18,6 @@ import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readSessionScan, recordSessionDigest } from '../session-digest.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { captureToolFailure } from '../capture-error.js';
-import type { JsonValue } from '../working-memory.js';
 import {
   estimateTokens,
   isSubagentPayload,
@@ -54,6 +53,7 @@ import {
   runHookWithStores,
   inPilotHoldout,
 } from './shared.js';
+import type { JsonValue } from '../json.js';
 
 /** Prints the SessionEnd sleep log, then clears it. Stderr, because Claude Code adds
  *  SessionStart stdout to the model's context and this log is for the user. */
@@ -258,7 +258,7 @@ export async function cmdSessionEnd(
       windowsHide: true,
     });
     child.unref();
-  } catch (err) {
+  } catch {
     // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;

@@ -19,7 +19,7 @@ import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { extractGraph } from '../src/graph-extract.js';
 import { insertEntity } from '../src/graph/write.js';
-import { loadEntities, loadRelations } from '../src/graph/read.js';
+import { loadEntities } from '../src/graph/read.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -113,7 +113,7 @@ describe('v38 E2-provenance (graph anchored to the authoritative E2 object)', ()
   });
 
   it('SUCCESS CRITERION: forget the decision mirror -> the active decision STAYS in the entities table (memory_id NULL, source_object set); its references arc preserved', () => {
-    const policy = savePolicy(home, T, {
+    savePolicy(home, T, {
       policyName: 'Data Retention Policy',
       policyText: 'Delete logs after 90 days',
     });
@@ -317,7 +317,7 @@ describe('v38 E2-provenance (graph anchored to the authoritative E2 object)', ()
   });
 
   it('P2 round-4 (codex): an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', () => {
-    const policy = savePolicy(home, T, { policyName: 'Retention', policyText: 'p' });
+    savePolicy(home, T, { policyName: 'Retention', policyText: 'p' });
     extractGraph(home, T);
     const polEnt = entityRows(home).find((e) => e.source_object_type === 'policy')!;
     const db = openHippoDb(home);

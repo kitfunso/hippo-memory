@@ -2,7 +2,8 @@ import { envPath } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { isJsonString, HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { isJsonString } from '../json.js';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;

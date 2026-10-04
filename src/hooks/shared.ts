@@ -2,17 +2,10 @@ import { envHomeDir, processEnv } from '../env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { JsonValue, JsonObject } from '../working-memory.js';
+import type { JsonObject } from '../working-memory.js';
+import type { JsonValue } from '../json.js';
 
-/** JSON-value string check. `constructor` narrows a primitive via its boxed wrapper
- *  instead of inspecting the `typeof` tag (anti-slop/no-runtime-typeof); equivalent to
- *  `typeof value === 'string'` for every value JSON.parse can ever produce. */
-export function isJsonString(value: JsonValue | undefined): value is string {
-  return value !== undefined && value !== null && value.constructor === String;
-}
-
-/** JSON-value plain-object check (excludes arrays and null), typeof-free for the same
- *  reason as isJsonString above. */
+/** JSON-value plain-object check (excludes arrays and null); `constructor` avoids the `typeof` tag banned by anti-slop/no-runtime-typeof. */
 export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
 }

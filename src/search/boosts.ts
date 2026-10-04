@@ -7,6 +7,7 @@ import { temporalBoost, type TemporalDirection, type TemporalRange } from './tem
 
 export const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
+const DECISION_TAG_BOOST = 1.2;
 const DEFAULT_SUMMARY_DEBOOST = 0.85;
 const DEFAULT_FRESHNESS_BOOST = 1.05;
 const FRESHNESS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -103,7 +104,7 @@ export interface AppliedBoosts {
 
 /** Applies every rank multiplier one at a time, in a fixed order, so float rounding matches across paths. */
 export function applyRankBoosts(score: number, entry: MemoryEntry, ctx: BoostContext): AppliedBoosts {
-  const decisionBoost = entry.tags.includes('decision') ? 1.2 : 1.0;
+  const decisionBoost = entry.tags.includes('decision') ? DECISION_TAG_BOOST : 1.0;
   const churnStaleMultiplier = churnStaleFactor(entry);
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);
   const outcomeBoost = ctx.outcome ? outcomeMultiplier(entry) : 1.0;

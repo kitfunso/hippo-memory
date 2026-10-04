@@ -39,7 +39,7 @@ describe('compareEntryIdentity', () => {
     // locale collation) — the opposite order. This pins the byte-compare choice.
     const a = { content: 'Bravo', id: '1' };
     const b = { content: 'alpha', id: '2' };
-    expect('Bravo' < 'alpha').toBe(true); // sanity: JS default string compare is byte order
+    expect(a.content < b.content).toBe(true); // sanity: JS default string compare is byte order
     expect(compareEntryIdentity(a, b)).toBeLessThan(0); // a (Bravo) sorts first
     expect('Bravo'.localeCompare('alpha')).toBeGreaterThan(0); // localeCompare disagrees
   });

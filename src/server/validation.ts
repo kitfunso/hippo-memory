@@ -1,11 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
 import type { Context } from '../api.js';
-import { HttpError, isJsonObjectRecord, type JsonValue, readBody } from '../http-util.js';
-
-export function isJsonString(value: JsonValue | undefined): value is string {
-  return typeof value === 'string';
-}
+import { HttpError, isJsonObjectRecord, MAX_ID_LEN, readBody } from '../http-util.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 export function isJsonNumber(value: JsonValue | undefined): value is number {
   return typeof value === 'number';
@@ -87,7 +84,7 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.\-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
-  if (id.length > 256) throw new HttpError(400, `${fieldName} exceeds 256-character cap`);
+  if (id.length > MAX_ID_LEN) throw new HttpError(400, `${fieldName} exceeds ${MAX_ID_LEN}-character cap`);
   if (!ID_SEGMENT_RE.test(id)) {
     throw new HttpError(400, `${fieldName} contains invalid characters; allowed: A-Z a-z 0-9 _ : . -`);
   }

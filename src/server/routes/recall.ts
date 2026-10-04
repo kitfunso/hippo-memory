@@ -7,7 +7,7 @@ import { updateStats } from '../../store/index-and-stats.js';
 import { appendRecall, biasHintEnabled, buildSessionKey, getOrCreateRing, hashQueryText, RingBuffer, snapshotRing } from '../../recall-history.js';
 import { appendAuditEvent, auditQueryFields } from '../../audit.js';
 import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, type RecallOpts, recordTokens, retrieve } from '../../api.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { HttpError, MAX_ID_LEN, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseListLimit, validateIdSegment } from '../validation.js';
@@ -54,8 +54,8 @@ function parseFreshTail(query: URLSearchParams): Pick<RecallQuery, 'freshTailCou
   // and through any downstream metric/log; 256 is generous for a session
   // id and matches the rest of this file's id-shaped param parsers.
   const freshTailSessionIdRaw = query.get('fresh_tail_session_id');
-  if (freshTailSessionIdRaw !== null && freshTailSessionIdRaw.length > 256) {
-    throw new HttpError(400, 'fresh_tail_session_id exceeds 256-character cap');
+  if (freshTailSessionIdRaw !== null && freshTailSessionIdRaw.length > MAX_ID_LEN) {
+    throw new HttpError(400, `fresh_tail_session_id exceeds ${MAX_ID_LEN}-character cap`);
   }
   const freshTailSessionId = freshTailSessionIdRaw && freshTailSessionIdRaw.length > 0
     ? freshTailSessionIdRaw
@@ -68,8 +68,8 @@ function parseSessionId(query: URLSearchParams): string | undefined {
   // fresh_tail_session_id (above). Trim then drop if empty so api.recall
   // sees undefined when the param is omitted or whitespace-only.
   const sessionIdRaw = query.get('session_id');
-  if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
-    throw new HttpError(400, 'session_id exceeds 256-character cap');
+  if (sessionIdRaw !== null && sessionIdRaw.length > MAX_ID_LEN) {
+    throw new HttpError(400, `session_id exceeds ${MAX_ID_LEN}-character cap`);
   }
   return sessionIdRaw && sessionIdRaw.trim().length > 0
     ? sessionIdRaw.trim()
@@ -347,8 +347,8 @@ export async function handleGetContext({ req, res, opts, query }: RouteRequest):
   const pinnedOnlyRaw = query.get('pinned_only');
   const pinnedOnly = pinnedOnlyRaw === '1' || pinnedOnlyRaw === 'true';
   const scopeRaw = query.get('scope');
-  if (scopeRaw !== null && scopeRaw.length > 256) {
-    throw new HttpError(400, 'scope exceeds 256-character cap');
+  if (scopeRaw !== null && scopeRaw.length > MAX_ID_LEN) {
+    throw new HttpError(400, `scope exceeds ${MAX_ID_LEN}-character cap`);
   }
   const scope = scopeRaw === null ? undefined : scopeRaw;
   const includeRecentRaw = query.get('include_recent');

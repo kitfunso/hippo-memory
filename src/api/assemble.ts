@@ -6,12 +6,14 @@ import type { MemoryEntry } from '../memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed } from '../recall-scope.js';
 import type { Context } from './types.js';
 
+export const DEFAULT_ASSEMBLE_BUDGET = 4000;
+
 // ---------------------------------------------------------------------------
 // assemble — Hippo DAG Phase 2 (bio-aware context engine)
 // ---------------------------------------------------------------------------
 
 export interface AssembleOpts {
-  /** Token budget. Default 4000. */
+  /** Token budget. Default DEFAULT_ASSEMBLE_BUDGET. */
   budget?: number;
   /** Recent raw rows always kept verbatim. Default 10. */
   freshTailCount?: number;
@@ -111,7 +113,7 @@ export function assemble(
   opts: AssembleOpts = {},
 ): AssembleResult {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
-  const budget = opts.budget ?? 4000;
+  const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
   const freshTailCount = opts.freshTailCount ?? 10;
   const summarizeOlder = opts.summarizeOlder ?? true;
   const rowCap = opts.rowCap ?? 5000;

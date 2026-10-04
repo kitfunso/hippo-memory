@@ -24,10 +24,9 @@ import * as path from 'node:path';
 import {
   simulate,
   computeSystemEnergy,
-  vecDot,
   vecNormalize,
 } from '../dist/physics.js';
-import { DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from '../dist/physics-config.js';
+import { mergePhysicsConfig } from '../dist/physics-config.js';
 
 // ---- flags ----
 

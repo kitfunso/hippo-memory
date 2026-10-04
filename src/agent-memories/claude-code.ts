@@ -4,11 +4,11 @@ import path from 'node:path';
 import { deriveOriginProject, realpathOrResolve } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
 import { isJsonObject } from '../hooks/shared.js';
-import type { JsonValue } from '../working-memory.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
+import type { JsonValue } from '../json.js';
 
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;

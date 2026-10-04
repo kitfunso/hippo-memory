@@ -35,8 +35,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonValue, JsonObject } from '../working-memory.js';
-import { isJsonString, isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, codexHomeDir, defaultPreCompactLogPath } from './shared.js';
+import type { JsonObject } from '../working-memory.js';
+import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, codexHomeDir, defaultPreCompactLogPath } from './shared.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 export interface JsonHookPaths {
   settings: string;

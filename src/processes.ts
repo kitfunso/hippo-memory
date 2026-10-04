@@ -39,6 +39,7 @@ import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { JsonValue } from './json.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -51,10 +52,6 @@ export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessS
   'superseded',
   'closed',
 ]);
-
-/** Arbitrary JSON-shaped value; the domain type for untrusted input at the
- *  steps I/O boundary (validateProcessSteps parses this into string[]). */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 function isString(v: JsonValue): v is string {
   return typeof v === 'string';

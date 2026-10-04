@@ -1,10 +1,11 @@
 // /v1/predictions routes.
 import { closePrediction, computePredictionBaserate, loadAllPredictions, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { HttpError, MAX_ID_LEN, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonNumber, isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonNumber, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
 // ── E2 prediction first-class object (v0.31) ──
 // docs/plans/2026-05-26-e2-prediction-object.md
@@ -107,8 +108,8 @@ export async function handlePredictionStats({ req, res, opts, query }: RouteRequ
   if (!classTag || classTag.length === 0) {
     throw new HttpError(400, 'class param is required');
   }
-  if (classTag.length > 256) {
-    throw new HttpError(400, 'class exceeds 256-character cap');
+  if (classTag.length > MAX_ID_LEN) {
+    throw new HttpError(400, `class exceeds ${MAX_ID_LEN}-character cap`);
   }
   const ctx = await buildContextWithAuth(req, opts);
   const baserate = computePredictionBaserate(opts.hippoRoot, ctx.tenantId, classTag, ctx.actor.subject);

@@ -5,7 +5,8 @@ import { HttpError, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 

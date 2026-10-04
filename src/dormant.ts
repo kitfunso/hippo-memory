@@ -20,6 +20,7 @@
 import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
 import { rejectionDigest } from './rejection.js';
+import { escapeLike } from './escape.js';
 
 /** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, or `hippo projects repair` splitting a two-project merge. */
 export type DormantReason = 'decay' | 'source-deleted' | 'project-repair';
@@ -93,11 +94,6 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
     move.strength,
     move.dormantAt,
   );
-}
-
-/** Escape LIKE metacharacters so a search term matches literally (ESCAPE '\'). */
-function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
 /**

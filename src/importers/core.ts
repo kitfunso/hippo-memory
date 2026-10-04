@@ -14,6 +14,7 @@ import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
+import type { JsonValue } from '../json.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,7 +62,7 @@ export interface ImportOptions {
    * sharing a basename would collide and clobber each other). importVault throws
    * if it is missing or blank. Optional in this shared type only because the
    * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
-   * it (see `escapeLike` below).
+   * it (`escapeLike` in src/escape.ts).
    */
   name?: string;
   /**
@@ -205,16 +206,6 @@ function writeOrProbeImport(
 // ---------------------------------------------------------------------------
 // ChatGPT importer
 // ---------------------------------------------------------------------------
-
-/** The full value space `JSON.parse` can produce. Boundary-guard functions in
- *  this file accept `JsonValue` (never `unknown`) so a value's origin as
- *  unparsed external JSON stays visible in its type, then narrow it via the
- *  `isJson*` predicates below. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-export function isJsonString(x: JsonValue): x is string {
-  return typeof x === 'string';
-}
 
 export function isJsonPlainObject(x: JsonValue): x is { [key: string]: JsonValue } {
   return x !== null && !Array.isArray(x) && typeof x === 'object';

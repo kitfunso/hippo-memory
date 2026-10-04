@@ -16,9 +16,9 @@ import {
   isJsonObjectRecord,
   readBody,
   sendJson,
-  type JsonValue,
   type WebhookRequest,
 } from '../../http-util.js';
+import type { JsonValue } from '../../json.js';
 
 /**
  * Slack Events API webhook. Auth is signature-based (HMAC over the raw

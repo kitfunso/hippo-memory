@@ -21,6 +21,7 @@ import { log } from '../log.js';
 import { printError } from './output.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
+import { escapeRegex } from '../escape.js';
 
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
@@ -231,10 +232,6 @@ function withoutHookBlock(text: string): string {
     'g'
   );
   return text.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.

@@ -2,8 +2,9 @@ import type { DatabaseSyncLike } from '../../db.js';
 import type { Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { verifyGitHubSignature } from './signature.js';
-import { isGitHubWebhookEnvelope, type JsonValue } from './types.js';
+import { isGitHubWebhookEnvelope } from './types.js';
 import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
+import type { JsonValue } from '../../json.js';
 
 /**
  * GitHub webhook DLQ. Mirrors the Slack DLQ shape (src/connectors/slack/dlq.ts)

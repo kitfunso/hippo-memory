@@ -1,5 +1,9 @@
 import type { MemoryEntry } from '../memory.js';
 
+export const DEFAULT_RECALL_BUDGET = 4000;
+// Local memories outrank global ones by this factor; getContext applies it as a 1/x global discount.
+export const DEFAULT_LOCAL_BUMP = 1.2;
+
 /** One score mutation applied after candidate generation; allocated only under `recall --why` or `RecallOpts.explain`. */
 export interface RerankStep {
   /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */

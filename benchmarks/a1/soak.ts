@@ -32,7 +32,7 @@
  */
 
 import {
-  mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync, readdirSync, appendFileSync,
+  mkdtempSync, rmSync, mkdirSync, statSync, readdirSync, appendFileSync,
 } from 'node:fs';
 import { tmpdir, platform } from 'node:os';
 import { join, dirname, resolve } from 'node:path';

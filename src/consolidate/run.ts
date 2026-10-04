@@ -49,15 +49,6 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
   return entry.tags.some((tag) => NO_MERGE_TAGS.has(tag));
 }
 
-/** JSON value shape for a session event's free-form metadata field, cast to
- *  once at its `Record<string, unknown>` origin so it can be narrowed via
- *  isJsonString below rather than left as unparsed `unknown`. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-export function isJsonString(value: JsonValue): value is string {
-  return typeof value === 'string';
-}
-
 /** The sleep's one tombstone-check handle: opened on first use, never under dryRun, closed once. */
 interface LazyDb {
   get: () => DatabaseSyncLike | null;

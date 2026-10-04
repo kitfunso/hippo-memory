@@ -8,6 +8,8 @@
  * for the wrong event type.
  */
 
+import { type JsonValue, isJsonString } from '../../json.js';
+
 /**
  * Codex P1 #7: `private` MUST be optional, not required. The Slack-style
  * fail-safe in scope.ts requires an envelope with `private: undefined` to
@@ -88,26 +90,8 @@ export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelo
   };
 }
 
-/**
- * The full value space `JSON.parse` can produce. Boundary-guard functions in
- * this file accept `JsonValue` (never `unknown`) so a value's origin as
- * unparsed external JSON stays visible in its type, then narrow it via the
- * `isJson*` predicates below.
- */
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
 function isJsonObject(x: JsonValue): x is Record<string, JsonValue> {
   return x !== null && typeof x === 'object';
-}
-
-function isJsonString(x: JsonValue): x is string {
-  return typeof x === 'string';
 }
 
 function isJsonNumber(x: JsonValue): x is number {

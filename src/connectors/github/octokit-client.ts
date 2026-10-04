@@ -10,9 +10,9 @@
  * operator signal, so this code path is now load-bearing.
  */
 
-import type { JsonValue } from './types.js';
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../http-retry.js';
+import type { JsonValue } from '../../json.js';
 
 export class GitHubFetchError extends Error {
   constructor(
@@ -58,6 +58,7 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
 }
 
 const GITHUB_TIMEOUT_MS = 30_000;
+const ERROR_BODY_SNIPPET_CHARS = 256;
 
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   const res = await fetchWithRetry(url, {
@@ -73,7 +74,7 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   // Codex P1 #4: don't silently turn 401/403/404/500 into empty pages.
   if (res.status !== 200 && rateLimit.reason === 'none') {
     const body = await res.text().catch(() => '');
-    throw new GitHubFetchError(res.status, body.slice(0, 256), url);
+    throw new GitHubFetchError(res.status, body.slice(0, ERROR_BODY_SNIPPET_CHARS), url);
   }
 
   // SAFETY: GitHub's list/paginated endpoints (issues, comments, etc. — the

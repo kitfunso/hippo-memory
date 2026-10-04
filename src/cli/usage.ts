@@ -1,6 +1,8 @@
 // Help text for every verb, keyed like the command table in cli.ts; no command logic lives here.
 
 import { TAIL_MAX_LINES } from '../support-bundle.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../search/types.js';
+import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 
 export function printAuditPruneUsage(): void {
   console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -109,7 +111,7 @@ export const VERB_USAGE = {
     --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
   recall: [`
   recall <query>           Search and retrieve memories (local + global)
-    --budget <n>           Token budget for the whole printed block (default: 4000)
+    --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_RECALL_BUDGET})
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
@@ -200,7 +202,7 @@ export const VERB_USAGE = {
     --json                 Output as JSON`],
   assemble: [`
   assemble --session <id>  Build a session's chronological context window
-    --budget N             Token budget for the printed window (default 4000)
+    --budget N             Token budget for the printed window (default ${DEFAULT_ASSEMBLE_BUDGET})
     --fresh-tail N         Recent rows always kept verbatim (default 10)
     --no-summarize-older   Disable older-row summary substitution
     --scope <s>            Restrict to exact scope (default: deny *:private:*)
@@ -212,7 +214,7 @@ export const VERB_USAGE = {
     --pin                  Pin the new memory (default: pinned if the old one was)`],
   explain: [`
   explain <query>          Show full score breakdown for each retrieved memory
-    --budget <n>           Token budget, counted as recall prints (default: 4000)
+    --budget <n>           Token budget, counted as recall prints (default: ${DEFAULT_RECALL_BUDGET})
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
@@ -228,7 +230,7 @@ export const VERB_USAGE = {
     --no-mmr               Disable MMR for this eval run
     --mmr-lambda <f>       Override MMR lambda for this run
     --embedding-weight <f> Override cosine weight (default: 0.6)
-    --local-bump <f>       Local-over-global priority multiplier (default: 1.2)
+    --local-bump <f>       Local-over-global priority multiplier (default: ${DEFAULT_LOCAL_BUMP})
     --equal-sources        Shortcut for --local-bump 1.0
     --min-mrr <f>          Exit non-zero if mean MRR falls below this
     --json                 Output full summary as JSON`],

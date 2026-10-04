@@ -8,11 +8,12 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { estimateTokens, recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
-import { findHippoRoot, isJsonString, isJsonObjectRecord, type McpContext, type McpRequest, type McpResponse, type JsonValue, type ToolHandler } from './protocol.js';
+import { findHippoRoot, isJsonObjectRecord, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
 import { runPredictBaserateTool, runStatusTool, runConflictsTool, runResolveTool, runShareTool, runPeersTool } from './admin-tools.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 /**
  * Zero-install first run (`npx -y hippo-memory mcp` with no store anywhere):

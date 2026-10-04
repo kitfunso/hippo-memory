@@ -5,7 +5,8 @@ import { NotFoundError } from '../../api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonNumber, isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonNumber, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
 // ── decisions (E2 first-class object) ──
 //

@@ -2,7 +2,7 @@ import { openHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { RejectedValueError } from '../rejection.js';
-import type { JsonValue } from './rows.js';
+import type { JsonValue } from '../json.js';
 
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit

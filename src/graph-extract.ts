@@ -28,6 +28,7 @@ import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
 import { loadProjectBriefs } from './project-briefs.js';
 import { assertTenantId } from './tenant.js';
+import { escapeRegex } from './escape.js';
 
 /** Per-type load cap (the loaders default to 100). A type whose active or superseded
  *  set exceeds this is truncated; `ExtractResult.truncated` records it so the
@@ -94,11 +95,6 @@ function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
   if (!type) throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
   return { type, id: e2Id };
-}
-
-/** Escape a string for safe use as a literal inside a RegExp alternation. */
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Unordered entity-id pair key, so a relation between a,b is found in either direction. */

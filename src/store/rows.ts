@@ -1,8 +1,6 @@
 import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../memory.js';
 import { log } from '../log.js';
-
-/** A value that round-trips through JSON.stringify/JSON.parse unchanged. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+import type { JsonValue } from '../json.js';
 
 export interface IndexEntry {
   id: string;

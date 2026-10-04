@@ -11,7 +11,7 @@ import { evalNow } from '../ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import type { SearchResult } from '../search/types.js';
+import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../search/types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
 import { type HippoConfig } from '../config.js';
@@ -25,6 +25,8 @@ import {
 import type { DeliveryObserver } from '../delivery-recorder.js';
 import type { ContextCost, ContextOpts, ContextResultEntry } from './context-types.js';
 import type { Context } from './types.js';
+
+const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
 /** What getContext resolved from opts and config before it read a row. */
 export interface ContextPlan {
@@ -70,7 +72,7 @@ export function oneCopyPerMemory(
   global: readonly MemoryEntry[],
   now: Date,
 ): [MemoryEntry[], MemoryEntry[]] {
-  const score = (e: MemoryEntry, isGlobal: boolean): number => calculateStrength(e, now) * (isGlobal ? 1 / 1.2 : 1);
+  const score = (e: MemoryEntry, isGlobal: boolean): number => calculateStrength(e, now) * (isGlobal ? GLOBAL_DISCOUNT : 1);
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
     const held = best.get(entry.content);
@@ -168,7 +170,7 @@ function rankPinned(
       const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
       return {
         entry,
-        score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
+        score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1) * sBst,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -311,7 +313,7 @@ function backfillRecent(
     .slice(0, plan.includeRecent)
     .map(({ entry, isGlobal }) => ({
       entry,
-      score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
+      score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1),
       tokens: plan.price(entry, isGlobal),
       isGlobal,
     }));
@@ -334,7 +336,7 @@ export function selectStrongest(plan: ContextPlan, left: number, pools: ContextP
   const globalRanked = globalPool
     .map((e) => ({
       entry: e,
-      score: calculateStrength(e, now) * (1 / 1.2),
+      score: calculateStrength(e, now) * GLOBAL_DISCOUNT,
       tokens: plan.price(e, true),
       isGlobal: true,
     }))

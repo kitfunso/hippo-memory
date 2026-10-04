@@ -24,7 +24,7 @@
 // initStore + api.remember for seeding, execFileSync against dist/cli.js
 // for the recall itself (real DB, real CLI, project convention).
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -9,7 +9,7 @@ import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, type DatabaseSyncLike } fro
 import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
-import type { JsonValue } from '../src/working-memory.js';
+import type { JsonValue } from '../src/json.js';
 
 let tmp: string;
 let root: string;

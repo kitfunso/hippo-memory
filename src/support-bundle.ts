@@ -11,7 +11,9 @@ import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTabl
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import type { JsonValue, JsonObject } from './working-memory.js';
+import type { JsonObject } from './working-memory.js';
+import { type JsonValue, isJsonString } from './json.js';
+import { escapeRegex } from './escape.js';
 
 export interface SupportBundleOpts extends DoctorOpts {
   readonly cwd: string;
@@ -39,10 +41,6 @@ const CONFIG_SECRET_KEY_RE = /key|token|secret|passw|credential|auth|cookie|bear
 
 function isJsonObject(v: JsonValue): v is JsonObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function isJsonString(v: JsonValue): v is string {
-  return typeof v === 'string';
 }
 
 function buildRuntime(): JsonObject {
@@ -198,10 +196,6 @@ function buildLogsSection(opts: SupportBundleOpts): JsonObject {
   return logs;
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 // The native realpath is the only form that exposes a short-name (8.3) or symlinked alias for what it is.
 function nativeRealPathKey(p: string): string | null {
   try {
@@ -256,12 +250,12 @@ function mountedDrive(letter: string): string {
 
 /** Regex source for one spelling of the home, or null when too little of it is left to swap safely. */
 function spellingPattern(spelling: string, deep: boolean): string | null {
-  if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegExp(spelling) : null;
+  if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegex(spelling) : null;
   // Each tool that mounts a drive writes it its own way, so a home two or more folders below its drive (\Users\<name>)
   // matches after any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
   const drive = /^([A-Za-z])[:-]/.exec(spelling);
   const below = drive === null ? spelling : spelling.slice(2);
-  const body = below.split(/[\\/]+/).map(escapeRegExp).join('[\\\\/]+');
+  const body = below.split(/[\\/]+/).map(escapeRegex).join('[\\\\/]+');
   if (drive === null) {
     if (spelling.length < 3) return null;
     return deep ? body : `(?<![\\p{L}\\p{N}_])${body}`;

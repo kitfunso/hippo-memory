@@ -195,14 +195,6 @@ function inferConflictPolarity(text: string): ConflictPolarity {
   return 'neutral';
 }
 
-function stripConflictPolarity(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\b(?:not|never|no|don['’]?t|do\s+not|doesn['’]?t|does\s+not|can['’]?t|cannot|shouldn['’]?t|should\s+not|enabled|enable|disabled|disable|on|off|true|false|always|must|must\s+not|works?|working|missing|broken|failed|available|present)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function containsAny(text: string, needles: string[]): boolean {
   return needles.some((needle) => text.includes(needle));
 }

@@ -13,12 +13,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
 
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
-import { estimateTokens } from '../src/token-ledger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

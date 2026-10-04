@@ -16,9 +16,9 @@ import { loadSkills, saveSkill } from '../src/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../src/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../src/customer-notes.js';
 import { loadAllPredictions, savePrediction } from '../src/predictions/store.js';
-import { isJsonObjectRecord, type JsonValue } from '../src/http-util.js';
-import { isJsonString } from '../src/server/validation.js';
+import { isJsonObjectRecord } from '../src/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { type JsonValue, isJsonString } from '../src/json.js';
 
 const ROWS = 7;
 const PAGE = 3;

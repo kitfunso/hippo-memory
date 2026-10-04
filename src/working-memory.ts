@@ -8,10 +8,10 @@
 
 import { closeHippoDb } from './db.js';
 import { openStore } from './store/open.js';
+import type { JsonValue } from './json.js';
 
 export const WM_MAX_ENTRIES = 20;
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 export type JsonObject = { [key: string]: JsonValue };
 
 export interface WorkingMemoryItem {

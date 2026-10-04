@@ -6,6 +6,7 @@ import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
 import { log } from './log.js';
+import { isJsonString } from './json.js';
 
 export interface ExtractedFact {
   content: string;
@@ -19,14 +20,6 @@ export interface ExtractOptions {
   fetcher?: typeof fetch;
   /** Told why a call produced nothing, so callers can surface it instead of guessing. */
   onError?: (msg: string) => void;
-}
-
-/** JSON value shape for fields pulled off the untyped, parsed LLM response
- *  array before they are individually validated. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function isJsonString(value: JsonValue): value is string {
-  return typeof value === 'string';
 }
 
 const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.

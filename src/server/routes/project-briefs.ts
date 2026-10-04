@@ -1,11 +1,12 @@
 // /v1/project-briefs routes.
-import { assembleBriefFromReceipts, type BriefStatus, closeProjectBrief, loadProjectBriefById, loadProjectBriefs, refreshBrief, saveProjectBrief, VALID_BRIEF_STATES } from '../../project-briefs.js';
+import { assembleBriefFromReceipts, type BriefStatus, closeProjectBrief, loadProjectBriefById, loadProjectBriefs, MAX_REPO_LEN, refreshBrief, saveProjectBrief, VALID_BRIEF_STATES } from '../../project-briefs.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import type { KeysetPosition } from '../../keyset.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
 // Named list-opts shape for GET /v1/project-briefs (see no-known-value-widening:
 // a named interface is not flagged the way an inline anonymous object type is).
@@ -33,8 +34,8 @@ export async function handleCreateProjectBrief({ req, res, opts }: RouteRequest)
   if (!isJsonString(repo) || repo.trim().length === 0) {
     throw new HttpError(400, 'repo is required (non-empty string)');
   }
-  if (repo.length > 256) {
-    throw new HttpError(400, 'repo exceeds 256-character cap');
+  if (repo.length > MAX_REPO_LEN) {
+    throw new HttpError(400, `repo exceeds ${MAX_REPO_LEN}-character cap`);
   }
   const summary = body['summary'];
   if (!isJsonString(summary) || summary.trim().length === 0) {
@@ -82,8 +83,8 @@ export async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest
   if (!isJsonString(repo) || repo.trim().length === 0) {
     throw new HttpError(400, 'repo is required (non-empty string)');
   }
-  if (repo.length > 256) {
-    throw new HttpError(400, 'repo exceeds 256-character cap');
+  if (repo.length > MAX_REPO_LEN) {
+    throw new HttpError(400, `repo exceeds ${MAX_REPO_LEN}-character cap`);
   }
   const dryRun = body['dryRun'] === true;
   if (dryRun) {

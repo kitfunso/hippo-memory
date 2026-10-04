@@ -14,7 +14,7 @@ import { fuseRanks, type GraphStreamOptions } from './fusion.js';
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import type { ResultCost, SearchResult } from './types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './types.js';
 
 export interface HybridSearchOptions {
   budget?: number;
@@ -84,7 +84,7 @@ export async function hybridSearch(query: string, entries: MemoryEntry[], option
   });
   scored.sort(compareScoredResults);
   const ordered = await orderHybrid(query, withDagChildren(dedupeExtracted(scored), arm.entries), arm, options);
-  return fitBudget(ordered, options.budget ?? 4000, options.minResults ?? 1, options.cost);
+  return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
 function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridSearchOptions): BoostContext {

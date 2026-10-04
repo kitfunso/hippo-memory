@@ -26,7 +26,8 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import type { DatabaseSyncLike } from './db.js';
-import type { JsonObject, JsonValue } from './working-memory.js';
+import type { JsonObject } from './working-memory.js';
+import { type JsonValue, isJsonString } from './json.js';
 
 /**
  * Where a block of memory text was sent.
@@ -276,10 +277,6 @@ interface ModelTagged {
 /** Claude Code writes its own API errors and limit notices as assistant lines from this model; no model call made them. */
 export function isSyntheticMessage(message: ModelTagged): boolean {
   return message.model === '<synthetic>';
-}
-
-function isJsonString(value: JsonValue | undefined): value is string {
-  return value !== undefined && value !== null && value.constructor === String;
 }
 
 /** JSON-value plain-object check (excludes arrays and null). */

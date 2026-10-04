@@ -9,9 +9,9 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/failure-log.js';
 import { captureToolFailure, failureSignature, lessonFromFailure } from '../src/capture-error.js';
-import type { JsonValue } from '../src/working-memory.js';
 import { blockHash } from '../src/token-ledger.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/rejection.js';
+import type { JsonValue } from '../src/json.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();

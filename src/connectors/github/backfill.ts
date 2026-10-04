@@ -28,7 +28,6 @@ import type { Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
-import type { JsonValue } from './types.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -36,6 +35,7 @@ import type {
   GitHubRepository,
   GitHubSender,
 } from './types.js';
+import type { JsonValue } from '../../json.js';
 
 const API = 'https://api.github.com';
 

@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
-import type { JsonObject, JsonValue } from './working-memory.js';
+import type { JsonObject } from './working-memory.js';
 import { log } from './log.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { JsonValue } from './json.js';
 
 export type AuditSeverity = 'warning' | 'error';
 

@@ -21,8 +21,6 @@ import * as path from 'path';
 import * as os from 'os';
 import {
   createMemory,
-  applyOutcome,
-  type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
 import { initStore } from '../src/store/open.js';

@@ -9,6 +9,7 @@ import { loadConfig } from '../config.js';
 import type { Actor as ApiActor } from '../api.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { isSqliteBusy, STORE_BUSY_MESSAGE } from '../db.js';
+import type { JsonValue } from '../json.js';
 
 // ── Find hippo root ──
 
@@ -104,12 +105,6 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
 }
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
-
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-export function isJsonString(v: JsonValue | undefined): v is string {
-  return typeof v === 'string';
-}
 
 export function isJsonBoolean(v: JsonValue | undefined): v is boolean {
   return typeof v === 'boolean';

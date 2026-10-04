@@ -4,9 +4,10 @@ import { openHippoDb, closeHippoDb } from '../../db.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForTeam } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
-import { isSlackEventEnvelope, isSlackMessageEvent, type JsonValue, type SlackEventEnvelope } from './types.js';
+import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
+import type { JsonValue } from '../../json.js';
 
 export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';
 

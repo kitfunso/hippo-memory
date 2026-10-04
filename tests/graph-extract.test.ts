@@ -36,7 +36,7 @@ describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', 
   it('extracts entities (4 types) + a supersedes relation; excludes closed; idempotent', () => {
     // decision v1 -> superseded by v2 (active)
     const d1 = saveDecision(home, 'default', { decisionText: 'Adopt Postgres' });
-    const d2 = saveDecision(home, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+    saveDecision(home, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
     // a closed decision (must be excluded)
     const dc = saveDecision(home, 'default', { decisionText: 'Retired idea' });
     closeDecision(home, 'default', dc.id);

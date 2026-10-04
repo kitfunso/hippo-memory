@@ -14,6 +14,7 @@ import {
   rowToEntry,
 } from './rows.js';
 import { openStore } from './open.js';
+import { escapeLike } from '../escape.js';
 
 /**
  * v1.7.2 — recall-mode scope filter shape, exported so callers
@@ -222,7 +223,6 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
 }
 
 function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
-  const escapeLike = (term: string): string => term.replace(/[%_\\]/g, '\\$&');
   const where = terms.map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`).join(' OR ');
   const params = terms.flatMap((term) => {
     const like = `%${escapeLike(term)}%`;

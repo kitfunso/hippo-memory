@@ -9,7 +9,7 @@
  *   - P1: backfill issues HWM ignored skipped PR items, looping on PR-only pages.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { Context } from '../src/api.js';
 import { writeEntry } from '../src/store/entry-writes.js';

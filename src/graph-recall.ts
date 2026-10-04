@@ -38,7 +38,7 @@
  */
 import { loadEntriesByIds } from './store/entry-reads.js';
 import type { MemoryEntry } from './memory.js';
-import type { ResultCost, SearchResult } from './search/types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './search/types.js';
 import { estimateTokens } from './token-ledger.js';
 import { compareEntryIdentity } from './compare.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';
@@ -76,7 +76,7 @@ export interface GraphExpandOpts {
    *  cmdRecall: a row is visible if valid_from <= asOf AND, when superseded, its successor
    *  was not yet valid at asOf). */
   asOf?: string;
-  /** Token budget for the augmented set (defaults to 4000, matching recall's default). */
+  /** Token budget for the augmented set (defaults to DEFAULT_RECALL_BUDGET, matching recall). */
   budget?: number;
   /** Budget cost per result; defaults to the memory text. */
   cost?: ResultCost;
@@ -266,7 +266,7 @@ export function graphExpandRecall(
   const { hops, hippoRoot, globalRoot, tenantId } = opts;
   if (hops <= 0 || baseResults.length === 0) return baseResults;
   const maxNeighbors = opts.maxNeighbors ?? DEFAULT_MAX_NEIGHBORS;
-  const budget = opts.budget ?? 4000;
+  const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
   const includeSuperseded = opts.includeSuperseded ?? false;
   const asOfDate = opts.asOf ? new Date(opts.asOf) : null;
   const minResults = opts.minResults ?? 1;

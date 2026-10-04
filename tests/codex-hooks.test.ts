@@ -7,12 +7,12 @@ import { spawnSync } from 'node:child_process';
 import { CODEX_TRUST_LINE } from '../src/hooks/shared.js';
 import { installJsonHooks, uninstallJsonHooks } from '../src/hooks/json-hooks.js';
 import { formatDoctor, runDoctor } from '../src/doctor.js';
-import type { JsonValue } from '../src/working-memory.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import type { JsonValue } from '../src/json.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const START = '<!-- hippo:start -->';

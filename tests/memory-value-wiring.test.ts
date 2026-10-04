@@ -31,7 +31,6 @@ import {
   MV_FEATURE_NAMES,
   scoreEntries,
   rescueSet,
-  rankNonPinnedByTenant,
   validateWeights,
   type MvFeatureVector,
 } from '../src/memory-value.js';
