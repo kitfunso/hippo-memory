@@ -152,6 +152,8 @@ import { ForbiddenError, NotFoundError } from './api-errors.js';
 
 // Add-on packages revoke keys through these without importing the whole api surface.
 export { authRevoke, ForbiddenError, type Context, type Actor };
+// Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
+export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
