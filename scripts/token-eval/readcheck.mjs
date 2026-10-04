@@ -1,6 +1,7 @@
 // G1 (prereg 113, 159-162): a session that read past its own cell, or was handed memory its arm must not hold, is void.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment } from './records.mjs';
 
@@ -238,7 +239,9 @@ function ownObjects(text) {
 /** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
 function contentHits(ctx, run, b, files, fileName) {
   const hits = [];
-  for (const { file, text } of toolResultTexts(files)) {
+  for (const { file, text: raw } of toolResultTexts(files)) {
+    // Colour escapes (`rg --color=always`) hold `[`, which would open a false array and hide the record's keys.
+    const text = stripVTControlCharacters(raw);
     // Only a Claude Code transcript line holds type, uuid and sessionId together; hippo output has no uuid, so no arm voids on its own output.
     // Per object, not per line: a pretty-printer (`jq .`) spreads one record over many lines, and keys from sibling objects are no record.
     const lines = ownObjects(text).filter((l) => /"uuid"\s*:/.test(l) && /"type"\s*:/.test(l));
