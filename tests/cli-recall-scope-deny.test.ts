@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { withSharedStoreHandles } from '../src/db.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -133,16 +134,19 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).not.toContain(PRIV_GITHUB);
   });
 
-  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', () => {
+  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', async () => {
     // 220 matching private rows > the 200-row default window. Pre-fix, the
     // window filled with private rows in SQL and the JS filter then emptied
     // it, so the one admitted row never surfaced. The SQL pre-window
     // NOT LIKE '%:private:%' exclusion keeps the window for admitted rows.
     const hippoDir = join(home, '.hippo');
-    for (let i = 0; i < 220; i++) {
-      writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:Cbulk' }));
-    }
-    writeEntry(hippoDir, createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    // One connection for all 221 writes: a close per write checkpoints the WAL, which timed this out on Windows CI.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 220; i++) {
+        writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:Cbulk' }));
+      }
+      writeEntry(hippoDir, createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    });
 
     const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', undefined, 'default');
     const contents = entries.map((e) => e.content);
