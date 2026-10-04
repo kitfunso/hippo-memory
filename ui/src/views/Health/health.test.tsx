@@ -1,5 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+/// <reference types="vite/client" />
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { makeProject } from "../../testing/fixtures";
@@ -110,28 +109,22 @@ describe("VTable access", () => {
 });
 
 describe("T10: token coverage", () => {
-  const src = join(__dirname, "..", "..");
-
-  function walk(dir: string): string[] {
-    return readdirSync(dir).flatMap((name) => {
-      const path = join(dir, name);
-      if (statSync(path).isDirectory()) return walk(path);
-      return /\.(css|tsx?)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
-    });
-  }
+  // Vite reads the sources, so the ui project needs no Node types (CI installs ui/ alone).
+  const sources = import.meta.glob<string>(["../../**/*.{css,ts,tsx}", "!../../**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
+  const tokens = sources["../../tokens.css"] ?? "";
 
   it("defines every var(--x) used under ui/src in tokens.css :root, in the same rule, or inline from a component", () => {
     const names = (text: string) => [...text.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]);
-    const root = new Set(names(/:root\s*\{([^}]*)\}/.exec(readFileSync(join(src, "tokens.css"), "utf8"))?.[1] ?? ""));
-    const files = walk(src);
+    const root = new Set(names(/:root\s*\{([^}]*)\}/.exec(tokens)?.[1] ?? ""));
+    const files = Object.keys(sources);
     const inline = new Set<string>();
     for (const file of files.filter((f) => /\.tsx?$/.test(f))) {
-      for (const m of readFileSync(file, "utf8").matchAll(/["'](--[a-z0-9-]+)["']/g)) inline.add(m[1]);
+      for (const m of sources[file].matchAll(/["'](--[a-z0-9-]+)["']/g)) inline.add(m[1]);
     }
     const missing: string[] = [];
     let used = 0;
     for (const file of files) {
-      const text = readFileSync(file, "utf8");
+      const text = sources[file];
       const rules = file.endsWith(".css") ? [...text.matchAll(/[^{}]+\{([^{}]*)\}/g)].map((m) => m[1]) : [text];
       for (const body of rules) {
         const own = new Set(file.endsWith(".css") ? names(body) : []);
@@ -147,8 +140,7 @@ describe("T10: token coverage", () => {
   });
 
   it("defines every token in tokens.css exactly once at :root", () => {
-    const text = readFileSync(join(src, "tokens.css"), "utf8");
-    const names = [...text.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]);
+    const names = [...tokens.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]);
     expect(names.length).toBeGreaterThan(10);
     expect(new Set(names).size).toBe(names.length);
   });
