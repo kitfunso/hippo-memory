@@ -2,9 +2,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { cleanup } from './fixtures/z0-harness.js';
+import { cleanup, tmp } from './fixtures/z0-harness.js';
 import { PRICES } from './fixtures/z0-gen.js';
-import { copyOut, grading, keyOf, readGrading, regrade, rowFor, rowsOf, sharedRun, taskOf, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
+import { copyOut, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, taskOf, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
 import { evidenceOf } from '../scripts/token-eval/regrade.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';
@@ -140,10 +140,58 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(readGrading(c.out)).toMatchObject({ flippedLessons: ['f1-l1'], g5: { pass: 'postfix' } });
   }, 600_000);
 
+  it('under --post-fix, a checker that did not change flips when its verdict differs from the saved one (R2)', async () => {
+    const c = copyOut(shared);
+    expect(await regrade(c, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
+    expect(rowFor(c.out, 'a1', 'postfix').checks[0]).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: true, reason: 'verdict' });
+  }, 300_000);
+
+  it('a flip that a re-run of its cell does not repeat still drops the lesson (R7)', async () => {
+    const c = copyOut(shared);
+    expect(await regrade(c, ['--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
+    expect(rowFor(c.out, 'a1').checks[0]).toMatchObject({ flip: true });
+    const file = join(c.out, 'grading', 'seqF', 'A0', 'seed1', 'a1.grade.json');
+    writeFileSync(file, JSON.stringify(JSON.parse(readFileSync(file, 'utf8')), null, 1));
+    expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 8 cells (0 with errors), skipped 0 done ones\n' });
+    expect(rowFor(c.out, 'a1').checks.some((x) => x.flip)).toBe(false);
+    expect(await grading(c.out)).toMatchObject({ code: 0 });
+    expect(readGrading(c.out)).toMatchObject({ flippedLessons: ['f1-l1'] });
+  }, 300_000);
+
+  it('a late harness fault keeps the checks that ran before it, and their flips count after a clean retry (R7)', async () => {
+    const c = copyOut(shared);
+    // t1's checker spoils .git during its first check, so the final check's checkout fails with that flip already seen.
+    expect(await regrade(c, ['--cell', keyOf('t1')], { Z0_TOGGLE: 'regrade', Z0_TOGGLE_BREAK_GIT: '1' })).toMatchObject({ code: 0 });
+    expect(rowFor(c.out, 't1')).toMatchObject({ status: 'error', error: { stage: 'git' }, checks: [expect.objectContaining({ which: 'first', saved: 'pass', regraded: 'fail', flip: true })] });
+    expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 8 cells (0 with errors), skipped 0 done ones\n' });
+    expect(rowFor(c.out, 't1')).toMatchObject({ status: 'done' });
+    expect(await grading(c.out)).toMatchObject({ code: 0 });
+    expect(readGrading(c.out)).toMatchObject({ flippedLessons: ['f1-l1'], g5: { unreproducible: { cells: 0 } } });
+  }, 300_000);
+
+  it('a valid record with no grade.json refuses the regrade, and a regraded cell whose grade.json is gone refuses grading (166)', async () => {
+    const c = copyOut(shared);
+    expect(await regrade(c)).toMatchObject({ code: 0 });
+    rmSync(join(c.out, 'grading', 'seqF', 'A0', 'seed1', 'a2.grade.json'));
+    const graded = await grading(c.out);
+    expect(graded.code).toBe(1);
+    expect(graded.stderr).toContain(`${keyOf('a2')} has regrade rows but no grade.json`);
+    const again = await regrade(c);
+    expect(again.code).toBe(1);
+    expect(again.stderr).toContain(`no grade.json for 1 valid cells in runs.jsonl: ${keyOf('a2')}`);
+  }, 300_000);
+
   it('runs.regraded.jsonl takes new verdicts, recomputes resolved and chain.followed, keeps acceptancePassed, and shares the blind key (19, 20, R3)', async () => {
     const c = copyOut(shared);
     const env = { Z0_TOGGLE: 'regrade', Z0_TOGGLE_TEST: 'regrade' };
     expect(await regrade(c, [], env)).toMatchObject({ code: 0 });
+    // The fixed checker: new bytes, so its post-fix verdicts may move from the saved ones without a flip.
+    const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
+    const { check } = lessonOf(raw, 'f1-l1');
+    const fixed = join(tmp('z0-rg-fix-'), 'toggle-fixed.mjs');
+    writeFileSync(fixed, `${readFileSync(check.script, 'utf8')}// fixed\n`);
+    check.script = fixed;
+    writeFileSync(c.tasks, JSON.stringify(raw));
     expect(await regrade(c, ['--post-fix'], env)).toMatchObject({ code: 0 });
     const file = join(c.out, 'runs.regraded.jsonl');
     expect(() => parseZ0Records(readFileSync(file, 'utf8'), file)).not.toThrow();
@@ -152,7 +200,7 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(pick(before, 'a1')).toMatchObject({ acceptancePassed: true, resolved: true, lessons: [{ first: 'pass', final: 'pass' }], chain: { shown: true, followed: true } });
     expect(pick(after, 'a1')).toMatchObject({ acceptancePassed: true, resolved: false, lessons: [{ first: 'fail', final: 'fail' }], chain: { shown: true, followed: false } });
     expect(rowFor(c.out, 'a1', 'postfix').acceptance).toMatchObject({ saved: true, regraded: false, flip: true });
-    // A post-fix verdict that differs from the saved one is the fix working; only two runs that disagree flip.
+    // A changed checker's verdict that differs from the saved one is the fix working; only its two runs disagreeing flip.
     expect(rowFor(c.out, 'a1', 'postfix').checks[0]).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: false });
     expect(pick(after, 'a4').lessons[0]).toMatchObject({ first: 'pass', staleFollow: false });
     expect(pick(after, 'n1')).toEqual(pick(before, 'n1'));

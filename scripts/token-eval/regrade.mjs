@@ -63,22 +63,24 @@ export function inputsHash(entry, t, checkerShas, pass) {
   return sha256(JSON.stringify(parts));
 }
 
-/** The last row per cell key, and whether the file ends in a torn line (a write cut off mid-line). */
+/** The last row per cell key, every row per key in file order, and whether the file ends in a torn line (a write cut off mid-line). */
 export function readRows(file) {
-  if (!fs.existsSync(file)) return { rows: new Map(), torn: false, whole: 0 };
+  if (!fs.existsSync(file)) return { rows: new Map(), history: new Map(), torn: false, whole: 0 };
   const text = fs.readFileSync(file, 'utf8');
   const end = text.lastIndexOf('\n') + 1;
   const rows = new Map();
+  const history = new Map();
   text.slice(0, end).split('\n').forEach((line, i) => {
     if (!line) return;
     try {
       const row = JSON.parse(line);
       rows.set(row.key, row);
+      history.set(row.key, [...(history.get(row.key) ?? []), row]);
     } catch (err) {
       throw new Error(`${file} line ${i + 1}: ${err.message}`);
     }
   });
-  return { rows, torn: end < text.length, whole: Buffer.byteLength(text.slice(0, end)) };
+  return { rows, history, torn: end < text.length, whole: Buffer.byteLength(text.slice(0, end)) };
 }
 
 /** Scratch dirs laid out like runDirs, so childEnv's bin strip still works; never inside the run root (R14). */
@@ -183,31 +185,31 @@ function verdicts(ctx, entry, dirs, env, call) {
   return ctx.pass === 'postfix' ? { regraded, second: checkOn(ctx, entry, dirs, env, call) } : { regraded };
 }
 
-/** Repro: a flip is a change from the saved verdict. Post-fix: the fix is meant to change verdicts, so only two runs that differ flip. */
-function flipReason(saved, v) {
+/** A flip is a verdict that moved without a fix: two post-fix runs that differ, or an unchanged checker that differs from the saved verdict. */
+function flipReason(saved, v, unchanged) {
   if (v.regraded === 'error' || v.second === 'error') return 'checker-error';
-  const moved = 'second' in v ? v.second !== v.regraded : v.regraded !== saved;
+  const moved = ('second' in v && v.second !== v.regraded) || (unchanged && v.regraded !== saved);
   return moved ? 'verdict' : null;
 }
 
-function checkEntry(lessonId, which, saved, v, checkerSha) {
-  const reason = flipReason(saved, v);
+function checkEntry(lessonId, which, saved, v, checkerSha, unchanged) {
+  const reason = flipReason(saved, v, unchanged);
   return { lessonId, which, saved, ...v, flip: reason !== null, reason, checkerSha };
 }
 
-/** The main lesson's first and final checks, and the stale one after a reversal (compared as pass-ness, reading 6). */
-function lessonChecks(ctx, entry, dirs, env, shas) {
+/** The main lesson's first and final checks, then the stale one after a reversal (as pass-ness, reading 6), each pushed to `acc` as it ends. */
+function lessonChecks(ctx, entry, dirs, env, shas, acc) {
   const g = entry.grade;
-  if (g.verdicts.first === null) return [];
+  if (g.verdicts.first === null) return;
+  const add = (id, which, v) => acc.push(checkEntry(id, which, which === 'stale' ? g.verdicts.staleFollow : g.verdicts[which], v, shas[id], shas[id] === g.checkers[id]));
   const lesson = ctx.lesson(g.lessonId);
   const first = verdicts(ctx, entry, dirs, env, { lesson, sha: g.first, commands: g.commandsFirst });
+  add(g.lessonId, 'first', first);
   // Reading 8: the final check is re-run only where the run ran it; otherwise final is first, as in the run.
-  const final = g.finalChecked ? verdicts(ctx, entry, dirs, env, { lesson, sha: g.finalCheck, commands: g.commandsFinal }) : first;
-  const out = [checkEntry(g.lessonId, 'first', g.verdicts.first, first, shas[g.lessonId]), checkEntry(g.lessonId, 'final', g.verdicts.final, final, shas[g.lessonId])];
-  if (g.staleLessonId === null) return out;
+  add(g.lessonId, 'final', g.finalChecked ? verdicts(ctx, entry, dirs, env, { lesson, sha: g.finalCheck, commands: g.commandsFinal }) : first);
+  if (g.staleLessonId === null) return;
   const raw = verdicts(ctx, entry, dirs, env, { lesson: ctx.lesson(g.staleLessonId), sha: g.stale, commands: g.commandsStale });
-  const passed = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === 'error' ? 'error' : v === 'pass']));
-  return [...out, checkEntry(g.staleLessonId, 'stale', g.verdicts.staleFollow, passed, shas[g.staleLessonId])];
+  add(g.staleLessonId, 'stale', Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === 'error' ? 'error' : v === 'pass'])));
 }
 
 /** The hidden tests on the final tree, run once in either pass; a change from the run's result is counted, never dropped (reading 7). */
@@ -229,14 +231,15 @@ export function regradeCell(ctx, entry, inputs) {
   };
   const dirs = scratchDirs(ctx.out, g);
   const env = armEnv(g.arm, dirs, ctx.baseEnv, { passEnv: ctx.passEnv });
+  // Checks that ended before a later fault stay on the error row, so their flips still count (R7).
+  const checks = [];
   try {
-    const shas = gates(ctx, entry, dirs, env);
-    const checks = lessonChecks(ctx, entry, dirs, env, shas);
+    lessonChecks(ctx, entry, dirs, env, gates(ctx, entry, dirs, env), checks);
     return { ...head, status: 'done', error: null, checks, acceptance: acceptanceOf(ctx, entry, dirs, env) };
   } catch (err) {
     const known = err instanceof HarnessFault ? err : err instanceof WorkspaceGitError ? new HarnessFault('git', err.message) : null;
     if (!known) throw err;
-    return { ...head, status: 'error', error: { stage: known.stage, message: known.message }, checks: [], acceptance: null };
+    return { ...head, status: 'error', error: { stage: known.stage, message: known.message }, checks, acceptance: null };
   }
 }
 
@@ -255,13 +258,16 @@ function regradedRecord(r, row) {
   return out;
 }
 
+/** A record the run had to save a grade.json for: valid and not a screen. */
+export const isGraded = (r) => (r.invalid === null || r.invalid === undefined) && r.screen !== true;
+
 /** `runs.regraded.jsonl` beside runs.jsonl; refused while a valid non-screen record has no done post-fix row. */
 export function writeRegraded(runsFile, rows) {
   const lines = fs.readFileSync(runsFile, 'utf8').split('\n').filter((l) => l.trim());
   const missing = [];
   const out = lines.map((line) => {
     const r = JSON.parse(line);
-    if (!(r.invalid === null || r.invalid === undefined) || r.screen === true) return line;
+    if (!isGraded(r)) return line;
     const row = rows.get(cellKey(r));
     if (row?.status !== 'done') missing.push(cellKey(r));
     return row?.status === 'done' ? JSON.stringify(regradedRecord(r, row)) : line;
@@ -337,6 +343,9 @@ export function runRegrade(opts) {
   const unknown = cells.filter((k) => !all.some((e) => e.key === k));
   if (unknown.length) throw new Error(`--cell ${unknown.join(', ')}: no such cell under ${path.join(out, 'grading')}`);
   const entries = all.filter((e) => cells.length === 0 || cells.includes(e.key)).map((e) => ({ ...e, t: taskOf(opts.spec, e.grade) }));
+  // A missing grade.json refuses rather than counting as unreproducible, so deleting one can never drop a lesson.
+  const orphans = [...new Set(opts.records.filter(isGraded).map(cellKey))].filter((k) => !all.some((e) => e.key === k));
+  if (orphans.length) throw new Error(`no grade.json for ${orphans.length} valid cells in runs.jsonl: ${orphans.slice(0, 5).join(', ')}`);
   const ctx = regradeContext(opts, entries);
   const file = rowsFile(out, pass);
   fs.mkdirSync(path.dirname(file), { recursive: true });

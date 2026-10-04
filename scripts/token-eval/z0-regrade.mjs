@@ -6,7 +6,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateTasks } from './ab-run.mjs';
 import { parseZ0Records } from './z0-records.mjs';
-import { listGrades, readRows, rowsFile, runRegrade } from './regrade.mjs';
+import { listGrades, runRegrade } from './regrade.mjs';
+import { flipsOf } from './g5-flips.mjs';
 import { drawReader, readerSummary, scoreReader } from './reader-sample.mjs';
 import { drawStored, scoreStored, storedSummary } from './stored-sample.mjs';
 
@@ -84,36 +85,6 @@ function regradeMode(args, out, cwd, log) {
   const tally = runRegrade({ out, spec, records, runsFile, pass, cells: args.cell, baseEnv: process.env, log });
   const wrote = tally.regraded ? `; wrote ${tally.regraded}` : '';
   return `${pass}: regraded ${tally.ran} cells (${tally.errors} with errors), skipped ${tally.skipped} done ones${wrote}\n`;
-}
-
-/** Flips from the latest row of each cell in each pass run so far; error rows refuse unless --flip-errors drops their lessons. */
-function flipsOf(out, entries, flipErrors) {
-  const passes = fs.existsSync(rowsFile(out, 'postfix')) ? ['repro', 'postfix'] : ['repro'];
-  const flipped = new Set();
-  const accepted = new Set();
-  const unrepro = { cells: new Set(), lessons: new Set() };
-  const extra = new Set();
-  const errors = [];
-  for (const pass of passes) {
-    const rows = readRows(rowsFile(out, pass)).rows;
-    for (const e of entries) {
-      const row = rows.get(e.key);
-      if (!row) throw new Error(`cell ${e.key} has no ${pass} row; run regrade${pass === 'postfix' ? ' --post-fix' : ''} first`);
-      for (const k of row.extraEnvKeys ?? []) extra.add(k);
-      if (row.status === 'error') {
-        errors.push(`${e.key} (${pass}, ${row.error.stage})`);
-        unrepro.cells.add(e.key);
-        for (const id of [row.lessonId, row.staleLessonId].filter(Boolean)) unrepro.lessons.add(id);
-        continue;
-      }
-      for (const c of row.checks) if (c.flip) flipped.add(c.lessonId);
-      if (row.acceptance.flip) accepted.add(e.key);
-    }
-  }
-  if (errors.length && !flipErrors) throw new Error(`${errors.length} cells have error rows: ${errors.slice(0, 5).join(', ')}; re-run regrade, or pass --flip-errors to drop their lessons`);
-  for (const id of unrepro.lessons) flipped.add(id);
-  for (const k of unrepro.cells) accepted.add(k);
-  return { pass: passes.at(-1), flipped, accepted, unrepro, extra };
 }
 
 /** The grading file (166): E7's three fields, then `g5` with the regrade's own counts; no field holds an arm (R11). */
