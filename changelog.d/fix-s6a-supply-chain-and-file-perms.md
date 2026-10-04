@@ -1,5 +1,0 @@
-### Security
-
-- **New stores are owner-only on Linux and macOS.** When hippo creates a `.hippo` directory, its mirror folders and `hippo.db`, the directories are now `0700` and the database `0600`, and SQLite gives the WAL and SHM files the same mode. Before, they took the process umask, so on most systems other local users could read every memory. Existing directories and files keep the mode they have; to tighten an older store, run `chmod -R go-rwx .hippo`. Windows is unchanged.
-- **The publish gate has no skip switch.** `HIPPO_PUBLISH_SKIP_TESTS` used to let a release publish on a failing suite, and the gate also passed a non-zero vitest exit when every error was vitest 3's worker IPC timeout. No release path set the variable and vitest 5 no longer prints that timeout text, so both are gone: any non-zero vitest exit refuses the publish.
-- **CI and publish workflows pin every third-party action to a commit SHA.** A moved tag on `actions/*`, `astral-sh/setup-uv` or `pypa/gh-action-pypi-publish` can no longer change the code that runs with npm and PyPI publish rights. Dependabot now opens a weekly PR to keep the pins current.

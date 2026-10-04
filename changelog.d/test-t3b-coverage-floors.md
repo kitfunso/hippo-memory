@@ -1,5 +1,0 @@
-### Testing
-
-- **Coverage now counts the `node dist/cli.js` processes the tests spawn.** About 40 test files drive the built CLI, but none of that ran through the coverage tool, so `src/cli.ts` showed 1.8% of lines covered. A small coverage provider (`tests/_coverage-provider.ts`) maps each child's coverage back to `src/` through the tsc source maps. It gives each code construct one key, so a file loaded both in-process and by a child is counted once. The stdio MCP tests now close stdin before they kill the server, so its coverage is written too.
-- **New behaviour tests for code that had none:** the 400, 404 and 409 answers of every `/v1` write route; `hippo projects`, `decide`, `predict`, `capture --file` and `import --markdown`/`--vault` through the CLI; and the re-rank stages of `rankRecall` (recency swap, plugged-in reranker, conflict, value, utility, salience and as-of).
-- **Coverage floors went up from 67/60/80/67 to 90/82/95/89** (lines/branches/functions/statements). The merged CI coverage is now 90.6/82.6/95.6/89.5, up from 69.5/61.9/80.5/69.1 on master.

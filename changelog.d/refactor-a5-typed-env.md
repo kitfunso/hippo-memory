@@ -1,3 +1,0 @@
-### Changed
-
-- **Every environment variable `src/` reads now goes through one typed module, `src/env.ts`, and CI keeps it that way.** Each `HIPPO_*` variable, plus the few others hippo reads (`HOME`, `USERPROFILE`, `XDG_DATA_HOME`, `PATH`, `CLAUDE_CODE_SESSION_ID`, the Anthropic, TypeSafe, Cloudflare, Slack and GitHub credentials, and the `MCP_SSE_*` knobs), has one accessor that reads at call time with the same default and parsing rule as before. `scripts/check-env-reads.mjs` fails the build when any other `src/` file touches `process.env`. The store no longer imports the eval-only ablation switches: recall strengthening now takes the recall-boost switch from its caller. No default, parsing rule or variable name changed.
