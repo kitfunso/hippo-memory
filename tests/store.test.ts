@@ -27,7 +27,8 @@ import {
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, 'fixtures', 'legacy-markdown-store');

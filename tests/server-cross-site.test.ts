@@ -4,7 +4,7 @@ import { request } from 'node:http';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 

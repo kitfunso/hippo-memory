@@ -5,11 +5,15 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+// @ts-expect-error - .mjs script without a .d.ts
 import { runAll, planRuns, validateTasks, preflight, cacheTaskRepos } from '../scripts/token-eval/ab-run.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { usageFromResult, isUsageLimit, transcriptWork } from '../scripts/token-eval/records.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { ARM_SEEDS } from '../scripts/token-eval/arms.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { ancestorInstructionFiles } from '../scripts/token-eval/homes.mjs';
-import { validateCorpus, validateRecord } from './fixtures/z0-contract';
+import { validateCorpus, validateRecord } from './fixtures/z0-contract.js';
 import { loadAllEntries } from '../src/store.js';
 
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
@@ -573,7 +577,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const out = join(scratch, 'out');
     mkdirSync(out);
     writeFileSync(join(out, 'runs.jsonl'), '{"earlier":true}\n');
-    const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
+    const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
     delete env.Z0_ANCESTOR_STOP;
     const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
     expect(real.status).not.toBe(0);
@@ -608,7 +612,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const tasksFile = join(scratch, 'tasks.json');
     writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, tasks: [task(r, 'l1', 'x'), task(r, 'l2', 'y', { baseRef: r.linked })] }] }));
     const out = join(scratch, 'out');
-    const env = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
+    const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: 'x' };
     delete env.Z0_ANCESTOR_STOP;
     const real = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0'], { encoding: 'utf8', env });
     expect(real.status).not.toBe(0);

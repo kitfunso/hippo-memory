@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { initStore, writeEntry, readEntry, strengthenRetrieved } from '../src/store.js';
 
 const roots: string[] = [];

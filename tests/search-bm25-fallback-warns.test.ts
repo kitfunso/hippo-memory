@@ -1,10 +1,10 @@
 // When hybrid search drops to BM25 only for a fixable reason, it says so once per process.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { embedMemory } from '../src/embeddings.js';
 import { hybridSearch } from '../src/search.js';
 import { resetLogOnce } from '../src/log.js';
@@ -12,7 +12,7 @@ import { resetLogOnce } from '../src/log.js';
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
 let savedKey: string | undefined;
-let stderrSpy: ReturnType<typeof vi.spyOn>;
+let stderrSpy: MockInstance<typeof process.stderr.write>;
 
 function useModel(model: string): void {
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model } }), 'utf8');

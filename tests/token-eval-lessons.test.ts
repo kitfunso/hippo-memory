@@ -4,8 +4,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+// @ts-expect-error - .mjs script without a .d.ts
 import { validateFamilies, drawOrder, taskRoles, teachMessage, memoryText, wordOverlap, promptLeaks, withTaught } from '../scripts/token-eval/lessons.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { runCheck, CheckerError } from '../scripts/token-eval/checks.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { validateTasks } from '../scripts/token-eval/ab-run.mjs';
 
 const dirs: string[] = [];
@@ -18,7 +21,7 @@ const tmp = (prefix: string): string => {
   return d;
 };
 
-interface Task { id: string; kind: string; familyId?: string; lessonId?: string; prompt: string; keyPhraseAllowed?: boolean; [k: string]: string | boolean | string[] | undefined }
+interface Task { id: string; kind?: string; familyId?: string; lessonId?: string; prompt: string; keyPhraseAllowed?: boolean; [k: string]: string | boolean | string[] | undefined }
 
 /** A dir holding checks/lesson.mjs, which exits with its first argument. */
 function checkDir(): string {
@@ -31,11 +34,14 @@ function checkDir(): string {
 const t = (id: string, kind: string, extra: Partial<Task> = {}): Task => ({ id, kind, baseRef: 'b', fixRef: 'f', prompt: `do ${id}`, test: 'node test.js', testFiles: [], ...extra });
 const teach = (id: string, familyId: string, lessonId: string, extra: Partial<Task> = {}) => t(id, 'teach', { familyId, lessonId, ...extra });
 const apply = (id: string, familyId: string, lessonId: string, extra: Partial<Task> = {}) => t(id, 'apply', { familyId, lessonId, ...extra });
-const lesson = (id: string, rule: string, keyPhrase: string, extra: Record<string, string> = {}) => ({ id, rule, reason: 'the release script reads them', keyPhrase, check: { script: 'checks/lesson.mjs' }, ...extra });
+interface Lesson { id: string; rule: string; reason: string; keyPhrase: string; check: { script: string }; supersedes?: string }
+const lesson = (id: string, rule: string, keyPhrase: string, extra: { supersedes?: string } = {}): Lesson => ({ id, rule, reason: 'the release script reads them', keyPhrase, check: { script: 'checks/lesson.mjs' }, ...extra });
 const SCREEN = { id: 'screen', baseRef: 'b', fixRef: 'f', prompt: 'screen task', test: 'node test.js', testFiles: [] };
 
 /** Two families on one sequence: f1 with a reversal (l1 then l2), f2 plain; four no-lesson tasks. */
-function spec(fixedOrder = false) {
+interface Family { id: string; sequence: string; lessonSource: string; screen?: typeof SCREEN; lessons: Lesson[] }
+interface Spec { families: Family[]; sequences: Array<{ id: string; cluster: string; repo: string; fixedOrder: boolean; tasks: Task[] }>; dev?: boolean }
+function spec(fixedOrder = false): Spec {
   return {
     families: [
       { id: 'f1', sequence: 'seqA', lessonSource: 'maintainer', screen: { ...SCREEN, id: 'f1-screen' }, lessons: [
@@ -51,7 +57,6 @@ function spec(fixedOrder = false) {
     ] }],
   };
 }
-type Spec = ReturnType<typeof spec> & { dev?: boolean };
 
 describe('validateFamilies', () => {
   it('accepts a valid two-family file with a reversal and stores each checker path', () => {

@@ -8,12 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   serve, authRevoke, ForbiddenError, isReservedActor,
   type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
 } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db.js';
 import { listAuditEventsAfter } from '../src/audit.js';
 
@@ -23,7 +24,7 @@ const PRIVATE_SCOPE = 'slack:private:C1';
 
 let home: string;
 let handle: ServerHandle | undefined;
-let apiKey: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
 const savedEnv = { req: process.env.HIPPO_REQUIRE_AUTH, hb: process.env.MCP_SSE_HEARTBEAT_MS };
 
 async function start(authResolver?: AuthResolver, hippoRoot = home, extra: Partial<ServeOpts> = {}): Promise<ServerHandle> {
@@ -380,8 +381,8 @@ describe('auth resolver and key routes', () => {
 
   it('lets a resolver admin revoke member keys in its tenant but not an admin key', async () => {
     const db = openHippoDb(home);
-    let admin: CreatedApiKey;
-    let member: CreatedApiKey;
+    let admin: CreateApiKeyResult;
+    let member: CreateApiKeyResult;
     try {
       admin = createApiKey(db, { tenantId: 'ext-tenant', label: 'host-admin', role: 'admin' });
       member = createApiKey(db, { tenantId: 'ext-tenant', label: 'cli', role: 'member' });

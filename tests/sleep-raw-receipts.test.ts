@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { consolidate } from '../src/consolidate.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { auditMemory } from '../src/audit.js';
 import * as api from '../src/api.js';
 

@@ -22,6 +22,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
+import type { Context } from '../src/api.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
@@ -82,7 +83,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('dry_run=true previews dedup/audit and skips share/ambient', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'dry-run-canary' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -106,7 +107,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('runs the full pipeline on a populated store', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 5; i++) {
       remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
     }
@@ -123,7 +124,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('no_share=true keeps shared undefined', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'high-value would-trigger-share' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -151,8 +152,8 @@ describe('POST /v1/sleep', () => {
     // Seed near-duplicate memories under two tenants. Run /v1/sleep (default
     // Bearer). Verify both tenants' rows are visible to dedupe (they share
     // hippoRoot).
-    const tenantA = { hippoRoot: home, tenantId: 'tenant_a', actor: { subject: 'localhost:cli', role: 'admin' } };
-    const tenantB = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantA: Context = { hippoRoot: home, tenantId: 'tenant_a', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantB: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     const dupContent = 'highly similar content x'.repeat(20);
     remember(tenantA, { content: dupContent + ' tenant_a marker' });
     remember(tenantB, { content: dupContent + ' tenant_b marker' });

@@ -11,7 +11,8 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import {
   recordTokenUse,
   lastSentState,
@@ -117,7 +118,7 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
   afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
 
   function run(args: string[], stdin = ''): string {
-    const env = { ...process.env, HIPPO_HOME: join(tmpDir, 'global') };
+    const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(tmpDir, 'global') };
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
     return execFileSync(process.execPath, [HIPPO_JS, ...args], { env, cwd: tmpDir, encoding: 'utf8', input: stdin });

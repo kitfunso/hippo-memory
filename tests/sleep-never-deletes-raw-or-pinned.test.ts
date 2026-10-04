@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import {
   initStore, writeEntry, readEntry, deleteEntry, loadAllEntries, loadAllDirtySummaries, batchWriteAndDelete,
 } from '../src/store.js';

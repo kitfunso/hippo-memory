@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import type { Context } from '../src/api.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
 import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { writeToDlq, listDlq, replayDlqEntry } from '../src/connectors/slack/dlq.js';
+import { writeToDlq, replayDlqEntry } from '../src/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
@@ -199,7 +201,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
     const { remember } = await import('../src/api.js');
     const { DuplicateEventError } = await import('../src/connectors/slack/idempotency.js');
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+    const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = ingestMessage(ctx, {
@@ -254,7 +256,6 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     expect(() =>
       remember(ctx, {
         content: seedMem.content,
-        layer: seedMem.layer,
         tags: seedMem.tags,
         kind: 'raw',
         afterWrite: (innerDb, memoryId) => {

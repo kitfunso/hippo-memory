@@ -2,17 +2,22 @@
  * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.test.ts. */
 import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval-stats.js';
+// @ts-expect-error - .mjs script without a .d.ts
 import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus } from '../scripts/token-eval/z0-records.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, holmVerdicts, inSets, meanBootstrap, repeatMistake, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { analyzeZ0, buildReport, renderText } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOpts, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
 
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
-const runOf = (rs: readonly { sequence: string; seed: number }[], sequence: string, seed: number) =>
+const runOf = <R extends { sequence: string; seed: number }>(rs: readonly R[], sequence: string, seed: number): R[] =>
   rs.filter((r) => r.sequence === sequence && r.seed === seed);
 const STAT = { iterations: 2000, seed: 1 };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
@@ -34,7 +39,7 @@ describe('Z0 records contract', () => {
       const i = mutate(records, plan);
       expect(() => corpus(records, plan)).toThrow(new RegExp(`runs\\.jsonl line ${i + 1}: .*${pattern.source}`));
     };
-    rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); delete rs[i]!.usage!.extra; return i; }, /usage\.extra/);
+    rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); Reflect.deleteProperty(rs[i]!.usage!, 'extra'); return i; }, /usage\.extra/);
     rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); Object.assign(rs[i]!, { kind: 'lesson' }); return i; }, /kind must be/);
     rejects((rs) => { const i = at(rs, 'A0', 'rn-repo1', 2, 4); rs[i]!.seed = 3; return i; }, /seed 3 is not run for A0/);
     rejects((rs) => { const i = at(rs, 'A1', 'rn-repo1', 1, 4); rs[i]!.familyId = null; return i; }, /familyId/);
@@ -135,7 +140,7 @@ describe('Z0 filters', () => {
     const voidedFrom = (arm: string, extra: Partial<Z0Record> = {}): number[] => {
       const { records, plan } = fresh();
       Object.assign(records[at(records, arm, 'rn-repo1', 1, 8)]!, { limitRetries: 1, ...extra });
-      const run = runOf(filterRecords(parse(records), plan).scored, 'rn-repo1', 1);
+      const run = runOf<Z0Record>(filterRecords(parse(records), plan).scored, 'rn-repo1', 1);
       return [...new Set(run.map((r: Z0Record) => r.position))].sort((a, b) => a - b);
     };
     const upTo8 = Array.from({ length: 8 }, (_, i) => i);
@@ -146,8 +151,8 @@ describe('Z0 filters', () => {
     const { records, plan } = fresh();
     records[at(records, 'X4', 'x-repo1', 1, 8)]!.limitRetries = 1;
     const f = filterRecords(parse(records), plan);
-    expect(runOf(f.scored, 'x-repo1', 1).every((r: Z0Record) => r.position < 8)).toBe(true);
-    expect(runOf(f.scored, 'x-repo1', 1).filter((r: Z0Record) => r.position === 7)).toHaveLength(4);
+    expect(runOf<Z0Record>(f.scored, 'x-repo1', 1).every((r: Z0Record) => r.position < 8)).toBe(true);
+    expect(runOf<Z0Record>(f.scored, 'x-repo1', 1).filter((r: Z0Record) => r.position === 7)).toHaveLength(4);
     expect(f.retryVoided.positions).toBe(6);
   });
 
@@ -188,7 +193,7 @@ describe('Z0 filters', () => {
     expect(f.scored.some((r: Z0Record) => r.sequence === 'rn-repo2' && r.seed === 2 && r.position === 6)).toBe(false);
     expect(f.leaked).toEqual(['rn-repo4 seed 1', 'rn-repo5 seed 2']);
     expect(f.abandoned).toEqual(['rn-repo5 seed 2']);
-    expect(runOf(f.scored, 'rn-repo4', 1).length + runOf(f.scored, 'rn-repo5', 2).length).toBe(0);
+    expect(runOf<Z0Record>(f.scored, 'rn-repo4', 1).length + runOf<Z0Record>(f.scored, 'rn-repo5', 2).length).toBe(0);
     expect([f.counts.A1.missing, f.counts.A1.abandoned]).toEqual([0, 10]);
     expect(f.scored.some((r: Z0Record) => r.lessons.some((l) => l.lessonId === lesson))).toBe(false);
     expect(f.scored[at(f.scored, 'A2', 'rn-repo6', 1, 4)].resolved).toBe(true);
@@ -206,14 +211,14 @@ describe('Z0 filters', () => {
     crash(g.records[at(g.records, 'A2', 'rn-repo1', 1, 0)]!);
     const f = filterRecords(parse(g.records), g.plan);
     expect(f.untaughtApplyDrops).toBe(2);
-    expect(runOf(f.scored, 'rn-repo1', 1).filter((r: Z0Record) => r.position === 4 || r.position === 11)).toEqual([]);
+    expect(runOf<Z0Record>(f.scored, 'rn-repo1', 1).filter((r: Z0Record) => r.position === 4 || r.position === 11)).toEqual([]);
     const h1 = repeatMistake(f.scored, 'A2', 'A1', 'violation', STAT, inSets('R'));
     expect([h1.units, h1.droppedUnits]).toEqual([71, []]);
     // Family 3 is taught at 5 and re-taught at 14; its applies sit at 9, 12 and 17.
     const reteach = fresh();
     crash(reteach.records[at(reteach.records, 'A2', 'rn-repo1', 1, 5)]!);
     const r = filterRecords(parse(reteach.records), reteach.plan);
-    const arms = (p: number) => runOf(r.scored, 'rn-repo1', 1).filter((x: Z0Record) => x.position === p).length;
+    const arms = (p: number) => runOf<Z0Record>(r.scored, 'rn-repo1', 1).filter((x: Z0Record) => x.position === p).length;
     expect([r.untaughtApplyDrops, arms(9), arms(12), arms(17)]).toEqual([2, 0, 0, 5]);
   });
 
@@ -221,7 +226,7 @@ describe('Z0 filters', () => {
     const gone = fresh();
     gone.records = gone.records.filter((x) => !(x.sequence === 'rn-repo1' && x.seed === 1 && x.position === 1));
     const m = filterRecords(parse(gone.records), gone.plan);
-    expect([m.untaughtApplyDrops, m.counts.A1.missing, runOf(m.scored, 'rn-repo1', 1).length]).toEqual([2, 1, 90 - 5 - 10]);
+    expect([m.untaughtApplyDrops, m.counts.A1.missing, runOf<Z0Record>(m.scored, 'rn-repo1', 1).length]).toEqual([2, 1, 90 - 5 - 10]);
   });
 });
 

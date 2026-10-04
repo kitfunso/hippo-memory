@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { llmReranker } from '../../src/rerankers/llm.js';
-import { createMemory } from '../../src/memory.js';
+import { createMemory } from '../_helpers/create-memory.js';
 import type { SearchResult } from '../../src/search.js';
 
 function asResult(content: string, score: number): SearchResult {

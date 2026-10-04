@@ -4,6 +4,7 @@
  * relevance does not. Real SQLite, hippo's real search and packer.
  */
 import { describe, it, expect } from 'vitest';
+// @ts-expect-error - .mjs script without a .d.ts
 import { evaluateQuestion, summarize } from '../scripts/token-eval/budget-curve.mjs';
 
 const filler = (i: number): string =>

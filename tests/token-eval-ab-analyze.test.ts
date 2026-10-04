@@ -4,6 +4,7 @@
  * The records are generated here, not measured; they test the arithmetic.
  */
 import { describe, it, expect } from 'vitest';
+// @ts-expect-error - .mjs script without a .d.ts
 import { parseRuns, analyze, recordCost } from '../scripts/token-eval/ab-analyze.mjs';
 
 function records(): string {

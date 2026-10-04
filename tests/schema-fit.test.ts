@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { createMemory, computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 
 function makePool(): MemoryEntry[] {
   return [

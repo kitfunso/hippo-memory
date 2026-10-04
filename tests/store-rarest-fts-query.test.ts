@@ -11,7 +11,7 @@ import {
   loadRecallSearchEntriesFromDb,
   pickRarestFtsQuery,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
 
 let tmpRoot: string;

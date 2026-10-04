@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectConflicts, mergePartners } from '../src/consolidate.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { tokenize } from '../src/tokenize.js';
 import { pairwiseDetectConflicts, pairwiseMergePartners } from './_helpers/pairwise-sleep-oracle.js';
 

@@ -1,5 +1,6 @@
 // tests/sl-analyze-v1.7.7.test.ts
 import { describe, it, expect } from 'vitest';
+// @ts-expect-error - .mjs script without a .d.ts
 import { computeVerdict } from '../benchmarks/sequential-learning/analyze-v1.7.7.mjs';
 
 describe('v1.7.7 computeVerdict', () => {

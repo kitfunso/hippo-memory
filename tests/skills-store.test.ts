@@ -22,7 +22,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveSkill,
@@ -185,8 +186,8 @@ describe('skills store (E2 executable/exportable first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the skill; old versions loadable', () => {
     const v1 = saveSkill(home, 'default', { skillName: 'D', instructions: 'a' });
     const v2 = saveSkill(home, 'default', { skillName: 'D', instructions: 'b', supersedesSkillId: v1.id });
-    deleteEntry(home, v1.memoryId!, 'default');
-    deleteEntry(home, v2.memoryId!, 'default');
+    deleteEntry(home, v1.memoryId!);
+    deleteEntry(home, v2.memoryId!);
     expect(loadSkillById(home, 'default', v1.id)!.memoryId).toBeNull();
     expect(loadSkillById(home, 'default', v1.id)!.status).toBe('superseded');
     expect(loadSkillById(home, 'default', v2.id)!.status).toBe('active');

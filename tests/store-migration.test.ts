@@ -4,7 +4,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { createRequire } from 'module';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at

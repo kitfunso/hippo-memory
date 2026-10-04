@@ -7,7 +7,7 @@ import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { appendSessionEvent, getHippoRoot, initStore, isInitialized, loadIndex, readEntry, saveActiveTaskSnapshot, saveSessionHandoff, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { adminActor, recall as apiRecall } from '../src/api.js';
@@ -192,7 +192,8 @@ describe('CLI end to end', () => {
       const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' })
         .filter((e) => e.metadata?.mode === 'context');
       expect(audits).toHaveLength(2);
-      const traces = missedDb.prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id").all();
+      // SAFETY: the SELECT names exactly one integer column.
+      const traces = missedDb.prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id").all() as Array<{ result_count: number }>;
       expect(traces).toHaveLength(priorTraces + 2);
       expect(traces.at(-1)?.result_count).toBe(0);
     } finally {

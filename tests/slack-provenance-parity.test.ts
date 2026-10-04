@@ -20,7 +20,7 @@ import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
 import type { Context } from '../src/api.js';
 
-const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', name: 'general', isPrivate: false };
+const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
 
 function ctxFor(root: string): Context {

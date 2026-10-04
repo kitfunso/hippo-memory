@@ -16,7 +16,8 @@ import {
   listMemoryConflicts,
   replaceDetectedConflicts,
 } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 
 let tmpDir: string;
 

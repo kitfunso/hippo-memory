@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recordTokenUse } from '../src/token-ledger.js';
+// @ts-expect-error - .mjs script without a .d.ts
 import { readTranscript, readProjects, readLedger, report } from '../scripts/token-eval/claude-usage.mjs';
 
 const dirs: string[] = [];

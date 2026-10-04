@@ -23,7 +23,8 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, saveActiveTaskSnapshot } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import type { Context } from '../src/api.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { recall } from '../src/api.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
@@ -34,13 +35,11 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
-function ctx(home: string) {
+function ctx(home: string): Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
 
-interface ScopeToolArgs {
-  query?: string;
-}
+type ScopeToolArgs = { query: string } | Record<string, never>;
 
 function callMcpTool(
   home: string,

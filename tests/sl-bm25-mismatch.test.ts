@@ -11,7 +11,11 @@
 // disjointness. It is NOT a magnitude claim.
 
 import { describe, it, expect } from 'vitest';
-import { TRAP_CATEGORIES } from '../benchmarks/sequential-learning/traps.mjs';
+import type { TrapCategory } from './_helpers/trap-types.js';
+// @ts-expect-error - .mjs script without a .d.ts
+import { TRAP_CATEGORIES as UNTYPED_CATEGORIES } from '../benchmarks/sequential-learning/traps.mjs';
+
+const TRAP_CATEGORIES: TrapCategory[] = UNTYPED_CATEGORIES;
 
 const NEW_IDS = ['timezone_naive', 'idempotency_retry', 'float_accumulation'];
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { hybridSearch, type SearchResult } from '../../src/search.js';
-import { createMemory } from '../../src/memory.js';
+import { hybridSearch } from '../../src/search.js';
+import { createMemory } from '../_helpers/create-memory.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 
 describe('hybridSearch reranker seam', () => {
@@ -21,10 +21,10 @@ describe('hybridSearch reranker seam', () => {
       calls.push({ query, resultCount: results.length });
       lastInputId = results[results.length - 1].entry.id;
       // Reverse order to prove the reranker output replaces the input ordering
-      return [...results].reverse().map((r, i) => ({
-        ...r,
-        rerankScore: results.length - i,
-      }));
+      return results
+        .map((r, i) => ({ ...r, preRerankRank: i + 1 }))
+        .reverse()
+        .map((r, i) => ({ ...r, rerankScore: results.length - i, postRerankRank: i + 1 }));
     };
 
     const out = await hybridSearch('failure', entries, {
@@ -47,7 +47,7 @@ describe('hybridSearch reranker seam', () => {
     const entries = ['alpha failure', 'beta failure', 'gamma failure', 'delta failure'].map((c) => createMemory(c));
     // Slices like llm.ts and jev.ts do: options.topK, else a default smaller than the search's own.
     const stub: RerankerFn = async (_query, results, options) =>
-      results.slice(0, options?.topK ?? 2).map((r) => ({ ...r, rerankScore: r.score }));
+      results.slice(0, options?.topK ?? 2).map((r, i) => ({ ...r, rerankScore: r.score, preRerankRank: i + 1, postRerankRank: i + 1 }));
     const out = await hybridSearch('failure', entries, { budget: 100000, reranker: stub });
     expect(out).toHaveLength(4);
   });

@@ -230,7 +230,7 @@ describe('card routes', () => {
     mkdirSync(cwd, { recursive: true });
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
-    const cliEnv = { ...process.env, HIPPO_HOME: globalDir, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    const cliEnv: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: globalDir, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     delete cliEnv.HIPPO_TENANT;
     execFileSync(process.execPath, [CLI_PATH, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
       cwd,

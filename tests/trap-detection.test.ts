@@ -17,10 +17,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  createMemory,
-  type MemoryEntry,
-} from '../src/memory.js';
+import { type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import {
   initStore,
   writeEntry,
@@ -264,7 +262,6 @@ describe('Trap repo files contain expected issues', () => {
 // ---------------------------------------------------------------------------
 
 describe('Memory recall catches traps (with memory)', () => {
-  let caughtCount = 0;
   const results: Array<{ trap: string; caught: boolean; query: string; topIds: string[] }> = [];
 
   for (const trap of trapDefs) {
@@ -273,7 +270,6 @@ describe('Memory recall catches traps (with memory)', () => {
       const caught = topIds.includes(trap.memory_id);
 
       results.push({ trap: trap.id, caught, query: trap.recall_query, topIds });
-      if (caught) caughtCount++;
 
       // Soft assertion: log result even on failure for diagnostics
       if (!caught) {

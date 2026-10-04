@@ -8,7 +8,8 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { appendSessionEvent, initStore, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { runDoctor } from '../src/doctor.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import {
   carryingCalls,
   estimateTokens,

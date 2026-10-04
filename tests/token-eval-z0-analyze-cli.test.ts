@@ -5,8 +5,11 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+// @ts-expect-error - .mjs script without a .d.ts
 import { RN_ARMS, parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { pooledVoids } from '../scripts/token-eval/z0-blind.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { analyzeZ0, runCli } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, generate, jsonl, type Generated } from './fixtures/z0-gen.js';
 

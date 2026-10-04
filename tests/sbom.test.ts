@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 // Imported from the .mjs script; the CLI main is guarded so this import does NOT run it.
+// @ts-expect-error - .mjs script without a .d.ts
 import { runtimeComponents, mergeRuntimeBoms } from '../scripts/sbom.mjs';
 
 interface CdxProperty { readonly name: string; readonly value: string }

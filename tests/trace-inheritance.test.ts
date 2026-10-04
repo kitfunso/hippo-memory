@@ -11,12 +11,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createMemory, Layer, calculateStrength } from '../src/memory.js';
+import { Layer, calculateStrength } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { consolidate } from '../src/consolidate.js';
 import {
   initStore,
   writeEntry,
-  readEntry,
   loadAllEntries,
 } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';

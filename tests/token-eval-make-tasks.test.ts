@@ -8,7 +8,9 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+// @ts-expect-error - .mjs script without a .d.ts
 import { findCandidates, verifyCandidate, draftTasks } from '../scripts/token-eval/make-tasks.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { validateTasks } from '../scripts/token-eval/ab-run.mjs';
 
 const dirs: string[] = [];

@@ -10,7 +10,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { detectSecret, redactSecrets, redactSecretsStrict } from '../src/secret-detect.js';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from './_helpers/create-memory.js';
 import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRoot } from '../src/shared.js';
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';

@@ -27,6 +27,7 @@ import {
   loadIndex,
   saveIndex,
 } from '../src/store.js';
+import type { Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember } from '../src/api.js';
@@ -72,7 +73,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('with ids returns applied:N (200)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     const m1 = remember(ctx, { content: 'outcome-target-1' });
     const m2 = remember(ctx, { content: 'outcome-target-2' });
 
@@ -87,7 +88,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('without ids uses last-recall (returns {applied, ids})', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     const m1 = remember(ctx, { content: 'last-recall-mem-1' });
     const m2 = remember(ctx, { content: 'last-recall-mem-2' });
     const idx = loadIndex(home);
@@ -144,7 +145,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('emits one audit_log row per applied id (op=outcome)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     const m1 = remember(ctx, { content: 'audit-trail-1' });
     const m2 = remember(ctx, { content: 'audit-trail-2' });
 
@@ -171,7 +172,7 @@ describe('POST /v1/outcome', () => {
     // ctx.tenantId resolves to 'default' (the unauthenticated localhost
     // default). default cannot read tenant_b's memory -> readEntry returns
     // null -> applied stays 0, no audit row written.
-    const tenantBCtx = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantBCtx: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     const tenantBMem = remember(tenantBCtx, { content: 'belongs-to-tenant-b' });
 
     const res = await fetch(`${handle.url}/v1/outcome`, {
@@ -205,7 +206,7 @@ describe('POST /v1/outcome', () => {
     // This route hit has no Bearer, so ctx.tenantId = 'default'. We seed
     // last_retrieval_ids with a tenant_b memory id and verify the
     // 'default' caller cannot see it.
-    const tenantBCtx = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const tenantBCtx: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     const tenantBMem = remember(tenantBCtx, { content: 'tenant-b-secret-id' });
     const idx = loadIndex(home);
     idx.last_retrieval_ids = [tenantBMem.id];
@@ -240,7 +241,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('1000 ids at boundary returns 200 (cap-exclusive)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     // Seed 3 real memories so applied > 0 confirms route ran.
     const m1 = remember(ctx, { content: 'boundary-mem-1' });
     const m2 = remember(ctx, { content: 'boundary-mem-2' });

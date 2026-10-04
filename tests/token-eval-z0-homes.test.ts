@@ -6,9 +6,13 @@ import { join, dirname, delimiter, resolve } from 'node:path';
 import { execFile, execFileSync, spawnSync, spawn } from 'node:child_process';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
+// @ts-expect-error - .mjs script without a .d.ts
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
+// @ts-expect-error - .mjs script without a .d.ts
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
@@ -315,6 +319,8 @@ function repoDirs(root: string, rel = ''): string[] {
 
 const nodeFs: typeof import('node:fs') = createRequire(import.meta.url)('node:fs');
 
+type FsCall = (...a: Array<string | number | object>) => ReturnType<typeof nodeFs.readdirSync> | number;
+
 interface FsHooks {
   before?: (p: string) => void;
   after?: (p: string) => void;
@@ -326,7 +332,8 @@ function withFs<K extends 'readdirSync' | 'openSync'>(name: K, hooks: FsHooks, f
   nodeFs[name] = new Proxy(real, {
     apply: (target, self, args) => {
       hooks.before?.(String(args[0]));
-      const out = target.apply(self, args);
+      // SAFETY: the Proxy forwards the caller's own arguments, so no overload is mixed with another's.
+      const out = (target as FsCall).apply(self, args);
       hooks.after?.(String(args[0]));
       return out;
     },
@@ -830,7 +837,7 @@ describe('homes check (built CLI, no claude session)', () => {
     process.env[key] = `${d}${delimiter}${process.env[key]}`;
     return d;
   };
-  const runs = ARMS.map((arm) => ({ seq: 'seqH', arm, seed: 1 }));
+  const runs = ARMS.map((arm: string) => ({ seq: 'seqH', arm, seed: 1 }));
   const textUnder = (dir: string): string => readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? textUnder(join(dir, e.name)) : readFileSync(join(dir, e.name), 'latin1'))).join('\n');
 
   it('passes for every arm (A4 included, with no hippo) with a hippo decoy on PATH, and a real A2 init plus import keeps the canaries out', () => {
