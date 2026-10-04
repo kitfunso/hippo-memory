@@ -42,7 +42,7 @@ export interface RecallSearchOpts {
   mmrLambda: number;
   localBump: number;
   minResults?: number;
-  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out the bi-temporal flags. */
+  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and includeSuperseded. */
   explain: boolean;
 }
 
@@ -230,8 +230,8 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
   };
   if (search.usePhysics && !globalRoot) {
-    // Explain has never passed the bi-temporal flags to physics; keeping that holds its output steady.
-    const temporal = explain ? {} : { minResults, includeSuperseded, asOf };
+    // Explain leaves minResults and includeSuperseded out to hold its output steady; asOf must reach physics or later rows leak.
+    const temporal = explain ? { asOf } : { minResults, includeSuperseded, asOf };
     return physicsSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, vectorCandidates, ...temporal });
   }
   if (globalRoot) {

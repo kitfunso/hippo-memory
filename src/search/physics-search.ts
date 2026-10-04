@@ -13,6 +13,7 @@ import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScori
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
+import { currentEntries } from './as-of.js';
 import { vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
 import type { ResultCost, ScoreBreakdown, SearchResult } from './types.js';
 
@@ -29,7 +30,7 @@ export interface PhysicsSearchOptions {
   scope?: string | null;
   /** Include superseded memories; must reach the inner hybrid filter or `recall --include-superseded` rows drop out here. */
   includeSuperseded?: boolean;
-  /** Bi-temporal filter: memories current at this ISO date string. */
+  /** Bi-temporal filter: memories current at this ISO date string, ranked by hybridSearch. */
   asOf?: string;
   /** Same summary deboost as hybridSearch, which also inherits it on every fallback. */
   summaryDeboost?: number;
@@ -57,11 +58,13 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
   if (entries.length === 0 || !options.hippoRoot) return [];
+  // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
+  if (options.asOf) return hybridSearch(query, entries, options);
   const root = options.hippoRoot;
 
   const queryVector = await physicsQueryVector(query, root, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, options);
-  const pool = withVectorCandidates(root, entries, queryVector, options.vectorCandidates);
+  const pool = currentEntries(withVectorCandidates(root, entries, queryVector, options.vectorCandidates), options);
   const physicsMap = loadCandidateParticles(root, pool);
   if (!physicsMap) return hybridSearch(query, pool, options);
 
