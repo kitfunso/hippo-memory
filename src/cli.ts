@@ -81,13 +81,9 @@ import {
   isInitialized,
   initStore,
   writeEntry,
-  strengthenRetrieved,
   readEntry,
   deleteEntry,
   loadAllEntries,
-  loadSearchEntries,
-  loadIndex,
-  saveIndex,
   loadStats,
   updateStats,
   saveActiveTaskSnapshot,
@@ -104,34 +100,15 @@ import {
   loadHandoffById,
   stampHandoffOutcome,
   writeSessionEndHandoff,
-  TaskSnapshot,
   SessionEvent,
   memoriesBackingObjects,
 } from './store.js';
-import {
-  createCard,
-  loadCard,
-  listCards,
-  loadCardRuns,
-  claimCard,
-  heartbeatCard,
-  blockCard,
-  reviewCard,
-  completeCard,
-  reclaimExpiredCards,
-  addCardComment,
-} from './store-cards.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
-import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome } from './handoff.js';
+import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from './handoff.js';
 import { readSessionScan, recordSessionDigest } from './session-digest.js';
-import { type Card, isCardStatus } from './card.js';
-import { loadCardDetail, type CardDetail } from './card-detail.js';
-import { passesScopeFilterForRecall } from './recall-scope.js';
-import { search, estimateTokens, fitBudget, explainMatch, type SearchResult } from './search.js';
+import { search, estimateTokens,} from './search.js';
 import { renderTraceContent, parseSteps } from './trace.js';
-import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle, writeRecallTraceAtRoot } from './recall-trace.js';
-import { createDeliveryRecorder, type DeliveryRecorder } from './delivery-recorder.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
 import {
@@ -145,19 +122,16 @@ import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
-import { ensurePilotArm, hashArm, readPilotArm } from './pilot-arm.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS, isSqliteBusy, noteStoreBusy } from './db.js';
+import { openHippoDb, closeHippoDb,} from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from './version.js';
 import { captureToolFailure } from './capture-error.js';
 import type { JsonValue } from './working-memory.js';
-import {
-  blockHash, isSubagentPayload, lastSentState, readApiCalls, recordRereads, recordTokenUse, shouldSkipUnchanged,
-  type TokenSurface, type TranscriptCalls,
+import { isSubagentPayload, readApiCalls, recordRereads, recordTokenUse, type TranscriptCalls,
 } from './token-ledger.js';
 import { FAILURE_LOG_RETENTION_DAYS } from './failure-log.js';
-import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, writeGoalRecallLog } from './goals.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from './goals.js';
 import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
 import { rowToGoal } from './goals.js';
 import {
@@ -165,7 +139,6 @@ import {
   runWatched,
   isGitRepo,
 } from './autolearn.js';
-import { dropHeldCopies } from './same-text.js';
 import {
   currentMachine,
   importAtCompaction,
@@ -176,9 +149,8 @@ import {
 } from './agent-memories/sync.js';
 import { detailLines, emptyReport, mergeReports, summaryLine } from './agent-memories/report.js';
 import { invalidateMatching, InvalidationTarget } from './invalidation.js';
-import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
+import { deriveOriginProject } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
-import { autoDetectContext } from './context-auto.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
   getGlobalRoot,
@@ -210,7 +182,6 @@ import { COMPACTION_DB_WAIT_MS, replayCompactionsAt } from './compaction-record.
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
-  auditQueryFields,
   queryAuditEvents,
   AUDIT_OPS,
   type AuditEvent,
@@ -223,7 +194,6 @@ import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import { vetSecrets } from './secret-detect.js';
 import * as predictionsModule from './predictions.js';
-import { computePlanningFallacyOutput, type PlanningFallacyOutput } from './predictions.js';
 import * as decisionsModule from './decisions.js';
 import * as incidentsModule from './incidents.js';
 import * as processesModule from './processes.js';
@@ -233,58 +203,13 @@ import * as briefsModule from './project-briefs.js';
 import * as customerNotesModule from './customer-notes.js';
 import { extractGraph } from './graph-extract.js';
 import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from './graph-view.js';
-import {
-  detectAnchoring,
-  hashQueryText,
-  biasHintEnabled,
-  buildSessionKey,
-  getOrCreateRing,
-  appendRecall,
-  snapshotRing,
-  RingBuffer,
-} from './recall-history.js';
-import { detectAvailabilityBias } from './availability.js';
-
-// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map.
-// Each CLI process maintains its OWN Map; no IPC / no cross-process sharing
-// (plan v3 decision: per-pipeline rings, see docs/plans/2026-05-26-j1-anchoring-detector.md).
-//
-// IMPORTANT single-shot CLI limitation (codex round-2 catch): in normal
-// terminal usage each `hippo recall` invocation spawns a fresh Node
-// process, so this Map is recreated empty every time and J1 cannot
-// accumulate history across invocations. CLI J1 only fires in
-// long-running processes (the cmdSleep / consolidate loops, batch
-// scripts that call cmdRecall in-process, or tests). MCP and HTTP
-// pipelines DO accumulate because their host processes are long-lived
-// (hippo serve, MCP server). For CLI users who want per-session
-// anchoring in single-shot mode, the recommendation is to run via
-// `hippo serve` and call HTTP /v1/memories?session_id=... (the HTTP
-// ring persists across calls within the server process). A J1-v1.1
-// follow-up may add SQLite-backed CLI persistence (migration v30
-// recall_history table per the original brainstorm option D).
-const sessionRecallHistoryCli = new Map<string, RingBuffer>();
-
-/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
-export function __resetSessionRecallHistoryCli(): void {
-  sessionRecallHistoryCli.clear();
-}
 import * as client from './client.js';
 import { resolveTenantId } from './tenant.js';
-import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
-import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
-import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
-import { getReranker } from './rerankers/index.js';
-import type { RerankerFn } from './rerankers/types.js';
-import { rankRecall, type RankStage, type RecallGraphHops, type RecallGraphStream, type RecallReranker } from './recall-pipeline.js';
-import { JEV_DEFAULT_TOP_K } from './rerankers/jev.js';
-import { isClefModel } from './rerankers/clef.js';
 import { computeSalience } from './salience.js';
-import { renderAmbientSummary } from './ambient.js';
 import {
-  assembleCost, assembleHeading, contextCost, contextHeading, contextLine, crossProjectHeading, crossProjectLine, drillCost, handoffText,
-  printedTokens, sessionTrailText, settleTokens, snapshotText,
+  assembleCost, assembleHeading, drillCost, settleTokens,
 } from './context-render.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
@@ -300,7 +225,6 @@ import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-imp
 import { log } from './log.js';
 import { printError } from './cli/output.js';
 import {
-  parseLimitFlag,
   parseCountFlag,
   parseBudgetFlag,
   emitCliAudit,
@@ -308,15 +232,11 @@ import {
   runChurnStaleForRepo,
   runViaServerIfAvailable,
   fmt,
-  recallEntryText,
-  recallHeading,
   printAgentImport,
   hippoBlock,
   installCodexMemoryHooks,
   setupDailySchedule,
-  type CliFlags,
-  parseAsOfFlag,
-  engineFlags,
+  type CommandContext,
   collectHandoffEvidence,
   logSessionEndImport,
   appendSessionEndCloseLog,
@@ -324,7 +244,6 @@ import {
   printSessionEvents,
   printHandoff,
   cardStringFlag,
-  hostSessionId,
   resetHookInjection,
   captureConsole,
   hookStoreRoot,
@@ -333,6 +252,8 @@ import {
   HOOK_MARKERS,
   HOOKS,
   resolveAuthRoot,
+  runHookWithStores,
+  inPilotHoldout,
 } from './cli/shared.js';
 
 // ---------------------------------------------------------------------------
@@ -465,24 +386,6 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
   }
 
   return { command, args, flags };
-}
-
-// JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
-function planningLine(p: PlanningFallacyOutput): string | null {
-  if (p.hint) return `Planning fallacy hint (class: ${p.hint.classTag}): ${p.hint.baserateSummary} [detected: ${JSON.stringify(p.hint.detectedPhrase)}]`;
-  if (p.watching) return `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} [detected: ${JSON.stringify(p.watching.detectedPhrase)}]`;
-  return null;
-}
-
-function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | null {
-  const clauses: string[] = [];
-  // The residual covers rank, budget and limit drops alike, and fires with no --limit at all.
-  if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
-  if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
-  if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
-  if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
-  if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
-  return clauses.length > 0 ? `Cutoff: showing ${shown} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.` : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -995,869 +898,6 @@ function cmdSupersede(
   emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
 
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
-}
-
-/** A flag value, or the deferred error that rejects it. */
-interface ParsedFlag<T> { value?: T; fail?: () => never }
-
-/** A flag the ranking stages read, rejected where the old mid-pipeline check printed its error. */
-interface LateFlagError { stage: RankStage; fail: () => never }
-
-interface RecallLateFlags {
-  graphHops?: RecallGraphHops;
-  reranker?: RecallReranker;
-  salienceThreshold?: number;
-  outcome?: string;
-  layer?: string;
-  error?: LateFlagError;
-}
-
-function failWith(message: string): () => never {
-  return () => {
-    printError(message);
-    process.exit(1);
-  };
-}
-
-/** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local store only. */
-function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
-  let hops: number | undefined;
-  if (flags['graph-hops'] !== undefined) {
-    if (typeof flags['graph-hops'] === 'boolean') failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
-    const h = Number(flags['graph-hops']);
-    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
-      failWith(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`)();
-    }
-    hops = h;
-  }
-  let seeds: number | undefined;
-  if (flags['graph-seeds'] !== undefined) {
-    if (typeof flags['graph-seeds'] === 'boolean') failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
-    const s = Number(flags['graph-seeds']);
-    if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`)();
-    seeds = s;
-  }
-  return { hops, seeds };
-}
-
-function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
-  if (flags['hops'] === undefined) return {};
-  // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
-  if (typeof flags['hops'] === 'boolean') return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
-  const hops = Number(flags['hops']);
-  if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
-    return { fail: failWith(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`) };
-  }
-  const raw = flags['max-neighbors'];
-  if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
-  if (typeof raw === 'boolean') return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
-  const maxNeighbors = Number(raw);
-  if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
-    return { fail: failWith(`Invalid --max-neighbors: "${String(raw)}". Must be an integer 1..200.`) };
-  }
-  return { value: { hops, maxNeighbors } };
-}
-
-function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
-  const name = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
-  let fn: RerankerFn | null;
-  try {
-    fn = getReranker(name);
-  } catch (err) {
-    // An unknown name throws to the top-level handler, as it did when the lookup sat mid-pipeline.
-    return { fail: () => { throw err; } };
-  }
-  if (!fn) return {};
-  const raw = flags['reranker-top-k'];
-  const topK = raw !== undefined ? Number(raw) : name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50;
-  // slice(0, -1) would quietly drop the last candidate rather than fail.
-  if (!Number.isInteger(topK) || topK < 1) {
-    return { fail: failWith(`Invalid --reranker-top-k: "${String(raw)}". Must be a positive integer.`) };
-  }
-  return { value: { fn, topK } };
-}
-
-function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
-  const raw = flags['salience-threshold'];
-  if (raw === undefined) return {};
-  const threshold = Number(raw);
-  if (!Number.isFinite(threshold) || threshold <= 0) {
-    return { fail: failWith(`Invalid --salience-threshold: "${String(raw)}". Must be a positive number.`) };
-  }
-  return { value: threshold };
-}
-
-function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
-  const value = flags[name] !== undefined ? String(flags[name]).trim() : '';
-  if (!value) return {};
-  if (!valid.includes(value)) return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
-  return { value };
-}
-
-/** Parses every flag a ranking stage reads; the first invalid one in pipeline order becomes `error`. */
-function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
-  const graphHops = parseHopsFlags(flags);
-  const reranker = parseRerankerFlag(flags);
-  const salience = parseSalienceFlag(flags);
-  const outcome = parseChoiceFlag(flags, 'outcome', ['success', 'failure', 'partial']);
-  const layer = parseChoiceFlag(flags, 'layer', Object.values(Layer));
-  const staged: ReadonlyArray<readonly [RankStage, (() => never) | undefined]> = [
-    ['expand', graphHops.fail], ['rerank', reranker.fail], ['salience', salience.fail], ['outcome', outcome.fail], ['layer', layer.fail],
-  ];
-  let error: LateFlagError | undefined;
-  for (const [stage, fail] of staged) {
-    if (fail) { error = { stage, fail }; break; }
-  }
-  return {
-    graphHops: graphHops.value,
-    reranker: reranker.value,
-    salienceThreshold: salience.value,
-    outcome: outcome.value,
-    layer: layer.value,
-    error,
-  };
-}
-
-async function cmdRecall(
-  hippoRoot: string,
-  query: string,
-  flags: CliFlags
-): Promise<void> {
-  requireInit(hippoRoot);
-
-  const budget = parseBudgetFlag(flags['budget'], 4000);
-  const limit = parseLimitFlag(flags['limit']);
-  const asJson = Boolean(flags['json']);
-  const showWhy = Boolean(flags['why']);
-  const includeSuperseded = Boolean(flags['include-superseded']);
-  const asOf = parseAsOfFlag(flags);
-  const globalRoot = getGlobalRoot();
-  const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
-  // Cross-tenant rows must never surface, so the tenant is resolved once and threaded through every load.
-  const tenantId = resolveTenantId({});
-  // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
-  const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const config = loadConfig(hippoRoot);
-  const minResults = flags['min-results'] !== undefined
-    ? parseInt(String(flags['min-results']), 10)
-    : undefined;
-  const recallActiveScope = recallExplicitScope || detectScope();
-  const graphStream = flags['graph-stream'] === true ? parseGraphStreamFlags(flags) : undefined;
-  const late = parseRecallLateFlags(flags);
-  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
-  const sessionId = (
-    flags['session-id'] !== undefined
-      ? String(flags['session-id'])
-      : process.env.HIPPO_SESSION_ID ?? ''
-  ).trim();
-
-  // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
-  const localIndex = loadIndex(hippoRoot);
-  const globalOn = isInitialized(globalRoot);
-  const entryText = (r: SearchResult): string => recallEntryText(r, query, showWhy, primaryIsGlobal || (globalOn && !localIndex.entries[r.entry.id]));
-  const printCost = (r: SearchResult): number => printedTokens(entryText(r));
-  const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
-
-  const rank = await rankRecall(
-    { hippoRoot, globalRoot: globalRoot !== hippoRoot && globalOn ? globalRoot : undefined, tenantId, note: (line) => printError(line) },
-    {
-      query, budget: entryBudget, cost: printCost, limit, why: showWhy, includeSuperseded, asOf,
-      explicitScope: recallExplicitScope, activeScope: recallActiveScope,
-      search: { ...engineFlags(flags, config), multihop: flags['multihop'] === true || config.multihop.enabled, graphStream, minResults, explain: false },
-      graphHops: late.graphHops,
-      evcAdaptive: Boolean(flags['evc-adaptive']),
-      filterConflicts: Boolean(flags['filter-conflicts']),
-      valueAware: Boolean(flags['value-aware']),
-      rerankUtility: Boolean(flags['rerank-utility']),
-      reranker: late.reranker,
-      goalTag,
-      sessionId,
-      salienceThreshold: late.salienceThreshold,
-      outcome: late.outcome,
-      layer: late.layer,
-      haltBefore: late.error?.stage,
-    },
-  );
-  if (rank.goalRecallLog.length > 0) {
-    const dbForGoals = openHippoDb(hippoRoot);
-    try {
-      writeGoalRecallLog(dbForGoals, rank.goalRecallLog);
-    } finally {
-      closeHippoDb(dbForGoals);
-    }
-  }
-  late.error?.fail();
-  const {
-    localEntries,
-    globalEntries,
-    totalCandidates: totalCandidatesCountCmd,
-    droppedPreRank: droppedPreRankCountCmd,
-    graphAdded: graphAddedCountCmd,
-  } = rank;
-  let results = rank.results;
-
-  // Continuity assembly (--continuity). Lives BEFORE the zero-result branch
-  // so a no-match query with active continuity state still returns a useful
-  // resume packet. Same three tenant-scoped store helpers as api.recall.
-  const includeContinuity = Boolean(flags['continuity']);
-  let activeSnapshot: TaskSnapshot | null = null;
-  let sessionHandoff: SessionHandoff | null = null;
-  let recentSessionEvents: SessionEvent[] = [];
-  if (includeContinuity && !primaryIsGlobal) {
-    const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-    const sessionId = rawSnapshot?.session_id ?? undefined;
-    const rawHandoff = sessionId
-      ? loadLatestHandoff(hippoRoot, tenantId, sessionId)
-      : null;
-    const rawEvents = sessionId
-      ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: 5 })
-      : [];
-    // W1: was its own copy of passesScopeFilterForRecall (cloned 3x);
-    // calls the shared helper directly now (recallActiveScope merges
-    // --scope and detectScope()).
-    const effectiveScope = recallActiveScope || undefined;
-    const rowScope = (
-      r: { scope?: string | null } | null | undefined,
-    ): string | null => r?.scope ?? null;
-    activeSnapshot =
-      rawSnapshot && passesScopeFilterForRecall(rowScope(rawSnapshot), effectiveScope) ? rawSnapshot : null;
-    sessionHandoff =
-      rawHandoff && passesScopeFilterForRecall(rowScope(rawHandoff), effectiveScope) ? rawHandoff : null;
-    recentSessionEvents = rawEvents.filter((e) => passesScopeFilterForRecall(rowScope(e), effectiveScope));
-  }
-
-  // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
-  const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
-  let left = sectionBudget;
-  const pays = (tokens: number): boolean => { if (tokens > left) return false; left -= tokens; return true; };
-  if (activeSnapshot && !pays(printedTokens(snapshotText(activeSnapshot)))) activeSnapshot = null;
-  if (sessionHandoff && !pays(printedTokens(handoffText(sessionHandoff)))) sessionHandoff = null;
-  if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) recentSessionEvents = [];
-  const continuityTokens = sectionBudget - left;
-  const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
-
-  // J3.2: the baserate hint depends on the query alone; its audit is pipeline-local (actor 'cli').
-  const cmdPlanningFallacyOutput = computePlanningFallacyOutput(hippoRoot, tenantId, query, { actor: 'cli' });
-  const planText = planningLine(cmdPlanningFallacyOutput);
-  const showPlan = planText !== null && pays(printedTokens(`${planText}\n`));
-  const cmdPlanningFallacyHint = showPlan ? cmdPlanningFallacyOutput.hint ?? null : null;
-  const cmdPlanningFallacyWatching = showPlan ? cmdPlanningFallacyOutput.watching ?? null : null;
-
-  // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
-  const floor = minResults ?? 1;
-  const fitted = fitBudget(results, left, floor, printCost);
-  // Copies go after every cut, so a merged row the budget drops never hides its sources.
-  const shown = (n: number): SearchResult[] => dropHeldCopies(fitted.slice(0, n), (r) => r.entry);
-  let kept = fitted.length;
-  results = shown(kept);
-
-  // J1, J2 and C5: each pipeline computes its hints over the list it returns, so they follow the list as it shrinks.
-  // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = biasHintEnabled('anchoring') && sessionId
-    ? getOrCreateRing(sessionRecallHistoryCli, buildSessionKey(tenantId, sessionId))
-    : null;
-  const queryHash = hashQueryText(query);
-  const availabilityPool = biasHintEnabled('availability')
-    ? [...localEntries, ...globalEntries].map((e) => ({ id: e.id, created: e.created }))
-    : null;
-  const hintsFor = (list: SearchResult[], held: number) => {
-    const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
-    const availability = availabilityPool
-      ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool: availabilityPool })
-      : null;
-    const summary = api.buildSuppressionSummary({
-      // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
-      totalCandidates: totalCandidatesCountCmd + graphAddedCountCmd,
-      droppedPreRank: droppedPreRankCountCmd + held,
-      droppedByBudget: Math.max(0, totalCandidatesCountCmd + graphAddedCountCmd - droppedPreRankCountCmd - held - list.length),
-      summarySubstitutionsAdded: 0,
-      freshTailAdded: 0,
-      suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0, // a query_repeat is a re-ask, not competition
-    });
-    return { anchoring, availability, summary };
-  };
-  const printContinuity = (): void => {
-    if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
-    if (sessionHandoff) printHandoff(sessionHandoff);
-    if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-  };
-  const renderRecall = (list: SearchResult[], h: ReturnType<typeof hintsFor>): string => settleTokens((t) => captureConsole(() => {
-    if (list.length === 0) {
-      // The hint still prints when nothing matched, so the agent sees its track record.
-      if (showPlan) { console.log(planText); console.log(); }
-      if (hasContinuity) {
-        printContinuity();
-        console.log(`(no memories matched "${query}")`);
-      } else {
-        console.log('No memories found for:', query);
-      }
-      return;
-    }
-    printContinuity();
-    // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
-    if (h.anchoring) { console.log(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`); console.log(); }
-    if (h.availability) {
-      console.log(`Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`);
-      console.log();
-    }
-    if (showPlan) { console.log(planText); console.log(); }
-    const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
-    if (cutoff) { console.log(cutoff); console.log(); }
-    console.log(recallHeading(list.length, t, query));
-    for (const r of list) console.log(entryText(r));
-  }));
-
-  let hints = hintsFor(results, kept - results.length);
-  let recallText = renderRecall(results, hints);
-  // The hints, Cutoff line and header vary with the list, so the lowest-ranked entry goes until the whole block fits.
-  while (kept > floor && estimateTokens(recallText) > budget) {
-    kept--;
-    results = shown(kept);
-    hints = hintsFor(results, kept - results.length);
-    recallText = renderRecall(results, hints);
-  }
-  const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = hints;
-
-  if (anchorRing) {
-    // Appended after every detect: anchoredOn feeds the cooldown for the next recall on this session.
-    appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
-  } else if (biasHintEnabled('anchoring')) {
-    // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
-    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query));
-  }
-  if (cmdAnchoringHint?.reason === 'memory_dominance') {
-    emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
-      memory_id: cmdAnchoringHint.memoryId,
-      query_count: cmdAnchoringHint.queryCount ?? null,
-    });
-  } else if (cmdAnchoringHint?.reason === 'query_repeat') {
-    emitCliAudit(hippoRoot, 'recall_anchor_detected_query_repeat', cmdAnchoringHint.memoryId, {
-      memory_id: cmdAnchoringHint.memoryId,
-    });
-  }
-  if (cmdAvailabilityHint) {
-    emitCliAudit(hippoRoot, 'recall_availability_detected', undefined, {
-      recent_fraction: cmdAvailabilityHint.recentFraction,
-      older_passed_over: cmdAvailabilityHint.olderCandidatesPassedOver,
-      returned_count: cmdAvailabilityHint.returnedCount,
-    });
-  }
-
-  // A5 audit: one 'recall' event per query, before the early-empty return, in every participating store.
-  const recallMetadata: Record<string, unknown> = {
-    ...auditQueryFields(query),
-    results: results.length,
-  };
-  emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
-  if (isInitialized(globalRoot) && globalRoot !== hippoRoot) {
-    emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
-  }
-
-  // TE0 token ledger: books the block this recall prints, on whichever exit it takes.
-  const emit = (text: string): void => {
-    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId,
-      sessionId: hostSessionId() ?? null,
-      surface: 'recall',
-      event: 'inject',
-      items: results.length,
-      tokens: estimateTokens(text),
-    }));
-    console.log(text);
-  };
-
-  if (results.length === 0) {
-    // LC1 F1 structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
-    // trace the zero-result recall too (result_count 0, no result rows) so
-    // a query that reveals a coverage gap still lands in the training
-    // corpus. Deliberately does NOT touch `localIndex` at all — this path
-    // never advances last_retrieval_ids (no memories to update), and
-    // writeRecallTraceAtRoot no longer stamps last_trace_id on its own
-    // (that only happens via the caller folding the returned id into
-    // localIndex before a SAME saveIndex call, which this path never
-    // reaches). By construction the two can't desync. Fail-soft
-    // internally; never throws.
-    writeRecallTraceAtRoot(hippoRoot, {
-      tenantId,
-      sessionId: sessionId || hostSessionId() || null,
-      pipeline: 'cli',
-      query,
-      explainMode: showWhy,
-      results: [],
-    });
-
-    if (asJson) {
-      const out: Record<string, unknown> = {
-        query,
-        results: [],
-        total: 0,
-        suppressionSummary: cmdSuppressionSummary,
-        // v0.32 / J3.2 — preserve planningFallacyHint on zero-result
-        // recalls. Codex review round 1 catch: hint was previously only
-        // included in the populated-results JSON branch, breaking parity
-        // with HTTP/MCP which surface the hint regardless of memory
-        // matches. A forward-claim query that finds no memories STILL
-        // produces useful planning-fallacy debias when the class resolves.
-        ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
-        ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
-        ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
-        ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
-      };
-      if (includeContinuity) {
-        out.continuity = {
-          activeSnapshot,
-          sessionHandoff,
-          recentSessionEvents,
-        };
-        out.continuityTokens = continuityTokens;
-      }
-      emit(JSON.stringify(out));
-      return;
-    }
-    emit(recallText);
-    return;
-  }
-
-  const retrievedIds = results.map((r) => r.entry.id);
-  const strengthenedHere = strengthenRetrieved(hippoRoot, retrievedIds);
-  if (isInitialized(globalRoot)) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)));
-
-  // Track last retrieval IDs for outcome command
-  localIndex.last_retrieval_ids = retrievedIds;
-
-  // LC1 F1 structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
-  // ONE trace at hippoRoot (where last_retrieval_ids and outcome
-  // attribution live). Write the trace FIRST, then fold its id into
-  // `localIndex` so the SAME saveIndex call below persists
-  // last_retrieval_ids + last_trace_id atomically (LOCKSTEP INVARIANT —
-  // see writeRecallTraceAtRoot JSDoc). The globalRoot audit emit
-  // (emitCliAudit above) is untouched — no second trace row. Fail-soft
-  // internally; never throws.
-  const traceId = writeRecallTraceAtRoot(hippoRoot, {
-    tenantId,
-    sessionId: sessionId || hostSessionId() || null,
-    pipeline: 'cli',
-    query,
-    explainMode: showWhy,
-    results: results.map((r) => ({
-      memoryId: r.entry.id,
-      score: r.score,
-      rerankSteps: r.rerankTrace,
-    })),
-  });
-  localIndex.last_trace_id = traceId !== null ? String(traceId) : null;
-  saveIndex(hippoRoot, localIndex);
-
-  updateStats(hippoRoot, { recalled: results.length });
-
-  if (asJson) {
-    const output = results.map((r) => {
-      const isGlobal = primaryIsGlobal || (isInitialized(globalRoot) && !localIndex.entries[r.entry.id]);
-      const base: Record<string, unknown> = {
-        id: r.entry.id,
-        score: r.score,
-        strength: r.entry.strength,
-        tokens: r.tokens,
-        tags: r.entry.tags,
-        content: r.entry.content,
-        layer: r.entry.layer,
-      };
-      if (r.entry.layer === Layer.Trace) {
-        base.trace_outcome = r.entry.trace_outcome;
-      }
-      if (r.entry.superseded_by) {
-        base.superseded = true;
-        base.superseded_by = r.entry.superseded_by;
-      }
-      if (r.graphVia) {
-        base.graphVia = r.graphVia;
-      }
-      if (showWhy) {
-        const explanation = explainMatch(query, r);
-        const facets = confidenceFacets(r.entry);
-        base.confidence = facets.tier;
-        base.aged_out = facets.agedOut;
-        base.source = isGlobal ? 'global' : 'local';
-        base.reason = explanation.reason;
-        base.bm25 = r.bm25;
-        base.cosine = r.cosine;
-        if (explanation.envelope) {
-          base.envelope = explanation.envelope;
-        }
-        // A7 recall-trace: emit the ordered lifecycle re-ranking steps.
-        if (r.rerankTrace && r.rerankTrace.length > 0) {
-          base.rerankTrace = r.rerankTrace;
-        }
-      }
-      return base;
-    });
-    const jsonOut: Record<string, unknown> = {
-      query,
-      budget,
-      results: output,
-      total: output.length,
-      suppressionSummary: cmdSuppressionSummary,
-      ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
-      ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
-      ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
-      ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
-    };
-    if (includeContinuity) {
-      jsonOut.continuity = {
-        activeSnapshot,
-        sessionHandoff,
-        recentSessionEvents,
-      };
-      jsonOut.continuityTokens = continuityTokens;
-    }
-    emit(JSON.stringify(jsonOut));
-    return;
-  }
-  emit(recallText);
-}
-
-/** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
-function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
-  const probe = [
-    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
-    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
-  ];
-  // Window-capped, so the count is a floor on large stores; fine for a "why is my row missing" hint.
-  const hidden = probe.filter((e) => !api.passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
-  if (hidden > 0) {
-    printError(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
-  }
-}
-
-async function cmdExplain(
-  hippoRoot: string,
-  query: string,
-  flags: CliFlags
-): Promise<void> {
-  requireInit(hippoRoot);
-
-  const budget = parseBudgetFlag(flags['budget'], 4000);
-  const limit = parseLimitFlag(flags['limit']);
-  const asJson = Boolean(flags['json']);
-  const includeSuperseded = Boolean(flags['include-superseded']);
-  const asOf = parseAsOfFlag(flags);
-  const globalRoot = getGlobalRoot();
-  const tenantId = resolveTenantId({});
-  // Explain shows what recall would see, so it applies the same scope rule.
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
-  const explainGlobalOn = isInitialized(globalRoot);
-  noteScopeHidden(hippoRoot, explainGlobalOn ? globalRoot : undefined, query, tenantId, explicitScope || undefined);
-
-  const config = loadConfig(hippoRoot);
-  const engine = engineFlags(flags, config);
-  // Priced as recall prints each result, so explain returns what recall's engines would.
-  const explainIndex = loadIndex(hippoRoot);
-  const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
-  const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
-
-  const rank = await rankRecall(
-    { hippoRoot, globalRoot: explainGlobalOn ? globalRoot : undefined, tenantId },
-    {
-      query, budget: entryBudget, cost, limit, includeSuperseded, asOf,
-      explicitScope, activeScope: explicitScope || detectScope(),
-      search: { ...engine, multihop: false, explain: true },
-    },
-  );
-  const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
-    ? 'physics'
-    : hasGlobal ? 'searchBothHybrid' : 'hybrid';
-  const results = dropHeldCopies(rank.results, (r) => r.entry);
-
-  const candidates = rank.localEntries.length + rank.globalEntries.length;
-
-  if (asJson) {
-    const output = results.map((r, rank) => ({
-      rank: rank + 1,
-      id: r.entry.id,
-      layer: r.entry.layer,
-      confidence: confidenceFacets(r.entry).tier,
-      aged_out: confidenceFacets(r.entry).agedOut,
-      score: r.score,
-      tokens: r.tokens,
-      tags: r.entry.tags,
-      content: r.entry.content,
-      breakdown: r.breakdown,
-    }));
-    console.log(JSON.stringify({
-      query,
-      mode: modeUsed,
-      candidates,
-      returned: output.length,
-      results: output,
-    }));
-    return;
-  }
-
-  if (results.length === 0) {
-    console.log(`No memories matched "${query}" (scanned ${candidates}).`);
-    return;
-  }
-
-  console.log(`Query: "${query}"`);
-  console.log(`Mode:  ${modeUsed}   candidates: ${candidates}   returned: ${results.length}`);
-  console.log();
-  console.log('Rank  Score   Strength  Age    Layer      ID                Preview');
-  console.log('----- ------- --------- ------ ---------- ----------------- ---------------------------------');
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    const b = r.breakdown;
-    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, 48);
-    const ageStr = b ? `${b.ageDays}d` : '?';
-    console.log(
-      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
-    );
-  }
-  console.log();
-
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    const b = r.breakdown;
-    console.log(`[${i + 1}] ${r.entry.id}   composite=${fmt(r.score, 4)}`);
-    if (!b) {
-      console.log('    (no breakdown available)');
-      console.log();
-      continue;
-    }
-    if (b.mode === 'physics') {
-      console.log(`    mode:      physics-gravity`);
-      console.log(`    cosine:    ${fmt(b.cosine, 3)}  (pre-amp baseline)`);
-      console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
-    } else {
-      const matched = b.matchedTerms.length > 0 ? b.matchedTerms.join(', ') : '(none)';
-      console.log(`    mode:      ${b.mode}${b.mode === 'hybrid-no-vec' ? '  (no cached doc vector — run `hippo embed`)' : ''}`);
-      console.log(`    BM25:      raw=${fmt(r.bm25, 3)}  normalized=${fmt(b.normBm25, 3)}  weight=${fmt(b.bm25Weight, 2)}  matched=[${matched}]`);
-      console.log(`    embedding: cosine=${fmt(b.cosine, 3)}  weight=${fmt(b.embeddingWeight, 2)}`);
-      console.log(`    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`);
-      console.log(`    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`);
-      console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
-      if (b.decisionBoost !== 1) console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
-      if (b.scopeBoost !== 1) console.log(`    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`);
-      if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
-      if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
-      if (b.outcomeBoost !== 1) console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  (user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
-      if (b.churnStaleMultiplier !== 1) console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
-      if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
-        const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
-        console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
-      }
-      console.log(`    final:     ${fmt(b.final, 4)}`);
-    }
-    console.log();
-  }
-
-  console.log('Note: explain does not mark memories as retrieved (read-only).');
-}
-
-async function cmdEval(
-  hippoRoot: string,
-  corpusPath: string | null,
-  flags: Record<string, string | boolean | string[]>
-): Promise<void> {
-  const asJson = Boolean(flags['json']);
-  const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
-  const showCases = Boolean(flags['show-cases']);
-  const comparePath = flags['compare'] ? String(flags['compare']) : null;
-  const noMmr = Boolean(flags['no-mmr']);
-  const mmrLambda = flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined;
-  const embeddingWeight = flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined;
-
-  // Suite mode doesn't need an initialized store
-  if (flags['suite']) {
-    // handled below after bootstrap check
-  } else {
-    requireInit(hippoRoot);
-  }
-
-  const entries = flags['suite'] ? [] : loadAllEntries(hippoRoot);
-
-  // Bootstrap mode: emit a synthetic corpus and exit.
-  if (flags['bootstrap']) {
-    const outPath = flags['out'] ? String(flags['out']) : null;
-    const max = flags['max-cases'] !== undefined ? parseInt(String(flags['max-cases']), 10) : 50;
-    const corpus = bootstrapCorpus(entries, max);
-    const payload = JSON.stringify({ cases: corpus }, null, 2);
-    if (outPath) {
-      fs.mkdirSync(path.dirname(outPath), { recursive: true });
-      fs.writeFileSync(outPath, payload, 'utf8');
-      console.log(`Wrote ${corpus.length} bootstrap cases to ${outPath}`);
-    } else {
-      console.log(payload);
-    }
-    return;
-  }
-
-  // Suite mode: run built-in feature eval (no corpus file needed, no init needed)
-  if (flags['suite']) {
-    const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '..', 'package.json'), 'utf8'));
-    const version = pkg.version || 'unknown';
-
-    const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
-    let baseline: EvalBaseline | undefined;
-    if (fs.existsSync(baselinePath)) {
-      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {
-        printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
-      }
-    }
-
-    const result = await runFeatureEval(version);
-
-    if (asJson) {
-      console.log(JSON.stringify(result, null, 2));
-    } else {
-      console.log(formatResult(result, baseline));
-    }
-
-    if (flags['save-baseline']) {
-      const newBaseline = resultToBaseline(result);
-      fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
-      fs.writeFileSync(baselinePath, JSON.stringify(newBaseline, null, 2), 'utf8');
-      console.log(`\nBaseline saved to ${baselinePath}`);
-    }
-
-    if (baseline) {
-      const report = detectRegressions(baseline, result);
-      if (report.verdict === 'REGRESSION' && minMrr === null) {
-        process.exit(1);
-      }
-    }
-
-    return;
-  }
-
-  if (!corpusPath) {
-    printError('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
-    process.exit(1);
-  }
-
-  if (!fs.existsSync(corpusPath)) {
-    printError(`Corpus file not found: ${corpusPath}`);
-    process.exit(1);
-  }
-
-  let cases: EvalCase[];
-  try {
-    const raw = JSON.parse(fs.readFileSync(corpusPath, 'utf8'));
-    cases = Array.isArray(raw) ? raw : raw.cases;
-    if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
-  } catch (err) {
-    printError(`Failed to read corpus: ${err instanceof Error ? err.message : err}`);
-    process.exit(1);
-  }
-
-  const globalRoot = getGlobalRoot();
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : loadConfig(hippoRoot).search.localBump;
-
-  const summary = await runEval(cases, entries, {
-    hippoRoot,
-    globalRoot,
-    mmr: !noMmr,
-    mmrLambda,
-    embeddingWeight,
-    localBump,
-  });
-
-  if (asJson) {
-    console.log(JSON.stringify(summary, null, 2));
-  } else {
-    console.log(`Eval: ${summary.cases.length} cases, ${summary.durationMs}ms`);
-    console.log();
-    console.log(`MRR:          ${fmt(summary.meanMrr, 4)}`);
-    console.log(`Recall@5:     ${fmt(summary.meanRecallAt5, 4)}`);
-    console.log(`Recall@10:    ${fmt(summary.meanRecallAt10, 4)}`);
-    console.log(`NDCG@10:      ${fmt(summary.meanNdcgAt10, 4)}`);
-
-    if (showCases) {
-      console.log();
-      console.log('Case details:');
-      for (const c of summary.cases) {
-        const exp = c.case.expectedIds.length;
-        const expectedSet = new Set(c.case.expectedIds);
-        const hitTop10 = c.returnedIds.slice(0, 10).filter((id) => expectedSet.has(id));
-        const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, 10).includes(id));
-        console.log();
-        console.log(`[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`);
-        console.log(`  query: ${c.case.query}`);
-        console.log(`  top 3: ${c.returnedIds.slice(0, 3).join(', ') || '(none)'}`);
-        if (missed.length > 0) {
-          const shown = missed.slice(0, 4);
-          const more = missed.length > shown.length ? ` +${missed.length - shown.length} more` : '';
-          console.log(`  missed: ${shown.join(', ')}${more}`);
-        }
-      }
-    }
-
-    console.log();
-    const failing = summary.cases.filter((c) => c.mrr === 0);
-    if (failing.length > 0) {
-      console.log(`${failing.length} case(s) returned zero relevant results:`);
-      for (const f of failing.slice(0, 10)) {
-        console.log(`  [${f.case.id}] "${f.case.query.slice(0, 60)}"`);
-      }
-      if (failing.length > 10) console.log(`  ...and ${failing.length - 10} more`);
-    }
-  }
-
-  if (minMrr !== null && summary.meanMrr < minMrr) {
-    printError(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
-    process.exit(1);
-  }
-
-  if (comparePath) {
-    if (!fs.existsSync(comparePath)) {
-      printError(`Baseline file not found: ${comparePath}`);
-      process.exit(1);
-    }
-    let baseline: EvalSummary;
-    try {
-      baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
-    } catch (err) {
-      printError(`Failed to parse baseline: ${err instanceof Error ? err.message : err}`);
-      process.exit(1);
-    }
-    const cmp = compareSummaries(baseline, summary);
-
-    if (asJson) {
-      // The main JSON output already emitted; append comparison to stderr so
-      // both can be captured independently.
-      printError(JSON.stringify({ compare: cmp }, null, 2));
-    } else {
-      console.log();
-      console.log('Compare vs baseline:');
-      const sign = (d: number): string => (d >= 0 ? '+' : '') + fmt(d, 4);
-      console.log(`  MRR:        ${sign(cmp.aggregate.mrr)}`);
-      console.log(`  Recall@5:   ${sign(cmp.aggregate.recallAt5)}`);
-      console.log(`  Recall@10:  ${sign(cmp.aggregate.recallAt10)}`);
-      console.log(`  NDCG@10:    ${sign(cmp.aggregate.ndcgAt10)}`);
-      console.log();
-      console.log(`  improved: ${cmp.improved.length}   regressed: ${cmp.regressed.length}   unchanged: ${cmp.unchanged}`);
-      if (cmp.onlyInBaseline.length > 0) console.log(`  only in baseline: ${cmp.onlyInBaseline.length}`);
-      if (cmp.onlyInCurrent.length > 0) console.log(`  only in current:  ${cmp.onlyInCurrent.length}`);
-
-      const showPerCase = cmp.improved.length + cmp.regressed.length > 0;
-      if (showPerCase) {
-        for (const d of cmp.improved.slice(0, 5)) {
-          const delta = d.ndcgAfter - d.ndcgBefore;
-          console.log(`  + [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (+${fmt(delta, 3)})`);
-        }
-        for (const d of cmp.regressed.slice(0, 5)) {
-          const delta = d.ndcgAfter - d.ndcgBefore;
-          console.log(`  - [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (${fmt(delta, 3)})`);
-        }
-      }
-    }
-  }
 }
 
 function cmdTraceRecord(
@@ -3822,340 +2862,6 @@ function cmdHandoff(
   process.exit(1);
 }
 
-// Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
-const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
-
-function printCard(detail: CardDetail): void {
-  const { card, deps, runs, comments, handoff } = detail;
-  console.log(`## Card ${card.id}\n`);
-  console.log(`- Title: ${card.title}`);
-  console.log(`- Status: ${card.status}`);
-  if (card.assigneeRuntime) console.log(`- Assignee: ${card.assigneeRuntime}`);
-  if (card.leaseUntil) console.log(`- Lease until: ${card.leaseUntil}`);
-  if (card.heartbeatAt) console.log(`- Heartbeat: ${card.heartbeatAt}`);
-  if (card.repo) console.log(`- Repo: ${card.repo}`);
-  if (card.contract) console.log(`- Contract: ${card.contract}`);
-  if (card.budget !== null) console.log(`- Budget: ${card.budget}`);
-  console.log(`- Updated: ${card.updatedAt}`);
-
-  if (deps.parents.length > 0) console.log(`- Parents: ${deps.parents.join(', ')}`);
-  if (deps.children.length > 0) console.log(`- Children: ${deps.children.join(', ')}`);
-
-  if (runs.length > 0) {
-    console.log('\n### Runs');
-    for (const run of runs) {
-      console.log(`- run ${run.id}: ${run.runtime} started ${run.started}${run.ended ? ` ended ${run.ended} (${run.outcome})` : ' (open)'}`);
-    }
-  }
-
-  if (comments.length > 0) {
-    console.log('\n### Comments');
-    for (const comment of comments) {
-      console.log(`- [${comment.createdAt}] ${comment.author}: ${comment.body}`);
-    }
-  }
-
-  if (handoff) {
-    console.log('\n### Latest handoff');
-    console.log(`- Session: ${handoff.sessionId}, updated ${handoff.updatedAt}`);
-    console.log(handoff.summary);
-  }
-  console.log('');
-}
-
-// A too-large --run would silently round to a different id (mirrors parsePositiveIncidentId).
-function cardRunFlag(flags: Record<string, string | boolean | string[]>): number | undefined {
-  const raw = cardStringFlag(flags, 'run');
-  if (raw === undefined) return undefined;
-  const n = Number(raw);
-  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n <= 0) {
-    printError(`Invalid --run: "${raw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return n;
-}
-
-// Reads after the store already refused, so this only explains the refusal, never changes it.
-function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
-  const card = loadCard(hippoRoot, tenantId, id);
-  const liveRun = loadCardRuns(hippoRoot, tenantId, id).find((r) => !r.ended);
-  return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
-}
-
-// One entry per subcommand: the flags cmdCard actually reads for it, so a typo like
-// --depend-on fails fast instead of silently doing nothing.
-type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'heartbeat' | 'block' | 'review' | 'complete' | 'reclaim' | 'comment';
-const CARD_SUBCOMMAND_FLAGS = {
-  create: ['title', 'repo', 'contract', 'budget', 'depends-on'],
-  show: ['json'],
-  list: ['status', 'json'],
-  claim: ['runtime', 'session'],
-  heartbeat: ['run'],
-  block: ['reason', 'run'],
-  review: ['run'],
-  complete: ['outcome', 'run'],
-  reclaim: new Array<string>(),
-  comment: ['body', 'author'],
-} satisfies Record<CardSubcommand, string[]>;
-
-function cmdCard(
-  hippoRoot: string,
-  args: string[],
-  flags: Record<string, string | boolean | string[]>
-): void {
-  requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
-  const subcommand = args[0] ?? '';
-
-  if (Object.hasOwn(CARD_SUBCOMMAND_FLAGS, subcommand)) {
-    // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a real key.
-    const allowedFlags = CARD_SUBCOMMAND_FLAGS[subcommand as CardSubcommand];
-    for (const key of Object.keys(flags)) {
-      if (!allowedFlags.includes(key)) {
-        const valid = allowedFlags.length > 0 ? allowedFlags.map((f) => `--${f}`).join(', ') : '(none)';
-        printError(`Unknown flag --${key} for hippo card ${subcommand}. Valid flags: ${valid}`);
-        process.exit(1);
-      }
-    }
-  }
-
-  if (subcommand === 'create') {
-    const title = cardStringFlag(flags, 'title') ?? '';
-    if (!title) {
-      printError('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
-      process.exit(1);
-    }
-    const repo = cardStringFlag(flags, 'repo') || undefined;
-    const contract = cardStringFlag(flags, 'contract') || undefined;
-    const budgetRaw = cardStringFlag(flags, 'budget');
-    let budget: number | undefined;
-    if (budgetRaw !== undefined) {
-      if (!/^\d+$/.test(budgetRaw)) {
-        printError(`Invalid budget: "${budgetRaw}" (expected a positive integer)`);
-        process.exit(1);
-      }
-      budget = Number(budgetRaw);
-    }
-    const dependsOnFlag = flags['depends-on'];
-    if (dependsOnFlag === true) {
-      printError('--depends-on requires a value');
-      process.exit(1);
-    }
-    const dependsOn: string[] = Array.isArray(dependsOnFlag) ? dependsOnFlag : [];
-
-    let card: Card;
-    try {
-      card = createCard(hippoRoot, tenantId, { title, repo, contract, budget, dependsOn });
-    } catch (error) {
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-    console.log(`Created card ${card.id} (status: ${card.status})`);
-    return;
-  }
-
-  if (subcommand === 'show') {
-    const id = args[1];
-    if (!id) {
-      printError('Usage: hippo card show <id> [--json]');
-      process.exit(1);
-    }
-    const detail = loadCardDetail(hippoRoot, tenantId, id);
-    if (!detail) {
-      printError(`No card found with id ${id}.`);
-      process.exit(1);
-    }
-    if (flags['json']) {
-      console.log(JSON.stringify(detail, null, 2));
-      return;
-    }
-    printCard(detail);
-    return;
-  }
-
-  if (subcommand === 'list') {
-    const status = cardStringFlag(flags, 'status');
-    if (status !== undefined && !isCardStatus(status)) {
-      printError(`Invalid status: "${status}".`);
-      process.exit(1);
-    }
-    const cards = listCards(hippoRoot, tenantId, { status });
-    if (flags['json']) {
-      console.log(JSON.stringify({ cards }, null, 2));
-      return;
-    }
-    if (cards.length === 0) {
-      console.log('No cards found.');
-      return;
-    }
-    for (const card of cards) {
-      console.log(`${card.id}\t${card.status}\t${card.title}${card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : ''}`);
-    }
-    return;
-  }
-
-  if (subcommand === 'claim') {
-    const id = args[1];
-    const runtime = cardStringFlag(flags, 'runtime') ?? '';
-    if (!id || !runtime) {
-      printError('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
-      process.exit(1);
-    }
-    const sessionId = cardStringFlag(flags, 'session') || undefined;
-    let card: (Card & { runId: number }) | null;
-    try {
-      card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
-    } catch (error) {
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-    if (!card) {
-      printError(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
-      process.exit(1);
-    }
-    console.log(`Claimed card ${card.id} for ${runtime} (run ${card.runId}, lease until ${card.leaseUntil})`);
-    return;
-  }
-
-  if (subcommand === 'heartbeat') {
-    const id = args[1];
-    const runId = cardRunFlag(flags);
-    if (!id || runId === undefined) {
-      printError('Usage: hippo card heartbeat <id> --run <n>');
-      process.exit(1);
-    }
-    let card: Card | null;
-    try {
-      card = heartbeatCard(hippoRoot, tenantId, id, runId);
-    } catch (error) {
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-    if (!card) {
-      printError(`Could not heartbeat card ${id} (${cardRefusal(hippoRoot, tenantId, id)}).`);
-      process.exit(1);
-    }
-    console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
-    return;
-  }
-
-  if (subcommand === 'block') {
-    const id = args[1];
-    const reason = cardStringFlag(flags, 'reason') ?? '';
-    if (!id || !reason) {
-      printError(CARD_BLOCK_REASON_REQUIRED);
-      process.exit(1);
-    }
-    const runId = cardRunFlag(flags);
-    let card: Card | null;
-    try {
-      card = blockCard(hippoRoot, tenantId, id, reason, runId);
-    } catch (error) {
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-    if (!card) {
-      const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
-      printError(`Could not block card ${id} (${why}).`);
-      process.exit(1);
-    }
-    console.log(`Blocked card ${card.id}`);
-    return;
-  }
-
-  if (subcommand === 'review') {
-    const id = args[1];
-    if (!id) {
-      printError('Usage: hippo card review <id> [--run <n>]');
-      process.exit(1);
-    }
-    const runId = cardRunFlag(flags);
-    let card: Card | null;
-    try {
-      card = reviewCard(hippoRoot, tenantId, id, runId);
-    } catch (error) {
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-    if (!card) {
-      const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
-      printError(`Could not move card ${id} to review (${why}).`);
-      process.exit(1);
-    }
-    console.log(`Card ${card.id} moved to review`);
-    return;
-  }
-
-  if (subcommand === 'complete') {
-    const id = args[1];
-    const outcomeRaw = flags['outcome'];
-    if (!id || !isHandoffOutcome(outcomeRaw)) {
-      printError('Usage: hippo card complete <id> --outcome <success|failure|partial> [--run <n>]');
-      process.exit(1);
-    }
-    const runId = cardRunFlag(flags);
-    let result: { card: Card; promotedChildren: string[] } | null;
-    try {
-      result = completeCard(hippoRoot, tenantId, id, outcomeRaw, runId);
-    } catch (error) {
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-    if (!result) {
-      const why = runId === undefined ? 'not in review' : cardRefusal(hippoRoot, tenantId, id);
-      printError(`Could not complete card ${id} (${why}).`);
-      process.exit(1);
-    }
-    console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);
-    if (result.promotedChildren.length > 0) {
-      console.log(`Promoted to ready: ${result.promotedChildren.join(', ')}`);
-    }
-    return;
-  }
-
-  if (subcommand === 'reclaim') {
-    if (args.length > 1) {
-      printError('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
-      process.exit(1);
-    }
-    const ids = reclaimExpiredCards(hippoRoot, tenantId);
-    if (ids.length === 0) {
-      console.log('No expired leases.');
-      return;
-    }
-    for (const id of ids) {
-      console.log(`Reclaimed card ${id} (now ready)`);
-    }
-    return;
-  }
-
-  if (subcommand === 'comment') {
-    const id = args[1];
-    if (!id) {
-      printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
-      process.exit(1);
-    }
-    // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store instead.
-    const card = loadCard(hippoRoot, tenantId, id);
-    if (!card) {
-      printError(`No card found with id ${id}.`);
-      process.exit(1);
-    }
-    const body = cardStringFlag(flags, 'body') ?? '';
-    if (!body) {
-      printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
-      process.exit(1);
-    }
-    const author = cardStringFlag(flags, 'author') || 'cli';
-    const comment = addCardComment(hippoRoot, tenantId, id, author, body);
-    console.log(`Added comment ${comment.id} to card ${id}`);
-    return;
-  }
-
-  printError('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
-  process.exit(1);
-}
-
 // ---------------------------------------------------------------------------
 // E2 prediction first-class object (v0.31)
 // docs/plans/2026-05-26-e2-prediction-object.md
@@ -5729,387 +4435,6 @@ function cmdCurrent(
 
   printError('Usage: hippo current <show>');
   process.exit(1);
-}
-
-/** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
-async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
-  try {
-    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
-  } catch (error) {
-    if (!isSqliteBusy(error)) throw error;
-    noteStoreBusy('hook skipped');
-    return undefined;
-  }
-}
-
-async function cmdContext(
-  hippoRoot: string,
-  args: string[],
-  flags: Record<string, string | boolean | string[]>,
-  stdinText?: string
-): Promise<void> {
-  const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
-  // No try/finally: a render throw keeps its own exit code and writes no event.
-  await renderContext(hippoRoot, args, flags, stdinText, rec);
-  flushDeliveryRecorder(rec);
-}
-
-/** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
-function startDeliveryRecorder(
-  hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
-  stdinText: string | undefined,
-): DeliveryRecorder | null {
-  if (flags['pinned-only'] !== true) return null;
-  try {
-    // The same store withLedgerDb writes the token ledger to, so its config governs both.
-    const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
-    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
-    return createDeliveryRecorder({
-      root,
-      storeHash: blockHash(path.resolve(root)),
-      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
-      tenantId: resolveTenantId({}),
-      stdinText,
-      envSessionId: hostSessionId(),
-    });
-  } catch (error) {
-    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${error instanceof Error ? error.message : String(error)}`);
-    return null;
-  }
-}
-
-/** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
-function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
-  if (rec === null) return;
-  try {
-    rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
-  } catch (error) {
-    // Pinned stderr text, as in the recorder build above.
-    printError(`[hippo] delivery ledger write failed:${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-/**
- * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
- * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
- */
-function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
-  if (sessionId === undefined || sessionId.trim() === '') return false;
-  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
-  if (root === null) return false;
-  const rate = loadConfig(root).pilot.holdoutRateBp;
-  if (rate <= 0) return false;
-  const arm = withLedgerDb(hippoRoot, (db) =>
-    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
-  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
-}
-
-async function renderContext(
-  hippoRoot: string,
-  args: string[],
-  flags: Record<string, string | boolean | string[]>,
-  stdinText: string | undefined,
-  rec: DeliveryRecorder | null,
-): Promise<void> {
-  // --pinned-only fires on every UserPromptSubmit — including in directories
-  // that don't have a local .hippo. Skip requireInit for that path and fall
-  // back to global-only inside api.getContext. The non-pinned path still
-  // requires init (handled by CLI for user-friendly error messaging).
-  const pinnedOnly = flags['pinned-only'] === true;
-  if (!pinnedOnly) {
-    requireInit(hippoRoot);
-  }
-
-  // DF1 T2: resolve the calling session's id for the bounded active-task-
-  // snapshot read (api.getContext -> loadFreshActiveTaskSnapshot). Stdin
-  // payload (the UserPromptSubmit hook JSON) wins; falls back to
-  // hostSessionId(); absent both, undefined -- api.getContext then applies
-  // the pure freshness bound with no owner-match short-circuit.
-  let payloadSessionId: string | undefined;
-  // Z1: the hook payload's raw prompt, read beside session_id (docs/plans/2026-09-26-z1-prompt-recall.md).
-  let payloadPrompt: string | undefined;
-  if (stdinText && stdinText.trim() !== '') {
-    try {
-      // SAFETY: both fields are type-checked below before use; `?? {}` covers a JSON null payload.
-      const { session_id: sid, prompt } = (JSON.parse(stdinText.trim()) ?? {}) as { session_id?: unknown; prompt?: unknown };
-      if (typeof sid === 'string' && sid.trim() !== '') payloadSessionId = sid;
-      if (typeof prompt === 'string') payloadPrompt = prompt;
-    } catch {
-      // Malformed/non-JSON stdin: fall through to the env fallback below.
-    }
-  }
-  const currentSessionId = payloadSessionId ?? hostSessionId();
-  // A sub-agent's payload and env both carry its parent's session id, so it books no session and never skips a block.
-  const subagent = isSubagentPayload(stdinText);
-  const ledgerSessionId = subagent ? undefined : currentSessionId;
-  if (subagent) payloadSessionId = undefined;
-
-  // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
-  const resolvedTenant = resolveTenantId({});
-  if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, payloadSessionId !== undefined)) {
-    rec?.disabled();
-    return;
-  }
-
-  const budget = parseBudgetFlag(flags['budget'], 1500);
-  if (budget <= 0) {
-    rec?.disabled();
-    return;
-  }
-
-  // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
-  // fall through to api.getContext's '*' fallback. api.getContext is host-
-  // agnostic so the auto-detect (which shells out to git) stays CLI-side.
-  let query = args.join(' ').trim();
-  if (!query && flags['auto']) {
-    query = autoDetectContext();
-  }
-
-  // Scope detection (CLI-side: uses cwd). api.getContext takes the resolved
-  // scope via opts.scope to stay host-agnostic.
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const ctxActiveScope = ctxExplicitScope || detectScope();
-
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolvedTenant,
-    actor: api.adminActor('cli'),
-  };
-  // v39 memory scope isolation: --cross-project re-includes other-project
-  // memories (rendered under a demarcated section below).
-  const crossProject = flags['cross-project'] === true;
-
-  const format = String(flags['format'] ?? 'markdown');
-  const framing = String(flags['framing'] ?? 'observe');
-
-  const opts: api.ContextOpts = {
-    q: query,
-    budget,
-    limit: parseLimitFlag(flags['limit']),
-    pinnedOnly,
-    scope: ctxActiveScope ?? undefined,
-    includeRecent: parseCountFlag(flags['include-recent']),
-    crossProject,
-    currentSessionId,
-    prompt: payloadPrompt,
-    // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
-    cost: contextCost(format === 'additional-context' ? 'additional-context' : 'markdown', framing),
-    deliveryObserver: rec ?? undefined,
-  };
-
-  const result = await api.getContext(ctx, opts);
-
-  // Early exit when there's nothing to render (matches pre-extraction behavior).
-  const hasContextData =
-    result.entries.length > 0 ||
-    result.activeSnapshot ||
-    result.sessionHandoff ||
-    (result.recentEvents && result.recentEvents.length > 0);
-  if (!hasContextData) {
-    rec?.delivered({ state: 'empty' });
-    return;
-  }
-
-  // Adapter: ContextResultEntry -> the print-helper input shape. v39:
-  // cross-project inclusions (only present under --cross-project or with
-  // isolation disabled via crossProject) render in their own demarcated
-  // section so they can never masquerade as project memory.
-  const mainEntries = result.entries.filter((r) => r.category !== 'cross-project');
-  const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
-  const renderItems = mainEntries.map((r) => ({
-    entry: r.entry,
-    score: r.score,
-    tokens: r.tokens,
-    isGlobal: r.isGlobal ?? false,
-  }));
-
-  if (format === 'json') {
-    const output = result.entries.map((r) => ({
-      id: r.entry.id,
-      score: r.score,
-      strength: r.entry.strength,
-      tags: r.entry.tags,
-      confidence: r.entry.confidence,
-      content: r.entry.content,
-      global: r.isGlobal ?? false,
-      origin: r.origin ?? null,
-      category: r.category ?? null,
-    }));
-    const jsonText = JSON.stringify({
-      query: query || '*',
-      activeSnapshot: result.activeSnapshot ?? null,
-      sessionHandoff: result.sessionHandoff ?? null,
-      recentSessionEvents: result.recentEvents ?? [],
-      memories: output,
-      tokens: result.tokens,
-    });
-    console.log(jsonText);
-    rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-    withLedgerDb(hippoRoot, (db) => {
-      recordTokenUse(db, {
-        tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
-        event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
-      });
-      flushDeliveryRecorder(rec, db);
-    });
-  } else if (format === 'additional-context') {
-    // Z1: split into a static block (snapshot/handoff/events/pins/recent-N,
-    // TE2-skippable) and a prompt-recall block (never skipped, own heading).
-    const staticEntries = mainEntries.filter((r) => !r.promptRecall);
-    const staticCrossEntries = crossEntries.filter((r) => !r.promptRecall);
-    const recallEntries = result.entries.filter((r) => r.promptRecall);
-    const staticItems = staticEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
-    const recallItems = recallEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
-
-    const staticBlock = settleTokens((t) => captureConsole(() => {
-      if (result.activeSnapshot) printActiveTaskSnapshot(result.activeSnapshot);
-      if (result.sessionHandoff) printHandoff(result.sessionHandoff);
-      if (result.recentEvents && result.recentEvents.length > 0) {
-        printSessionEvents(result.recentEvents);
-      }
-      // TE1: no live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
-      if (staticItems.length > 0) printContextMarkdown(staticItems, t, framing, { showStrength: false });
-      printCrossProjectSection(staticCrossEntries);
-    }));
-    const recallBlock = recallItems.length > 0
-      ? settleTokens((t) => captureConsole(() => printContextMarkdown(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' })))
-      : '';
-    if (!staticBlock.trim() && !recallBlock.trim()) {
-      rec?.delivered({ state: 'empty' });
-      return;
-    }
-
-    const surface: TokenSurface = pinnedOnly ? 'hook' : 'context';
-    let sendStatic = staticBlock.trim().length > 0;
-    // TE2: the per-prompt hook skips a static block identical to the one this
-    // session already has, resent every refreshTurns skips. Hashed on the
-    // static text alone so an unchanged pin set still skips while recall varies.
-    if (sendStatic && pinnedOnly && payloadSessionId !== undefined) {
-      const injectCfg = loadConfig(hippoRoot).pinnedInject;
-      if (injectCfg.skipUnchanged !== false) {
-        const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
-          ? injectCfg.refreshTurns
-          : 10;
-        const staticHash = blockHash(staticBlock);
-        const last = withLedgerDb(hippoRoot, (db) =>
-          lastSentState(db, ctx.tenantId, payloadSessionId, surface));
-        if (shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) {
-          withLedgerDb(hippoRoot, (db) => {
-            recordTokenUse(db, {
-              tenantId: ctx.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-              items: staticItems.length, tokens: estimateTokens(staticBlock), hash: staticHash,
-            });
-            if (recallBlock.trim()) return;
-            rec?.delivered({ state: 'reused', staticHash, staticReused: true });
-            flushDeliveryRecorder(rec, db);
-          });
-          sendStatic = false;
-        }
-      }
-    }
-
-    const finalStatic = sendStatic ? staticBlock : '';
-    const additionalContext = finalStatic && recallBlock
-      ? `${finalStatic}\n\n${recallBlock}`
-      : finalStatic || recallBlock;
-    const staticReused = !sendStatic && staticBlock.trim().length > 0;
-    if (!additionalContext.trim()) {
-      rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
-      return;
-    }
-
-    const payload = {
-      hookSpecificOutput: {
-        hookEventName: 'UserPromptSubmit',
-        additionalContext,
-      },
-    };
-    process.stdout.write(JSON.stringify(payload));
-    rec?.delivered({
-      state: staticReused ? 'reused-recall-sent' : 'sent',
-      staticHash: staticBlock.trim() ? blockHash(staticBlock) : null,
-      recallHash: recallBlock ? blockHash(recallBlock) : null,
-      emittedText: additionalContext,
-      staticReused,
-    });
-    if (finalStatic || recallBlock) {
-      // One connection for both rows; each insert in its own try so one failing doesn't skip the other.
-      withLedgerDb(hippoRoot, (db) => {
-        if (finalStatic) {
-          try {
-            recordTokenUse(db, {
-              tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface, event: 'inject',
-              items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
-            });
-          // Best-effort row: only a busy store is actionable, and a ledger failure must not break the hook.
-          } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
-        }
-        if (recallBlock) {
-          try {
-            recordTokenUse(db, {
-              tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: 'hook_recall', event: 'inject',
-              items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
-            });
-          // Same best-effort rule as the inject row above.
-          } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
-        }
-        flushDeliveryRecorder(rec, db);
-      });
-    }
-  } else {
-    // markdown (default); the header figure counts the whole block, sections included, as the ledger does.
-    const text = settleTokens((t) => captureConsole(() => {
-      if (result.activeSnapshot) {
-        printActiveTaskSnapshot(result.activeSnapshot);
-      }
-      if (result.sessionHandoff) {
-        printHandoff(result.sessionHandoff);
-      }
-      if (result.recentEvents && result.recentEvents.length > 0) {
-        printSessionEvents(result.recentEvents);
-      }
-      if (renderItems.length > 0) printContextMarkdown(renderItems, t, framing);
-      printCrossProjectSection(crossEntries);
-      if (result.ambientState) {
-        console.log(`\n${renderAmbientSummary(result.ambientState)}`);
-      }
-    }));
-    if (text.length > 0) console.log(text);
-    rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-    withLedgerDb(hippoRoot, (db) => {
-      recordTokenUse(db, {
-        tenantId: ctx.tenantId, sessionId: ledgerSessionId, surface: pinnedOnly ? 'hook' : 'context',
-        event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
-      });
-      flushDeliveryRecorder(rec, db);
-    });
-  }
-}
-
-/**
- * v39: render cross-project inclusions under an explicit header so agents
- * (and humans) can tell borrowed context from project memory. Only ever
- * non-empty when the caller passed --cross-project or disabled isolation.
- */
-function printCrossProjectSection(items: api.ContextResultEntry[]): void {
-  if (items.length === 0) return;
-  console.log(crossProjectHeading(items.length));
-  for (const item of items) console.log(crossProjectLine(item));
-}
-
-/** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
-export function printContextMarkdown(
-  items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
-  totalTokens: number,
-  framing: string = 'observe',
-  opts: { showStrength?: boolean; heading?: string } = {}
-): void {
-  const now = evalNow();
-  const showStrength = opts.showStrength !== false;
-  console.log(contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens));
-  for (const item of items) console.log(contextLine(item, framing, showStrength, now));
 }
 
 // ---------------------------------------------------------------------------
@@ -7884,12 +6209,6 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
   process.exit(1);
 }
 
-interface CommandContext {
-  readonly hippoRoot: string;
-  readonly args: string[];
-  readonly flags: CliFlags;
-}
-
 interface CommandSpec {
   readonly run: (ctx: CommandContext) => void | Promise<void>;
   readonly aliases?: readonly string[];
@@ -7953,15 +6272,6 @@ async function handleRemember({ hippoRoot, args, flags }: CommandContext): Promi
   await cmdRemember(hippoRoot, text, flags);
 }
 
-async function handleRecall({ hippoRoot, args, flags }: CommandContext): Promise<void> {
-  const query = args.join(' ').trim();
-  if (!query) {
-    printError('Please provide a search query.');
-    process.exit(1);
-  }
-  await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
-}
-
 function handleDrill({ hippoRoot, args, flags }: CommandContext): void {
   const summaryId = args[0];
   if (!summaryId) {
@@ -7988,20 +6298,6 @@ function handleSupersede({ hippoRoot, args, flags }: CommandContext): void {
     process.exit(1);
   }
   cmdSupersede(hippoRoot, oldId, newContent, flags);
-}
-
-async function handleExplain({ hippoRoot, args, flags }: CommandContext): Promise<void> {
-  const query = args.join(' ').trim();
-  if (!query) {
-    printError('Please provide a search query.');
-    process.exit(1);
-  }
-  await cmdExplain(hippoRoot, query, flags);
-}
-
-async function handleEval({ hippoRoot, args, flags }: CommandContext): Promise<void> {
-  const corpusPath = args[0] ? String(args[0]) : null;
-  await cmdEval(hippoRoot, corpusPath, flags);
 }
 
 function handleTrace({ hippoRoot, args, flags }: CommandContext): void {
@@ -8248,13 +6544,6 @@ function handleInspect({ hippoRoot, args }: CommandContext): void {
     process.exit(1);
   }
   cmdInspect(hippoRoot, id);
-}
-
-async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {
-  // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
-  // the hot stdin path and a manual run share this one command.
-  const { text: stdinText } = await readStdinBounded();
-  await runHookWithStores(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
 }
 
 async function handleWatch({ hippoRoot, args }: CommandContext): Promise<void> {
@@ -8562,7 +6851,7 @@ export const COMMANDS = {
     --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
   },
   recall: {
-    run: handleRecall,
+    run: async (c) => { await (await import('./cli/recall.js')).handleRecall(c); },
     usage: [`
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget for the whole printed block (default: 4000)
@@ -8677,7 +6966,7 @@ export const COMMANDS = {
     --pin                  Pin the new memory (default: pinned if the old one was)`],
   },
   explain: {
-    run: handleExplain,
+    run: async (c) => { await (await import('./cli/explain.js')).handleExplain(c); },
     usage: [`
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget, counted as recall prints (default: 4000)
@@ -8688,7 +6977,7 @@ export const COMMANDS = {
     --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)`],
   },
   eval: {
-    run: handleEval,
+    run: async (c) => { await (await import('./cli/eval.js')).handleEval(c); },
     usage: [`
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
@@ -9068,7 +7357,7 @@ export const COMMANDS = {
     handoff show <id>      Show a specific handoff by ID`],
   },
   card: {
-    run: ({ hippoRoot, args, flags }) => { cmdCard(hippoRoot, args, flags); },
+    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/card.js')).cmdCard(hippoRoot, args, flags); },
     usage: [`
   card <sub>                Manage claimable work-queue cards
     card create             Create a new card
@@ -9137,7 +7426,7 @@ export const COMMANDS = {
   inspect <id>             Show full memory detail`],
   },
   context: {
-    run: handleContext,
+    run: async (c) => { await (await import('./cli/context.js')).handleContext(c); },
     usage: [`
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state

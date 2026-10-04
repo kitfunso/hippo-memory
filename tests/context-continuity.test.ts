@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execFileSync } from 'child_process';
+import { cmdContext } from '../src/cli/context.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 import {
   initStore,
   saveActiveTaskSnapshot,
@@ -16,21 +17,19 @@ let hippoDir: string;
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-context-continuity-'));
   hippoDir = path.join(tmpDir, '.hippo');
+  vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
-
-function runHippo(args: string[]): string {
-  const globalDir = path.join(tmpDir, 'global');
-  return execFileSync(process.execPath, [HIPPO_JS, ...args], {
-    env: { ...process.env, HIPPO_HOME: globalDir },
-    cwd: tmpDir,
-    encoding: 'utf8',
-  });
+/** `hippo context` run in this process against the temp store; a non-zero exit fails the test as a spawn would. */
+async function runHippo(flags: Record<string, string>): Promise<string> {
+  const r = await runInProcess(() => cmdContext(hippoDir, [], flags));
+  expect(r.status, r.stderr).toBe(0);
+  return r.stdout;
 }
 
 function seedContinuityState(): void {
@@ -69,10 +68,10 @@ function seedContinuityState(): void {
 }
 
 describe('hippo context continuity assembly', () => {
-  it('returns snapshot, matching handoff, and recent trail in JSON even when no memories are recalled', () => {
+  it('returns snapshot, matching handoff, and recent trail in JSON even when no memories are recalled', async () => {
     seedContinuityState();
 
-    const out = runHippo(['context', '--format', 'json', '--budget', '500']);
+    const out = await runHippo({ format: 'json', budget: '500' });
     const parsed = JSON.parse(out);
 
     expect(parsed.activeSnapshot).toBeTruthy();
@@ -85,10 +84,10 @@ describe('hippo context continuity assembly', () => {
     expect(parsed.tokens).toBe(0);
   });
 
-  it('prints the matching handoff in markdown context and excludes the stale one', () => {
+  it('prints the matching handoff in markdown context and excludes the stale one', async () => {
     seedContinuityState();
 
-    const out = runHippo(['context', '--budget', '500']);
+    const out = await runHippo({ budget: '500' });
 
     expect(out).toContain('## Active Task Snapshot');
     expect(out).toContain('## Session Handoff');

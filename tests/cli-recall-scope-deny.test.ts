@@ -15,14 +15,16 @@
  * bin). Global-store rows are seeded in-process against the same SQLite.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { withSharedStoreHandles } from '../src/db.js';
+import { cmdExplain } from '../src/cli/explain.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -62,6 +64,7 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
@@ -159,12 +162,10 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).not.toContain('private filler');
   });
 
-  it('hippo explain applies the same rule and prints an honest note', () => {
-    const res = spawnSync('node', [HIPPO_BIN, 'explain', 'deploykey'], {
-      cwd: home,
-      env: { ...process.env, ...env },
-      encoding: 'utf-8',
-    });
+  it('hippo explain applies the same rule and prints an honest note', async () => {
+    vi.stubEnv('HIPPO_HOME', env.HIPPO_HOME);
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', env.HIPPO_SKIP_AUTO_INTEGRATIONS);
+    const res = await runInProcess(() => cmdExplain(join(home, '.hippo'), 'deploykey', {}));
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);
     expect(res.stdout).not.toContain(PRIV_GITHUB);

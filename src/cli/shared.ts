@@ -12,7 +12,8 @@ import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
 import { type SearchResult, explainMatch } from '../search.js';
 import { embedMemory } from '../embeddings.js';
 import { type HippoConfig, loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy } from '../db.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
+import { ensurePilotArm, hashArm, readPilotArm } from '../pilot-arm.js';
 import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { isGitRepo, fetchGitLog, extractLessons, partitionLessons } from '../autolearn.js';
 import { storedTextKeys, duplicateKey } from '../same-text.js';
@@ -327,6 +328,13 @@ export function setupDailySchedule(globalRoot: string): void {
 }
 
 export type CliFlags = Record<string, string | boolean | string[]>;
+
+/** What the command table hands each verb's run(). */
+export interface CommandContext {
+  readonly hippoRoot: string;
+  readonly args: string[];
+  readonly flags: CliFlags;
+}
 
 export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
@@ -870,4 +878,30 @@ export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string 
   }
   requireInit(hippoRoot);
   return hippoRoot;
+}
+
+/** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
+export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
+  try {
+    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
+  } catch (error) {
+    if (!isSqliteBusy(error)) throw error;
+    noteStoreBusy('hook skipped');
+    return undefined;
+  }
+}
+
+/**
+ * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
+ * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
+ */
+export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
+  if (sessionId === undefined || sessionId.trim() === '') return false;
+  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
+  if (root === null) return false;
+  const rate = loadConfig(root).pilot.holdoutRateBp;
+  if (rate <= 0) return false;
+  const arm = withLedgerDb(hippoRoot, (db) =>
+    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
+  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
 }

@@ -475,8 +475,8 @@ describe('test 8: scope filtering on the continuity read paths', () => {
 });
 
 describe('test 9: helper swap leaves no local passesScopeFilter clone', () => {
-  it('src/api.ts, src/cli.ts and src/mcp/server.ts declare no local passesScopeFilter const', () => {
-    for (const rel of ['api.ts', 'cli.ts', 'mcp/server.ts']) {
+  it('src/api.ts, the CLI recall path and src/mcp/server.ts declare no local passesScopeFilter const', () => {
+    for (const rel of ['api.ts', 'cli.ts', 'cli/recall.ts', 'mcp/server.ts']) {
       const content = readFileSync(join(__dirname, '..', 'src', rel), 'utf8');
       expect(content).not.toMatch(/const passesScopeFilter\b/);
     }

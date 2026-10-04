@@ -1,0 +1,113 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hippo context output (in process) > prints the same bytes and exit codes in every format 1`] = `
+"$ context markdown -> 0
+--- stdout
+## Active Task Snapshot
+
+- Task: ship the context split
+- Status: active
+- Updated: <ts>
+- Source: cli
+- Session: sess-golden
+
+### Summary
+renderContext split by stage
+
+### Next step
+run the goldens
+
+## Project Memory (2 entries, 134 tokens)
+
+- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
+- **[verified] always run the migration dry run before deploying** [deploy] (100%)
+
+Memory state: 3 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength.
+
+--- stderr
+
+$ context markdown --framing assert -> 0
+--- stdout
+## Active Task Snapshot
+
+- Task: ship the context split
+- Status: active
+- Updated: <ts>
+- Source: cli
+- Session: sess-golden
+
+### Summary
+renderContext split by stage
+
+### Next step
+run the goldens
+
+## Project Memory (1 entries, 113 tokens)
+
+- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
+
+Memory state: 3 memories, mostly fresh (<7d), steady operation, mostly episodic, high avg strength.
+
+--- stderr
+
+$ context json -> 0
+--- stdout
+{"query":"deploy","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[{"id":"mem_ctx_deploy","score":0.6350,"strength":1,"tags":["deploy"],"confidence":"verified","content":"the deploy pipeline uses blue green rollout for the api","global":false,"origin":"","category":"user-global"},{"id":"mem_ctx_pinned","score":0.4777,"strength":1,"tags":["deploy"],"confidence":"verified","content":"always run the migration dry run before deploying","global":false,"origin":"","category":"user-global"}],"tokens":44}
+
+--- stderr
+
+$ context additional-context -> 0
+--- stdout
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Task: ship the context split\\n- Status: active\\n- Updated: <ts>\\n- Source: cli\\n- Session: sess-golden\\n\\n### Summary\\nrenderContext split by stage\\n\\n### Next step\\nrun the goldens\\n\\n## Project Memory (2 entries, 105 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]\\n- **[verified] always run the migration dry run before deploying** [deploy]"}}
+--- stderr
+
+$ context no match -> 0
+--- stdout
+{"query":"zzqqxx","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[],"tokens":0}
+
+--- stderr
+
+$ context budget 0 -> 0
+--- stdout
+
+--- stderr
+
+$ context pinned-only hook -> 0
+--- stdout
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Task: ship the context split\\n- Status: active\\n- Updated: <ts>\\n- Source: cli\\n- Session: sess-golden\\n\\n### Summary\\nrenderContext split by stage\\n\\n### Next step\\nrun the goldens\\n\\n## Project Memory (1 entries, 85 tokens)\\n\\n- **[verified] always run the migration dry run before deploying** [deploy]\\n\\n## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
+--- stderr
+
+$ context pinned-only hook (unchanged) -> 0
+--- stdout
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
+--- stderr
+
+$ context pinned-only markdown -> 0
+--- stdout
+## Active Task Snapshot
+
+- Task: ship the context split
+- Status: active
+- Updated: <ts>
+- Source: cli
+- Session: sess-golden
+
+### Summary
+renderContext split by stage
+
+### Next step
+run the goldens
+
+## Project Memory (1 entries, 86 tokens)
+
+- **[verified] always run the migration dry run before deploying** [deploy] (100%)
+
+--- stderr
+
+$ context malformed stdin -> 0
+--- stdout
+{"query":"deploy","activeSnapshot":{"id":1,"task":"ship the context split","summary":"renderContext split by stage","next_step":"run the goldens","status":"active","source":"cli","session_id":"sess-golden","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":null,"recentSessionEvents":[],"memories":[{"id":"mem_ctx_deploy","score":0.6350,"strength":1,"tags":["deploy"],"confidence":"verified","content":"the deploy pipeline uses blue green rollout for the api","global":false,"origin":"","category":"user-global"},{"id":"mem_ctx_pinned","score":0.4777,"strength":1,"tags":["deploy"],"confidence":"verified","content":"always run the migration dry run before deploying","global":false,"origin":"","category":"user-global"}],"tokens":44}
+
+--- stderr
+"
+`;

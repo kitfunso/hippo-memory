@@ -37,9 +37,9 @@ describe('cli.ts cmdRecall zero-result branch preserves planningFallacyHint (J3.
   let cliText: string;
   let zeroResultBlock: string;
 
-  it('the codex-catch comment is present (anchor)', () => {
-    cliText = readFileSync(join(repoRoot, 'src/cli.ts'), 'utf8');
-    expect(cliText).toContain('Codex review round 1 catch');
+  it('the parity comment is present (anchor)', () => {
+    cliText = readFileSync(join(repoRoot, 'src/cli/recall.ts'), 'utf8');
+    expect(cliText).toContain('zero-result JSON keeps it for parity');
   });
 
   it('isolate the zero-result block by line range', () => {

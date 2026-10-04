@@ -1,0 +1,441 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hippo eval output (in process) > prints the same bytes and exit codes in every mode 1`] = `
+"$ eval (no corpus) -> 1
+--- stdout
+--- stderr
+Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap
+
+$ eval (missing corpus) -> 1
+--- stdout
+--- stderr
+Corpus file not found: <root>/nope.json
+
+$ eval (bad corpus) -> 1
+--- stdout
+--- stderr
+Failed to read corpus: Corpus JSON must be an array or { cases: [...] }
+
+$ eval corpus -> 0
+--- stdout
+Eval: 3 cases, <n>ms
+
+MRR:          0.6667
+Recall@5:     0.5000
+Recall@10:    0.5000
+NDCG@10:      0.5377
+
+1 case(s) returned zero relevant results:
+  [miss] "quantum chromodynamics"
+--- stderr
+
+$ eval corpus --show-cases -> 0
+--- stdout
+Eval: 3 cases, <n>ms
+
+MRR:          0.6667
+Recall@5:     0.5000
+Recall@10:    0.5000
+NDCG@10:      0.5377
+
+Case details:
+
+[deploy] R@10=1.00  MRR=1.00  expected=1  hit=1
+  query: deploy pipeline rollout
+  top 3: mem_eval_deploy
+
+[billing] R@10=0.50  MRR=1.00  expected=2  hit=1
+  query: billing friday
+  top 3: mem_eval_billing
+  missed: mem_eval_missing
+
+[miss] R@10=0.00  MRR=0.00  expected=1  hit=0
+  query: quantum chromodynamics
+  top 3: (none)
+  missed: mem_eval_lunch
+
+1 case(s) returned zero relevant results:
+  [miss] "quantum chromodynamics"
+--- stderr
+
+$ eval corpus --json -> 0
+--- stdout
+{
+  "cases": [
+    {
+      "case": {
+        "id": "deploy",
+        "query": "deploy pipeline rollout",
+        "expectedIds": [
+          "mem_eval_deploy"
+        ]
+      },
+      "returnedIds": [
+        "mem_eval_deploy"
+      ],
+      "mrr": 1,
+      "recallAt5": 1,
+      "recallAt10": 1,
+      "ndcgAt10": 1
+    },
+    {
+      "case": {
+        "id": "billing",
+        "query": "billing friday",
+        "expectedIds": [
+          "mem_eval_billing",
+          "mem_eval_missing"
+        ]
+      },
+      "returnedIds": [
+        "mem_eval_billing"
+      ],
+      "mrr": 1,
+      "recallAt5": 0.5,
+      "recallAt10": 0.5,
+      "ndcgAt10": 0.6131471927654584
+    },
+    {
+      "case": {
+        "id": "miss",
+        "query": "quantum chromodynamics",
+        "expectedIds": [
+          "mem_eval_lunch"
+        ]
+      },
+      "returnedIds": [],
+      "mrr": 0,
+      "recallAt5": 0,
+      "recallAt10": 0,
+      "ndcgAt10": 0
+    }
+  ],
+  "meanMrr": 0.6666666666666666,
+  "meanRecallAt5": 0.5,
+  "meanRecallAt10": 0.5,
+  "meanNdcgAt10": 0.5377157309218195,
+  "durationMs": <n>
+}
+--- stderr
+
+$ eval corpus --min-mrr 2 -> 1
+--- stdout
+Eval: 3 cases, <n>ms
+
+MRR:          0.6667
+Recall@5:     0.5000
+Recall@10:    0.5000
+NDCG@10:      0.5377
+
+1 case(s) returned zero relevant results:
+  [miss] "quantum chromodynamics"
+--- stderr
+MRR 0.6667 below threshold 2
+
+$ eval corpus --compare -> 0
+--- stdout
+Eval: 3 cases, <n>ms
+
+MRR:          0.6667
+Recall@5:     0.5000
+Recall@10:    0.5000
+NDCG@10:      0.5377
+
+1 case(s) returned zero relevant results:
+  [miss] "quantum chromodynamics"
+
+Compare vs baseline:
+  MRR:        +0.0000
+  Recall@5:   +0.0000
+  Recall@10:  +0.0000
+  NDCG@10:    +0.0000
+
+  improved: 1   regressed: 1   unchanged: 1
+  + [deploy] NDCG 0.50 -> 1.00 (+0.500)
+  - [billing] NDCG 1.00 -> 0.61 (-0.387)
+--- stderr
+
+$ eval corpus --compare --json -> 0
+--- stdout
+{
+  "cases": [
+    {
+      "case": {
+        "id": "deploy",
+        "query": "deploy pipeline rollout",
+        "expectedIds": [
+          "mem_eval_deploy"
+        ]
+      },
+      "returnedIds": [
+        "mem_eval_deploy"
+      ],
+      "mrr": 1,
+      "recallAt5": 1,
+      "recallAt10": 1,
+      "ndcgAt10": 1
+    },
+    {
+      "case": {
+        "id": "billing",
+        "query": "billing friday",
+        "expectedIds": [
+          "mem_eval_billing",
+          "mem_eval_missing"
+        ]
+      },
+      "returnedIds": [
+        "mem_eval_billing"
+      ],
+      "mrr": 1,
+      "recallAt5": 0.5,
+      "recallAt10": 0.5,
+      "ndcgAt10": 0.6131471927654584
+    },
+    {
+      "case": {
+        "id": "miss",
+        "query": "quantum chromodynamics",
+        "expectedIds": [
+          "mem_eval_lunch"
+        ]
+      },
+      "returnedIds": [],
+      "mrr": 0,
+      "recallAt5": 0,
+      "recallAt10": 0,
+      "ndcgAt10": 0
+    }
+  ],
+  "meanMrr": 0.6666666666666666,
+  "meanRecallAt5": 0.5,
+  "meanRecallAt10": 0.5,
+  "meanNdcgAt10": 0.5377157309218195,
+  "durationMs": <n>
+}
+--- stderr
+{
+  "compare": {
+    "aggregate": {
+      "mrr": 0,
+      "recallAt5": 0,
+      "recallAt10": 0,
+      "ndcgAt10": 0
+    },
+    "improved": [
+      {
+        "id": "deploy",
+        "query": "deploy pipeline rollout",
+        "mrrBefore": 1,
+        "mrrAfter": 1,
+        "r10Before": 1,
+        "r10After": 1,
+        "ndcgBefore": 0.5,
+        "ndcgAfter": 1
+      }
+    ],
+    "regressed": [
+      {
+        "id": "billing",
+        "query": "billing friday",
+        "mrrBefore": 1,
+        "mrrAfter": 1,
+        "r10Before": 0.5,
+        "r10After": 0.5,
+        "ndcgBefore": 1,
+        "ndcgAfter": 0.6131471927654584
+      }
+    ],
+    "unchanged": 1,
+    "onlyInBaseline": [],
+    "onlyInCurrent": []
+  }
+}
+
+$ eval corpus --compare (missing) -> 1
+--- stdout
+Eval: 3 cases, <n>ms
+
+MRR:          0.6667
+Recall@5:     0.5000
+Recall@10:    0.5000
+NDCG@10:      0.5377
+
+1 case(s) returned zero relevant results:
+  [miss] "quantum chromodynamics"
+--- stderr
+Baseline file not found: <root>/nope.json
+
+$ eval corpus --compare (unparseable) -> 1
+--- stdout
+Eval: 3 cases, <n>ms
+
+MRR:          0.6667
+Recall@5:     0.5000
+Recall@10:    0.5000
+NDCG@10:      0.5377
+
+1 case(s) returned zero relevant results:
+  [miss] "quantum chromodynamics"
+--- stderr
+Failed to parse baseline: Unexpected token 'o', "not json" is not valid JSON
+
+$ eval --bootstrap -> 0
+--- stdout
+{
+  "cases": [
+    {
+      "id": "bootstrap_mem_eval_deploy",
+      "query": "the deploy pipeline uses blue green rollout for",
+      "expectedIds": [
+        "mem_eval_deploy"
+      ],
+      "description": "trivial self-query on memory mem_eval_deploy"
+    },
+    {
+      "id": "bootstrap_mem_eval_billing",
+      "query": "billing service freezes deploys every friday afternoon",
+      "expectedIds": [
+        "mem_eval_billing"
+      ],
+      "description": "trivial self-query on memory mem_eval_billing"
+    }
+  ]
+}
+--- stderr
+
+$ eval --bootstrap --out -> 0
+--- stdout
+Wrote 3 bootstrap cases to <root>/out/boot.json
+--- stderr
+
+boot.json:
+{
+  "cases": [
+    {
+      "id": "bootstrap_mem_eval_deploy",
+      "query": "the deploy pipeline uses blue green rollout for",
+      "expectedIds": [
+        "mem_eval_deploy"
+      ],
+      "description": "trivial self-query on memory mem_eval_deploy"
+    },
+    {
+      "id": "bootstrap_mem_eval_billing",
+      "query": "billing service freezes deploys every friday afternoon",
+      "expectedIds": [
+        "mem_eval_billing"
+      ],
+      "description": "trivial self-query on memory mem_eval_billing"
+    },
+    {
+      "id": "bootstrap_mem_eval_lunch",
+      "query": "lunch options near the office include noodle bar",
+      "expectedIds": [
+        "mem_eval_lunch"
+      ],
+      "description": "trivial self-query on memory mem_eval_lunch"
+    }
+  ]
+}
+$ eval --suite -> 0
+--- stdout
+Hippo Eval v<version> — 23 queries, <n>ms
+
+Feature                  | MRR      | R@5      | NDCG@5   | vs baseline  | verdict
+────────────────────────-|-────────-|-────────-|-────────-|-────────────-|────────
+direct-recall            | 100.0%   | 100.0%   | 100.0%   | NEW          | baseline
+extraction-preference    | 100.0%   | 100.0%   | 100.0%   | NEW          | baseline
+dag-drilldown            | 100.0%   | 83.3%    | 85.2%    | NEW          | baseline
+temporal                 | 81.3%    | 100.0%   | 85.8%    | NEW          | baseline
+noise-resistance         | 100.0%   | 100.0%   | 100.0%   | NEW          | baseline
+multi-hop                | 100.0%   | 75.0%    | 81.8%    | NEW          | baseline
+
+Overall: MRR 96.7% | R@5 96.4% | NDCG@5 94.7%
+
+Baseline saved to <root>/suite/base.json
+--- stderr
+
+$ eval --suite (with baseline) --json -> 0
+--- stdout
+{
+  "version": "<version>",
+  "timestamp": "<ts>",
+  "features": [
+    {
+      "category": "direct-recall",
+      "cases": 8,
+      "mrr": 1,
+      "recallAt5": 1,
+      "ndcgAt5": 1,
+      "passed": true
+    },
+    {
+      "category": "extraction-preference",
+      "cases": 3,
+      "mrr": 1,
+      "recallAt5": 1,
+      "ndcgAt5": 1,
+      "passed": true
+    },
+    {
+      "category": "dag-drilldown",
+      "cases": 2,
+      "mrr": 1,
+      "recallAt5": 0.8333333333333333,
+      "ndcgAt5": 0.8519590445170673,
+      "passed": true
+    },
+    {
+      "category": "temporal",
+      "cases": 4,
+      "mrr": 0.8125,
+      "recallAt5": 1,
+      "ndcgAt5": 0.8576691395183482,
+      "passed": true
+    },
+    {
+      "category": "noise-resistance",
+      "cases": 4,
+      "mrr": 1,
+      "recallAt5": 1,
+      "ndcgAt5": 1,
+      "passed": true
+    },
+    {
+      "category": "multi-hop",
+      "cases": 2,
+      "mrr": 1,
+      "recallAt5": 0.75,
+      "ndcgAt5": 0.8183412193664159,
+      "passed": true
+    }
+  ],
+  "overall": {
+    "mrr": 0.967391304347826,
+    "recallAt5": 0.9637681159420289,
+    "ndcgAt5": 0.9465772646017546
+  },
+  "totalCases": 23,
+  "durationMs": <n>
+}
+--- stderr
+
+$ eval --suite (unreadable baseline) -> 0
+--- stdout
+Hippo Eval v<version> — 23 queries, <n>ms
+
+Feature                  | MRR      | R@5      | NDCG@5   | vs baseline  | verdict
+────────────────────────-|-────────-|-────────-|-────────-|-────────────-|────────
+direct-recall            | 100.0%   | 100.0%   | 100.0%   | NEW          | baseline
+extraction-preference    | 100.0%   | 100.0%   | 100.0%   | NEW          | baseline
+dag-drilldown            | 100.0%   | 83.3%    | 85.2%    | NEW          | baseline
+temporal                 | 81.3%    | 100.0%   | 85.8%    | NEW          | baseline
+noise-resistance         | 100.0%   | 100.0%   | 100.0%   | NEW          | baseline
+multi-hop                | 100.0%   | 75.0%    | 81.8%    | NEW          | baseline
+
+Overall: MRR 96.7% | R@5 96.4% | NDCG@5 94.7%
+--- stderr
+Warning: eval baseline <root>/suite/base.json is unreadable; running without it.
+"
+`;

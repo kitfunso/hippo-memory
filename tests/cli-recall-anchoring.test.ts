@@ -22,13 +22,13 @@ const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   let cliText: string;
 
-  it('reads cli.ts (anchor for the rest of the tests)', () => {
-    cliText = readFileSync(join(repoRoot, 'src/cli.ts'), 'utf8');
+  it('reads the recall verb module (anchor for the rest of the tests)', () => {
+    cliText = readFileSync(join(repoRoot, 'src/cli/recall.ts'), 'utf8');
     expect(cliText.length).toBeGreaterThan(0);
   });
 
   it('imports the J1 helpers from recall-history', () => {
-    expect(cliText).toContain("from './recall-history.js'");
+    expect(cliText).toContain("from '../recall-history.js'");
     expect(cliText).toContain('detectAnchoring');
     expect(cliText).toContain('hashQueryText');
     expect(cliText).toContain('buildSessionKey');
