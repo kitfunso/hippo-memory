@@ -89,6 +89,8 @@ function readJson(cwd, file) {
 
 const isNames = (v) => Array.isArray(v) && v.every(isString);
 const isCount = (v) => Number.isInteger(v) && v >= 0;
+const isRate = (v) => v === null || Number.isFinite(v);
+const isStoredSample = (s) => s !== null && isCount(s.n) && isCount(s.agree) && s.agree <= s.n && isRate(s.agreement) && isRate(s.kappa);
 const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) => Number.isFinite(p[f]) && p[f] >= 0);
 
 /** Reads every input file and rejects a malformed one by name; records keep their file and line. */
@@ -111,6 +113,9 @@ export function loadInputs(args, cwd) {
   const grading = args.grading === null ? null : readJson(cwd, args.grading);
   if (grading !== null && !(isNames(grading.flippedLessons) && isCount(grading.acceptanceFlips) && isCount(grading.readerSample?.n) && isCount(grading.readerSample?.disagreements))) {
     throw new Error(`${args.grading}: needs flippedLessons (strings), acceptanceFlips and readerSample { n, disagreements } (integers)`);
+  }
+  if (grading?.storedSample !== undefined && !isStoredSample(grading.storedSample)) {
+    throw new Error(`${args.grading}: storedSample needs n and agree (integers, agree <= n), agreement and kappa (numbers or null)`);
   }
   const dropList = args.dropList === null ? null : readJson(cwd, args.dropList);
   if (dropList !== null && !(isNames(dropList.droppedLessons) && isNames(dropList.droppedFamilies))) {
@@ -135,6 +140,7 @@ export function buildReport(analysis, inputs, args, codes, hashes) {
     untaughtApplyDrops: analysis.filtered.untaughtApplyDrops, warnings: inputs.warnings,
     counts: view.perCode, voids, gates: view.gates, invalid: abandoned ? null : analysis.gates.failed,
     hypotheses, reported: abandoned ? NOT_ANALYSED : blind ? SEALED : analysis.reported, hashes,
+    storedSample: inputs.grading?.storedSample ?? null,
   };
 }
 
@@ -216,7 +222,11 @@ export function renderText(r) {
     lines.push(`${k}: ${c.records} records of ${c.planned} planned; voids ${c.voids} (${pct(c.voidShare)}), invalid ${c.invalid} (${pct(c.invalidShare)}), missing ${c.missing} (${pct(c.missingShare)}), abandoned tail ${c.abandoned}`);
   }
   lines.push(`void reasons: ${JSON.stringify(r.voids)}`);
-  if (r.gates !== null) lines.push(...gateLines(r), r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);
+  if (r.gates !== null) lines.push(...gateLines(r));
+  // Holds no arm, so it prints in blind mode too; reported only, prereg 179 sets no gate on it.
+  const s = r.storedSample;
+  if (s) lines.push(`stored sample (179): agreement ${f3(s.agreement)} [${f3(s.ci95?.[0])}, ${f3(s.ci95?.[1])}], kappa ${f3(s.kappa)}, n ${s.n}`);
+  if (r.gates !== null) lines.push(r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);
   if (isString(r.hypotheses)) lines.push(r.hypotheses);
   else lines.push(...hypothesisLines(r.hypotheses), ...reportedLines(r.reported));
   lines.push('sha256:', ...r.hashes.map((h) => `  ${h.sha256}  ${h.role} ${h.file}`));

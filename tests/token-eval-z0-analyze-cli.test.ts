@@ -149,6 +149,27 @@ describe('Z0 CLI and blind mode', () => {
     expect(fs.existsSync(path.join(dir, 'z0-blind-key.json'))).toBe(false);
   });
 
+  it('E3b 30: a scored storedSample is accepted and printed in blind mode; a malformed one is refused; absent prints nothing new', () => {
+    const dir = workspace(fresh());
+    const run = () => runCli([...ARGS, '--iterations', '300', '--out', 'o.json'], dir);
+    const before = run();
+    expect(before.stdout).not.toContain('stored sample');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'o.json'), 'utf8')).storedSample).toBeNull();
+    const stored = { n: 30, agree: 27, agreement: 0.9, ci95: [0.7438, 0.9654], kappa: 0.8, table: { yesYes: 14, yesNo: 1, noYes: 2, noNo: 13 }, excluded: { cut: 1, empty: 0, hiddenHit: 0 } };
+    fs.writeFileSync(path.join(dir, 'grading.json'), JSON.stringify({ ...GRADING, storedSample: stored }));
+    const shown = run();
+    expect(shown.code).toBe(0);
+    expect(shown.stdout).toMatch(/^G5 .*\nstored sample \(179\): agreement 0\.900 \[0\.744, 0\.965\], kappa 0\.800, n 30$/m);
+    expect(shown.stdout).not.toMatch(ARM_NAME);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'o.json'), 'utf8')).storedSample).toEqual(stored);
+    fs.writeFileSync(path.join(dir, 'grading.json'), JSON.stringify({ ...GRADING, storedSample: { ...stored, kappa: null } }));
+    expect(run().stdout).toContain('kappa n/a, n 30');
+    for (const bad of [{ ...stored, agree: 31 }, { ...stored, n: 1.5 }, { ...stored, agreement: 'high' }, null]) {
+      fs.writeFileSync(path.join(dir, 'grading.json'), JSON.stringify({ ...GRADING, storedSample: bad }));
+      expect(run()).toMatchObject({ code: 1, stderr: expect.stringContaining('storedSample needs n and agree') });
+    }
+  });
+
   it('--help prints the usage and exits 0', () => {
     expect(runCli(['--help'])).toMatchObject({ code: 0, stdout: expect.stringMatching(/^usage: z0-analyze\.mjs --runs FILE/) });
   });
