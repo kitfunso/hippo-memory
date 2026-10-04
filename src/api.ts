@@ -36,6 +36,8 @@ import {
   saveIndex,
   loadAllEntries,
   loadAmbientCandidates,
+  loadContextCandidates,
+  type ContextCandidateFilter,
   type AmbientRecallRequest,
   type AmbientLoadResult,
   updateStats,
@@ -264,7 +266,11 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): 
   return origin === currentProjectName;
 }
 
+/** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
+export const CONTEXT_CANDIDATE_CAP = 2000;
+
 // The pinned-only branch needs pins and recent-N candidates, not the corpus; `recall` applies there only.
+// Without `window` the whole store loads: a local-only query searches every local row.
 function loadAmbientEntries(
   hippoRoot: string,
   tenantId: string,
@@ -273,8 +279,12 @@ function loadAmbientEntries(
   admit: (e: MemoryEntry) => boolean,
   recall?: AmbientRecallRequest,
   onQualityDrop?: (e: MemoryEntry) => void,
+  window?: ContextCandidateFilter,
 ): AmbientLoadResult {
-  if (!pinnedOnly) return { entries: loadAllEntries(hippoRoot, tenantId).filter(admit) };
+  if (!pinnedOnly) {
+    const rows = window ? loadContextCandidates(hippoRoot, tenantId, window) : loadAllEntries(hippoRoot, tenantId);
+    return { entries: rows.filter(admit) };
+  }
   // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
   // counts by it too, or it stops short of a store whose newest rows are junk.
   const admitAmbient = (e: MemoryEntry): boolean => {
@@ -2807,12 +2817,22 @@ export async function getContext(
   const qualityDrop = (isGlobal: boolean): ((e: MemoryEntry) => void) | undefined =>
     obs && !promptRecallPending ? (e) => obs.qualityDropped(e, isGlobal) : undefined;
 
+  // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
+  const searchesLocalRows = query !== '*' && !(hasGlobal && !primaryIsGlobal);
+  const window: ContextCandidateFilter | undefined = pinnedOnly || searchesLocalRows
+    ? undefined
+    : {
+        exactScope,
+        project: includeCrossProject || currentProjectName === '' ? undefined : currentProjectName,
+        cap: CONTEXT_CANDIDATE_CAP,
+        now: evalNow(),
+      };
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(primaryIsGlobal))
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(primaryIsGlobal), window)
     : { entries: [] };
   const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(true))
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(true), window)
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;

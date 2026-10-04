@@ -1,0 +1,5 @@
+### Changed
+
+- **Context, status, peers and learn no longer load every memory on each request.** A context read without a query (HTTP `/v1/context`, MCP `hippo_context`) now reads at most 2,000 rows per store from SQL. Pins come first, then the rows decay has worn least. The scope, project and supersession filters run in the query. MCP `hippo_status` reads only the columns its numbers need. `hippo_peers` counts rows in SQL. `hippo_learn` looks up only the rows that could hold each lesson. At 10,000 memories per store, `hippo_status` went from about 92 ms to 36 ms and `hippo_peers` from about 93 ms to 14 ms.
+- **On a store with more than 2,000 admitted rows, the no-query context ranks only those 2,000.** The 2,000 are the pins plus the rows decay has worn least. Below that size, output is unchanged. Above it, the `ambientState` numbers (`totalMemories`, `avgStrength` and the others) describe those 2,000 rows, not the whole store.
+- **CI times the request paths at 10,000 memories per store** and fails if any of them takes more than 2 seconds.

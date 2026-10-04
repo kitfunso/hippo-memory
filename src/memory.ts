@@ -262,7 +262,7 @@ function applyLossAversionRatio(
  * Modulates effective half-life: memories with consistent positive outcomes
  * decay slower; consistent negative outcomes decay faster.
  */
-export function calculateRewardFactor(entry: MemoryEntry): number {
+export function calculateRewardFactor(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
   // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
   if (isOutcomeSlowAblated()) return 1.0;
   const pos = entry.outcome_positive ?? 0;
@@ -280,7 +280,7 @@ const MAX_WRONG_HALVINGS = 3;
  * Strength halves per unit (capped at 3) and recall stops strengthening
  * the memory, so a correction outranks pinning, error tags and heavy recall.
  */
-export function netWrong(entry: MemoryEntry): number {
+export function netWrong(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
   if (isOutcomeSlowAblated() || isDecayAblated()) return 0;
   return Math.max(0, (entry.outcome_negative ?? 0) - (entry.outcome_positive ?? 0));
 }
@@ -291,6 +291,12 @@ export function netWrong(entry: MemoryEntry): number {
  * - session: decay by sleep cycle count (for intermittent agents)
  * - adaptive: auto-scale half-life by session frequency (default v0.15+)
  */
+/** What calculateStrength reads, so a caller can score a row without loading its text. */
+export type StrengthInputs = Pick<
+  MemoryEntry,
+  'pinned' | 'created' | 'last_retrieved' | 'half_life_days' | 'retrieval_count' | 'emotional_valence' | 'outcome_positive' | 'outcome_negative'
+>;
+
 export interface DecayOptions {
   decayBasis?: 'clock' | 'session' | 'adaptive';
   /** Average interval between sleep cycles, in days. Used by 'adaptive' and 'session' modes. */
@@ -311,7 +317,7 @@ export interface DecayOptions {
  * Pinned memories skip time decay; being marked wrong still fades them (netWrong).
  */
 export function calculateStrength(
-  entry: MemoryEntry,
+  entry: StrengthInputs,
   // evalNow(): the real clock unless HIPPO_FAKE_NOW is set (eval-only,
   // simulated-time protocols; see ablation.ts). Explicit `now` always wins.
   now: Date = evalNow(),

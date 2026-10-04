@@ -49,6 +49,8 @@ jobs:
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
       - run: node scripts/check-openclaw-dist.mjs
+      - name: Request-path timing at 10k memories
+        run: node scripts/check-request-path-timing.mjs
       - name: Install the packed tarball
         run: npm run smoke:pack
       - name: Provenance gate

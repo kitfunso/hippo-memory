@@ -22,11 +22,11 @@ import {
 } from '../memory.js';
 import { fitBudget, estimateTokens, type SearchResult } from '../search.js';
 import { evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep, type SessionEvent, type TaskSnapshot } from '../store.js';
+import { loadStrengthRows, loadTextsHoldingWords, writeEntry, readEntry, initStore, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep, type SessionEvent, type TaskSnapshot } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
+import { dropHeldCopies, duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
@@ -697,7 +697,7 @@ async function executeTool(
   const hippoRoot = ctx?.hippoRoot ?? findHippoRoot() ?? createGlobalStoreOnFirstRun();
 
   const config = loadConfig(hippoRoot);
-  // A5: every loadAllEntries() in this server returns to the caller and is
+  // A5: every store read in this server returns to the caller and is
   // tenant-isolated. Resolved once per tool call: prefer the transport's
   // ctx.tenantId so an HTTP Bearer for tenant B doesn't drop to HIPPO_TENANT.
   const tenantId = ctx?.tenantId ?? resolveTenantId({});
@@ -1074,7 +1074,8 @@ async function executeTool(
     }
 
     case 'hippo_status': {
-      const entries = loadAllEntries(hippoRoot, tenantId);
+      // Every row counts toward the averages, so this scans the store, but without its text.
+      const entries = loadStrengthRows(hippoRoot, tenantId);
       const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
       let atRisk = 0;
       let totalStrength = 0;
@@ -1115,7 +1116,7 @@ async function executeTool(
       let added = 0;
       let skipped = 0;
       let rejected = 0;
-      const keys = storedTextKeys(loadAllEntries(hippoRoot, tenantId));
+      const keys = storedTextKeys(loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord)));
       for (const lesson of lessons) {
         if (keys.has(duplicateKey(lesson))) { skipped++; continue; }
         const entry = createMemory(lesson, {

@@ -17,6 +17,7 @@ import {
   loadIndex,
   loadSearchEntries,
   loadRecallSearchEntries,
+  tallySources,
   writeEntry,
   readEntry,
 } from './store.js';
@@ -471,31 +472,28 @@ export function listPeers(
 
   // D4: tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const allEntries = loadAllEntries(root);
-  const entries = tenantId !== undefined
-    ? allEntries.filter((e) => e.tenantId === tenantId)
-    : allEntries;
+  const tallies = tallySources(root, tenantId).sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
   const peerMap = new Map<string, { count: number; latest: string }>();
 
-  for (const entry of entries) {
+  for (const tally of tallies) {
     let project = 'unknown';
 
-    if (entry.source.startsWith('shared:')) {
-      const parts = entry.source.split(':');
+    if (tally.source.startsWith('shared:')) {
+      const parts = tally.source.split(':');
       project = parts[1] || 'unknown';
-    } else if (entry.source.startsWith('promoted:')) {
-      const promotedPath = entry.source.slice('promoted:'.length);
+    } else if (tally.source.startsWith('promoted:')) {
+      const promotedPath = tally.source.slice('promoted:'.length);
       project = path.basename(path.resolve(promotedPath, '..'));
-    } else if (entry.source === 'cli-global') {
+    } else if (tally.source === 'cli-global') {
       project = 'global-cli';
     }
 
     const existing = peerMap.get(project);
     if (!existing) {
-      peerMap.set(project, { count: 1, latest: entry.created });
+      peerMap.set(project, { count: tally.count, latest: tally.latest });
     } else {
-      existing.count++;
-      if (entry.created > existing.latest) existing.latest = entry.created;
+      existing.count += tally.count;
+      if (tally.latest > existing.latest) existing.latest = tally.latest;
     }
   }
 
