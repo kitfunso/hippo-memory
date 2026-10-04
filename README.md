@@ -551,6 +551,8 @@ A project's name is the `id` in a committed `.hippo-project.json`, else its `ori
 (`github.com/acme/api`), else its folder name. So two repos both called `api` no longer share
 memories in the global store. Rows saved under the old folder name stay visible to the
 project, and `hippo projects repair` folds that name into the id unless two projects claim it.
+`hippo sleep` runs that repair once per store after an upgrade, with a backup; in the global store
+it leaves the name folds to you, since only `hippo projects repair --global` lists them for review.
 Set `{"projectIdentity":{"remote":false}}` in the global `config.json` to keep folder names.
 A long-running MCP or HTTP server reads a new project file or remote after a restart.
 
