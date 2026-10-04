@@ -1,3 +1,0 @@
-### Changed
-
-- **`hippo context` with a query now ranks the same candidate window recall uses: the top 200 full-text matches per store.** It used to rank up to 2,000 matches from the local store. With a global store it also ranked up to 5,000 matches per store and first sorted every row by decay for a list it threw away. The other-project rule now runs in SQL before the window is cut, so rows from other projects cannot crowd out this project's matches. On a 10,000-row store, a query now reads 200 rows instead of 2,000, or 400 instead of 3,000 plus the search's own load with a global store. A new test holds that bound. A query with fewer than 200 matches per store ranks as before.
