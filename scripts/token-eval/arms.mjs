@@ -1,18 +1,22 @@
-// Z0 Claude Code arms (docs/evals/2026-09-29-z0-built-in-memory-prereg.md, "Arms"): settings, environment, PATH and the hippo shims.
+// Z0 arms (docs/evals/2026-09-29-z0-built-in-memory-prereg.md, "Arms"): settings, environment, PATH and the hippo shims.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, STRIP_ENV, pathKey } from './exec.mjs';
 
-export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];
-// Prereg "Seeds": A0's and A4's gates need a large effect, so they run two.
-export const ARM_SEEDS = { A0: 2, A1: 3, A2: 3, A4: 2, A5: 3 };
+export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
+export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5', ...X_ARMS];
+// Prereg "Seeds": A0's, A4's and X4's gates need a large effect, so they run two.
+export const ARM_SEEDS = { A0: 2, A1: 3, A2: 3, A4: 2, A5: 3, X1: 3, X2: 3, X3: 3, X4: 2 };
 const NO_AUTO_MEMORY = new Set(['A0', 'A4']);
-export const HIPPO_ARMS = new Set(['A2', 'A5']);
-export const CARRY_ARMS = new Set(['A1', 'A2', 'A5']);
+export const HIPPO_ARMS = new Set(['A2', 'A5', 'X2']);
+export const CARRY_ARMS = new Set(['A1', 'A2', 'A5', ...X_ARMS]);
+/** The set an arm runs: X arms run only set X sequences, the A arms only R and N. */
+export const armSet = (arm) => (X_ARMS.includes(arm) ? 'X' : 'RN');
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
 
 const CAPTURE_EVENTS = ['SessionEnd', 'PreCompact', 'PostCompact', 'PostToolUseFailure'];
-const STRIP_PREFIXES = ['ANTHROPIC_', 'CLAUDE_', 'AWS_', 'CODEX_', 'HIPPO_'];
+// OPENAI_: an operator API key would turn a plan-login Codex session into a paid one.
+const STRIP_PREFIXES = ['ANTHROPIC_', 'CLAUDE_', 'AWS_', 'CODEX_', 'HIPPO_', 'OPENAI_'];
 const STRIP_EXACT = new Set(['CLAUDECODE', ...STRIP_ENV].map((k) => k.toUpperCase()));
 const LAUNCHERS = ['hippo', 'hippo.cmd', 'hippo.ps1', 'hippo.exe', 'hippo.bat'];
 const REQUIRED_TOOLS = ['node', 'npm', 'npx', 'git'];
@@ -23,8 +27,9 @@ const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CO
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
   if (NO_AUTO_MEMORY.has(arm)) return { autoMemoryEnabled: false };
-  if (arm === 'A1') return {};
-  if (arm === 'A2') return hippoSettings;
+  // Each X arm's Claude teach is the A arm it copies: X2 is A2, the rest are A1.
+  if (arm === 'A1' || arm === 'X1' || arm === 'X3' || arm === 'X4') return {};
+  if (arm === 'A2' || arm === 'X2') return hippoSettings;
   if (arm === 'A5') {
     const hooks = Object.fromEntries(Object.entries(hippoSettings.hooks ?? {}).filter(([event]) => !CAPTURE_EVENTS.includes(event)));
     return { ...hippoSettings, hooks };

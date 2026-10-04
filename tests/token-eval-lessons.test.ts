@@ -88,7 +88,7 @@ describe('validateFamilies', () => {
     ['apply prompt holds the key phrase', (s) => { s.sequences[0].tasks[3].prompt = 'add a Changelog.D entry'; }, /task a1.*key phrase/],
     ['family without a screen task', (s) => { delete s.families[1].screen; }, /family f2.*screen/],
     ['screenSkipped outside a dev file', (s) => { delete s.families[1].screen; Object.assign(s.families[1], { screenSkipped: true, screenNote: 'toy' }); }, /family f2.*"dev": true/],
-    ['set X task', (s) => { s.sequences[0].tasks[1].set = 'X'; }, /set X needs the Codex runner/],
+    ['task-level set', (s) => { s.sequences[0].tasks[1].set = 'X'; }, /task n1.*set belongs on the sequence/],
   ];
   for (const [name, mutate, re] of rejects) {
     it(`rejects ${name}, naming it`, () => {

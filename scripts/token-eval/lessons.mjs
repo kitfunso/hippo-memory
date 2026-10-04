@@ -16,10 +16,12 @@ export function lessonIndex(families) {
   return index;
 }
 
-function checkTaskRole(t, families, index) {
-  if (t.set === 'X') throw new Error(`task ${t.id}: set X needs the Codex runner (E6)`);
+function checkTaskRole(t, families, index, sequence) {
+  // The tool is fixed per kind in set X, so a task-level set could make records the contract refuses.
+  if ('set' in t) throw new Error(`task ${t.id}: set belongs on the sequence ("set": "X"), never on a task`);
   if (!KINDS.includes(t.kind)) throw new Error(`task ${t.id}: kind must be one of ${KINDS.join(', ')} (got ${t.kind ?? 'none'})`);
   if (t.kind === 'no-lesson') {
+    if (sequence.set === 'X') throw new Error(`task ${t.id}: a no-lesson task cannot sit in set X sequence ${sequence.id}; no-lesson is set N only`);
     if (t.familyId || t.lessonId) throw new Error(`task ${t.id}: a no-lesson task takes no familyId or lessonId`);
     return;
   }
@@ -97,7 +99,10 @@ export function validateFamilies(spec, baseDir) {
   const repeated = lessonIds.find((id, i) => lessonIds.indexOf(id) !== i);
   if (repeated) throw new Error(`lesson id ${repeated} is used twice`);
   const index = lessonIndex(families);
-  for (const s of spec.sequences) for (const t of s.tasks) checkTaskRole(t, families, index);
+  for (const s of spec.sequences) {
+    if (s.set !== undefined && s.set !== 'X') throw new Error(`sequence ${s.id}: set must be "X" or absent (R and N come from each task's kind), got ${s.set}`);
+    for (const t of s.tasks) checkTaskRole(t, families, index, s);
+  }
   for (const f of families) checkFamilyLessons(f, spec, baseDir);
   for (const f of families) checkFamilyTasks(f, spec);
   return spec;
@@ -237,14 +242,14 @@ export function promptLeaks(orderTasks, families) {
 const NULL_ROLE = { applyIndex: null, afterReversal: null, tasksSinceTeach: null };
 
 /** Per position: kind, family, lesson, source, and the apply-only fields E7 cross-checks (null off apply). */
-export function taskRoles(orderTasks, families) {
+export function taskRoles(orderTasks, families, sequenceSet) {
   const index = lessonIndex(families);
   const lastTeach = new Map();
   const applies = new Map();
   return orderTasks.map((t, pos) => {
     if (t.kind === 'no-lesson') return { kind: t.kind, familyId: null, lessonId: null, lessonSource: null, ...NULL_ROLE, set: 'N' };
     const { lesson, family } = index.get(t.lessonId);
-    const role = { kind: t.kind, familyId: family.id, lessonId: lesson.id, lessonSource: family.lessonSource, ...NULL_ROLE, set: 'R' };
+    const role = { kind: t.kind, familyId: family.id, lessonId: lesson.id, lessonSource: family.lessonSource, ...NULL_ROLE, set: sequenceSet === 'X' ? 'X' : 'R' };
     if (t.kind === 'teach') {
       lastTeach.set(family.id, pos);
       return role;

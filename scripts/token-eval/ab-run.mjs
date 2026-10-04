@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ARMS, ARM_SEEDS, TOKEN_KEY } from './arms.mjs';
+import { ARMS, ARM_SEEDS, TOKEN_KEY, armSet } from './arms.mjs';
 import { assertNoAncestorInstructions, checkHomes } from './homes.mjs';
 import { validateFamilies, drawOrder, taskRoles } from './lessons.mjs';
 import { openContext, cacheTaskRepos } from './runs.mjs';
@@ -43,7 +43,16 @@ const rotate = (list, k) => list.map((_, i) => list[(i + k) % list.length]);
 /** A sequence's tasks in this seed's drawn order with their roles; every arm on the seed shares it (prereg 117). */
 function seededOrder(sequence, families, seed) {
   const tasks = drawOrder(sequence, families, seed).map((id) => sequence.tasks.find((t) => t.id === id));
-  return { tasks, roles: taskRoles(tasks, families) };
+  return { tasks, roles: taskRoles(tasks, families, sequence.set) };
+}
+
+const pairs = (arm, sequence) => armSet(arm) === (sequence.set === 'X' ? 'X' : 'RN');
+
+/** Throws when an arm has no sequence of its set, so a plan never silently drops an arm. */
+function assertArmsPair(spec, arms) {
+  for (const arm of arms) {
+    if (!spec.sequences.some((s) => pairs(arm, s))) throw new Error(`arm ${arm} has no sequence of set ${armSet(arm) === 'X' ? 'X' : 'R or N'} in the tasks file`);
+  }
 }
 
 // --seeds only lowers a count: E7 refuses an A0 or A4 seed past the prereg's two (prereg 122-124).
@@ -51,6 +60,7 @@ const seedCap = (seeds) => (arm) => Math.min(seeds ?? ARM_SEEDS[arm], ARM_SEEDS[
 
 /** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, arm order rotated by position + seed. */
 export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
+  assertArmsPair(spec, arms);
   const steps = [];
   const maxSeed = Math.max(...arms.map(seedsFor));
   const maxTasks = Math.max(...spec.sequences.map((s) => s.tasks.length));
@@ -60,7 +70,7 @@ export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
     for (let position = 0; position < maxTasks; position++) {
       for (const arm of rotate(active, position + seed)) {
         for (const sequence of spec.sequences) {
-          if (position >= sequence.tasks.length) continue;
+          if (position >= sequence.tasks.length || !pairs(arm, sequence)) continue;
           const { tasks, roles } = orders.get(sequence.id);
           steps.push({ seed, position, arm, sequence, taskId: tasks[position].id, t: tasks[position], role: roles[position] });
         }
@@ -120,7 +130,7 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]';
 
 /** The command line, checked: the tasks file, out dir, arms, seeds, pass-env names and mode. */
 function parseArgs(argv) {
@@ -135,7 +145,8 @@ function parseArgs(argv) {
     process.exit(1);
   }
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')), path.dirname(path.resolve(tasksFile)));
-  const arms = flag('--arms', ARMS.join(',')).split(',').map((a) => a.trim());
+  const fitting = ARMS.filter((a) => spec.sequences.some((s) => pairs(a, s)));
+  const arms = flag('--arms', fitting.join(',')).split(',').map((a) => a.trim());
   for (const a of arms) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
   if (new Set(arms).size !== arms.length) throw new Error(`--arms names an arm twice (${arms.join(',')}); each arm runs once`);
   const timeoutArg = flag('--session-timeout-min', '60');

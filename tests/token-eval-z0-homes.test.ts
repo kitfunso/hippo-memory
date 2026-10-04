@@ -97,7 +97,7 @@ describe('armEnv and childEnv', () => {
 
   it('strips every provider, Claude, Codex and hippo key, any case, and sets the run homes', () => {
     const { run, base } = setup();
-    expect(ARMS).toEqual(['A0', 'A1', 'A2', 'A4', 'A5']);
+    expect(ARMS).toEqual(['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4']);
     for (const arm of ARMS) {
       const env = armEnv(arm, { ...run, seed: 2 }, base);
       expect(env.KEEP_ME).toBe('k');
@@ -131,7 +131,7 @@ describe('armEnv and childEnv', () => {
     expect(() => armEnv('A1', run, { ...base, CLAUDE_CODE_GIT_BASH_PATH: 'C:/bash.exe' }, { passEnv: ['CLAUDE_CODE_GIT_BASH_PATH'] })).not.toThrow();
   });
 
-  it('puts bin/ first for A2/A5 only, drops the hippo dir for all, and childEnv drops bin/', () => {
+  it('puts bin/ first for A2/A5/X2 only, drops the hippo dir for all, and childEnv drops bin/', () => {
     const { run, base, decoy, other } = setup();
     for (const arm of ARMS) {
       const armPath = armEnv(arm, run, base).PATH;
@@ -139,7 +139,7 @@ describe('armEnv and childEnv', () => {
       const parts = armPath.split(delimiter);
       expect(parts.includes(decoy), arm).toBe(false);
       expect(parts.includes(other), arm).toBe(true);
-      expect(parts[0] === run.bin, arm).toBe(arm === 'A2' || arm === 'A5');
+      expect(parts[0] === run.bin, arm).toBe(arm === 'A2' || arm === 'A5' || arm === 'X2');
       expect(childEnv(armEnv(arm, run, base)).PATH.split(delimiter)).not.toContain(run.bin);
     }
     expect(childEnv(armEnv('A2', run, base), { keepBin: true }).PATH.split(delimiter)[0]).toBe(run.bin);
