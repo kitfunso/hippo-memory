@@ -18,6 +18,7 @@
 - **CI times the request paths at 10,000 memories per store** and fails if any of them takes more than 2 seconds.
 - **The CLI dispatches from a command table.** Each verb's handler, aliases and help text now sit in one entry, and `hippo --help`, `hippo <verb> --help` and the unknown-command message are built from it. Output is byte-for-byte the same, pinned by new golden snapshots of every help form. One edge case changes: `hippo hippo --help` printed the examples list and now prints the full usage, like any other unknown verb.
 - **Store-heavy test and eval-script seed loops share one SQLite connection.** Seeding with a close per write paid a WAL checkpoint each time and pushed Windows CI tests toward the 30 s budget. The E1 lifecycle driver and the lifecycle-stress builder now do the same. No product code changed.
+- **CI now type-checks the test files.** The `checks` job runs `npm run typecheck:tests` (`tsc -p tsconfig.tests.json`, which covers `src/` and `tests/` and infers types from the `.mjs` scripts the tests import), so a wrong-shaped call in a test fails the PR. JSDoc on the token-eval scripts gives those imports real types.
 
 ### Fixed
 
