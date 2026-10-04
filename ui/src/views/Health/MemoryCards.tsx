@@ -122,23 +122,25 @@ export function MemoryCards({ pages, count, sortKey, sortDir, onSort, onToggleDi
           {sortDir === "asc" ? "▲" : "▼"}
         </button>
       </div>
-      <div
-        ref={t.rootRef}
-        className="vt"
-        role="listbox"
-        aria-label="Memories"
-        aria-activedescendant={t.active >= 0 ? `mc-r${t.active}` : undefined}
-        tabIndex={0}
-        onScroll={t.onScroll}
-        onKeyDown={t.onRootKeyDown}
-        onFocus={(e) => {
-          if (e.target === e.currentTarget) t.onRootFocus();
-        }}
-      >
-        <div className="vt-sp" style={{ height: count * height }}>
-          {rows}
+      <div className="vt-wrap">
+        <div
+          ref={t.rootRef}
+          className="vt"
+          role="listbox"
+          aria-label="Memories"
+          aria-activedescendant={t.active >= 0 ? `mc-r${t.active}` : undefined}
+          tabIndex={0}
+          onScroll={t.onScroll}
+          onKeyDown={t.onRootKeyDown}
+          onFocus={(e) => {
+            if (e.target === e.currentTarget) t.onRootFocus();
+          }}
+        >
+          <div className="vt-sp" style={{ height: count * height }}>
+            {rows}
+          </div>
         </div>
-        {count === 0 && <div className="vt-empty mc-empty">{empty}</div>}
+        {count === 0 && <div className="vt-empty">{empty}</div>}
       </div>
     </div>
   );

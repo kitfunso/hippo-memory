@@ -123,9 +123,10 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
 }
 
 function handleRead(ctx: RouteContext, segments: string[]): boolean {
-  const { hippoRoot, snapshots, res, url } = ctx;
+  const { hippoRoot, snapshots, req, res, url } = ctx;
   const tenantId = resolveTenantId({});
-  const fresh = url.searchParams.get('fresh') === '1';
+  // A cross-site <img src=...?fresh=1> must not force a full rebuild.
+  const fresh = url.searchParams.get('fresh') === '1' && !isCrossSite(req);
   const [, head, a, b] = segments;
 
   if (head === 'overview' && segments.length === 2) {
@@ -251,6 +252,11 @@ export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { 
 
   const server = http.createServer((req, res) => {
     handleRequest(req, res).catch((err) => {
+      const clientFault = err instanceof ParamError || err instanceof URIError;
+      // A cut-short response is logged even for a client fault; a bare 400 is not.
+      if (res.headersSent || !clientFault) {
+        log.error('dashboard request failed', { error: err instanceof Error ? err.message : String(err), path: req.url });
+      }
       if (res.headersSent) {
         res.end();
         return;
@@ -262,7 +268,6 @@ export function serveDashboard(hippoRoot: string, port: number = 3333, opts?: { 
       }
       if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);
       if (err instanceof URIError) return jsonResponse(res, { error: 'Malformed URL path' }, 400);
-      log.error('dashboard request failed', { error: err instanceof Error ? err.message : String(err), path: req.url });
       jsonResponse(res, { error: 'Internal error' }, 500);
     });
   });

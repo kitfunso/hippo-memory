@@ -10,7 +10,7 @@ import { quarantineScopeFor } from '../src/quarantine.js';
 import { COALESCE_MS, TTL_MS, createSnapshotService, type SnapshotService } from '../src/dashboard-snapshot.js';
 import { buildOverview } from '../src/dashboard-queries.js';
 import {
-  NOW, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
+  NOW, call, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import type { MemoryDetail, Overview } from '../src/dashboard-types.js';
 
@@ -243,5 +243,16 @@ describe('through the server', () => {
     expect(plain.snapshotId).toBe(first.snapshotId);
     expect(forced.snapshotId).toBeGreaterThan(first.snapshotId);
     expect(forced.total).toBe(2);
+  });
+
+  it('ignores ?fresh=1 on a cross-site request but honours it on a same-origin one', async () => {
+    const first = parse<Overview>(await get(dash.port, '/api/overview'));
+    seed(store.hippoRoot, 'written elsewhere');
+
+    const crossSite = parse<Overview>(await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'cross-site' } }));
+    const sameOrigin = parse<Overview>(await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'same-origin' } }));
+
+    expect(crossSite.snapshotId).toBe(first.snapshotId);
+    expect(sameOrigin.snapshotId).toBeGreaterThan(first.snapshotId);
   });
 });

@@ -556,6 +556,14 @@ main > :last-child {
 }
 
 /* virtual table */
+.vt-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
 .vt {
   position: relative;
   flex: 1 1 auto;
@@ -654,15 +662,20 @@ main > :last-child {
   color: var(--text-3);
   margin-left: 6px;
 }
+/* Covers the whole wrapper so no header height is hard-coded; only its buttons take the pointer. */
 .vt-empty {
   position: absolute;
-  inset: 45px 0 0;
+  inset: 0;
+  pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-2);
   padding: 16px;
   text-align: center;
+}
+.vt-empty :is(button, a) {
+  pointer-events: auto;
 }
 .bar {
   display: inline-block;
@@ -1421,9 +1434,6 @@ main > :last-child {
 .mc-meta .shape,
 .mc-meta .flag {
   margin-right: 0;
-}
-.mc-empty {
-  inset: 0;
 }
 
 @media (max-width: 760px) {

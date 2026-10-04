@@ -381,6 +381,20 @@ describe("ProjectView: toggles and phone list structure", () => {
     expect(screen.getByRole("button", { name: /^buffer/ })).toHaveClass("layer");
   });
 
+  it("keeps the phone empty-state buttons outside the listbox", async () => {
+    stubPhone();
+    const all = makeRows(2);
+    const handler: Handler = (url) => json(makePage(url.searchParams.get("chip") === "pinned" ? [] : all, 0, 100));
+    openHippo(all, { extra: { [MEMORIES]: handler } });
+    const list = await screen.findByRole("listbox", { name: "Memories" });
+    await within(list).findAllByRole("option");
+    fireEvent.click(screen.getByRole("button", { name: /^Pinned/ }));
+
+    const clear = await screen.findByRole("button", { name: "Clear filters" });
+    expect(list.contains(clear)).toBe(false);
+    expect(Array.from(list.children).map((c) => c.className)).toEqual(["vt-sp"]);
+  });
+
   it("makes the memory listbox the scroller with the spacer as its only child", async () => {
     stubPhone();
     openHippo(makeRows(2));

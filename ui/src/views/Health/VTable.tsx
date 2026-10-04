@@ -89,47 +89,49 @@ export function VTable(props: VTableProps) {
   // SAFETY: React's CSSProperties has no custom-property keys; the browser accepts them.
   const style = { "--cols": columns.map((c) => c.width).join(" ") } as CSSProperties;
   return (
-    <div
-      ref={t.rootRef}
-      className="vt"
-      role="grid"
-      aria-label={label}
-      aria-rowcount={count + 1}
-      aria-activedescendant={t.active >= 0 ? `${id}-r${t.active}` : undefined}
-      tabIndex={0}
-      style={style}
-      onScroll={t.onScroll}
-      onKeyDown={t.onRootKeyDown}
-      onFocus={(e) => {
-        if (e.target === e.currentTarget) t.onRootFocus();
-      }}
-    >
-      <div ref={headRef} className="vt-head" role="row" aria-rowindex={1}>
-        {columns.map((c) => {
-          const on = sortKey === c.key;
-          return (
-            <div
-              key={c.key}
-              className={c.right ? "vt-th r" : "vt-th"}
-              role="columnheader"
-              aria-sort={on ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-            >
-              {c.nosort || !onSort ? (
-                <span className="h">{c.label}</span>
-              ) : (
-                <button type="button" onClick={() => onSort(c.key)}>
-                  {c.label}
-                  <span className="ar" aria-hidden="true">
-                    {on ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                  </span>
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="vt-sp" role="rowgroup" style={{ height: count * rowHeight }}>
-        {rows}
+    <div className="vt-wrap">
+      <div
+        ref={t.rootRef}
+        className="vt"
+        role="grid"
+        aria-label={label}
+        aria-rowcount={count + 1}
+        aria-activedescendant={t.active >= 0 ? `${id}-r${t.active}` : undefined}
+        tabIndex={0}
+        style={style}
+        onScroll={t.onScroll}
+        onKeyDown={t.onRootKeyDown}
+        onFocus={(e) => {
+          if (e.target === e.currentTarget) t.onRootFocus();
+        }}
+      >
+        <div ref={headRef} className="vt-head" role="row" aria-rowindex={1}>
+          {columns.map((c) => {
+            const on = sortKey === c.key;
+            return (
+              <div
+                key={c.key}
+                className={c.right ? "vt-th r" : "vt-th"}
+                role="columnheader"
+                aria-sort={on ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+              >
+                {c.nosort || !onSort ? (
+                  <span className="h">{c.label}</span>
+                ) : (
+                  <button type="button" onClick={() => onSort(c.key)}>
+                    {c.label}
+                    <span className="ar" aria-hidden="true">
+                      {on ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                    </span>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="vt-sp" role="rowgroup" style={{ height: count * rowHeight }}>
+          {rows}
+        </div>
       </div>
       {count === 0 && <div className="vt-empty">{empty}</div>}
     </div>

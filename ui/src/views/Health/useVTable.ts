@@ -129,8 +129,11 @@ export function useVTable(opts: UseVTableOptions): VTableState {
     }
   };
 
+  // A press on a row also focuses the root; only keyboard focus may pick a row, and it picks the first visible one.
   const onRootFocus = () => {
-    if (active < 0 && count > 0) setActive(0, true);
+    const root = rootRef.current;
+    if (active >= 0 || count === 0 || !root?.matches(":focus-visible")) return;
+    setActive(clamp(Math.ceil(root.scrollTop / rowHeight), 0, count - 1), true);
   };
 
   return { rootRef, first, last, active, setActive, onScroll, onRootKeyDown, onRootFocus };
