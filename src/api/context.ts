@@ -717,9 +717,8 @@ export async function getContext(
     const updatedEntries = markRetrieved(toUpdate);
     const localIndex = loadIndex(ctx.hippoRoot);
     const retrievedIds = updatedEntries.map((u) => u.id);
-    const gate = { recallBoostAblated: isRecallBoostAblated() };
-    const strengthenedHere = strengthenRetrieved(ctx.hippoRoot, retrievedIds, gate);
-    if (hasGlobal) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)), gate);
+    const strengthenedHere = strengthenRetrieved(ctx.hippoRoot, retrievedIds, { recallBoostAblated: isRecallBoostAblated() });
+    if (hasGlobal) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)), { recallBoostAblated: isRecallBoostAblated() });
 
     localIndex.last_retrieval_ids = retrievedIds;
 
