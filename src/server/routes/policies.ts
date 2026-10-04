@@ -2,6 +2,7 @@
 import { closePolicy, loadPolicies, loadPoliciesAsOf, loadPolicyById, savePolicy, VALID_POLICY_STATES } from '../../policies.js';
 import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -61,20 +62,23 @@ export async function handleCreatePolicy({ req, res, opts }: RouteRequest): Prom
 export async function handleListPolicies({ req, res, opts, query }: RouteRequest): Promise<void> {
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   let policies;
   if (status === 'all') {
-    policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit });
+    policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else {
     if (!isSetMember(VALID_POLICY_STATES, status)) {
       throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
     }
     policies = loadPolicies(opts.hippoRoot, ctx.tenantId, {
       status,
-      limit,
+      limit: limit + 1,
+      after,
     });
   }
-  sendJson(res, 200, { policies });
+  const page = pageOf(policies, limit, byCreatedAt);
+  sendJson(res, 200, { policies: page.items, next_cursor: page.nextCursor });
   return;
 }
 

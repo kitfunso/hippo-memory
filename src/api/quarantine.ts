@@ -13,6 +13,7 @@ import {
   type QuarantineStatus,
 } from '../quarantine.js';
 import { log } from '../log.js';
+import type { KeysetPosition } from '../keyset.js';
 import { appendAuditEvent } from '../audit.js';
 import type { Context } from './types.js';
 
@@ -36,11 +37,11 @@ const QUARANTINE_PREVIEW_CHARS = 200;
 /** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review queue). */
 export function quarantineList(
   ctx: Context,
-  opts: { status?: QuarantineStatus | 'all'; limit?: number } = {},
+  opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
 ): QuarantineListItem[] {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    const rows = listQuarantineRows(db, ctx.tenantId, opts.status ?? 'pending', opts.limit);
+    const rows = listQuarantineRows(db, ctx.tenantId, opts.status ?? 'pending', opts.limit, opts.after);
     return rows.map((row) => {
       const entry = readEntry(ctx.hippoRoot, row.memoryId, ctx.tenantId);
       return {

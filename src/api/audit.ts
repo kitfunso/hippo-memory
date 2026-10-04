@@ -2,6 +2,7 @@
 
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { queryAuditEvents, type AuditEvent, type AuditOp } from '../audit.js';
+import type { KeysetPosition } from '../keyset.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -13,6 +14,8 @@ export interface AuditListOpts {
   /** ISO timestamp lower bound. */
   since?: string;
   limit?: number;
+  /** Resume after this row: the (ts, id) position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 /**
@@ -27,6 +30,7 @@ export function auditList(ctx: Context, opts: AuditListOpts): AuditEvent[] {
       op: opts.op,
       since: opts.since,
       limit: opts.limit,
+      after: opts.after,
     });
   } finally {
     closeHippoDb(db);

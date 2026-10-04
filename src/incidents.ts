@@ -33,6 +33,7 @@ import { assertTenantId } from './tenant.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -78,6 +79,8 @@ export interface SaveIncidentOpts {
 export interface ListIncidentsOpts {
   status?: IncidentStatus;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -402,6 +405,7 @@ export function loadIncidents(
 ): Incident[] {
   assertTenantId('loadIncidents', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
     let rows: IncidentRow[];
@@ -414,18 +418,18 @@ export function loadIncidents(
       // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
       rows = db.prepare(`
         SELECT ${INCIDENT_COLS} FROM incidents
-        WHERE tenant_id = ? AND status = ?
+        WHERE tenant_id = ? AND status = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, opts.status, limit) as IncidentRow[];
+      `).all(tenantId, opts.status, ...after.params, limit) as IncidentRow[];
     } else {
       // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
       rows = db.prepare(`
         SELECT ${INCIDENT_COLS} FROM incidents
-        WHERE tenant_id = ?
+        WHERE tenant_id = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, limit) as IncidentRow[];
+      `).all(tenantId, ...after.params, limit) as IncidentRow[];
     }
     return rows.map(rowToIncident);
   } finally {

@@ -3,6 +3,7 @@ import { canAutoDelete, type MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject, JsonValue } from './working-memory.js';
 import { log } from './log.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -337,6 +338,8 @@ export interface QueryAuditOpts {
   op?: AuditOp;
   since?: string; // ISO timestamp
   limit?: number;
+  /** Resume after this row: the (ts, id) position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 export interface AuditEvent {
@@ -360,13 +363,15 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
     where.push('ts >= ?');
     params.push(opts.since);
   }
-  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10000));
+  const after = keysetAfter('ts', 'id', opts.after);
+  // One past the route's 10000 cap: GET /v1/audit reads a row ahead to tell whether another page exists.
+  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10001));
   // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(
-      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY ts DESC, id DESC LIMIT ?`,
+      `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC LIMIT ?`,
     )
-    .all(...params, limit) as AuditRow[];
+    .all(...params, ...after.params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
 }
 

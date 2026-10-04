@@ -31,6 +31,7 @@ import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -96,6 +97,8 @@ export interface ListProjectBriefsOpts {
   /** Filter to a single repo. */
   repo?: string;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 /** A receipt row gathered for the refresh assembler. */
@@ -443,6 +446,7 @@ export function loadProjectBriefs(
 ): ProjectBrief[] {
   assertTenantId('loadProjectBriefs', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   if (opts.status && !VALID_BRIEF_STATES.has(opts.status)) {
     throw new BadRequestError(
       `loadProjectBriefs: status must be one of ${Array.from(VALID_BRIEF_STATES).join('|')}; got ${opts.status}`,
@@ -460,13 +464,13 @@ export function loadProjectBriefs(
       clauses.push('repo = ?');
       params.push(opts.repo);
     }
-    params.push(limit);
+    params.push(...after.params, limit);
     // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow columns
     // regardless of the dynamic WHERE clause built above; .all() returns rows
     // in that shape.
     const rows = db.prepare(`
       SELECT ${BRIEF_COLS} FROM project_briefs
-      WHERE ${clauses.join(' AND ')}
+      WHERE ${clauses.join(' AND ')}${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(...params) as ProjectBriefRow[];

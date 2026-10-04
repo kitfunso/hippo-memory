@@ -3,7 +3,8 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import { createApiKey, listApiKeys, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem } from '../auth.js';
+import { createApiKey, listApiKeyRows, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem, type ApiKeyListRow } from '../auth.js';
+import type { KeysetPosition } from '../keyset.js';
 import { isRestrictedScope } from '../recall-scope.js';
 import type { Context } from './types.js';
 
@@ -89,10 +90,17 @@ export function authList(
   ctx: Context,
   opts: { active: boolean },
 ): ApiKeyListItem[] {
+  return authListRows(ctx, opts).map((r) => r.key);
+}
+
+/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
+export function authListRows(
+  ctx: Context,
+  opts: { active: boolean; limit?: number; after?: KeysetPosition },
+): ApiKeyListRow[] {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    const all = listApiKeys(db, opts);
-    return all.filter((k) => k.tenantId === ctx.tenantId);
+    return listApiKeyRows(db, { ...opts, tenantId: ctx.tenantId });
   } finally {
     closeHippoDb(db);
   }

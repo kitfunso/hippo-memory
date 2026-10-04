@@ -1,7 +1,9 @@
 // /v1/project-briefs routes.
 import { assembleBriefFromReceipts, type BriefStatus, closeProjectBrief, loadProjectBriefById, loadProjectBriefs, refreshBrief, saveProjectBrief, VALID_BRIEF_STATES } from '../../project-briefs.js';
 import { HttpError, sendJson } from '../../http-util.js';
+import type { KeysetPosition } from '../../keyset.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -11,6 +13,7 @@ interface ProjectBriefListOpts {
   status?: BriefStatus;
   repo?: string;
   limit: number;
+  after?: KeysetPosition;
 }
 
 // ── E2 project_brief routes ──
@@ -52,8 +55,9 @@ export async function handleListProjectBriefs({ req, res, opts, query }: RouteRe
   const status = query.get('status') ?? 'all';
   const repoFilter = query.get('repo');
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
-  const listOpts: ProjectBriefListOpts = { limit };
+  const listOpts: ProjectBriefListOpts = { limit: limit + 1, after };
   if (repoFilter !== null && repoFilter.trim().length > 0) {
     listOpts.repo = repoFilter.trim();
   }
@@ -64,7 +68,8 @@ export async function handleListProjectBriefs({ req, res, opts, query }: RouteRe
     listOpts.status = status;
   }
   const briefs = loadProjectBriefs(opts.hippoRoot, ctx.tenantId, listOpts);
-  sendJson(res, 200, { briefs });
+  const page = pageOf(briefs, limit, byCreatedAt);
+  sendJson(res, 200, { briefs: page.items, next_cursor: page.nextCursor });
   return;
 }
 

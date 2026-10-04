@@ -2,6 +2,7 @@
 import { closePrediction, computePredictionBaserate, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonNumber, isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -66,18 +67,20 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   const classTag = query.get('class') ?? undefined;
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   let predictions;
   if (status === 'all') {
     if (classTag) {
-      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit });
+      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit: limit + 1, after });
     } else {
-      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit });
+      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
     }
   } else if (status === 'open') {
     predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, {
       classTag: classTag || undefined,
-      limit,
+      limit: limit + 1,
+      after,
     });
   } else {
     if (!isSetMember(VALID_CLOSURE_STATES, status)) {
@@ -88,10 +91,12 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
     }
     predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, {
       closureState: status,
-      limit,
+      limit: limit + 1,
+      after,
     });
   }
-  sendJson(res, 200, { predictions });
+  const page = pageOf(predictions, limit, byCreatedAt);
+  sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
   return;
 }
 

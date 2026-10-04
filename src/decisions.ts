@@ -32,6 +32,7 @@ import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -76,6 +77,8 @@ export interface SaveDecisionOpts {
 export interface ListDecisionsOpts {
   status?: DecisionStatus;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +361,7 @@ export function loadDecisions(
 ): Decision[] {
   assertTenantId('loadDecisions', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
     let rows: DecisionRow[];
@@ -370,18 +374,18 @@ export function loadDecisions(
       // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
       rows = db.prepare(`
         SELECT ${DECISION_COLS} FROM decisions
-        WHERE tenant_id = ? AND status = ?
+        WHERE tenant_id = ? AND status = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, opts.status, limit) as DecisionRow[];
+      `).all(tenantId, opts.status, ...after.params, limit) as DecisionRow[];
     } else {
       // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
       rows = db.prepare(`
         SELECT ${DECISION_COLS} FROM decisions
-        WHERE tenant_id = ?
+        WHERE tenant_id = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, limit) as DecisionRow[];
+      `).all(tenantId, ...after.params, limit) as DecisionRow[];
     }
     return rows.map(rowToDecision);
   } finally {

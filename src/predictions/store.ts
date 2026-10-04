@@ -32,6 +32,7 @@ import { assertTenantId } from '../tenant.js';
 import { createMemory, Layer, type MemoryKind } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { loadConfig } from '../config.js';
+import { keysetAfter, type KeysetPosition } from '../keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -80,6 +81,8 @@ export interface ClosePredictionOpts {
 export interface ListPredictionsOpts {
   closureState?: ClosureState;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +355,7 @@ export function loadPredictionsByClass(
 ): Prediction[] {
   assertTenantId('loadPredictionsByClass', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
     let rows: PredictionRow[];
@@ -367,10 +371,10 @@ export function loadPredictionsByClass(
                estimate_value, estimate_unit, target_date,
                actual_value, closure_state, closed_at, closure_note, created_at
         FROM predictions
-        WHERE tenant_id = ? AND class_tag = ? AND closure_state = ?
+        WHERE tenant_id = ? AND class_tag = ? AND closure_state = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, classTag, opts.closureState, limit) as PredictionRow[];
+      `).all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
     } else {
       // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
@@ -378,10 +382,10 @@ export function loadPredictionsByClass(
                estimate_value, estimate_unit, target_date,
                actual_value, closure_state, closed_at, closure_note, created_at
         FROM predictions
-        WHERE tenant_id = ? AND class_tag = ?
+        WHERE tenant_id = ? AND class_tag = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, classTag, limit) as PredictionRow[];
+      `).all(tenantId, classTag, ...after.params, limit) as PredictionRow[];
     }
     return rows.map(rowToPrediction);
   } finally {
@@ -545,10 +549,11 @@ export function computePredictionBaserate(
 export function loadOpenPredictions(
   hippoRoot: string,
   tenantId: string,
-  opts: { classTag?: string; limit?: number } = {},
+  opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
   assertTenantId('loadOpenPredictions', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
     let rows: PredictionRow[];
@@ -559,10 +564,10 @@ export function loadOpenPredictions(
                estimate_value, estimate_unit, target_date,
                actual_value, closure_state, closed_at, closure_note, created_at
         FROM predictions
-        WHERE tenant_id = ? AND class_tag = ? AND closure_state = 'open'
+        WHERE tenant_id = ? AND class_tag = ? AND closure_state = 'open'${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, opts.classTag, limit) as PredictionRow[];
+      `).all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
     } else {
       // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
@@ -570,10 +575,10 @@ export function loadOpenPredictions(
                estimate_value, estimate_unit, target_date,
                actual_value, closure_state, closed_at, closure_note, created_at
         FROM predictions
-        WHERE tenant_id = ? AND closure_state = 'open'
+        WHERE tenant_id = ? AND closure_state = 'open'${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, limit) as PredictionRow[];
+      `).all(tenantId, ...after.params, limit) as PredictionRow[];
     }
     return rows.map(rowToPrediction);
   } finally {

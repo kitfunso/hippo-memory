@@ -1,10 +1,11 @@
 // Admin routes: API keys, quarantine and the audit log.
 import { AUDIT_OPS, type AuditOp } from '../../audit.js';
-import { auditList, authCreate, authList, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
+import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
+import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, validateIdSegment } from '../validation.js';
+import { isJsonString, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
@@ -12,6 +13,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 // enough to dump a small deployment's full audit log without paginating, but
 // small enough that a malicious client can't ask for the world.
 const MAX_AUDIT_LIMIT = 10000;
+
+// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees no change.
+const MAX_AUTH_KEYS_PAGE = 1000;
 
 // POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
 // body (Task 8): the HTTP layer hands it to the client; the user-facing
@@ -46,7 +50,7 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   return;
 }
 
-// GET /v1/auth/keys?active=true — list keys visible to ctx.tenantId.
+// GET /v1/auth/keys?active=true&limit=&cursor=: list keys visible to ctx.tenantId.
 // `active` defaults to true so the common case (show me usable keys) is
 // a single GET; ?active=false includes revoked rows.
 export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest): Promise<void> {
@@ -57,9 +61,12 @@ export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest
     else if (activeRaw === 'false') active = false;
     else throw new HttpError(400, "active must be 'true' or 'false'");
   }
+  const limit = parseListLimit(query.get('limit'), MAX_AUTH_KEYS_PAGE, MAX_AUTH_KEYS_PAGE);
+  const after = parseCursor(query.get('cursor'), 'integer', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
-  const result = authList(ctx, { active });
-  sendJson(res, 200, result);
+  const page = pageOf(authListRows(ctx, { active, limit: limit + 1, after }), limit, (r) => ({ key: r.rowId, id: r.rowId }));
+  setNextCursorHeader(res, page.nextCursor);
+  sendJson(res, 200, page.items.map((r) => r.key));
   return;
 }
 
@@ -74,7 +81,7 @@ export async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyM
   return;
 }
 
-// GET /v1/quarantine?status=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
+// GET /v1/quarantine?status=&limit=&cursor=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
 export async function handleListQuarantine({ req, res, opts, query }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   if (ctx.actor.role !== 'admin') {
@@ -88,7 +95,10 @@ export async function handleListQuarantine({ req, res, opts, query }: RouteReque
     }
     status = statusRaw;
   }
-  sendJson(res, 200, { quarantine: quarantineList(ctx, { status }) });
+  const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'string');
+  const page = pageOf(quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({ key: q.quarantinedAt, id: q.id }));
+  sendJson(res, 200, { quarantine: page.items, next_cursor: page.nextCursor });
   return;
 }
 
@@ -110,7 +120,7 @@ export async function handleRejectQuarantine({ req, res, opts }: RouteRequest, q
   return;
 }
 
-// GET /v1/audit?op=&since=&limit= — read audit events. All three filters
+// GET /v1/audit?op=&since=&limit=&cursor=: read audit events. All three filters
 // validated at the route boundary so an invalid value lands a 400 before
 // we hit the DB.
 export async function handleListAudit({ req, res, opts, query }: RouteRequest): Promise<void> {
@@ -132,7 +142,7 @@ export async function handleListAudit({ req, res, opts, query }: RouteRequest): 
     since = sinceRaw;
   }
   const limitRaw = query.get('limit');
-  let limit: number | undefined;
+  let limit = 100;
   if (limitRaw !== null) {
     const parsed = Number(limitRaw);
     if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
@@ -140,13 +150,15 @@ export async function handleListAudit({ req, res, opts, query }: RouteRequest): 
     }
     limit = parsed;
   }
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
   const tenantOverride = query.get('tenant');
   const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
   if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
   const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
-  const result = auditList(effectiveCtx, { op, since, limit });
-  sendJson(res, 200, result);
+  const page = pageOf(auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({ key: e.ts, id: e.id }));
+  setNextCursorHeader(res, page.nextCursor);
+  sendJson(res, 200, page.items);
   return;
 }

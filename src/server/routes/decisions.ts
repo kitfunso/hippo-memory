@@ -3,6 +3,7 @@ import { closeDecision, loadDecisionById, loadDecisions, saveDecision, VALID_DEC
 import { HttpError, sendJson } from '../../http-util.js';
 import { NotFoundError } from '../../api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonNumber, isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -63,20 +64,23 @@ export async function handleCreateDecision({ req, res, opts }: RouteRequest): Pr
 export async function handleListDecisions({ req, res, opts, query }: RouteRequest): Promise<void> {
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   let decisions;
   if (status === 'all') {
-    decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit });
+    decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else {
     if (!isSetMember(VALID_DECISION_STATES, status)) {
       throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
     }
     decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, {
       status,
-      limit,
+      limit: limit + 1,
+      after,
     });
   }
-  sendJson(res, 200, { decisions });
+  const page = pageOf(decisions, limit, byCreatedAt);
+  sendJson(res, 200, { decisions: page.items, next_cursor: page.nextCursor });
   return;
 }
 

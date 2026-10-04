@@ -25,7 +25,7 @@
  *
  * Run:
  *   node --experimental-strip-types benchmarks/a1/p99-recall.ts \
- *     --store-size 10000 --queries 1000
+ *     --store-size 10000 --queries 1000 [--gate-ms 50]
  *
  * Or via vitest harness (downsized) — see tests/server-p99.test.ts.
  *
@@ -48,6 +48,7 @@ interface CliArgs {
   storeSize: number;
   queries: number;
   port: number;
+  gateMs: number;
 }
 
 interface Stats {
@@ -74,12 +75,13 @@ interface Result {
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { storeSize: 10000, queries: 1000, port: 6789 };
+  const args: CliArgs = { storeSize: 10000, queries: 1000, port: 6789, gateMs: 50 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--store-size') args.storeSize = Number(argv[++i]);
     else if (a === '--queries') args.queries = Number(argv[++i]);
     else if (a === '--port') args.port = Number(argv[++i]);
+    else if (a === '--gate-ms') args.gateMs = Number(argv[++i]);
   }
   return args;
 }
@@ -232,6 +234,8 @@ async function main(): Promise<void> {
 
   // Server start AFTER seed so the bench measures cold-cache fetch latency
   // (no warmup query). Port 0 = ephemeral to avoid collisions.
+  // The bench measures recall, not the per-IP limiter, which would 429 most queries and drop them from the stats.
+  process.env.HIPPO_V1_RPS = '0';
   const server: ServerHandle = await serve({ hippoRoot: home, port: 0 });
   console.log(`[p99-recall] server listening on ${server.url}`);
 
@@ -269,8 +273,8 @@ async function main(): Promise<void> {
   const wallMs = Date.now() - wallStart;
 
   const stats = computeStats(samples);
-  const gateThreshold = 50;
-  const gatePass = stats.p99 < gateThreshold;
+  const gateThreshold = args.gateMs;
+  const gatePass = errorCount === 0 && stats.p99 < gateThreshold;
 
   const notes: string[] = [];
   if (errorCount > 0) notes.push(`${errorCount} fetch errors (excluded from stats)`);

@@ -3,6 +3,7 @@ import { closeIncident, loadIncidentById, loadIncidents, resolveIncident, saveIn
 import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
 import { NotFoundError } from '../../api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -72,20 +73,23 @@ export async function handleCreateIncident({ req, res, opts }: RouteRequest): Pr
 export async function handleListIncidents({ req, res, opts, query }: RouteRequest): Promise<void> {
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   let incidents;
   if (status === 'all') {
-    incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit });
+    incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else {
     if (!isSetMember(VALID_INCIDENT_STATES, status)) {
       throw new HttpError(400, `status must be one of: open | resolved | closed | all (got "${status}")`);
     }
     incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, {
       status,
-      limit,
+      limit: limit + 1,
+      after,
     });
   }
-  sendJson(res, 200, { incidents });
+  const page = pageOf(incidents, limit, byCreatedAt);
+  sendJson(res, 200, { incidents: page.items, next_cursor: page.nextCursor });
   return;
 }
 

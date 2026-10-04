@@ -45,6 +45,7 @@ import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -99,6 +100,8 @@ export interface SavePolicyOpts {
 export interface ListPoliciesOpts {
   status?: PolicyStatus;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,6 +457,7 @@ export function loadPolicies(
 ): Policy[] {
   assertTenantId('loadPolicies', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
     let rows: PolicyRow[];
@@ -467,19 +471,19 @@ export function loadPolicies(
       // .all() returns rows in that shape regardless of the status filter applied.
       rows = db.prepare(`
         SELECT ${POLICY_COLS} FROM policies
-        WHERE tenant_id = ? AND status = ?
+        WHERE tenant_id = ? AND status = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, opts.status, limit) as PolicyRow[];
+      `).all(tenantId, opts.status, ...after.params, limit) as PolicyRow[];
     } else {
       // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
       // .all() returns rows in that shape for every tenant-scoped row.
       rows = db.prepare(`
         SELECT ${POLICY_COLS} FROM policies
-        WHERE tenant_id = ?
+        WHERE tenant_id = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, limit) as PolicyRow[];
+      `).all(tenantId, ...after.params, limit) as PolicyRow[];
     }
     return rows.map(rowToPolicy);
   } finally {

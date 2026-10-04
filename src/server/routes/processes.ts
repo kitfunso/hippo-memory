@@ -2,6 +2,7 @@
 import { closeProcess, loadProcessById, loadProcesses, saveProcess, VALID_PROCESS_STATES } from '../../processes.js';
 import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -76,20 +77,23 @@ export async function handleCreateProcess({ req, res, opts }: RouteRequest): Pro
 export async function handleListProcesses({ req, res, opts, query }: RouteRequest): Promise<void> {
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   let processes;
   if (status === 'all') {
-    processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit });
+    processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else {
     if (!isSetMember(VALID_PROCESS_STATES, status)) {
       throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
     }
     processes = loadProcesses(opts.hippoRoot, ctx.tenantId, {
       status,
-      limit,
+      limit: limit + 1,
+      after,
     });
   }
-  sendJson(res, 200, { processes });
+  const page = pageOf(processes, limit, byCreatedAt);
+  sendJson(res, 200, { processes: page.items, next_cursor: page.nextCursor });
   return;
 }
 

@@ -28,6 +28,7 @@ import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -84,6 +85,8 @@ export interface ListCustomerNotesOpts {
   /** Filter to a single customer. */
   customer?: string;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +413,7 @@ export function loadCustomerNotes(
 ): CustomerNote[] {
   assertTenantId('loadCustomerNotes', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   if (opts.status && !VALID_NOTE_STATES.has(opts.status)) {
     throw new BadRequestError(
       `loadCustomerNotes: status must be one of ${Array.from(VALID_NOTE_STATES).join('|')}; got ${opts.status}`,
@@ -427,13 +431,13 @@ export function loadCustomerNotes(
       clauses.push('customer = ?');
       params.push(opts.customer);
     }
-    params.push(limit);
+    params.push(...after.params, limit);
     // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns
     // regardless of the dynamic WHERE clause built above; .all() returns rows
     // in that shape.
     const rows = db.prepare(`
       SELECT ${NOTE_COLS} FROM customer_notes
-      WHERE ${clauses.join(' AND ')}
+      WHERE ${clauses.join(' AND ')}${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(...params) as CustomerNoteRow[];

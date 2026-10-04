@@ -36,11 +36,11 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
 // list routes so the guard cannot drift (codex review 2026-05-30 P2: fractional
 // limit reached SQLite on the policy route; the same latent hole existed in the
 // sibling routes this was copied from).
-export function parseListLimit(limitRaw: string | null): number {
-  if (limitRaw === null) return 100;
+export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = 1000): number {
+  if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
-  if (!Number.isInteger(limit) || limit <= 0 || limit > 1000) {
-    throw new HttpError(400, 'limit must be a positive integer <= 1000');
+  if (!Number.isInteger(limit) || limit <= 0 || limit > maxLimit) {
+    throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
   }
   return limit;
 }

@@ -1,7 +1,9 @@
 // /v1/customer-notes routes.
 import { closeCustomerNote, loadCustomerNoteById, loadCustomerNotes, type NoteStatus, saveCustomerNote, VALID_NOTE_STATES } from '../../customer-notes.js';
 import { HttpError, sendJson } from '../../http-util.js';
+import type { KeysetPosition } from '../../keyset.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -45,14 +47,16 @@ interface CustomerNoteListOpts {
   status?: NoteStatus;
   customer?: string;
   limit: number;
+  after?: KeysetPosition;
 }
 
 export async function handleListCustomerNotes({ req, res, opts, query }: RouteRequest): Promise<void> {
   const status = query.get('status') ?? 'all';
   const customerFilter = query.get('customer');
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
-  const listOpts: CustomerNoteListOpts = { limit };
+  const listOpts: CustomerNoteListOpts = { limit: limit + 1, after };
   if (customerFilter !== null && customerFilter.trim().length > 0) {
     listOpts.customer = customerFilter.trim();
   }
@@ -63,7 +67,8 @@ export async function handleListCustomerNotes({ req, res, opts, query }: RouteRe
     listOpts.status = status;
   }
   const notes = loadCustomerNotes(opts.hippoRoot, ctx.tenantId, listOpts);
-  sendJson(res, 200, { notes });
+  const page = pageOf(notes, limit, byCreatedAt);
+  sendJson(res, 200, { notes: page.items, next_cursor: page.nextCursor });
   return;
 }
 

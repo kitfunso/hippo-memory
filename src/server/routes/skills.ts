@@ -2,6 +2,7 @@
 import { closeSkill, exportSkills, loadSkillById, loadSkills, saveSkill, VALID_SKILL_STATES } from '../../skills.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
+import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
@@ -57,20 +58,23 @@ export async function handleCreateSkill({ req, res, opts }: RouteRequest): Promi
 export async function handleListSkills({ req, res, opts, query }: RouteRequest): Promise<void> {
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
+  const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
   let skills;
   if (status === 'all') {
-    skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit });
+    skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else {
     if (!isSetMember(VALID_SKILL_STATES, status)) {
       throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
     }
     skills = loadSkills(opts.hippoRoot, ctx.tenantId, {
       status,
-      limit,
+      limit: limit + 1,
+      after,
     });
   }
-  sendJson(res, 200, { skills });
+  const page = pageOf(skills, limit, byCreatedAt);
+  sendJson(res, 200, { skills: page.items, next_cursor: page.nextCursor });
   return;
 }
 

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
@@ -236,20 +237,50 @@ export interface ApiKeyListItem {
   scopes: string[];
 }
 
-export function listApiKeys(db: DatabaseSyncLike, opts: { active: boolean }): ApiKeyListItem[] {
-  const sql = opts.active
-    ? `SELECT key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys WHERE revoked_at IS NULL ORDER BY id DESC`
-    : `SELECT key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys ORDER BY id DESC`;
-  // SAFETY: rows come from one of the two SELECTs above, both of which
-  // project the same 6 columns (key_id, tenant_id, label, created_at,
-  // revoked_at, role) in the same order.
-  const rows = db.prepare(sql).all() as Array<{
-    key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null; role: string;
+export interface ListApiKeysOpts {
+  active: boolean;
+  /** Only this tenant's keys; omit for every tenant (the CLI's single-tenant view). */
+  tenantId?: string;
+  /** Resume after this row: the position the previous page ended on (key and id are both the row id). */
+  after?: KeysetPosition;
+  limit?: number;
+}
+
+/** A listed key plus its row id, the paging key the list item itself does not expose. */
+export interface ApiKeyListRow {
+  rowId: number;
+  key: ApiKeyListItem;
+}
+
+/** Keys newest first, with their row ids, filtered and limited in SQL. */
+export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
+  const where: string[] = ['1 = 1'];
+  const params: Array<string | number> = [];
+  if (opts.active) where.push('revoked_at IS NULL');
+  if (opts.tenantId !== undefined) {
+    where.push('tenant_id = ?');
+    params.push(opts.tenantId);
+  }
+  const after = keysetAfter('id', 'id', opts.after);
+  params.push(...after.params);
+  const limitSql = opts.limit === undefined ? '' : ' LIMIT ?';
+  if (opts.limit !== undefined) params.push(opts.limit);
+  const sql = `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
+  // SAFETY: the SELECT above projects exactly these 7 columns, in this order.
+  const rows = db.prepare(sql).all(...params) as Array<{
+    id: number; key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null; role: string;
   }>;
   return rows.map(r => ({
-    keyId: r.key_id, tenantId: r.tenant_id, label: r.label,
-    createdAt: r.created_at, revokedAt: r.revoked_at,
-    role: r.role === 'admin' ? 'admin' : 'member',
-    scopes: listScopeGrants(db, r.key_id),
+    rowId: r.id,
+    key: {
+      keyId: r.key_id, tenantId: r.tenant_id, label: r.label,
+      createdAt: r.created_at, revokedAt: r.revoked_at,
+      role: r.role === 'admin' ? 'admin' : 'member',
+      scopes: listScopeGrants(db, r.key_id),
+    },
   }));
+}
+
+export function listApiKeys(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListItem[] {
+  return listApiKeyRows(db, opts).map(r => r.key);
 }
