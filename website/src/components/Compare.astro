@@ -38,7 +38,7 @@ const rows = homeFeatures.map((f) => {
 ---
 
 <section id="compare" class="relative scroll-mt-20 border-t border-white/5">
-  <div class="mx-auto max-w-6xl px-5 py-24">
+  <div class="mx-auto max-w-6xl px-5 py-16 sm:py-20">
     <div class="max-w-2xl">
       <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Compare</p>
       <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
@@ -49,8 +49,8 @@ const rows = homeFeatures.map((f) => {
 
     <!-- trimmed matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
     <div class="relative mt-10">
-      <!-- Capped width and equal fixed columns: auto layout let the long LongMemEval cells set every column's width. -->
-      <div class="max-w-3xl overflow-x-auto rounded-2xl glass" data-scroll-x>
+      <!-- Equal fixed columns: auto layout let the long LongMemEval cells set every column's width. -->
+      <div class="overflow-x-auto rounded-2xl glass" data-scroll-x>
         <table class="w-full min-w-[640px] table-fixed border-collapse text-left text-sm">
           <thead>
             <tr class="border-b border-white/10">
@@ -107,11 +107,10 @@ const rows = homeFeatures.map((f) => {
       </a>
     </p>
 
-    <div class="mt-4 space-y-2" data-reveal>
-      {comparison.footnotes.map((f) => <p class="copy max-w-lg text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
-      <p class="max-w-lg text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
+    <div class="mt-4 gap-x-12 *:mb-2 lg:columns-2" data-reveal>
+      {comparison.footnotes.map((f) => <p class="copy break-inside-avoid text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
+      <p class="break-inside-avoid text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
+      <p class="break-inside-avoid pt-4 text-sm leading-relaxed text-zinc-400">{comparison.closing}</p>
     </div>
-
-    <p class="mt-6 max-w-lg text-sm leading-relaxed text-zinc-400" data-reveal>{comparison.closing}</p>
   </div>
 </section>

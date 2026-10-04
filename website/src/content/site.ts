@@ -20,10 +20,10 @@ export const site = {
   pkg: 'hippo-memory',
   version: pkg.version, // Build-source version; publication is verified separately.
   positioning: 'memory for AI agents that learns what is wrong', // page title and hero eyebrow
-  // Hero headline, split for accent emphasis: what works on day one leads.
-  tagline: { lead: 'Local memory for', accent: 'the agents you already use.' },
+  // Hero headline, split for accent emphasis. The per-agent install detail lives in Get started.
+  tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
   description:
-    "Hippo keeps your coding agents' memories in SQLite on your machine. Search needs no model or network call. hippo init installs hooks for Claude Code and OpenCode, adds 2 hooks to Codex's hooks.json when Codex is installed (requiring one-time trust), and adds instructions to an existing AGENTS.md for Codex, Cursor, OpenClaw and Pi; any MCP client can connect too. Capture and compaction coverage depend on the integration. Mark a memory wrong and it ranks lower; run hippo supersede and the old fact leaves recall.",
+    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, drops what turned out to be wrong, and replaces facts that changed.",
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init',
   // Every page that offers the scan states what it changes before the command.

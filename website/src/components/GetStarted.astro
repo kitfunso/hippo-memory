@@ -4,24 +4,27 @@ import CopyCommand from './CopyCommand.astro';
 ---
 
 <section id="get-started" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
-  <div class="mx-auto max-w-6xl px-5 py-24">
-    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
-      <div>
+  <div class="mx-auto max-w-6xl px-5 py-16 sm:py-20">
+    <!-- On wide screens the commands sit under the intro so the left column is not half empty; on phones the change list still comes first. -->
+    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-16 lg:gap-y-8">
+      <div class="lg:col-start-1 lg:row-start-1">
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{getStarted.kicker}</p>
         <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
         <p class="mt-5 max-w-md text-lg leading-relaxed text-zinc-400">{getStarted.body}</p>
         <p class="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">{getStarted.notice}</p>
       </div>
 
-      <div data-reveal>
-        <!-- What init changes sits above the commands, so it is read before anything is copied. -->
+      <div class="lg:col-start-2 lg:row-span-2 lg:row-start-1" data-reveal>
         <div class="rounded-2xl glass p-5">
           <ul class="list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-300">
             {getStarted.changes.map((c) => <li>{c}</li>)}
           </ul>
           <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.skip}</p>
         </div>
-        <ol class="mt-6 space-y-4">
+      </div>
+
+      <div class="lg:col-start-1 lg:row-start-2">
+        <ol class="space-y-4">
           {getStarted.steps.map((cmd, i) => (
             <li class="flex items-start gap-4">
               <span class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-xs text-acc-cyan">{i + 1}</span>
