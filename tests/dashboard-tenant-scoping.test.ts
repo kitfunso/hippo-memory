@@ -1,33 +1,25 @@
-/**
- * v1.11.0 tenant-isolation residue: dashboard POST /api/star/:id must deny
- * cross-tenant mutations.
- *
- * The dashboard process derives its tenant via resolveTenantId({}) (which
- * reads HIPPO_TENANT). A star-toggle for another tenant's memory id must
- * return 404 and leave the memory's starred field untouched.
- */
+// The dashboard derives its tenant via resolveTenantId({}), which reads HIPPO_TENANT.
+// A pin for another tenant's memory id must return 404 and leave the row untouched.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 
-const DASHBOARD_TOKEN = 'test-dashboard-token';
-
 function post(
   port: number,
   path: string,
+  payload: string = '{}',
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method: 'POST', headers: { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } },
+      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json' } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -38,7 +30,7 @@ function post(
       },
     );
     req.on('error', reject);
-    req.end();
+    req.end(payload);
   });
 }
 
@@ -75,7 +67,7 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('POST /api/star/:id denies a cross-tenant mutation', async () => {
+  it('POST /api/memory/:id/pin denies a cross-tenant mutation', async () => {
     // Seed a memory under tenant_a in the local store.
     const a = createMemory('tenant_a memory', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -86,23 +78,20 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
 
     // Run the dashboard under HIPPO_TENANT=tenant_b on an ephemeral port.
     process.env.HIPPO_TENANT = 'tenant_b';
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
+    server = serveDashboard(hippoRoot, 0);
     const port = await boundPort(server);
 
-    // POST /api/star/<tenant_a memory id> under HIPPO_TENANT=tenant_b → 404.
-    const res = await post(port, `/api/star/${a.id}`);
+    const res = await post(port, `/api/memory/${a.id}/pin`, '{"pinned":true}');
     expect(res.status).toBe(404);
 
-    // The tenant_a memory's starred field is unchanged in the DB.
+    // The tenant_a memory is still unpinned in the DB.
     const db = openHippoDb(hippoRoot);
     try {
-      // SAFETY: SELECT starred FROM memories WHERE id = ? names exactly one
-      // column against the row seeded above (a.id), which is guaranteed to
-      // exist.
+      // SAFETY: the SELECT names one column of the row seeded above, which exists.
       const row = db
-        .prepare(`SELECT starred FROM memories WHERE id = ?`)
-        .get(a.id) as { starred: number };
-      expect(row.starred).toBe(0);
+        .prepare(`SELECT pinned FROM memories WHERE id = ?`)
+        .get(a.id) as { pinned: number };
+      expect(row.pinned).toBe(0);
     } finally {
       closeHippoDb(db);
     }

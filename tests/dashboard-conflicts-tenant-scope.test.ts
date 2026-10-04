@@ -1,4 +1,4 @@
-// The dashboard's conflict list and open-conflict count follow HIPPO_TENANT, like its memory list.
+// The overview's open-conflict count and a memory's conflicts follow HIPPO_TENANT, like the memory list.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -60,7 +60,7 @@ describe('dashboard conflicts are tenant-scoped', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('GET /api/conflicts and /api/stats count only the running tenant', async () => {
+  it('the overview and the memory detail count only the running tenant', async () => {
     const a1 = createMemory('tenant_a says the deploy target is fly', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_a' });
     const a2 = createMemory('tenant_a says the deploy target is render', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_a' });
     const b1 = createMemory('tenant_b says the build uses webpack', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_b' });
@@ -75,16 +75,20 @@ describe('dashboard conflicts are tenant-scoped', () => {
     server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 
-    const conflicts = await get(port, '/api/conflicts');
-    expect(conflicts.status).toBe(200);
-    // SAFETY: /api/conflicts returns the conflicts array built in dashboard.ts buildDashboardData.
-    const rows = JSON.parse(conflicts.body) as Array<{ memory_a_id: string; memory_b_id: string; reason: string }>;
-    expect(rows.map((r) => r.reason)).toEqual(['deploy target']);
-    const ids = new Set(rows.flatMap((r) => [r.memory_a_id, r.memory_b_id]));
-    expect(ids.has(b1.id) || ids.has(b2.id)).toBe(false);
+    const overview = await get(port, '/api/overview');
+    expect(overview.status).toBe(200);
+    // SAFETY: /api/overview returns the Overview of dashboard-types.ts.
+    const parsed = JSON.parse(overview.body) as { total: number; kpis: Array<{ id: string; value: number }> };
+    expect(parsed.total).toBe(2);
+    expect(parsed.kpis.find((k) => k.id === 'openConflicts')?.value).toBe(1);
 
-    const stats = await get(port, '/api/stats');
-    // SAFETY: /api/stats returns DashboardData.stats, which always carries open_conflicts.
-    expect((JSON.parse(stats.body) as { open_conflicts: number }).open_conflicts).toBe(1);
+    const detail = await get(port, `/api/memory/${a1.id}`);
+    expect(detail.status).toBe(200);
+    // SAFETY: /api/memory/:id returns the MemoryDetail of dashboard-types.ts.
+    const own = JSON.parse(detail.body) as { conflicts: Array<{ reason: string; other: { id: string } }> };
+    expect(own.conflicts.map((c) => c.reason)).toEqual(['deploy target']);
+    expect(own.conflicts[0].other.id).toBe(a2.id);
+
+    expect((await get(port, `/api/memory/${b1.id}`)).status).toBe(404);
   }, 15_000);
 });

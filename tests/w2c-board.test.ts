@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { execFileSync } from 'node:child_process';
@@ -118,7 +118,7 @@ describe('dashboard entry', () => {
   });
 
   it('E1: a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
-    const stats = await dashboardRequest(port, '/api/stats', `127.0.0.1:${port}`);
+    const stats = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(stats.status).toBe(200);
     expect(stats.acaoPresent).toBe(false);
 
@@ -126,8 +126,8 @@ describe('dashboard entry', () => {
     expect(root.acaoPresent).toBe(false);
   });
 
-  it('E2: a foreign Host gets 403 Forbidden, on API, static and star POST paths', async () => {
-    const stats = await dashboardRequest(port, '/api/stats', `evil.example:${port}`);
+  it('E2: a foreign Host gets 403 Forbidden, on API, static and pin POST paths', async () => {
+    const stats = await dashboardRequest(port, '/api/overview', `evil.example:${port}`);
     expect(stats.status).toBe(403);
     expect(stats.body).toBe('Forbidden');
 
@@ -135,37 +135,38 @@ describe('dashboard entry', () => {
     expect(root.status).toBe(403);
     expect(root.body).toBe('Forbidden');
 
-    const star = await dashboardRequest(port, '/api/star/mem_x', `evil.example:${port}`, 'POST');
-    expect(star.status).toBe(403);
-    expect(star.body).toBe('Forbidden');
+    const pin = await dashboardRequest(port, '/api/memory/mem_x/pin', `evil.example:${port}`, 'POST');
+    expect(pin.status).toBe(403);
+    expect(pin.body).toBe('Forbidden');
   });
 
-  it('E2b: a star POST from another site is 403 even with a loopback Host', async () => {
+  it('E2b: a wrong POST from another site is 403 even with a loopback Host', async () => {
     const host = `127.0.0.1:${port}`;
-    const star = (headers: Record<string, string>) =>
-      dashboardRequest(port, '/api/star/mem_x', host, 'POST', headers);
-    expect((await star({ Origin: 'http://evil.example' })).status).toBe(403);
-    expect((await star({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
-    expect((await star({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404);
-    expect((await star({})).status).toBe(404);
+    const json = { 'Content-Type': 'application/json' };
+    const wrong = (headers: Record<string, string>) =>
+      dashboardRequest(port, '/api/memory/mem_x/wrong', host, 'POST', { ...json, ...headers });
+    expect((await wrong({ Origin: 'http://evil.example' })).status).toBe(403);
+    expect((await wrong({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+    expect((await wrong({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404);
+    expect((await wrong({})).status).toBe(404);
   });
 
   it('E3: localhost, LOCALHOST and a portless 127.0.0.1 all get 200', async () => {
-    const lower = await dashboardRequest(port, '/api/stats', `localhost:${port}`);
+    const lower = await dashboardRequest(port, '/api/overview', `localhost:${port}`);
     expect(lower.status).toBe(200);
 
-    const upper = await dashboardRequest(port, '/api/stats', `LOCALHOST:${port}`);
+    const upper = await dashboardRequest(port, '/api/overview', `LOCALHOST:${port}`);
     expect(upper.status).toBe(200);
 
-    const noPort = await dashboardRequest(port, '/api/stats', '127.0.0.1');
+    const noPort = await dashboardRequest(port, '/api/overview', '127.0.0.1');
     expect(noPort.status).toBe(200);
   });
 
   it('E4: a Host with a space gets 403, and the server keeps serving', async () => {
-    const bad = await dashboardRequest(port, '/api/stats', 'a b');
+    const bad = await dashboardRequest(port, '/api/overview', 'a b');
     expect(bad.status).toBe(403);
 
-    const after = await dashboardRequest(port, '/api/stats', `127.0.0.1:${port}`);
+    const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);
   });
 
@@ -175,34 +176,17 @@ describe('dashboard entry', () => {
     const broken = await dashboardRequest(port, '//', `127.0.0.1:${port}`);
     expect(broken.status).toBe(500);
     expect(broken.body).toBe('{"error":"Internal error"}');
-    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dashboard request failed'));
 
-    const after = await dashboardRequest(port, '/api/stats', `127.0.0.1:${port}`);
+    const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);
 
     errorSpy.mockRestore();
   });
 
   it('E6: an HTTP/1.0 request with no Host header is routed as today', async () => {
-    const raw = await rawHttp10Get(port, '/api/stats');
+    const raw = await rawHttp10Get(port, '/api/overview');
     expect(raw).toMatch(/^HTTP\/1\.[01] 200 /);
-  });
-
-  it("E7: /api/config lists the home folder's path tags, read per request", async () => {
-    const prevHomeEnv = process.env.HOME;
-    const prevProfile = process.env.USERPROFILE;
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
-    try {
-      const res = await dashboardRequest(port, '/api/config', `127.0.0.1:${port}`);
-      expect(res.status).toBe(200);
-      expect(JSON.parse(res.body).homePathTags).toContain(`path:${basename(home).toLowerCase()}`);
-    } finally {
-      if (prevHomeEnv === undefined) delete process.env.HOME;
-      else process.env.HOME = prevHomeEnv;
-      if (prevProfile === undefined) delete process.env.USERPROFILE;
-      else process.env.USERPROFILE = prevProfile;
-    }
   });
 });
 

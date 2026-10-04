@@ -241,21 +241,19 @@ describe('confidence facets', () => {
     server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 
-    const memories = JSON.parse(await get(port, '/api/memories')) as Array<{
-      id: string;
-      confidence: string;
-      aged_out: boolean;
-    }>;
-    const stats = JSON.parse(await get(port, '/api/stats')) as {
-      by_confidence: Record<string, number>;
-      aged_out: number;
+    // SAFETY: each route returns the dashboard-types.ts shape named in the cast.
+    const overview = JSON.parse(await get(port, '/api/overview')) as { projects: Array<{ key: string }> };
+    const key = encodeURIComponent(overview.projects[0]!.key);
+    // SAFETY: the memory page route returns the MemoryPage of dashboard-types.ts.
+    const page = JSON.parse(await get(port, `/api/projects/${key}/memories`)) as {
+      rows: Array<{ id: string; confidence: string }>;
     };
+    // SAFETY: the memory route returns the MemoryDetail of dashboard-types.ts.
+    const detail = JSON.parse(await get(port, `/api/memory/${e.id}`)) as { confidence: string; agedOut: boolean };
 
-    const row = memories.find((m) => m.id === e.id);
-    expect(row?.confidence).toBe('observed');
-    expect(row?.aged_out).toBe(true);
-    expect(stats.by_confidence['observed']).toBe(1);
-    expect(stats.aged_out).toBe(1);
+    expect(page.rows.find((m) => m.id === e.id)?.confidence).toBe('observed');
+    expect(detail.confidence).toBe('observed');
+    expect(detail.agedOut).toBe(true);
   }, 15_000);
 
   it('renders the pair on hippo trace, the surface that reads without retrieving', () => {
