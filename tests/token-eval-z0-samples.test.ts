@@ -192,7 +192,7 @@ describe('reader sample labels and scoring', () => {
     expect(gradingOf(s.out)).toMatchObject({ readerSample: { n: 6, disagreements: 2 }, g5: { readerRound: 1, readerEligible: 20, readerRound1Rescored: null } });
 
     // The fixed checker turns every A1 verdict to pass, so round 1's labels of A1 pairs now disagree.
-    writeRows(s.out, listGrades(s.out).map((e) => rowOf(e.grade, 'postfix', e.grade.arm === 'A1' ? { first: 'pass' } : {})), 'postfix');
+    writeRows(s.out, listGrades(s.out).map((e) => rowOf(e.grade, 'postfix', e.grade.arm === 'A1' ? { first: 'pass' } : {}, 'y')), 'postfix');
     expect(draw(s.out, s.tasks, ['--round', '2', '--n', '6'])).toMatchObject({ code: 0 });
     const r2 = pairsOf(s.out, 2);
     expect(r2.filter((p) => r1.some((q) => q.pairId === p.pairId))).toEqual([]);
@@ -202,6 +202,35 @@ describe('reader sample labels and scoring', () => {
     const a0Wrong = r1.filter((p) => p.arm === 'A0' && wrong.has(p.file)).length;
     expect(gradingOf(s.out)).toMatchObject({ readerSample: { n: 6, disagreements: 0 }, g5: { readerRound: 2, readerEligible: 14, readerRound1Rescored: { n: 6, disagreements: a1Right + a0Wrong } } });
     expect(existsSync(join(s.out, 'g5', 'sealed', 'reader-r2.score.json'))).toBe(true);
+  });
+
+  it('draws round K only after round K-1 failed and a checker changed since its draw; a scored round is final (27b, 166)', () => {
+    const fresh = () => synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
+    const postfix = (out: string, sha: string) => writeRows(out, listGrades(out).map((e) => rowOf(e.grade, 'postfix', {}, sha)), 'postfix');
+    const next = (s: { out: string; tasks: string }, k: number) => draw(s.out, s.tasks, ['--round', String(k), '--n', '6']);
+    const allWrong = () => true;
+
+    const passed = fresh();
+    expect(draw(passed.out, passed.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    postfix(passed.out, 'y');
+    expect(next(passed, 2)).toMatchObject({ code: 1, stderr: expect.stringContaining('reader round 1 is not scored') });
+    expect(score(passed.out, labelsFor(pairsOf(passed.out)))).toMatchObject({ code: 0 });
+    expect(next(passed, 2)).toMatchObject({ code: 1, stderr: expect.stringContaining('reader round 1 passed') });
+    // The same labels again print the score; other labels for a scored round are refused, so a failed round is never re-labelled.
+    expect(score(passed.out, labelsFor(pairsOf(passed.out)))).toMatchObject({ code: 0, stdout: expect.stringContaining('0 of 6') });
+    expect(score(passed.out, labelsFor(pairsOf(passed.out), allWrong))).toMatchObject({ code: 1, stderr: expect.stringContaining('already scored') });
+
+    const failed = fresh();
+    expect(draw(failed.out, failed.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    expect(score(failed.out, labelsFor(pairsOf(failed.out), allWrong))).toMatchObject({ code: 0 });
+    postfix(failed.out, 'x');
+    expect(next(failed, 2)).toMatchObject({ code: 1, stderr: expect.stringContaining('no checker changed since reader round 1') });
+    postfix(failed.out, 'y');
+    expect(next(failed, 2)).toMatchObject({ code: 0 });
+    expect(score(failed.out, labelsFor(pairsOf(failed.out, 2), allWrong), ['--round', '2'])).toMatchObject({ code: 0 });
+    expect(next(failed, 3)).toMatchObject({ code: 1, stderr: expect.stringContaining('no checker changed since reader round 2') });
+    postfix(failed.out, 'z');
+    expect(next(failed, 3)).toMatchObject({ code: 0 });
   });
 
   it('refuses a grade.json in the wrong folder, and every alias of --out shares one lock (31)', () => {

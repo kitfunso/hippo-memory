@@ -31,11 +31,11 @@ function gradeOf(c: Cell) {
 }
 export type Grade = ReturnType<typeof gradeOf>;
 
-/** A done repro row whose verdicts equal the saved ones; `regraded` overrides them for a post-fix row. */
-export function rowOf(g: Grade, pass: 'repro' | 'postfix' = 'repro', regraded: Partial<Record<'first' | 'final', Verdict>> = {}) {
+/** A done repro row whose verdicts equal the saved ones; `regraded` and `checkerSha` override them for a post-fix row. */
+export function rowOf(g: Grade, pass: 'repro' | 'postfix' = 'repro', regraded: Partial<Record<'first' | 'final', Verdict>> = {}, checkerSha = g.checkers['f1-l1']) {
   const v = g.verdicts;
   const which = g.finalChecked ? (['first', 'final'] as const) : (['first'] as const);
-  const checks = which.map((w) => ({ lessonId: 'f1-l1', which: w, saved: v[w], regraded: regraded[w] ?? v[w], flip: false, reason: null }));
+  const checks = which.map((w) => ({ lessonId: 'f1-l1', which: w, saved: v[w], regraded: regraded[w] ?? v[w], flip: false, reason: null, checkerSha }));
   return { schema: 'z0-regrade/1', pass, key: cellKey(g), status: 'done', error: null, lessonId: 'f1-l1', staleLessonId: null, checks, acceptance: { saved: true, regraded: true, flip: false, reason: null }, extraEnvKeys: [] };
 }
 
