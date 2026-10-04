@@ -24,6 +24,7 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     grepRun: 'GREP:{RUN}',
     rgHere: 'BASH:rg secret .',
     content: 'BASH:sh x.sh\nECHO_TRANSCRIPT',
+    contentPretty: 'ECHO_TRANSCRIPT_PRETTY',
     subagent: 'SUBAGENT\nREAD:{OUT}/runs/seqF/A2/seed1/work/lib.js',
     own: 'READ:lib.js\nREAD:{RUN}/claude-config/CLAUDE.md\nGREP:.\nBASH:cat $CLAUDE_CONFIG_DIR/projects/x/memory/MEMORY.md',
     cache: 'READ:{OUT}/repo-cache/seqF/HEAD',
@@ -62,6 +63,7 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     expect(find(recs, 'A1', 'rgHere').void).toBeNull();
   });
   it('a tool result holding another session\'s transcript lines voids', () => expectRead('content', 'transcript-content'));
+  it('a transcript line printed over several lines voids too', () => expectRead('contentPretty', 'transcript-content'));
   it('a subagent\'s read counts', () => expectRead('subagent', 'other-run'));
   it('own memory, own instructions and own workspace reads do not void', () => {
     expect(find(recs, 'A1', 'own')).toMatchObject({ invalid: null, void: null });

@@ -77,6 +77,17 @@ describe('a session that runs out of time (prereg 165)', () => {
     expect(rawResult(out, 'A4', 'n1.json').files['CLAUDE.md']).toContain('- Write the lesson file, because');
   }, 120_000);
 
+  it('a timed-out resume forked to a new id prices only its own messages, not its copy of session 1', async () => {
+    const { out } = isolate('hang-resume-fork');
+    await run(oneLesson(makeRepo(), { t1: 'LESSON_BAD HANG_ON_RESUME NEW_ID_ON_RESUME FORK_COPY S1_USAGE' }), ['A4'], out, TIMEOUT);
+    const t1 = find(readRecords(out), 'A4', 't1');
+    expect(t1).toMatchObject({ invalid: null, timedOut: true, turnsSource: 'transcript' });
+    expect(t1.resumeSessionId).not.toBe(t1.sessionId);
+    expect(t1.usage!.extra).toEqual({ inputTokens: 13, cacheWriteTokens: 40, cacheReadTokens: 200, outputTokens: 47 });
+    // Session 1's result says 3 turns; the resume made two messages of its own.
+    expect(t1.turns).toBe(5);
+  }, 300_000);
+
   it('a resume that bills into a subagent file session 1 wrote prices those bytes as the resume\'s', async () => {
     const { out } = isolate('hang-resume-sub');
     const r = makeRepo();

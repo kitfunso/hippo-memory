@@ -205,12 +205,32 @@ function pathHits(run, b, files, fileName) {
   return hits;
 }
 
+/** Each top-level `{...}` in text, string-aware; a string ends at a newline and an unclosed group runs to the end, so stray quotes or braces cannot hide a later group. */
+function braceGroups(text) {
+  const groups = [];
+  let depth = 0;
+  let start = -1;
+  let inStr = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '\\') i++;
+      else if (ch === '"' || ch === '\n') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === '{' && depth++ === 0) start = i;
+    else if (ch === '}' && depth > 0 && --depth === 0) groups.push(text.slice(start, i + 1));
+  }
+  if (depth > 0) groups.push(text.slice(start));
+  return groups;
+}
+
 /** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
 function contentHits(ctx, run, b, files, fileName) {
   const hits = [];
   for (const { file, text } of toolResultTexts(files)) {
     // Only a Claude Code transcript line holds type, uuid and sessionId together; hippo output has no uuid, so no arm voids on its own output.
-    const lines = text.split('\n').filter((l) => /"uuid"\s*:/.test(l) && /"type"\s*:/.test(l));
+    // Brace groups too, since a pretty-printer (`jq .`) spreads one transcript line over many.
+    const lines = [...text.split('\n'), ...braceGroups(text)].filter((l) => /"uuid"\s*:/.test(l) && /"type"\s*:/.test(l));
     const ids = lines.flatMap((l) => [...l.matchAll(/"sessionId"\s*:\s*"([^"]+)"/g)]).map((m) => (b.win ? m[1].toLowerCase() : m[1]));
     if (ids.some((id) => !b.ownIds.has(id)) || /"type"\s*:\s*"session_meta"/.test(text)) hits.push(hit('read', 'transcript-content', null, null, fileName(file)));
   }

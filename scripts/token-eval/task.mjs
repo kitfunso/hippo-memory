@@ -6,7 +6,7 @@ import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
-  findTranscript, sessionFiles, listTranscripts, transcriptWork, transcriptUsage, assistantTurns, commandLog, usageFromResult, invalidRecord, validRecord,
+  findTranscript, sessionFiles, listTranscripts, transcriptWork, transcriptUsage, assistantTurns, assistantIds, commandLog, usageFromResult, invalidRecord, validRecord,
   hookContexts, toolResultTexts,
 } from './records.mjs';
 import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
@@ -241,14 +241,16 @@ function pricing(run, session, resume, sessionIds) {
   const rr = resume?.result ?? null;
   const { first, extra } = turnSegments(run, sessionIds, resume);
   const priced = Boolean(r) && (!resume || Boolean(rr));
+  // A resume forked to a new id can start its file with a copy of session 1's messages, which session 1 already paid for.
+  const paid = resume && !rr ? assistantIds(first) : new Set();
   return {
     usage: {
       firstSession: r ? usageFromResult(r) : transcriptUsage(first),
-      extra: !resume ? ZERO_USAGE : (rr ? usageFromResult(rr) : transcriptUsage(extra)),
+      extra: !resume ? ZERO_USAGE : (rr ? usageFromResult(rr) : transcriptUsage(extra, paid)),
     },
     costUsd: priced ? sum(r.total_cost_usd ?? null, rr?.total_cost_usd) : null,
     // Turns count the main transcripts only; usage takes subagent files too.
-    turns: (r ? r.num_turns ?? 0 : assistantTurns(mainsOnly(first))) + (!resume ? 0 : (rr ? rr.num_turns ?? 0 : assistantTurns(mainsOnly(extra)))),
+    turns: (r ? r.num_turns ?? 0 : assistantTurns(mainsOnly(first))) + (!resume ? 0 : (rr ? rr.num_turns ?? 0 : assistantTurns(mainsOnly(extra), paid))),
     turnsSource: priced ? 'result' : 'transcript',
   };
 }

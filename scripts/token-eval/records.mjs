@@ -61,13 +61,13 @@ function* segmentLines(segments) {
   }
 }
 
-/** Usage of a turn with no result: per message id the largest value in each bucket (a streamed message repeats its id), summed over ids. */
-export function transcriptUsage(segments) {
+/** Usage of a turn with no result: per message id not in skip, the largest value in each bucket (a streamed message repeats its id), summed over ids. */
+export function transcriptUsage(segments, skip = new Set()) {
   const byId = new Map();
   let anon = 0;
   for (const o of segmentLines(segments)) {
     const u = o.type === 'assistant' ? o.message?.usage : null;
-    if (!u) continue;
+    if (!u || skip.has(o.message.id)) continue;
     const key = o.message.id ?? `anon-${anon++}`;
     const prev = byId.get(key) ?? [0, 0, 0, 0];
     const cur = [u.input_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens, u.output_tokens].map((n) => Number(n) || 0);
@@ -78,12 +78,15 @@ export function transcriptUsage(segments) {
   return { inputTokens: total[0], cacheWriteTokens: total[1], cacheReadTokens: total[2], outputTokens: total[3] };
 }
 
-/** Turns of a turn with no result: distinct assistant message ids, a different unit from the result's num_turns. */
-export function assistantTurns(segments) {
+/** The distinct assistant message ids in segments. */
+export function assistantIds(segments) {
   const ids = new Set();
   for (const o of segmentLines(segments)) if (o.type === 'assistant' && o.message?.id) ids.add(o.message.id);
-  return ids.size;
+  return ids;
 }
+
+/** Turns of a turn with no result: distinct assistant message ids not in skip, a different unit from the result's num_turns. */
+export const assistantTurns = (segments, skip = new Set()) => [...assistantIds(segments)].filter((id) => !skip.has(id)).length;
 
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;

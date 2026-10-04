@@ -121,10 +121,10 @@ const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.di
 const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'hook_additional_context', content: [injected], hookEvent: 'UserPromptSubmit' } }] : []);
 const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
 
-/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT. */
+/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
 function probes(text = prompt) {
   const lines = [];
-  for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT)$/gm)) {
+  for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT(?:_PRETTY)?)$/gm)) {
     const [kind, ...rest] = m[1].split(':');
     const arg = fill(rest.join(':'));
     if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
@@ -132,7 +132,11 @@ function probes(text = prompt) {
     else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
     else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg }));
     else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));
-    else lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${JSON.stringify({ type: 'user', uuid: randomUUID(), sessionId: randomUUID(), message: { content: 'old' } })}\n`));
+    else {
+      const old = { type: 'user', uuid: randomUUID(), sessionId: randomUUID(), message: { content: 'old' } };
+      // The pretty form is what `jq .` prints: no single line holds type, uuid and sessionId together.
+      lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${kind === 'ECHO_TRANSCRIPT_PRETTY' ? JSON.stringify(old, null, 2) : JSON.stringify(old)}\n`));
+    }
   }
   return lines;
 }
@@ -213,6 +217,7 @@ function firstSession() {
     toolUse('Bash', { command: 'git status && cat lib.js' }),
     ...commands.map((command) => toolUse('Bash', { command })),
     ...(/\bSUBAGENT\b/.test(prompt) ? [] : probes()),
+    ...(prompt.includes('S1_USAGE') ? [{ type: 'assistant', message: { id: 'm-s1', usage: { input_tokens: 0, output_tokens: 500 } } }] : []),
   ]);
   const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
   if (delegated.length) writeSubagent('agent-a1', delegated);
@@ -260,6 +265,8 @@ function resumeTurn() {
   }
   log(`transcript-bytes ${fs.existsSync(transcript) ? fs.statSync(transcript).size : 0}`);
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
+  // FORK_COPY: a resume under a new id starts its file with a copy of session 1's lines, usage included.
+  if (prompt.includes('FORK_COPY') && sessionId !== resumeId) fs.copyFileSync(path.join(path.dirname(transcript), `${resumeId}.jsonl`), transcript);
   for (const m of prompt.matchAll(/MEMWRITE_ON_RESUME:([^\n]+)/g)) memWrite(m[1].trim());
   cutOff();
   // RESUME_SUBAGENT_USAGE: the resume bills 1000 output tokens into a subagent file session 1 wrote.
