@@ -25,7 +25,6 @@ import { physicsSearch } from '../src/search.js';
 import { consolidate } from '../src/consolidate.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };

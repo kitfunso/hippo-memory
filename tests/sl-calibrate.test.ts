@@ -1,9 +1,7 @@
 // tests/sl-calibrate.test.ts
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error - .mjs script without a .d.ts
 import { selectBStar } from '../benchmarks/sequential-learning/calibrate.mjs';
 
-// @ts-expect-error - .mjs script without a .d.ts
 import { mulberry32 } from '../benchmarks/sequential-learning/aggregate.mjs';
 
 describe('v1.7.6 calibration B* selection', () => {

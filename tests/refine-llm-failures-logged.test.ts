@@ -1,9 +1,9 @@
 // A refine call that fails still returns null, but now says why on stderr, and never prints the API key.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { refineSemanticMemory } from '../src/refine-llm.js';
 
 const API_KEY = 'refine-test-key-0000';
-let stderr: ReturnType<typeof vi.spyOn>;
+let stderr: MockInstance<typeof process.stderr.write>;
 
 function warnLines(): string[] {
   return stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('refine'));

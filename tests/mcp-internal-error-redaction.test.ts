@@ -1,5 +1,5 @@
 // An MCP tool that throws an untyped error must not hand its internal text to the client; typed API errors keep theirs.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +17,7 @@ interface RpcReply {
 
 let home: string;
 let handle: ServerHandle;
-let stderr: ReturnType<typeof vi.spyOn>;
+let stderr: MockInstance<typeof process.stderr.write>;
 
 function stderrText(): string {
   return stderr.mock.calls.map((c) => String(c[0])).join('');

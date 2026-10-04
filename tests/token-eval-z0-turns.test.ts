@@ -5,19 +5,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-// @ts-expect-error - .mjs script without a .d.ts
 import { runAll, planRuns, validateTasks } from '../scripts/token-eval/ab-run.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import * as records from '../scripts/token-eval/records.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { teachMessage, drawOrder } from '../scripts/token-eval/lessons.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { stateCommit, holdPre, dropPre, runCheck } from '../scripts/token-eval/checks.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { stubBaseCommit, STUB_CLAUDE_MD } from '../scripts/token-eval/workspace.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { runScreen } from '../scripts/token-eval/screen.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { loadHippo } from '../scripts/token-eval/runs.mjs';
 import { validateCorpus, type Z0Record, type Z0PlanCell } from './fixtures/z0-contract.js';
 

@@ -4,7 +4,6 @@
  * No LLM calls, real CLI, real SQLite.
  */
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error - .mjs script without a .d.ts
 import { replayTrace, replayAll } from '../scripts/token-eval/replay.mjs';
 
 const TRACE = {

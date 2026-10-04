@@ -14,7 +14,9 @@ import { planScreen, screenLines, runScreen } from './screen.mjs';
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
 
-/** Validate a tasks file; `baseDir` (the file's folder) resolves checker scripts. Throws on the first problem. */
+/** Validate a tasks file; `baseDir` (the file's folder) resolves checker scripts. Throws on the first problem.
+ * @param {any} spec
+ * @param {string | null} [baseDir] */
 export function validateTasks(spec, baseDir = null) {
   if (!spec || !Array.isArray(spec.sequences) || spec.sequences.length === 0) throw new Error('tasks file needs a non-empty "sequences" array');
   const ids = new Set();

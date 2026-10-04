@@ -277,7 +277,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     expect(VALID_CLOSURE_STATES.has('open')).toBe(true);
     expect(VALID_CLOSURE_STATES.has('closed')).toBe(true);
     expect(VALID_CLOSURE_STATES.has('closed-unknown')).toBe(true);
-    // @ts-expect-error
+    // @ts-expect-error - 'closed-clean' is deliberately outside the closure-state set
     expect(VALID_CLOSURE_STATES.has('closed-clean')).toBe(false);
   });
 

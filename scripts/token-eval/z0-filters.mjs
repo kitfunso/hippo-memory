@@ -21,9 +21,11 @@ export function countCells(records, planCells, tail = abandonedTail(records, pla
   const arms = [...new Set(planCells.map((c) => c.arm))].sort();
   const present = new Set(records.map(cellKey));
   const tailCells = new Set(tail.map(cellKey));
+  /** @type {Record<string, {planned: number, records: number, invalid: number, missing: number, abandoned: number, voids: number, voidReasons: Record<string, number>}>} */
   const counts = {};
   for (const arm of arms) {
     const mine = records.filter((r) => r.arm === arm);
+    /** @type {Record<string, number>} */
     const voidReasons = {};
     for (const r of mine) if (r.void !== null) voidReasons[r.void] = (voidReasons[r.void] ?? 0) + 1;
     const planned = planCells.filter((c) => c.arm === arm);
@@ -73,7 +75,10 @@ const canonical = (a, b) => a.sequence.localeCompare(b.sequence) || a.seed - b.s
 
 /** Filters 0-6 in the plan's order: the step-0 counts, the lists the report prints, and `scored`, the
  * records every statistic reads, in canonical order so argv order cannot move a resample.
- * Abandoned runs are listed, not removed: analyzeZ0 stops on any abandoned run before gates or statistics (114). */
+ * Abandoned runs are listed, not removed: analyzeZ0 stops on any abandoned run before gates or statistics (114).
+ * @param {any[]} records
+ * @param {any[]} planCells
+ * @param {{grading?: object | null, dropList?: object | null}} [options] */
 export function filterRecords(records, planCells, { grading = null, dropList = null } = {}) {
   const tail = abandonedTail(records, planCells);
   const { arms, counts } = countCells(records, planCells, tail);

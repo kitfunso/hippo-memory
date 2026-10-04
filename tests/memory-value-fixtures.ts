@@ -16,17 +16,11 @@
  */
 import * as fs from 'node:fs';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { formatLmeDate, questionDir } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { metaPathFor } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { readJson } from '../benchmarks/memory-value/common.mjs';
 import { _resetAblationCacheForTests } from '../dist/ablation.js';
 

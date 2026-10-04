@@ -52,7 +52,9 @@ function codeLinesChanged(repo, parent, sha, isTest) {
   return lines;
 }
 
-/** Candidate commits, oldest first, past the scope gate (fault 3: bundled commits cost no test runs). */
+/** Candidate commits, oldest first, past the scope gate (fault 3: bundled commits cost no test runs).
+ * @param {string} repo
+ * @param {{since?: string | null, max?: number, testPattern?: string, runExclude?: string, maxTestFiles?: number, maxCodeLines?: number, onSkip?: ((c: {subject: string}, reason: string) => unknown) | null}} [options] */
 export function findCandidates(repo, {
   since = null,
   max = 40,

@@ -4,11 +4,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-// @ts-expect-error - .mjs script without a .d.ts
 import { validateFamilies, drawOrder, taskRoles, teachMessage, memoryText, wordOverlap, promptLeaks, withTaught } from '../scripts/token-eval/lessons.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { runCheck, CheckerError } from '../scripts/token-eval/checks.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { validateTasks } from '../scripts/token-eval/ab-run.mjs';
 
 const dirs: string[] = [];

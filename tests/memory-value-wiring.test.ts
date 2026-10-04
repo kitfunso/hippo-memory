@@ -39,7 +39,6 @@ import {
 } from '../src/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/memory-value-weights.js';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */

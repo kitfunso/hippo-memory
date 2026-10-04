@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error - .mjs script without a .d.ts
 import { hitRateByPhase, parseRestrictLateTo } from '../benchmarks/sequential-learning/run.mjs';
 
 // Synthetic 25-trap result fixture. Hit pattern: alternate hit/miss for clarity.

@@ -48,6 +48,8 @@ jobs:
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
+      # Tests are type-checked so a wrong-shaped call cannot pass.
+      - run: npm run typecheck:tests
       - run: node scripts/check-openclaw-dist.mjs
       - name: Install the packed tarball
         run: npm run smoke:pack

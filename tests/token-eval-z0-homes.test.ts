@@ -6,13 +6,9 @@ import { join, dirname, delimiter, resolve } from 'node:path';
 import { execFile, execFileSync, spawnSync, spawn } from 'node:child_process';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
-// @ts-expect-error - .mjs script without a .d.ts
 import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHippoShim, ARMS } from '../scripts/token-eval/arms.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
@@ -138,7 +134,9 @@ describe('armEnv and childEnv', () => {
   it('puts bin/ first for A2/A5 only, drops the hippo dir for all, and childEnv drops bin/', () => {
     const { run, base, decoy, other } = setup();
     for (const arm of ARMS) {
-      const parts = armEnv(arm, run, base).PATH.split(delimiter);
+      const armPath = armEnv(arm, run, base).PATH;
+      if (armPath === undefined) throw new Error(`${arm} env has no PATH`);
+      const parts = armPath.split(delimiter);
       expect(parts.includes(decoy), arm).toBe(false);
       expect(parts.includes(other), arm).toBe(true);
       expect(parts[0] === run.bin, arm).toBe(arm === 'A2' || arm === 'A5');

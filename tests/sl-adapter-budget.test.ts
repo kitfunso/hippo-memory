@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error - .mjs script without a .d.ts
 import hippoAdapter from '../benchmarks/sequential-learning/adapters/hippo.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import baselineAdapter from '../benchmarks/sequential-learning/adapters/baseline.mjs';
-// @ts-expect-error - .mjs script without a .d.ts
 import staticAdapter from '../benchmarks/sequential-learning/adapters/static.mjs';
 
 describe('sequential-learning adapter recall budget', () => {

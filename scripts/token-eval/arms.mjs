@@ -42,7 +42,12 @@ function getKey(env, name) {
   return key === undefined ? undefined : env[key];
 }
 
-/** A session's environment: the parent's minus every provider, Claude, Codex and hippo key, plus the run's own homes and PATH. */
+/** A session's environment: the parent's minus every provider, Claude, Codex and hippo key, plus the run's own homes and PATH.
+ * @param {string} arm
+ * @param {any} dirs
+ * @param {Record<string, string | undefined>} baseEnv
+ * @param {{passEnv?: string[]}} [options]
+ * @returns {Record<string, string | undefined>} */
 export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
   if (!ARMS.includes(arm)) throw new Error(`unknown arm ${arm}; known: ${ARMS.join(', ')}`);
   const reserved = passEnv.find((name) => RUNNER_KEYS.includes(name.toUpperCase()));

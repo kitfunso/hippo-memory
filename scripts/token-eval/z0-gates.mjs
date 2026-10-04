@@ -13,7 +13,8 @@ export function g1(records, counts) {
   return { pass: canaries === 0, operatorCanaries: canaries, perArm };
 }
 
-/** One G2 half: under both codings, estimate at most -0.30 and the CI's high below zero (reading 5). */
+/** One G2 half: under both codings, estimate at most -0.30 and the CI's high below zero (reading 5).
+ * @returns {{status: string, required: boolean, pass: boolean} & Partial<ReturnType<typeof bothCodings>>} the per-coding estimates only when the half ran */
 function g2Half(filtered, armT, armC, keep, required, opts) {
   const planned = new Set(filtered.arms);
   if (!planned.has(armT) || !planned.has(armC)) return { status: NOT_RUN, required, pass: !required };

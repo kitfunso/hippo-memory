@@ -111,6 +111,7 @@ export async function evaluateQuestion(q, budgets) {
     const byNewest = [...sessions].sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const fullTokens = sessions.reduce((s, x) => s + x.tokens, 0);
 
+    /** @type {Record<number, Record<'hippo' | 'recency', {hit: boolean, tokens: number}>>} */
     const perBudget = {};
     for (const budget of budgets) {
       const results = await hybridSearch(q.question, entries, { budget, hippoRoot });

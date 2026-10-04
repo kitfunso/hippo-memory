@@ -10,7 +10,6 @@ import {
   TRAP_PLACEMENTS as UNTYPED_PLACEMENTS,
   generateTasks as untypedGenerateTasks,
   N_TASKS,
-// @ts-expect-error - .mjs script without a .d.ts
 } from '../benchmarks/sequential-learning/traps.mjs';
 
 const TRAP_CATEGORIES: TrapCategory[] = UNTYPED_CATEGORIES;

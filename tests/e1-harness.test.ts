@@ -9,9 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { generateProtocol } from '../scripts/e1-lifecycle/generate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { runArmSeed } from '../scripts/e1-lifecycle/run.mjs';
 import { loadAllEntries } from '../src/store.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
@@ -87,6 +85,7 @@ describe('E1 generator', () => {
     const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
     expect(negs.length).toBeGreaterThan(0);
     expect(negs.every((m: any) => m.session < floor)).toBe(true);
+    // @ts-expect-error - 'junk' is deliberately outside the lookalikeWindow union to reach the runtime validation
     expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(/lookalikeWindow/);
   });
 });
