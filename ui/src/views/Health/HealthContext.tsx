@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type RefObject, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Chip, errorMessage, fetchOverview } from "../../api/client";
 import type { Overview } from "../../types";
 import { HOME_CAMERA } from "./canvas/camera";
@@ -67,7 +67,8 @@ export function HealthProvider({ enabled, children }: { enabled: boolean; childr
   }, [accept]);
 
   const stamp = useRef(fetchedAt);
-  useEffect(() => {
+  // Layout effect, so the stamp is current before a visibility event can follow the paint that showed the data.
+  useLayoutEffect(() => {
     stamp.current = fetchedAt;
   }, [fetchedAt]);
   useEffect(() => {
