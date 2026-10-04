@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { savePrediction, closePrediction } from '../src/predictions.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type HippoRecallToolArgs = {

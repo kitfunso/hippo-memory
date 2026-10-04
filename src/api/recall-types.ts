@@ -4,7 +4,7 @@ import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import type { SessionHandoff } from '../handoff.js';
 import type { MemoryEntry } from '../memory.js';
 import type { RerankStep, SearchResult } from '../search/types.js';
-import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions.js';
+import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';
 

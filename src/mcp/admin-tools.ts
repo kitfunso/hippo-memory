@@ -5,7 +5,7 @@ import { evalNow } from '../ablation.js';
 import { loadStrengthRows } from '../store/candidates.js';
 import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
-import { computePredictionBaserate } from '../predictions.js';
+import { computePredictionBaserate } from '../predictions/store.js';
 import { isJsonString, type ToolCall } from './protocol.js';
 
 export function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {

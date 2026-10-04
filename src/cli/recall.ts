@@ -23,7 +23,7 @@ import { detectScope } from '../scope.js';
 import { getGlobalRoot } from '../shared.js';
 import { auditQueryFields } from '../audit.js';
 import * as api from '../api.js';
-import { computePlanningFallacyOutput, type PlanningFallacyOutput } from '../predictions.js';
+import { computePlanningFallacyOutput, type PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import {
   detectAnchoring,
   hashQueryText,

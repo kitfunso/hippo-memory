@@ -21,7 +21,7 @@ import type { RerankStep } from '../search/types.js';
 import { compareEntryIdentity } from '../compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { loadConfig } from '../config.js';
-import { computePlanningFallacyOutput } from '../predictions.js';
+import { computePlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from '../recall-history.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, isRestrictedScope } from '../recall-scope.js';
