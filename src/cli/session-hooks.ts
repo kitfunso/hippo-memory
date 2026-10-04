@@ -27,7 +27,7 @@ import {
   recordTokenUse,
   type TranscriptCalls,
 } from '../token-ledger.js';
-import { currentMachine, importAtCompaction } from '../agent-memories/sync.js';
+import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
 import { deriveOriginProject } from '../project-identity.js';
 import { getGlobalRoot } from '../shared.js';
@@ -618,8 +618,8 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
     stdinText: text,
     logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
     // Passed in, since capture.ts importing the sync would close an import cycle.
-    afterSave: (transcriptPath, originProject, log) => {
-      const report = importAtCompaction(store, transcriptPath, originProject, { machine: currentMachine(), busyWaitMs: COMPACTION_DB_WAIT_MS });
+    afterSave: (transcriptPath, cwd, log) => {
+      const report = importSessionFolder(store, transcriptPath, cwd, { machine: currentMachine(), busyWaitMs: COMPACTION_DB_WAIT_MS });
       const summary = summaryLine(report);
       if (summary !== null) log(summary);
       for (const warning of report.warnings) log(`agent memories: ${warning}`);

@@ -1,7 +1,7 @@
 // The PR 2 list from the agent memory plan's Tests section, run against real stores in scratch folders.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { restoreDormant } from '../src/api.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
@@ -231,14 +231,13 @@ describe('agent memory sync: the PR 2 list', () => {
     expect(loadAllEntries(w.local).filter((e) => e.layer === Layer.Semantic)).toEqual([]);
   });
 
-  it('session end in a folder without a store imports the project and transcript notes into the global store with the project as origin', () => {
-    const cwd = join(w.dir, 'hookproj');
-    mkdirSync(join(cwd, '.git'), { recursive: true });
+  it('session end in a folder without a store imports the project and session folder notes into the global store with the project as origin', () => {
+    const cwd = join(w.dir, 'hookproj', 'src');
+    mkdirSync(join(w.dir, 'hookproj', '.git'), { recursive: true });
+    mkdirSync(cwd);
     note(projectNotes(w, cwd), 'deploy.md', DEPLOY);
-    const session = join(w.home, '.claude', 'projects', 'transcript-folder');
     const QUEUE = 'The session folder note says the queue drains at midnight.';
-    note(join(session, 'memory'), 'queue.md', QUEUE);
-    const transcript = join(session, 's1.jsonl');
+    const transcript = join(dirname(note(projectNotes(w, dirname(cwd)), 'queue.md', QUEUE)), '..', 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
     expect(claude(importAtSessionEnd(cwd, transcript, { machine: w.machine })).imported).toBe(2);

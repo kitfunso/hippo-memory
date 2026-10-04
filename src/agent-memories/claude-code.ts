@@ -1,7 +1,7 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user folder.
 import fs from 'node:fs';
 import path from 'node:path';
-import { realpathOrResolve } from '../project-identity.js';
+import { deriveOriginProject, realpathOrResolve } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
 import { isJsonObject } from '../hooks/shared.js';
 import type { JsonValue } from '../working-memory.js';
@@ -48,11 +48,22 @@ export const claudeCodeAdapter: Adapter = {
   },
 };
 
-/** Post-compact's read: the session's own notes folder and nothing else, so no git call runs inside the hook's time limit. */
+/** A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time limit. */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
   const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
   const folder = path.join(path.dirname(transcriptPath), 'memory');
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
+}
+
+/** The project a session folder's notes belong to: the one Claude named the folder for, which is cwd or a parent; null when it is neither. */
+export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null, platform: NodeJS.Platform): string | null {
+  if (cwd === null) return null;
+  const fold = (name: string) => (platform === 'win32' ? name.toLowerCase() : name);
+  const folder = fold(path.basename(path.dirname(transcriptPath)));
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return deriveOriginProject(dir);
+    if (path.dirname(dir) === dir) return null;
+  }
 }
 
 function projectFolders(ctx: AdapterContext, config: string): string[] {
@@ -61,9 +72,7 @@ function projectFolders(ctx: AdapterContext, config: string): string[] {
   const pinned = ctx.env.CLAUDE_CODE_PROJECT_DIR_NAME;
   // Claude reads the pinned name only alongside a pinned config folder.
   if (ctx.env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned)) names.push(pinned);
-  const folders = names.map((name) => path.join(projects, name, 'memory'));
-  if (ctx.transcriptPath) folders.push(path.join(path.dirname(ctx.transcriptPath), 'memory'));
-  return folders;
+  return names.map((name) => path.join(projects, name, 'memory'));
 }
 
 function userFolders(ctx: AdapterContext, config: string, warnings: string[]): string[] {

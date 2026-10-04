@@ -5,7 +5,6 @@ import { isInitialized } from '../store/open.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
 import {
   PRE_COMPACT_INSTRUCTION,
-  compactionOrigin,
   parsePostCompactPayload,
   postCompactLine,
   recordCompactionStart,
@@ -324,7 +323,7 @@ export async function cmdPreCompact(hippoRoot: string, options: PreCompactOption
 export interface PostCompactOptions {
   stdinText?: string;
   logFile?: string;
-  afterSave?: (transcriptPath: string, originProject: string, log: (message: string) => void) => void;
+  afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => void;
 }
 
 /** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
@@ -351,7 +350,7 @@ export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): 
       storeBusy = saved.deferred;
       if (!storeBusy && payload.transcriptPath !== null && options.afterSave) {
         try {
-          options.afterSave(payload.transcriptPath, compactionOrigin(hippoRoot, payload.cwd), log);
+          options.afterSave(payload.transcriptPath, payload.cwd, log);
         } catch (err) {
           log(`agent memory import failed: ${errorMessage(err)}`);
         }

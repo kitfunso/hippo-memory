@@ -73,7 +73,7 @@ interface CompactionRow {
 export type Log = (message: string) => void;
 
 /** Where the session ran: rows written through the global store keep the project the session was in. */
-export function compactionOrigin(hippoRoot: string, cwd: string | null): string {
+function compactionOrigin(hippoRoot: string, cwd: string | null): string {
   if (!isGlobalStoreRoot(hippoRoot)) return deriveOriginProject(path.dirname(hippoRoot));
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
   return cwd === null ? '' : deriveOriginProject(cwd);

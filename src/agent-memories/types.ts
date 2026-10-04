@@ -9,8 +9,6 @@ export interface AdapterContext {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly platform: NodeJS.Platform;
   readonly projectRoot?: string;
-  /** Claude Code's transcript at a hook: its folder's `memory/` holds that session's own notes. */
-  readonly transcriptPath?: string;
 }
 
 export interface MemoryItem {

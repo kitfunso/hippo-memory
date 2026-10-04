@@ -16,7 +16,7 @@ import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { resolveTenantId } from '../tenant.js';
 import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
-import { claudeCodeAdapter, claudeTranscriptListing } from './claude-code.js';
+import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesOrigin } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
 import { geminiAdapter } from './gemini.js';
@@ -89,27 +89,31 @@ export function importUserMemories(invokingRoot: string, opts: SyncOptions): Imp
   }, opts);
 }
 
-/** Session end in a folder with no store of its own: the session's project into the global store with its origin, then the user pass. */
+/** Session end in a folder with no store of its own: the session's project into the global store with its origin, the session folder's notes, then the user pass. */
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
-  const ctx = context(opts.machine, { projectRoot: cwd, transcriptPath });
+  const ctx = context(opts.machine, { projectRoot: cwd });
   const report = runPass({
     scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false, originProject: deriveOriginProject(cwd), handover: false,
   }, opts);
+  if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
   mergeReports(report, importUserMemories(globalRoot, opts));
   return report;
 }
 
-/** Post-compact: the transcript folder's notes only, with no git call, no legacy adoption and no user pass, as the hook has 10 seconds. */
-export function importAtCompaction(hippoRoot: string, transcriptPath: string, originProject: string | undefined, opts: SyncOptions): ImportReport {
+/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
+export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
+  const origin = transcriptNotesOrigin(transcriptPath, cwd, opts.machine.platform);
+  // A project store takes its own project's notes only; the global store parts any project's by origin.
+  if (origin === null || (!isGlobalStoreRoot(hippoRoot) && origin !== deriveOriginProject(path.dirname(hippoRoot)))) return emptyReport();
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, legacy: false, originProject, handover: false,
+    scope: 'project', target: hippoRoot, invoking: hippoRoot, legacy: false, originProject: origin, handover: false,
     list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
   }, opts);
 }
 
-function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot' | 'transcriptPath'>): AdapterContext {
+function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): AdapterContext {
   return { home: machine.home, env: machine.env, platform: machine.platform, ...extra };
 }
 
