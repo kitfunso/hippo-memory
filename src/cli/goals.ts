@@ -1,0 +1,235 @@
+// `hippo goal`: the per-session goal stack that recall boosts.
+
+import { openHippoDb, closeHippoDb } from '../db.js';
+import { pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from '../goals.js';
+import type { PolicyType, Goal, GoalRow } from '../goals.js';
+import { rowToGoal } from '../goals.js';
+import { resolveTenantId } from '../tenant.js';
+import { printError } from './output.js';
+
+// ---------------------------------------------------------------------------
+// `hippo goal <push|list|complete|suspend|resume>` — B3 dlPFC depth (Task 10)
+// ---------------------------------------------------------------------------
+
+const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
+  'schema-fit-biased',
+  'error-prioritized',
+  'recency-first',
+  'hybrid',
+];
+
+function sanitizeGoalName(s: string): string {
+  // Strip C0 control chars + DEL to prevent terminal escape injection.
+  return s.replace(/[\x00-\x1f\x7f]/g, '?');
+}
+
+function resolveGoalSession(flags: Record<string, string | boolean | string[]>): { sessionId: string; tenantId: string } {
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
+  if (!sessionId) {
+    printError('session id required (set HIPPO_SESSION_ID or pass --session-id)');
+    process.exit(1);
+  }
+  const tenantId = (
+    flags['tenant-id'] !== undefined
+      ? String(flags['tenant-id'])
+      : resolveTenantId({})
+  ).trim() || 'default';
+  return { sessionId, tenantId };
+}
+
+function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const rawName = args.join(' ').trim();
+  if (!rawName) {
+    printError('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
+    process.exit(1);
+  }
+  // Sanitize at WRITE time so corrupt names never enter the DB.
+  const name = sanitizeGoalName(rawName);
+  if (name !== rawName) {
+    printError('note: stripped control characters from goal name');
+  }
+  const { sessionId, tenantId } = resolveGoalSession(flags);
+
+  let policy: { policyType: PolicyType } | undefined;
+  const policyRaw = flags['policy'];
+  if (policyRaw === true) {
+    printError('--policy requires a value (e.g., --policy error-prioritized)');
+    process.exit(1);
+  }
+  if (typeof policyRaw === 'string') {
+    if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
+      printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
+      process.exit(1);
+    }
+    policy = { policyType: policyRaw as PolicyType };
+  }
+
+  const successRaw = flags['success'];
+  if (successRaw === true) {
+    printError('--success requires a value (e.g., --success "<condition>")');
+    process.exit(1);
+  }
+  const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
+
+  const levelRaw = flags['level'];
+  let level: number | undefined;
+  if (levelRaw === true) {
+    printError('--level requires a value (e.g., --level 1)');
+    process.exit(1);
+  }
+  if (levelRaw !== undefined) {
+    const parsed = Number(levelRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
+      printError('--level must be an integer in [0, 2]');
+      process.exit(1);
+    }
+    level = parsed;
+  }
+
+  const parentRaw = flags['parent'];
+  if (parentRaw === true) {
+    printError('--parent requires a value (e.g., --parent <goalId>)');
+    process.exit(1);
+  }
+  const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
+
+  const goal = pushGoal(hippoRoot, {
+    sessionId,
+    tenantId,
+    goalName: name,
+    level,
+    parentGoalId,
+    successCondition,
+    policy,
+  });
+  console.log(goal.id);
+}
+
+function listAllGoals(hippoRoot: string, sessionId: string, tenantId: string): Goal[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+      FROM goal_stack
+      WHERE tenant_id = ? AND session_id = ?
+      ORDER BY created_at ASC
+    `).all(tenantId, sessionId) as GoalRow[];
+    return rows.map(rowToGoal);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const { sessionId, tenantId } = resolveGoalSession(flags);
+  const showAll = Boolean(flags['all']);
+  const goals = showAll
+    ? listAllGoals(hippoRoot, sessionId, tenantId)
+    : getActiveGoals(hippoRoot, { sessionId, tenantId });
+
+  if (goals.length === 0) {
+    console.log('(no goals)');
+    return;
+  }
+
+  // 4-column table: id, status, goal_name, outcome. Plan calls it a "2-column"
+  // table but the assertion list (id, status, goal_name, outcome) needs four;
+  // tests check for substrings ('active', '0.9', name) so column count is
+  // observably four but not asserted.
+  const rows = goals.map(g => ({
+    id: g.id,
+    status: g.status,
+    name: sanitizeGoalName(g.goalName),
+    outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
+  }));
+  const widths = {
+    id: Math.max(2, ...rows.map(r => r.id.length)),
+    status: Math.max(6, ...rows.map(r => r.status.length)),
+    name: Math.max(4, ...rows.map(r => r.name.length)),
+    outcome: Math.max(7, ...rows.map(r => r.outcome.length)),
+  };
+  const pad = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - s.length));
+  console.log(`${pad('id', widths.id)}  ${pad('status', widths.status)}  ${pad('name', widths.name)}  ${pad('outcome', widths.outcome)}`);
+  for (const r of rows) {
+    console.log(`${pad(r.id, widths.id)}  ${pad(r.status, widths.status)}  ${pad(r.name, widths.name)}  ${pad(r.outcome, widths.outcome)}`);
+  }
+}
+
+function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const id = args[0];
+  if (!id) {
+    printError('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
+    process.exit(1);
+  }
+  let outcomeScore: number | undefined;
+  const outcomeRaw = flags['outcome'];
+  if (outcomeRaw === true) {
+    printError('--outcome requires a value (e.g., --outcome 0.9)');
+    process.exit(1);
+  }
+  if (outcomeRaw !== undefined) {
+    const parsed = Number(outcomeRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      printError('--outcome must be a number in [0, 1]');
+      process.exit(1);
+    }
+    outcomeScore = parsed;
+  }
+  const noPropagate = flags['no-propagate'] === true;
+  completeGoal(hippoRoot, id, { outcomeScore, noPropagate });
+  console.log('ok');
+}
+
+function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
+  const id = args[0];
+  if (!id) {
+    printError('Usage: hippo goal suspend <id>');
+    process.exit(1);
+  }
+  suspendGoal(hippoRoot, id);
+  console.log('ok');
+}
+
+function cmdGoalResume(hippoRoot: string, args: string[]): void {
+  const id = args[0];
+  if (!id) {
+    printError('Usage: hippo goal resume <id>');
+    process.exit(1);
+  }
+  resumeGoal(hippoRoot, id);
+  console.log('ok');
+}
+
+export function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (!sub) {
+    printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
+    process.exit(1);
+  }
+  const subArgs = args.slice(1);
+  switch (sub) {
+    case 'push':
+      cmdGoalPush(hippoRoot, subArgs, flags);
+      return;
+    case 'list':
+      cmdGoalList(hippoRoot, flags);
+      return;
+    case 'complete':
+      cmdGoalComplete(hippoRoot, subArgs, flags);
+      return;
+    case 'suspend':
+      cmdGoalSuspend(hippoRoot, subArgs);
+      return;
+    case 'resume':
+      cmdGoalResume(hippoRoot, subArgs);
+      return;
+    default:
+      printError(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);
+      process.exit(1);
+  }
+}
