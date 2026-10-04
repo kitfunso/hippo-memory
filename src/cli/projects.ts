@@ -13,7 +13,7 @@ type Flags = Record<string, string | boolean | string[]>;
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
-    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
     const paths = out.split(/\r?\n/).filter((l) => l.startsWith('worktree ')).map((l) => path.basename(l.slice('worktree '.length)));
     return new Map(paths.slice(1).map((name) => [name, paths[0]]));
   } catch {

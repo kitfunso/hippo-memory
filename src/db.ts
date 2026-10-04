@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createRequire } from 'module';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createPhysicsTable } from './physics-state.js';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { PACKAGE_VERSION, compareSemver } from './version.js';
@@ -2753,10 +2754,20 @@ export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>, opts?:
   }
 }
 
+/** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall every other request on the event loop. */
+export const SERVER_DB_WAIT_MS = 250;
+
+const scopedBusyWaitMs = new AsyncLocalStorage<number>();
+
+/** Runs `fn` so that every store opened inside it, across awaits, waits at most `busyWaitMs` for a lock unless the open passes its own. */
+export function withBusyWait<T>(busyWaitMs: number, fn: () => T): T {
+  return scopedBusyWaitMs.run(busyWaitMs, fn);
+}
+
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  if (shareDepth === 0) return openOwnHippoDb(hippoRoot, opts);
-  const busyWaitMs = opts?.busyWaitMs ?? shareBusyWaitMs;
+  if (shareDepth === 0) return openOwnHippoDb(hippoRoot, { busyWaitMs: opts?.busyWaitMs ?? scopedBusyWaitMs.getStore() });
+  const busyWaitMs = opts?.busyWaitMs ?? shareBusyWaitMs ?? scopedBusyWaitMs.getStore();
   const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${busyWaitMs ?? ''}`;
   const shared = sharedHandles.get(key);
   if (shared?.isOpen && !shared.isTransaction) return shared;

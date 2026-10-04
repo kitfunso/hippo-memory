@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { llmReranker } from '../../src/rerankers/llm.js';
+import { createLlmReranker, llmReranker } from '../../src/rerankers/llm.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/search.js';
 
@@ -78,5 +78,33 @@ describe('llmReranker', () => {
     expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
 
     delete process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS;
+  });
+
+  it('warns once with the status on an HTTP failure and keeps the input order', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('upstream down', { status: 500 }));
+    const rerank = createLlmReranker();
+    const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
+
+    const first = await rerank('q', inputs);
+    const second = await rerank('q', inputs);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(first.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
+    expect(second.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
+    const warnings = stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('llm reranker unavailable'));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('HTTP 500');
+  });
+
+  it('names the timeout in its warning', async () => {
+    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS = '5';
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    }));
+    await createLlmReranker()('q', [asResult('alpha', 1.0)]);
+    delete process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS;
+    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('no answer within 5 ms');
   });
 });

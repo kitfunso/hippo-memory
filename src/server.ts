@@ -6,7 +6,7 @@ import { resolveProjectIdentity } from './project-identity.js';
 import { assembleCost, contextCost, drillCost } from './context-render.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, withBusyWait, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from './db.js';
 import { updateStats } from './store.js';
 import {
   buildSessionKey,
@@ -32,7 +32,7 @@ export function __resetSessionRecallHistoryHttp(): void {
   sessionRecallHistoryHttp.clear();
 }
 import { PACKAGE_VERSION } from './version.js';
-import { log } from './log.js';
+import { errorFields, log } from './log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
@@ -318,6 +318,8 @@ export interface ServeOpts {
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM. Only `hippo serve` owns the process, so only it sets this. */
   handleSignals?: boolean;
+  /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
+  shutdownDrainMs?: number;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -331,12 +333,19 @@ function resolveRequestId(header: string | string[] | undefined): string {
   return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
 }
 
-/** One line per failed request; 4xx is the caller's mistake, so it stays below the default level. */
+/** One line per failed request; 4xx is the caller's mistake, so it stays below the default level and skips the stack. */
 function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string, status: number): void {
   const message = err instanceof Error ? err.message : String(err);
   const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
-  if (status >= 500) log.error(line, { requestId, status });
+  if (status >= 500) log.error(line, { requestId, status, ...errorFields(err) });
   else log.info(line, { requestId, status });
+}
+
+const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
+
+/** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
+function replyFor<E>(err: E): { status: number; message: string } {
+  return isSqliteBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
 function sendError(res: ServerResponse, status: number, message: string): void {
@@ -2764,6 +2773,32 @@ async function handleMcpStream(req: IncomingMessage, res: ServerResponse, opts: 
 }
 
 /**
+ * Stop accepting, end streams at once (they never finish on their own), give other in-flight
+ * requests up to `drainMs`, then close whatever is left.
+ */
+async function drainAndClose(server: Server, inflight: ReadonlySet<ServerResponse>, drainMs: number): Promise<void> {
+  const closed = new Promise<void>((resolve, reject) => {
+    server.close((err) => (err ? reject(err) : resolve()));
+  });
+  server.closeIdleConnections?.();
+  for (const res of inflight) {
+    if (res.headersSent && !res.writableEnded) res.destroy();
+    else if (!res.headersSent) res.setHeader('Connection', 'close');
+  }
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(true), drainMs);
+  });
+  const late = await Promise.race([closed.then(() => false), timedOut]);
+  clearTimeout(timer);
+  if (late) {
+    log.warn(`shutdown: ${inflight.size} request(s) still running after ${drainMs} ms; closing them`);
+    server.closeAllConnections?.();
+  }
+  await closed;
+}
+
+/**
  * Boot the HTTP daemon on host:port and write the pidfile under hippoRoot.
  *
  * Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless
@@ -2837,18 +2872,22 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     }
   };
 
+  const inflight = new Set<ServerResponse>();
   const server: Server = createServer((req, res) => {
     res.once('finish', holdStore);
+    inflight.add(res);
+    res.once('close', () => inflight.delete(res));
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
-    handleRequest(req, res, opts, startedAt, limiter).catch(<E>(err: E) => {
-      const mapped = mapApiError(err);
+    withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, limiter)).catch(<E>(err: E) => {
+      const mapped = replyFor(err);
       logRequestFailure(req, err, requestId, mapped.status);
       if (res.headersSent) {
         try { res.end(); } catch { /* socket already gone */ }
         return;
       }
+      if (isSqliteBusy(err)) res.setHeader('Retry-After', '1');
       if (mapped.status === 500) {
         // The id lets an operator find the logged cause without the client seeing internal text.
         sendJson(res, 500, { error: mapped.message, requestId });
@@ -2915,14 +2954,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     // may have started on this hippoRoot and rewritten the pidfile; an
     // unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
-    // Force-close any long-lived idle connections (e.g. SSE keepalive streams
-    // on /mcp/stream) so server.close() can resolve. Without this, SIGTERM
-    // would hang the process until the SSE client cancels. Available on
-    // Node 18.2+; gate via optional chaining to avoid crashing on older runtimes.
-    server.closeAllConnections?.();
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
+    await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
     stopHolding = true;
     if (heldDb) closeHippoDb(heldDb);
     heldDb = undefined;
@@ -2936,10 +2968,10 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       log.warn(`received ${signal}, shutting down`);
       try {
         await stop();
-      } catch (err) {
-        log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`);
-      } finally {
         process.exit(0);
+      } catch (err) {
+        log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`, errorFields(err));
+        process.exit(1);
       }
     };
     process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });

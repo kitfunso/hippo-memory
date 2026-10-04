@@ -824,6 +824,8 @@ export function recallScopeFilter(requestedScope: string | undefined, mode: 'exa
   return mode === 'additive' ? { mode: 'default-deny-or-exact', value: requestedScope } : { mode: 'exact', value: requestedScope };
 }
 
+const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
@@ -909,8 +911,10 @@ function loadSearchRows(
       `).all(ftsQuery, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
 
       if (rows.length > 0) return rows;
-    } catch {
-      // Fall back to LIKE matching below.
+    } catch (err) {
+      // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
+      const message = err instanceof Error ? err.message : String(err);
+      if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
     }
   }
 
@@ -1334,8 +1338,9 @@ function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry, isNe
       entry.content,
       entry.tags.join(' ')
     );
-  } catch {
-    // Best effort only. SQLite store is still authoritative even if FTS is unavailable.
+  } catch (err) {
+    // The memories table stays authoritative; a stale FTS row only costs recall quality, so the write goes on.
+    log.warnThenDebug('fts-sync', `FTS index update failed for ${entry.id}; keyword recall may miss it: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -1343,8 +1348,8 @@ function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
   if (!isFtsAvailable(db)) return;
   try {
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
-  } catch {
-    // Best effort.
+  } catch (err) {
+    log.warnThenDebug('fts-delete', `FTS index delete failed for ${id}; recall may return a stale hit: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

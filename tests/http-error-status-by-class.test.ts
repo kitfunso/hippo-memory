@@ -160,6 +160,8 @@ describe('an untyped error is a 500 that hides its text', () => {
     const line = writes.find((w) => w.includes('requestId=req-s1b-500'));
     expect(line).toMatch(/^\[hippo\] error: GET \/v1\/audit failed: \S/);
     expect(line).toContain('status=500');
+    expect(line).toMatch(/ errorClass=\w+ stack=\w*Error: .+ at /);
     expect(line).not.toContain(INTERNAL_ERROR_MESSAGE);
+    expect(JSON.stringify(r.body)).not.toContain(' at ');
   });
 });

@@ -101,7 +101,7 @@ export function requireInit(hippoRoot: string): void {
 
 /** Runs detectChurnStale against every store this repo's memories can live in. */
 export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
-  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true }).trim();
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000, windowsHide: true }).trim();
   const projectName = resolveProjectIdentity(process.cwd()).name;
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];

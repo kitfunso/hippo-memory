@@ -3382,8 +3382,8 @@ export function recordTokens(
     } finally {
       closeHippoDb(db);
     }
-  } catch {
-    // Ledger is best-effort.
+  } catch (err) {
+    log.warnThenDebug('api-token-ledger', `token ledger write failed; the reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

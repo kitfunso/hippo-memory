@@ -50,12 +50,26 @@ function once(key: string, level: LogLevel, message: string, fields?: LogFields)
   write(level, message, fields);
 }
 
+/** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure stays findable without flooding stderr. */
+function warnThenDebug(key: string, message: string, fields?: LogFields): void {
+  const level = onceKeys.has(key) ? 'debug' : 'warn';
+  onceKeys.add(key);
+  write(level, message, fields);
+}
+
+/** The class name and stack of a thrown value, as log fields; a non-Error throw has no stack. */
+export function errorFields<E>(err: E): LogFields {
+  if (!(err instanceof Error)) return { errorClass: 'NonError' };
+  return { errorClass: err.constructor.name, stack: err.stack };
+}
+
 export const log = {
   error: (message: string, fields?: LogFields): void => write('error', message, fields),
   warn: (message: string, fields?: LogFields): void => write('warn', message, fields),
   info: (message: string, fields?: LogFields): void => write('info', message, fields),
   debug: (message: string, fields?: LogFields): void => write('debug', message, fields),
   once,
+  warnThenDebug,
 } as const;
 
 /** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
