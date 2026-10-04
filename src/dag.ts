@@ -7,7 +7,7 @@ import {
   clearSummaryDirtyAfterBuild,
 } from './store.js';
 import { RejectedValueError } from './rejection.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
@@ -83,9 +83,9 @@ export async function generateDagSummary(
   const model = opts.model ?? 'claude-sonnet-4-6';
   const fetchFn = opts.fetcher ?? fetch;
 
-  const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecrets(f)}`).join('\n');
+  const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecretsStrict(f)}`).join('\n');
   const prompt = DAG_SUMMARY_PROMPT
-    .replace('{label}', redactSecrets(label))
+    .replace('{label}', redactSecretsStrict(label))
     .replace('{facts}', factsBlock);
 
   let res: Response;

@@ -2,7 +2,7 @@ import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js'
 import { writeEntry } from './store.js';
 import { loadConfig } from './config.js';
 import { RejectedValueError } from './rejection.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
 import { log } from './log.js';
@@ -61,7 +61,7 @@ export async function extractFacts(
       body: JSON.stringify({
         model,
         max_tokens: 1200,
-        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecrets(text) }],
+        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecretsStrict(text) }],
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {

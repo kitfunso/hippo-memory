@@ -1,4 +1,4 @@
-import { buildRelevanceRequest, JEV_DEFAULT_TOP_K } from './jev.js';
+import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../search.js';
 import { isJsonObjectRecord, type JsonValue } from '../http-util.js';
@@ -9,6 +9,9 @@ export type ClefModel = 'clef-flash' | 'clef';
 
 const CLEF_MODELS: readonly ClefModel[] = ['clef-flash', 'clef'];
 const DEFAULT_TIMEOUT_MS = 15_000;
+const MAX_TIMEOUT_MS = 120_000;
+// 64 answers fit in a few KB; 1 MiB leaves room for a verbose envelope.
+const MAX_REPLY_BYTES = 1024 * 1024;
 // Workers AI rejects a request with more than 64 questions, one per candidate here.
 const MAX_CANDIDATES = 64;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
@@ -21,7 +24,12 @@ export function isClefModel(name: string): name is ClefModel {
 interface ClefRoute {
   url: string;
   token: string | undefined;
-  backend: 'cloudflare' | 'private-endpoint';
+  backend: Exclude<RerankProvenance['backend'], 'native'>;
+}
+
+// Plain http would put the token and the memory text on the wire, so only the local machine may use it.
+function isLoopback(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '[::1]' || /^127(\.\d{1,3}){3}$/.test(hostname);
 }
 
 interface ClefScores {
@@ -40,7 +48,12 @@ function isString(v: JsonValue | undefined): v is string {
 }
 
 function isRejection(v: ClefScores | string): v is string {
-  return typeof v === 'string';
+  return v.constructor === String;
+}
+
+// fetch quotes a rejected header value in its error, so a token it would reject must never reach it.
+function checkHeaderSafe(name: string, token: string): void {
+  if (!/^[\x21-\x7e]+$/.test(token)) throw new Error(`${name} has characters a header cannot carry`);
 }
 
 /** Transport from trusted local env, never call arguments: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
@@ -56,12 +69,22 @@ export function resolveClefRoute(model: ClefModel): ClefRoute {
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       throw new Error('HIPPO_CLEF_ENDPOINT must be an http or https URL');
     }
-    return { url: parsed.href, token: process.env.HIPPO_CLEF_ENDPOINT_TOKEN?.trim() || undefined, backend: 'private-endpoint' };
+    // fetch echoes a URL with credentials in its error text, which reaches stderr.
+    if (parsed.username || parsed.password) {
+      throw new Error('HIPPO_CLEF_ENDPOINT must not embed credentials; set HIPPO_CLEF_ENDPOINT_TOKEN');
+    }
+    if (parsed.protocol === 'http:' && !isLoopback(parsed.hostname)) {
+      throw new Error('HIPPO_CLEF_ENDPOINT must use https unless it is on this machine');
+    }
+    const endpointToken = process.env.HIPPO_CLEF_ENDPOINT_TOKEN?.trim() || undefined;
+    if (endpointToken) checkHeaderSafe('HIPPO_CLEF_ENDPOINT_TOKEN', endpointToken);
+    return { url: parsed.href, token: endpointToken, backend: 'private-endpoint' };
   }
   const account = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? '';
   const token = process.env.CLOUDFLARE_API_TOKEN?.trim() ?? '';
   if (!account || !token) throw new Error('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN not set');
   if (!ACCOUNT_ID.test(account)) throw new Error('CLOUDFLARE_ACCOUNT_ID is not a 32-character hex id');
+  checkHeaderSafe('CLOUDFLARE_API_TOKEN', token);
   return {
     url: `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/${model}`,
     token,
@@ -101,14 +124,40 @@ export function parseClefReply(body: JsonValue, n: number, model: ClefModel, req
   };
 }
 
+// The timeout bounds time, not bytes: a hostile endpoint could stream a huge 2xx body into memory.
+async function readCappedJson(resp: Response): Promise<JsonValue> {
+  if (!resp.body) throw new Error('reply has no body');
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let raw = '';
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > MAX_REPLY_BYTES) {
+      await reader.cancel();
+      throw new Error(`reply over ${MAX_REPLY_BYTES} bytes`);
+    }
+    raw += decoder.decode(value, { stream: true });
+  }
+  raw += decoder.decode();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('reply is not JSON');
+  }
+}
+
 async function requestScores(model: ClefModel, query: string, head: SearchResult[], route: ClefRoute): Promise<ClefScores> {
   const { state, questions } = buildRelevanceRequest(query, head);
-  const parsedTimeout = Number.parseInt(process.env.HIPPO_CLEF_TIMEOUT_MS ?? '', 10);
-  const timeoutMs = parsedTimeout > 0 ? parsedTimeout : DEFAULT_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Strict parse: parseInt would read "15s" as 15 ms, and Node clamps a delay past 2^31-1 to 1 ms.
+  const requested = Number(process.env.HIPPO_CLEF_TIMEOUT_MS);
+  const timeoutMs = Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
   if (route.token) headers.set('authorization', `Bearer ${route.token}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const resp = await fetch(route.url, {
       method: 'POST',
@@ -122,7 +171,7 @@ async function requestScores(model: ClefModel, query: string, head: SearchResult
       await resp.body?.cancel();
       throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
     }
-    const body: JsonValue = await resp.json();
+    const body = await readCappedJson(resp);
     const parsed = parseClefReply(body, head.length, model, route.backend === 'cloudflare');
     if (isRejection(parsed)) throw new Error(parsed);
     return parsed;
@@ -141,7 +190,8 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
     rerankScore: r.score,
     preRerankRank: r.preRerankRank ?? i + 1,
     postRerankRank: i + 1,
-    rerankProvenance: provenance,
+    // A copy per row, so a caller editing one result cannot change another's provenance.
+    rerankProvenance: { ...provenance },
   }));
 }
 
@@ -152,12 +202,11 @@ export function createClefReranker(model: ClefModel): RerankerFn {
     const head = results.slice(0, options?.topK ?? JEV_DEFAULT_TOP_K);
     if (head.length === 0) return [];
 
-    let backend: RerankProvenance['backend'] = 'native';
+    let route: ClefRoute;
     let got: ClefScores;
     try {
       if (head.length > MAX_CANDIDATES) throw new Error(`more than ${MAX_CANDIDATES} candidates`);
-      const route = resolveClefRoute(model);
-      backend = route.backend;
+      route = resolveClefRoute(model);
       got = await requestScores(model, query, head, route);
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'unknown error';
@@ -170,24 +219,14 @@ export function createClefReranker(model: ClefModel): RerankerFn {
       return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });
     }
 
-    const provenance: RerankProvenance = {
-      backend,
+    const rerankProvenance: RerankProvenance = {
+      backend: route.backend,
       requestedModel: model,
       actualModel: got.actualModel,
       inputTokens: got.inputTokens,
       outputTokens: got.outputTokens,
     };
-    const scored = head.map((r, i) => ({
-      ...r,
-      rerankScore: got.scores[i],
-      preRerankRank: r.preRerankRank ?? i + 1,
-      postRerankRank: 0,
-      rerankProvenance: provenance,
-    }));
-    // Stable sort: ties fall back to the prior relevance order.
-    scored.sort((a, b) => b.rerankScore - a.rerankScore);
-    scored.forEach((r, i) => (r.postRerankRank = i + 1));
-    return scored;
+    return rankByScores(head, got.scores).map((r) => ({ ...r, rerankProvenance: { ...rerankProvenance } }));
   };
 }
 

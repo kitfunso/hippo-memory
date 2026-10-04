@@ -1,7 +1,7 @@
 import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../search.js';
-import { redactSecrets } from '../secret-detect.js';
+import { redactSecretsStrict } from '../secret-detect.js';
 import { log } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
@@ -47,8 +47,9 @@ export interface RelevanceRequest {
 
 /** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
 export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
-  const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecrets(r.entry.content), TRUNCATE_CHARS)}`);
-  const state = `Query: ${redactSecrets(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
+  // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
+  const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`);
+  const state = `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
   const questions: RelevanceRequest['questions'] = {};
   for (let i = 1; i <= head.length; i++) {
     questions[`c${i}`] = {
@@ -124,18 +125,22 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
       return localFallback(query, head, options);
     }
 
-    const scored = head.map((r, i) => ({
-      ...r,
-      rerankScore: scores[i],
-      preRerankRank: r.preRerankRank ?? i + 1,
-      postRerankRank: 0,
-    }));
-
-    // Stable sort: ties fall back to the prior relevance order.
-    scored.sort((a, b) => b.rerankScore - a.rerankScore);
-    scored.forEach((r, i) => (r.postRerankRank = i + 1));
-    return scored;
+    return rankByScores(head, scores);
   };
+}
+
+/** Orders `head` by `scores[i]`, keeping any upstream pre-rerank rank. Shared with CLEF. */
+export function rankByScores(head: readonly SearchResult[], scores: readonly number[]): RerankResult[] {
+  const scored = head.map((r, i) => ({
+    ...r,
+    rerankScore: scores[i],
+    preRerankRank: r.preRerankRank ?? i + 1,
+    postRerankRank: 0,
+  }));
+  // Stable sort: ties fall back to the prior relevance order.
+  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.forEach((r, i) => (r.postRerankRank = i + 1));
+  return scored;
 }
 
 /** Track 4 reranker: hosted TypeSafe Jev, opt-in and paid (TYPESAFE_API_KEY), one batched call per recall.

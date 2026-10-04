@@ -1068,9 +1068,12 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
     return { fail: () => { throw err; } };
   }
   if (!fn) return {};
-  const topK = flags['reranker-top-k'] !== undefined
-    ? parseInt(String(flags['reranker-top-k']), 10)
-    : name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50;
+  const raw = flags['reranker-top-k'];
+  const topK = raw !== undefined ? Number(raw) : name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50;
+  // slice(0, -1) would quietly drop the last candidate rather than fail.
+  if (!Number.isInteger(topK) || topK < 1) {
+    return { fail: failWith(`Invalid --reranker-top-k: "${String(raw)}". Must be a positive integer.`) };
+  }
   return { value: { fn, topK } };
 }
 

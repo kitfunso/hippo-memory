@@ -1,5 +1,5 @@
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import { redactSecrets } from '../secret-detect.js';
+import { redactSecretsStrict } from '../secret-detect.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -36,8 +36,8 @@ export const llmReranker: RerankerFn = async (
 
   const prompt = [
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in best-first order.`,
-    `Query: ${redactSecrets(query)}`,
-    ...head.map((r, i) => `[${i}] ${redactSecrets(r.entry.content)}`),
+    `Query: ${redactSecretsStrict(query)}`,
+    ...head.map((r, i) => `[${i}] ${redactSecretsStrict(r.entry.content)}`),
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
   ].join('\n');
 

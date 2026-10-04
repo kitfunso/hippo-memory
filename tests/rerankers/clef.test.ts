@@ -80,7 +80,7 @@ describe('clef rerankers', () => {
   it('makes no network call and keeps the native order when credentials are missing', async () => {
     delete process.env.CLOUDFLARE_API_TOKEN;
     process.env.TYPESAFE_API_KEY = 'paid-jev-key-must-not-be-used';
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
     const out = await createClefReranker('clef-flash')('q', inputs());
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('clef rerankers', () => {
 
   it('refuses an account id that is not 32 hex characters without a request', async () => {
     process.env.CLOUDFLARE_ACCOUNT_ID = '../../evil';
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
     const out = await createClefReranker('clef-flash')('q', inputs());
     expect(fetchMock).not.toHaveBeenCalled();
     expect(contents(out)).toEqual(NATIVE);
@@ -158,13 +158,13 @@ describe('clef rerankers', () => {
 
   it('keeps the native order without a request when HIPPO_CLEF_ENDPOINT is not an http URL', async () => {
     process.env.HIPPO_CLEF_ENDPOINT = 'file:///etc/passwd';
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
     expect(contents(await createClefReranker('clef')('q', inputs()))).toEqual(NATIVE);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('keeps the native order without a request above the 64-question cap', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
     const many = Array.from({ length: 70 }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
     const out = await createClefReranker('clef-flash')('q', many, { topK: 65 });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -178,6 +178,114 @@ describe('clef rerankers', () => {
     const out = await createClefReranker('clef-flash')('q', many);
     expect(Object.keys(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).questions)).toHaveLength(40);
     expect(out).toHaveLength(40);
+  });
+
+  it('prefers HIPPO_CLEF_ENDPOINT over Workers AI and never forwards the Cloudflare token to it', async () => {
+    process.env.HIPPO_CLEF_ENDPOINT = 'http://localhost:8787/ai/run/clef-flash';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ answers: answersFor([0.3, 0.2, 0.9]) }));
+    await createClefReranker('clef-flash')('q', inputs());
+    expect(String(fetchMock.mock.calls[0][0])).toBe('http://localhost:8787/ai/run/clef-flash');
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBeNull();
+  });
+
+  it.each([
+    ['an unparseable URL', 'not a url', 'HIPPO_CLEF_ENDPOINT is not a valid URL'],
+    ['embedded credentials', 'https://user:pass@clef.example.com/run', 'must not embed credentials'],
+    ['plain http to another host', 'http://10.0.0.5:8787/run', 'must use https unless it is on this machine'],
+  ])('refuses %s without a request', async (_label, endpoint, reason) => {
+    process.env.HIPPO_CLEF_ENDPOINT = endpoint;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const out = await createClefReranker('clef-flash')('q', inputs());
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(contents(out)).toEqual(NATIVE);
+    expect(out[0].rerankProvenance?.fallbackReason).toContain(reason);
+    expect(String(warnSpy.mock.calls[0][0])).not.toContain('pass');
+  });
+
+  it('keeps only printable ASCII from a hostile cf-ray header, capped at 64 characters', async () => {
+    const res = new Response('{}', { status: 500, headers: { 'cf-ray': `abécd${'z'.repeat(100)}` } });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(res);
+    const out = await createClefReranker('clef-flash')('q', inputs());
+    expect(out[0].rerankProvenance?.fallbackReason).toMatch(/^HTTP 500, ray [\x20-\x7e]{1,64}$/);
+  });
+
+  it('keeps the input order on tied scores', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.5, 0.5, 0.5]));
+    expect(contents(await createClefReranker('clef-flash')('q', inputs()))).toEqual(NATIVE);
+  });
+
+  it('keeps an upstream pre-rerank rank on success and on fallback', async () => {
+    const ranked = () => inputs().map((r, i) => ({ ...r, preRerankRank: [7, 3, 5][i] }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(workersReply([0.1, 0.9, 0.5]));
+    const ok = await createClefReranker('clef-flash')('q', ranked());
+    expect(ok.map((r) => r.preRerankRank)).toEqual([3, 5, 7]);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('fetch failed'));
+    const fell = await createClefReranker('clef-flash')('q', ranked());
+    expect(fell.map((r) => r.preRerankRank)).toEqual([7, 3, 5]);
+  });
+
+  it('redacts secrets from the query and the candidates before sending', async () => {
+    const secret = `sk-${'a'.repeat(40)}`;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
+    await createClefReranker('clef-flash')(`q ${secret}`, [asResult(`key ${secret}`, 1), asResult('bravo', 0.9), asResult('charlie', 0.8)]);
+    expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain(secret);
+  });
+
+  it('strips Bearer, Basic-auth and JWT shapes from the text it sends', async () => {
+    const bearer = `Bearer ${'b'.repeat(24)}`;
+    const jwt = `eyJ${'h'.repeat(12)}.eyJ${'p'.repeat(12)}.sig`;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
+    await createClefReranker('clef-flash')(`q ${bearer}`, [asResult(`tok ${jwt}`, 1), asResult('bravo', 0.9), asResult('charlie', 0.8)]);
+    const sent = String(fetchMock.mock.calls[0][1]?.body);
+    expect(sent).not.toContain('b'.repeat(24));
+    expect(sent).not.toContain(jwt);
+  });
+
+  it.each([
+    ['HIPPO_CLEF_ENDPOINT_TOKEN', 'https://clef.example.com/run'],
+    ['CLOUDFLARE_API_TOKEN', undefined],
+  ])('refuses a %s a header cannot carry, without a request or echoing it', async (key, endpoint) => {
+    if (endpoint) process.env.HIPPO_CLEF_ENDPOINT = endpoint;
+    process.env[key] = 'secret-part-one\nsecret-part-two';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const out = await createClefReranker('clef-flash')('q', inputs());
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(contents(out)).toEqual(NATIVE);
+    expect(out[0].rerankProvenance?.fallbackReason).toBe(`${key} has characters a header cannot carry`);
+    expect(String(warnSpy.mock.calls[0][0])).not.toContain('secret-part');
+  });
+
+  it.each(['15s', '-1', '1.5', '999999999999'])('uses the default timeout for HIPPO_CLEF_TIMEOUT_MS=%s', async (value) => {
+    process.env.HIPPO_CLEF_TIMEOUT_MS = value;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
+    await createClefReranker('clef-flash')('q', inputs());
+    expect(setTimeoutSpy.mock.calls.map((c) => c[1])).toContain(15_000);
+  });
+
+  it('keeps the native order when a reply runs past the byte cap', async () => {
+    const huge = new Response(`{"pad":"${'x'.repeat(1024 * 1024 + 10)}"}`, { status: 200 });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(huge);
+    const out = await createClefReranker('clef-flash')('q', inputs());
+    expect(contents(out)).toEqual(NATIVE);
+    expect(out[0].rerankProvenance?.fallbackReason).toBe('reply over 1048576 bytes');
+  });
+
+  it('gives every result its own provenance object', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.9, 0.5]));
+    const ok = await createClefReranker('clef-flash')('q', inputs());
+    expect(ok[0].rerankProvenance).not.toBe(ok[1].rerankProvenance);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+    const fell = await createClefReranker('clef-flash')('q', inputs());
+    expect(fell[0].rerankProvenance).not.toBe(fell[1].rerankProvenance);
+  });
+
+  it('returns nothing and makes no request for an empty head', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const rerank = createClefReranker('clef-flash');
+    expect(await rerank('q', [])).toEqual([]);
+    expect(await rerank('q', inputs(), { topK: 0 })).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('parses a bare reply without a model name only when the model is not required', () => {
