@@ -1,0 +1,62 @@
+// The thin client rides out a busy-store 503 on remember, the one write that commits nothing before a busy error.
+import { afterEach, describe, expect, it } from 'vitest';
+import { createServer, type Server, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { forget, remember, HttpResponseError } from '../src/client.js';
+
+let server: Server | undefined;
+
+function sendBusy(res: ServerResponse): void {
+  res.writeHead(503, { 'content-type': 'application/json', 'retry-after': '1' });
+  res.end(JSON.stringify({ error: 'store busy: another process holds the write lock; retry shortly' }));
+}
+
+/** A server that answers the first `busyCount` requests with a busy 503, then 200; returns its URL and a request counter. */
+async function startFake(busyCount: number): Promise<{ url: string; hits: () => number }> {
+  let hits = 0;
+  server = createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      hits++;
+      if (hits <= busyCount) return sendBusy(res);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(req.method === 'DELETE' ? { ok: true, id: 'm1' } : { id: 'm1', kind: 'distilled', tenantId: 'default' }));
+    });
+  });
+  await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+  // SAFETY: a TCP listen always yields AddressInfo.
+  const { port } = server.address() as AddressInfo;
+  return { url: `http://127.0.0.1:${port}`, hits: () => hits };
+}
+
+afterEach(async () => {
+  await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
+  server = undefined;
+});
+
+describe('thin client under a busy store', () => {
+  it('remember retries two busy 503s and returns the 200', async () => {
+    const fake = await startFake(2);
+    const result = await remember(fake.url, undefined, { content: 'held lock clears' });
+    expect(result.id).toBe('m1');
+    expect(fake.hits()).toBe(3);
+  }, 15_000);
+
+  it('remember gives up with the 503 inside the ~5 s budget when the lock never clears', async () => {
+    const fake = await startFake(Number.POSITIVE_INFINITY);
+    const started = Date.now();
+    const err = await remember(fake.url, undefined, { content: 'lock never clears' }).catch((e: Error) => e);
+    const elapsed = Date.now() - started;
+    expect(err).toBeInstanceOf(HttpResponseError);
+    expect(err).toMatchObject({ status: 503, message: expect.stringMatching(/store busy/) });
+    expect(fake.hits()).toBe(5);
+    expect(elapsed).toBeGreaterThanOrEqual(3_500);
+    expect(elapsed).toBeLessThan(7_000);
+  }, 15_000);
+
+  it('forget does not replay a busy 503, since its busy error can follow a committed delete', async () => {
+    const fake = await startFake(1);
+    await expect(forget(fake.url, undefined, 'm1')).rejects.toMatchObject({ status: 503 });
+    expect(fake.hits()).toBe(1);
+  });
+});

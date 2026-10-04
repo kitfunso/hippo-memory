@@ -15,9 +15,18 @@
  */
 
 import type { RememberOpts, RememberResult } from './api.js';
+import { fetchWithRetry } from './http-retry.js';
 
 /** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
+
+/** Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the server answered busy with 503. */
+const STORE_BUSY_ATTEMPTS = 5;
+
+/** The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the auth-provider 503 has none. */
+function isStoreBusy(res: Response): boolean {
+  return res.status === 503 && res.headers.has('retry-after');
+}
 
 function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   const headers: Record<string, string> = {};
@@ -64,12 +73,13 @@ export async function remember(
   apiKey: string | undefined,
   opts: RememberOpts,
 ): Promise<RememberResult> {
-  const res = await fetch(`${serverUrl}/v1/memories`, {
-    method: 'POST',
-    headers: buildHeaders(apiKey, true),
-    signal: AbortSignal.timeout(SERVER_TIMEOUT_MS),
-    body: JSON.stringify(opts),
-  });
+  // Only remember retries: api.remember is one SAVEPOINT with no later write, while forget, archive and promote
+  // write again after their commit, so their busy 503 can follow a committed change and a replay would repeat it.
+  const res = await fetchWithRetry(
+    `${serverUrl}/v1/memories`,
+    { method: 'POST', headers: buildHeaders(apiKey, true), body: JSON.stringify(opts) },
+    { timeoutMs: SERVER_TIMEOUT_MS, attempts: STORE_BUSY_ATTEMPTS, retryOn: isStoreBusy },
+  );
   if (!res.ok) await throwForStatus(res);
   const result: RememberResult = await res.json();
   return result;

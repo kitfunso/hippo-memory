@@ -8,6 +8,8 @@ export interface RetryPolicy {
   baseDelayMs?: number;
   /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
   maxDelayMs?: number;
+  /** Which responses to retry; defaults to 429 and 5xx. A write narrows it to answers that prove nothing committed. */
+  retryOn?: (res: Response) => boolean;
   fetchFn?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
@@ -47,12 +49,13 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
   const maxDelayMs = policy.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
   const sleep = policy.sleep ?? realSleep;
   const random = policy.random ?? Math.random;
+  const retryOn = policy.retryOn ?? ((res: Response) => isRetryableStatus(res.status));
 
   for (let attempt = 1; ; attempt++) {
     const timeout = AbortSignal.timeout(policy.timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
     const res = await fetchFn(url, { ...init, signal });
-    if (!isRetryableStatus(res.status) || attempt >= attempts) return res;
+    if (!retryOn(res) || attempt >= attempts) return res;
 
     const retryAfter = parseRetryAfterMs(res.headers.get('retry-after'));
     if (retryAfter !== null && retryAfter > maxDelayMs) return res;

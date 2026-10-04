@@ -1,6 +1,6 @@
 ### Fixed
 
-- **A held write lock no longer freezes `hippo serve`.** A request now waits at most 250 ms for the SQLite write lock, then gets a 503 with `Retry-After: 1`, so one long write elsewhere cannot stall every other request. The CLI and hooks keep their longer waits.
+- **A held write lock no longer freezes `hippo serve`.** A request now waits at most 250 ms for the SQLite write lock, then gets a 503 with `Retry-After: 1`, so one long write elsewhere cannot stall every other request. The CLI and hooks keep their longer waits, and a `hippo remember` routed through the server retries the 503 for about 5 s, so it still rides out a sleep or consolidate run. Forget, archive and promote do not retry, because their 503 can follow a change that already committed.
 - **`hippo serve` drains before it stops.** On shutdown it stops accepting, ends open streams, gives running requests up to 5 s (`shutdownDrainMs`) to finish, then closes the rest, and exits 1 when shutdown fails.
 - **5xx log lines carry the error class and stack.** The client body is unchanged: the generic message plus the request id.
 - **The stdio MCP server answers a malformed frame with a JSON-RPC `-32700` parse error** instead of dropping it silently. After an uncaught exception or unhandled rejection it logs the stack and exits 1, so the client restarts it instead of talking to a process in an unknown state.

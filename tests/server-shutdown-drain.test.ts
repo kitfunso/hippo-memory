@@ -1,8 +1,10 @@
 // stop() stops accepting, lets an in-flight request finish within the drain window, and closes a stuck one when it ends.
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
 import { initStore } from '../src/store.js';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
 
@@ -56,5 +58,24 @@ describe('serve() graceful stop', () => {
     await handle.stop();
     expect(Date.now() - started).toBeLessThan(3000);
     expect(await pending).toBe('reset');
+  }, 15000);
+
+  it('exits 1 when a signal-driven shutdown fails', async () => {
+    const home = makeRoot();
+    const script = join(home, 'failing-stop.mjs');
+    const dist = (file: string): string => JSON.stringify(pathToFileURL(resolve('dist', file)).href);
+    // Closing the server first makes stop()'s own close fail with ERR_SERVER_NOT_RUNNING.
+    writeFileSync(script, [
+      `const { serve } = await import(${dist('server.js')});`,
+      `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true });`,
+      'handle.server.close();',
+      "process.emit('SIGTERM');",
+    ].join('\n'));
+    const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    const code = await new Promise<number | null>((done) => child.once('exit', done));
+    expect(stderr).toMatch(/error during stop: .*errorClass=/);
+    expect(code).toBe(1);
   }, 15000);
 });
