@@ -94,61 +94,8 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
 
   db.exec('BEGIN');
   try {
-    // AT1 (plan §3, round-3 redesign): run the guard LIVE per row rather
-    // than bypassing it. bootstrapLegacyStore is exactly the channel through
-    // which a stale/never-purged markdown mirror could resurrect a rejected
-    // value; a skip-and-count here closes that structurally, independent of
-    // mirror state. The refusal audit is written INLINE inside this
-    // still-open loop transaction (plain audit() — nothing is rolled back
-    // on a per-row skip, so the post-rollback auditRejectionRefusal helper
-    // is the wrong tool here).
-    let rejectedCount = 0;
-    for (const entry of legacyEntries) {
-      // v39: legacy markdown carries no origin_project; stamp from the store
-      // location so bootstrapped rows stay visible to ambient context.
-      const stamped = stampOriginProjectForImport(hippoRoot, entry);
-      try {
-        upsertEntryRow(db, stamped);
-      } catch (err) {
-        if (err instanceof RejectedValueError) {
-          rejectedCount++;
-          audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
-          continue;
-        }
-        throw err;
-      }
-    }
-    if (rejectedCount > 0) {
-      log.warn(`bootstrapLegacyStore: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
-    }
-
-    const legacyIndex = loadLegacyIndexFile(hippoRoot);
-    setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
-    // LC1: legacy index.json predates last_trace_id, so this is '' for every
-    // pre-v40 store — harmless, matches the ensureMetaDefaults default.
-    // Coerce like its neighbors below coerce theirs (independent-review-critic
-    // LOW finding): accept only a clean digit string, else fall back to ''
-    // rather than trusting whatever a hand-edited/corrupt index.json carries.
-    const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
-    setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
-
-    const legacyStats = loadLegacyStatsFile(hippoRoot);
-    setMeta(db, 'total_remembered', String(Number(legacyStats.total_remembered ?? 0)));
-    setMeta(db, 'total_recalled', String(Number(legacyStats.total_recalled ?? 0)));
-    setMeta(db, 'total_forgotten', String(Number(legacyStats.total_forgotten ?? 0)));
-
-    const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
-    const insertRun = db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`);
-    for (const run of runs) {
-      if (!isPlainJsonObject(run)) continue;
-      const row = run;
-      insertRun.run(
-        String(row.timestamp ?? new Date().toISOString()),
-        Number(row.decayed ?? 0),
-        Number(row.merged ?? 0),
-        Number(row.removed ?? 0)
-      );
-    }
+    importLegacyEntries(db, hippoRoot, legacyEntries);
+    importLegacyIndexAndStats(db, hippoRoot);
 
     // AT1 P2 fix: stamp completion regardless of how many rows actually
     // landed (all-rejected included) — see the gate comment above.
@@ -159,6 +106,66 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
     throw error;
   }
   return true;
+}
+
+function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntries: MemoryEntry[]): void {
+  // AT1 (plan §3, round-3 redesign): run the guard LIVE per row rather
+  // than bypassing it. bootstrapLegacyStore is exactly the channel through
+  // which a stale/never-purged markdown mirror could resurrect a rejected
+  // value; a skip-and-count here closes that structurally, independent of
+  // mirror state. The refusal audit is written INLINE inside this
+  // still-open loop transaction (plain audit() — nothing is rolled back
+  // on a per-row skip, so the post-rollback auditRejectionRefusal helper
+  // is the wrong tool here).
+  let rejectedCount = 0;
+  for (const entry of legacyEntries) {
+    // v39: legacy markdown carries no origin_project; stamp from the store
+    // location so bootstrapped rows stay visible to ambient context.
+    const stamped = stampOriginProjectForImport(hippoRoot, entry);
+    try {
+      upsertEntryRow(db, stamped);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejectedCount++;
+        audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (rejectedCount > 0) {
+    log.warn(`bootstrapLegacyStore: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
+  }
+}
+
+function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
+  const legacyIndex = loadLegacyIndexFile(hippoRoot);
+  setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
+  // LC1: legacy index.json predates last_trace_id, so this is '' for every
+  // pre-v40 store — harmless, matches the ensureMetaDefaults default.
+  // Coerce like its neighbors below coerce theirs (independent-review-critic
+  // LOW finding): accept only a clean digit string, else fall back to ''
+  // rather than trusting whatever a hand-edited/corrupt index.json carries.
+  const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
+  setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
+
+  const legacyStats = loadLegacyStatsFile(hippoRoot);
+  setMeta(db, 'total_remembered', String(Number(legacyStats.total_remembered ?? 0)));
+  setMeta(db, 'total_recalled', String(Number(legacyStats.total_recalled ?? 0)));
+  setMeta(db, 'total_forgotten', String(Number(legacyStats.total_forgotten ?? 0)));
+
+  const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
+  const insertRun = db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`);
+  for (const run of runs) {
+    if (!isPlainJsonObject(run)) continue;
+    const row = run;
+    insertRun.run(
+      String(row.timestamp ?? new Date().toISOString()),
+      Number(row.decayed ?? 0),
+      Number(row.merged ?? 0),
+      Number(row.removed ?? 0)
+    );
+  }
 }
 
 export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {

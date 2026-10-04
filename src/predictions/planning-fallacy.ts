@@ -1,7 +1,7 @@
 import { envAutodebiasOff } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { appendAuditEvent } from '../audit.js';
-import { detectForwardClaim } from '../forward-claim-detector.js';
+import { detectForwardClaim, type ForwardClaimMatch } from '../forward-claim-detector.js';
 import { computePredictionBaserate } from './store.js';
 
 // ---------------------------------------------------------------------------
@@ -216,26 +216,7 @@ export function computePlanningFallacyOutput(
     // v1.13.4: now ALSO returns a watching variant so the caller surface
     // can render a "watching but no baserate (tiebreak)" line. Audit emission
     // unchanged (the audit channel is the telemetry-grade source of truth).
-    const db = openHippoDb(hippoRoot);
-    try {
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'recall_autodebias_hint_tiebreak',
-        targetId: match.phrase.slice(0, 100),
-        metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
-      });
-    } finally {
-      closeHippoDb(db);
-    }
-    return {
-      watching: {
-        detectedPhrase: match.phrase,
-        reason: 'tiebreak',
-        suggestion:
-          'Multiple prediction classes tied on this query. Refine the query or rename overlapping classes to break the tie.',
-      },
-    };
+    return watchingWithAudit(hippoRoot, tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
   }
   if (!resolution.classTag) {
     // Telemetry: forward-claim detected, no class scored ≥ 1.
@@ -244,26 +225,7 @@ export function computePlanningFallacyOutput(
     // legitimate forward-claims that have NO obvious class signal.
     // v1.13.4: now ALSO returns a watching variant so the caller surface
     // can render a "watching but no baserate (no class match)" line.
-    const db = openHippoDb(hippoRoot);
-    try {
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'recall_autodebias_hint_no_class_match',
-        targetId: match.phrase.slice(0, 100),
-        metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
-      });
-    } finally {
-      closeHippoDb(db);
-    }
-    return {
-      watching: {
-        detectedPhrase: match.phrase,
-        reason: 'no_class_match',
-        suggestion:
-          'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to start tracking this class.',
-      },
-    };
+    return watchingWithAudit(hippoRoot, tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
   }
 
   // emitAudit=false: avoid double-write to predict_baserate channel.
@@ -277,23 +239,18 @@ export function computePlanningFallacyOutput(
   );
   if (baserate.nClosed === 0) return {}; // Silent — wait for closed data.
 
-  const db = openHippoDb(hippoRoot);
-  try {
-    appendAuditEvent(db, {
-      tenantId,
-      actor,
-      op: 'recall_autodebias_hint',
-      targetId: resolution.classTag,
-      metadata: {
-        class_tag: resolution.classTag,
-        detected_phrase: match.phrase,
-        n_closed: baserate.nClosed,
-        mean_ratio: baserate.meanRatio,
-      },
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+  appendAuditEventOnce(hippoRoot, {
+    tenantId,
+    actor,
+    op: 'recall_autodebias_hint',
+    targetId: resolution.classTag,
+    metadata: {
+      class_tag: resolution.classTag,
+      detected_phrase: match.phrase,
+      n_closed: baserate.nClosed,
+      mean_ratio: baserate.meanRatio,
+    },
+  });
 
   return {
     hint: {
@@ -303,6 +260,45 @@ export function computePlanningFallacyOutput(
       detectedPhrase: match.phrase,
       nClosed: baserate.nClosed,
       meanRatio: baserate.meanRatio,
+    },
+  };
+}
+
+const TIEBREAK_SUGGESTION =
+  'Multiple prediction classes tied on this query. Refine the query or rename overlapping classes to break the tie.';
+const NO_CLASS_MATCH_SUGGESTION =
+  'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to start tracking this class.';
+
+/** One audit row on its own short-lived connection. */
+function appendAuditEventOnce(hippoRoot: string, event: Parameters<typeof appendAuditEvent>[1]): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    appendAuditEvent(db, event);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function watchingWithAudit(
+  hippoRoot: string,
+  tenantId: string,
+  actor: string,
+  match: ForwardClaimMatch,
+  reason: PlanningFallacyWatching['reason'],
+  suggestion: string,
+): PlanningFallacyOutput {
+  appendAuditEventOnce(hippoRoot, {
+    tenantId,
+    actor,
+    op: reason === 'tiebreak' ? 'recall_autodebias_hint_tiebreak' : 'recall_autodebias_hint_no_class_match',
+    targetId: match.phrase.slice(0, 100),
+    metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
+  });
+  return {
+    watching: {
+      detectedPhrase: match.phrase,
+      reason,
+      suggestion,
     },
   };
 }

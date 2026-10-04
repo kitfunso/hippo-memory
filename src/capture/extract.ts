@@ -199,59 +199,12 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
     const ch = full[i];
 
     if (quote) {
-      // Closing uses the SAME shape test as opening. This was asymmetric:
-      // twelve rounds went into deciding when a quote OPENS a literal, while
-      // the close accepted any bare "'" - so the apostrophe in a possessive
-      // INSIDE a literal closed it early:
-      //   "Always pass 'user's a, b list' to the parser."
-      //     -> "Always pass 'user's a"   (master kept the whole literal)
-      // a mid-literal fragment that then PASSES the write gate, which is
-      // precisely the defect this branch exists to remove. Found by the
-      // ship-gate review after every earlier gate missed it.
-      if (ch === quote && (quote !== "'" || !isLetterOrDigit(full[i + 1]))) {
-        quote = null;
-      }
+      if (closesQuote(full, i, quote)) quote = null;
       continue;
     }
-    // Quote handling has to tell an APOSTROPHE from a single-quoted
-    // LITERAL, because getting either wrong reintroduces the fragment
-    // defect this change exists to remove, and both fragments PASS the
-    // write gate (code punctuation reads as "specific"):
-    //   treat every ' as a quote  -> "Always ensure it's enabled, then
-    //     restart..." never leaves quote mode, bounding disabled entirely
-    //   treat no ' as a quote     -> "Always pass 'a, b' to the parser."
-    //     cuts at the comma and stores "Always pass 'a"
-    // Both were codex P1s on this branch, in consecutive rounds.
-    //
-    // Discriminator: a ' OPENS a literal only at a word boundary - preceded
-    // by start/whitespace/open-bracket AND followed by non-whitespace. An
-    // in-word apostrophe ("it's", "user's") has letters on both sides and is
-    // just a character.
     if (ch === '"' || ch === '`') { quote = ch; continue; }
     if (ch === "'") {
-      const prev = i > 0 ? full[i - 1] : undefined;
-      const next = full[i + 1];
-      const atBoundary =
-        (prev === undefined || /[\s([{]/.test(prev)) &&
-        next !== undefined && !/\s/.test(next);
-      // Pairing is VERIFIED, not assumed. A word-boundary test alone still
-      // opens quote mode on elided forms ("keep 'em", "wait 'til"), which
-      // have no closer, so the scanner never leaves quote mode and bounding
-      // is disabled for the rest of the capture. Requiring an actual closing
-      // quote later in the string replaces a guess with a checkable fact -
-      // an elided form simply has no partner. Codex P2, this round.
-      // ...and the partner must LOOK like a closer, not merely be another
-      // apostrophe. Distance cannot separate the two cases - both put a `'`
-      // far downstream:
-      //   "Always pass '<600-char literal>' to the parser"  -> the far ' IS
-      //     the closer, and pairing must succeed
-      //   "keep 'em enabled, then <520 chars> check user's config" -> the far
-      //     ' is in-word, and pairing against it re-opens quote mode on the
-      //     elision, disabling bounding for the rest of the capture
-      // So apply the SAME shape rule already used to open a literal, mirrored:
-      // a closer has non-whitespace before it and whitespace/punctuation (not
-      // a letter) after. "user's" fails it on both counts. Codex P2, r6.
-      if (atBoundary && lastCloser > i) { quote = ch; }
+      if (opensSingleQuote(full, i, lastCloser)) { quote = ch; }
       continue;
     }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
@@ -275,6 +228,59 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
   let bounded = full.slice(0, cutEnd);
   if (bounded.length > maxLen) bounded = bounded.slice(0, maxLen);
   return bounded;
+}
+
+function closesQuote(full: string, i: number, quote: string): boolean {
+  // Closing uses the SAME shape test as opening. This was asymmetric:
+  // twelve rounds went into deciding when a quote OPENS a literal, while
+  // the close accepted any bare "'" - so the apostrophe in a possessive
+  // INSIDE a literal closed it early:
+  //   "Always pass 'user's a, b list' to the parser."
+  //     -> "Always pass 'user's a"   (master kept the whole literal)
+  // a mid-literal fragment that then PASSES the write gate, which is
+  // precisely the defect this branch exists to remove. Found by the
+  // ship-gate review after every earlier gate missed it.
+  return full[i] === quote && (quote !== "'" || !isLetterOrDigit(full[i + 1]));
+}
+
+function opensSingleQuote(full: string, i: number, lastCloser: number): boolean {
+  // Quote handling has to tell an APOSTROPHE from a single-quoted
+  // LITERAL, because getting either wrong reintroduces the fragment
+  // defect this change exists to remove, and both fragments PASS the
+  // write gate (code punctuation reads as "specific"):
+  //   treat every ' as a quote  -> "Always ensure it's enabled, then
+  //     restart..." never leaves quote mode, bounding disabled entirely
+  //   treat no ' as a quote     -> "Always pass 'a, b' to the parser."
+  //     cuts at the comma and stores "Always pass 'a"
+  // Both were codex P1s on this branch, in consecutive rounds.
+  //
+  // Discriminator: a ' OPENS a literal only at a word boundary - preceded
+  // by start/whitespace/open-bracket AND followed by non-whitespace. An
+  // in-word apostrophe ("it's", "user's") has letters on both sides and is
+  // just a character.
+  const prev = i > 0 ? full[i - 1] : undefined;
+  const next = full[i + 1];
+  const atBoundary =
+    (prev === undefined || /[\s([{]/.test(prev)) &&
+    next !== undefined && !/\s/.test(next);
+  // Pairing is VERIFIED, not assumed. A word-boundary test alone still
+  // opens quote mode on elided forms ("keep 'em", "wait 'til"), which
+  // have no closer, so the scanner never leaves quote mode and bounding
+  // is disabled for the rest of the capture. Requiring an actual closing
+  // quote later in the string replaces a guess with a checkable fact -
+  // an elided form simply has no partner. Codex P2, this round.
+  // ...and the partner must LOOK like a closer, not merely be another
+  // apostrophe. Distance cannot separate the two cases - both put a `'`
+  // far downstream:
+  //   "Always pass '<600-char literal>' to the parser"  -> the far ' IS
+  //     the closer, and pairing must succeed
+  //   "keep 'em enabled, then <520 chars> check user's config" -> the far
+  //     ' is in-word, and pairing against it re-opens quote mode on the
+  //     elision, disabling bounding for the rest of the capture
+  // So apply the SAME shape rule already used to open a literal, mirrored:
+  // a closer has non-whitespace before it and whitespace/punctuation (not
+  // a letter) after. "user's" fails it on both counts. Codex P2, r6.
+  return atBoundary && lastCloser > i;
 }
 
 function cleanExtract(raw: string): string {

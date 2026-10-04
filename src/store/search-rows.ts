@@ -71,6 +71,22 @@ export function recallScopeFilter(requestedScope: string | undefined, mode: 'exa
 
 const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 
+/** SQL predicate fragments every candidate path appends, built once per load. */
+interface SearchPredicates {
+  tenantPredicate: string;
+  tenantPredicateNoAlias: string;
+  tenantOnlyPredicate: string;
+  tenantParams: string[];
+  archivedClauseAlias: string;
+  archivedClauseNoAlias: string;
+  archivedClauseTenantOnly: string;
+  aliasScope: SqlFragment;
+  plainScope: SqlFragment;
+  scopeParams: string[];
+  currentAlias: string;
+  currentNoAlias: string;
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
@@ -79,6 +95,45 @@ function loadSearchRows(
   scopeFilter?: RecallScopeFilter,
   includeSuperseded = true,
 ): MemoryRow[] {
+  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded);
+
+  const terms = Array.from(new Set(tokenize(query)));
+  if (terms.length === 0) {
+    // F3 (v1.7.0) self-review: empty-query path is the second uncapped
+    // path (codex diff-pass caught the full-store fallback at the bottom;
+    // this no-terms path had the same shape). Apply LIMIT so all four
+    // candidate paths honour the caller's cap when set.
+    return selectAllCandidates(db, p, limit);
+  }
+
+  // v1.7.1 — test/diagnostic hook: `HIPPO_FORCE_LIKE_PATH=1` forces the
+  // LIKE-fallback path here only. Gated at the read-call site so writes
+  // (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using
+  // `isFtsAvailable` honestly and never silently skip FTS index sync.
+  // Lets tests exercise the LIKE branch deterministically without
+  // poisoning the on-disk FTS state.
+  const forceLikePath = envForceLikePath();
+  if (!forceLikePath && isFtsAvailable(db)) {
+    const rows = selectFtsCandidates(db, terms, p, limit);
+    if (rows.length > 0) return rows;
+  }
+
+  const rows = selectLikeCandidates(db, terms, p, limit);
+  if (rows.length > 0) return rows;
+
+  // F3 (v1.7.0) codex P1: pre-v1.7.0 the full-store fallback ignored
+  // `limit` and could return the whole tenant store. With scorerWindow
+  // now reported on RecallResult, an unbounded fallback would lie about
+  // candidate-pool size. Apply LIMIT here so all four paths honour the
+  // caller's cap.
+  return selectAllCandidates(db, p, limit);
+}
+
+function searchPredicates(
+  tenantId: string | undefined,
+  scopeFilter: RecallScopeFilter | undefined,
+  includeSuperseded: boolean,
+): SearchPredicates {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
   // idx_memories_tenant_created (leading column tenant_id, O(log n) lookup).
@@ -115,54 +170,50 @@ function loadSearchRows(
 
   const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const currentNoAlias = includeSuperseded ? '' : ' AND superseded_by IS NULL';
+  return {
+    tenantPredicate, tenantPredicateNoAlias, tenantOnlyPredicate, tenantParams,
+    archivedClauseAlias, archivedClauseNoAlias, archivedClauseTenantOnly,
+    aliasScope, plainScope, scopeParams, currentAlias, currentNoAlias,
+  };
+}
 
-  const terms = Array.from(new Set(tokenize(query)));
-  if (terms.length === 0) {
-    // F3 (v1.7.0) self-review: empty-query path is the second uncapped
-    // path (codex diff-pass caught the full-store fallback at the bottom;
-    // this no-terms path had the same shape). Apply LIMIT so all four
-    // candidate paths honour the caller's cap when set.
-    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${plainScope.sql}${currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
-    // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
-    // matches MemoryRow's field set.
-    return db.prepare(sql).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
-  }
+/** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */
+function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
+  const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
+  // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
+  // matches MemoryRow's field set.
+  return db.prepare(sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
+}
 
-  // v1.7.1 — test/diagnostic hook: `HIPPO_FORCE_LIKE_PATH=1` forces the
-  // LIKE-fallback path here only. Gated at the read-call site so writes
-  // (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using
-  // `isFtsAvailable` honestly and never silently skip FTS index sync.
-  // Lets tests exercise the LIKE branch deterministically without
-  // poisoning the on-disk FTS state.
-  const forceLikePath = envForceLikePath();
-  if (!forceLikePath && isFtsAvailable(db)) {
-    try {
-      const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
-      // memories_fts virtual table has no tenant_id column; filter via the
-      // joined memories row (cheap with idx_memories_tenant_created leading
-      // on tenant_id).
-      // F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing
-      // result column. Every other column is m.<col> AS <col> so rowToEntry
-      // sees the same shape it always has.
-      // SAFETY: MEMORY_SEARCH_COLUMNS aliases every column to the same name
-      // MEMORY_SELECT_COLUMNS uses (plus bm25_score), matching MemoryRow.
-      const rows = db.prepare(`
+/** FTS5 bm25 matches; empty when none match or FTS5 cannot run the query. */
+function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
+  try {
+    const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+    // memories_fts virtual table has no tenant_id column; filter via the
+    // joined memories row (cheap with idx_memories_tenant_created leading
+    // on tenant_id).
+    // F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing
+    // result column. Every other column is m.<col> AS <col> so rowToEntry
+    // sees the same shape it always has.
+    // SAFETY: MEMORY_SEARCH_COLUMNS aliases every column to the same name
+    // MEMORY_SELECT_COLUMNS uses (plus bm25_score), matching MemoryRow.
+    return db.prepare(`
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
-        WHERE memories_fts MATCH ?${tenantPredicate}${archivedClauseAlias}${aliasScope.sql}${currentAlias}
+        WHERE memories_fts MATCH ?${p.tenantPredicate}${p.archivedClauseAlias}${p.aliasScope.sql}${p.currentAlias}
         ORDER BY bm25(memories_fts), m.updated_at DESC, m.content ASC, m.id ASC
         LIMIT ?
-      `).all(ftsQuery, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
-
-      if (rows.length > 0) return rows;
-    } catch (err) {
-      // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
-      const message = err instanceof Error ? err.message : String(err);
-      if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
-    }
+      `).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
+  } catch (err) {
+    // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
+    const message = err instanceof Error ? err.message : String(err);
+    if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
+    return [];
   }
+}
 
+function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
   const escapeLike = (term: string): string => term.replace(/[%_\\]/g, '\\$&');
   const where = terms.map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`).join(' OR ');
   const params = terms.flatMap((term) => {
@@ -172,25 +223,13 @@ function loadSearchRows(
 
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const rows = db.prepare(`
+  return db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
-    WHERE (${where})${tenantPredicateNoAlias}${archivedClauseNoAlias}${plainScope.sql}${currentNoAlias}
+    WHERE (${where})${p.tenantPredicateNoAlias}${p.archivedClauseNoAlias}${p.plainScope.sql}${p.currentNoAlias}
     ORDER BY updated_at DESC, created DESC, content ASC, id ASC
     LIMIT ?
-  `).all(...params, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
-
-  if (rows.length > 0) return rows;
-
-  // F3 (v1.7.0) codex P1: pre-v1.7.0 the full-store fallback ignored
-  // `limit` and could return the whole tenant store. With scorerWindow
-  // now reported on RecallResult, an unbounded fallback would lie about
-  // candidate-pool size. Apply LIMIT here so all four paths honour the
-  // caller's cap.
-  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${plainScope.sql}${currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
-  // SAFETY: fallback selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
-  return db.prepare(fallback).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
+  `).all(...params, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
 }
 
 /**

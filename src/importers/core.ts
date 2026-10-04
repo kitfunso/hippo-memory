@@ -8,7 +8,7 @@ import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../same-text.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
@@ -113,13 +113,7 @@ export function importEntries(
   const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
   try {
     for (const raw of chunks) {
-      const original = raw.trim();
-      const trimmed = vetSecrets(original, allTags, true).content;
-      const wasRedacted = trimmed !== original;
-      if (trimmed.length > 1000) {
-        log.warn(`imported memory truncated from ${trimmed.length} to 1000 chars`);
-      }
-      const chunk = trimmed.slice(0, 1000);
+      const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
 
       // Skip empty or too-short chunks
       if (!chunk || chunk.length < 10) {
@@ -135,53 +129,13 @@ export function importEntries(
         continue;
       }
 
-      // A3: kind defaults to 'distilled'. ChatGPT/Claude/Cursor exports are curated
-      // user pastes, not raw transcripts from a system of record, so distilled is
-      // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
-      // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
-      // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
-      // L9: the dedup read above is scoped by options.tenantId — the WRITE
-      // must match, or scoped-dedup-passes-then-default-tenant-write breaks
-      // the per-tenant contract. Mirror the dedup-read guard: global=true
-      // → host-wide write to global store (tenantId irrelevant, createMemory
-      // defaults to 'default'). global=false → write to the same tenant as
-      // the dedup read.
-      const entry = createMemory(chunk, {
-        layer: Layer.Episodic,
-        tags: allTags,
-        source,
-        confidence: 'observed',
-        tenantId: options.global ? undefined : options.tenantId,
-        baseHalfLifeDays,
-      });
-
-      if (options.dryRun) {
-        if (dryRunDb) {
-          try {
-            checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
-          } catch (err) {
-            if (err instanceof RejectedValueError) {
-              rejected++;
-              continue;
-            }
-            throw err;
-          }
-        }
-      } else {
-        // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
-        // whole import batch. Caught per-item so siblings still land.
-        try {
-          writeEntry(targetRoot, entry);
-        } catch (err) {
-          if (err instanceof RejectedValueError) {
-            rejected++;
-            continue;
-          }
-          throw err;
-        }
-        // Add to existing so subsequent chunks dedup against freshly imported ones
-        keys.add(duplicateKey(chunk));
+      const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
+      if (!writeOrProbeImport(targetRoot, entry, options, dryRunDb)) {
+        rejected++;
+        continue;
       }
+      // Add to existing so subsequent chunks dedup against freshly imported ones
+      if (!options.dryRun) keys.add(duplicateKey(chunk));
 
       entries.push(entry);
       imported++;
@@ -192,6 +146,74 @@ export function importEntries(
   } finally {
     if (dryRunDb) closeHippoDb(dryRunDb);
   }
+}
+
+/** The secret-vetted chunk capped at 1000 chars, and whether vetting changed it. */
+function prepareImportChunk(raw: string, allTags: string[]) {
+  const original = raw.trim();
+  const trimmed = vetSecrets(original, allTags, true).content;
+  const wasRedacted = trimmed !== original;
+  if (trimmed.length > 1000) {
+    log.warn(`imported memory truncated from ${trimmed.length} to 1000 chars`);
+  }
+  return { chunk: trimmed.slice(0, 1000), wasRedacted };
+}
+
+function createImportEntry(
+  chunk: string,
+  source: string,
+  allTags: string[],
+  options: ImportOptions,
+  baseHalfLifeDays: number,
+): MemoryEntry {
+  // A3: kind defaults to 'distilled'. ChatGPT/Claude/Cursor exports are curated
+  // user pastes, not raw transcripts from a system of record, so distilled is
+  // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
+  // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
+  // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
+  // L9: the dedup read above is scoped by options.tenantId — the WRITE
+  // must match, or scoped-dedup-passes-then-default-tenant-write breaks
+  // the per-tenant contract. Mirror the dedup-read guard: global=true
+  // → host-wide write to global store (tenantId irrelevant, createMemory
+  // defaults to 'default'). global=false → write to the same tenant as
+  // the dedup read.
+  return createMemory(chunk, {
+    layer: Layer.Episodic,
+    tags: allTags,
+    source,
+    confidence: 'observed',
+    tenantId: options.global ? undefined : options.tenantId,
+    baseHalfLifeDays,
+  });
+}
+
+/** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
+function writeOrProbeImport(
+  targetRoot: string,
+  entry: MemoryEntry,
+  options: ImportOptions,
+  dryRunDb: DatabaseSyncLike | null,
+): boolean {
+  if (options.dryRun) {
+    if (dryRunDb) {
+      try {
+        checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
+      } catch (err) {
+        if (err instanceof RejectedValueError) return false;
+        throw err;
+      }
+    }
+    return true;
+  }
+  // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
+  // whole import batch. Caught per-item so siblings still land.
+  try {
+    writeEntry(targetRoot, entry);
+  } catch (err) {
+    if (err instanceof RejectedValueError) return false;
+    throw err;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------

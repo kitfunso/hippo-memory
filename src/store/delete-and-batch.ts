@@ -1,5 +1,5 @@
 import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { checkRejectionGuard, RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { type DormantMove, insertDormantRow } from '../dormant.js';
@@ -164,130 +164,22 @@ export function batchWriteAndDelete(
     // independent-review-critic R1 HIGH: consolidate.ts/sleep flushes through
     // this path every cycle; without these hooks parents NEVER get marked
     // dirty for the dominant mutation source (decay, merge, garbage-collect).
-    const dirtyParents = new Set<string>();
-    const tenantById = new Map<string, string>();
+    const dirty: DirtyParents = { parents: new Set<string>(), tenantById: new Map<string, string>() };
     const deletableIds: string[] = [];
     if (toDeleteIds.length > 0) {
-      const placeholders = toDeleteIds.map(() => '?').join(',');
       // A row pinned after the caller decided to delete it survives.
-      // SAFETY: rows' shape matches the three columns named in the SELECT.
-      const rows = db.prepare(
-        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTOMATIC_DELETE_SQL}`,
-      ).all(...toDeleteIds) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
-      for (const row of rows) {
-        deletableIds.push(row.id);
-        if (row.dag_parent_id) {
-          dirtyParents.add(row.dag_parent_id);
-          tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
-        }
-      }
+      const placeholders = toDeleteIds.map(() => '?').join(',');
+      for (const row of selectAutoDeletableRows(db, placeholders, toDeleteIds, dirty)) deletableIds.push(row.id);
     }
     // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new
     // memories from ambient context). A row queued twice keeps only its last version, the one the merge compares.
     const stampedWrites = [...new Map(toWrite.map((e) => [e.id, stampOriginProject(hippoRoot, e)])).values()];
-    // AT1 P1 fix (codex, batch-transaction rejection race): the producer-side
-    // check (e.g. consolidate.ts's merge pass) runs BEFORE this transaction,
-    // on a different connection. A `hippo reject X` that commits in that
-    // window is invisible to it — a queued same-id write of X already
-    // sitting in `toWrite` (decay/replay re-persist, or a merge built before
-    // the reject) would silently re-INSERT the just-rejected row via the
-    // blind bypass. Fix: one indexed point probe per batch entry, on THIS
-    // connection, INSIDE this transaction — closes the race regardless of
-    // which write class hits it. N is small per sleep, so the extra query
-    // per entry is cheap.
-    //
-    // Skip, don't throw: the batch must still complete for every OTHER
-    // entry. Skipping is correct for every write class here — a merge
-    // summary skip just means that rollup is absent this cycle (its source
-    // facts stay merely demoted, recoverable next sleep); a skipped
-    // demotion/replay re-persist of a rejected-removed row means it stays
-    // gone, which is the entire point of the tombstone.
-    let batchRejectedSkips = 0;
-    const written: MemoryEntry[] = [];
-    const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
-    for (const entry of stampedWrites) {
-      const base = opts?.snapshot?.get(entry.id);
-      // SAFETY: MEMORY_SELECT_COLUMNS is the MemoryRow shape rowToEntry reads.
-      const liveRow = readLiveRow.get(entry.id) as MemoryRow | undefined;
-      const live = liveRow ? rowToEntry(liveRow) : undefined;
-      const row = base && live ? mergeOwnChanges(base, entry, live) : entry;
-      const entryTenantId = row.tenantId ?? 'default';
-      // Codex delta-review P2 fix: reuse checkRejectionGuard rather than a
-      // bare tombstone probe — the guard's content-INTRODUCTION
-      // classification must apply here too. A tombstone can legitimately
-      // coexist with a live same-content row (resolveConflict deliberately
-      // excludes keepId from its sweep; unreject-then-re-reject windows), and
-      // an unconditional skip would starve that row of decay/replay metadata
-      // updates forever. The guard throws only when the write is new-row or
-      // changes content TO the rejected value; unchanged same-id re-persists
-      // pass through, exactly as on the writeEntry path.
-      try {
-        checkRejectionGuard(db, entryTenantId, row.id, row.content);
-      } catch (err) {
-        if (err instanceof RejectedValueError) {
-          batchRejectedSkips++;
-          audit(
-            db,
-            'reject_refusal',
-            row.id,
-            { digest: err.digest, reason: err.reason },
-            'sleep-batch',
-            entryTenantId,
-          );
-          continue;
-        }
-        throw err;
-      }
-      if (base && !live) continue;
-      written.push(row);
-      // AT1 (plan §3, corrected): bypass the rejection guard here.
-      // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
-      // consolidate.ts:736-751) of already-guarded leaf facts, not an LLM
-      // paraphrase — refusing mid-batch would abort the whole consolidation
-      // transaction. The bypass is safe because consolidate.ts's merge pass
-      // now checks the merged content's rejection digest against the
-      // tenant's tombstones BEFORE ever pushing a merge into pendingWrites,
-      // skipping that merge entirely on a hit, AND because the point-probe
-      // immediately above closes the race window between that producer
-      // check and this COMMIT. The guard itself still belongs on leaf
-      // inserts, which write through writeEntry / writeEntryDbOnly and stay
-      // guarded (bypassRejectionGuard defaults false).
-      upsertEntryRow(db, row, true);
-      // Hook for writes: a new child, or a change to what its summary reads, marks the parent dirty; decay alone does not.
-      if (row.dag_parent_id && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
-        dirtyParents.add(row.dag_parent_id);
-        tenantById.set(row.dag_parent_id, row.tenantId);
-      }
-    }
-    // Dormant moves: same eligibility and DAG bookkeeping as deletes.
-    const movable: DormantMove[] = [];
-    if (dormantMoves.length > 0) {
-      const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
-      const placeholders = dormantMoves.map(() => '?').join(',');
-      // SAFETY: rows' shape matches the three columns named in the SELECT.
-      const rows = db.prepare(
-        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTOMATIC_DELETE_SQL}`,
-      ).all(...byId.keys()) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
-      for (const row of rows) {
-        movable.push(byId.get(row.id)!);
-        if (row.dag_parent_id) {
-          dirtyParents.add(row.dag_parent_id);
-          tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
-        }
-      }
-    }
-    for (const move of movable) {
-      insertDormantRow(db, move);
-    }
-    const removedIds = [...deletableIds, ...movable.map((m) => m.entry.id)];
-    for (const id of removedIds) {
-      db.prepare('DELETE FROM memories WHERE id = ?').run(id);
-      deleteFtsRow(db, id);
-    }
+    const { written, batchRejectedSkips } = applyBatchWrites(db, stampedWrites, opts?.snapshot, dirty);
+    const removedIds = moveDormantAndDelete(db, dormantMoves, deletableIds, dirty);
     // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
     // dirty flag commits atomically with the writes + deletes.
-    for (const parentId of dirtyParents) {
-      markSummaryDirtyInTx(db, parentId, tenantById.get(parentId) ?? 'default', 'batch');
+    for (const parentId of dirty.parents) {
+      markSummaryDirtyInTx(db, parentId, dirty.tenantById.get(parentId) ?? 'default', 'batch');
     }
     db.exec('COMMIT');
 
@@ -311,4 +203,146 @@ export function batchWriteAndDelete(
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Moves eligible dormant rows out, deletes them with the doomed rows, and returns every removed id. */
+function moveDormantAndDelete(
+  db: DatabaseSyncLike,
+  dormantMoves: DormantMove[],
+  deletableIds: string[],
+  dirty: DirtyParents,
+): string[] {
+  // Dormant moves: same eligibility and DAG bookkeeping as deletes.
+  const movable: DormantMove[] = [];
+  if (dormantMoves.length > 0) {
+    const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
+    const placeholders = dormantMoves.map(() => '?').join(',');
+    for (const row of selectAutoDeletableRows(db, placeholders, [...byId.keys()], dirty)) movable.push(byId.get(row.id)!);
+  }
+  for (const move of movable) {
+    insertDormantRow(db, move);
+  }
+  const removedIds = [...deletableIds, ...movable.map((m) => m.entry.id)];
+  for (const id of removedIds) {
+    db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+    deleteFtsRow(db, id);
+  }
+  return removedIds;
+}
+
+/** DAG parents to mark dirty inside the batch transaction, with the tenant each belongs to. */
+interface DirtyParents {
+  parents: Set<string>;
+  tenantById: Map<string, string>;
+}
+
+/** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. */
+function selectAutoDeletableRows(
+  db: DatabaseSyncLike,
+  placeholders: string,
+  ids: string[],
+  dirty: DirtyParents,
+): Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }> {
+  // SAFETY: rows' shape matches the three columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND ${AUTOMATIC_DELETE_SQL}`,
+  ).all(...ids) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
+  for (const row of rows) {
+    if (row.dag_parent_id) {
+      dirty.parents.add(row.dag_parent_id);
+      dirty.tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
+    }
+  }
+  return rows;
+}
+
+function applyBatchWrites(
+  db: DatabaseSyncLike,
+  stampedWrites: MemoryEntry[],
+  snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
+  dirty: DirtyParents,
+) {
+  // AT1 P1 fix (codex, batch-transaction rejection race): the producer-side
+  // check (e.g. consolidate.ts's merge pass) runs BEFORE this transaction,
+  // on a different connection. A `hippo reject X` that commits in that
+  // window is invisible to it — a queued same-id write of X already
+  // sitting in `toWrite` (decay/replay re-persist, or a merge built before
+  // the reject) would silently re-INSERT the just-rejected row via the
+  // blind bypass. Fix: one indexed point probe per batch entry, on THIS
+  // connection, INSIDE this transaction — closes the race regardless of
+  // which write class hits it. N is small per sleep, so the extra query
+  // per entry is cheap.
+  //
+  // Skip, don't throw: the batch must still complete for every OTHER
+  // entry. Skipping is correct for every write class here — a merge
+  // summary skip just means that rollup is absent this cycle (its source
+  // facts stay merely demoted, recoverable next sleep); a skipped
+  // demotion/replay re-persist of a rejected-removed row means it stays
+  // gone, which is the entire point of the tombstone.
+  let batchRejectedSkips = 0;
+  const written: MemoryEntry[] = [];
+  const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
+  for (const entry of stampedWrites) {
+    const base = snapshot?.get(entry.id);
+    // SAFETY: MEMORY_SELECT_COLUMNS is the MemoryRow shape rowToEntry reads.
+    const liveRow = readLiveRow.get(entry.id) as MemoryRow | undefined;
+    const live = liveRow ? rowToEntry(liveRow) : undefined;
+    const row = base && live ? mergeOwnChanges(base, entry, live) : entry;
+    if (isRejectedBatchWrite(db, row)) {
+      batchRejectedSkips++;
+      continue;
+    }
+    if (base && !live) continue;
+    written.push(row);
+    // AT1 (plan §3, corrected): bypass the rejection guard here.
+    // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
+    // consolidate.ts:736-751) of already-guarded leaf facts, not an LLM
+    // paraphrase — refusing mid-batch would abort the whole consolidation
+    // transaction. The bypass is safe because consolidate.ts's merge pass
+    // now checks the merged content's rejection digest against the
+    // tenant's tombstones BEFORE ever pushing a merge into pendingWrites,
+    // skipping that merge entirely on a hit, AND because the point-probe
+    // immediately above closes the race window between that producer
+    // check and this COMMIT. The guard itself still belongs on leaf
+    // inserts, which write through writeEntry / writeEntryDbOnly and stay
+    // guarded (bypassRejectionGuard defaults false).
+    upsertEntryRow(db, row, true);
+    // Hook for writes: a new child, or a change to what its summary reads, marks the parent dirty; decay alone does not.
+    if (row.dag_parent_id && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
+      dirty.parents.add(row.dag_parent_id);
+      dirty.tenantById.set(row.dag_parent_id, row.tenantId);
+    }
+  }
+  return { written, batchRejectedSkips };
+}
+
+/** True, after auditing the refusal, when the write would introduce a rejected value. */
+function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
+  const entryTenantId = row.tenantId ?? 'default';
+  // Codex delta-review P2 fix: reuse checkRejectionGuard rather than a
+  // bare tombstone probe — the guard's content-INTRODUCTION
+  // classification must apply here too. A tombstone can legitimately
+  // coexist with a live same-content row (resolveConflict deliberately
+  // excludes keepId from its sweep; unreject-then-re-reject windows), and
+  // an unconditional skip would starve that row of decay/replay metadata
+  // updates forever. The guard throws only when the write is new-row or
+  // changes content TO the rejected value; unchanged same-id re-persists
+  // pass through, exactly as on the writeEntry path.
+  try {
+    checkRejectionGuard(db, entryTenantId, row.id, row.content);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      audit(
+        db,
+        'reject_refusal',
+        row.id,
+        { digest: err.digest, reason: err.reason },
+        'sleep-batch',
+        entryTenantId,
+      );
+      return true;
+    }
+    throw err;
+  }
+  return false;
 }

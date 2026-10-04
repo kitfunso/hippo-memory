@@ -26,7 +26,7 @@
  */
 
 import { BadRequestError, NotFoundError } from '../api-errors.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { assertTenantId } from '../tenant.js';
 import { createMemory, Layer, type MemoryKind } from '../memory.js';
@@ -169,52 +169,7 @@ export function savePrediction(
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      const result = db.prepare(`
-        INSERT INTO predictions(
-          memory_id, tenant_id, class_tag, claim_text,
-          estimate_value, estimate_unit, target_date,
-          actual_value, closure_state, closed_at, closure_note, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        opts.classTag,
-        opts.claimText,
-        opts.estimateValue ?? null,
-        opts.estimateUnit ?? null,
-        opts.targetDate ?? null,
-        null, // actual_value — null until close
-        now,
-      );
-
-      const predictionId = Number(result.lastInsertRowid ?? 0);
-      // SAFETY: row's shape matches the columns named in the SELECT above.
-      const row = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
-        FROM predictions WHERE id = ?
-      `).get(predictionId) as PredictionRow | undefined;
-
-      if (!row) {
-        throw new Error('Failed to reload saved prediction row');
-      }
-      savedRow = row;
-
-      // GDPR-light audit metadata: prediction_id + class_tag + flags only.
-      // No claim_text in metadata; the predictions table holds it canonically.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'predict_create',
-        targetId: String(predictionId),
-        metadata: {
-          prediction_id: predictionId,
-          class_tag: opts.classTag,
-          has_estimate: opts.estimateValue !== undefined && opts.estimateValue !== null,
-          target_date: opts.targetDate ?? null,
-        },
-      });
+      savedRow = insertPredictionRow(db, memoryId, tenantId, opts, now, actor);
     },
   });
 
@@ -223,6 +178,63 @@ export function savePrediction(
     throw new Error('savePrediction: afterWrite did not populate the row');
   }
   return rowToPrediction(savedRow);
+}
+
+/** Inserts, reloads and audits the predictions row inside writeEntry's SAVEPOINT. */
+function insertPredictionRow(
+  db: DatabaseSyncLike,
+  memoryId: string,
+  tenantId: string,
+  opts: SavePredictionOpts,
+  now: string,
+  actor: string,
+): PredictionRow {
+  const result = db.prepare(`
+        INSERT INTO predictions(
+          memory_id, tenant_id, class_tag, claim_text,
+          estimate_value, estimate_unit, target_date,
+          actual_value, closure_state, closed_at, closure_note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL, ?)
+      `).run(
+    memoryId,
+    tenantId,
+    opts.classTag,
+    opts.claimText,
+    opts.estimateValue ?? null,
+    opts.estimateUnit ?? null,
+    opts.targetDate ?? null,
+    null, // actual_value — null until close
+    now,
+  );
+
+  const predictionId = Number(result.lastInsertRowid ?? 0);
+  // SAFETY: row's shape matches the columns named in the SELECT above.
+  const row = db.prepare(`
+        SELECT id, memory_id, tenant_id, class_tag, claim_text,
+               estimate_value, estimate_unit, target_date,
+               actual_value, closure_state, closed_at, closure_note, created_at
+        FROM predictions WHERE id = ?
+      `).get(predictionId) as PredictionRow | undefined;
+
+  if (!row) {
+    throw new Error('Failed to reload saved prediction row');
+  }
+
+  // GDPR-light audit metadata: prediction_id + class_tag + flags only.
+  // No claim_text in metadata; the predictions table holds it canonically.
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'predict_create',
+    targetId: String(predictionId),
+    metadata: {
+      prediction_id: predictionId,
+      class_tag: opts.classTag,
+      has_estimate: opts.estimateValue !== undefined && opts.estimateValue !== null,
+      target_date: opts.targetDate ?? null,
+    },
+  });
+  return row;
 }
 
 /**
@@ -250,67 +262,7 @@ export function closePrediction(
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
-      // Codex review finding 2026-05-26: WHERE clause requires
-      // closure_state='open' so duplicate close requests / retries against
-      // an already-closed prediction return a clear error instead of
-      // silently overwriting actual_value + emitting a duplicate
-      // predict_close audit row. Zero changed rows → caller decides
-      // whether it's a "not found" or "already closed" case based on the
-      // load-then-close pattern.
-      const updateResult = db.prepare(`
-        UPDATE predictions
-        SET actual_value = ?, closure_state = ?, closed_at = ?, closure_note = ?
-        WHERE id = ? AND tenant_id = ? AND closure_state = 'open'
-      `).run(
-        opts.actualValue ?? null,
-        opts.closureState,
-        now,
-        opts.closureNote ?? null,
-        id,
-        tenantId,
-      );
-
-      if (updateResult.changes === 0) {
-        // Distinguish "not found" from "already closed" so callers (CLI, HTTP)
-        // can surface the right error to the user.
-        // SAFETY: row shape matches the single `closure_state` column named
-        // in the SELECT above.
-        const existing = db.prepare(`
-          SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
-        `).get(id, tenantId) as { closure_state: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
-        }
-        throw new BadRequestError(
-          `closePrediction: prediction ${id} is already closed (state='${existing.closure_state}'); ` +
-          `cannot re-close. Open predictions only.`,
-        );
-      }
-
-      // SAFETY: row's shape matches the columns named in the SELECT above.
-      const row = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
-        FROM predictions WHERE id = ? AND tenant_id = ?
-      `).get(id, tenantId) as PredictionRow | undefined;
-
-      if (!row) {
-        throw new NotFoundError(`closePrediction: prediction ${id} not found after UPDATE`);
-      }
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'predict_close',
-        targetId: String(id),
-        metadata: {
-          prediction_id: id,
-          closure_state: opts.closureState,
-          has_actual: opts.actualValue !== undefined && opts.actualValue !== null,
-        },
-      });
-
+      const row = closeOpenPredictionRow(db, tenantId, id, opts, now, actor);
       db.exec('COMMIT');
       return rowToPrediction(row);
     } catch (e) {
@@ -324,6 +276,80 @@ export function closePrediction(
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Closes the row, reloads it and audits the close; the caller owns the transaction. */
+function closeOpenPredictionRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: number,
+  opts: ClosePredictionOpts,
+  now: string,
+  actor: string,
+): PredictionRow {
+  // Codex review finding 2026-05-26: WHERE clause requires
+  // closure_state='open' so duplicate close requests / retries against
+  // an already-closed prediction return a clear error instead of
+  // silently overwriting actual_value + emitting a duplicate
+  // predict_close audit row. Zero changed rows → caller decides
+  // whether it's a "not found" or "already closed" case based on the
+  // load-then-close pattern.
+  const updateResult = db.prepare(`
+        UPDATE predictions
+        SET actual_value = ?, closure_state = ?, closed_at = ?, closure_note = ?
+        WHERE id = ? AND tenant_id = ? AND closure_state = 'open'
+      `).run(
+    opts.actualValue ?? null,
+    opts.closureState,
+    now,
+    opts.closureNote ?? null,
+    id,
+    tenantId,
+  );
+
+  if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
+
+  // SAFETY: row's shape matches the columns named in the SELECT above.
+  const row = db.prepare(`
+        SELECT id, memory_id, tenant_id, class_tag, claim_text,
+               estimate_value, estimate_unit, target_date,
+               actual_value, closure_state, closed_at, closure_note, created_at
+        FROM predictions WHERE id = ? AND tenant_id = ?
+      `).get(id, tenantId) as PredictionRow | undefined;
+
+  if (!row) {
+    throw new NotFoundError(`closePrediction: prediction ${id} not found after UPDATE`);
+  }
+
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'predict_close',
+    targetId: String(id),
+    metadata: {
+      prediction_id: id,
+      closure_state: opts.closureState,
+      has_actual: opts.actualValue !== undefined && opts.actualValue !== null,
+    },
+  });
+  return row;
+}
+
+function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): never {
+  // Distinguish "not found" from "already closed" so callers (CLI, HTTP)
+  // can surface the right error to the user.
+  // SAFETY: row shape matches the single `closure_state` column named
+  // in the SELECT above.
+  const existing = db.prepare(`
+          SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
+        `).get(id, tenantId) as { closure_state: string } | undefined;
+  if (!existing) {
+    throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
+  }
+  throw new BadRequestError(
+    `closePrediction: prediction ${id} is already closed (state='${existing.closure_state}'); ` +
+    `cannot re-close. Open predictions only.`,
+  );
 }
 
 export function loadPredictionById(
@@ -475,15 +501,7 @@ export function computePredictionBaserate(
       // a signal worth recording. Skipped when emitAudit=false (J3.2
       // orchestrator path; its own recall_autodebias_hint audit fires
       // only when nClosed > 0 anyway, so no signal is lost).
-      if (emitAudit) {
-        appendAuditEvent(db, {
-          tenantId,
-          actor,
-          op: 'predict_baserate',
-          targetId: classTag,
-          metadata: { class_tag: classTag, n_closed: 0 },
-        });
-      }
+      if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, 0);
       return {
         classTag,
         nClosed: 0,
@@ -497,53 +515,61 @@ export function computePredictionBaserate(
       };
     }
 
-    const ratioEligible = rows.filter((r) => r.estimate_value > 0);
-    const nRatioEligible = ratioEligible.length;
-
-    const meanEstimate = rows.reduce((s, r) => s + r.estimate_value, 0) / nClosed;
-    const meanActual = rows.reduce((s, r) => s + r.actual_value, 0) / nClosed;
-    const mae = rows.reduce((s, r) => s + Math.abs(r.actual_value - r.estimate_value), 0) / nClosed;
-
-    let meanRatio: number | null = null;
-    let p50Ratio: number | null = null;
-    if (nRatioEligible > 0) {
-      const ratios = ratioEligible.map((r) => r.actual_value / r.estimate_value);
-      meanRatio = ratios.reduce((s, x) => s + x, 0) / nRatioEligible;
-      const sorted = ratios.slice().sort((a, b) => a - b);
-      p50Ratio = nRatioEligible % 2 === 1
-        ? sorted[(nRatioEligible - 1) / 2]
-        : (sorted[nRatioEligible / 2 - 1] + sorted[nRatioEligible / 2]) / 2;
-    }
-
-    const ratioPart = meanRatio !== null
-      ? `averaged ${meanRatio.toFixed(2)}x actual`
-      : 'no ratio-eligible rows (all estimates were 0)';
-    const summary = `Last ${nClosed} estimate${nClosed === 1 ? '' : 's'} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`;
-
-    if (emitAudit) {
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'predict_baserate',
-        targetId: classTag,
-        metadata: { class_tag: classTag, n_closed: nClosed },
-      });
-    }
-
-    return {
-      classTag,
-      nClosed,
-      nRatioEligible,
-      meanEstimate,
-      meanActual,
-      meanRatio,
-      p50Ratio,
-      mae,
-      summary,
-    };
+    const baserate = baserateFromRows(classTag, rows);
+    if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, nClosed);
+    return baserate;
   } finally {
     closeHippoDb(db);
   }
+}
+
+function auditBaserateRead(db: DatabaseSyncLike, tenantId: string, actor: string, classTag: string, nClosed: number): void {
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'predict_baserate',
+    targetId: classTag,
+    metadata: { class_tag: classTag, n_closed: nClosed },
+  });
+}
+
+/** Stats over a non-empty set of closed rows. */
+function baserateFromRows(classTag: string, rows: BaserateRow[]): PredictionBaserate {
+  const nClosed = rows.length;
+  const ratioEligible = rows.filter((r) => r.estimate_value > 0);
+  const nRatioEligible = ratioEligible.length;
+
+  const meanEstimate = rows.reduce((s, r) => s + r.estimate_value, 0) / nClosed;
+  const meanActual = rows.reduce((s, r) => s + r.actual_value, 0) / nClosed;
+  const mae = rows.reduce((s, r) => s + Math.abs(r.actual_value - r.estimate_value), 0) / nClosed;
+
+  let meanRatio: number | null = null;
+  let p50Ratio: number | null = null;
+  if (nRatioEligible > 0) {
+    const ratios = ratioEligible.map((r) => r.actual_value / r.estimate_value);
+    meanRatio = ratios.reduce((s, x) => s + x, 0) / nRatioEligible;
+    const sorted = ratios.slice().sort((a, b) => a - b);
+    p50Ratio = nRatioEligible % 2 === 1
+      ? sorted[(nRatioEligible - 1) / 2]
+      : (sorted[nRatioEligible / 2 - 1] + sorted[nRatioEligible / 2]) / 2;
+  }
+
+  const ratioPart = meanRatio !== null
+    ? `averaged ${meanRatio.toFixed(2)}x actual`
+    : 'no ratio-eligible rows (all estimates were 0)';
+  const summary = `Last ${nClosed} estimate${nClosed === 1 ? '' : 's'} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`;
+
+  return {
+    classTag,
+    nClosed,
+    nRatioEligible,
+    meanEstimate,
+    meanActual,
+    meanRatio,
+    p50Ratio,
+    mae,
+    summary,
+  };
 }
 
 export function loadOpenPredictions(

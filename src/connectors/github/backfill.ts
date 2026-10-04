@@ -268,6 +268,93 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
+function issueItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+  if (!isIssuesItem(item)) return null;
+  // Codex P1 #2: /issues returns PRs too — skip them.
+  if (item.pull_request) return null;
+  const payload: GitHubIssueEvent = {
+    action: 'opened',
+    repository,
+    issue: {
+      number: item.number,
+      title: item.title,
+      body: item.body ?? null,
+      user: { login: item.user.login, id: item.user.id },
+      updated_at: item.updated_at,
+    },
+  };
+  return { eventName: 'issues', payload };
+}
+
+function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+  if (!isCommentItem(item)) return null;
+  // SAFETY: this closure only runs against the /issues/comments stream,
+  // so every item isCommentItem validates here is genuinely an
+  // IssueCommentItem; a missing issue_url is handled defensively below.
+  const c = item as IssueCommentItem;
+  const issueNumber = parseTrailingNumber(c.issue_url);
+  if (issueNumber === null) return null;
+  const payload: GitHubIssueCommentEvent = {
+    action: 'created',
+    repository,
+    issue: { number: issueNumber },
+    comment: {
+      id: c.id,
+      body: c.body ?? null,
+      user: { login: c.user.login, id: c.user.id },
+      updated_at: c.updated_at,
+    },
+  };
+  return { eventName: 'issue_comment', payload };
+}
+
+function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+  if (!isCommentItem(item)) return null;
+  // SAFETY: this closure only runs against the /pulls/comments stream,
+  // so every item isCommentItem validates here is genuinely a
+  // PrReviewCommentItem; a missing pull_request_url is handled below.
+  const c = item as PrReviewCommentItem;
+  const prNumber = parseTrailingNumber(c.pull_request_url);
+  if (prNumber === null) return null;
+  const payload: GitHubPullRequestReviewCommentEvent = {
+    action: 'created',
+    repository,
+    pull_request: { number: prNumber },
+    comment: {
+      id: c.id,
+      body: c.body ?? null,
+      user: { login: c.user.login, id: c.user.id },
+      updated_at: c.updated_at,
+    },
+  };
+  return { eventName: 'pull_request_review_comment', payload };
+}
+
+/** Drains one stream, then persists its HWM only when the stream ran to the end. */
+async function backfillStream(
+  ctx: Context,
+  opts: BackfillOpts,
+  sleep: (ms: number) => Promise<void>,
+  stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
+): Promise<{ ingested: number; pages: number }> {
+  const res = await drainStream(
+    ctx,
+    stream.url,
+    stream.toIngestEvent,
+    opts.fetcher,
+    opts.token,
+    sleep,
+    opts.maxPerStream,
+  );
+  // v1.3.1: only advance HWM when the stream actually drained. A capped run
+  // (--max) must leave the HWM at its previous value so the next invocation
+  // re-fetches the unprocessed tail.
+  if (res.drained && res.maxUpdatedAt) {
+    writeOneHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
+  }
+  return { ingested: res.ingested, pages: res.pages };
+}
+
 export async function backfillRepo(
   ctx: Context,
   opts: BackfillOpts,
@@ -283,142 +370,37 @@ export async function backfillRepo(
   };
 
   // ---------- Stream 1: issues (skip PRs) ----------
-  const issuesUrl =
-    `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
-    (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : '');
-  const issuesRes = await drainStream(
-    ctx,
-    issuesUrl,
-    (item) => {
-      if (!isIssuesItem(item)) return null;
-      // Codex P1 #2: /issues returns PRs too — skip them.
-      if (item.pull_request) return null;
-      const payload: GitHubIssueEvent = {
-        action: 'opened',
-        repository,
-        issue: {
-          number: item.number,
-          title: item.title,
-          body: item.body ?? null,
-          user: { login: item.user.login, id: item.user.id },
-          updated_at: item.updated_at,
-        },
-      };
-      return { eventName: 'issues', payload };
-    },
-    opts.fetcher,
-    opts.token,
-    sleep,
-    opts.maxPerStream,
-  );
+  const issuesRes = await backfillStream(ctx, opts, sleep, {
+    url:
+      `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
+      (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : ''),
+    column: 'issues_hwm',
+    toIngestEvent: (item) => issueItemToEvent(item, repository),
+  });
   result.ingested.issues = issuesRes.ingested;
   result.pages.issues = issuesRes.pages;
-  // v1.3.1: only advance HWM when the stream actually drained. A capped run
-  // (--max) must leave the HWM at its previous value so the next invocation
-  // re-fetches the unprocessed tail.
-  if (issuesRes.drained && issuesRes.maxUpdatedAt) {
-    writeOneHwm(
-      ctx.hippoRoot,
-      ctx.tenantId,
-      opts.repoFullName,
-      'issues_hwm',
-      issuesRes.maxUpdatedAt,
-    );
-  }
 
   // ---------- Stream 2: repo-level issue comments ----------
-  const commentsUrl =
-    `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
-    (cursors.issueComments
-      ? `&since=${encodeURIComponent(cursors.issueComments)}`
-      : '');
-  const commentsRes = await drainStream(
-    ctx,
-    commentsUrl,
-    (item) => {
-      if (!isCommentItem(item)) return null;
-      // SAFETY: this closure only runs against the /issues/comments stream,
-      // so every item isCommentItem validates here is genuinely an
-      // IssueCommentItem; a missing issue_url is handled defensively below.
-      const c = item as IssueCommentItem;
-      const issueNumber = parseTrailingNumber(c.issue_url);
-      if (issueNumber === null) return null;
-      const payload: GitHubIssueCommentEvent = {
-        action: 'created',
-        repository,
-        issue: { number: issueNumber },
-        comment: {
-          id: c.id,
-          body: c.body ?? null,
-          user: { login: c.user.login, id: c.user.id },
-          updated_at: c.updated_at,
-        },
-      };
-      return { eventName: 'issue_comment', payload };
-    },
-    opts.fetcher,
-    opts.token,
-    sleep,
-    opts.maxPerStream,
-  );
+  const commentsRes = await backfillStream(ctx, opts, sleep, {
+    url:
+      `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
+      (cursors.issueComments ? `&since=${encodeURIComponent(cursors.issueComments)}` : ''),
+    column: 'issue_comments_hwm',
+    toIngestEvent: (item) => issueCommentItemToEvent(item, repository),
+  });
   result.ingested.issueComments = commentsRes.ingested;
   result.pages.issueComments = commentsRes.pages;
-  if (commentsRes.drained && commentsRes.maxUpdatedAt) {
-    writeOneHwm(
-      ctx.hippoRoot,
-      ctx.tenantId,
-      opts.repoFullName,
-      'issue_comments_hwm',
-      commentsRes.maxUpdatedAt,
-    );
-  }
 
   // ---------- Stream 3: repo-level PR review comments ----------
-  const prCommentsUrl =
-    `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
-    (cursors.prReviewComments
-      ? `&since=${encodeURIComponent(cursors.prReviewComments)}`
-      : '');
-  const prCommentsRes = await drainStream(
-    ctx,
-    prCommentsUrl,
-    (item) => {
-      if (!isCommentItem(item)) return null;
-      // SAFETY: this closure only runs against the /pulls/comments stream,
-      // so every item isCommentItem validates here is genuinely a
-      // PrReviewCommentItem; a missing pull_request_url is handled below.
-      const c = item as PrReviewCommentItem;
-      const prNumber = parseTrailingNumber(c.pull_request_url);
-      if (prNumber === null) return null;
-      const payload: GitHubPullRequestReviewCommentEvent = {
-        action: 'created',
-        repository,
-        pull_request: { number: prNumber },
-        comment: {
-          id: c.id,
-          body: c.body ?? null,
-          user: { login: c.user.login, id: c.user.id },
-          updated_at: c.updated_at,
-        },
-      };
-      return { eventName: 'pull_request_review_comment', payload };
-    },
-    opts.fetcher,
-    opts.token,
-    sleep,
-    opts.maxPerStream,
-  );
+  const prCommentsRes = await backfillStream(ctx, opts, sleep, {
+    url:
+      `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
+      (cursors.prReviewComments ? `&since=${encodeURIComponent(cursors.prReviewComments)}` : ''),
+    column: 'pr_review_comments_hwm',
+    toIngestEvent: (item) => prReviewCommentItemToEvent(item, repository),
+  });
   result.ingested.prReviewComments = prCommentsRes.ingested;
   result.pages.prReviewComments = prCommentsRes.pages;
-  if (prCommentsRes.drained && prCommentsRes.maxUpdatedAt) {
-    writeOneHwm(
-      ctx.hippoRoot,
-      ctx.tenantId,
-      opts.repoFullName,
-      'pr_review_comments_hwm',
-      prCommentsRes.maxUpdatedAt,
-    );
-  }
 
   return result;
 }

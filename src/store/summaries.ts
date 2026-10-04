@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb } from '../db.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { assertTenantId } from '../tenant.js';
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
 import { log } from '../log.js';
@@ -231,159 +231,9 @@ export function applyRebuildResult(
   try {
     db.exec('SAVEPOINT rebuild_summary');
     try {
-      const nowIso = new Date().toISOString();
-
-      // AT1 P1a fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-      // applyRebuildResult's bumpRebuildCount branch wrote patch.content via
-      // a direct UPDATE, bypassing the rejection guard entirely (the guard
-      // lives in upsertEntryRow's INSERT path, which this function never
-      // calls). A rebuild that regenerates byte-identical content to an
-      // already-rejected value (e.g. deterministic summarization of an
-      // unchanged child set) would silently re-assert it every sleep cycle.
-      // Check BEFORE choosing which UPDATE to run — only the
-      // bumpRebuildCount branch ever writes content, so a miss or a
-      // zero-child call is a no-op here (one indexed point query, guarded
-      // path only).
-      const tombstone = patch.bumpRebuildCount
-        ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
-        : null;
-      // On a hit: do NOT write the new content. Fall through to the SAME
-      // metadata-only behavior the zero-child branch already has —
-      // descendant_count/earliest_at/latest_at update + summary_dirty
-      // cleared, no content write, no rebuild_count bump. Clearing dirty
-      // (rather than leaving it set) is deliberate: leaving it dirty would
-      // make every following sleep cycle re-attempt and re-refuse the
-      // identical rebuild forever (the DAG-loop this fix closes).
-      const applyContentWrite = patch.bumpRebuildCount && !tombstone;
-
-      // ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
-      // v0.30 / E5: widened dag_level=2 -> IN (2, 3) on both branches.
-      const sql = applyContentWrite
-        ? `UPDATE memories
-              SET content = ?,
-                  descendant_count = ?,
-                  earliest_at = ?,
-                  latest_at = ?,
-                  last_rebuilt_at = ?,
-                  rebuild_count = COALESCE(rebuild_count, 0) + 1,
-                  summary_dirty = 0
-            WHERE id = ?
-              AND tenant_id = ?
-              AND dag_level IN (2, 3)
-              AND summary_dirty = 1
-              AND kind != 'archived'`
-        : `UPDATE memories
-              SET descendant_count = ?,
-                  earliest_at = ?,
-                  latest_at = ?,
-                  summary_dirty = 0
-            WHERE id = ?
-              AND tenant_id = ?
-              AND dag_level IN (2, 3)
-              AND summary_dirty = 1
-              AND kind != 'archived'`;
-
-      const result = applyContentWrite
-        ? db.prepare(sql).run(
-            patch.content,
-            patch.descendant_count,
-            patch.earliest_at,
-            patch.latest_at,
-            nowIso,
-            summary.id,
-            summary.tenantId,
-          )
-        : db.prepare(sql).run(
-            patch.descendant_count,
-            patch.earliest_at,
-            patch.latest_at,
-            summary.id,
-            summary.tenantId,
-          );
-
-      // Return-value semantics (v0.30/T4 split): `changed` reflects whether
-      // THIS call's UPDATE (content or metadata-only) affected a row — NOT
-      // whether patch.content specifically landed. On a refusal, metadata
-      // still applies, so changed=true even though content did not change.
-      // This preserves the pre-T4 no-infinite-retry choice: the caller
-      // (dag.ts rebuildDirtySummaries) treats changed=false as "race lost,
-      // silently retry next cycle" — returning false on a refusal would
-      // retry the same doomed LLM rebuild forever, so changed=true settles
-      // this cycle (dirty cleared) regardless of refusal.
-      // `refused` is the T4 addition: true only when a tombstone hit AND
-      // the metadata UPDATE landed (changed=true) — a refusal that loses
-      // the race to a concurrent writer reports refused=false too, since
-      // nothing from this call took effect. Before T4, a refusal also
-      // counted toward the caller's `rebuilt` stat because `changed` alone
-      // could not distinguish it; the caller now increments `refused`
-      // instead of `rebuilt` when this is true, so the stat reflects what
-      // happened without changing dirty-clearing or retry behavior.
-      const changed = (result.changes ?? 0) > 0;
-      const refused = Boolean(tombstone) && changed;
-
-      if (tombstone && changed) {
-        // refused === true here (same condition, narrowed for the tombstone.*
-        // access below). Best-effort refusal audit, written INLINE inside
-        // this still-open SAVEPOINT — nothing here rolls back on a refusal
-        // (the metadata UPDATE above already committed to this savepoint), so the
-        // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
-        // tool) is the wrong one here; a direct audit() call is correct and
-        // commits with the rest of this savepoint.
-        audit(
-          db,
-          'reject_refusal',
-          summary.id,
-          { digest: tombstone.digest, reason: tombstone.reason },
-          patch.actor,
-          summary.tenantId,
-        );
-        log.warn(
-          `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
-            `(digest ${tombstone.digest.slice(0, 12)}...); metadata updated, content unchanged`,
-        );
-      }
-
-      if (changed) {
-        // FTS sync — bare UPDATE on memories does NOT update memories_fts.
-        // R1 HIGH must-fix from plan-eng-r1. Construct the patched entry in
-        // memory and reuse the existing syncFtsRow helper (delete-then-insert).
-        // earliest_at/latest_at preserve null semantics (R2 must-fix).
-        // AT1: content stays summary.content (unchanged) when the write was
-        // refused — applyContentWrite is false, so patch.content was never
-        // written to the row FTS must mirror.
-        const patchedEntry: MemoryEntry = {
-          ...summary,
-          content: applyContentWrite ? patch.content : summary.content,
-          descendant_count: patch.descendant_count,
-          earliest_at: patch.earliest_at,
-          latest_at: patch.latest_at,
-          summary_dirty: 0,
-          last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
-          rebuild_count: applyContentWrite
-            ? (summary.rebuild_count ?? 0) + 1
-            : summary.rebuild_count,
-        };
-        syncFtsRow(db, patchedEntry);
-
-        audit(
-          db,
-          'summary_rebuilt',
-          summary.id,
-          {
-            // v0.30 / E5: read actual level from the summary in scope
-            // (NOT hardcoded 2). L2 -> 2, L3 -> 3.
-            dag_level: summary.dag_level,
-            source: 'E3-rebuild',
-            zero_children: patch.zeroChildren,
-            descendant_count: patch.descendant_count,
-          },
-          patch.actor,
-          summary.tenantId,
-        );
-      }
-
+      const outcome = applyRebuildInSavepoint(db, summary, patch);
       db.exec('RELEASE SAVEPOINT rebuild_summary');
-      return { changed, refused };
+      return outcome;
     } catch (e) {
       try {
         db.exec('ROLLBACK TO SAVEPOINT rebuild_summary');
@@ -396,6 +246,179 @@ export function applyRebuildResult(
   } finally {
     closeHippoDb(db);
   }
+}
+
+// ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
+// v0.30 / E5: widened dag_level=2 -> IN (2, 3) on both branches.
+const REBUILD_CONTENT_SQL = `UPDATE memories
+              SET content = ?,
+                  descendant_count = ?,
+                  earliest_at = ?,
+                  latest_at = ?,
+                  last_rebuilt_at = ?,
+                  rebuild_count = COALESCE(rebuild_count, 0) + 1,
+                  summary_dirty = 0
+            WHERE id = ?
+              AND tenant_id = ?
+              AND dag_level IN (2, 3)
+              AND summary_dirty = 1
+              AND kind != 'archived'`;
+const REBUILD_METADATA_SQL = `UPDATE memories
+              SET descendant_count = ?,
+                  earliest_at = ?,
+                  latest_at = ?,
+                  summary_dirty = 0
+            WHERE id = ?
+              AND tenant_id = ?
+              AND dag_level IN (2, 3)
+              AND summary_dirty = 1
+              AND kind != 'archived'`;
+
+function applyRebuildInSavepoint(
+  db: DatabaseSyncLike,
+  summary: MemoryEntry,
+  patch: RebuildPatch,
+) {
+  const nowIso = new Date().toISOString();
+
+  // AT1 P1a fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+  // applyRebuildResult's bumpRebuildCount branch wrote patch.content via
+  // a direct UPDATE, bypassing the rejection guard entirely (the guard
+  // lives in upsertEntryRow's INSERT path, which this function never
+  // calls). A rebuild that regenerates byte-identical content to an
+  // already-rejected value (e.g. deterministic summarization of an
+  // unchanged child set) would silently re-assert it every sleep cycle.
+  // Check BEFORE choosing which UPDATE to run — only the
+  // bumpRebuildCount branch ever writes content, so a miss or a
+  // zero-child call is a no-op here (one indexed point query, guarded
+  // path only).
+  const tombstone = patch.bumpRebuildCount
+    ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
+    : null;
+  // On a hit: do NOT write the new content. Fall through to the SAME
+  // metadata-only behavior the zero-child branch already has —
+  // descendant_count/earliest_at/latest_at update + summary_dirty
+  // cleared, no content write, no rebuild_count bump. Clearing dirty
+  // (rather than leaving it set) is deliberate: leaving it dirty would
+  // make every following sleep cycle re-attempt and re-refuse the
+  // identical rebuild forever (the DAG-loop this fix closes).
+  const applyContentWrite = patch.bumpRebuildCount && !tombstone;
+
+  const result = applyContentWrite
+    ? db.prepare(REBUILD_CONTENT_SQL).run(
+        patch.content,
+        patch.descendant_count,
+        patch.earliest_at,
+        patch.latest_at,
+        nowIso,
+        summary.id,
+        summary.tenantId,
+      )
+    : db.prepare(REBUILD_METADATA_SQL).run(
+        patch.descendant_count,
+        patch.earliest_at,
+        patch.latest_at,
+        summary.id,
+        summary.tenantId,
+      );
+
+  // Return-value semantics (v0.30/T4 split): `changed` reflects whether
+  // THIS call's UPDATE (content or metadata-only) affected a row — NOT
+  // whether patch.content specifically landed. On a refusal, metadata
+  // still applies, so changed=true even though content did not change.
+  // This preserves the pre-T4 no-infinite-retry choice: the caller
+  // (dag.ts rebuildDirtySummaries) treats changed=false as "race lost,
+  // silently retry next cycle" — returning false on a refusal would
+  // retry the same doomed LLM rebuild forever, so changed=true settles
+  // this cycle (dirty cleared) regardless of refusal.
+  // `refused` is the T4 addition: true only when a tombstone hit AND
+  // the metadata UPDATE landed (changed=true) — a refusal that loses
+  // the race to a concurrent writer reports refused=false too, since
+  // nothing from this call took effect. Before T4, a refusal also
+  // counted toward the caller's `rebuilt` stat because `changed` alone
+  // could not distinguish it; the caller now increments `refused`
+  // instead of `rebuilt` when this is true, so the stat reflects what
+  // happened without changing dirty-clearing or retry behavior.
+  const changed = (result.changes ?? 0) > 0;
+  const refused = Boolean(tombstone) && changed;
+
+  if (tombstone && changed) auditRefusedRebuild(db, summary, patch, tombstone);
+
+  if (changed) syncRebuiltSummary(db, summary, patch, applyContentWrite, nowIso);
+  return { changed, refused };
+}
+
+/** Audit and log a rebuild whose content matched a rejected value; metadata still landed. */
+function auditRefusedRebuild(
+  db: DatabaseSyncLike,
+  summary: MemoryEntry,
+  patch: RebuildPatch,
+  tombstone: NonNullable<ReturnType<typeof findRejectedValue>>,
+): void {
+  // refused === true here (same condition, narrowed for the tombstone.*
+  // access below). Best-effort refusal audit, written INLINE inside
+  // this still-open SAVEPOINT — nothing here rolls back on a refusal
+  // (the metadata UPDATE above already committed to this savepoint), so the
+  // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
+  // tool) is the wrong one here; a direct audit() call is correct and
+  // commits with the rest of this savepoint.
+  audit(
+    db,
+    'reject_refusal',
+    summary.id,
+    { digest: tombstone.digest, reason: tombstone.reason },
+    patch.actor,
+    summary.tenantId,
+  );
+  log.warn(
+    `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
+      `(digest ${tombstone.digest.slice(0, 12)}...); metadata updated, content unchanged`,
+  );
+}
+
+function syncRebuiltSummary(
+  db: DatabaseSyncLike,
+  summary: MemoryEntry,
+  patch: RebuildPatch,
+  applyContentWrite: boolean,
+  nowIso: string,
+): void {
+  // FTS sync — bare UPDATE on memories does NOT update memories_fts.
+  // R1 HIGH must-fix from plan-eng-r1. Construct the patched entry in
+  // memory and reuse the existing syncFtsRow helper (delete-then-insert).
+  // earliest_at/latest_at preserve null semantics (R2 must-fix).
+  // AT1: content stays summary.content (unchanged) when the write was
+  // refused — applyContentWrite is false, so patch.content was never
+  // written to the row FTS must mirror.
+  const patchedEntry: MemoryEntry = {
+    ...summary,
+    content: applyContentWrite ? patch.content : summary.content,
+    descendant_count: patch.descendant_count,
+    earliest_at: patch.earliest_at,
+    latest_at: patch.latest_at,
+    summary_dirty: 0,
+    last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
+    rebuild_count: applyContentWrite
+      ? (summary.rebuild_count ?? 0) + 1
+      : summary.rebuild_count,
+  };
+  syncFtsRow(db, patchedEntry);
+
+  audit(
+    db,
+    'summary_rebuilt',
+    summary.id,
+    {
+      // v0.30 / E5: read actual level from the summary in scope
+      // (NOT hardcoded 2). L2 -> 2, L3 -> 3.
+      dag_level: summary.dag_level,
+      source: 'E3-rebuild',
+      zero_children: patch.zeroChildren,
+      descendant_count: patch.descendant_count,
+    },
+    patch.actor,
+    summary.tenantId,
+  );
 }
 
 /**

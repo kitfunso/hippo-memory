@@ -1,9 +1,10 @@
 import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../env.js';
+import type { ServerResponse } from 'node:http';
 import { verifySlackSignature } from './signature.js';
-import { isSlackEventEnvelope, isSlackMessageEvent } from './types.js';
+import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
-import { writeToDlq } from './dlq.js';
+import { writeToDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForTeam } from './tenant-routing.js';
 import { resolveTenantId } from '../../tenant.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
@@ -64,6 +65,41 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
   ) {
     throw new HttpError(401, 'invalid Slack signature');
   }
+  routeSignedSlackPayload({ hippoRoot: opts.hippoRoot, res, rawBody, signature: sigStr, slackTimestamp: tsStr });
+}
+
+/** One signed request and where to answer it; every stage below parks into the DLQ through it. */
+interface SignedSlackRequest {
+  hippoRoot: string;
+  res: ServerResponse;
+  rawBody: string;
+  signature: string;
+  slackTimestamp: string;
+}
+
+function parkInDlq(
+  d: SignedSlackRequest,
+  park: { tenantId: string | null; teamId: string | null; error: string; bucket: DlqBucket },
+): void {
+  const db = openHippoDb(d.hippoRoot);
+  try {
+    writeToDlq(db, {
+      tenantId: park.tenantId,
+      teamId: park.teamId,
+      rawPayload: d.rawBody,
+      error: park.error,
+      bucket: park.bucket,
+      signature: d.signature,
+      slackTimestamp: d.slackTimestamp,
+    });
+  } finally {
+    closeHippoDb(db);
+  }
+  sendJson(d.res, 200, { ok: true, status: 'dlq' });
+}
+
+function routeSignedSlackPayload(d: SignedSlackRequest): void {
+  const { rawBody, res } = d;
   // Cheap regex extracts team_id from a (possibly malformed) raw body so the
   // DLQ row carries it for triage even when JSON.parse fails.
   const teamIdFromRaw = (() => {
@@ -74,25 +110,7 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
   try {
     body = JSON.parse(rawBody);
   } catch {
-    // Attribute the parse failure to the originating workspace via the regex-extracted
-    // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
-    const db = openHippoDb(opts.hippoRoot);
-    try {
-      const parseFailTenant =
-        teamIdFromRaw !== null ? resolveTenantForTeam(db, teamIdFromRaw) : null;
-      writeToDlq(db, {
-        tenantId: parseFailTenant, // null → '__unroutable__' sentinel
-        teamId: teamIdFromRaw,
-        rawPayload: rawBody,
-        error: 'invalid JSON',
-        bucket: 'parse_error',
-        signature: sigStr,
-        slackTimestamp: tsStr,
-      });
-    } finally {
-      closeHippoDb(db);
-    }
-    sendJson(res, 200, { ok: true, status: 'dlq' });
+    parkUnparseable(d, teamIdFromRaw);
     return;
   }
   if (isJsonObjectRecord(body)) {
@@ -110,28 +128,19 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
   // 200 so Slack stops retrying; do NOT call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
-    const db = openHippoDb(opts.hippoRoot);
+    const db = openHippoDb(d.hippoRoot);
     try {
       resolvedTenant = resolveTenantForTeam(db, body.team_id);
     } finally {
       closeHippoDb(db);
     }
     if (resolvedTenant === null) {
-      const db2 = openHippoDb(opts.hippoRoot);
-      try {
-        writeToDlq(db2, {
-          tenantId: null, // unroutable - stored as '__unroutable__'
-          teamId: body.team_id,
-          rawPayload: rawBody,
-          error: `unroutable team_id: ${body.team_id}`,
-          bucket: 'unroutable',
-          signature: sigStr,
-          slackTimestamp: tsStr,
-        });
-      } finally {
-        closeHippoDb(db2);
-      }
-      sendJson(res, 200, { ok: true, status: 'dlq' });
+      parkInDlq(d, {
+        tenantId: null, // unroutable - stored as '__unroutable__'
+        teamId: body.team_id,
+        error: `unroutable team_id: ${body.team_id}`,
+        bucket: 'unroutable',
+      });
       return;
     }
   } else {
@@ -139,28 +148,50 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
     resolvedTenant = resolveTenantId({});
   }
   const ctx: Context = {
-    hippoRoot: opts.hippoRoot,
+    hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
   };
   if (body === undefined || !isSlackEventEnvelope(body)) {
-    const db = openHippoDb(ctx.hippoRoot);
-    try {
-      writeToDlq(db, {
-        tenantId: ctx.tenantId,
-        teamId: teamIdFromRaw,
-        rawPayload: rawBody,
-        error: 'not an event_callback envelope',
-        bucket: 'parse_error',
-        signature: sigStr,
-        slackTimestamp: tsStr,
-      });
-    } finally {
-      closeHippoDb(db);
-    }
-    sendJson(res, 200, { ok: true, status: 'dlq' });
+    parkInDlq(d, {
+      tenantId: ctx.tenantId,
+      teamId: teamIdFromRaw,
+      error: 'not an event_callback envelope',
+      bucket: 'parse_error',
+    });
     return;
   }
+  dispatchSlackEvent(d, ctx, body);
+}
+
+function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): void {
+  // Attribute the parse failure to the originating workspace via the regex-extracted
+  // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
+  const db = openHippoDb(d.hippoRoot);
+  try {
+    const parseFailTenant =
+      teamIdFromRaw !== null ? resolveTenantForTeam(db, teamIdFromRaw) : null;
+    writeToDlq(db, {
+      tenantId: parseFailTenant, // null → '__unroutable__' sentinel
+      teamId: teamIdFromRaw,
+      rawPayload: d.rawBody,
+      error: 'invalid JSON',
+      bucket: 'parse_error',
+      signature: d.signature,
+      slackTimestamp: d.slackTimestamp,
+    });
+  } finally {
+    closeHippoDb(db);
+  }
+  sendJson(d.res, 200, { ok: true, status: 'dlq' });
+}
+
+function dispatchSlackEvent(
+  d: SignedSlackRequest,
+  ctx: Context,
+  body: JsonValue & SlackEventEnvelope,
+): void {
+  const { res } = d;
   const inner = body.event;
   if (isSlackMessageEvent(inner)) {
     if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
@@ -190,20 +221,10 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
     sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
     return;
   }
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    writeToDlq(db, {
-      tenantId: ctx.tenantId,
-      teamId: body.team_id,
-      rawPayload: rawBody,
-      error: `unhandled event type: ${inner.type ?? 'unknown'}`,
-      bucket: 'parse_error',
-      signature: sigStr,
-      slackTimestamp: tsStr,
-    });
-  } finally {
-    closeHippoDb(db);
-  }
-  sendJson(res, 200, { ok: true, status: 'dlq' });
-  return;
+  parkInDlq(d, {
+    tenantId: ctx.tenantId,
+    teamId: body.team_id,
+    error: `unhandled event type: ${inner.type ?? 'unknown'}`,
+    bucket: 'parse_error',
+  });
 }

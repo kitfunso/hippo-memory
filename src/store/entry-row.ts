@@ -36,7 +36,12 @@ export function upsertEntryRow(
     checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
   }
   const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
-  db.prepare(`
+  db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
+
+  syncFtsRow(db, entry, isNewRow);
+}
+
+const UPSERT_MEMORY_SQL = `
     INSERT INTO memories(
       id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
       tags_json, emotional_valence, schema_fit, source, outcome_score,
@@ -91,7 +96,11 @@ export function upsertEntryRow(
       latest_at = excluded.latest_at,
       dag_level_3_built_at = excluded.dag_level_3_built_at,
       updated_at = datetime('now')
-  `).run(
+  `;
+
+/** Bind values for UPSERT_MEMORY_SQL, in its column order. */
+function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
+  return [
     entry.id,
     entry.created,
     entry.last_retrieved,
@@ -129,9 +138,7 @@ export function upsertEntryRow(
     entry.earliest_at ?? null,
     entry.latest_at ?? null,
     entry.dag_level_3_built_at ?? null,
-  );
-
-  syncFtsRow(db, entry, isNewRow);
+  ];
 }
 
 export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry, isNewRow = false): void {

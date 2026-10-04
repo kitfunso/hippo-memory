@@ -255,62 +255,12 @@ export async function replayDlqEntry(
 
   // Signature verification (current secret, not the one in effect when DLQed).
   if (!opts.force && opts.webhookSecret) {
-    if (!row.signature) {
-      return {
-        ok: false,
-        status: 'sig_missing',
-        memoryId: null,
-        retryCount: row.retryCount,
-        reason: 'row has no signature (legacy, or redacted before storing); pass --force to replay',
-      };
-    }
-    const sigOk = verifyGitHubSignature({
-      rawBody: row.rawPayload,
-      signature: row.signature,
-      webhookSecret: opts.webhookSecret,
-      previousSecret: opts.previousSecret,
-    });
-    if (!sigOk) {
-      bumpRetryCount(ctx.hippoRoot, id);
-      return {
-        ok: false,
-        status: 'sig_fail',
-        memoryId: null,
-        retryCount: row.retryCount + 1,
-        reason:
-          'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
-      };
-    }
+    const sigFailure = checkReplaySignature(ctx.hippoRoot, id, row, opts.webhookSecret, opts.previousSecret);
+    if (sigFailure) return sigFailure;
   }
 
-  // Parse + envelope guard.
-  let parsed: JsonValue;
-  try {
-    parsed = JSON.parse(row.rawPayload);
-  } catch (e) {
-    bumpRetryCount(ctx.hippoRoot, id);
-    // SAFETY: this is a best-effort error message only; property access on
-    // any JS value is safe (undefined if absent), preserving the existing
-    // lenient formatting even when something non-Error was thrown.
-    const message = (e as Error).message;
-    return {
-      ok: false,
-      status: 'parse_error',
-      memoryId: null,
-      retryCount: row.retryCount + 1,
-      reason: `still unparseable: ${message}`,
-    };
-  }
-  if (!isGitHubWebhookEnvelope(parsed)) {
-    bumpRetryCount(ctx.hippoRoot, id);
-    return {
-      ok: false,
-      status: 'unhandled',
-      memoryId: null,
-      retryCount: row.retryCount + 1,
-      reason: 'not a GitHub webhook envelope',
-    };
-  }
+  const envelopeFailure = checkReplayEnvelope(ctx.hippoRoot, id, row);
+  if (envelopeFailure) return envelopeFailure;
 
   // Without an ingest hook this is a dry-run validation. Bump and report.
   if (!opts.ingestHook) {
@@ -343,4 +293,73 @@ export async function replayDlqEntry(
     memoryId,
     retryCount: row.retryCount + 1,
   };
+}
+
+/** The failure result when the row cannot pass the signature gate, else null. */
+function checkReplaySignature(
+  hippoRoot: string,
+  id: number,
+  row: DlqItem,
+  webhookSecret: string,
+  previousSecret: string | undefined,
+): ReplayResult | null {
+  if (!row.signature) {
+    return {
+      ok: false,
+      status: 'sig_missing',
+      memoryId: null,
+      retryCount: row.retryCount,
+      reason: 'row has no signature (legacy, or redacted before storing); pass --force to replay',
+    };
+  }
+  const sigOk = verifyGitHubSignature({
+    rawBody: row.rawPayload,
+    signature: row.signature,
+    webhookSecret,
+    previousSecret,
+  });
+  if (!sigOk) {
+    bumpRetryCount(hippoRoot, id);
+    return {
+      ok: false,
+      status: 'sig_fail',
+      memoryId: null,
+      retryCount: row.retryCount + 1,
+      reason:
+        'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
+    };
+  }
+  return null;
+}
+
+/** Parse + envelope guard; the failure result after bumping the count, else null. */
+function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): ReplayResult | null {
+  let parsed: JsonValue;
+  try {
+    parsed = JSON.parse(row.rawPayload);
+  } catch (e) {
+    bumpRetryCount(hippoRoot, id);
+    // SAFETY: this is a best-effort error message only; property access on
+    // any JS value is safe (undefined if absent), preserving the existing
+    // lenient formatting even when something non-Error was thrown.
+    const message = (e as Error).message;
+    return {
+      ok: false,
+      status: 'parse_error',
+      memoryId: null,
+      retryCount: row.retryCount + 1,
+      reason: `still unparseable: ${message}`,
+    };
+  }
+  if (!isGitHubWebhookEnvelope(parsed)) {
+    bumpRetryCount(hippoRoot, id);
+    return {
+      ok: false,
+      status: 'unhandled',
+      memoryId: null,
+      retryCount: row.retryCount + 1,
+      reason: 'not a GitHub webhook envelope',
+    };
+  }
+  return null;
 }

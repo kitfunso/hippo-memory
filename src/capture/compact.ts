@@ -219,6 +219,18 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
     printPreCompactInstruction(logFile);
   }
 
+  const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile);
+  if (!transcriptPath) return;
+
+  // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with junk.
+  const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
+  if (!derived) return;
+
+  saveDerivedSnapshot(hippoRoot, logFile, sessionId, recordId, derived);
+}
+
+/** The transcript to snapshot, or null after logging why there is none. */
+function resolvePreCompactTranscript(payloadTranscriptPath: string | null, stdinText: string | undefined, logFile: string): string | null {
   // A payload transcript_path is EXCLUSIVE: never fall back to
   // newest-transcript auto-discovery when it's missing/unreadable. That
   // fallback would snapshot a DIFFERENT session's transcript under THIS
@@ -231,7 +243,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
       transcriptPath = payloadTranscriptPath;
     } else {
       appendPreCompactLog(logFile, `skip: payload transcript_path unreadable: ${payloadTranscriptPath}`);
-      return;
+      return null;
     }
   } else {
     transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
@@ -239,13 +251,18 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
 
   if (!transcriptPath) {
     appendPreCompactLog(logFile, 'skip: no transcript resolved');
-    return;
+    return null;
   }
+  return transcriptPath;
+}
 
-  // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with junk.
-  const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
-  if (!derived) return;
-
+function saveDerivedSnapshot(
+  hippoRoot: string,
+  logFile: string,
+  sessionId: string | null,
+  recordId: string | null,
+  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>,
+): void {
   const tenantId = resolveTenantId({});
 
   // Per-field merge (X1): a tool-heavy tail whose only user turns are
