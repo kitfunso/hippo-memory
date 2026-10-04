@@ -233,6 +233,35 @@ function newDraft(identity: { key: string; name: string; kind: ProjectKind }): P
   };
 }
 
+function toFact(entry: MemoryEntry, f: ReturnType<typeof memoryFacts>, project: number, embedded: boolean, createdMs: number): Fact {
+  const { head, truncated } = cutHead(entry.content);
+  const tier = CONFIDENCE_ORDER.indexOf(f.confidence);
+  return {
+    id: entry.id,
+    head,
+    truncated,
+    lower: entry.content.toLowerCase(),
+    tagsLower: entry.tags.length > 0 ? entry.tags.join('\n').toLowerCase() : '',
+    layer: f.layer,
+    band: f.band,
+    strength: f.strength,
+    strength7d: f.strength7d,
+    strength30d: f.strength30d,
+    retrievals: entry.retrieval_count,
+    lastRetrievedDays: f.lastRetrievedDays,
+    ageDays: f.ageDays,
+    confidence: f.confidence,
+    confidenceRank: tier === -1 ? CONFIDENCE_ORDER.length : tier,
+    scope: entry.scope,
+    pinned: entry.pinned,
+    wrong: f.wrong,
+    inConflict: false,
+    embedded,
+    project,
+    createdMs,
+  };
+}
+
 /** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
 export function buildSnapshot(input: SnapshotInput): Snapshot {
   const { entries, embeddedIds, nowMs } = input;
@@ -257,8 +286,6 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
     }
     const f = memoryFacts(entry, nowMs);
     const embedded = embeddedIds !== null && embeddedIds.has(entry.id);
-    const { head, truncated } = cutHead(entry.content);
-    const tier = CONFIDENCE_ORDER.indexOf(f.confidence);
     const parsedCreated = Date.parse(entry.created);
     const draft = drafts[p];
     draft.members.push(facts.length);
@@ -269,30 +296,7 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
     if (embedded) draft.summary.embedded++;
     if (Number.isFinite(parsedCreated) && parsedCreated < draft.firstCreatedMs) draft.firstCreatedMs = parsedCreated;
     if (f.lastRetrievedDays < draft.lastDays) draft.lastDays = f.lastRetrievedDays;
-    facts.push({
-      id: entry.id,
-      head,
-      truncated,
-      lower: entry.content.toLowerCase(),
-      tagsLower: entry.tags.length > 0 ? entry.tags.join('\n').toLowerCase() : '',
-      layer: f.layer,
-      band: f.band,
-      strength: f.strength,
-      strength7d: f.strength7d,
-      strength30d: f.strength30d,
-      retrievals: entry.retrieval_count,
-      lastRetrievedDays: f.lastRetrievedDays,
-      ageDays: f.ageDays,
-      confidence: f.confidence,
-      confidenceRank: tier === -1 ? CONFIDENCE_ORDER.length : tier,
-      scope: entry.scope,
-      pinned: entry.pinned,
-      wrong: f.wrong,
-      inConflict: false,
-      embedded,
-      project: p,
-      createdMs: Number.isFinite(parsedCreated) ? parsedCreated : nowMs,
-    });
+    facts.push(toFact(entry, f, p, embedded, Number.isFinite(parsedCreated) ? parsedCreated : nowMs));
   }
 
   const openConflicts = countOpenConflicts(facts, drafts.map((d) => d.summary), input.openConflicts);
