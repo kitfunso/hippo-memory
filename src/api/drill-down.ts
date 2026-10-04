@@ -110,33 +110,7 @@ export function drillDown(
     return { failure: 'not_found' };
   }
 
-  // v0.30 / E5: BFS walk levels 1..depth with visited-Set dedup. Defensive
-  // against shared-child data anomalies (dag_parent_id has no uniqueness
-  // constraint, so a misconfigured tree could double-emit at depth > 1).
-  // Each level uses loadChildrenOf which is tenant-scoped via ctx.tenantId.
-  const collected: MemoryEntry[] = [];
-  const visited = new Set<string>([summaryId]);
-  let frontier: string[] = [summaryId];
-  // independent-review MED #4 fold: track level-0 direct-children count
-  // separately so the descendantCount fallback (for legacy summaries with
-  // null descendant_count) reflects DIRECT children, not BFS-collected total.
-  let level0DirectCount = 0;
-  for (let level = 0; level < depth; level++) {
-    const nextFrontier: string[] = [];
-    for (const parentId of frontier) {
-      const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
-      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
-      for (const k of eligibleKids) {
-        if (visited.has(k.id)) continue;
-        visited.add(k.id);
-        collected.push(k);
-        nextFrontier.push(k.id);
-        if (level === 0) level0DirectCount++;
-      }
-    }
-    if (nextFrontier.length === 0) break;
-    frontier = nextFrontier;
-  }
+  const { collected, level0DirectCount } = collectDescendants(ctx, summaryId, depth);
 
   const summaryOut: DrillDownSummary = {
     id: summary.id,
@@ -155,7 +129,66 @@ export function drillDown(
     created: c.created,
   }));
 
-  // Apply global cumulative token budget + limit cap on collected.
+  const { children, truncated } = capChildren(all, summaryOut, opts, limit);
+
+  return {
+    summary: summaryOut,
+    children,
+    // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
+    // depth=1 this equals the eligible direct-children count (backward
+    // compat). For depth>1 it is the cumulative count across levels.
+    totalChildren: collected.length,
+    truncated,
+  };
+}
+
+interface DescendantWalk {
+  collected: MemoryEntry[];
+  level0DirectCount: number;
+}
+
+interface CappedChildren {
+  children: DrillDownChild[];
+  truncated: boolean;
+}
+
+// BFS with a visited set: dag_parent_id is not unique, so a misconfigured tree could emit a child twice past depth 1.
+// The level-0 count is kept apart so a legacy summary's descendantCount fallback counts direct children only.
+function collectDescendants(
+  ctx: Context,
+  summaryId: string,
+  depth: number,
+): DescendantWalk {
+  const collected: MemoryEntry[] = [];
+  const visited = new Set<string>([summaryId]);
+  let frontier: string[] = [summaryId];
+  let level0DirectCount = 0;
+  for (let level = 0; level < depth; level++) {
+    const nextFrontier: string[] = [];
+    for (const parentId of frontier) {
+      const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
+      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
+      for (const k of eligibleKids) {
+        if (visited.has(k.id)) continue;
+        visited.add(k.id);
+        collected.push(k);
+        nextFrontier.push(k.id);
+        if (level === 0) level0DirectCount++;
+      }
+    }
+    if (nextFrontier.length === 0) break;
+    frontier = nextFrontier;
+  }
+  return { collected, level0DirectCount };
+}
+
+/** Global cumulative token budget first, then the `limit` cap. */
+function capChildren(
+  all: DrillDownChild[],
+  summaryOut: DrillDownSummary,
+  opts: DrillDownOpts,
+  limit: number,
+): CappedChildren {
   let children = all;
   let truncated = false;
   if (opts.budget !== undefined) {
@@ -177,14 +210,5 @@ export function drillDown(
     children = children.slice(0, limit);
     truncated = true;
   }
-
-  return {
-    summary: summaryOut,
-    children,
-    // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
-    // depth=1 this equals the eligible direct-children count (backward
-    // compat). For depth>1 it is the cumulative count across levels.
-    totalChildren: collected.length,
-    truncated,
-  };
+  return { children, truncated };
 }

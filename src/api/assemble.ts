@@ -149,57 +149,9 @@ export function assemble(
   const tailRows = scoped.slice(tailStartIdx);
 
   // Substitute parent summaries for older rows that share one.
-  const olderItems: AssembledContextItem[] = [];
-  let summarized = 0;
-  if (summarizeOlder && olderRows.length > 0) {
-    const olderByParent = new Map<string, MemoryEntry[]>();
-    for (const r of olderRows) {
-      if (!r.dag_parent_id) continue;
-      const list = olderByParent.get(r.dag_parent_id) ?? [];
-      list.push(r);
-      olderByParent.set(r.dag_parent_id, list);
-    }
-    const eligibleParentIds = Array.from(olderByParent.keys()).filter(
-      (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
-    );
-    const parents = eligibleParentIds.length > 0
-      ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
-          .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
-          .filter((p) => passesScopeFilterForRecall(p.scope ?? null, opts.scope))
-      : [];
-    const claimedRawIds = new Set<string>();
-    for (const parent of parents) {
-      const claimed = (olderByParent.get(parent.id) ?? []).map((r) => r.id);
-      claimed.forEach((id) => claimedRawIds.add(id));
-      olderItems.push({
-        id: parent.id,
-        content: parent.content,
-        createdAt: parent.earliest_at ?? parent.created,
-        isSummary: true,
-        substitutedFor: claimed,
-        strength: parent.strength,
-      });
-      summarized += claimed.length;
-    }
-    for (const r of olderRows) {
-      if (claimedRawIds.has(r.id)) continue;
-      olderItems.push({
-        id: r.id,
-        content: r.content,
-        createdAt: r.created,
-        strength: r.strength,
-      });
-    }
-  } else {
-    for (const r of olderRows) {
-      olderItems.push({
-        id: r.id,
-        content: r.content,
-        createdAt: r.created,
-        strength: r.strength,
-      });
-    }
-  }
+  const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
+    ? substituteSummaries(ctx, olderRows, opts.scope)
+    : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
     id: r.id,
@@ -215,10 +167,84 @@ export function assemble(
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
-  let items: AssembledContextItem[] = [...olderItems, ...tailItems];
-
   const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
   const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
+  const { items, tokens, evicted } = evictToBudget([...olderItems, ...tailItems], itemCost, room);
+
+  return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
+}
+
+function rawItem(r: MemoryEntry): AssembledContextItem {
+  return {
+    id: r.id,
+    content: r.content,
+    createdAt: r.created,
+    strength: r.strength,
+  };
+}
+
+/** Older rows with every level-2 parent shared by two or more of them standing in for those rows. */
+interface SubstitutedOlder {
+  olderItems: AssembledContextItem[];
+  summarized: number;
+}
+
+function substituteSummaries(
+  ctx: Context,
+  olderRows: MemoryEntry[],
+  scope: string | undefined,
+): SubstitutedOlder {
+  const olderItems: AssembledContextItem[] = [];
+  let summarized = 0;
+  const olderByParent = new Map<string, MemoryEntry[]>();
+  for (const r of olderRows) {
+    if (!r.dag_parent_id) continue;
+    const list = olderByParent.get(r.dag_parent_id) ?? [];
+    list.push(r);
+    olderByParent.set(r.dag_parent_id, list);
+  }
+  const eligibleParentIds = Array.from(olderByParent.keys()).filter(
+    (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
+  );
+  const parents = eligibleParentIds.length > 0
+    ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
+        .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
+        .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope))
+    : [];
+  const claimedRawIds = new Set<string>();
+  for (const parent of parents) {
+    const claimed = (olderByParent.get(parent.id) ?? []).map((r) => r.id);
+    claimed.forEach((id) => claimedRawIds.add(id));
+    olderItems.push({
+      id: parent.id,
+      content: parent.content,
+      createdAt: parent.earliest_at ?? parent.created,
+      isSummary: true,
+      substitutedFor: claimed,
+      strength: parent.strength,
+    });
+    summarized += claimed.length;
+  }
+  for (const r of olderRows) {
+    if (claimedRawIds.has(r.id)) continue;
+    olderItems.push(rawItem(r));
+  }
+  return { olderItems, summarized };
+}
+
+/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are never evicted. */
+interface BudgetFit {
+  items: AssembledContextItem[];
+  tokens: number;
+  evicted: number;
+}
+
+function evictToBudget(
+  start: AssembledContextItem[],
+  itemCost: (it: AssembledContextItem) => number,
+  room: number,
+): BudgetFit {
+  let items = start;
   let tokens = items.reduce((acc, it) => acc + itemCost(it), 0);
   let evicted = 0;
   while (tokens > room && items.length > 0) {
@@ -237,6 +263,5 @@ export function assemble(
     tokens -= cost;
     evicted++;
   }
-
-  return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
+  return { items, tokens, evicted };
 }

@@ -150,6 +150,22 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   extractGraph,
 };
 
+/** Phase counters the consolidate audit row reports, filled in as each phase completes. */
+interface SleepCounts {
+  consolidation: number;
+  dedup: number;
+  auditDeleted: number;
+  ambient: number;
+}
+
+type ConsolidateOutcome = Awaited<ReturnType<SleepPhases['consolidate']>>;
+type DedupOutcome = ReturnType<SleepPhases['deduplicateStore']>;
+
+interface DirtyTenantSnapshot {
+  dirtyTenants: { tenantId: string; maxPendingId: number }[];
+  error: string | null;
+}
+
 export async function sleep(
   ctx: Context,
   opts: SleepOpts = {},
@@ -163,197 +179,11 @@ export async function sleep(
   // v1.11.5: phase counters for the consolidate audit emit (in finally).
   // Accumulated as each phase completes so partial-failure paths still report
   // accurate "what got done before the failure" data.
-  let consolidationCount = 0;
-  let dedupCount = 0;
-  let auditDeletedCount = 0;
-  let ambientTotal = 0;
+  const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };
   let phaseError: Error | null = null;
-  let graphSnapshotError: string | null = null;
 
-  let result: SleepResult | null = null;
   try {
-    // Snapshot dirty tenants BEFORE any memory-deleting phase (consolidate /
-    // dedup / audit). The graph_extraction_queue rows are FK'd to mirror
-    // memories with ON DELETE CASCADE, so a phase that deletes a queued mirror
-    // (e.g. dedup removing a near-duplicate superseding decision) would drop the
-    // tenant from a drain-time load and leave its graph stale (codex P1). The
-    // MAX(id) watermark captured here stays valid: arrivals during sleep get a
-    // higher id and remain pending.
-    //
-    // Fail-soft (codex P2): a queue-read failure here must NOT abort core sleep
-    // (consolidation / dedup / audit run regardless). On failure, skip graph
-    // refresh this sleep (recovered next sleep) and surface a detail once
-    // `result` exists (Phase 6).
-    let dirtyTenants: { tenantId: string; maxPendingId: number }[] = [];
-    if (!dryRun) {
-      try {
-        dirtyTenants = phases.loadPendingExtractionTenants(ctx.hippoRoot);
-      } catch (snapErr) {
-        // SAFETY: this is a best-effort log message only; property access on
-        // any JS value is safe (undefined if absent), preserving the existing
-        // lenient formatting even when something non-Error was thrown.
-        graphSnapshotError = (snapErr as Error).message;
-      }
-    }
-
-    // Phase 1: Consolidation.
-    const consolidateResult = await phases.consolidate(ctx.hippoRoot, { dryRun });
-    consolidationCount = consolidateResult.semanticCreated + consolidateResult.merged;
-
-    result = {
-      active: consolidateResult.decayed,
-      removed: consolidateResult.removed,
-      mergedEpisodic: consolidateResult.merged,
-      newSemantic: consolidateResult.semanticCreated,
-      dryRun,
-      details: consolidateResult.details,
-    };
-    // Set only when non-zero, so a store without dormant memories gets a
-    // byte-identical result (HTTP /v1/sleep, the CLI render snapshot).
-    if (consolidateResult.dormant > 0) {
-      result.dormant = consolidateResult.dormant;
-    }
-    if (consolidateResult.dormantExpired > 0) {
-      result.dormantExpired = consolidateResult.dormantExpired;
-    }
-
-    // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
-    const dedupResult = phases.deduplicateStore(ctx.hippoRoot, { dryRun, actor: ctx.actor.subject });
-    dedupCount = dedupResult.removed;
-    if (dedupResult.removed > 0) {
-      const semDups = dedupResult.pairs.filter(
-        (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
-      ).length;
-      const epiDups = dedupResult.pairs.filter(
-        (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
-      ).length;
-      const crossDups = dedupResult.pairs.filter(
-        (p) => p.keptLayer !== p.removedLayer,
-      ).length;
-      result.deduped = {
-        removed: dedupResult.removed,
-        semDups,
-        epiDups,
-        crossDups,
-      };
-    }
-
-    // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-    const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
-    const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
-    const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
-    if (auditOut.issues.length > 0) {
-      const errors = auditOut.issues.filter((i) => i.severity === 'error');
-      const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
-      let removed = 0;
-      for (const issue of errors) {
-        const reason = `sleep-audit: ${issue.reason}`;
-        if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason, automatic: true })) removed++;
-      }
-      auditDeletedCount = removed;
-      if (removed > 0 || warnings.length > 0) {
-        result.audit = {
-          errorsRemoved: removed,
-          warningCount: warnings.length,
-        };
-      }
-    }
-
-    if (dryRun) return result;
-
-    // Phase 4: Auto-share high-transfer-score memories to global.
-    if (!opts.noShare) {
-      const sleepConfig = phases.loadConfig(ctx.hippoRoot);
-      if (sleepConfig.autoShareOnSleep) {
-        // v1.25.0: surface the secret-veto skip count (v39 follow-up #2) so
-        // the veto is observable instead of silent.
-        // AT1: rejectedSkipped is autoShare's sibling counter for candidates
-        // the global store's rejection tombstone refused (threaded the same
-        // way as secretSkipped just below).
-        const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-        const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6, stats: autoShareStats });
-        if (shared.length > 0) {
-          result.shared = shared.length;
-        }
-        if (autoShareStats.secretSkipped > 0) {
-          result.secretSkipped = autoShareStats.secretSkipped;
-        }
-        if (autoShareStats.rejectedSkipped > 0) {
-          result.rejectedSkipped = autoShareStats.rejectedSkipped;
-        }
-      }
-    }
-
-    // Phase 5: Post-sleep ambient state summary.
-    const postSleepConfig = phases.loadConfig(ctx.hippoRoot);
-    if (postSleepConfig.ambient.enabled) {
-      const postSleepEntries = phases.loadAllEntries(ctx.hippoRoot).filter(
-        (e) => !e.superseded_by,
-      );
-      if (postSleepEntries.length > 0) {
-        result.ambient = phases.computeAmbientState(postSleepEntries);
-        ambientTotal = result.ambient.totalMemories;
-      }
-    }
-
-    // Phase 6: Graph extraction drain (E3 sleep enqueue-hook). Rebuild the
-    // entity/relation graph for every tenant marked dirty (by markGraphDirty)
-    // since the last sleep, so `recall --hops` + cross-object `references` edges
-    // run on fresh data without a manual `hippo graph extract`. Fully
-    // fault-isolated: the consolidation work above has already committed, so a
-    // failure here must never abort sleep; a per-tenant extract failure leaves
-    // that tenant's queue items pending for the next sleep. (Skipped under
-    // dryRun via the early return above.)
-    try {
-      if (graphSnapshotError) {
-        // The dirty-tenant snapshot failed (codex P2 fail-soft). Core sleep
-        // already succeeded; surface the skipped graph refresh as a detail.
-        result.details = [
-          ...(result.details ?? []),
-          `graph: dirty-tenant snapshot failed (skipped graph refresh): ${graphSnapshotError}`,
-        ];
-      }
-      let gTenants = 0;
-      let gEntities = 0;
-      let gRelations = 0;
-      // dirtyTenants was snapshotted before the memory-deleting phases above.
-      for (const { tenantId, maxPendingId } of dirtyTenants) {
-        try {
-          const ext = phases.extractGraph(ctx.hippoRoot, tenantId);
-          // Count the rebuild as soon as it succeeds — it happened regardless of
-          // the drain-mark below.
-          gTenants += 1;
-          gEntities += ext.entities;
-          gRelations += ext.relations;
-          // Watermark drain: mark processed only items enqueued before this
-          // rebuild started (id <= maxPendingId). Arrivals during the rebuild
-          // keep pending status and are caught next sleep; rows whose mirror was
-          // cascade-deleted earlier this sleep are already gone (no-op).
-          markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);
-        } catch (tenantErr) {
-          // SAFETY: this is a best-effort log message only; property access
-          // on any JS value is safe (undefined if absent), preserving the
-          // existing lenient formatting even when something non-Error was thrown.
-          result.details = [
-            ...(result.details ?? []),
-            `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
-          ];
-        }
-      }
-      if (gTenants > 0) {
-        result.graph = { tenants: gTenants, entities: gEntities, relations: gRelations };
-      }
-    } catch (graphErr) {
-      // SAFETY: this is a best-effort log message only; property access on
-      // any JS value is safe (undefined if absent), preserving the existing
-      // lenient formatting even when something non-Error was thrown.
-      result.details = [
-        ...(result.details ?? []),
-        `graph: drain phase failed (skipped): ${(graphErr as Error).message}`,
-      ];
-    }
-
-    return result;
+    return await runSleepPhases(ctx, opts, phases, counts);
   } catch (err) {
     // SAFETY: phaseError is read via phaseError.message / (phaseError !==
     // null) below, both safe even if a non-Error was thrown; this mirrors
@@ -361,70 +191,253 @@ export async function sleep(
     phaseError = err as Error;
     throw err;
   } finally {
-    // v1.11.5: emit one 'consolidate' audit_log row per api.sleep invocation,
-    // with phase counters in metadata. Closes the CLI/MCP parity gap that T6
-    // fixed for cmdOutcome (Episode A follow-up). In finally so partial-failure
-    // paths still emit; `partial: true` + errorMessage flag the failure.
-    // Dedicated handle for this emit only (phase helpers above each open their
-    // own handle via hippoRoot — SQLite single-writer makes parallel handles
-    // safe for the read-heavy phases).
-    //
-    // TODO(v1.12.0 + A5 v2): the audit row is tagged with ctx.tenantId but
-    // api.sleep is host-wide (cross-tenant dedup is intentional). When
-    // /v1/sleep moves off loopback-only, either tag with a synthetic "host"
-    // tenant or scope api.sleep per-tenant. Independent-review-critic flag,
-    // v1.11.5 ship.
-    //
-    // Error preservation: if openHippoDb or appendAuditEvent throws here, we
-    // do NOT let it replace the original phaseError (independent-review HIGH:
-    // would mask the underlying consolidation failure). Audit emit failure
-    // is logged to stderr but the original throw wins.
-    try {
-      const db = openHippoDb(ctx.hippoRoot);
-      try {
-        // D2 v1.12.10: tag with '__host__' synthetic tenant since api.sleep
-        // is host-wide (cross-tenant dedup is intentional). Tagging with
-        // ctx.tenantId would mislead tenant-scoped audit queries — a
-        // consolidate row labeled tenant=acme is wrong when the underlying
-        // work touched all tenants' rows. '__host__' is a system-reserved
-        // tenant string for host-wide ops; admins query it explicitly via
-        // `hippo audit list --tenant __host__`. The actor field still
-        // carries ctx.actor.subject so the operator who triggered the
-        // consolidation is traceable.
-        interface SleepAuditMetadata {
-          consolidationCount: number;
-          dedupCount: number;
-          auditDeletedCount: number;
-          ambientTotal: number;
-          dryRun: boolean;
-          noShare: boolean;
-          partial: boolean;
-          triggeredByTenant: string;
-          errorMessage?: string;
-        }
-        const sleepAuditMetadata: SleepAuditMetadata = {
-          consolidationCount,
-          dedupCount,
-          auditDeletedCount,
-          ambientTotal,
-          dryRun,
-          noShare: opts.noShare ?? false,
-          partial: phaseError !== null,
-          triggeredByTenant: ctx.tenantId, // preserve for audit forensics
-        };
-        if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
-        appendAuditEvent(db, {
-          tenantId: '__host__',
-          actor: ctx.actor.subject,
-          op: 'consolidate',
-          metadata: { ...sleepAuditMetadata },
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-    } catch (auditErr) {
-      // Logged, never thrown: a second failure must not mask the original phaseError.
-      reportAuditWriteFailure('consolidate', String(auditErr));
-    }
+    emitSleepAudit(ctx, opts, dryRun, counts, phaseError);
   }
 }
+
+async function runSleepPhases(
+  ctx: Context,
+  opts: SleepOpts,
+  phases: SleepPhases,
+  counts: SleepCounts,
+): Promise<SleepResult> {
+  const dryRun = Boolean(opts.dryRun);
+  const snapshot = snapshotDirtyTenants(ctx, phases, dryRun);
+
+  // Phase 1: Consolidation.
+  const consolidateResult = await phases.consolidate(ctx.hippoRoot, { dryRun });
+  counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
+  const result = sleepResultFrom(consolidateResult, dryRun);
+
+  // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
+  const dedupResult = phases.deduplicateStore(ctx.hippoRoot, { dryRun, actor: ctx.actor.subject });
+  counts.dedup = dedupResult.removed;
+  if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
+
+  // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
+  counts.auditDeleted = runQualityAudit(ctx, phases, dryRun, consolidateResult, dedupResult, result);
+
+  if (dryRun) return result;
+
+  // Phase 4: Auto-share high-transfer-score memories to global.
+  if (!opts.noShare) shareOnSleep(ctx, phases, result);
+
+  // Phase 5: Post-sleep ambient state summary.
+  counts.ambient = summarizeAmbient(ctx, phases, result);
+
+  drainGraphQueue(ctx, phases, snapshot, result);
+  return result;
+}
+
+// Taken before any memory-deleting phase: queue rows cascade-delete with their mirror, so a later read would miss
+// tenants dedup touched. Fail-soft: a failed read skips the graph refresh this sleep and never aborts core sleep.
+function snapshotDirtyTenants(ctx: Context, phases: SleepPhases, dryRun: boolean): DirtyTenantSnapshot {
+  const snapshot: DirtyTenantSnapshot = { dirtyTenants: [], error: null };
+  if (!dryRun) {
+    try {
+      snapshot.dirtyTenants = phases.loadPendingExtractionTenants(ctx.hippoRoot);
+    } catch (snapErr) {
+      // SAFETY: this is a best-effort log message only; property access on
+      // any JS value is safe (undefined if absent), preserving the existing
+      // lenient formatting even when something non-Error was thrown.
+      snapshot.error = (snapErr as Error).message;
+    }
+  }
+  return snapshot;
+}
+
+function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean): SleepResult {
+  const result: SleepResult = {
+    active: consolidateResult.decayed,
+    removed: consolidateResult.removed,
+    mergedEpisodic: consolidateResult.merged,
+    newSemantic: consolidateResult.semanticCreated,
+    dryRun,
+    details: consolidateResult.details,
+  };
+  // Set only when non-zero, so a store without dormant memories gets a
+  // byte-identical result (HTTP /v1/sleep, the CLI render snapshot).
+  if (consolidateResult.dormant > 0) {
+    result.dormant = consolidateResult.dormant;
+  }
+  if (consolidateResult.dormantExpired > 0) {
+    result.dormantExpired = consolidateResult.dormantExpired;
+  }
+  return result;
+}
+
+function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['deduped']> {
+  const semDups = dedupResult.pairs.filter(
+    (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
+  ).length;
+  const epiDups = dedupResult.pairs.filter(
+    (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
+  ).length;
+  const crossDups = dedupResult.pairs.filter(
+    (p) => p.keptLayer !== p.removedLayer,
+  ).length;
+  return {
+    removed: dedupResult.removed,
+    semDups,
+    epiDups,
+    crossDups,
+  };
+}
+
+/** Returns how many audit errors were deleted, or would be under dryRun. */
+function runQualityAudit(
+  ctx: Context,
+  phases: SleepPhases,
+  dryRun: boolean,
+  consolidateResult: ConsolidateOutcome,
+  dedupResult: DedupOutcome,
+  result: SleepResult,
+): number {
+  const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
+  const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
+  const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
+  if (auditOut.issues.length === 0) return 0;
+  const errors = auditOut.issues.filter((i) => i.severity === 'error');
+  const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
+  let removed = 0;
+  for (const issue of errors) {
+    const reason = `sleep-audit: ${issue.reason}`;
+    if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason, automatic: true })) removed++;
+  }
+  if (removed > 0 || warnings.length > 0) {
+    result.audit = {
+      errorsRemoved: removed,
+      warningCount: warnings.length,
+    };
+  }
+  return removed;
+}
+
+function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): void {
+  const sleepConfig = phases.loadConfig(ctx.hippoRoot);
+  if (!sleepConfig.autoShareOnSleep) return;
+  // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
+  const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
+  const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6, stats: autoShareStats });
+  if (shared.length > 0) {
+    result.shared = shared.length;
+  }
+  if (autoShareStats.secretSkipped > 0) {
+    result.secretSkipped = autoShareStats.secretSkipped;
+  }
+  if (autoShareStats.rejectedSkipped > 0) {
+    result.rejectedSkipped = autoShareStats.rejectedSkipped;
+  }
+}
+
+/** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is left. */
+function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult): number {
+  const postSleepConfig = phases.loadConfig(ctx.hippoRoot);
+  if (!postSleepConfig.ambient.enabled) return 0;
+  const postSleepEntries = phases.loadAllEntries(ctx.hippoRoot).filter(
+    (e) => !e.superseded_by,
+  );
+  if (postSleepEntries.length === 0) return 0;
+  result.ambient = phases.computeAmbientState(postSleepEntries);
+  return result.ambient.totalMemories;
+}
+
+// Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall runs on fresh data.
+// Fault-isolated: consolidation has already committed, so no failure here aborts sleep; a failed tenant stays pending.
+function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: DirtyTenantSnapshot, result: SleepResult): void {
+  try {
+    if (snapshot.error) {
+      // Core sleep already succeeded; surface the skipped graph refresh as a detail.
+      result.details = [
+        ...(result.details ?? []),
+        `graph: dirty-tenant snapshot failed (skipped graph refresh): ${snapshot.error}`,
+      ];
+    }
+    let gTenants = 0;
+    let gEntities = 0;
+    let gRelations = 0;
+    // dirtyTenants was snapshotted before the memory-deleting phases above.
+    for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
+      try {
+        const ext = phases.extractGraph(ctx.hippoRoot, tenantId);
+        // Count the rebuild as soon as it succeeds — it happened regardless of
+        // the drain-mark below.
+        gTenants += 1;
+        gEntities += ext.entities;
+        gRelations += ext.relations;
+        // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
+        markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);
+      } catch (tenantErr) {
+        // SAFETY: this is a best-effort log message only; property access
+        // on any JS value is safe (undefined if absent), preserving the
+        // existing lenient formatting even when something non-Error was thrown.
+        result.details = [
+          ...(result.details ?? []),
+          `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
+        ];
+      }
+    }
+    if (gTenants > 0) {
+      result.graph = { tenants: gTenants, entities: gEntities, relations: gRelations };
+    }
+  } catch (graphErr) {
+    // SAFETY: this is a best-effort log message only; property access on
+    // any JS value is safe (undefined if absent), preserving the existing
+    // lenient formatting even when something non-Error was thrown.
+    result.details = [
+      ...(result.details ?? []),
+      `graph: drain phase failed (skipped): ${(graphErr as Error).message}`,
+    ];
+  }
+}
+
+// One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got done.
+// Its own handle; an audit failure is logged and never replaces the original phase error.
+function emitSleepAudit(
+  ctx: Context,
+  opts: SleepOpts,
+  dryRun: boolean,
+  counts: SleepCounts,
+  phaseError: Error | null,
+): void {
+  try {
+    const db = openHippoDb(ctx.hippoRoot);
+    try {
+      // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
+      interface SleepAuditMetadata {
+        consolidationCount: number;
+        dedupCount: number;
+        auditDeletedCount: number;
+        ambientTotal: number;
+        dryRun: boolean;
+        noShare: boolean;
+        partial: boolean;
+        triggeredByTenant: string;
+        errorMessage?: string;
+      }
+      const sleepAuditMetadata: SleepAuditMetadata = {
+        consolidationCount: counts.consolidation,
+        dedupCount: counts.dedup,
+        auditDeletedCount: counts.auditDeleted,
+        ambientTotal: counts.ambient,
+        dryRun,
+        noShare: opts.noShare ?? false,
+        partial: phaseError !== null,
+        triggeredByTenant: ctx.tenantId, // preserve for audit forensics
+      };
+      if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
+      appendAuditEvent(db, {
+        tenantId: '__host__',
+        actor: ctx.actor.subject,
+        op: 'consolidate',
+        metadata: { ...sleepAuditMetadata },
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch (auditErr) {
+    // Logged, never thrown: a second failure must not mask the original phaseError.
+    reportAuditWriteFailure('consolidate', String(auditErr));
+  }
+}
+

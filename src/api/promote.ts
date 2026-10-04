@@ -94,21 +94,7 @@ export function supersede(
   oldId: string,
   newContent: string,
 ): SupersedeResult {
-  // Read old (tenant-scoped). readEntry filters by tenantId, so a Bearer for
-  // tenant A on tenant B's id throws "Memory not found" here without any
-  // info leak.
-  const old: MemoryEntry | null = readEntry(ctx.hippoRoot, oldId, ctx.tenantId);
-  if (!old) {
-    throw new NotFoundError(`Memory not found: ${oldId}`);
-  }
-  // Guard: not already superseded. The CAS UPDATE below race-safely closes
-  // the window between this read and the write; this check just produces a
-  // clearer error in the common single-writer case.
-  if (old.superseded_by) {
-    throw new ConflictError(
-      `Memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`,
-    );
-  }
+  const old = readSupersedable(ctx, oldId);
 
   const newEntry = createSuccessor(old, newContent, {
     tenantId: ctx.tenantId,
@@ -123,55 +109,7 @@ export function supersede(
   // the old.superseded_by pointer.
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      // 1. CAS update: only succeed if old.superseded_by IS NULL AND the
-      //    row still belongs to ctx.tenantId. Tenant filter is belt-and-
-      //    braces with the readEntry above — it costs nothing and closes
-      //    a hypothetical window where ownership changes between read and
-      //    update.
-      const result = db.prepare(`
-        UPDATE memories
-        SET superseded_by = ?
-        WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL
-      `).run(newEntry.id, oldId, ctx.tenantId);
-      if ((result.changes ?? 0) === 0) {
-        db.exec('ROLLBACK');
-        throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
-      }
-      // v0.30 / E2 — DAG live-coupling: OLD entry just transitioned to
-      // superseded. Its parent (if any) needs rebuild. Lands strictly
-      // between the rollback guard above and the writeEntryDbOnly(NEW)
-      // below so a failed CAS hits throw before this hook. The NEW
-      // entry's parent (typically same parent) is auto-marked by the
-      // writeEntryDbOnly hook (same parent → idempotent, audits once).
-      if (old.dag_parent_id) {
-        markSummaryDirtyInTx(db, old.dag_parent_id, ctx.tenantId, ctx.actor.subject);
-      }
-      // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
-      //    path). This emits its OWN 'remember' audit row for the new
-      //    memory inside the SAVEPOINT — atomic with the row INSERT.
-      writeEntryDbOnly(db, stampOriginProject(ctx.hippoRoot, newEntry), { actor: ctx.actor.subject });
-      // 3. User-facing 'supersede' audit row inside the same tx so the
-      //    chain pointer + audit trail commit atomically.
-      appendAuditEvent(db, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'supersede',
-        targetId: oldId,
-        metadata: { newId: newEntry.id },
-      });
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-      // AT1 (plan §3): refusal audit lands post-ROLLBACK, in a fresh
-      // implicit transaction the aborted outer one cannot claw back — then
-      // rethrow so the caller sees the refusal.
-      if (err instanceof RejectedValueError) {
-        auditRejectionRefusal(db, err, ctx.actor.subject);
-      }
-      throw err;
-    }
+    commitSupersede(db, ctx, oldId, old, newEntry);
     // Mirrors after COMMIT, while the db handle is still open. Same
     // invariant as the original writeEntry: a mirror failure leaves disk
     // MISSING the markdown for the new memory (rebuildIndex rewrites every
@@ -187,6 +125,59 @@ export function supersede(
   }
 
   return { ok: true, oldId, newId: newEntry.id };
+}
+
+/** The tenant-scoped row to supersede; readEntry's tenant filter makes another tenant's id read as not found. */
+function readSupersedable(ctx: Context, oldId: string): MemoryEntry {
+  const old: MemoryEntry | null = readEntry(ctx.hippoRoot, oldId, ctx.tenantId);
+  if (!old) {
+    throw new NotFoundError(`Memory not found: ${oldId}`);
+  }
+  // The CAS UPDATE closes the race; this check only gives a clearer error in the common single-writer case.
+  if (old.superseded_by) {
+    throw new ConflictError(
+      `Memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`,
+    );
+  }
+  return old;
+}
+
+/** CAS on the old row, the successor's insert and the 'supersede' audit row, in one BEGIN IMMEDIATE transaction. */
+function commitSupersede(db: DatabaseSyncLike, ctx: Context, oldId: string, old: MemoryEntry, newEntry: MemoryEntry): void {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    // The tenant filter repeats readEntry's check at no cost, closing an ownership change between read and update.
+    const result = db.prepare(`
+      UPDATE memories
+      SET superseded_by = ?
+      WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL
+    `).run(newEntry.id, oldId, ctx.tenantId);
+    if ((result.changes ?? 0) === 0) {
+      db.exec('ROLLBACK');
+      throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
+    }
+    // After the CAS guard, so a lost race throws before the old parent is marked for rebuild.
+    if (old.dag_parent_id) {
+      markSummaryDirtyInTx(db, old.dag_parent_id, ctx.tenantId, ctx.actor.subject);
+    }
+    // Emits its own 'remember' audit row inside the same transaction.
+    writeEntryDbOnly(db, stampOriginProject(ctx.hippoRoot, newEntry), { actor: ctx.actor.subject });
+    appendAuditEvent(db, {
+      tenantId: ctx.tenantId,
+      actor: ctx.actor.subject,
+      op: 'supersede',
+      targetId: oldId,
+      metadata: { newId: newEntry.id },
+    });
+    db.exec('COMMIT');
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+    // The refusal audit lands after ROLLBACK, in a fresh implicit transaction the aborted one cannot undo.
+    if (err instanceof RejectedValueError) {
+      auditRejectionRefusal(db, err, ctx.actor.subject);
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
