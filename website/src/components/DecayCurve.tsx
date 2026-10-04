@@ -114,7 +114,7 @@ export default function DecayCurve() {
   const wrongBefore = strengthAt(alone, WRONG_AT);
   const wrongAfter = wrongPts[1][1];
   const supersededS = strengthAt(wrongPts, SUPERSEDED_AT);
-  const label = 'absolute whitespace-nowrap font-mono text-[11px] leading-none sm:text-xs';
+  const label = 'absolute whitespace-nowrap font-mono text-xs leading-none';
 
   return (
     <div
@@ -123,7 +123,7 @@ export default function DecayCurve() {
       aria-label="Memory strength over two years. Left alone, a memory falls to half strength after a year. Each recall restores it to full. Marked wrong, it halves and fades faster; superseded, it leaves recall."
       class="grid grid-cols-[auto_1fr] gap-x-3"
     >
-      <div class="relative h-56 font-mono text-[11px] text-zinc-400 sm:h-72 sm:text-xs" aria-hidden="true">
+      <div class="relative h-56 font-mono text-xs text-zinc-400 sm:h-72" aria-hidden="true">
         {[1, 0.5, 0].map((s) => (
           <span class="absolute right-0 -translate-y-1/2" style={{ top: pos(0, s).top }}>{s === 0.5 ? '½' : s}</span>
         ))}
@@ -155,7 +155,7 @@ export default function DecayCurve() {
       </div>
 
       <span />
-      <div class="relative mt-2 h-4 font-mono text-[11px] text-zinc-400 sm:text-xs" aria-hidden="true">
+      <div class="relative mt-2 h-4 font-mono text-xs text-zinc-400" aria-hidden="true">
         {ticks.map((t, i) => (
           <span
             class={`absolute whitespace-nowrap ${i === 0 ? '' : i === ticks.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}

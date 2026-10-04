@@ -5,7 +5,7 @@ import CopyCommand from './CopyCommand.astro';
 
 <section class="relative overflow-hidden border-t border-white/5 bg-white/[0.02]">
   <div class="pointer-events-none absolute inset-0 -z-10 hero-glow opacity-60"></div>
-  <div class="mx-auto max-w-3xl px-5 py-16 sm:py-20 text-center">
+  <div class="mx-auto max-w-3xl px-5 py-(--section-y) text-center">
     <h2 class="text-3xl leading-tight sm:text-4xl">
       Two commands. <span class="text-gradient">One project.</span>
     </h2>
@@ -21,7 +21,7 @@ import CopyCommand from './CopyCommand.astro';
     </div>
 
     <!-- The scan is a second step, and what it changes comes before its command. -->
-    <p class="mx-auto mt-8 max-w-lg text-sm leading-relaxed text-zinc-400">
+    <p class="mx-auto mt-8 text-sm leading-relaxed text-zinc-400">
       Many repos at once is a second step. This command gives every git repo in your home folder and up to three levels
       below it a store of its own, seeded from a year of its commits, plus the same user-level hooks and daily run. It
       patches no CLAUDE.md or AGENTS.md.

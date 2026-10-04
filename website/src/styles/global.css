@@ -40,6 +40,16 @@
   :root {
     color-scheme: dark;
     --bg: #0b0f0c;
+    /* em, not ch: Geist averages ~0.45em a character, so 30em holds about 70 per line at any text size */
+    --measure: 30em;
+    /* DESIGN section_padding_y: one vertical rhythm, used as py-(--section-y) on every section */
+    --section-y: 2.5rem;
+  }
+  @media (width >= 48rem) {
+    :root { --section-y: 3.5rem; }
+  }
+  @media (width >= 64rem) {
+    :root { --section-y: 4.5rem; }
   }
 
   html {
@@ -47,6 +57,15 @@
        background canvas (BackgroundFx.astro) reads through site-long. */
     background-color: var(--bg);
     scroll-behavior: smooth;
+    /* keeps focused and anchored targets clear of the 64px sticky header (WCAG 2.4.11) */
+    scroll-padding-top: 5rem;
+  }
+
+  /* DESIGN prose_measure; mono captions are labels, not running text */
+  p:not(.font-mono, .flex),
+  .list-disc > li,
+  dd {
+    max-width: var(--measure);
   }
 
   body {

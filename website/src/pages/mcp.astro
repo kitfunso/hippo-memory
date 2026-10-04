@@ -97,15 +97,16 @@ const others = [
           <caption class="sr-only">Tools the hippo MCP server exposes</caption>
           <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
             <tr>
-              <th scope="col" class="px-5 py-3 font-medium">Tool</th>
-              <th scope="col" class="px-5 py-3 font-medium">What it does</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">Tool</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">What it does</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
             {tools.map((t) => (
               <tr class="align-top">
-                <th scope="row" class="whitespace-nowrap px-5 py-3 text-left font-mono text-xs font-normal text-acc-cyan">{t.name}</th>
-                <td class="px-5 py-3 text-zinc-300">{t.does}</td>
+                {/* break points after underscores give the description column room on a phone */}
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-acc-cyan sm:whitespace-nowrap sm:px-5">{t.name.split('_').map((part, i, all) => <Fragment>{part}{i < all.length - 1 && <Fragment>_<wbr /></Fragment>}</Fragment>)}</th>
+                <td class="px-3 py-3 text-zinc-300 sm:px-5">{t.does}</td>
               </tr>
             ))}
           </tbody>

@@ -10,8 +10,8 @@ interface Props {
 const { items = faq, heading = 'Questions, answered.', moreHref } = Astro.props;
 ---
 
-<section id="faq" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
-  <div class="mx-auto grid max-w-6xl gap-10 px-5 py-16 sm:py-20 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+<section id="faq" class="relative border-t border-white/5 bg-white/[0.02]">
+  <div class="mx-auto grid max-w-6xl gap-10 px-5 py-(--section-y) lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
     <div>
       <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">FAQ</p>
       <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{heading}</h2>

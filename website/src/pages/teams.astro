@@ -41,7 +41,7 @@ const kpis = [
   <main id="main">
     <section class="relative overflow-hidden">
       <div class="pointer-events-none absolute inset-0 -z-10 hero-glow"></div>
-      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-24 pt-10 sm:pt-12 lg:grid-cols-2">
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-(--section-y) pt-10 sm:pt-12 lg:grid-cols-2">
         <div class="min-w-0">
           <span class="inline-flex items-center gap-2 rounded-full border border-acc-amber/40 bg-acc-amber/10 px-3 py-1 font-mono text-xs text-acc-amber">
             {enterprise.status} · pilot requests open
@@ -80,7 +80,7 @@ const kpis = [
     </section>
 
     <section class="border-t border-white/5">
-      <div class="mx-auto grid max-w-6xl gap-4 px-5 py-24 md:grid-cols-3">
+      <div class="mx-auto grid max-w-6xl gap-4 px-5 py-(--section-y) md:grid-cols-3">
         {pillars.map((p) => (
           <div class="glass flex flex-col gap-3 rounded-2xl p-6">
             <span class:list={['self-start rounded px-2 py-0.5 font-mono text-xs', p.status === 'available in MIT core' ? 'bg-acc-violet/15 text-acc-violet' : 'bg-acc-amber/15 text-acc-amber']}>{p.status}</span>
@@ -92,7 +92,7 @@ const kpis = [
     </section>
 
     <section class="border-t border-white/5 bg-white/[0.02]">
-      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-24 lg:grid-cols-2">
+      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-(--section-y) lg:grid-cols-2">
         <div class="min-w-0">
           <p class="font-mono text-xs uppercase tracking-wider text-acc-violet">Proposed pilot</p>
           <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">Measured on your work, against a holdout.</h2>

@@ -178,8 +178,23 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
         });
 
         // [data-scroll-x]: flag "more to the right" so global.css fades that edge only while it is true.
+        // A region that scrolls and holds nothing focusable joins the tab order, so keyboard users can scroll it.
         document.querySelectorAll('[data-scroll-x]').forEach(function (el) {
-          var update = function () { el.toggleAttribute('data-more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4); };
+          var caption = el.querySelector('caption');
+          var needsStop = !el.querySelector('a[href], button, input, select, textarea, [tabindex]');
+          var update = function () {
+            var scrolls = el.scrollWidth > el.clientWidth + 1;
+            el.toggleAttribute('data-more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+            if (!needsStop) return;
+            if (scrolls) {
+              el.tabIndex = 0;
+              if (caption) { el.setAttribute('role', 'region'); el.setAttribute('aria-label', caption.textContent.trim()); }
+            } else {
+              el.removeAttribute('tabindex');
+              el.removeAttribute('role');
+              el.removeAttribute('aria-label');
+            }
+          };
           el.addEventListener('scroll', update, { passive: true });
           window.addEventListener('resize', update);
           update();

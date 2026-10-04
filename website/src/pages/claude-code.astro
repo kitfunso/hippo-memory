@@ -63,15 +63,15 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
           <caption class="sr-only">Claude Code hooks that hippo init installs</caption>
           <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
             <tr>
-              <th scope="col" class="px-5 py-3 font-medium">Hook</th>
-              <th scope="col" class="px-5 py-3 font-medium">What it does</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">Hook</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">What it does</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
             {hooks.map((h) => (
               <tr class="align-top">
-                <th scope="row" class="whitespace-nowrap px-5 py-3 text-left font-mono text-xs font-normal text-acc-cyan">{h.event}</th>
-                <td class="copy px-5 py-3 text-zinc-300" set:html={mdInline(h.does)} />
+                <th scope="row" class="px-3 py-3 text-left font-mono text-xs font-normal text-acc-cyan sm:whitespace-nowrap sm:px-5">{h.event}</th>
+                <td class="copy px-3 py-3 text-zinc-300 sm:px-5" set:html={mdInline(h.does)} />
               </tr>
             ))}
           </tbody>

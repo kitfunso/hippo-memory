@@ -10,7 +10,8 @@ const pad = size === 'lg' ? 'px-4 py-4 text-sm sm:px-5' : 'px-4 py-3 text-sm';
 
 <div class:list={['group flex items-center gap-3 rounded-xl glass font-mono', pad]}>
   <span class="select-none text-acc-cyan">$</span>
-  <code class="min-w-0 flex-1 break-words text-zinc-200">{command}</code>
+  <!-- each word is an inline-block: lines break between words, and inside one (hippo-memory at its hyphen) only when it cannot fit a line alone -->
+  <code class="min-w-0 flex-1 break-words text-zinc-200">{command.split(' ').map((word, i) => <Fragment>{i > 0 && ' '}<span class="inline-block max-w-full">{word}</span></Fragment>)}</code>
   <button
     type="button"
     data-copy={command}

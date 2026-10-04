@@ -3,10 +3,10 @@ import { getStarted } from '../content/site';
 import CopyCommand from './CopyCommand.astro';
 ---
 
-<section id="get-started" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
-  <div class="mx-auto max-w-6xl px-5 py-16 sm:py-20">
+<section id="get-started" class="relative border-t border-white/5 bg-white/[0.02]">
+  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
     <!-- On wide screens the commands sit under the intro so the left column is not half empty; on phones the change list still comes first. -->
-    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-16 lg:gap-y-8">
+    <div class="grid grid-cols-1 gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-16 lg:gap-y-8">
       <div class="lg:col-start-1 lg:row-start-1">
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{getStarted.kicker}</p>
         <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
@@ -15,7 +15,7 @@ import CopyCommand from './CopyCommand.astro';
       </div>
 
       <div class="lg:col-start-2 lg:row-span-2 lg:row-start-1" data-reveal>
-        <div class="rounded-2xl glass p-5">
+        <div class="rounded-2xl glass p-5 break-words">
           <ul class="list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-300">
             {getStarted.changes.map((c) => <li>{c}</li>)}
           </ul>
