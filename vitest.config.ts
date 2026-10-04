@@ -54,9 +54,12 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 30_000,
     coverage: {
-      provider: 'v8',
-      // Without include, vitest reports only files some test loads, so untested src files would not count.
-      include: ['src/**/*.ts'],
+      provider: 'custom',
+      customProviderModule: './tests/_coverage-provider.ts',
+      // Without include, untested src files would not count; dist/ lets spawned-CLI results through to remap.
+      include: ['src/**/*.ts', 'dist/**/*.js'],
+      autoAttachSubprocess: true,
+      excludeAfterRemap: true,
       reporter: ['text-summary', 'json-summary'],
       thresholds: { lines: 67, branches: 60, functions: 80, statements: 67 },
     },
