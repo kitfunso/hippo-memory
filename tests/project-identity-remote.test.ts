@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/project-identity.js';
+import { clearProjectIdentityCache, projectNames, resolveProjectIdentity } from '../src/project-identity.js';
 import { normaliseRemote, originUrlFromConfig } from '../src/project-remote.js';
 
 let tmpRoot: string;
@@ -58,6 +58,8 @@ describe('normaliseRemote', () => {
     ['Azure DevOps old host', 'https://org.visualstudio.com/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
     ['Azure DevOps old host with its collection', 'https://org.visualstudio.com/DefaultCollection/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
     ['Azure DevOps old ssh host', 'org@vs-ssh.visualstudio.com:v3/org/proj/repo', 'dev.azure.com/org/proj/repo'],
+    ['https with a token in the query', 'https://gitlab.example.com/acme/api.git?private_token=not-a-real-token', 'gitlab.example.com/acme/api'],
+    ['scp with a fragment', 'git@github.com:acme/api.git#main', 'github.com/acme/api'],
   ])('%s', (_form, url, id) => {
     expect(normaliseRemote(url)).toBe(id);
   });
@@ -72,6 +74,7 @@ describe('normaliseRemote', () => {
     ['a remote helper', 'codecommit::us-east-1://api'],
     ['a bare host', 'https://github.com/'],
     ['nothing', '  '],
+    ['an @ left in the path', 'https://github.com/acme/user:pass@api'],
   ])('names no project from %s', (_form, url) => {
     expect(normaliseRemote(url)).toBeNull();
   });
@@ -92,7 +95,7 @@ describe('originUrlFromConfig', () => {
 describe('resolveProjectIdentity with an origin remote', () => {
   it('names a checkout by its remote and keeps the folder rule as its legacy name', () => {
     const root = repo('git@github.com:acme/api.git', 'home', 'work', 'api');
-    expect(identity(mkdirs('home', 'work', 'api', 'src'))).toEqual({ root, name: 'github.com/acme/api', legacyName: 'api', isHome: false });
+    expect(identity(mkdirs('home', 'work', 'api', 'src'))).toEqual({ root, name: 'github.com/acme/api', legacyName: 'api', aliases: ['api'], isHome: false });
   });
 
   it('falls back to the folder name with no remote, and with a file remote', () => {
@@ -107,6 +110,22 @@ describe('resolveProjectIdentity with an origin remote', () => {
     clearProjectIdentityCache();
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'has a space' }));
     expect(identity(root).name).toBe('github.com/acme/api');
+  });
+
+  it('refuses a remote-shaped id in .hippo-project.json, so a clone cannot claim another project', () => {
+    const root = repo(null, 'home', 'api');
+    fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'github.com/acme/billing' }));
+    expect(identity(root).name).toBe('api');
+  });
+
+  it('still reads rows under every rung that resolves: the remote under a file id, and with the rule off', () => {
+    const root = repo('git@github.com:acme/api.git', 'home', 'api');
+    fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'acme-api' }));
+    expect(projectNames(identity(root))).toEqual(['acme-api', 'github.com/acme/api', 'api']);
+    fs.rmSync(path.join(root, '.hippo-project.json'));
+    fs.writeFileSync(path.join(process.env.HIPPO_HOME!, 'config.json'), JSON.stringify({ projectIdentity: { remote: false } }));
+    clearProjectIdentityCache();
+    expect(projectNames(identity(root))).toEqual(['api', 'github.com/acme/api']);
   });
 
   it('gives a linked worktree its main checkout remote, read through commondir', () => {

@@ -34,6 +34,8 @@ export interface ProjectIdentity {
   name: string;
   /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked worktree with no `.hippo`. */
   legacyName: string;
+  /** Every other name this root resolves to (the project file id, the origin remote even with the rule off, legacyName), so rows written under an earlier id stay readable. */
+  aliases?: readonly string[];
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
 }
@@ -67,9 +69,13 @@ function remoteRuleOn(): boolean {
   return remoteSwitch.on;
 }
 
-/** The id a root names itself by; only the root's own `.git` is read, so a store nested in another checkout keeps its folder name. */
-function projectIdAt(root: string): string | null {
-  return projectFileId(root) ?? (remoteRuleOn() ? originRemoteId(root) : null);
+/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested in another checkout keeps its folder name. */
+function namesAt(root: string, legacyName: string): Pick<ProjectIdentity, 'name' | 'aliases'> {
+  const fileId = projectFileId(root);
+  const remoteId = originRemoteId(root);
+  const name = fileId ?? (remoteRuleOn() ? remoteId : null) ?? legacyName;
+  const aliases = [...new Set([fileId, remoteId, legacyName])].filter((n): n is string => n !== null && n !== name);
+  return { name, aliases };
 }
 
 /**
@@ -140,7 +146,7 @@ export function resolveProjectIdentity(
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
     const legacyName = (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
-    identity = { root, name: projectIdAt(root) ?? legacyName, legacyName, isHome: false };
+    identity = { root, ...namesAt(root, legacyName), legacyName, isHome: false };
   } else if (reachedHome || isUnder(start, home)) {
     identity = { root: home, name: '', legacyName: '', isHome: true };
   } else {
@@ -216,7 +222,7 @@ export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpt
 }
 
 /** A reader's project: a bare name, or an identity whose own rows may also carry its legacy folder name. */
-export type ProjectRef = string | Pick<ProjectIdentity, 'name' | 'legacyName'>;
+export type ProjectRef = string | Pick<ProjectIdentity, 'name' | 'legacyName' | 'aliases'>;
 
 function isBareName(project: ProjectRef): project is string {
   return typeof project === 'string';
@@ -227,10 +233,10 @@ export function projectId(project: ProjectRef): string {
   return isBareName(project) ? project : project.name;
 }
 
-/** Every origin_project value the reader's own rows carry: the id, then the legacy name when it differs. */
+/** Every origin_project value the reader's own rows carry: the id first, then each alias and the legacy name. */
 export function projectNames(project: ProjectRef): readonly string[] {
-  if (isBareName(project) || project.legacyName === project.name || project.legacyName === '') return [projectId(project)];
-  return [project.name, project.legacyName];
+  if (isBareName(project) || project.name === '') return [projectId(project)];
+  return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter((n) => n !== '');
 }
 
 /** `origin_project IN (?, ...)` with one placeholder per name; an empty list matches nothing. */

@@ -552,6 +552,7 @@ A project's name is the `id` in a committed `.hippo-project.json`, else its `ori
 memories in the global store. Rows saved under the old folder name stay visible to the
 project, and `hippo projects repair` folds that name into the id unless two projects claim it.
 Set `{"projectIdentity":{"remote":false}}` in the global `config.json` to keep folder names.
+A long-running MCP or HTTP server reads a new project file or remote after a restart.
 
 **See what memory costs in tokens.** Every block of memory text hippo hands an agent (the
 per-prompt hook, the block `hippo compact-resume` restores after compaction, `hippo context`,

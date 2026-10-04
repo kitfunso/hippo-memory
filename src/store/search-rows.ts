@@ -53,9 +53,14 @@ function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | unde
   return { sql: ` AND (${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value] };
 }
 
+/** One project name, or every name a project's rows carry. */
+export type OriginFilter = string | readonly string[];
+
 // In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows out of the LIMIT.
-function withProject(scope: SqlFragment, col: 'm.' | '', originProjects: readonly string[] | undefined): SqlFragment {
-  if (originProjects === undefined) return scope;
+function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | undefined): SqlFragment {
+  if (origin === undefined) return scope;
+  // A string is the shape published callers passed before a project could carry several names.
+  const originProjects = [origin].flat();
   return { sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`, params: [...scope.params, ...originProjects] };
 }
 
@@ -90,7 +95,7 @@ function loadSearchRows(
   tenantId: string | undefined,
   scopeFilter?: RecallScopeFilter,
   includeSuperseded = true,
-  originProjects?: readonly string[],
+  originProjects?: OriginFilter,
 ): MemoryRow[] {
   const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
 
@@ -120,7 +125,7 @@ function searchPredicates(
   tenantId: string | undefined,
   scopeFilter: RecallScopeFilter | undefined,
   includeSuperseded: boolean,
-  originProjects: readonly string[] | undefined,
+  originProjects: OriginFilter | undefined,
 ): SearchPredicates {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -251,7 +256,7 @@ export function loadRecallSearchEntries(
   requestedScope?: string,
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
-  originProjects?: readonly string[],
+  originProjects?: OriginFilter,
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
@@ -271,7 +276,7 @@ export function loadRecallSearchEntriesFromDb(
   requestedScope?: string,
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
-  originProjects?: readonly string[],
+  originProjects?: OriginFilter,
 ): MemoryEntry[] {
   return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode), includeSuperseded, originProjects).map(rowToEntry);
 }

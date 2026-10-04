@@ -280,6 +280,21 @@ describe('hooks in a folder without a store', () => {
     expect(globalRows()).toEqual([]);
   });
 
+  it('handover finds the global copies filed under a name merged into the project', () => {
+    const b = box();
+    const id = (name: string): void => writeFileSync(join(b.project, '.hippo-project.json'), JSON.stringify({ id: name }));
+    id('old-id');
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    hippo(b, b.project, ['import', '--agents']);
+    id('new-id');
+    hippo(b, b.project, ['projects', 'merge', 'old-id', 'new-id', '--global', '--apply']);
+    expect(imported(b.global)).toEqual([PROJECT_NOTE]);
+
+    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
+    expect(imported(join(b.project, '.hippo'))).toEqual([PROJECT_NOTE]);
+    expect(imported(b.global)).toEqual([]);
+  });
+
   it('handover leaves the global copy of a note the new local store could not read', () => {
     const b = box();
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);

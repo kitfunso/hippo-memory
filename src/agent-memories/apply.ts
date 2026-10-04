@@ -151,7 +151,7 @@ class ContainerRun {
     }
   }
 
-  /** Rows filed under an earlier project name keep their id and history; dormant ones move only when live ones did, since finding them scans every snapshot. */
+  /** Rows filed under an earlier project name keep their id and history; dormant ones move too, scanned only until this prefix holds live rows. */
   private adoptPrefix(old: string): void {
     const origin = this.s.originProject ?? null;
     let moved = 0;
@@ -165,7 +165,7 @@ class ContainerRun {
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }
     this.tally.renamed += moved;
-    if (moved === 0) return;
+    if (moved === 0 && (this.w.container.items.length === 0 || selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix).length > 0)) return;
     for (const snap of dormantSnapshotsBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + snap.entry.source.slice(old.length);
       replaceDormantEntry(this.s.db, this.s.tenantId, snap.entry.id, { ...snap.entry, source, origin_project: origin ?? snap.entry.origin_project });

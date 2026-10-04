@@ -13,6 +13,7 @@ import { mergeProjects, planProjectRepair, repairProjects } from '../src/project
 import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/project-identity.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { initStore } from '../src/store/open.js';
 import { closeWorld, ctxFor, liveRows, note, openWorld, projectNotes, toolTally, withDb, type World } from './_helpers/agent-memories-world.js';
 
@@ -111,6 +112,19 @@ describe('two repos named api in one global store', () => {
     }, () => undefined));
     expect(written).toBe(0);
   });
+
+  it('a record saved under the old name still sees the rows its project holds under the id', () => {
+    const written = withDb(w.global, (db) => saveItems(db, w.global, {
+      tenantId: T, recordId: null, sessionId: 's2', originProject: 'api', cwd: a, items: [NEW_A],
+    }, () => undefined));
+    expect(written).toBe(0);
+  });
+
+  it('recall still takes one project name as a string, the shape published callers pass', () => {
+    const rows = loadRecallSearchEntries(w.global, 'api', undefined, T, undefined, 'exact', true, resolveProjectIdentity(a).name);
+    expect(rows.map((e) => e.content)).toContain(NEW_A);
+    expect(rows.map((e) => e.content)).not.toContain(NEW_B);
+  });
 });
 
 describe('the upgrade re-sync', () => {
@@ -137,6 +151,20 @@ describe('the upgrade re-sync', () => {
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
     note(projectNotes(w, api), 'n2.md', NOTES[2]);
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+  });
+
+  it('moves a dormant-only folder-named import, so a returning note is restored, not imported again', () => {
+    const api = checkout('git@github.com:acme/api.git', 'api');
+    note(projectNotes(w, api), 'n0.md', NOTES[0]);
+    globalConfig(false);
+    sync(api);
+    unlinkSync(join(projectNotes(w, api), 'n0.md'));
+    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+
+    globalConfig(true);
+    note(projectNotes(w, api), 'n0.md', NOTES[0]);
+    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+    expect(liveRows(w.global)).toMatchObject([{ origin_project: 'github.com/acme/api', source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')) }]);
   });
 
   it('repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them', () => {
@@ -185,5 +213,15 @@ describe('a project store with an id', () => {
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
     expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
     expect(withDb(store, (db) => planProjectRepair(db, store, T)).folds).toEqual([]);
+  });
+
+  it('repair folds the folder name when only a compaction record still carries it', () => {
+    const svc = checkout('git@github.com:acme/svc.git', 'svc');
+    const store = join(svc, '.hippo');
+    initStore(store);
+    withDb(store, (db) => db.prepare(
+      `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'svc', 'auto', ?, NULL, ?)`,
+    ).run(T, svc, new Date().toISOString()));
+    expect(withDb(store, (db) => planProjectRepair(db, store, T)).folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
   });
 });

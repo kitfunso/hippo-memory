@@ -86,7 +86,7 @@ function compactionOrigin(hippoRoot: string, cwd: string | null): string {
 /** The names a record's held rows may carry: its origin, plus the folder name rows saved before project ids used. */
 function heldOrigins(hippoRoot: string, cwd: string | null, originProject: string): readonly string[] {
   const names = projectNames(compactionProject(hippoRoot, cwd));
-  return names[0] === originProject ? names : [originProject];
+  return names.includes(originProject) ? names : [originProject];
 }
 
 function scrub(text: string): string {

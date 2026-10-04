@@ -402,8 +402,9 @@ export const VERB_USAGE = {
                            Fold one project name into another (dry run unless --apply;
                            writes a backup and one audit event first)
     projects repair [--apply]
-                           Re-tag merged rows older versions of sleep saved as user-global,
-                           by their parents' project (dry run unless --apply)`],
+                           Set aside misfiled note imports, fold old project names into
+                           their ids, re-tag merged rows (dry run unless --apply;
+                           writes a backup and one audit event first)`],
   quarantine: [`
   quarantine [list]       List memories a connector flagged as an instruction attempt, pending review
     --all                  Include approved and rejected rows too (default: pending only)

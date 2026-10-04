@@ -244,11 +244,12 @@ function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): P
   return { folds: folds.filter((f) => !sources.has(f.into)), collisions };
 }
 
-/** A project store's rows written before its id existed carry its folder name. */
+/** A project store's rows, dormant snapshots and compaction records written before its id existed carry its folder name. */
 function ownLegacyFold(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): ProjectFold[] {
   const { name, legacyName } = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   if (legacyName === '' || legacyName === name) return [];
-  const held = db.prepare(`SELECT 1 FROM memories WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(tenantId, legacyName) !== undefined;
+  const heldIn = (table: string) => db.prepare(`SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(tenantId, legacyName) !== undefined;
+  const held = heldIn('memories') || heldIn('compactions') || listDormantSnapshots(db, tenantId).some((s) => s.entry.origin_project === legacyName);
   return held ? [{ from: legacyName, into: name }] : [];
 }
 

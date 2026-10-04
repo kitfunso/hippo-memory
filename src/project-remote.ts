@@ -77,7 +77,8 @@ function azureDevOps(hostPath: string): string {
 
 /** `host/path` for a network remote, so ssh, scp and https forms agree; null for a local path, which would put a user path into rows. */
 export function normaliseRemote(url: string): string | null {
-  const u = url.trim();
+  // A query or fragment can carry a token (`?private_token=`) and never names the repo.
+  const u = url.trim().replace(/[?#].*$/, '');
   if (u === '' || u.includes('::') || /^file:/i.test(u) || /^[A-Za-z]:[\\/]/.test(u) || /^[./\\~]/.test(u)) return null;
   let hostPath: string;
   const withScheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/]*)(.*)$/.exec(u);
@@ -91,8 +92,8 @@ export function normaliseRemote(url: string): string | null {
   }
   const tidy = hostPath.toLowerCase().replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/\/+$/, '').replace(/\.git$/, '').replace(/\/+$/, '');
   const id = azureDevOps(tidy);
-  // A colon would break the `shared:<project>:` source format; whitespace means this was no URL.
-  return /^[^/]+\/./.test(id) && !/[:\s]/.test(id) ? id : null;
+  // A colon would break the `shared:<project>:` source format; whitespace means this was no URL; an `@` left in a path may be a credential.
+  return /^[^/]+\/./.test(id) && !/[:\s@]/.test(id) ? id : null;
 }
 
 /** The normalised origin of the checkout rooted at gitRoot, or null when it has none a project can be named by. */
@@ -118,8 +119,9 @@ export function projectFileId(root: string): string | null {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     const raw = isObjectLike(parsed) && 'id' in parsed ? parsed.id : undefined;
     const id = isStringValue(raw) ? raw.trim().toLowerCase() : '';
-    if (id !== '' && id.length <= 200 && !/[:\s]/.test(id)) return id;
-    log.warn(`${file}: "id" must be a non-empty string with no colon or spaces; using the remote or folder name instead`);
+    // No slash: a committed file in an untrusted clone must not claim a remote-shaped id like `github.com/acme/api`.
+    if (id !== '' && id.length <= 200 && !/[:\s/\\]/.test(id)) return id;
+    log.warn(`${file}: "id" must be a non-empty string with no colon, slash or spaces; using the remote or folder name instead`);
   } catch (err) {
     log.warn(`${file} not read: ${err instanceof Error ? err.message : String(err)}; using the remote or folder name instead`);
   }

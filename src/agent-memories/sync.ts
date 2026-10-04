@@ -358,7 +358,9 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
     db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
     const tenantId = resolveTenantId({});
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
-    const origins = [...new Set([...projectNames(resolveProjectIdentity(projectRoot)), ''])];
+    // Names folded into this project's in the global store were its rows too.
+    const names = projectNames(resolveProjectIdentity(projectRoot));
+    const origins = [...new Set([...names, ...namesFoldedInto(db, tenantId, names), ''])];
     for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, origins, opts.machine.platform, report);
   } catch (err) {
     report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);
