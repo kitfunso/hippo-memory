@@ -40,7 +40,7 @@ function withFakeHome() {
       process.env.HOME = prevHome;
       process.env.USERPROFILE = prevUserProfile;
       process.env.PATH = prevPath;
-      // The detached capture worker can still hold the temp dir for a moment after a test.
+      // Tests wait for the worker's last write; retries cover Windows releasing an exited worker's handles late.
       fs.rmSync(fake, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
@@ -390,9 +390,10 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
 
     const saved = (): string[] => loadAllEntries(globalRoot, 'default').map((e) => e.content);
     const readLog = (): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
-    // The worker is detached, so wait for either its capture or its skip line.
+    // The detached worker writes until its last log line; cleanup racing those writes fails with ENOTEMPTY.
+    const workerDone = (log: string): boolean => log.includes('skip capture') || /digest: (skip|wrote)|digest failed/.test(log);
     const deadline = Date.now() + 30_000;
-    while (Date.now() < deadline && !saved().some((c) => c.includes(SENTINEL)) && !readLog().includes('skip capture')) {
+    while (Date.now() < deadline && !workerDone(readLog())) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
