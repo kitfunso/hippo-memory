@@ -1,18 +1,16 @@
 // stop() stops accepting, lets an in-flight request finish within the drain window, and closes a stuck one when it ends.
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
-import { initStore } from '../src/store.js';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const homes: string[] = [];
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-drain-'));
-  initStore(home);
+function trackedRoot(): string {
+  const home = makeRoot('drain');
   homes.push(home);
   return home;
 }
@@ -33,7 +31,7 @@ afterEach(() => {
 
 describe('serve() graceful stop', () => {
   it('lets a request already running finish instead of cutting its socket', async () => {
-    const handle = await serve({ hippoRoot: makeRoot(), port: 0, authResolver: delayedResolver(400), shutdownDrainMs: 5000 });
+    const handle = await serve({ hippoRoot: trackedRoot(), port: 0, authResolver: delayedResolver(400), shutdownDrainMs: 5000 });
     const pending = slowRecall(handle);
     await new Promise((resolve) => setTimeout(resolve, 100));
     const stopped = handle.stop();
@@ -46,7 +44,7 @@ describe('serve() graceful stop', () => {
 
   it('closes a request that outlives the drain window so stop() still returns', async () => {
     const handle = await serve({
-      hippoRoot: makeRoot(),
+      hippoRoot: trackedRoot(),
       port: 0,
       authResolver: neverResolves,
       authResolverTimeoutMs: 60_000,
@@ -61,7 +59,7 @@ describe('serve() graceful stop', () => {
   }, 15000);
 
   it('exits 1 when a signal-driven shutdown fails', async () => {
-    const home = makeRoot();
+    const home = trackedRoot();
     const script = join(home, 'failing-stop.mjs');
     const dist = (file: string): string => JSON.stringify(pathToFileURL(resolve('dist', file)).href);
     // Closing the server first makes stop()'s own close fail with ERR_SERVER_NOT_RUNNING.
