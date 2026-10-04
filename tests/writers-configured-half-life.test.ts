@@ -16,7 +16,7 @@ import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts } from '../src/extract.js';
 import { importGenericFile } from '../src/importers/sources.js';
 import { importVault } from '../src/importers/vault.js';
-import { cmdCapture } from '../src/capture.js';
+import { cmdCapture } from '../src/capture/command.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');

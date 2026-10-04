@@ -35,7 +35,7 @@ import {
   insertRejectedValue,
   findRejectedValue,
 } from '../src/rejection.js';
-import { cmdCapture } from '../src/capture.js';
+import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';
 import { consolidate } from '../src/consolidate.js';

@@ -30,7 +30,7 @@ import { resolveProjectIdentity } from '../project-identity.js';
 import { extractPathTags } from '../path-context.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
-import { sanitizeLogMessage } from '../capture.js';
+import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import * as client from '../client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';

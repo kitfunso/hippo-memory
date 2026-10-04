@@ -8,7 +8,7 @@
       "checked": "2026-10-03",
       "names": ["Claude Code", "claude-code"],
       "integration": ["native-hooks", "native-plugin"],
-      "sources": ["src/hooks/json-hooks.ts", "src/capture.ts", "src/capture-contract.ts", "src/compaction-record.ts", "src/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
+      "sources": ["src/hooks/json-hooks.ts", "src/capture", "src/capture-contract.ts", "src/compaction-record.ts", "src/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
       "claims": ["README.md", "package.json", "website/src/pages/claude-code.astro"],
       "routes": {
         "promptContext": "UserPromptSubmit runs hippo context --pinned-only",

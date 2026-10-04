@@ -1,6 +1,6 @@
 // A captured modal rule keeps the words before its keyword, so a negation or subject is never cut off.
 import { describe, expect, it } from 'vitest';
-import { extractFromText } from '../src/capture.js';
+import { extractFromText } from '../src/capture/extract.js';
 
 const rules = (text: string) => extractFromText(text).filter((i) => i.category === 'rule');
 

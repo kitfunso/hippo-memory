@@ -16,7 +16,7 @@ import { createMemory, Layer } from '../src/memory.js';
 import { invalidateMatching } from '../src/invalidation.js';
 import { refineStore } from '../src/refine-llm.js';
 import { deduplicateLesson } from '../src/autolearn.js';
-import { cmdCapture } from '../src/capture.js';
+import { cmdCapture } from '../src/capture/command.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/shared.js';

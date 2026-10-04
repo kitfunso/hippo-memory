@@ -2,12 +2,8 @@
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import {
-  collectSessionTurns,
-  splitSentences,
-  type SessionTurn,
-  type TranscriptRecord,
-} from './capture.js';
+import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './capture/transcript.js';
+import { splitSentences } from './capture/extract.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
