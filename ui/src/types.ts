@@ -155,11 +155,6 @@ export interface ForgetResult {
   id: string;
 }
 
-/** Body of `POST /api/memory/:id/wrong` on success. */
-export interface WrongResult {
-  ok: true;
-}
-
 // W2c board view: mirrors src/card.ts field for field, same nullability.
 export type CardStatus = "backlog" | "ready" | "running" | "blocked" | "review" | "done" | "shelved";
 

@@ -9,7 +9,6 @@ import type {
   ProjectDetail,
   ResolveResult,
   SearchResult,
-  WrongResult,
 } from "../types";
 
 const BASE = "";
@@ -153,9 +152,9 @@ export function postPin(id: string, pinned: boolean, opts: ActionOptions = {}): 
   return post<MemoryDetail>(`/api/memory/${encodeURIComponent(id)}/pin`, { pinned }, opts.keepalive === true);
 }
 
-/** `POST /api/memory/:id/wrong`: sends `{}` so the JSON content type is accepted. */
-export function postWrong(id: string, opts: ActionOptions = {}): Promise<WrongResult> {
-  return post<WrongResult>(`/api/memory/${encodeURIComponent(id)}/wrong`, {}, opts.keepalive === true);
+/** `POST /api/memory/:id/wrong`: sends `{}` so the JSON content type is accepted; answers the updated detail. */
+export function postWrong(id: string, opts: ActionOptions = {}): Promise<MemoryDetail> {
+  return post<MemoryDetail>(`/api/memory/${encodeURIComponent(id)}/wrong`, {}, opts.keepalive === true);
 }
 
 /** `POST /api/conflicts/:id/resolve`: keeps `keep`, weakens the other memory. */

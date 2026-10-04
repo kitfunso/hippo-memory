@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { type View } from "./components/ViewSwitch";
 import { OVERVIEW_ROUTE, navigate, useRoute } from "./router";
 import { Board } from "./views/Board/Board";
+import { ActionsProvider } from "./views/Health/actions";
 import { Header } from "./views/Health/Header";
 import { HealthProvider, useHealth } from "./views/Health/HealthContext";
 import { Overview } from "./views/Health/Overview";
 import { ProjectView } from "./views/Health/ProjectView";
 import { Tip } from "./views/Health/Tip";
+import { Toast } from "./views/Health/Toast";
 
 function Shell() {
   const route = useRoute();
@@ -48,6 +50,7 @@ function Shell() {
         {route.view === "board" ? <Board /> : projectKey === null ? <Overview /> : <ProjectView key={projectKey} projectKey={projectKey} memoryId={route.memoryId} />}
       </main>
       <Tip ref={tip} />
+      <Toast />
     </div>
   );
 }
@@ -57,7 +60,9 @@ export function App() {
   const route = useRoute();
   return (
     <HealthProvider enabled={route.view === "health"}>
-      <Shell />
+      <ActionsProvider>
+        <Shell />
+      </ActionsProvider>
     </HealthProvider>
   );
 }

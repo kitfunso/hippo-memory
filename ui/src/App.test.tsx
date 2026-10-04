@@ -111,11 +111,12 @@ describe("App: snapshot clock", () => {
     vi.stubGlobal("fetch", stub);
     render(<App />);
     await waitFor(() => expect(screen.queryByText("loading")).toBeNull());
-    const before = calls.filter((c) => c.startsWith("/api/projects/")).length;
+    const projectCalls = () => calls.filter((c) => c.startsWith("/api/projects/") && !c.includes("/memories"));
+    const before = projectCalls().length;
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(calls.filter((c) => c.startsWith("/api/projects/")).length).toBe(before + 1));
-    expect(calls.filter((c) => c.startsWith("/api/projects/") && c.includes("fresh"))).toHaveLength(0);
+    await waitFor(() => expect(projectCalls().length).toBe(before + 1));
+    expect(projectCalls().filter((c) => c.includes("fresh"))).toHaveLength(0);
   });
 
   it("refetches the overview when the tab becomes visible and the data is over 30 s old", async () => {
