@@ -270,20 +270,27 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): 
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
 export const CONTEXT_CANDIDATE_CAP = 2000;
 
+/** A local-only query reads its FTS window; the search's vector arm adds the nearest rows. */
+interface ContextQueryWindow {
+  query: string;
+  exactScope: string | undefined;
+}
+
 // The pinned-only branch needs pins and recent-N candidates, not the corpus; `recall` applies there only.
-// Without `window` the whole store loads: a local-only query searches every local row.
 function loadAmbientEntries(
   hippoRoot: string,
   tenantId: string,
   pinnedOnly: boolean,
   includeRecent: number,
   admit: (e: MemoryEntry) => boolean,
+  window: ContextCandidateFilter | ContextQueryWindow,
   recall?: AmbientRecallRequest,
   onQualityDrop?: (e: MemoryEntry) => void,
-  window?: ContextCandidateFilter,
 ): AmbientLoadResult {
   if (!pinnedOnly) {
-    const rows = window ? loadContextCandidates(hippoRoot, tenantId, window) : loadAllEntries(hippoRoot, tenantId);
+    const rows = 'query' in window
+      ? loadRecallSearchEntries(hippoRoot, window.query, CONTEXT_CANDIDATE_CAP, tenantId, window.exactScope, 'exact', false)
+      : loadContextCandidates(hippoRoot, tenantId, window);
     return { entries: rows.filter(admit) };
   }
   // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
@@ -2838,8 +2845,8 @@ export async function getContext(
 
   // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
   const searchesLocalRows = query !== '*' && !(hasGlobal && !primaryIsGlobal);
-  const window: ContextCandidateFilter | undefined = pinnedOnly || searchesLocalRows
-    ? undefined
+  const window: ContextCandidateFilter | ContextQueryWindow = searchesLocalRows && !pinnedOnly
+    ? { query, exactScope }
     : {
         exactScope,
         project: includeCrossProject || currentProjectName === '' ? undefined : currentProjectName,
@@ -2848,10 +2855,10 @@ export async function getContext(
       };
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
   const localLoad: AmbientLoadResult = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(primaryIsGlobal), window)
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, window, recallRequest, qualityDrop(primaryIsGlobal))
     : { entries: [] };
   const globalLoad: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, recallRequest, qualityDrop(true), window)
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, loadAdmit, window, recallRequest, qualityDrop(true))
     : { entries: [] };
   let localEntries = localLoad.entries;
   let globalEntries = globalLoad.entries;
@@ -3135,6 +3142,9 @@ export async function getContext(
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
       const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
+      const vectorCandidates: HybridVectorCandidates = {
+        tenantId: ctx.tenantId, scope: recallScopeFilter(exactScope, 'exact'), includeSuperseded: false, admit,
+      };
       const ctxResults = usePhysicsCtx
         ? await physicsSearch(query, localEntries, {
             budget: left,
@@ -3143,6 +3153,7 @@ export async function getContext(
             hippoRoot: ctx.hippoRoot,
             physicsConfig: ctxConfig.physics,
             scope: activeScope,
+            vectorCandidates,
           })
         : await hybridSearch(query, localEntries, {
             budget: left,
@@ -3150,6 +3161,7 @@ export async function getContext(
             cost: localCost,
             hippoRoot: ctx.hippoRoot,
             scope: activeScope,
+            vectorCandidates,
           });
       results = ctxResults.map((r) => ({
         entry: r.entry,

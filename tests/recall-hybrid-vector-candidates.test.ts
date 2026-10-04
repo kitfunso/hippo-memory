@@ -11,7 +11,7 @@ import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { searchBothHybrid } from '../src/shared.js';
 import { hybridSearch } from '../src/search.js';
-import { retrieve } from '../src/api.js';
+import { retrieve, getContext } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
@@ -116,6 +116,20 @@ describe('hybrid recall candidates with stored vectors', () => {
     expect(labels(s, res.results.map((r) => r.id))).toEqual(EXPECTED.retrieveHybrid);
   });
 
+  it('getContext with a query and no global store', async () => {
+    const s = track(seed());
+    withEmbeddings(s);
+    const saved = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = join(s.global, 'absent');
+    try {
+      const res = await getContext({ hippoRoot: s.home, tenantId: TENANT, actor: { subject: 'cli', role: 'admin' } }, { q: QUERY, budget: 100000 });
+      expect(labels(s, res.entries.map((e) => e.entry.id))).toEqual(EXPECTED.contextLocal);
+    } finally {
+      if (saved === undefined) delete process.env.HIPPO_HOME;
+      else process.env.HIPPO_HOME = saved;
+    }
+  });
+
   it('without a vector spec, hybridSearch ranks only the pool it was given', async () => {
     const s = track(seed());
     withEmbeddings(s);
@@ -132,5 +146,6 @@ const EXPECTED = {
   sharedDefault: WITH_VECTORS,
   sharedAdditive: WITH_VECTORS,
   retrieveHybrid: WITH_VECTORS,
+  contextLocal: WITH_VECTORS,
   plainPool: LEXICAL,
 };

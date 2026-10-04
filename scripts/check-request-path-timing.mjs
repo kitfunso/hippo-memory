@@ -72,11 +72,23 @@ const tool = (name, args = {}) => async () => {
   if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
 };
 
+// With no global store a context query searches the local store alone, a separate load path.
+const withoutGlobal = (run) => async () => {
+  process.env.HIPPO_HOME = path.join(tmp, 'no-global');
+  try {
+    await run();
+  } finally {
+    process.env.HIPPO_HOME = globalRoot;
+  }
+};
+
 const cases = [
   ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' })],
   ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })],
   ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' })],
+  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }))],
   ['mcp hippo_context', tool('hippo_context')],
+  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' })],
   ['mcp hippo_status', tool('hippo_status')],
   ['mcp hippo_peers', tool('hippo_peers')],
 ];

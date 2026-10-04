@@ -179,7 +179,7 @@ describe('request-path output on a fixed store', () => {
     expect(contextSnapshot(await getContext(ctx(), opts))).toMatchSnapshot();
   });
 
-  it('getContext: local-only query searches the whole local store', async () => {
+  it('getContext: local-only query ranks the local FTS window', async () => {
     process.env.HIPPO_HOME = join(tmp, 'no-global');
     expect(contextSnapshot(await getContext(ctx(), { currentProject: 'proj', q: 'kafka redis' }))).toMatchSnapshot();
   });

@@ -809,7 +809,7 @@ interface SqlFragment {
   params: string[];
 }
 
-/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in api.ts is its JS twin. */
+/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is its JS twin. */
 function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | undefined): SqlFragment {
   if (scopeFilter === undefined) return { sql: '', params: [] };
   if (scopeFilter.mode === 'exact') return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
