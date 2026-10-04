@@ -77,8 +77,11 @@ beforeEach(() => {
 afterEach(async () => {
   for (const proc of procs.splice(0)) {
     if (proc.exitCode === null) {
-      proc.kill('SIGKILL');
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Closing stdin lets the server exit itself and write its coverage; SIGKILL is the fallback.
+      const exited = new Promise((resolve) => proc.once('exit', resolve));
+      proc.stdin.end();
+      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 2000))]);
+      if (proc.exitCode === null) proc.kill('SIGKILL');
     }
   }
   fs.rmSync(tmpHome, { recursive: true, force: true });
