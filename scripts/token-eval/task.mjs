@@ -16,7 +16,7 @@ import { runCheck, stateCommit, holdPre, dropPre, agentGit, CheckerError, Worksp
 import { saveGrading, surfaceText } from './grading.mjs';
 import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs';
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
-import { deliveryHits, sessionVoid } from './readcheck.mjs';
+import { deliveryHits, sessionVoid, foldPath, under } from './readcheck.mjs';
 
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const NOT_STAGED = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
@@ -273,11 +273,11 @@ function firstSessionIds(ctx, run, t, session, stage) {
 function noteWorktrees(ctx, run, step) {
   const work = run.dirs.work;
   const listed = agentGit(work, (rgit) => rgit(['worktree', 'list', '--porcelain'], work));
+  // Git prints the long, link-free path while work/ may sit under a short name or an alias, so both sides are folded.
+  const home = foldPath(work);
   for (const m of listed.matchAll(/^worktree (.+)$/gm)) {
-    const dir = path.resolve(m[1].trim());
-    const rel = path.relative(work, dir);
-    const outside = rel.startsWith('..') || path.isAbsolute(rel);
-    if (outside && !ctx.foreignDirs.some((f) => path.relative(f.path, dir) === '')) ctx.foreignDirs.push({ path: dir, order: step.order });
+    const dir = foldPath(m[1].trim());
+    if (!under(dir, home) && !ctx.foreignDirs.some((f) => f.path === dir)) ctx.foreignDirs.push({ path: dir, order: step.order });
   }
 }
 

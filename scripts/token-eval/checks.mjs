@@ -38,6 +38,8 @@ function filtersOff(listed) {
 
 /** fn(rgit, scratch, filterParams) on the workspace's own .git; only a git exit failure becomes a WorkspaceGitError, so runner bugs still throw. */
 export function agentGit(work, fn) {
+  // A deleted work dir fails git's spawn (ENOENT) before git runs, yet it is still the agent breaking its repo.
+  if (!fs.existsSync(work)) throw new WorkspaceGitError(new Error(`the work dir ${work} is gone`));
   // GIT_DIR pinned: with .git deleted, git would otherwise walk up to whatever repo holds the workspace.
   const gitDir = { GIT_DIR: path.join(work, '.git'), GIT_WORK_TREE: work };
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));

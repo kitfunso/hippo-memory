@@ -82,13 +82,35 @@ function toolPaths(name, input, work, opts) {
   return key && input[key] ? [{ token: String(input[key]), search: false, cwd: work }] : [];
 }
 
-/** The cell's bounds, folded for comparison (case-insensitive on win32). */
+// Errors that mean "this prefix does not resolve as given", so the walk takes the parent; any other is a runner fault.
+const UNRESOLVED = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP', 'EINVAL']);
+
+/** p with its deepest existing prefix resolved by the filesystem, so a short name or a link alias equals its target. */
+function canonical(p) {
+  const tail = [];
+  for (let cur = path.resolve(p); ; cur = path.dirname(cur)) {
+    try {
+      return path.join(fs.realpathSync.native(cur), ...tail);
+    } catch (err) {
+      if (!UNRESOLVED.has(err.code)) throw err;
+    }
+    if (path.dirname(cur) === cur) return path.resolve(p);
+    tail.unshift(path.basename(cur));
+  }
+}
+
+const WIN = process.platform === 'win32';
+
+/** A path as every G1 comparison sees it: canonical, forward slashes, no trailing slash, lower case on win32. */
+export function foldPath(p) {
+  const s = canonical(p).replaceAll('\\', '/');
+  return (WIN ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
+}
+
+/** The cell's bounds, folded for comparison. */
 function bounds(ctx, run, step, ownIds) {
-  const win = process.platform === 'win32';
-  const fold = (p) => {
-    const s = path.resolve(p).replaceAll('\\', '/');
-    return (win ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
-  };
+  const win = WIN;
+  const fold = foldPath;
   const d = run.dirs;
   const homes = [...new Set(['HOME', 'USERPROFILE'].map((k) => envValue(run.env, k, win)).filter(Boolean))];
   const appData = envValue(run.env, 'APPDATA', win);
@@ -103,7 +125,7 @@ function bounds(ctx, run, step, ownIds) {
   };
 }
 
-const under = (p, root) => p === root || p.startsWith(root.endsWith('/') ? root : `${root}/`);
+export const under = (p, root) => p === root || p.startsWith(root.endsWith('/') ? root : `${root}/`);
 const relTo = (root, p) => (p === root ? '' : p.slice(root.length + 1));
 
 /** Files under claude-config a session may read: its arm's memory and instructions, and its own transcripts. */

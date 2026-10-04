@@ -1,5 +1,8 @@
 // Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { symlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { resolveToken } from '../scripts/token-eval/readcheck.mjs';
 import { validateCorpus } from './fixtures/z0-contract';
 import { cleanup, tmp, isolate, makeRepo, task, plain, spec, run, readRecords, readPlan, find, type RunRecord } from './fixtures/z0-harness';
@@ -123,4 +126,45 @@ describe('delivery voids and the worktree read', () => {
     expect((t3.voidHits ?? []).map((h) => h.reason)).toEqual(['operator-canary', 'read']);
     expect(find(recs, 'A1', 't4').void).toBeNull();
   }, 300_000);
+
+  it.skipIf(process.platform !== 'win32')('an out dir and a worktree under 8.3 short names classify long-path reads, as on the CI runner', async (t) => {
+    const { out } = isolate('shortname');
+    const r = makeRepo();
+    const wtParent = tmp('z0-surf-worktree-parent-');
+    const [shortOut, shortWt] = [out, wtParent].map(shortName);
+    if (shortOut === out || shortWt === wtParent) t.skip();
+    // The run and the worktree live under short names, while git prints and the agent reads the long forms.
+    process.env.FAKE_WT_DIR = `${shortWt}/wt`;
+    await run(spec(r, [], [
+      task(r, 't1', 'WORKTREE'), task(r, 't2', `READ:${out}/runs/seqF/A2/seed1/claude-config/x`), task(r, 't3', `READ:${shortWt}/wt/lib.js`),
+      task(r, 't4', `READ:${out}/runs/seqF/A1/seed1/work/lib.js`),
+    ]), ['A1'], shortOut);
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 't2')).toMatchObject({ invalid: null, void: 'read' });
+    expect(classes(find(recs, 'A1', 't2'))).toEqual(['other-run']);
+    expect(classes(find(recs, 'A1', 't3'))).toEqual(['worktree']);
+    expect(find(recs, 'A1', 't4')).toMatchObject({ invalid: null, void: null });
+  }, 300_000);
+
+  it('a read through a link alias of the out dir is classified like the out dir itself', async (t) => {
+    const { out } = isolate('alias');
+    const r = makeRepo();
+    const alias = join(tmp('z0-surf-alias-'), 'alias');
+    try {
+      symlinkSync(out, alias, 'junction');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') t.skip();
+      throw err;
+    }
+    await run(spec(r, [], [task(r, 't1', `READ:${alias}/runs/seqF/A2/seed1/claude-config/x`), task(r, 't2', `READ:${alias}/runs/seqF/A1/seed1/work/lib.js`)]), ['A1'], out);
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 't1')).toMatchObject({ invalid: null, void: 'read' });
+    expect(classes(find(recs, 'A1', 't1'))).toEqual(['other-run']);
+    expect(find(recs, 'A1', 't2').void).toBeNull();
+  }, 300_000);
 });
+
+/** The 8.3 short form of a dir, or the dir itself when the volume makes no short names. */
+function shortName(dir: string): string {
+  return execFileSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${dir}") do @echo %~sI"`], { windowsVerbatimArguments: true, encoding: 'utf8' }).trim();
+}
