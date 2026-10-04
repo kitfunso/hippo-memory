@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../db.js';
 import { updateStats } from '../../store/index-and-stats.js';
 import { appendRecall, biasHintEnabled, buildSessionKey, getOrCreateRing, hashQueryText, RingBuffer, snapshotRing } from '../../recall-history.js';
 import { appendAuditEvent, auditQueryFields } from '../../audit.js';
-import { assemble, type AssembleOpts, drillDown, type DrillDownOpts, getContext, type RecallOpts, recordTokens, retrieve } from '../../api.js';
+import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, type RecallOpts, recordTokens, retrieve } from '../../api.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
@@ -25,22 +25,22 @@ export function __resetSessionRecallHistoryHttp(): void {
   sessionRecallHistoryHttp.clear();
 }
 
-// GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
-export async function handleRecallMemories({ req, res, opts, query }: RouteRequest): Promise<void> {
-  const q = query.get('q');
-  if (!q) {
-    throw new HttpError(400, 'q is required');
-  }
-  const limitRaw = query.get('limit');
-  const limit = limitRaw === null ? undefined : parseListLimit(limitRaw);
-  const mode = query.get('mode');
-  if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
-    throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
-  }
-  const scope = query.get('scope');
-  const includeContinuityRaw = query.get('include_continuity');
-  const includeContinuity = includeContinuityRaw === '1'
-    || includeContinuityRaw === 'true';
+/** The /v1/memories query, parsed and checked in a fixed order so the first bad param is the one reported. */
+interface RecallQuery {
+  q: string;
+  limit: number | undefined;
+  mode: 'bm25' | 'hybrid' | 'physics' | null;
+  scope: string | null;
+  includeContinuity: boolean;
+  freshTailCount: number | undefined;
+  freshTailSessionId: string | undefined;
+  summarizeOverflow: boolean | undefined;
+  scorerWindow: number | undefined;
+  sessionId: string | undefined;
+  explain: boolean;
+}
+
+function parseFreshTail(query: URLSearchParams): Pick<RecallQuery, 'freshTailCount' | 'freshTailSessionId'> {
   // v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP
   // callers. Pre-v1.6.2 the route silently ignored these so the
   // session-scoped fresh-tail and summary substitution were JS-only.
@@ -60,6 +60,38 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const freshTailSessionId = freshTailSessionIdRaw && freshTailSessionIdRaw.length > 0
     ? freshTailSessionIdRaw
     : undefined;
+  return { freshTailCount, freshTailSessionId };
+}
+
+function parseSessionId(query: URLSearchParams): string | undefined {
+  // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
+  // fresh_tail_session_id (above). Trim then drop if empty so api.recall
+  // sees undefined when the param is omitted or whitespace-only.
+  const sessionIdRaw = query.get('session_id');
+  if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
+    throw new HttpError(400, 'session_id exceeds 256-character cap');
+  }
+  return sessionIdRaw && sessionIdRaw.trim().length > 0
+    ? sessionIdRaw.trim()
+    : undefined;
+}
+
+function parseRecallQuery(query: URLSearchParams): RecallQuery {
+  const q = query.get('q');
+  if (!q) {
+    throw new HttpError(400, 'q is required');
+  }
+  const limitRaw = query.get('limit');
+  const limit = limitRaw === null ? undefined : parseListLimit(limitRaw);
+  const mode = query.get('mode');
+  if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
+    throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
+  }
+  const scope = query.get('scope');
+  const includeContinuityRaw = query.get('include_continuity');
+  const includeContinuity = includeContinuityRaw === '1'
+    || includeContinuityRaw === 'true';
+  const { freshTailCount, freshTailSessionId } = parseFreshTail(query);
   // v1.6.3 senior-review P1-4: tighten parser to match the includeContinuity
   // convention. Pre-v1.6.3 accepted any non-'0'/'false' value as `true`,
   // so `?summarize_overflow=banana` and `?summarize_overflow=` both
@@ -74,31 +106,29 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   if (scorerWindow !== undefined && scorerWindow > 1000) {
     throw new HttpError(400, 'scorer_window must be <= 1000');
   }
-  // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
-  // fresh_tail_session_id (above). Trim then drop if empty so api.recall
-  // sees undefined when the param is omitted or whitespace-only.
-  const sessionIdRaw = query.get('session_id');
-  if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
-    throw new HttpError(400, 'session_id exceeds 256-character cap');
-  }
-  const sessionId = sessionIdRaw && sessionIdRaw.trim().length > 0
-    ? sessionIdRaw.trim()
-    : undefined;
+  const sessionId = parseSessionId(query);
   // A7 recall-trace: opt-in explain flag. When set, api.recall attaches the
   // lifecycle re-ranking trace (goal-boost step on the api pipeline) +
   // rerankPipeline:'api' to each result item; the field then rides on the
   // serialized RecallResult. Mirrors the include_continuity convention.
   const explainRaw = query.get('explain');
   const explain = explainRaw === '1' || explainRaw === 'true';
-  const ctx = await buildContextWithAuth(req, opts);
+  return { q, limit, mode, scope, includeContinuity, freshTailCount, freshTailSessionId, summarizeOverflow, scorerWindow, sessionId, explain };
+}
 
-  // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
-  // ring snapshot via opts.recallHistory so api.recall's own
-  // anchoringHint compute path activates. Unlike CLI (which computes
-  // its own hint separately because cmdRecall runs its own physics/
-  // hybrid pipeline outside api.recall), HTTP's /v1/memories response
-  // body IS api.recall's result directly. So the api.recall-computed
-  // hint flows through. HIPPO_ANCHORING=off short-circuits.
+interface SessionRing {
+  httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
+  httpRingKey: string | undefined;
+}
+
+// v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
+// ring snapshot via opts.recallHistory so api.recall's own
+// anchoringHint compute path activates. Unlike CLI (which computes
+// its own hint separately because cmdRecall runs its own physics/
+// hybrid pipeline outside api.recall), HTTP's /v1/memories response
+// body IS api.recall's result directly. So the api.recall-computed
+// hint flows through. HIPPO_ANCHORING=off short-circuits.
+function snapshotSessionRing(ctx: Context, hippoRoot: string, q: string, sessionId: string | undefined): SessionRing {
   let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
   let httpRingKey: string | undefined;
   if (biasHintEnabled('anchoring')) {
@@ -122,7 +152,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
       // matching, NOT a privacy hash; brute-force trivial for low-
       // entropy queries. Use the same SHA-256/16 truncation as the
       // canonical recall audit.
-      const dbForAudit = openHippoDb(opts.hippoRoot);
+      const dbForAudit = openHippoDb(hippoRoot);
       try {
         appendAuditEvent(dbForAudit, {
           tenantId: ctx.tenantId,
@@ -136,26 +166,41 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
       }
     }
   }
+  return { httpRecallHistory, httpRingKey };
+}
 
-  const recallExtra: Pick<
-    RecallOpts,
-    'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId' | 'recallHistory' | 'explain'
-  > = {};
-  if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
-  if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
-  if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
-  if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
-  if (sessionId !== undefined) recallExtra.sessionId = sessionId;
+type RecallExtra = Pick<
+  RecallOpts,
+  'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId' | 'recallHistory' | 'explain'
+>;
+
+function recallExtraOpts(parsed: RecallQuery, httpRecallHistory: SessionRing['httpRecallHistory']): RecallExtra {
+  const recallExtra: RecallExtra = {};
+  if (parsed.freshTailCount !== undefined) recallExtra.freshTailCount = parsed.freshTailCount;
+  if (parsed.freshTailSessionId !== undefined) recallExtra.freshTailSessionId = parsed.freshTailSessionId;
+  if (parsed.summarizeOverflow !== undefined) recallExtra.summarizeOverflow = parsed.summarizeOverflow;
+  if (parsed.scorerWindow !== undefined) recallExtra.scorerWindow = parsed.scorerWindow;
+  if (parsed.sessionId !== undefined) recallExtra.sessionId = parsed.sessionId;
   if (httpRecallHistory !== undefined) recallExtra.recallHistory = httpRecallHistory;
-  if (explain) recallExtra.explain = explain;
+  if (parsed.explain) recallExtra.explain = parsed.explain;
+  return recallExtra;
+}
+
+// GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
+export async function handleRecallMemories({ req, res, opts, query }: RouteRequest): Promise<void> {
+  const parsed = parseRecallQuery(query);
+  const { q, includeContinuity, sessionId } = parsed;
+  const ctx = await buildContextWithAuth(req, opts);
+
+  const { httpRecallHistory, httpRingKey } = snapshotSessionRing(ctx, opts.hippoRoot, q, sessionId);
 
   const result = await retrieve(ctx, {
     query: q,
-    limit,
-    mode: mode ?? undefined,
-    scope: scope ?? undefined,
+    limit: parsed.limit,
+    mode: parsed.mode ?? undefined,
+    scope: parsed.scope ?? undefined,
     includeContinuity,
-    ...recallExtra,
+    ...recallExtraOpts(parsed, httpRecallHistory),
   });
 
   // v0.33 / J1 — append AFTER recall completes (snapshot was taken before

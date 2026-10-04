@@ -1,7 +1,4 @@
 {
   "files": {},
-  "functions": {
-    "src/config.ts:loadConfig": 127,
-    "src/server/routes/recall.ts:handleRecallMemories": 158
-  }
+  "functions": {}
 }

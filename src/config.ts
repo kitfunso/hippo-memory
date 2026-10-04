@@ -308,6 +308,95 @@ function agentMemoryTools(value: string[] | null | undefined): string[] | null {
   return [];
 }
 
+function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['memoryValue']> {
+  // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
+  // silently no-ops when raw.memoryValue is a non-object (e.g. the user
+  // wrote {"memoryValue": true}) — spreading a boolean/primitive/array
+  // contributes no enumerable own properties, so `enabled` stays at the
+  // default `false` with zero indication anything was wrong. This
+  // feature's whole point is "never silently off": warn loudly and fall
+  // back to defaults instead of merging garbage.
+  const memoryValueRaw = raw.memoryValue;
+  const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
+  if (!validMemoryValueConfig) {
+    log.warn(
+      `config.json's "memoryValue" must be an object like {"enabled": true} ` +
+      `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
+    );
+  }
+  return memoryValueRaw !== undefined && isMemoryValueConfig(memoryValueRaw) ? memoryValueRaw : {};
+}
+
+function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
+  // Same rule as memoryValue above: a malformed value never silently
+  // changes what sleep does. Anything but a real object / boolean / number
+  // warns and falls back to the default, which keeps faded memories.
+  const dormantRaw = raw.dormant;
+  if (dormantRaw !== undefined && !isDormantConfig(dormantRaw)) {
+    log.warn(
+      `config.json's "dormant" must be an object like {"enabled": false} ` +
+      `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
+    );
+  }
+  const dormantOverride: Partial<HippoConfig['dormant']> =
+    dormantRaw !== undefined && isDormantConfig(dormantRaw) ? dormantRaw : {};
+  // Only a real boolean counts: {"enabled": "false"} is a truthy string.
+  let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
+  if (dormantEnabled !== true && dormantEnabled !== false) {
+    log.warn(
+      `config.json's "dormant.enabled" must be true or false ` +
+      `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
+    );
+    dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
+  }
+  let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
+  if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
+    log.warn(
+      `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
+      `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
+    );
+    dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
+  }
+  return { enabled: dormantEnabled, retentionDays: dormantRetentionDays };
+}
+
+function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
+  // Same "never silently wrong" rule as memoryValue/dormant above.
+  const churnStalenessRaw = raw.churnStaleness;
+  const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
+  if (!validChurnStalenessConfig) {
+    log.warn(
+      `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
+      `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
+    );
+  }
+  const enabled =
+    churnStalenessRaw !== undefined && isChurnStalenessConfig(churnStalenessRaw)
+      ? churnStalenessRaw.enabled
+      : DEFAULT_CONFIG.churnStaleness.enabled;
+  if (enabled !== true && enabled !== false) {
+    log.warn(
+      `config.json's "churnStaleness.enabled" must be true or false ` +
+      `(got ${JSON.stringify(enabled)}) - using false.`,
+    );
+    return false;
+  }
+  return enabled;
+}
+
+function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
+  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
+  const days = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
+  if (!Number.isFinite(days) || days <= 0) {
+    log.warn(
+      `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
+      `(got ${JSON.stringify(days)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
+    );
+    return DEFAULT_CONFIG.defaultHalfLifeDays;
+  }
+  return days;
+}
+
 export function loadConfig(hippoRoot: string): HippoConfig {
   const configPath = path.join(hippoRoot, 'config.json');
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
@@ -315,83 +404,12 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const basis = raw.decayBasis;
     const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
-    // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
-    // silently no-ops when raw.memoryValue is a non-object (e.g. the user
-    // wrote {"memoryValue": true}) — spreading a boolean/primitive/array
-    // contributes no enumerable own properties, so `enabled` stays at the
-    // default `false` with zero indication anything was wrong. This
-    // feature's whole point is "never silently off": warn loudly and fall
-    // back to defaults instead of merging garbage.
-    const memoryValueRaw = raw.memoryValue;
-    const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
-    if (!validMemoryValueConfig) {
-      log.warn(
-        `config.json's "memoryValue" must be an object like {"enabled": true} ` +
-        `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
-      );
-    }
-    const memoryValueOverride: Partial<HippoConfig['memoryValue']> =
-      memoryValueRaw !== undefined && isMemoryValueConfig(memoryValueRaw) ? memoryValueRaw : {};
-    // Same rule as memoryValue above: a malformed value never silently
-    // changes what sleep does. Anything but a real object / boolean / number
-    // warns and falls back to the default, which keeps faded memories.
-    const dormantRaw = raw.dormant;
-    if (dormantRaw !== undefined && !isDormantConfig(dormantRaw)) {
-      log.warn(
-        `config.json's "dormant" must be an object like {"enabled": false} ` +
-        `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
-      );
-    }
-    const dormantOverride: Partial<HippoConfig['dormant']> =
-      dormantRaw !== undefined && isDormantConfig(dormantRaw) ? dormantRaw : {};
-    // Only a real boolean counts: {"enabled": "false"} is a truthy string.
-    let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
-    if (dormantEnabled !== true && dormantEnabled !== false) {
-      log.warn(
-        `config.json's "dormant.enabled" must be true or false ` +
-        `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
-      );
-      dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
-    }
-    let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
-    if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
-      log.warn(
-        `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
-        `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
-      );
-      dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
-    }
-    // Same "never silently wrong" rule as memoryValue/dormant above.
-    const churnStalenessRaw = raw.churnStaleness;
-    const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
-    if (!validChurnStalenessConfig) {
-      log.warn(
-        `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
-        `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
-      );
-    }
-    let churnStalenessEnabled =
-      churnStalenessRaw !== undefined && isChurnStalenessConfig(churnStalenessRaw)
-        ? churnStalenessRaw.enabled
-        : DEFAULT_CONFIG.churnStaleness.enabled;
-    if (churnStalenessEnabled !== true && churnStalenessEnabled !== false) {
-      log.warn(
-        `config.json's "churnStaleness.enabled" must be true or false ` +
-        `(got ${JSON.stringify(churnStalenessEnabled)}) - using false.`,
-      );
-      churnStalenessEnabled = false;
-    }
-    // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
-    let defaultHalfLifeDays = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
-    if (!Number.isFinite(defaultHalfLifeDays) || defaultHalfLifeDays <= 0) {
-      log.warn(
-        `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
-        `(got ${JSON.stringify(defaultHalfLifeDays)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
-      );
-      defaultHalfLifeDays = DEFAULT_CONFIG.defaultHalfLifeDays;
-    }
+    const memoryValue = memoryValueOverride(raw);
+    const dormant = dormantSettings(raw);
+    const churnEnabled = churnStalenessEnabled(raw);
+    const halfLifeDays = defaultHalfLifeDays(raw);
     return {
-      defaultHalfLifeDays,
+      defaultHalfLifeDays: halfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
       defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
       decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
@@ -415,14 +433,11 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
       memoryValue: {
         ...DEFAULT_CONFIG.memoryValue,
-        ...memoryValueOverride,
+        ...memoryValue,
       },
-      dormant: {
-        enabled: dormantEnabled,
-        retentionDays: dormantRetentionDays,
-      },
+      dormant,
       churnStaleness: {
-        enabled: churnStalenessEnabled,
+        enabled: churnEnabled,
       },
       agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
       deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
