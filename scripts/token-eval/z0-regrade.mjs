@@ -7,13 +7,19 @@ import { fileURLToPath } from 'node:url';
 import { validateTasks } from './ab-run.mjs';
 import { parseZ0Records } from './z0-records.mjs';
 import { listGrades, readRows, rowsFile, runRegrade } from './regrade.mjs';
+import { drawReader, readerSummary, scoreReader } from './reader-sample.mjs';
+import { drawStored, scoreStored, storedSummary } from './stored-sample.mjs';
 
 const USAGE = [
   'usage: z0-regrade.mjs regrade --out DIR --tasks FILE [--runs FILE] [--post-fix] [--cell KEY]...',
+  '       z0-regrade.mjs reader --out DIR (--tasks FILE --seed N [--n N] [--round K] | [--round K] --labels FILE)',
+  '       z0-regrade.mjs stored --out DIR (--tasks FILE --seed N [--n N] [--runs FILE] | --labels FILE)',
   '       z0-regrade.mjs grading --out DIR [--flip-errors]',
 ].join('\n');
 const MODES = {
   regrade: { values: ['--out', '--tasks', '--runs'], multi: ['--cell'], flags: ['--post-fix'], required: ['--out', '--tasks'] },
+  reader: { values: ['--out', '--tasks', '--seed', '--n', '--round', '--labels'], multi: [], flags: [], required: ['--out'] },
+  stored: { values: ['--out', '--tasks', '--runs', '--seed', '--n', '--labels'], multi: [], flags: [], required: ['--out'] },
   grading: { values: ['--out'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
 };
 const camel = (flag) => flag.slice(2).replace(/-(\w)/g, (_, c) => c.toUpperCase());
@@ -115,12 +121,44 @@ export function buildGrading(out, { flipErrors = false } = {}) {
   const entries = listGrades(out);
   if (entries.length === 0) throw new Error(`no grade.json under ${path.join(out, 'grading')}`);
   const f = flipsOf(out, entries, flipErrors);
+  const reader = readerSummary(out);
   const g5 = {
-    pass: f.pass, cells: entries.length, unreproducible: { cells: f.unrepro.cells.size, lessons: [...f.unrepro.lessons].sort() }, extraEnvKeys: [...f.extra].sort(),
+    pass: f.pass, cells: entries.length, unreproducible: { cells: f.unrepro.cells.size, lessons: [...f.unrepro.lessons].sort() }, ...reader.g5, extraEnvKeys: [...f.extra].sort(),
   };
-  // No reader round exists until the reader mode lands, so the sample is empty.
-  const grading = { flippedLessons: [...f.flipped].sort(), acceptanceFlips: f.accepted.size, readerSample: { n: 0, disagreements: 0 }, g5 };
+  const grading = { flippedLessons: [...f.flipped].sort(), acceptanceFlips: f.accepted.size, readerSample: reader.readerSample, g5 };
+  // Present only once scored, so an unscored stored sample leaves E7's file shape unchanged.
+  const storedSample = storedSummary(out);
+  if (storedSample) grading.storedSample = storedSample;
   return sortKeys(grading);
+}
+
+const count = (v, flag, min) => {
+  if (v === undefined) return undefined;
+  if (!/^\d+$/.test(v) || Number(v) < min) throw new Error(`${flag} must be a whole number of at least ${min}, got ${v}`);
+  return Number(v);
+};
+
+/** A draw needs --tasks and --seed (no default, so the seed is always a recorded choice); scoring takes only --labels. */
+function sampleArgs(args, cwd, drawFlags) {
+  if (args.labels !== undefined) {
+    const extra = drawFlags.filter((f) => args[camel(f)] !== undefined);
+    if (extra.length) throw new Error(`${args.mode} --labels scores a drawn sample and takes no ${extra.join(', ')}`);
+    return { labels: path.resolve(cwd, args.labels) };
+  }
+  for (const f of ['--tasks', '--seed']) if (args[camel(f)] === undefined) throw new Error(`${args.mode} needs ${f} to draw, or --labels to score\n${USAGE}`);
+  return { tasksFile: path.resolve(cwd, args.tasks), seed: count(args.seed, '--seed', 0), n: count(args.n, '--n', 1) ?? 30 };
+}
+
+function readerMode(args, out, cwd) {
+  const round = count(args.round, '--round', 1) ?? 1;
+  const a = sampleArgs(args, cwd, ['--tasks', '--seed', '--n']);
+  return a.labels ? scoreReader(out, round, a.labels) : drawReader(out, { ...a, round });
+}
+
+function storedMode(args, out, cwd) {
+  const a = sampleArgs(args, cwd, ['--tasks', '--seed', '--n', '--runs']);
+  if (a.labels) return scoreStored(out, a.labels);
+  return drawStored(out, { ...a, runsFile: args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl') });
 }
 
 function gradingMode(args, out) {
@@ -130,7 +168,7 @@ function gradingMode(args, out) {
   return `wrote ${file}: ${grading.flippedLessons.length} flipped lessons, ${grading.acceptanceFlips} acceptance flips\n`;
 }
 
-const RUN = { regrade: regradeMode, grading: gradingMode };
+const RUN = { regrade: regradeMode, reader: readerMode, stored: storedMode, grading: gradingMode };
 
 /** The whole CLI as a function of argv and cwd, so tests drive it without a child process. */
 export function runCli(argv, cwd = process.cwd()) {

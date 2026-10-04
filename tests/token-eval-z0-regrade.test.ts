@@ -4,7 +4,7 @@ import { readFileSync, realpathSync, rmSync, writeFileSync, statSync } from 'nod
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { CHECKS, cleanup } from './fixtures/z0-harness';
-import { copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade';
+import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade';
 
 const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
 let shared: Shared;
@@ -40,6 +40,15 @@ describe('z0-regrade regrade and grading', () => {
     expect(Object.keys(g)).toEqual(['acceptanceFlips', 'flippedLessons', 'g5', 'readerSample']);
     expect(g).toMatchObject({ flippedLessons: [], acceptanceFlips: 0, g5: { pass: 'repro', cells: 8, unreproducible: { cells: 0, lessons: [] }, extraEnvKeys: [] } });
     expect(readFileSync(join(c.out, 'grading.json'), 'utf8').endsWith('}\n')).toBe(true);
+    // A reader round on a real run: pairs come from the saved bundles, and labels equal to the key score zero disagreements.
+    expect(await cli(['reader', '--out', c.out, '--tasks', c.tasks, '--seed', '7'])).toMatchObject({ code: 0, stdout: expect.stringContaining('reader round 1: drew') });
+    const pairs: { file: string; verdict: string }[] = JSON.parse(readFileSync(join(c.out, 'g5', 'sealed', 'reader-r1.key.json'), 'utf8')).pairs;
+    const labels = join(c.out, 'labels-r1.tsv');
+    writeFileSync(labels, pairs.map((p) => `${p.file}\t${p.verdict}\n`).join(''));
+    expect(await cli(['reader', '--out', c.out, '--labels', labels])).toMatchObject({ code: 0 });
+    expect(await grading(c.out)).toMatchObject({ code: 0 });
+    expect(readGrading(c.out)).toMatchObject({ readerSample: { n: pairs.length, disagreements: 0 }, g5: { readerRound: 1 } });
+    expect(pairs.length).toBeGreaterThan(0);
   }, 300_000);
 
   it('a checker that fails at the regrade puts its lesson in flippedLessons (2)', async () => {
