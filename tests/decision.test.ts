@@ -21,6 +21,7 @@ describe('decision memory', () => {
 
   it('creates a decision memory on the default half-life', () => {
     const mem = createMemory('Use PostgreSQL over MySQL for JSONB support', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision', 'database'],
       layer: Layer.Semantic,
       confidence: 'verified',
@@ -39,6 +40,7 @@ describe('decision memory', () => {
 
   it('decision can be superseded by halving half-life', () => {
     const mem = createMemory('Use REST for all public APIs', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision', 'api'],
       layer: Layer.Semantic,
       confidence: 'verified',

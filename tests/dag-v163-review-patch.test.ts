@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, countSessionRawMemories } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -29,6 +29,7 @@ function ctxFor(root: string, tenantId: string = 'default'): Context {
 }
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',

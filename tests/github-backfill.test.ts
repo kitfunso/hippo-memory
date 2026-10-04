@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import type { Context } from '../src/api.js';
 import { initStore, loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
@@ -26,7 +27,7 @@ import {
 const REPO = 'acme/demo';
 const TENANT = 'default';
 
-const ctx = (root: string) => ({
+const ctx = (root: string): Context => ({
   hippoRoot: root,
   tenantId: TENANT,
   actor: { subject: 'connector:github', role: 'admin' },
@@ -100,7 +101,7 @@ function makeFakeFetcher(plan: FakePlan, capture?: CallCapture): GitHubFetcher {
   };
 }
 
-interface GithubIssueItem {
+type GithubIssueItem = {
   number: number;
   title: string;
   body: string;
@@ -109,7 +110,7 @@ interface GithubIssueItem {
   pull_request?: { url: string };
 }
 
-interface GithubIssueCommentItem {
+type GithubIssueCommentItem = {
   id: number;
   body: string;
   user: { login: string; id: number };
@@ -117,7 +118,7 @@ interface GithubIssueCommentItem {
   issue_url: string;
 }
 
-interface GithubPrReviewCommentItem {
+type GithubPrReviewCommentItem = {
   id: number;
   body: string;
   user: { login: string; id: number };

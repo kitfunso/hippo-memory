@@ -63,10 +63,10 @@ describe('E1 generator', () => {
       for (let i = 1; i < sessions.length; i++) expect(sessions[i]).toBeGreaterThan(sessions[i - 1]);
     }
     // Every outcome target exists and is scheduled at/after its ingestion session.
-    const memById = new Map(p.memories.map((m: any) => [m.id, m]));
+    const memById = new Map<string, { session: number }>(p.memories.map((m: any) => [m.id, m]));
     for (const o of p.outcomeSchedule) {
       const m = memById.get(o.memoryRef);
-      expect(m).toBeDefined();
+      if (m === undefined) throw new Error(`outcome targets missing memory ${o.memoryRef}`);
       expect(o.session).toBeGreaterThanOrEqual(m.session);
     }
     // Traps are bad-marked; some positive outcomes exist.

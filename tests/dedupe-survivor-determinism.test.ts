@@ -26,7 +26,7 @@ import { remember, type Context } from '../src/api.js';
 import { deduplicateStore, strengthBucket } from '../src/dedupe.js';
 import { compareEntryIdentity } from '../src/compare.js';
 import { consolidate } from '../src/consolidate.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
@@ -274,7 +274,7 @@ describe('dedupe survivor determinism', () => {
       const { home, restore } = tmpHome('hippo-dedupe-det-7-');
       try {
         for (const content of order) {
-          writeEntry(home, { ...createMemory(content, { layer: Layer.Episodic }), created: now.toISOString() });
+          writeEntry(home, { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
@@ -346,7 +346,7 @@ describe('dedupe survivor determinism', () => {
   }
 
   it('9. twins differing only in tags keep the copy with the most tags in both ingest orders', () => {
-    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) => createMemory(TWIN_TEXT, { tags }));
+    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) => createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags }));
     const forward = survivorAfterDedupe(twins).survivor;
     const reversed = survivorAfterDedupe([...twins].reverse()).survivor;
     expect([...forward.tags].sort()).toEqual(['d', 'e']);
@@ -354,14 +354,14 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('10. twins differing only in source keep the lowest source in both ingest orders', () => {
-    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) => createMemory(TWIN_TEXT, { source }));
+    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) => createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source }));
     expect(survivorAfterDedupe(twins).survivor.source).toBe('src-a');
     expect(survivorAfterDedupe([...twins].reverse()).survivor.source).toBe('src-a');
   });
 
   it('11. episodic/semantic twins keep the semantic copy in both ingest orders (was the episodic one via the mem_/sem_ id prefix)', () => {
-    const episodic = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
-    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    const episodic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
     for (const order of [[episodic, semantic], [semantic, episodic]]) {
       const { survivor, pairs } = survivorAfterDedupe(order);
       expect(survivor.layer).toBe(Layer.Semantic);
@@ -374,8 +374,8 @@ describe('dedupe survivor determinism', () => {
   // Cases 12-13 (codex round 1): the layer rank made these two lifecycle
   // states deterministic LOSERS, so dedupe must not consider them at all.
   it('12. a raw (append-only) episodic twin is not a dedupe candidate, so sleep no longer aborts on the delete trigger', () => {
-    const raw = createMemory(TWIN_TEXT, { layer: Layer.Episodic, kind: 'raw' });
-    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    const raw = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, kind: 'raw' });
+    const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
     for (const order of [[raw, semantic], [semantic, raw]]) {
       const { home, restore } = tmpHome('hippo-dedupe-det-raw-');
       try {
@@ -394,13 +394,13 @@ describe('dedupe survivor determinism', () => {
   it('13. a superseded semantic twin never outranks the current episodic re-ingest', () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-superseded-');
     try {
-      const successor = createMemory('unrelated successor text that replaced the old semantic row', { layer: Layer.Semantic });
+      const successor = createMemory('unrelated successor text that replaced the old semantic row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
       const stale = {
-        ...createMemory(TWIN_TEXT, { layer: Layer.Semantic }),
+        ...createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic }),
         superseded_by: successor.id,
         kind: 'superseded' as const,
       };
-      const current = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
+      const current = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
       for (const entry of [successor, stale, current]) writeEntry(home, entry);
       const result = deduplicateStore(home);
       expect(result.removed).toBe(0);
@@ -431,7 +431,7 @@ describe('dedupe survivor determinism', () => {
       const { home, restore } = tmpHome('hippo-dedupe-det-14-');
       try {
         for (const idx of perm) { // one shared `created`, so the ingest order cannot reach the primary key
-          writeEntry(home, { ...createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }), created: now.toISOString() });
+          writeEntry(home, { ...createMemory(variants[idx].content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tags: variants[idx].tags }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });

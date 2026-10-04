@@ -13,8 +13,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Context } from '../src/api.js';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
 import { compareSemver } from '../src/version.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
@@ -29,7 +30,7 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
-function ctx(home: string) {
+function ctx(home: string): Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
 
@@ -96,6 +97,7 @@ describe('v1.3.1 P0: deletion atomicity (claude review #2)', () => {
     const ids = ['mem-edit1', 'mem-edit2', 'mem-edit3'];
     for (const id of ids) {
       const e = createMemory(`secret body ${id}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         kind: 'raw',
         scope: 'github:private:acme/secret-repo',

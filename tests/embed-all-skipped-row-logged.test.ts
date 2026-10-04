@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
 import type { EmbeddingProvider } from '../src/embedding-provider.js';
 
@@ -33,8 +33,8 @@ afterEach(() => {
 
 describe('embedAll with a row the provider could not embed', () => {
   it('embeds the rest and warns once with the skipped memory id', async () => {
-    const good = createMemory('the deploy runbook lives in the ops wiki');
-    const bad = createMemory('unembeddable row for the skip test');
+    const good = createMemory('the deploy runbook lives in the ops wiki', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const bad = createMemory('unembeddable row for the skip test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, good);
     writeEntry(root, bad);
     const lines: string[] = [];

@@ -9,7 +9,7 @@ import {
   appendSessionEvent,
   writeEntry,
 } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
@@ -42,7 +42,7 @@ afterEach(async () => {
 
 describe('GET /v1/memories continuity + scope', () => {
   it('default: no continuity, no Cache-Control: no-store', async () => {
-    writeEntry(home, createMemory('memory about deploys', {}));
+    writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     const res = await fetch(`${handle.url}/v1/memories?q=deploys`);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).not.toBe('no-store');
@@ -51,7 +51,7 @@ describe('GET /v1/memories continuity + scope', () => {
   });
 
   it('include_continuity=1: returns continuity block with no-store cache header', async () => {
-    writeEntry(home, createMemory('memory about deploys', {}));
+    writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     saveActiveTaskSnapshot(home, 'default', {
       task: 'HTTP continuity',
       summary: 's',

@@ -15,7 +15,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, loadAllL2Summaries } from '../src/store.js';
 import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import {
   buildEntityProfiles,
   rebuildDirtySummaries,
@@ -38,17 +38,19 @@ function makeL2Summary(
   parentId?: string | null,
 ): MemoryEntry {
   const s = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: [`speaker:${speaker}`, 'dag-summary'],
     confidence: 'inferred',
     dag_level: 2,
   });
-  if (parentId !== undefined) s.dag_parent_id = parentId ?? undefined;
+  if (parentId !== undefined) s.dag_parent_id = parentId ?? null;
   return s;
 }
 
 function makeL3Profile(content: string, speaker: string = 'alice'): MemoryEntry {
   const s = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: [`speaker:${speaker}`, 'dag-entity-profile'],
     confidence: 'inferred',
@@ -59,6 +61,7 @@ function makeL3Profile(content: string, speaker: string = 'alice'): MemoryEntry 
 
 function makeL1Fact(parentId: string, content: string): MemoryEntry {
   const c = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags: ['extracted'],
     dag_level: 1,

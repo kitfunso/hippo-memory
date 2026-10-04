@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { hybridSearch, search, mmrRerank, type SearchResult } from '../src/search.js';
-import { createMemory, applyOutcome } from '../src/memory.js';
+import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { cosineSimilarity } from '../src/embeddings.js';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -35,8 +35,8 @@ describe('hybridSearch with embeddings', () => {
   it('returns results that have no BM25 match but high cosine similarity', async () => {
     // "deployment broke" vs "CI pipeline failure" — no shared tokens, but semantically related
     const entries = [
-      createMemory('CI pipeline failure on push to master causes rollback'),
-      createMemory('Python dict ordering is guaranteed in 3.7+'),
+      createMemory('CI pipeline failure on push to master causes rollback', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
 
     // Synthetic vectors: query is close to entry[0], far from entry[1]
@@ -67,8 +67,8 @@ describe('hybridSearch with embeddings', () => {
 
   it('blends BM25 and cosine scores with configurable weight', async () => {
     const entries = [
-      createMemory('FRED cache silently dropped the TIPS series'),
-      createMemory('cache refresh always verify contents after failure'),
+      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory('cache refresh always verify contents after failure', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
 
     // entry[0]: strong keyword match AND strong embedding match
@@ -94,9 +94,11 @@ describe('hybridSearch with embeddings', () => {
   it('falls back to BM25-only when no embedding index exists', async () => {
     const entries = [
       createMemory('FRED cache silently dropped the TIPS series', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         tags: ['error', 'data-pipeline'],
       }),
       createMemory('Python dict ordering is guaranteed in 3.7+', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         tags: ['python'],
       }),
     ];
@@ -109,7 +111,7 @@ describe('hybridSearch with embeddings', () => {
 
   it('respects token budget in hybrid mode', async () => {
     const entries = Array.from({ length: 20 }, (_, i) =>
-      createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`)
+      createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })
     );
 
     const results = await hybridSearch('cache error', entries, { budget: 300 });
@@ -119,9 +121,9 @@ describe('hybridSearch with embeddings', () => {
 
   it('embeddingWeight=0 produces same ranking as pure BM25', async () => {
     const entries = [
-      createMemory('FRED cache silently dropped the TIPS series'),
-      createMemory('Always verify cache contents after refresh failures'),
-      createMemory('Python dict ordering is guaranteed in 3.7+'),
+      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory('Always verify cache contents after refresh failures', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
 
     const bm25Results = search('cache failure', entries, { budget: 10000 });
@@ -138,7 +140,7 @@ describe('hybridSearch with embeddings', () => {
   });
 
   it('returns empty for empty query', async () => {
-    const entries = [createMemory('some content')];
+    const entries = [createMemory('some content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
     const results = await hybridSearch('', entries, { budget: 10000 });
     expect(results.length).toBe(0);
   });
@@ -155,14 +157,14 @@ describe('hybridSearch with embeddings', () => {
 
 describe('hybridSearch explain breakdown', () => {
   it('omits breakdown when explain flag is not set', async () => {
-    const entries = [createMemory('FRED cache silently dropped the TIPS series')];
+    const entries = [createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
     const results = await hybridSearch('FRED cache', entries, { budget: 10000 });
     expect(results.length).toBe(1);
     expect(results[0].breakdown).toBeUndefined();
   });
 
   it('populates breakdown when explain=true', async () => {
-    const entries = [createMemory('FRED cache silently dropped the TIPS series')];
+    const entries = [createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
     const results = await hybridSearch('FRED cache failure', entries, {
       budget: 10000,
       explain: true,
@@ -186,8 +188,8 @@ describe('hybridSearch explain breakdown', () => {
 
   it('final equals base * multipliers within rounding tolerance', async () => {
     const entries = [
-      createMemory('cache refresh verify contents after failure'),
-      createMemory('Python dict ordering is guaranteed in 3.7+'),
+      createMemory('cache refresh verify contents after failure', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
     const results = await hybridSearch('cache failure', entries, {
       budget: 10000,
@@ -214,8 +216,9 @@ describe('hybridSearch explain breakdown', () => {
   });
 
   it('applies 1.2x decision boost for decision-tagged memories', async () => {
-    const normal = createMemory('always verify cache after refresh');
+    const normal = createMemory('always verify cache after refresh', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const decided = createMemory('decide to always verify cache after refresh', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision'],
     });
     const entries = [normal, decided];
@@ -237,7 +240,7 @@ describe('hybridSearch explain breakdown', () => {
 describe('SearchResult cosine field', () => {
   it('search() returns cosine=0 (no embedding path)', () => {
     const entries = [
-      createMemory('FRED cache silently dropped the TIPS series'),
+      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
     const results = search('FRED cache', entries, { budget: 10000 });
     expect(results.length).toBe(1);
@@ -246,7 +249,7 @@ describe('SearchResult cosine field', () => {
 
   it('hybridSearch() returns cosine=0 when embeddings unavailable', async () => {
     const entries = [
-      createMemory('FRED cache silently dropped the TIPS series'),
+      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
     const results = await hybridSearch('FRED cache', entries, { budget: 10000 });
     expect(results.length).toBe(1);
@@ -271,7 +274,7 @@ describe('searchBothHybrid', () => {
 
 describe('outcomeBoost', () => {
   it('fresh memory with no outcome signal has boost = 1', async () => {
-    const entries = [createMemory('FRED cache silently dropped TIPS')];
+    const entries = [createMemory('FRED cache silently dropped TIPS', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
     const results = await hybridSearch('FRED cache', entries, {
       budget: 10000,
       explain: true,
@@ -280,7 +283,7 @@ describe('outcomeBoost', () => {
   });
 
   it('positive outcomes push boost above 1 (up to 1.15)', async () => {
-    let m = createMemory('FRED cache silently dropped TIPS');
+    let m = createMemory('FRED cache silently dropped TIPS', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     m = applyOutcome(m, true);
     m = applyOutcome(m, true);
@@ -294,7 +297,7 @@ describe('outcomeBoost', () => {
   });
 
   it('negative outcomes push boost below 1 (down to 0.85)', async () => {
-    let m = createMemory('FRED cache silently dropped TIPS');
+    let m = createMemory('FRED cache silently dropped TIPS', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, false);
     m = applyOutcome(m, false);
     m = applyOutcome(m, false);
@@ -308,8 +311,8 @@ describe('outcomeBoost', () => {
   });
 
   it('positive outcomes outrank neutral peers with identical text', async () => {
-    const a = createMemory('cache refresh verify contents after failure');
-    let b = createMemory('cache refresh verify contents after failure');
+    const a = createMemory('cache refresh verify contents after failure', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    let b = createMemory('cache refresh verify contents after failure', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     b = applyOutcome(b, true);
     b = applyOutcome(b, true);
     const results = await hybridSearch('cache failure', [a, b], {
@@ -328,7 +331,7 @@ describe('outcomeBoost', () => {
 describe('mmrRerank', () => {
   function makeResult(id: string, score: number): SearchResult {
     return {
-      entry: createMemory('placeholder', { tags: [] }),
+      entry: createMemory('placeholder', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] }),
       score,
       bm25: 0,
       cosine: 0,
@@ -413,7 +416,7 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
     // monotonic: entry N beats entry N+1 on BM25. No embeddings available in
     // test env, so MMR is skipped and we get pure relevance order regardless.
     const entries = Array.from({ length: 150 }, (_, i) =>
-      createMemory(`topic ${String(i).padStart(3, '0')} about ${'x'.repeat(20)} content`),
+      createMemory(`topic ${String(i).padStart(3, '0')} about ${'x'.repeat(20)} content`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
     const results = await hybridSearch('topic content about', entries, {
       budget: 1_000_000, // enough to include all matches
@@ -432,7 +435,7 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
 describe('hybridSearch minResults', () => {
   it('returns at least minResults entries even when budget is tight', async () => {
     const entries = Array.from({ length: 20 }, (_, i) =>
-      createMemory(`important topic ${i} with enough content to exceed a small budget ${'x'.repeat(200)}`),
+      createMemory(`important topic ${i} with enough content to exceed a small budget ${'x'.repeat(200)}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
     const withMin = await hybridSearch('important topic', entries, {
       budget: 100,
@@ -446,7 +449,7 @@ describe('hybridSearch minResults', () => {
   });
 
   it('does not exceed available results when minResults is higher', async () => {
-    const entries = [createMemory('solo topic about something unique')];
+    const entries = [createMemory('solo topic about something unique', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
     const results = await hybridSearch('solo topic', entries, {
       budget: 100,
       minResults: 10,

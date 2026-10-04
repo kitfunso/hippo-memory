@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { Prediction } from '../src/predictions.js';
 
@@ -38,7 +38,7 @@ function makeRoot(): string {
 
 let home: string;
 let handle: ServerHandle;
-let apiKey: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
 
 beforeEach(async () => {
   home = makeRoot();

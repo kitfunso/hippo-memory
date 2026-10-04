@@ -90,7 +90,7 @@ describe('hippo github CLI', () => {
   });
 
   it('backfill --repo without GITHUB_TOKEN exits 2 with actionable error', () => {
-    const env = { ...process.env, HIPPO_HOME: hippoRoot };
+    const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
     delete env.GITHUB_TOKEN;
     let status = 0;
     let stderr = '';

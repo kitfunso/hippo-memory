@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import { initStore, loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, type Context } from '../src/api.js';
-import { deduplicateStore } from '../src/dedupe.js';
+import { deduplicateStore, type DedupPair } from '../src/dedupe.js';
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
@@ -146,7 +146,7 @@ describe('deduplicateStore tenant partition', () => {
       expect(dry.removed).toBe(2);
       expect(real.removed).toBe(2);
 
-      const sortByRemoved = (p: { removed: string }[]) =>
+      const sortByRemoved = (p: DedupPair[]) =>
         [...p].sort((x, y) => x.removed.localeCompare(y.removed));
       expect(sortByRemoved(dry.pairs).map((p) => p.removed)).toEqual(
         sortByRemoved(real.pairs).map((p) => p.removed),

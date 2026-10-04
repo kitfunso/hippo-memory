@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { drillDown, type Context } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
@@ -29,6 +29,7 @@ function ctxFor(root: string, tenantId: string = 'default'): Context {
 }
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: ['dag-summary'],
     confidence: 'inferred',
@@ -60,6 +61,7 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
 
   it('failure=not_drillable for a leaf row', () => {
     const leaf = createMemory('plain leaf body content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
       dag_level: 0,
@@ -101,6 +103,7 @@ describe('v1.6.4 Task 1 — HTTP /v1/recall/drill status mapping', () => {
 
   it('422 for a leaf id (caller-actionable)', async () => {
     const leaf = createMemory('leaf body row content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
       dag_level: 0,

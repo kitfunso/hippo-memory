@@ -20,7 +20,7 @@ import {
   clearSummaryDirtyAfterBuild,
 } from '../src/store.js';
 import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
 import * as dagModule from '../src/dag.js';
 import { consolidate } from '../src/consolidate.js';
@@ -103,6 +103,7 @@ function makeSummary(
   tags: string[] = ['topic:test', 'dag-summary'],
 ): MemoryEntry {
   const s = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags,
     confidence: 'inferred',
@@ -119,6 +120,7 @@ function makeChild(
   tags: string[] = ['extracted'],
 ): MemoryEntry {
   const c = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags,
     dag_level: 1,
@@ -507,9 +509,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
   it('test #10: REGRESSION LOCK — buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
-    const factA = createMemory('alice did X', { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
-    const factB = createMemory('alice said Y', { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
-    const factC = createMemory('alice noted Z', { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factC = createMemory('alice noted Z', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
     writeEntry(hippoRoot, factA);
     writeEntry(hippoRoot, factB);
     writeEntry(hippoRoot, factC);
@@ -565,6 +567,7 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     // (dag.ts buildDag) instead of consolidate.ts's merge pass.
     const aFacts = ['alice did X', 'alice said Y', 'alice noted Z'].map((c) =>
       createMemory(c, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         dag_level: 1,
         tags: ['extracted', 'speaker:alice'],
@@ -573,6 +576,7 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     );
     const bFacts = ['alice ran P', 'alice flagged Q', 'alice closed R'].map((c) =>
       createMemory(c, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         dag_level: 1,
         tags: ['extracted', 'speaker:alice'],

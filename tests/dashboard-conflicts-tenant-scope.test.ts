@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { initStore, writeEntry, replaceDetectedConflicts } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 
 function get(port: number, path: string): Promise<{ status: number; body: string }> {
@@ -56,10 +56,10 @@ describe('dashboard conflicts are tenant-scoped', () => {
   });
 
   it('GET /api/conflicts and /api/stats count only the running tenant', async () => {
-    const a1 = createMemory('tenant_a says the deploy target is fly', { tenantId: 'tenant_a' });
-    const a2 = createMemory('tenant_a says the deploy target is render', { tenantId: 'tenant_a' });
-    const b1 = createMemory('tenant_b says the build uses webpack', { tenantId: 'tenant_b' });
-    const b2 = createMemory('tenant_b says the build uses vite', { tenantId: 'tenant_b' });
+    const a1 = createMemory('tenant_a says the deploy target is fly', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_a' });
+    const a2 = createMemory('tenant_a says the deploy target is render', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_a' });
+    const b1 = createMemory('tenant_b says the build uses webpack', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_b' });
+    const b2 = createMemory('tenant_b says the build uses vite', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant_b' });
     for (const m of [a1, a2, b1, b2]) writeEntry(hippoRoot, m);
     replaceDetectedConflicts(hippoRoot, [
       { memory_a_id: a1.id, memory_b_id: a2.id, reason: 'deploy target', score: 0.9 },

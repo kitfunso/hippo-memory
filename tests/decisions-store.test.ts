@@ -30,7 +30,7 @@ import {
   deleteEntry,
   writeEntry,
 } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveDecision,
@@ -152,6 +152,7 @@ describe('decisions store (E2 first-class object)', () => {
     const decBefore = countRows(home, 'decisions');
 
     const mem = createMemory('throwing decision', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision'],
       layer: Layer.Semantic,
       confidence: 'verified',
@@ -270,6 +271,7 @@ describe('decisions store (E2 first-class object)', () => {
 
   it('cross-tenant INSERT trigger raises ABORT on memory tenant mismatch', () => {
     const mem = createMemory('tenant-a memory', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision'],
       layer: Layer.Semantic,
       confidence: 'verified',
@@ -302,7 +304,7 @@ describe('decisions store (E2 first-class object)', () => {
   it('ON DELETE SET NULL: forgetting the memory orphans the decision (decay-bug structural proof)', () => {
     const d = saveDecision(home, 'default', { decisionText: 'survives memory decay' });
     expect(d.memoryId).not.toBeNull();
-    deleteEntry(home, d.memoryId!, 'default');
+    deleteEntry(home, d.memoryId!);
     const reloaded = loadDecisionById(home, 'default', d.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();
@@ -354,6 +356,7 @@ describe('decisions store (E2 first-class object)', () => {
 
     // A legacy decision-tagged memory with NO decisions row
     const legacy = createMemory('legacy decision memory', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision'],
       layer: Layer.Semantic,
       confidence: 'verified',

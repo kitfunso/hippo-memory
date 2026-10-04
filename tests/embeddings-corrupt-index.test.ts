@@ -1,16 +1,16 @@
 // A corrupt embeddings.json must be kept aside and the index rebuilt, never saved over.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { embedMemory, embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
 let savedKey: string | undefined;
-let stderrSpy: ReturnType<typeof vi.spyOn>;
+let stderrSpy: MockInstance<typeof process.stderr.write>;
 
 // One vector per input, derived from the text so each memory gets a distinct one.
 function fakeEmbeddings(): ReturnType<typeof vi.fn> {
@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 async function remember(content: string): Promise<string> {
-  const entry = createMemory(content);
+  const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(root, entry);
   await embedMemory(root, entry);
   return entry.id;

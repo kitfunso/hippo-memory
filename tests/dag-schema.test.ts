@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 describe('schema v13: DAG fields', () => {
   let hippoRoot: string;
@@ -19,12 +19,14 @@ describe('schema v13: DAG fields', () => {
 
   it('stores dag_level and dag_parent_id', () => {
     const summary = createMemory('John is a basketball player who trains daily', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       dag_level: 2,
     });
     writeEntry(hippoRoot, summary);
 
     const fact = createMemory('John scored 30 points on Jan 2', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       dag_level: 1,
       dag_parent_id: summary.id,
@@ -41,7 +43,7 @@ describe('schema v13: DAG fields', () => {
   });
 
   it('defaults dag_level to 0 and dag_parent_id to null', () => {
-    const entry = createMemory('plain memory', {});
+    const entry = createMemory('plain memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(hippoRoot, entry);
 
     const loaded = readEntry(hippoRoot, entry.id);

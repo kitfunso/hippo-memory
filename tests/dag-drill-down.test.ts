@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { drillDown, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -32,6 +32,7 @@ function ctxFor(root: string, tenantId: string = 'default'): Context {
 
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: opts.tags ?? ['dag-summary'],
     confidence: 'inferred',
@@ -43,6 +44,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
 
 function makeChild(text: string, parentId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     confidence: 'observed',
     dag_level: opts.dag_level ?? 1,
@@ -83,6 +85,7 @@ describe('drillDown', () => {
 
   it('returns failure=not_drillable on a leaf (v1.6.4)', () => {
     const leaf = createMemory('leaf body', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       dag_level: 0,
       tenantId: 'default',

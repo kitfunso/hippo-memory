@@ -11,7 +11,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore, writeEntry, readEntry, loadAllEntries, replaceDetectedConflicts, listMemoryConflicts, resolveConflict, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store.js';
-import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../src/memory.js';
 import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration, LEGACY_TYPED_HALF_LIFE } from '../src/half-life-migration.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { consolidate } from '../src/consolidate.js';
@@ -46,7 +46,7 @@ function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
   return root;
 }
-const legacy = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 function byContent(root: string): Map<string, number> {
   return new Map(loadAllEntries(root).map((e) => [e.content, e.half_life_days]));
 }
@@ -187,7 +187,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const note = saveCustomerNote(root, 'default', { customer: 'Acme', note: 'renewal is due in March' }).memoryId!;
     pinTo90(root, decision);
     pinTo90(root, note, 3);
-    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check');
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, ordinary);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
@@ -237,7 +237,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const root = store();
     const decision = saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' }).memoryId!;
     pinTo90(root, decision);
-    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check');
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, ordinary);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 730 }));

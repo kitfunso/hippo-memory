@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
   insertEntity,
@@ -38,7 +38,7 @@ function safeRmSync(p: string): void {
 /** Write a memory and force its kind (default writes are 'distilled'). Setting kind
  *  to 'raw' is allowed (the append-only trigger is BEFORE DELETE, not UPDATE). */
 function addMemory(home: string, tenant: string, kind: 'distilled' | 'superseded' | 'raw'): string {
-  const mem = createMemory('graph source memory for guard tests', { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
+  const mem = createMemory('graph source memory for guard tests', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
   writeEntry(home, mem, { actor: 'test' });
   if (kind !== 'distilled') {
     const db = openHippoDb(home);

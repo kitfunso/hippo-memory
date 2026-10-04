@@ -211,7 +211,7 @@ describe('E3 sleep enqueue-hook', () => {
     // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
       deduplicateStore: (root) => {
-        deleteEntry(root, d.memoryId!, T);
+        deleteEntry(root, d.memoryId!);
         return { removed: 1, pairs: [] };
       },
     };

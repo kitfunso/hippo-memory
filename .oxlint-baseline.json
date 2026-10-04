@@ -6,7 +6,7 @@
   "anti-slop(no-shape-in-symbol-names)": 2,
   "anti-slop(no-unknown-parameters)": 12,
   "anti-slop(no-unsafe-dictionary-type)": 14,
-  "anti-slop(require-safety-comment-for-type-assertion)": 145,
+  "anti-slop(require-safety-comment-for-type-assertion)": 144,
   "eslint(no-constant-binary-expression)": 1,
   "eslint(no-control-regex)": 1,
   "eslint(no-extra-boolean-cast)": 2,

@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'node:child_process';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
@@ -16,7 +16,7 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-lock-'));
   initStore(root);
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
-  writeEntry(root, createMemory('embed lock test memory'));
+  writeEntry(root, createMemory('embed lock test memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = ['sk', 'test'].join('-');
   fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] })));
@@ -83,7 +83,7 @@ describe('embeddings.json cross-process lock', () => {
     expect(await embedAll(root)).toBe(1);
     expect(held).toMatch(new RegExp(`^${process.pid}:.+`));
     fs.writeFileSync(lockPath, held);
-    writeEntry(root, createMemory('a second memory to embed'));
+    writeEntry(root, createMemory('a second memory to embed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     expect(await embedAll(root)).toBe(1);
     expect(fs.existsSync(lockPath)).toBe(false);
   });

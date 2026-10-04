@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { embedMemory, loadEmbeddingIndex } from '../src/embeddings.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
@@ -11,7 +11,7 @@ const KEY_ENV = 'OPENAI_API_KEY';
 const KEY = ['sk', 'proj', 'A1b2C3d4E5f6G7h8I9j0K1l2'].join('-');
 let root: string;
 let savedKey: string | undefined;
-let errorSpy: ReturnType<typeof vi.spyOn>;
+let errorSpy: MockInstance<typeof console.error>;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-warn-'));
@@ -35,7 +35,7 @@ function warnings(): string[] {
 }
 
 async function write(content: string): Promise<void> {
-  const entry = createMemory(content);
+  const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(root, entry);
   await embedMemory(root, entry);
 }
@@ -74,7 +74,7 @@ describe('embedMemory provider failure', () => {
     vi.resetModules();
     const fresh = await import('../src/embeddings.js');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
-    const entry = createMemory('a memory under a typo in the provider name');
+    const entry = createMemory('a memory under a typo in the provider name', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
 
     await expect(fresh.embedMemory(root, entry)).resolves.toBeUndefined();

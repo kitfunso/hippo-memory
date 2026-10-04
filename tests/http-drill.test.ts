@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 function makeRoot(): string {
@@ -40,6 +40,7 @@ afterEach(async () => {
 describe('GET /v1/recall/drill/:id', () => {
   it('200 with summary + children for a real level-2 summary', async () => {
     const summary: MemoryEntry = createMemory('topic alpha rollup http', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['dag-summary'],
       confidence: 'inferred',
@@ -49,6 +50,7 @@ describe('GET /v1/recall/drill/:id', () => {
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`alpha detail event ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         confidence: 'observed',
         dag_level: 1,
@@ -80,6 +82,7 @@ describe('GET /v1/recall/drill/:id', () => {
 
   it('422 for a leaf id (v1.6.4: distinguishable from missing)', async () => {
     const leaf = createMemory('plain leaf body', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
       dag_level: 0,
@@ -91,6 +94,7 @@ describe('GET /v1/recall/drill/:id', () => {
 
   it('400 on bad limit', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
@@ -100,6 +104,7 @@ describe('GET /v1/recall/drill/:id', () => {
 
   it('400 on bad budget', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
@@ -114,11 +119,13 @@ describe('GET /v1/recall/drill/:id', () => {
 
   it('budget truncates and sets truncated=true', async () => {
     const summary: MemoryEntry = createMemory('topic budget', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
     for (let i = 0; i < 8; i++) {
       writeEntry(home, createMemory(`detail row content ${i} `.repeat(15), {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic, dag_level: 1, dag_parent_id: summary.id, confidence: 'observed',
       }));
     }

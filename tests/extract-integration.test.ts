@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
 import { storeExtractedFacts, ExtractedFact } from '../src/extract.js';
 
@@ -22,6 +22,7 @@ describe('storeExtractedFacts', () => {
   it('creates Semantic entries linked to source via extracted_from', () => {
     const dir = setup();
     const source = createMemory('Alice and Bob discussed the project timeline', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       tags: ['conv:proj-meeting', 'session:s1'],
     });
@@ -54,6 +55,7 @@ describe('storeExtractedFacts', () => {
   it('inherits conv:, session:, scope:, path: tags from source', () => {
     const dir = setup();
     const source = createMemory('Discussion about deployment', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       tags: ['conv:deploy-chat', 'session:s2', 'scope:backend', 'path:/app/deploy', 'other-tag'],
     });
@@ -80,6 +82,7 @@ describe('storeExtractedFacts', () => {
   it('returns empty array when no facts provided', () => {
     const dir = setup();
     const source = createMemory('Small talk about weather', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
     writeEntry(dir, source);

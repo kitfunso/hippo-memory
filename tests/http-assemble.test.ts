@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -41,6 +41,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
   it('200 with items + counts for a real session', async () => {
     for (let i = 0; i < 4; i++) {
       const e = createMemory(`http session message ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         confidence: 'observed',
         kind: 'raw',
@@ -83,11 +84,13 @@ describe('GET /v1/sessions/:id/assemble', () => {
   it('summarizeOlder=0 disables substitution', async () => {
     // 3 raws under one parent + parent summary. Without summarize: 3 items.
     const summary = createMemory('topic alpha rollup http', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'],
     });
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
       const e = createMemory(`older detail ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         confidence: 'observed',
         kind: 'raw',

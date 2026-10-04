@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/api-errors.js';
 import { BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE, mapApiError } from '../src/http-util.js';
@@ -92,7 +92,7 @@ describe('typed errors from real domain paths keep their status and message', ()
   });
 
   it('ConflictError -> 409: superseding a row that is already superseded', async () => {
-    const old = createMemory('the build runs on node 20');
+    const old = createMemory('the build runs on node 20', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(home, old);
     const first = await call(handle, { method: 'POST', path: `/v1/memories/${old.id}/supersede`, body: { content: 'the build runs on node 22' } });
     expect(first.status).toBe(200);

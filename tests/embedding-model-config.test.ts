@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -120,7 +121,7 @@ describe('embedding model configuration', () => {
       expect(providerId).toBe('voyage:custom/model');
 
       const entryId = 'mem_custom_model';
-      const entry = createMemory('semantic-only match');
+      const entry = createMemory('semantic-only match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       entry.id = entryId;
 
       // Seed a real, in-sync embedding cache so hybridSearch's "does any
@@ -164,7 +165,7 @@ describe('embedding model configuration', () => {
       saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
       saveStoredEmbeddingModel(tmpDir, 'voyage:some-other-model');
 
-      const entry = createMemory('query text semantic-only match');
+      const entry = createMemory('query text semantic-only match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       const results = await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
       expect(stub.requests).toHaveLength(0);
@@ -189,7 +190,7 @@ describe('embedding model configuration', () => {
       const providerId = resolveEmbeddingProvider(tmpDir).id;
       saveStoredEmbeddingModel(tmpDir, providerId);
 
-      const results = await hybridSearch('query text', [createMemory('query text match')], {
+      const results = await hybridSearch('query text', [createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], {
         hippoRoot: tmpDir,
         budget: 1000,
       });

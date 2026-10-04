@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadSessionRawMemories } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -28,6 +28,7 @@ function ctxFor(root: string, tenantId: string = 'default'): Context {
 
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',
@@ -36,7 +37,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     source_session_id: sessionId,
     tags: opts.tags ?? [],
     dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id,
+    dag_parent_id: opts.dag_parent_id ?? undefined,
   });
   if (opts.created) e.created = opts.created;
   if (opts.strength !== undefined) e.strength = opts.strength;
@@ -45,6 +46,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
 
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const s = createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     confidence: 'inferred',
     dag_level: 2,

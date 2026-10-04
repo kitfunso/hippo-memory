@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -58,6 +58,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
   it('env unset: fresh_tail_count > 0 without session_id → 200 (back-compat tenant-wide)', async () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         kind: 'raw',
       }));
@@ -70,6 +71,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         kind: 'raw',
       }));
@@ -89,6 +91,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         kind: 'raw',
         source_session_id: 'sess-A',
@@ -103,6 +106,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
   it('env=1, fresh_tail_count=0 (or absent) → 200 (guard fires only when fresh-tail requested)', async () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     writeEntry(home, createMemory('event', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       kind: 'raw',
     }));

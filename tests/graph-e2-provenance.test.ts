@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { extractGraph } from '../src/graph-extract.js';
@@ -34,6 +34,7 @@ function makeRoot(): string {
 /** Write a memory and (optionally) force its kind. Returns its id. */
 function addMemory(home: string, kind: 'distilled' | 'superseded' | 'raw'): string {
   const mem = createMemory('graph e2-provenance test memory', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T,
   });
   writeEntry(home, mem, { actor: 'test' });

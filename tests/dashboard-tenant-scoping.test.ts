@@ -14,7 +14,7 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 
 function post(
@@ -74,6 +74,7 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
   it('POST /api/star/:id denies a cross-tenant mutation', async () => {
     // Seed a memory under tenant_a in the local store.
     const a = createMemory('tenant_a memory', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tenantId: 'tenant_a',
       tags: ['x'],
     });

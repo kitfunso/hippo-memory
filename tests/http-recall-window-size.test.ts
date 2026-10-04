@@ -14,7 +14,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 function makeRoot(): string {
@@ -30,6 +30,7 @@ let handle: ServerHandle;
 beforeEach(async () => {
   home = makeRoot();
   writeEntry(home, createMemory('alpha', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     kind: 'raw',
     tenantId: 'default',

@@ -19,7 +19,7 @@ import {
   markSummaryDirty,
 } from '../src/store.js';
 import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 
 describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
@@ -48,7 +48,7 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
   });
 
   it('backfill leaves rows clean (summary_dirty=0, rebuild_count=0, NULL timestamps)', () => {
-    const summary = createMemory('test summary', { layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('test summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summary);
     const db = openHippoDb(hippoRoot);
     // SAFETY: the SELECT list above names exactly these four columns, so
@@ -72,8 +72,8 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
     // Seed 2 summaries in different tenants. createMemory defaults
     // tenantId to 'default'; manually rewrite the second to 'tenant2'
     // via SQL — keeps the test self-contained without env shenanigans.
-    const summaryA = createMemory('summary A', { layer: Layer.Semantic, dag_level: 2 });
-    const summaryB = createMemory('summary B', { layer: Layer.Semantic, dag_level: 2 });
+    const summaryA = createMemory('summary A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summaryB = createMemory('summary B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summaryA);
     writeEntry(hippoRoot, summaryB);
     const db = openHippoDb(hippoRoot);
@@ -85,7 +85,7 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
   });
 
   it('markSummaryDirty is idempotent (second call writes no audit row + summary_dirty stays 1)', () => {
-    const summary = createMemory('idempotent test', { layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('idempotent test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summary);
     markSummaryDirty(hippoRoot, summary.id, 'default', 'actor');
     markSummaryDirty(hippoRoot, summary.id, 'default', 'actor');
@@ -103,7 +103,7 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
   });
 
   it('markSummaryDirty no-ops on non-summary rows (dag_level !== 2)', () => {
-    const leaf = createMemory('a leaf', { layer: Layer.Semantic, dag_level: 1 });
+    const leaf = createMemory('a leaf', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 1 });
     writeEntry(hippoRoot, leaf);
     markSummaryDirty(hippoRoot, leaf.id, 'default', 'actor');
     expect(loadDirtySummaries(hippoRoot, 'default')).toEqual([]);
@@ -133,7 +133,7 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
     // Independent-review-critic MED: without this test, dropping the
     // tenant_id clause from markSummaryDirty's UPDATE would pass all
     // prior 7 cases.
-    const summaryB = createMemory('cross-tenant target', { layer: Layer.Semantic, dag_level: 2 });
+    const summaryB = createMemory('cross-tenant target', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summaryB);
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
@@ -156,7 +156,7 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
     // is useless without VALID_AUDIT_OPS Set extensions in BOTH cli.ts +
     // server.ts. This test exercises the queryAuditEvents path that both
     // downstream sites consume.
-    const summary = createMemory('audit round-trip', { layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('audit round-trip', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summary);
     markSummaryDirty(hippoRoot, summary.id, 'default', 'test-actor');
     const db = openHippoDb(hippoRoot);

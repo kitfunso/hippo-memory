@@ -122,7 +122,7 @@ describe('E3.1 cross-object references (Pass 3 name-match)', () => {
     // decision row stays active and authoritative. v38 anchors the entity to the E2 object,
     // so the forgotten-mirror decision is STILL a Pass-3 source (provenance = the object,
     // not the decaying mirror). This is the whole point of the graph/E2 provenance fix.
-    deleteEntry(home, dec.memoryId!, T);
+    deleteEntry(home, dec.memoryId!);
     expect(() => extractGraph(home, T)).not.toThrow();
     const edges = refs(home);
     expect(edges).toHaveLength(1); // forgotten-mirror decision still references AlphaPolicy

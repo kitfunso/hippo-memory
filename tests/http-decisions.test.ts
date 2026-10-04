@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { Decision } from '../src/decisions.js';
 
@@ -42,8 +42,8 @@ function makeRoot(): string {
 
 let home: string;
 let handle: ServerHandle;
-let apiKey: CreatedApiKey;
-let apiKeyB: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
+let apiKeyB: CreateApiKeyResult;
 
 beforeEach(async () => {
   home = makeRoot();
@@ -62,14 +62,14 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders(key: CreatedApiKey = apiKey) {
+function authHeaders(key: CreateApiKeyResult = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
 
 async function createDecision(
   text: string,
   extra: { context?: string; supersedesDecisionId?: number } = {},
-  key: CreatedApiKey = apiKey,
+  key: CreateApiKeyResult = apiKey,
 ) {
   return fetch(`${handle.url}/v1/decisions`, {
     method: 'POST',

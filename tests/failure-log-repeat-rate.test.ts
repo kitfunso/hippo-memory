@@ -8,6 +8,7 @@ import { initStore, loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/failure-log.js';
 import { captureToolFailure, failureSignature, lessonFromFailure } from '../src/capture-error.js';
+import type { JsonValue } from '../src/working-memory.js';
 import { blockHash } from '../src/token-ledger.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/rejection.js';
 
@@ -129,7 +130,7 @@ describe('capture-error logs every failure, never its text', () => {
 
   it('logs each outcome with its session, tool and routine rule, and only hashes of the error', () => {
     const error = 'Exit code 1\nError: connect ECONNREFUSED db.internal.example:5432 as deploy_user';
-    const payloads = [
+    const payloads: JsonValue[] = [
       { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'npm test' }, error },
       { session_id: 's2', tool_name: 'Bash', tool_input: { command: 'npm test' }, error },
       { session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' },
@@ -162,7 +163,7 @@ describe('capture-error logs every failure, never its text', () => {
   it('keeps a finer detail hash that tells apart failures the lesson text merges', () => {
     const silent = (command: string) => ({ session_id: 's1', tool_name: 'Bash', tool_input: { command }, error: 'Exit code 1 (no output)' });
     const banner = `Error: ${'build banner line '.repeat(12)}`;
-    const payloads = [
+    const payloads: JsonValue[] = [
       silent('npm test'),
       silent('node build.js'),
       { session_id: 's1', tool_name: 'Bash', error: `${banner}missing semicolon` },
@@ -204,7 +205,7 @@ describe('hippo failures', () => {
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   function run(args: string[], input = '', cwd = dir): string {
-    const env = { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd, USERPROFILE: cwd };
+    const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd, USERPROFILE: cwd };
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
     return execFileSync(process.execPath, [HIPPO_JS, ...args], { env, cwd, encoding: 'utf8', input, stdio: 'pipe' });

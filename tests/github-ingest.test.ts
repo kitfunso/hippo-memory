@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import type { Context } from '../src/api.js';
 import { initStore, loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import type {
@@ -16,7 +17,7 @@ import type {
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string) => ({
+const ctx = (root: string): Context => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: { subject: 'connector:github', role: 'admin' },
@@ -103,6 +104,7 @@ function makePrReviewCommentEvent(): GitHubPullRequestReviewCommentEvent {
  */
 function injectMemoryRow(db: DatabaseSyncLike, id: string, content: string, artifactRef: string): void {
   const entry = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     kind: 'raw',
     scope: 'github:public:acme/demo',

@@ -82,7 +82,7 @@ describe('issueEventToRememberOpts', () => {
       },
     };
     const opts = issueEventToRememberOpts(evt);
-    expect(opts!.scope.startsWith('github:private:')).toBe(true);
+    expect(opts?.scope?.startsWith('github:private:')).toBe(true);
     expect(opts!.scope).toBe('github:private:acme/secrets');
   });
 });
@@ -142,7 +142,7 @@ describe('issueCommentEventToRememberOpts', () => {
       },
     };
     const opts = issueCommentEventToRememberOpts(evt);
-    expect(opts!.scope.startsWith('github:private:')).toBe(true);
+    expect(opts?.scope?.startsWith('github:private:')).toBe(true);
     expect(opts!.scope).toBe('github:private:acme/secrets');
   });
 });
@@ -202,7 +202,7 @@ describe('pullRequestEventToRememberOpts', () => {
       },
     };
     const opts = pullRequestEventToRememberOpts(evt);
-    expect(opts!.scope.startsWith('github:private:')).toBe(true);
+    expect(opts?.scope?.startsWith('github:private:')).toBe(true);
     expect(opts!.scope).toBe('github:private:acme/secrets');
   });
 });
@@ -264,7 +264,7 @@ describe('prReviewCommentEventToRememberOpts', () => {
       },
     };
     const opts = prReviewCommentEventToRememberOpts(evt);
-    expect(opts!.scope.startsWith('github:private:')).toBe(true);
+    expect(opts?.scope?.startsWith('github:private:')).toBe(true);
     expect(opts!.scope).toBe('github:private:acme/secrets');
   });
 });

@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { ProjectBrief } from '../src/project-briefs.js';
 
@@ -45,8 +45,8 @@ function makeRoot(): string {
 
 let home: string;
 let handle: ServerHandle;
-let apiKey: CreatedApiKey;
-let apiKeyB: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
+let apiKeyB: CreateApiKeyResult;
 
 beforeEach(async () => {
   home = makeRoot();
@@ -62,10 +62,10 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders(key: CreatedApiKey = apiKey) {
+function authHeaders(key: CreateApiKeyResult = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
-async function createBrief(body: { repo: string; summary: string }, key: CreatedApiKey = apiKey) {
+async function createBrief(body: { repo: string; summary: string }, key: CreateApiKeyResult = apiKey) {
   return fetch(`${handle.url}/v1/project-briefs`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 

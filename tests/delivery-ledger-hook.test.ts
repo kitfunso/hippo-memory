@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/recall-trace.js';
 import { blockHash, estimateTokens } from '../src/token-ledger.js';
@@ -44,7 +44,7 @@ const seeded: MemoryEntry[] = [];
 const store = (dir: string): string => path.join(dir, '.hippo');
 
 function seed(content: string, extra: Partial<MemoryEntry> = {}, dir = proj): MemoryEntry {
-  const entry = { ...createMemory(content), ...extra };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
   writeEntry(store(dir), entry);
   seeded.push(entry);
   return entry;
@@ -289,7 +289,7 @@ describe('what one hook call records', () => {
     const globalRoot = path.join(bare, 'global');
     fs.mkdirSync(globalRoot, { recursive: true });
     initStore(globalRoot);
-    writeEntry(globalRoot, { ...createMemory('PINNED: always check the rollback plan before deploy'), pinned: true });
+    writeEntry(globalRoot, { ...createMemory('PINNED: always check the rollback plan before deploy', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true });
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify({
       deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false },
     }));

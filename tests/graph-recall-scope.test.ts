@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { estimateTokens, type SearchResult } from '../src/search.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
@@ -36,6 +36,7 @@ function safeRmSync(p: string): void {
 function mem(home: string, tenant: string, text: string, opts: { scope?: string | null } = {}): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
   const m = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test',
     tenantId: tenant, scope: opts.scope ?? null,
   });

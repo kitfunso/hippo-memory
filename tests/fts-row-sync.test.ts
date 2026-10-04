@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { deleteEntry, initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 let root: string;
@@ -30,20 +30,20 @@ function ftsContents(id: string): string[] {
 
 describe('full-text row per memory', () => {
   it('a new memory gets exactly one full-text row', () => {
-    const entry = createMemory('fresh row gets one fts row');
+    const entry = createMemory('fresh row gets one fts row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
     expect(ftsContents(entry.id)).toEqual(['fresh row gets one fts row']);
   });
 
   it('rewriting a memory replaces its full-text row instead of adding a second', () => {
-    const entry = createMemory('first version');
+    const entry = createMemory('first version', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
     writeEntry(root, { ...entry, content: 'second version' });
     expect(ftsContents(entry.id)).toEqual(['second version']);
   });
 
   it('deleting then rewriting the same id leaves one full-text row', () => {
-    const entry = createMemory('before delete');
+    const entry = createMemory('before delete', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
     expect(deleteEntry(root, entry.id)).toBe(true);
     writeEntry(root, { ...entry, content: 'after delete' });

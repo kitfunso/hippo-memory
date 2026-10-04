@@ -15,8 +15,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { hybridSearch, physicsSearch, isDagSummary, type SearchResult } from '../src/search.js';
+import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
 import { searchBothHybrid } from '../src/shared.js';
 import { savePhysicsState } from '../src/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
@@ -26,6 +27,7 @@ function makeL2Summary(
   opts: { lastRebuiltAt?: string | null; rebuildCount?: number; descendantCount?: number } = {},
 ): MemoryEntry {
   const s = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: ['topic:test', 'dag-summary'],
     confidence: 'inferred',
@@ -39,6 +41,7 @@ function makeL2Summary(
 
 function makeL1Fact(content: string, parentId?: string): MemoryEntry {
   return createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags: ['extracted'],
     dag_level: 1,
@@ -235,11 +238,11 @@ describe('v0.30 / E4 — first-class DAG recall (scoring layer)', () => {
     const recordingReranker = vi.fn(async (
       _query: string,
       results: SearchResult[],
-      _opts?: import('../src/rerankers/types.js').RerankerOptions,
-    ): Promise<SearchResult[]> => {
+      _opts?: RerankerOptions,
+    ): Promise<RerankResult[]> => {
       recordedInputs = JSON.parse(JSON.stringify(results)); // deep snapshot
       // Reverse order (the "prerogative" branch — we don't assert this)
-      return [...results].reverse();
+      return [...results].reverse().map((r, i) => ({ ...r, rerankScore: r.score, preRerankRank: results.indexOf(r) + 1, postRerankRank: i + 1 }));
     });
 
     const summary = makeL2Summary('reranker-test summary alpha beta');
@@ -315,7 +318,7 @@ describe('v0.30 / E4 — first-class DAG recall (scoring layer)', () => {
   it('test #18: isDagSummary helper matches dag_level === 2 only', () => {
     const l2 = makeL2Summary('l2-summary-content');
     const l1 = makeL1Fact('l1 fact content');
-    const l0 = createMemory('l0 raw content', { layer: Layer.Episodic });
+    const l0 = createMemory('l0 raw content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     // l0 has no dag_level — undefined; helper returns false
     expect(isDagSummary(l2)).toBe(true);
     expect(isDagSummary(l1)).toBe(false);

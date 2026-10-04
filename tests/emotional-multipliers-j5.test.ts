@@ -37,6 +37,7 @@ import {
   type EmotionalValence,
   type MemoryEntry,
   _resetLossAversionRatioCacheForTests,
+  DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
 import { initStore, writeEntry } from '../src/store.js';
 import { recall, type Context } from '../src/api.js';
@@ -62,6 +63,7 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
   // unclamped for multipliers up to ~3.17 (covers all our valences).
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
   const e = createMemory(`test memory with valence ${valence}`, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
     kind: 'raw',
     tenantId: 'default',
@@ -279,6 +281,7 @@ describe('J5 behavioral: env=0 ranking effect (v1.13.5)', () => {
       // old, half-life 3) so the unclamped strength values are visible and
       // the env-driven multiplier delta is observable in recall output.
       const e = createMemory(marker(valence), {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         kind: 'raw',
         tenantId: 'default',
@@ -320,6 +323,7 @@ describe('J5 behavioral: env=0 ranking effect (v1.13.5)', () => {
     process.env[ENV_KEY] = '1.0';
     _resetLossAversionRatioCacheForTests();
     const baselineEntry = createMemory('shared ranking keyword variant negative test', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       kind: 'raw',
       tenantId: 'default',
