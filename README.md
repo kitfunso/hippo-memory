@@ -1,6 +1,8 @@
-# 🦛 Hippo: memory for AI agents that learns what is wrong
+# 🦛 Hippo
 
-**Hippo learns what is wrong and ranks it down.** Good memory is knowing what to forget: what turned out wrong, what got replaced, what nobody used.
+**Stop re-teaching your agent.**
+
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![npm downloads](https://img.shields.io/npm/dm/hippo-memory)](https://npmjs.com/package/hippo-memory)

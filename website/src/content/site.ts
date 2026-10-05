@@ -19,11 +19,14 @@ export const site = {
   name: 'hippo',
   pkg: 'hippo-memory',
   version: pkg.version, // Build-source version; publication is verified separately.
-  positioning: 'memory for AI agents that learns what is wrong', // page title and hero eyebrow
-  // Hero headline, split for accent emphasis. The per-agent install detail lives in Get started.
-  tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
-  description:
-    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, drops what turned out to be wrong, and replaces facts that changed.",
+  positioning: pkg.description,
+  tagline: {
+    lead: 'Stop re‑teaching', // non-breaking hyphen keeps the word whole
+    accent: 'your agent.',
+    summary:
+      "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.",
+  },
+  description: pkg.description,
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init --scan ~',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.

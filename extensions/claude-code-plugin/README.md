@@ -1,6 +1,8 @@
 # Hippo Memory - Claude Code Plugin
 
-Biologically-inspired memory for Claude Code. Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 
 ## Install
 

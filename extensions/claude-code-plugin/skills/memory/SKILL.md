@@ -5,7 +5,7 @@ description: Project memory powered by Hippo. Use when starting a session, after
 
 # Hippo Memory
 
-This project uses Hippo for biologically-inspired memory across sessions.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 Memories decay over time unless retrieved. Errors stick longer. Sleep consolidates.
 
 ## At session start (MANDATORY)

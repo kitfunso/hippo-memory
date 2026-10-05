@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.63.2 - 2026-10-05
+
+### Documentation
+
+- **The README and hippo-memory.com open with "Stop re-teaching your agent." again, with the full description under it.** 1.63.1 had cut the opening down to the tagline alone.
+
+## 1.63.1 - 2026-10-04
+
+### Changed
+
+- **Use one Hippo tagline across public descriptions.** The README, npm metadata, GitHub About, website, CLI help, plugin listings and Python SDK source now lead with "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents."
+- **Opening a store that is already current runs one read instead of the full schema check.** Every open used to re-assert 26 tables and indexes with `CREATE ... IF NOT EXISTS`, a meta read and two row counts (`memories` and the full-text index). Now one probe checks both schema versions, every table and index the open path repairs, the 7 default meta keys and the full-text flag. When all of them hold, the open skips the DDL and the counts. Anything stale or missing takes the old repair path, which now also brings a lagging `PRAGMA user_version` up to date. On a 20,000-memory store the median open and close fell from 3.6 ms to 1.9 ms.
+- **`hippo sleep` re-syncs the full-text index, and `hippo doctor` reports when it has drifted.** Opening a store no longer checks the index against `memories`, so drift from a failed full-text write now lasts until the next sleep, not the next open. Doctor shows a new `fts` check that warns and names `hippo sleep` as the fix. A failed full-text purge now fails the archive and rolls it back, so archived text is never left searchable.
+- **A write no longer counts every memory to decide whether the store needs its legacy import.** It checks for one row instead.
+
+### Tests
+
+- **`tests/db-open-fast-path.test.ts` pins the fast path on a real store.** It checks that a current store opens with no DDL, that every `CREATE` the repair path runs names an object in the required list (and the reverse), and that stale versions, a rolled-back `schema_version`, a lagging `user_version`, a dropped continuity table or index, and a missing meta key all still take the repair path. It also checks that sleep repairs a desynced full-text index and that doctor warns on one. Five of the nine tests fail against the previous code; the other four guard behaviour that must not change. `tests/raw-archive.test.ts` adds a case where the full-text purge fails: the archive throws, and the memory row stays, with no `raw_archive` or `archive_raw` audit row written.
+
 ## 1.63.0 - 2026-10-04
 
 ### Added

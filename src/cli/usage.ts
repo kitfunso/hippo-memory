@@ -26,7 +26,7 @@ export function printSlackWorkspacesUsage(): void {
 }
 
 export const USAGE_HEADER = `
-Hippo - memory for AI agents that learns what is wrong and ranks it down
+Hippo - Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 
 Usage: hippo <command> [options]
 

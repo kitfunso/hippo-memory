@@ -1,6 +1,8 @@
 # Hippo Memory - Pi Extension
 
-Biologically-inspired memory for [Pi coding agent](https://github.com/badlogic/pi-mono). Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+This extension supports the [Pi coding agent](https://github.com/badlogic/pi-mono). Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 
 ## Install
 
