@@ -28,7 +28,7 @@ function isStoreBusy(res: Response): boolean {
   return res.status === 503 && res.headers.has('retry-after');
 }
 
-/** Replaying is safe because each routed write commits in one transaction and anything after it is best-effort, so a busy 503 means nothing landed. */
+/** Replaying is safe because each routed write commits in one transaction and anything after it is best-effort, so a busy 503 means nothing landed; a sleep is safe too, as a re-run finishes a partial one. */
 function sendWrite(url: string, init: RequestInit): Promise<Response> {
   return fetchWithRetry(url, init, { timeoutMs: SERVER_TIMEOUT_MS, attempts: STORE_BUSY_ATTEMPTS, retryOn: isStoreBusy });
 }
