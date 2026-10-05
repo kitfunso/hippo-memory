@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadConfig } from '../src/config.js';
-import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, SERVER_DB_WAIT_MS, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
@@ -117,6 +117,36 @@ describe('pilot arm helpers', () => {
       closeHippoDb(holder);
     }
     expect(armCount()).toBe(0);
+  });
+
+  it('a held write lock under a server request waits the request bound, not the hook one', () => {
+    const holder = openHippoDb(root);
+    try {
+      holder.exec('BEGIN IMMEDIATE');
+      withBusyWait(SERVER_DB_WAIT_MS, () => {
+        const reader = openHippoDb(root);
+        try {
+          const started = Date.now();
+          expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
+          // HOOK_DB_WAIT_MS would take at least 1000 ms; this leaves room for slow busy sleeps on CI.
+          expect(Date.now() - started).toBeLessThan(HOOK_DB_WAIT_MS - 100);
+        } finally {
+          closeHippoDb(reader);
+        }
+      });
+    } finally {
+      holder.exec('ROLLBACK');
+      closeHippoDb(holder);
+    }
+    expect(armCount()).toBe(0);
+  });
+
+  it('a tenant-scoped read ignores another tenant\'s row for the same session', () => {
+    ensurePilotArm(db, 'tenant-a', 's1', 10000);
+    expect(readPilotArm(db, 's1', 'tenant-b')).toBeNull();
+    expect(ensurePilotArm(db, 'tenant-b', 's1', 0, { ownTenantOnly: true })).toBe('hippo');
+    expect(readPilotArm(db, 's1', 'tenant-b')).toBe('hippo');
+    expect(armCount()).toBe(2);
   });
 
   it('a stored arm is read without the write lock', () => {

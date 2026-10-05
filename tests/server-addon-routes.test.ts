@@ -92,6 +92,23 @@ describe('an add-on route behind serve()', () => {
     expect(await post(ECHO, '{}')).toEqual({ status: 404, reply: { error: 'no such thing' } });
   });
 
+  it('answers 500 for an HttpError status writeHead would refuse, and keeps serving', async () => {
+    const statuses = [0, 99, 1000, 404.5, Number.NaN];
+    await start([...statuses.map((s, i) => route(`/v1/x-status-${i}`, async () => { throw new HttpError(s, 'upstream failed'); })), echo()]);
+    for (const i of statuses.keys()) {
+      expect(await post(`/v1/x-status-${i}`, '{}')).toEqual({ status: 500, reply: { error: 'internal server error', requestId: expect.any(String) } });
+    }
+    expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
+  });
+
+  it('closes the socket and keeps serving when building the failure reply throws', async () => {
+    const unreadable = new HttpError(500, 'x');
+    Object.defineProperty(unreadable, 'message', { get: () => { throw new Error('unreadable message'); } });
+    await start([route('/v1/x-unreadable', async () => { throw unreadable; }), echo()]);
+    await expect(post('/v1/x-unreadable', '{}')).rejects.toThrow();
+    expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
+  });
+
   it('answers 500 with a request id, never a 200, when the handler value is not JSON', async () => {
     const circular: unknown[] = [];
     circular.push(circular);
