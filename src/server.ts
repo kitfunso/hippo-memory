@@ -41,7 +41,7 @@ export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AddonCall, AddonRoute, AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
-// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a hook route, JsonValue for its body.
+// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a caller that renders the prompt hook elsewhere, JsonValue for its body.
 export { HttpError } from './http-util.js';
 export { promptHookContext } from './prompt-hook.js';
 export type { JsonValue } from './json.js';
@@ -150,33 +150,26 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'GET', regex: /^\/v1\/customer-notes\/(\d+)$/, handler: handleGetCustomerNote },
 ];
 
-/**
- * Run the first /v1 route whose method and path match. Each matcher runs before its method check, as the
- * inline route blocks did, so a malformed `%` escape still throws from matchPath on any method.
- */
+/** The route's handler bound to this request's path params, or null when method or path differ. The matcher runs before the
+ *  method check, as the inline route blocks did, so a malformed `%` escape still throws from matchPath on any method. */
+function routeMatches(route: Route, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
+  if ('path' in route) return method === route.method && path === route.path ? route.handler : null;
+  if ('pattern' in route) {
+    const params = matchPath(route.pattern, path);
+    return method === route.method && params ? (r) => route.handler(r, params) : null;
+  }
+  const match = path.match(route.regex);
+  return method === route.method && match ? (r) => route.handler(r, match) : null;
+}
+
+/** Run the first /v1 route whose method and path match. */
 async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
   for (const route of V1_ROUTES) {
-    if ('path' in route) {
-      if (method === route.method && path === route.path) {
-        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
-        await route.handler(r);
-        return true;
-      }
-    } else if ('pattern' in route) {
-      const params = matchPath(route.pattern, path);
-      if (method === route.method && params) {
-        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
-        await route.handler(r, params);
-        return true;
-      }
-    } else {
-      const match = path.match(route.regex);
-      if (method === route.method && match) {
-        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
-        await route.handler(r, match);
-        return true;
-      }
-    }
+    const run = routeMatches(route, method, path);
+    if (run === null) continue;
+    if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
+    await run(r);
+    return true;
   }
   return false;
 }
@@ -185,13 +178,7 @@ const ADDON_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
 
 // A path with only ADDON_SEGMENT_RE characters never holds a `%`, so matchPath cannot throw here.
 function isCorePostPath(path: string): boolean {
-  if (PUBLIC_ROUTES.has(`POST ${path}`)) return true;
-  return V1_ROUTES.some((route) => {
-    if (route.method !== 'POST') return false;
-    if ('path' in route) return path === route.path;
-    if ('pattern' in route) return matchPath(route.pattern, path) !== null;
-    return route.regex.test(path);
-  });
+  return PUBLIC_ROUTES.has(`POST ${path}`) || V1_ROUTES.some((route) => routeMatches(route, 'POST', path) !== null);
 }
 
 /** Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or hides from dispatch. */
@@ -399,6 +386,16 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
   if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) req.destroy();
 }
 
+function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
+  try {
+    replyWithFailure(req, res, err, requestId);
+  } catch (replyErr) {
+    // A throw here would be an unhandled rejection, which stops the daemon for every caller.
+    log.error(`serve: failure reply not sent, socket closed: ${replyErr instanceof Error ? replyErr.message : String(replyErr)}`, { requestId });
+    res.destroy();
+  }
+}
+
 function setKeepAliveTimeouts(server: Server): void {
   // The default 5s keepAliveTimeout closes idle sockets just as clients reuse them (ECONNRESET).
   // headersTimeout must stay ABOVE keepAliveTimeout + keepAliveTimeoutBuffer (1s), or it closes idle reused sockets itself.
@@ -495,9 +492,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     res.setHeader('X-Request-Id', requestId);
     const run = (): Promise<void> => withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, served, startedAt, streamSlots, limiter));
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => {
-      replyWithFailure(req, res, err, requestId);
-    });
+    (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => replyOrClose(req, res, err, requestId));
   });
 
   setKeepAliveTimeouts(server);

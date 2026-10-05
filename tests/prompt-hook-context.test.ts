@@ -9,6 +9,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { adminActor, type Context } from '../src/api.js';
+import { BadRequestError } from '../src/api-errors.js';
+import { MAX_ID_LEN } from '../src/http-util.js';
 import { hashArm } from '../src/pilot-arm.js';
 import { resolveProjectIdentity } from '../src/project-identity.js';
 import { promptHookContext } from '../src/prompt-hook.js';
@@ -185,20 +187,102 @@ describe('promptHookContext', () => {
     expect(await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P })).toEqual({ arm: null, stdout: '' });
     expect(ledger(store, `event = 'skip'`).map((r) => [r.session_id, r.surface])).toEqual([['again', 'hook']]);
   });
+
+  it('books a caller arm row even when another tenant already holds that session id', async () => {
+    const store = makeProject(path.join(tmp, 'p'), 10000);
+    for (const tenantId of ['t-a', 't-b']) {
+      const ctx: Context = { hippoRoot: store, tenantId, actor: adminActor('prompt-hook-test') };
+      expect((await promptHookContext(ctx, { sessionId: 'same-id', project: PROJECT_P })).arm).toBe('holdout');
+    }
+    expect(ledger(store, `event = 'arm'`).map((r) => r.tenant_id)).toEqual(['t-a', 't-b']);
+  });
+
+  it.each([
+    ['a long session id', { sessionId: 'x'.repeat(MAX_ID_LEN + 1), project: PROJECT_P }],
+    ['a long project name', { sessionId: 's', project: { ...PROJECT_P, name: 'n'.repeat(MAX_ID_LEN + 1) } }],
+    ['a long alias', { sessionId: 's', project: { ...PROJECT_P, aliases: ['a'.repeat(MAX_ID_LEN + 1)] } }],
+    ['eleven aliases', { sessionId: 's', project: { ...PROJECT_P, aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) } }],
+  ])('rejects %s as a bad request', async (_name, req) => {
+    const store = makeProject(path.join(tmp, 'p'));
+    await expect(promptHookContext(ctxFor(store), req)).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('takes ten aliases at the length cap', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    const aliases = Array.from({ length: 10 }, (_, i) => `${i}`.padEnd(MAX_ID_LEN, 'a'));
+    expect((await promptHookContext(ctxFor(store), { sessionId: 's', project: { ...PROJECT_P, aliases } })).stdout).toContain('rollback plan');
+  });
 });
 
-describe('package exports the enterprise hook client loads', () => {
+describe('promptHookContext on a shared store', () => {
+  const SHARED = { sharedStore: true } as const;
+  const ask = (store: string, sessionId: string, shared: boolean): Promise<{ arm: string | null; stdout: string }> =>
+    promptHookContext(ctxFor(store), { sessionId, project: PROJECT_P }, shared ? SHARED : undefined);
+
+  it('keeps only the caller project rows in the recent tail; pins are unchanged', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: the user-global pin about the rollback plan', '');
+    writeEntry(store, { ...createMemory('Kafka consumers in the billing service must be paused with kafka-pause.sh first'), origin_project: 'p' });
+    writeEntry(store, { ...createMemory('Somebody keeps personal shell aliases in the dotfiles repo on the build box'), origin_project: '' });
+    const own = await ask(store, 'tail-own', false);
+    expect(own.stdout).toContain('dotfiles');
+    const shared = await ask(store, 'tail-shared', true);
+    expect(shared.stdout).toContain('kafka-pause.sh');
+    expect(shared.stdout).toContain('user-global pin');
+    expect(shared.stdout).not.toContain('dotfiles');
+  });
+
+  it('leaves out the global store of the user running the server', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    const globalStore = path.join(tmp, 'global');
+    initStore(globalStore);
+    pin(globalStore, 'PINNED: the operator keeps a personal note about the vpn', '');
+    expect((await ask(store, 'g-own', false)).stdout).toContain('personal note');
+    const shared = await ask(store, 'g-shared', true);
+    expect(shared.stdout).toContain('rollback plan');
+    expect(shared.stdout).not.toContain('personal note');
+  });
+
+  it('shows task state only to the session that saved it', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' });
+    expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');
+    const other = await ask(store, 'someone-else-shared', true);
+    expect(other.stdout).toContain('rollback plan');
+    expect(other.stdout).not.toContain('Active Task Snapshot');
+    expect((await ask(store, 'owner', true)).stdout).toContain('Active Task Snapshot');
+  });
+
+  it('records nothing and books no arm when the served root has no store, never falling back to the global one', async () => {
+    const globalStore = makeProject(path.join(tmp, 'home'), 10000);
+    process.env.HIPPO_HOME = globalStore;
+    const served = path.join(tmp, 'srv', '.hippo');
+    expect(await ask(served, 'no-store', true)).toEqual({ arm: null, stdout: '' });
+    expect(ledger(globalStore, '1 = 1')).toEqual([]);
+    expect(fs.existsSync(path.join(served, 'hippo.db'))).toBe(false);
+    expect((await ask(served, 'no-store', false)).arm).toBe('holdout');
+    expect(ledger(globalStore, `event = 'arm'`).map((r) => r.session_id)).toEqual(['no-store']);
+  });
+});
+
+describe('subpath exports resolve', () => {
   it.each([
-    ['hippo-memory/project-identity', 'resolveProjectIdentity'],
-    ['hippo-memory/json-hooks', 'uninstallJsonHooks'],
-    ['hippo-memory/json-hooks', 'resolveJsonHookPaths'],
-    ['hippo-memory/server', 'promptHookContext'],
-    ['hippo-memory/server', 'HttpError'],
-  ])('%s exports %s from the build', (specifier, name) => {
+    ['hippo-memory/project-identity', 'resolveProjectIdentity', 'function'],
+    ['hippo-memory/project-identity', 'originInSql', 'undefined'],
+    ['hippo-memory/project-identity', 'clearProjectIdentityCache', 'undefined'],
+    ['hippo-memory/json-hooks', 'installJsonHooks', 'function'],
+    ['hippo-memory/json-hooks', 'uninstallJsonHooks', 'function'],
+    ['hippo-memory/json-hooks', 'resolveJsonHookPaths', 'function'],
+    ['hippo-memory/server', 'promptHookContext', 'function'],
+    ['hippo-memory/server', 'HttpError', 'function'],
+  ])('%s: typeof %s is %s in the build', (specifier, name, type) => {
     const script = `const m = await import('${specifier}'); console.log(typeof m.${name});`;
     // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: REPO, encoding: 'utf-8', timeout: 30_000 });
     expect(child.status, child.stderr).toBe(0);
-    expect(child.stdout.trim()).toBe('function');
+    expect(child.stdout.trim()).toBe(type);
   });
 });

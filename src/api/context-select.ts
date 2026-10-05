@@ -42,6 +42,7 @@ export interface ContextPlan {
   globalRoot: string;
   primaryIsGlobal: boolean;
   hasLocalTaskState: boolean;
+  sharedStore: boolean;
   config: HippoConfig;
   currentProject: ProjectRef;
   includeCrossProject: boolean;

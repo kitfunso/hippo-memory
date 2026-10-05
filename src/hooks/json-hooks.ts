@@ -39,12 +39,14 @@ import type { JsonObject } from '../working-memory.js';
 import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, codexHomeDir, defaultPreCompactLogPath } from './shared.js';
 import { type JsonValue, isJsonString } from '../json.js';
 
+/** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {
   settings: string;
   logFile: string;
   display: string;
 }
 
+/** What installJsonHooks wrote, migrated or left alone in one target's settings file. */
 export interface InstallResult {
   target: JsonHookTarget;
   settingsPath: string;
@@ -65,6 +67,7 @@ export interface InstallResult {
   invalidJson: boolean;
 }
 
+/** The paths for `target` under the current home directory; reads and writes nothing. */
 export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
   const home = homeDir();
   const logsDir = path.join(home, '.hippo', 'logs');
@@ -182,6 +185,7 @@ function installCodexHooks(settingsPath: string, settings: JsonValue): InstallRe
   return { ...result, installedUserPromptSubmit, installedCompactResume };
 }
 
+/** Adds hippo's hooks to `target`'s settings file and migrates older hippo entries; a file that is not JSON stays untouched. */
 export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const { settings: settingsPath, logFile } = resolveJsonHookPaths(target);
   const dir = path.dirname(settingsPath);
@@ -346,6 +350,7 @@ function uninstallCodexHooks(hooks: JsonObject): boolean {
   return changed;
 }
 
+/** Removes every hippo hook from `target`'s settings file, other tools' hooks kept; true when the file changed. */
 export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return false;

@@ -11,6 +11,7 @@ export {
   withSharedStoreHandles,
   SERVER_DB_WAIT_MS,
   withBusyWait,
+  scopedBusyWait,
   SqliteBlockedError,
   withSqliteBlocked,
   openHippoDb,

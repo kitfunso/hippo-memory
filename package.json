@@ -8,8 +8,8 @@
   "exports": {
     ".": "./dist/index.js",
     "./server": "./dist/server.js",
-    "./project-identity": "./dist/project-identity.js",
-    "./json-hooks": "./dist/hooks/json-hooks.js"
+    "./project-identity": "./dist/entry/project-identity.js",
+    "./json-hooks": "./dist/entry/json-hooks.js"
   },
   "openclaw": {
     "extensions": [

@@ -2,14 +2,13 @@
 
 import * as path from 'path';
 import { MemoryEntry } from '../memory.js';
-import { isInitialized } from '../store/open.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../delivery-recorder.js';
 import { loadConfig } from '../config.js';
 import { blockHash, estimateTokens, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { isGlobalStoreRoot } from '../project-identity.js';
 import { autoDetectContext } from '../context-auto.js';
 import { detectScope } from '../scope.js';
-import { getGlobalRoot } from '../shared.js';
+import { ledgerRoot, withLedgerDb } from '../ledger-db.js';
 import { readStdinBounded } from '../stdin.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
@@ -21,7 +20,6 @@ import {
   flushDeliveryRecorder,
   hasContextData,
   toRenderItems,
-  withLedgerDb,
 } from '../prompt-hook.js';
 import { printError } from './output.js';
 import {
@@ -61,7 +59,7 @@ function startDeliveryRecorder(
   if (flags['pinned-only'] !== true) return null;
   try {
     // The same store withLedgerDb writes the token ledger to, so its config governs both.
-    const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
+    const root = ledgerRoot(hippoRoot);
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       root,

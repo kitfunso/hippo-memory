@@ -62,6 +62,7 @@ export interface ContextOpts {
   cost?: ContextCost;
   /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with or without it. */
   deliveryObserver?: DeliveryObserver;
+  sharedStore?: true;
 }
 
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */

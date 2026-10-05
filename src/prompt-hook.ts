@@ -1,55 +1,18 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
 // promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './api.js';
+import { BadRequestError } from './api-errors.js';
 import { loadConfig } from './config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import { closeHippoDb, isSqliteBusy, noteStoreBusy, openHippoDb } from './db.js';
+import { isSqliteBusy, noteStoreBusy, type openHippoDb } from './db.js';
 import type { DeliveryRecorder } from './delivery-recorder.js';
+import { MAX_ID_LEN } from './http-util.js';
 import { isJsonString, type JsonValue } from './json.js';
+import { withLedgerDb } from './ledger-db.js';
 import type { MemoryEntry } from './memory.js';
-import { ensurePilotArm, hashArm, readPilotArm, type PilotArm } from './pilot-arm.js';
+import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-trace.js';
-import { getGlobalRoot } from './shared.js';
-import { isInitialized } from './store/open.js';
 import { blockHash, estimateTokens, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
-
-/** Runs `fn` on the local store, else the global one, since the prompt hook fires where no local store exists.
- *  Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */
-export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T | undefined {
-  let root: string | null = null;
-  try {
-    if (isInitialized(hippoRoot)) root = hippoRoot;
-    else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
-  } catch {
-    // An unreadable store root means no ledger write; the ledger must never break context or recall.
-    return undefined;
-  }
-  if (root === null) return undefined;
-  let db: ReturnType<typeof openHippoDb> | undefined;
-  try {
-    db = openHippoDb(root);
-    return fn(db);
-  } catch (error) {
-    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
-    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
-    return undefined;
-  } finally {
-    if (db) closeHippoDb(db);
-  }
-}
-
-/** The session's pilot arm (src/pilot-arm.ts), or null at rate 0, with no session id, or with no store.
- *  `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash. */
-export function sessionPilotArm(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): PilotArm | null {
-  if (sessionId === undefined || sessionId.trim() === '') return null;
-  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
-  if (root === null) return null;
-  const rate = loadConfig(root).pilot.holdoutRateBp;
-  if (rate <= 0) return null;
-  const arm = withLedgerDb(hippoRoot, (db) =>
-    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
-  return arm ?? hashArm(sessionId, rate);
-}
 
 /** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
@@ -72,6 +35,8 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
+  /** Ledger rows stay in `hippoRoot`, never the global store; see promptHookContext. */
+  readonly sharedStore?: boolean;
 }
 
 export function hasContextData(result: ContextResult): boolean {
@@ -148,6 +113,7 @@ export function additionalContextOutput(view: ContextView): string {
 /** True, after booking the skip row, when the hook may omit a static block this session already holds. */
 function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlock: string, recallBlock: string, staticCount: number): boolean {
   const { hippoRoot, payloadSessionId, rec } = view;
+  const ledgerOpts = { sharedStore: view.sharedStore };
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   const injectCfg = loadConfig(hippoRoot).pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
@@ -157,7 +123,7 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
   const staticHash = blockHash(staticBlock);
   const last = withLedgerDb(hippoRoot, (db) =>
-    lastSentState(db, view.tenantId, payloadSessionId, surface));
+    lastSentState(db, view.tenantId, payloadSessionId, surface), ledgerOpts);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
   withLedgerDb(hippoRoot, (db) => {
     recordTokenUse(db, {
@@ -167,7 +133,7 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
     if (recallBlock.trim()) return;
     rec?.delivered({ state: 'reused', staticHash, staticReused: true });
     flushDeliveryRecorder(rec, db);
-  });
+  }, ledgerOpts);
   return true;
 }
 
@@ -195,7 +161,7 @@ function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, s
       } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
     }
     flushDeliveryRecorder(view.rec, db);
-  });
+  }, { sharedStore: view.sharedStore });
 }
 
 // The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two drift.
@@ -203,20 +169,40 @@ const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = 1500;
 const HOOK_FRAMING = 'observe';
 
+// Each project name is matched against every candidate row, so the caller's list stays short.
+const MAX_PROJECT_ALIASES = 10;
+
 interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: { readonly name: string; readonly legacyName: string; readonly aliases?: readonly string[] };
   readonly payload?: Readonly<Record<string, JsonValue>>;
 }
 
+interface PromptHookOpts {
+  /** The store serves many people, so the caller is not its owner: no global store, no user-global recent rows,
+   *  task state only for the caller's own session, and no ledger rows outside this store. */
+  readonly sharedStore?: true;
+}
+
+function assertPromptHookRequest(req: PromptHookRequest): void {
+  const { name, legacyName, aliases = [] } = req.project;
+  if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  if ([req.sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
+    throw new BadRequestError(`session id and project names: at most ${MAX_ID_LEN} characters each`);
+  }
+}
+
 /** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project.
- *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout. */
-export async function promptHookContext(ctx: Context, req: PromptHookRequest): Promise<{ arm: PilotArm | null; stdout: string }> {
+ *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout.
+ *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only. Throws BadRequestError past the input caps. */
+export async function promptHookContext(ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {}): Promise<{ arm: PilotArm | null; stdout: string }> {
+  assertPromptHookRequest(req);
   const { sessionId, payload } = req;
+  const { sharedStore } = opts;
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
-  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent);
+  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { sharedStore, ownTenantOnly: true });
   if (arm === 'holdout') return { arm, stdout: '' };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {
@@ -228,11 +214,12 @@ export async function promptHookContext(ctx: Context, req: PromptHookRequest): P
     currentSessionId: sessionId,
     prompt: isJsonString(prompt) ? prompt : undefined,
     cost: contextCost('additional-context', HOOK_FRAMING),
+    sharedStore,
   });
   const stdout = hasContextData(result)
     ? additionalContextOutput({
         hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
-        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result,
+        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, sharedStore,
       })
     : '';
   return { arm, stdout };
