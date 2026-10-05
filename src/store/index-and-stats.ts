@@ -26,7 +26,7 @@ export function loadIndex(hippoRoot: string): HippoIndex {
 export function saveIndex(hippoRoot: string, index: HippoIndex): void {
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
@@ -52,7 +52,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     );
     const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
     if (legacyEntries.length > 0) {
-      db.exec('BEGIN');
+      db.exec('BEGIN IMMEDIATE');
       try {
         // Guard with per-row skip, like bootstrapLegacyStore: a stale markdown mirror could resurrect a
         // rejected value here. Refusal audit is written inline because nothing rolls back on a skip.
