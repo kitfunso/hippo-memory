@@ -39,7 +39,7 @@ export interface ServeOpts {
   shutdownDrainMs?: number;
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
-  autoSleep?: boolean;
+  autoSleep?: false;
 }
 
 export type ResolvedServeOpts = ServeOpts & { store: HippoStore };
