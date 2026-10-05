@@ -12,7 +12,7 @@ import { deduplicateStore } from '../dedupe.js';
 import { computeAmbientState } from '../ambient.js';
 import { loadPendingExtractionTenants } from '../graph/read.js';
 import { markPendingProcessedUpTo } from '../graph/write.js';
-import { extractGraph } from '../graph-extract.js';
+import { extractGraphChunked, type ExtractResult } from '../graph-extract.js';
 import type { Context } from './types.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 
@@ -27,7 +27,7 @@ export interface SleepPhases {
   computeAmbientState: typeof computeAmbientState;
   loadConfig: typeof loadConfig;
   loadPendingExtractionTenants: typeof loadPendingExtractionTenants;
-  extractGraph: typeof extractGraph;
+  extractGraph: (hippoRoot: string, tenantId: string) => ExtractResult | Promise<ExtractResult>;
 }
 
 const DEFAULT_SLEEP_PHASES: SleepPhases = {
@@ -40,7 +40,7 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   computeAmbientState,
   loadConfig,
   loadPendingExtractionTenants,
-  extractGraph,
+  extractGraph: extractGraphChunked,
 };
 
 /** Phase counters the consolidate audit row reports, filled in as each phase completes. */
@@ -117,7 +117,7 @@ async function runSleepPhases(
   // Phase 5: Post-sleep ambient state summary.
   counts.ambient = summarizeAmbient(ctx, phases, result);
 
-  drainGraphQueue(ctx, phases, snapshot, result);
+  await drainGraphQueue(ctx, phases, snapshot, result);
   return result;
 }
 
@@ -236,7 +236,7 @@ function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult
 
 // Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall runs on fresh data.
 // Fault-isolated: consolidation has already committed, so no failure here aborts sleep; a failed tenant stays pending.
-function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: DirtyTenantSnapshot, result: SleepResult): void {
+async function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: DirtyTenantSnapshot, result: SleepResult): Promise<void> {
   try {
     if (snapshot.error) {
       // Core sleep already succeeded; surface the skipped graph refresh as a detail.
@@ -251,13 +251,14 @@ function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: DirtyTenan
     // dirtyTenants was snapshotted before the memory-deleting phases above.
     for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
       try {
-        const ext = phases.extractGraph(ctx.hippoRoot, tenantId);
+        const ext = await phases.extractGraph(ctx.hippoRoot, tenantId);
         // Count the rebuild as soon as it succeeds — it happened regardless of
         // the drain-mark below.
         gTenants += 1;
         gEntities += ext.entities;
         gRelations += ext.relations;
         // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
+        // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
         markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);
       } catch (tenantErr) {
         // SAFETY: this is a best-effort log message only; property access

@@ -15,8 +15,10 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { assertTenantId } from '../tenant.js';
 import { log } from '../log.js';
-import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts } from './types.js';
+import { clock } from '../write-budget.js';
+import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts, type UpdateEntityOpts } from './types.js';
 import { type EntityRow, type RelationRow, type QueueRow, rowToEntity, rowToRelation, rowToQueueItem, ENTITY_COLS, RELATION_COLS, QUEUE_COLS, type DbLike } from './rows.js';
+import type { DesiredRelation, GraphOp, NaturalKey } from './delta.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
@@ -131,11 +133,7 @@ export function insertEntity(
   if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(`insertEntity: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
   }
-  const name = (opts.name ?? '').trim();
-  if (name.length === 0) throw new Error('insertEntity: name is required');
-  if (name.length > MAX_ENTITY_NAME_LEN) {
-    throw new Error(`insertEntity: name exceeds the ${MAX_ENTITY_NAME_LEN}-char cap`);
-  }
+  const name = checkedName('insertEntity', opts.name);
   const now = new Date().toISOString();
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
@@ -154,6 +152,44 @@ export function insertEntity(
     return rowToEntity(row);
   } finally {
     if (ownDb) closeHippoDb(ownDb);
+  }
+}
+
+function checkedName(label: string, raw: string | undefined): string {
+  const name = (raw ?? '').trim();
+  if (name.length === 0) throw new Error(`${label}: name is required`);
+  if (name.length > MAX_ENTITY_NAME_LEN) {
+    throw new Error(`${label}: name exceeds the ${MAX_ENTITY_NAME_LEN}-char cap`);
+  }
+  return name;
+}
+
+/** Renames an entity or moves its memory provenance in place, keeping id and created_at; null when the row is gone.
+ *  A delete plus an insert would cascade away every relation that points at it. */
+export function updateEntity(
+  hippoRoot: string,
+  tenantId: string,
+  id: number,
+  opts: UpdateEntityOpts,
+  txDb?: GraphTxDb,
+): Entity | null {
+  assertTenantId('updateEntity', tenantId);
+  const name = checkedName('updateEntity', opts.name);
+  const db = txDb ?? openHippoDb(hippoRoot);
+  try {
+    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
+    const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as EntityRow | undefined;
+    if (!row) return null;
+    const entity = rowToEntity(row);
+    const sourceObject = entity.sourceObjectType === undefined || entity.sourceObjectId === undefined
+      ? null
+      : { type: entity.sourceObjectType, id: entity.sourceObjectId };
+    const resolved = resolveConsolidatedSource(db, tenantId, opts.memoryId ?? null, sourceObject, 'updateEntity');
+    db.prepare(`UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`)
+      .run(name, resolved.memoryId, resolved.sourceKind, id, tenantId);
+    return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
+  } finally {
+    if (db !== txDb) closeHippoDb(db);
   }
 }
 
@@ -274,35 +310,88 @@ export function markExtractionProcessed(
   }
 }
 
-/**
- * Delete ALL entities for a tenant (relations cascade via the from/to FKs). Returns
- * the number of entities deleted. The rebuild primitive for graph extraction: the
- * deterministic graph is a pure derived function of the consolidated objects, so an
- * extract clears then re-derives. Lives in graph.ts (the sole sanctioned graph
- * writer), so the CI lint permits this `DELETE FROM entities`. Does NOT touch
- * graph_extraction_queue (the enqueue-hook's domain).
- */
-export function clearGraph(hippoRoot: string, tenantId: string, txDb?: GraphTxDb): number {
-  assertTenantId('clearGraph', tenantId);
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const res = db.prepare(`DELETE FROM entities WHERE tenant_id = ?`).run(tenantId);
-    return Number(res.changes ?? 0);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
+/** The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph row. */
+function objectInForce(db: DbLike, tenantId: string, ref: SourceObjectRef): boolean {
+  // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
+  const table = SOURCE_OBJECT_TABLE[ref.type];
+  // SAFETY: row's shape matches the single `status` column named in the SELECT.
+  const row = db.prepare(`SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(ref.id, tenantId) as { status: string } | undefined;
+  return row?.status === 'active' || row?.status === 'superseded';
+}
+
+function entityIdByKey(db: DbLike, tenantId: string, key: NaturalKey): number | undefined {
+  // SAFETY: row's shape matches the single `id` column named in the SELECT.
+  const row = db.prepare(
+    `SELECT id FROM entities WHERE tenant_id = ? AND entity_type = ? AND source_object_type = ? AND source_object_id = ? ORDER BY id LIMIT 1`,
+  ).get(tenantId, key.entityType, key.sourceObject.type, key.sourceObject.id) as { id: number } | undefined;
+  return row?.id;
+}
+
+function insertDesiredRelation(db: GraphTxDb, hippoRoot: string, tenantId: string, rel: DesiredRelation): boolean {
+  const fromEntityId = entityIdByKey(db, tenantId, rel.from);
+  const toEntityId = entityIdByKey(db, tenantId, rel.to);
+  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) return false;
+  // SAFETY: row's shape matches the single aliased column named in the SELECT.
+  const present = db.prepare(
+    `SELECT 1 AS hit FROM relations WHERE tenant_id = ? AND from_entity_id = ? AND to_entity_id = ? AND rel_type = ? LIMIT 1`,
+  ).get(tenantId, fromEntityId, toEntityId, rel.relType) as { hit: number } | undefined;
+  if (present) return false;
+  insertRelation(hippoRoot, tenantId, { fromEntityId, toEntityId, relType: rel.relType, memoryId: rel.memoryId, sourceObject: rel.sourceObject }, db);
+  return true;
+}
+
+/** Applies one op; false when a writer since the diff made it stale, which the next run's diff repairs. */
+function applyGraphOp(db: GraphTxDb, hippoRoot: string, tenantId: string, op: GraphOp): boolean {
+  switch (op.op) {
+    case 'deleteEntity':
+      db.prepare(`DELETE FROM entities WHERE id = ? AND tenant_id = ?`).run(op.id, tenantId);
+      return true;
+    case 'deleteRelation':
+      db.prepare(`DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(op.id, tenantId);
+      return true;
+    case 'updateEntity':
+      if (!objectInForce(db, tenantId, op.entity.sourceObject)) return false;
+      return updateEntity(hippoRoot, tenantId, op.id, op.entity, db) !== null;
+    case 'insertEntity':
+      // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
+      if (!objectInForce(db, tenantId, op.entity.sourceObject) || entityIdByKey(db, tenantId, op.entity) !== undefined) return false;
+      insertEntity(hippoRoot, tenantId, op.entity, db);
+      return true;
+    case 'insertRelation':
+      return insertDesiredRelation(db, hippoRoot, tenantId, op.relation);
   }
 }
 
-/**
- * Run a full graph rebuild for one tenant inside a single transaction. `clearGraph`
- * + every `insertEntity`/`insertRelation` call made inside `fn` (passing the supplied
- * `txDb`) share the one connection and its `BEGIN IMMEDIATE` write lock, so the
- * rebuild is ATOMIC: two concurrent rebuilds serialize on the write lock (the second
- * waits, then re-derives cleanly) instead of interleaving into duplicate rows, and a
- * throw mid-rebuild ROLLS BACK the clear (no bricked/empty graph). The sole sanctioned
- * place to wrap graph writes in a transaction.
- */
+export interface ApplyGraphOpsResult {
+  readonly next: number;
+  readonly skipped: number;
+}
+
+/** Applies `ops` from index `from` on the caller's open transaction and stops at the first op boundary past `opts.holdMs`.
+ *  Returns where the next chunk starts and how many ops were skipped as stale. */
+export function applyGraphOps(
+  db: GraphTxDb,
+  hippoRoot: string,
+  tenantId: string,
+  ops: readonly GraphOp[],
+  from: number,
+  opts: { readonly holdMs: number; readonly clock?: () => number },
+): ApplyGraphOpsResult {
+  assertTenantId('applyGraphOps', tenantId);
+  const now = opts.clock ?? clock;
+  const begunAt = now();
+  let next = from;
+  let skipped = 0;
+  while (next < ops.length) {
+    if (!applyGraphOp(db, hippoRoot, tenantId, ops[next])) skipped += 1;
+    next += 1;
+    if (now() - begunAt >= opts.holdMs) break;
+  }
+  return { next, skipped };
+}
+
+/** Runs one tenant's graph writes in `fn` on `txDb` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
+ *  interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a transaction. */
 export function runGraphRebuildTransaction<T>(
   hippoRoot: string,
   tenantId: string,
