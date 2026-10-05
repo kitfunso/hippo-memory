@@ -67,6 +67,7 @@ export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } fro
 export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
 export { consolidate } from './consolidate/sleep.js';
 export { ConsolidationResult } from './consolidate/run.js';
+export { sleep, type SleepOpts, type SleepResult } from './api/sleep.js';
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './dedupe.js';
 

@@ -85,6 +85,7 @@ export interface McpContext {
   /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */
   hostAdmin?: true;
   store?: HippoStore;
+  autoSleep?: boolean;
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)

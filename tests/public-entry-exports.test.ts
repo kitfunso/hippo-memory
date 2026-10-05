@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
 import { strengthBucket } from '../src/dedupe.js';
+import { sleep } from '../src/api/sleep.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -40,5 +41,37 @@ describe('package entry re-exports strengthBucket', () => {
     expect(out.one).toBe(100);
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/dedupe\.js';$/m);
+  });
+});
+
+// An add-on runs consolidation in its own process; adminActor stays internal because sleep reads only actor.subject.
+describe('package entry re-exports sleep', () => {
+  it('src/index.ts exposes the same function api/sleep.ts defines, and not adminActor', () => {
+    expect(entry.sleep).toBe(sleep);
+    expect('adminActor' in entry).toBe(false);
+  });
+
+  it('the built package resolves sleep by name and ships its option and result types', () => {
+    const script = [
+      "const m = await import('hippo-memory');",
+      "console.log(JSON.stringify({ type: typeof m.sleep, admin: 'adminActor' in m }));",
+    ].join('\n');
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+    if (child.status !== 0) {
+      throw new Error(
+        `self-reference import failed (run \`npm run build\` first):\n${child.error?.message ?? ''}${child.stderr}`,
+      );
+    }
+    const lines = child.stdout.trim().split('\n');
+    // SAFETY: the child script above is the only writer of the last stdout line and always emits these two keys.
+    const out = JSON.parse(lines[lines.length - 1]) as { type: string; admin: boolean };
+    expect(out.type).toBe('function');
+    expect(out.admin).toBe(false);
+    const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
+    expect(dts).toMatch(/^export \{ sleep, type SleepOpts, type SleepResult \} from '\.\/api\/sleep\.js';$/m);
   });
 });
