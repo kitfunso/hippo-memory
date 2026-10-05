@@ -1,15 +1,17 @@
-// The per-prompt hook's block and ledger rows, shared by `hippo context` and POST /v1/hooks/prompt so both print the same bytes.
-import type { ContextResult, ContextResultEntry } from './api.js';
+// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
+// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
+import { getContext, type Context, type ContextResult, type ContextResultEntry } from './api.js';
 import { loadConfig } from './config.js';
-import { contextBlockLines, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
+import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
 import { closeHippoDb, isSqliteBusy, noteStoreBusy, openHippoDb } from './db.js';
 import type { DeliveryRecorder } from './delivery-recorder.js';
+import { isJsonString, type JsonValue } from './json.js';
 import type { MemoryEntry } from './memory.js';
 import { ensurePilotArm, hashArm, readPilotArm, type PilotArm } from './pilot-arm.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-trace.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
-import { blockHash, estimateTokens, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
+import { blockHash, estimateTokens, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
 
 /** Runs `fn` on the local store, else the global one, since the prompt hook fires where no local store exists.
  *  Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */
@@ -194,4 +196,44 @@ function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, s
     }
     flushDeliveryRecorder(view.rec, db);
   });
+}
+
+// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two drift.
+const HOOK_INCLUDE_RECENT = 5;
+const HOOK_BUDGET = 1500;
+const HOOK_FRAMING = 'observe';
+
+interface PromptHookRequest {
+  readonly sessionId: string;
+  readonly project: { readonly name: string; readonly legacyName: string; readonly aliases?: readonly string[] };
+  readonly payload?: Readonly<Record<string, JsonValue>>;
+}
+
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project.
+ *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout. */
+export async function promptHookContext(ctx: Context, req: PromptHookRequest): Promise<{ arm: PilotArm | null; stdout: string }> {
+  const { sessionId, payload } = req;
+  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
+  const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
+  const ledgerSessionId = subagent ? undefined : sessionId;
+  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent);
+  if (arm === 'holdout') return { arm, stdout: '' };
+  const prompt = payload?.prompt;
+  const result = await getContext(ctx, {
+    budget: HOOK_BUDGET,
+    pinnedOnly: true,
+    includeRecent: HOOK_INCLUDE_RECENT,
+    // The project comes from the caller, never from where the store sits or the daemon's cwd.
+    currentProject: req.project,
+    currentSessionId: sessionId,
+    prompt: isJsonString(prompt) ? prompt : undefined,
+    cost: contextCost('additional-context', HOOK_FRAMING),
+  });
+  const stdout = hasContextData(result)
+    ? additionalContextOutput({
+        hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
+        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result,
+      })
+    : '';
+  return { arm, stdout };
 }

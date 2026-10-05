@@ -103,7 +103,6 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'DELETE', pattern: '/v1/memories/:id' },
   { method: 'POST', pattern: '/v1/outcome', body: '{"good":true}' },
   { method: 'GET', pattern: '/v1/context' },
-  { method: 'POST', pattern: '/v1/hooks/:event', body: '{"session_id":"s","project":{"name":"p"}}' },
   { method: 'POST', pattern: '/v1/sleep' },
   { method: 'POST', pattern: '/v1/auth/keys', body: '{"label":"x"}' },
   { method: 'GET', pattern: '/v1/auth/keys' },

@@ -13,7 +13,7 @@ import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
-import { isLoopback, requireAuth } from './server/auth.js';
+import { buildContextWithAuth, isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
@@ -21,7 +21,6 @@ import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFo
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './server/routes/admin.js';
 import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './server/routes/customer-notes.js';
 import { handleCloseDecision, handleCreateDecision, handleGetDecision, handleListDecisions, handleSupersedeDecision } from './server/routes/decisions.js';
-import { handleHookEvent } from './server/routes/hooks.js';
 import { handleCloseIncident, handleCreateIncident, handleGetIncident, handleListIncidents, handleResolveIncident } from './server/routes/incidents.js';
 import { handleApplyOutcome, handleArchiveMemory, handleCreateMemory, handleForgetMemory, handleGetGraph, handlePromoteMemory, handleSleep, handleSupersedeMemory } from './server/routes/memories.js';
 import { handleClosePolicy, handleCreatePolicy, handleGetPolicy, handleListPolicies, handlePoliciesAsOf, handleSupersedePolicy } from './server/routes/policies.js';
@@ -30,7 +29,8 @@ import { handleCloseProcess, handleCreateProcess, handleGetProcess, handleListPr
 import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrief, handleListProjectBriefs, handleRefreshProjectBrief, handleSupersedeProjectBrief } from './server/routes/project-briefs.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
-import type { ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
+import { parseJsonBody } from './server/validation.js';
+import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 
 // Add-on packages revoke keys through these without importing the whole api surface.
 export { authRevoke, ForbiddenError, type Context, type Actor };
@@ -40,7 +40,11 @@ export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
-export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+export type { AddonCall, AddonRoute, AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a hook route, JsonValue for its body.
+export { HttpError } from './http-util.js';
+export { promptHookContext } from './prompt-hook.js';
+export type { JsonValue } from './json.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
 export { sqliteStore, type HippoStore } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
@@ -93,7 +97,6 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'DELETE', pattern: '/v1/memories/:id', handler: handleForgetMemory },
   { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
   { method: 'GET', path: '/v1/context', handler: handleGetContext },
-  { method: 'POST', pattern: '/v1/hooks/:event', handler: handleHookEvent },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
   { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
   { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
@@ -178,6 +181,43 @@ async function dispatchV1Route(r: RouteRequest, method: string, path: string): P
   return false;
 }
 
+const ADDON_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
+
+// A path with only ADDON_SEGMENT_RE characters never holds a `%`, so matchPath cannot throw here.
+function isCorePostPath(path: string): boolean {
+  if (PUBLIC_ROUTES.has(`POST ${path}`)) return true;
+  return V1_ROUTES.some((route) => {
+    if (route.method !== 'POST') return false;
+    if ('path' in route) return path === route.path;
+    if ('pattern' in route) return matchPath(route.pattern, path) !== null;
+    return route.regex.test(path);
+  });
+}
+
+/** Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or hides from dispatch. */
+function assertAddonRoutes(routes: readonly AddonRoute[]): void {
+  const seen = new Set<string>();
+  for (const { path } of routes) {
+    const plain = path.startsWith('/v1/') && new URL(path, 'http://h').pathname === path
+      && path.slice('/v1/'.length).split('/').every((segment) => ADDON_SEGMENT_RE.test(segment));
+    if (!plain) throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
+    if (isCorePostPath(path)) throw new Error(`add-on route '${path}' is already served by core`);
+    seen.add(path);
+  }
+}
+
+/** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a core one. */
+async function dispatchAddonRoute({ req, res, opts }: RouteRequest, method: string, path: string): Promise<boolean> {
+  const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
+  if (!route) return false;
+  await refuseUnportedRoute(req, opts);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
+  sendJson(res, 200, await route.handler({ ctx, body }));
+  return true;
+}
+
 const NOT_ON_STORE_MESSAGE = 'not available on this store';
 
 function assertSqliteStore(opts: ResolvedServeOpts): void {
@@ -212,7 +252,9 @@ async function handleRequest(
 
   enforceRateLimit(req, path, limiter);
 
-  if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
+  const routeRequest: RouteRequest = { req, res, opts, query };
+  if (await dispatchV1Route(routeRequest, method, path)) return;
+  if (await dispatchAddonRoute(routeRequest, method, path)) return;
 
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
     // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
@@ -423,6 +465,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
+  assertAddonRoutes(opts.routes ?? []);
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
