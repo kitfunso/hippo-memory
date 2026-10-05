@@ -35,6 +35,7 @@ import { loadConfig } from '../src/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/rejection.js';
 import * as api from '../src/api.js';
+import { WRITE_BUDGET } from '../src/write-budget.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -200,6 +201,43 @@ describe('dormant retention', () => {
     } finally {
       inside.restore();
       forever.restore();
+    }
+  });
+
+  it('expires in short transactions, and keeps a row put back to sleep between them', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-expire-chunks-', JSON.stringify({ dormant: { retentionDays: 30 } }));
+    const ids: string[] = [];
+    const db = openHippoDb(home);
+    try {
+      for (let i = 0; i < 5; i++) {
+        const entry = createMemory(`retired cron host number ${i} was called nightly-0${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+        insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date(Date.now() - 45 * DAY_MS).toISOString() });
+        ids.push(entry.id);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+    let pauses = 0;
+    let kept = '';
+    // A zero hold commits after every row; the first gap re-dates a row the run has not reached, as a restore and a new sleep would.
+    const pause = async (): Promise<void> => {
+      if (pauses++ > 0) return;
+      const other = openHippoDb(home);
+      try {
+        kept = (other.prepare(`SELECT id FROM dormant_memories LIMIT 1`).get() as { id: string }).id;
+        other.prepare(`UPDATE dormant_memories SET dormant_at = ? WHERE id = ?`).run(new Date().toISOString(), kept);
+      } finally {
+        closeHippoDb(other);
+      }
+    };
+    try {
+      const result = await consolidate(home, { now: new Date(), budget: { ...WRITE_BUDGET, holdMs: 0, pause } });
+      expect(result.dormantExpired).toBe(4);
+      expect(pauses).toBe(4);
+      expect(ids).toContain(kept);
+      expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([kept]);
+    } finally {
+      restore();
     }
   });
 

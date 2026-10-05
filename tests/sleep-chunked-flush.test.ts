@@ -17,7 +17,7 @@ import { upsertEntryRow } from '../src/store/entry-row.js';
 import { mergedText } from '../src/same-text.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { closeHippoDb, getHippoDbPath, getMeta, openHippoDb, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
+import { closeHippoDb, getHippoDbPath, getMeta, HOOK_DB_WAIT_MS, openHippoDb, withBusyWait, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
 import { WRITE_BUDGET, type WriteBudget } from '../src/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
@@ -322,5 +322,31 @@ describe('chunked consolidation flush', () => {
     expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);
     expect(result.semanticCreated).toBe(4);
+  }, 60_000);
+
+  it('the partial audit row names the unit that threw, not the first unit of its chunk', async () => {
+    const fx = seed({ clusters: 6, dormant: 0, filler: 0 });
+    const bad = fx.clusters[3]!;
+    onStore(fx.root, (db) => db.exec(
+      `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`));
+    const ctx: Context = { hippoRoot: fx.root, tenantId: 'default', actor: { subject: 'sleep-test', role: 'admin' } };
+    const oneChunk: typeof consolidate = (root, opts) => consolidate(root, { ...opts, now: NOW, budget: budget(Infinity) });
+
+    await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
+
+    const [audit] = onStore(fx.root, (db) => queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
+    expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(bad) });
+    expect((audit?.metadata as { nextUnitIds: string[] }).nextUnitIds).not.toContain(fx.clusters[0]![0]);
+  }, 60_000);
+
+  it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
+    const fx = seed({ clusters: 2, dormant: 0, filler: 0 });
+    const timeout = await withSharedStoreHandles(async () => {
+      await consolidate(fx.root, { now: NOW, budget: budget(0) });
+      const db = openHippoDb(fx.root);
+      // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
+      return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
+    }, { busyWaitMs: HOOK_DB_WAIT_MS });
+    expect(timeout).toBe(HOOK_DB_WAIT_MS);
   }, 60_000);
 });

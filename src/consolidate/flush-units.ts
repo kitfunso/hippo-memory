@@ -48,6 +48,7 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
 
 /** [child, parent] for each queued op on a child whose DAG parent the run removes: a child's change marks the parent
  *  dirty, and one transaction always applied that mark after the parent was gone, so it audited nothing. */
+// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can pass holdMs by a family's size; split by child if a family grows large.
 export function familyUnits(
   writes: readonly MemoryEntry[],
   deletes: readonly string[],
@@ -63,18 +64,4 @@ export function familyUnits(
   for (const id of deletes) link(id, snapshot.get(id)?.dag_parent_id);
   for (const move of dormant) link(move.entry.id, move.entry.dag_parent_id);
   return units;
-}
-
-const failedUnits = new WeakMap<Error, string[]>();
-
-/** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row. */
-export function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
-  if (!component) return;
-  const ids = [...component.writes.map((e) => e.id), ...component.deletes, ...component.dormant.map((m) => m.entry.id)];
-  failedUnits.set(err, [...new Set(ids)]);
-}
-
-/** The ids noteFailedUnit tagged `err` with, if a flush threw it. */
-export function failedUnitOf(err: Error | null): string[] | undefined {
-  return err ? failedUnits.get(err) : undefined;
 }
