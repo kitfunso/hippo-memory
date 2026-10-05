@@ -14,7 +14,8 @@ import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, ftsRowCounts, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
-import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
+import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
+import { readSettingsFile } from './hooks/json-hooks.js';
 import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
 import type { JsonValue } from './json.js';
@@ -66,8 +67,7 @@ function versionAtLeast(actual: string, min: string): boolean {
 
 function readJson(file: string): JsonValue | null {
   try {
-    // SAFETY: JSON.parse returns a JSON value by definition.
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as JsonValue;
+    return readSettingsFile(file);
   } catch {
     // A missing or corrupt file is the finding doctor reports, so null is the answer.
     return null;
@@ -309,7 +309,7 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function claudeCodeCheck(home: string): DoctorCheck {
-  const claudeDir = path.join(home, '.claude');
+  const claudeDir = claudeConfigDir(home);
   if (!fs.existsSync(claudeDir)) {
     return { id: 'claude-code', status: 'info', detail: 'Claude Code not found; other agents can use hippo over MCP (hippo mcp)' };
   }

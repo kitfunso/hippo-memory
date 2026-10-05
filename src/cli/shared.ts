@@ -252,6 +252,11 @@ export function installCodexMemoryHooks(indent: string): void {
   console.log(`${indent}${CODEX_TRUST_LINE}`);
 }
 
+/** The one line init, hook install and setup print when installJsonHooks('claude-code') reports invalidJson and so wrote nothing. */
+export function warnClaudeSettingsUnusable(settingsPath: string, indent: string): void {
+  console.log(`${indent}WARNING: ${settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook install claude-code\`.`);
+}
+
 /**
  * Set up a machine-level daily runner that sweeps all registered Hippo
  * workspaces.

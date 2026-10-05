@@ -218,6 +218,25 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
   });
 
+  it('scans $CLAUDE_CONFIG_DIR/projects when it is set, and not ~/.claude/projects', () => {
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    const config = path.join(tmp.dir, 'elsewhere');
+    const mine = path.join(config, 'projects', 'proj-a', 'mine.jsonl');
+    const decoy = path.join(tmp.dir, '.claude', 'projects', 'proj-b', 'decoy.jsonl');
+    for (const file of [mine, decoy]) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '{}');
+    }
+    fs.utimesSync(mine, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    process.env.CLAUDE_CONFIG_DIR = config;
+    try {
+      expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(mine);
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+    }
+  });
+
   it('does not throw on non-JSON stdin text', () => {
     expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });

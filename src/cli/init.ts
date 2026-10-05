@@ -15,7 +15,7 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo } from './shared.js';
+import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, warnClaudeSettingsUnusable } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
@@ -266,6 +266,7 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // claude-code` and `hippo setup`.
     if (hook === 'claude-code') {
       const result = installJsonHooks(hook);
+      if (result.invalidJson) warnClaudeSettingsUnusable(result.settingsPath, '   ');
       if (result.installedSessionEnd) {
         console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
       }

@@ -86,6 +86,36 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
     expect(flat).toContain('hippo context --pinned-only --include-recent 5 --format additional-context');
   });
 
+  it('migration edits only a hippo handler: a user command that merely mentions the pinned-only command is left as written', () => {
+    const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
+    const mine = { type: 'command', command: 'node ~/hooks/ctx.js --note "hippo context --pinned-only-report" --format json' };
+    fs.writeFileSync(settingsPath, JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [mine] }] } }));
+
+    const result = installJsonHooks('claude-code');
+    expect(result.migratedPinnedInjectRecent).toBe(false);
+    expect(result.installedUserPromptSubmit).toBe(true);
+
+    const groups = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.UserPromptSubmit;
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toEqual({ hooks: [mine] });
+  });
+
+  it('migration edits the hippo handler of a group it shares with a user handler, and only that one', () => {
+    const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
+    const mine = { type: 'command', command: 'node ~/hooks/redact.js --format json' };
+    fs.writeFileSync(settingsPath, JSON.stringify({
+      hooks: { UserPromptSubmit: [{ hooks: [mine, { type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 }] }] },
+    }));
+
+    const result = installJsonHooks('claude-code');
+    expect(result.migratedPinnedInjectRecent).toBe(true);
+
+    const groups = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.UserPromptSubmit;
+    expect(groups).toHaveLength(1);
+    expect(groups[0].hooks[0]).toEqual(mine);
+    expect(groups[0].hooks[1].command).toBe('hippo context --pinned-only --include-recent 5 --format additional-context');
+  });
+
   it('uninstallJsonHooks removes the UserPromptSubmit pinned-inject entry', () => {
     installJsonHooks('claude-code');
     const removed = uninstallJsonHooks('claude-code');
