@@ -25,8 +25,9 @@ export type SessionCaptureResult = Readonly<CaptureTally>;
 
 function assertSessionCapture(req: SessionCaptureRequest): void {
   assertCallerIds(req.sessionId, req.project);
-  // A '' project would read every project's rows as its own and write user-global rows.
-  if (projectId(req.project) === '') throw new BadRequestError('project name: required');
+  if (req.sessionId.trim() === '') throw new BadRequestError('session id: required');
+  // A '' project would read every project's rows as its own and write user-global rows; a blank one names no project anyone reads.
+  if (projectId(req.project).trim() === '') throw new BadRequestError('project name: required');
   if (req.texts.length > MAX_TEXTS) throw new BadRequestError(`texts: at most ${MAX_TEXTS}`);
   const sizes = req.texts.map((t) => Buffer.byteLength(t, 'utf8'));
   if (sizes.some((n) => n > MAX_TEXT_BYTES)) throw new BadRequestError(`each text: at most ${MAX_TEXT_BYTES} bytes`);

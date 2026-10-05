@@ -113,6 +113,15 @@ describe('captureSessionTexts', () => {
     expect(loadAllEntries(root)).toEqual([]);
   });
 
+  it.each([
+    ['a blank session id', { sessionId: '' }],
+    ['a whitespace session id', { sessionId: ' \t ' }],
+    ['a whitespace project name', { project: { name: '   ', legacyName: 'web' } }],
+  ])('throws on %s and writes nothing', (_name, over) => {
+    expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, over))).toThrow(BadRequestError);
+    expect(loadAllEntries(root)).toEqual([]);
+  });
+
   it('scrubs the texts again, so a bearer token, an email and a home path never land', () => {
     const token = 'abcdef0123456789abcdef0123456789';
     const texts = [

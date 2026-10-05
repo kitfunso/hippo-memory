@@ -52,12 +52,10 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // Generic assignment: api_key=..., password: ..., token = "..." where the
-  // value actually LOOKS like a credential: 12+ chars drawn only from
-  // token-safe characters AND containing at least one digit. Without both
-  // constraints this pattern flags ordinary code snippets and prose
-  // (`token = estimateTokens(...)`), silently hiding code-lesson memories from ambient context.
-  { name: 'secret-assignment', re: /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and doc templates like user:password@ would hide code lessons from ambient context.
+  // A lookbehind, not \b, since \b never fires after the _ of an env prefix (DB_PASSWORD); capping the suffix parts keeps the scan linear.
+  { name: 'secret-assignment', re: /(?<![A-Za-z0-9])(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d)(?:[_-][A-Za-z0-9]+){0,3}\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@]*:(?=[^\s/@]*\d)[^\s/@]+(?=@)/ },
 ];
 
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
@@ -68,6 +66,7 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
+  /(?<=[A-Za-z0-9]:\/\/)[^\s/:@]*:[^\s/@]+(?=@)/g,
 ];
 
 /**
@@ -99,8 +98,8 @@ export function redactSecrets(text: string): string {
   return redactText(text, false);
 }
 
-/** A domain's first label must open on a letter, so asset names like logo@2x.png and pins like react@18.2.0 stay. */
-const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
+/** Only a run's first character starts a match, so a long run is scanned once; a domain's first label opens on a letter, so logo@2x.png and react@18.2.0 stay. */
+const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
 
 /** Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their patterns misfire on ids. */
 export function maskEmails(text: string): string {

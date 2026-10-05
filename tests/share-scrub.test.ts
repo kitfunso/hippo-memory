@@ -14,6 +14,13 @@ describe('maskHomePaths', () => {
     ['Linux root', 'edit /root/.bashrc now', 'edit [home]/.bashrc now'],
     ['WSL mount', 'open /mnt/c/Users/alice/repo now', 'open [home]/repo now'],
     ['Git Bash mount', 'open /c/Users/alice/repo now', 'open [home]/repo now'],
+    ['Windows, a user folder with a space', 'open C:\\Users\\Alice Smith\\Documents\\notes.md now', 'open [home]\\Documents\\notes.md now'],
+    ['Windows, a quoted user folder with a space', 'cd "C:\\Users\\Alice Smith" now', 'cd "[home]" now'],
+    ['Git Bash mount, a user folder with a space', 'open /c/Users/Alice Smith/repo now', 'open [home]/repo now'],
+    ['two quoted Windows paths in one JSON line', '{"cwd":"C:\\\\Users\\\\alice","file":"C:\\\\Users\\\\bob\\\\x.ts"}', '{"cwd":"[home]","file":"[home]\\\\x.ts"}'],
+    ['a VS Code file link', 'see [x.ts](file:///c%3A/Users/alice/dev/x.ts) now', 'see [x.ts](file:///[home]/dev/x.ts) now'],
+    ['a URL-encoded backslash path', 'cwd c%3A%5CUsers%5Calice%5Cdev now', 'cwd [home]%5Cdev now'],
+    ['a UNC home share', 'open \\\\fileserver\\home$\\alice\\proj now', 'open [home]\\proj now'],
   ])('%s: the user segment becomes [home]', (_name, text, masked) => {
     expect(maskHomePaths(text)).toBe(masked);
   });
@@ -62,5 +69,44 @@ describe('scrubForSharing', () => {
   it('returns clean text unchanged', () => {
     const text = 'We decided to pin pnpm in packages/api because npm rewrote the lockfile.';
     expect(scrubForSharing(text)).toBe(text);
+  });
+
+  // Built at runtime, so no secret-shaped literal sits in source.
+  const PASSWORD = 'Hunter2' + 'Hunter2';
+  const AWS_SECRET = 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY';
+  it.each([
+    ['a prefixed password', `DB_PASSWORD=${PASSWORD}`, 'DB_[REDACTED]'],
+    ['a prefixed token', `set MY_API_TOKEN=${'abc123' + 'def456ghi789'}`, 'set MY_API_[REDACTED]'],
+    ['a prefixed secret after a colon', `CLIENT_SECRET: ${'4f9a8b7c6d' + '5e4f3a2b1c'}`, 'CLIENT_[REDACTED]'],
+    ['a name that runs on past the keyword', `AWS_SECRET_ACCESS_KEY=${AWS_SECRET}`, 'AWS_[REDACTED]'],
+    ['a database URL password', `DATABASE_URL=postgres://admin:${'S3cret' + 'Pw9'}@localhost:5432/app`, 'DATABASE_URL=postgres://[REDACTED]@localhost:5432/app'],
+    ['a git remote password', `https://user:${'ghsecret' + 'pw99'}@internal-host/repo.git`, 'https://[REDACTED]@internal-host/repo.git'],
+    ['a mongodb+srv password', `mongodb+srv://svc:${'pa55' + 'word123'}@cluster0.abcde.mongodb.net/db`, 'mongodb+srv://[REDACTED]@cluster0.abcde.mongodb.net/db'],
+    ['a URL password with no digit', `https://user:${'correct' + 'horse'}@internal-host/repo.git`, 'https://[REDACTED]@internal-host/repo.git'],
+  ])('redacts %s', (_name, text, scrubbed) => {
+    expect(scrubForSharing(text)).toBe(scrubbed);
+  });
+});
+
+describe('scrubForSharing on hostile input', () => {
+  const SIZE = 256 * 1024;
+  const fill = (unit: string): string => unit.repeat(Math.ceil(SIZE / unit.length)).slice(0, SIZE);
+  // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
+  const UNITS = [
+    'a.', 'a-', 'a@a.a.', '%2', '%3A%5C', 'c%3A%5CUsers%5C', 'c%3A/Users/',
+    'AKIA', 'ghp_', 'github_pat_', 'xoxb-', 'xoxb--', 'sk_live_', 'AIza', 'hk_', 'npm_', 'hf_', 'glpat-', 'ya29.',
+    'hooks.slack.com/services/', '-----BEGIN ', '-----BEGIN PRIVATE KEY-----', 'sk-', 'sk--', 'sk_a', 'sk_',
+    'token=', 'token=a', '_token_', '_token_aaaaaaaa', 'password: a', 'secret-', 'x://', 'a://a:', 'a://a:a/', 'a://',
+    'bearer ', 'bearer a', 'authorization: basic ', 'eyJ-', 'eyJa.', 'eyJaaaaaaaaa.eyJ', 'eyJaaaaaaaaa.eyJaaaaaaaaa.',
+    'C:\\Users\\', 'C:\\Users\\a ', 'C:\\Users\\a b', 'C:/', '/mnt/c/Users/', '/c/Users/a ', '/home/', '/var/home/', '/root', '/Users/',
+    'A~1', 'AAAAAA~1', '\\A~1', 'A~1.AB', '\\\\?\\', '\\\\a\\home$\\', '\\\\a\\home$\\a b ', '\\\\a',
+  ];
+  it.each([
+    ...UNITS.map((unit) => [JSON.stringify(unit), fill(unit)] as const),
+    ['a@ then a long a. run', `a@${fill('a.')}`.slice(0, SIZE)] as const,
+  ])('scrubs 256 KiB of %s in under 50 ms', (_name, text) => {
+    const started = performance.now();
+    scrubForSharing(text);
+    expect(performance.now() - started).toBeLessThan(50);
   });
 });
