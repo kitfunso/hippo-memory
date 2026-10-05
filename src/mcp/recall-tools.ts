@@ -256,6 +256,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const anchorRing = biasHintEnabled('anchoring') && sessionId
     ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
@@ -291,6 +292,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const explicitScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
@@ -318,6 +320,7 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const drillExtra: DrillDownExtraOpts = {};
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
@@ -348,7 +351,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }:
   // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
   const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   const result = await apiGetContext(
-    { hippoRoot, tenantId, actor: mcpActor(ctx) },
+    { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store },
     {
       q: autoDetectContext(),
       budget,

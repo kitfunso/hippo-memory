@@ -1,5 +1,6 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { HippoStore } from '../store-port.js';
 
 export interface ServerHandle {
   port: number;
@@ -36,18 +37,23 @@ export interface ServeOpts {
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;
+  /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
+  store?: HippoStore;
 }
+
+export type ResolvedServeOpts = ServeOpts & { store: HippoStore };
 
 /** Per-request values the /v1 route handlers read. */
 export interface RouteRequest {
   req: IncomingMessage;
   res: ServerResponse;
-  opts: ServeOpts;
+  opts: ResolvedServeOpts;
   query: URLSearchParams;
 }
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. */
-export type Route =
-  | { method: string; path: string; handler: (r: RouteRequest) => Promise<void> }
-  | { method: string; pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
-  | { method: string; regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> };
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. `storeReady` routes run under any store. */
+export type Route = { method: string; storeReady?: true } & (
+  | { path: string; handler: (r: RouteRequest) => Promise<void> }
+  | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
+  | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }
+);

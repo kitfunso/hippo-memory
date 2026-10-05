@@ -24,6 +24,7 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const result = apiRemember(apiCtx, {
     content: text,
@@ -68,6 +69,7 @@ export function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const { applied } = apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
@@ -75,7 +77,7 @@ export function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
 
 export function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
   const days = Number(args.days) || 7;
-  const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx) }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
+  const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';
   const { added, skipped, rejected, lowInfo } = result;

@@ -66,8 +66,29 @@ export function withBusyWait<T>(busyWaitMs: number, fn: () => T): T {
   return scopedBusyWaitMs.run(busyWaitMs, fn);
 }
 
+/** Thrown by a hippo.db open inside a request served from another store: the code path is not ported to the store port yet. */
+export class SqliteBlockedError extends Error {
+  constructor(readonly storeKind: string) {
+    super(`hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ported to the store yet`);
+    this.name = 'SqliteBlockedError';
+  }
+}
+
+const sqliteBlockedBy = new AsyncLocalStorage<string>();
+
+/** Runs `fn` so that every hippo.db open inside it, across awaits, throws; otherwise a missed port would create and write a hippo.db nobody reads. */
+export function withSqliteBlocked<T>(storeKind: string, fn: () => T): T {
+  return sqliteBlockedBy.run(storeKind, fn);
+}
+
+function assertSqliteAllowed(): void {
+  const storeKind = sqliteBlockedBy.getStore();
+  if (storeKind !== undefined) throw new SqliteBlockedError(storeKind);
+}
+
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+  assertSqliteAllowed();
   if (shareDepth === 0) return openOwnHippoDb(hippoRoot, { busyWaitMs: opts?.busyWaitMs ?? scopedBusyWaitMs.getStore() });
   const busyWaitMs = opts?.busyWaitMs ?? shareBusyWaitMs ?? scopedBusyWaitMs.getStore();
   const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${busyWaitMs ?? ''}`;
@@ -124,6 +145,7 @@ function openOwnHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): Data
 
 /** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db is missing. */
 export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
+  assertSqliteAllowed();
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
   try {
     db.exec('PRAGMA busy_timeout = 5000');

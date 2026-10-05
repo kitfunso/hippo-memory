@@ -1,6 +1,7 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
 import { BadRequestError } from '../api-errors.js';
+import type { HippoStore } from '../store-port.js';
 
 /**
  * Actor identity + authorization role for a Context.
@@ -25,6 +26,7 @@ export interface Context {
   hippoRoot: string;
   tenantId: string;
   actor: Actor;
+  store?: HippoStore;
 }
 
 /**

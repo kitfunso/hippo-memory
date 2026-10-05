@@ -2,7 +2,8 @@ import { envPort, envRequireAuth, envV1Rps } from './env.js';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isSqliteBusy, openHippoDb, SERVER_DB_WAIT_MS, withBusyWait } from './db.js';
+import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, SERVER_DB_WAIT_MS, withBusyWait, withSqliteBlocked } from './db.js';
+import { sqliteStore, type HippoStore } from './store-port.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
@@ -12,7 +13,7 @@ import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
-import { isLoopback } from './server/auth.js';
+import { isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
@@ -28,7 +29,7 @@ import { handleCloseProcess, handleCreateProcess, handleGetProcess, handleListPr
 import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrief, handleListProjectBriefs, handleRefreshProjectBrief, handleSupersedeProjectBrief } from './server/routes/project-briefs.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
-import type { Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
+import type { ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 
 // Add-on packages revoke keys through these without importing the whole api surface.
 export { authRevoke, ForbiddenError, type Context, type Actor };
@@ -39,6 +40,10 @@ export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+// An add-on serves from another database by passing serve() its own HippoStore.
+export { sqliteStore, type HippoStore } from './store-port.js';
+export type { ApiKeyRecord } from './auth.js';
+export { StoreBusyError } from './db.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -148,18 +153,21 @@ async function dispatchV1Route(r: RouteRequest, method: string, path: string): P
   for (const route of V1_ROUTES) {
     if ('path' in route) {
       if (method === route.method && path === route.path) {
+        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
         await route.handler(r);
         return true;
       }
     } else if ('pattern' in route) {
       const params = matchPath(route.pattern, path);
       if (method === route.method && params) {
+        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
         await route.handler(r, params);
         return true;
       }
     } else {
       const match = path.match(route.regex);
       if (method === route.method && match) {
+        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
         await route.handler(r, match);
         return true;
       }
@@ -168,10 +176,23 @@ async function dispatchV1Route(r: RouteRequest, method: string, path: string): P
   return false;
 }
 
+const NOT_ON_STORE_MESSAGE = 'not available on this store';
+
+function assertSqliteStore(opts: ResolvedServeOpts): void {
+  if (opts.store.kind !== 'sqlite') throw new HttpError(501, NOT_ON_STORE_MESSAGE);
+}
+
+/** Under another store, a route not yet ported answers 501 without running; the caller is checked first, so a bad key is still a 401. */
+async function refuseUnportedRoute(req: IncomingMessage, opts: ResolvedServeOpts): Promise<void> {
+  if (opts.store.kind === 'sqlite') return;
+  await requireAuth(req, opts);
+  assertSqliteStore(opts);
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: ServeOpts,
+  opts: ResolvedServeOpts,
   startedAt: string,
   streamSlots: Map<string, number>,
   limiter?: RateLimiter,
@@ -197,6 +218,7 @@ async function handleRequest(
       // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
       throw new HttpError(401, 'auth required');
     }
+    assertSqliteStore(opts);
     await handleSlackEventsWebhook({ req, res, opts });
     return;
   }
@@ -205,15 +227,18 @@ async function handleRequest(
     if (!isPublicRoute(method, path)) {
       throw new HttpError(401, 'auth required');
     }
+    assertSqliteStore(opts);
     await handleGitHubEventsWebhook({ req, res, opts });
     return;
   }
 
   if (method === 'POST' && path === '/mcp') {
+    await refuseUnportedRoute(req, opts);
     await handleMcpPost(req, res, opts);
     return;
   }
 
+  // Store-ready: the stream and its heartbeat only authenticate, and auth goes through the port.
   if (method === 'GET' && path === '/mcp/stream') {
     await handleMcpStream(req, res, opts, streamSlots);
     return;
@@ -281,7 +306,11 @@ interface StoreHolder {
   release: () => void;
 }
 
-function createStoreHolder(hippoRoot: string): StoreHolder {
+function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
+  if (store.kind !== 'sqlite') {
+    log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
+    return { hold: () => {}, release: () => {} };
+  }
   // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
   // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
   let heldDb: DatabaseSyncLike | undefined;
@@ -310,7 +339,7 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     try { res.end(); } catch { /* socket already gone */ }
     return;
   }
-  if (isSqliteBusy(err)) res.setHeader('Retry-After', '1');
+  if (isStoreBusy(err)) res.setHeader('Retry-After', '1');
   if (mapped.status === 500) {
     // The id lets an operator find the logged cause without the client seeing internal text.
     sendJson(res, 500, { error: mapped.message, requestId });
@@ -405,17 +434,21 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const store = createStoreHolder(opts.hippoRoot);
+  const served: ResolvedServeOpts = { ...opts, store: opts.store ?? sqliteStore(opts.hippoRoot) };
+  const { kind } = served.store;
+  const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
   const server: Server = createServer((req, res) => {
-    res.once('finish', store.hold);
+    res.once('finish', holder.hold);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
-    withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, streamSlots, limiter)).catch(<E>(err: E) => {
+    const run = (): Promise<void> => withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, served, startedAt, streamSlots, limiter));
+    // A missed port under another store would otherwise create and write a hippo.db that store never reads.
+    (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => {
       replyWithFailure(req, res, err, requestId);
     });
   });
@@ -433,7 +466,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const url = `http://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
-  store.hold();
+  holder.hold();
 
   let stopping = false;
   const stop = async (): Promise<void> => {
@@ -444,7 +477,8 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     // unconditional unlink here would orphan it.
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
-    store.release();
+    holder.release();
+    if (!opts.store) await served.store.close();
   };
 
   if (opts.handleSignals) installSignalHandlers(stop);

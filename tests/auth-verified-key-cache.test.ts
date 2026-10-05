@@ -12,18 +12,21 @@ import {
 } from '../src/auth.js';
 import { authRevoke, authGrant, type Context } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { sqliteStore } from '../src/store-port.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 /** Scrypt runs and store lookups made by `fn` alone. */
-function counted<T>(fn: () => T) {
+async function counted<T>(fn: () => Promise<T>) {
   const before = apiKeyVerifyStats();
-  const value = fn();
+  const value = await fn();
   const after = apiKeyVerifyStats();
   return { value, scrypt: after.scryptRuns - before.scryptRuns, dbOpen: after.storeLookups - before.storeLookups };
 }
 
 describe('verified API key cache', () => {
   let home: string;
+  const verify = (plaintext: string, root: string = home): Promise<VerifiedApiKey | null> =>
+    verifyApiKeyCached(root, plaintext, sqliteStore(root));
 
   function mint(role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } {
     const db = openHippoDb(home);
@@ -45,93 +48,105 @@ describe('verified API key cache', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('verifies a valid key once, then answers from the cache without scrypt or a DB open', () => {
+  it('verifies a valid key once, then answers from the cache without scrypt or a DB open', async () => {
     const key = mint();
-    const first = counted(() => verifyApiKeyCached(home, key.plaintext));
+    const first = await counted(() => verify(key.plaintext));
     expect(first.value).toEqual({ tenantId: 'default', keyId: key.keyId, role: 'member', scopes: [] });
     expect(first.scrypt).toBe(1);
     expect(first.dbOpen).toBe(1);
 
-    const second = counted(() => verifyApiKeyCached(home, key.plaintext));
+    const second = await counted(() => verify(key.plaintext));
     expect(second.value).toEqual(first.value);
     expect(second.scrypt).toBe(0);
     expect(second.dbOpen).toBe(0);
   });
 
-  it('a hit never shares its scopes array with the caller', () => {
+  it('a hit never shares its scopes array with the caller', async () => {
     const key = mint();
-    verifyApiKeyCached(home, key.plaintext)!.scopes.push('slack:private:leak');
-    expect(verifyApiKeyCached(home, key.plaintext)!.scopes).toEqual([]);
+    (await verify(key.plaintext))!.scopes.push('slack:private:leak');
+    expect((await verify(key.plaintext))!.scopes).toEqual([]);
   });
 
-  it('an in-process revoke rejects the next verify at once', () => {
+  it('an in-process revoke rejects the next verify at once', async () => {
     const key = mint();
-    expect(verifyApiKeyCached(home, key.plaintext)).not.toBeNull();
+    expect(await verify(key.plaintext)).not.toBeNull();
     authRevoke(adminCtx(), key.keyId);
-    const after = counted(() => verifyApiKeyCached(home, key.plaintext));
+    const after = await counted(() => verify(key.plaintext));
     expect(after.value).toBeNull();
     // The row proves the key revoked, so no scrypt is spent on it.
     expect(after.scrypt).toBe(0);
   });
 
-  it('an in-process scope grant shows on the next verify', () => {
+  it('an in-process scope grant shows on the next verify', async () => {
     const key = mint();
-    expect(verifyApiKeyCached(home, key.plaintext)!.scopes).toEqual([]);
+    expect((await verify(key.plaintext))!.scopes).toEqual([]);
     authGrant(adminCtx(), key.keyId, 'slack:private:C123');
-    expect(verifyApiKeyCached(home, key.plaintext)!.scopes).toEqual(['slack:private:C123']);
+    expect((await verify(key.plaintext))!.scopes).toEqual(['slack:private:C123']);
   });
 
-  it('re-verifies with scrypt once the TTL has passed', () => {
+  it('re-verifies with scrypt once the TTL has passed', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
     const key = mint();
-    expect(counted(() => verifyApiKeyCached(home, key.plaintext)).scrypt).toBe(1);
+    expect((await counted(() => verify(key.plaintext))).scrypt).toBe(1);
     vi.setSystemTime(Date.now() + VERIFIED_KEY_TTL_MS - 1);
-    expect(counted(() => verifyApiKeyCached(home, key.plaintext)).scrypt).toBe(0);
+    expect((await counted(() => verify(key.plaintext))).scrypt).toBe(0);
     vi.setSystemTime(Date.now() + 2);
-    const expired = counted(() => verifyApiKeyCached(home, key.plaintext));
+    const expired = await counted(() => verify(key.plaintext));
     expect(expired.value).not.toBeNull();
     expect(expired.scrypt).toBe(1);
   });
 
-  it('a wrong secret on a valid key id is rejected and never cached', () => {
+  it('a wrong secret on a valid key id is rejected and never cached', async () => {
     const key = mint();
     const wrong = `${key.keyId}.${'a'.repeat(32)}`;
     for (let i = 0; i < 2; i++) {
-      const res = counted(() => verifyApiKeyCached(home, wrong));
+      const res = await counted(() => verify(wrong));
       expect(res.value).toBeNull();
       expect(res.scrypt).toBe(1);
     }
     // A cached good key does not let a wrong secret through either.
-    verifyApiKeyCached(home, key.plaintext);
-    const afterHit = counted(() => verifyApiKeyCached(home, wrong));
+    await verify(key.plaintext);
+    const afterHit = await counted(() => verify(wrong));
     expect(afterHit.value).toBeNull();
     expect(afterHit.scrypt).toBe(1);
-    expect(counted(() => verifyApiKeyCached(home, key.plaintext)).scrypt).toBe(0);
+    expect((await counted(() => verify(key.plaintext))).scrypt).toBe(0);
   });
 
-  it('rejects malformed tokens and unknown key ids without any scrypt work', () => {
+  it('rejects malformed tokens and unknown key ids without any scrypt work', async () => {
     const malformed = ['no-dot-here', 'hk_forged.secret', `hk_${'a'.repeat(24)}.short`, `HK_${'a'.repeat(24)}.${'b'.repeat(32)}`];
     for (const token of malformed) {
-      const res = counted(() => verifyApiKeyCached(home, token));
+      const res = await counted(() => verify(token));
       expect(res.value).toBeNull();
       expect(res.scrypt).toBe(0);
       expect(res.dbOpen).toBe(0);
     }
-    const unknown = counted(() => verifyApiKeyCached(home, `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`));
+    const unknown = await counted(() => verify(`hk_${'a'.repeat(24)}.${'b'.repeat(32)}`));
     expect(unknown.value).toBeNull();
     expect(unknown.scrypt).toBe(0);
   });
 
-  it('a key cached for one store does not authenticate against another', () => {
+  it('a key cached for one store does not authenticate against another', async () => {
     const key = mint();
-    expect(verifyApiKeyCached(home, key.plaintext)).not.toBeNull();
+    expect(await verify(key.plaintext)).not.toBeNull();
     const other = makeRoot('key-cache');
     try {
-      expect(verifyApiKeyCached(other, key.plaintext)).toBeNull();
+      expect(await verify(key.plaintext, other)).toBeNull();
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
+  });
+
+  it('a lookup that straddles a revoke is not cached, so the next verify reads the store again', async () => {
+    const key = mint();
+    const inner = sqliteStore(home);
+    const racing = { ...inner, findApiKey: async (keyId: string) => {
+      const record = await inner.findApiKey(keyId);
+      authRevoke(adminCtx(), keyId);
+      return record;
+    } };
+    expect(await verifyApiKeyCached(home, key.plaintext, racing)).not.toBeNull();
+    expect(await verify(key.plaintext)).toBeNull();
   });
 });
 

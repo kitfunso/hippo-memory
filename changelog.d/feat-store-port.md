@@ -1,0 +1,4 @@
+### Added
+
+- **`serve()` takes a `store` option, so an add-on can serve from a database other than `hippo.db`.** `HippoStore` and `sqliteStore` are exported from `hippo-memory/server`. In this first step the store answers API key lookups only; the default, `sqliteStore(hippoRoot)`, behaves exactly as before. Under a store of any other kind, every route not yet ported to it answers 501 `{"error": "not available on this store"}` after the usual auth check, and any `hippo.db` open inside a request throws `SqliteBlockedError`, so a missed port cannot create a `hippo.db` that store never reads. `GET /health` and `GET /mcp/stream` work under any store.
+- **`StoreBusyError` lets a store report a held lock.** The server answers it with the same 503 and `Retry-After: 1` as a busy `hippo.db`, on `/v1` and on `/mcp`.

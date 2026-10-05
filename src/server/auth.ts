@@ -7,7 +7,7 @@ import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
 import type { Actor, Context } from '../api.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
 import { requestIds } from './request.js';
-import type { AuthResolver, ResolvedBearer, ServeOpts } from './types.js';
+import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../json.js';
 
 /**
@@ -78,7 +78,7 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
   return { kind: 'bearer', token };
 }
 
-type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs'>;
+type AuthOpts = Pick<ResolvedServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store'>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -163,15 +163,15 @@ async function resolveBearer(token: string, opts: AuthOpts): Promise<BearerIdent
     const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
     return { ...(await askResolver(opts.authResolver, token, deadlineMs)), viaAuthResolver: true };
   }
-  const key = verifyApiKeyCached(opts.hippoRoot, token);
+  const key = await verifyApiKeyCached(opts.hippoRoot, token, opts.store);
   if (!key) throw new HttpError(401, 'invalid api key');
   return { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
 }
 
 /**
  * Build a per-request Context from the Authorization header and remote
- * address. Throws HttpError(401) for invalid / missing credentials. Opens
- * the DB only for an API-key-shaped Bearer token (or any Bearer token when no
+ * address. Throws HttpError(401) for invalid / missing credentials. Reads
+ * the store only for an API-key-shaped Bearer token (or any Bearer token when no
  * auth resolver is registered), so loopback no-auth requests stay cheap.
  */
 export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
@@ -187,7 +187,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
     if (id.viaAuthResolver) actor.viaAuthResolver = true;
     // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
     else if (id.role === 'admin' && id.tenantId === resolveTenantId({})) actor.hostAdmin = true;
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor };
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store };
   }
 
   // No Authorization header. Loopback-only fallback for a direct local caller (no proxy headers),
@@ -202,6 +202,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
     actor: { subject: 'localhost:cli', role: 'admin', hostAdmin: true },
+    store: opts.store,
   };
 }
 

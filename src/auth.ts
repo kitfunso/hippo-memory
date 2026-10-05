@@ -1,6 +1,7 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import type { DatabaseSyncLike } from './db.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { HippoStore } from './store-port.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
@@ -90,21 +91,45 @@ export interface VerifiedApiKey {
   scopes: string[];
 }
 
-/** One full check against the store: shape, row, revocation, then scrypt. Null for any failure. */
-function lookupApiKey(db: DatabaseSyncLike, plaintext: string): VerifiedApiKey | null {
-  if (!MINTED_KEY_PATTERN.test(plaintext)) return null;
-  const keyId = plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN);
+/** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret and the role. */
+export interface ApiKeyRecord {
+  keyHash: string;
+  tenantId: string;
+  revokedAt: string | null;
+  role: string;
+  scopes: string[];
+}
+
+/** The api_keys row for `keyId` with its scope grants; null when no row matches. */
+export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
   // SAFETY: row comes from the SELECT above, which projects exactly
   // key_hash, tenant_id, revoked_at, role; `.get` returns undefined when no
   // row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
     .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string } | undefined;
+  if (!row) return null;
+  return { keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId) };
+}
+
+/** The key id of a minted-key-shaped token, else null. */
+function mintedKeyId(plaintext: string): string | null {
+  return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
+}
+
+/** Revocation, then scrypt, against a stored record. Null for any failure. */
+function checkApiKey(plaintext: string, keyId: string, record: ApiKeyRecord | null): VerifiedApiKey | null {
   // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn CPU.
-  if (!row || row.revoked_at || !verifyKey(plaintext, row.key_hash)) return null;
+  if (!record || record.revokedAt || !verifyKey(plaintext, record.keyHash)) return null;
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
-  const role: 'admin' | 'member' = row.role === 'admin' ? 'admin' : 'member';
-  return { tenantId: row.tenant_id, keyId, role, scopes: listScopeGrants(db, keyId) };
+  const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
+  return { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
+}
+
+/** One full check against the store: shape, row, revocation, then scrypt. Null for any failure. */
+function lookupApiKey(db: DatabaseSyncLike, plaintext: string): VerifiedApiKey | null {
+  const keyId = mintedKeyId(plaintext);
+  return keyId === null ? null : checkApiKey(plaintext, keyId, readApiKeyRecord(db, keyId));
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
@@ -131,11 +156,17 @@ function secretDigest(plaintext: string): Buffer {
 export class VerifiedKeyCache {
   // Map iterates in insertion order, so re-inserting on a hit makes the first key the least recent.
   private readonly entries = new Map<string, VerifiedKeyEntry>();
+  private deletes = 0;
 
   constructor(private readonly capacity: number, private readonly ttlMs: number) {}
 
   get size(): number {
     return this.entries.size;
+  }
+
+  /** Moves on every delete, so a store read that straddled a revoke or grant is not cached. */
+  get epoch(): number {
+    return this.deletes;
   }
 
   get(hippoRoot: string, keyId: string, plaintext: string, now: number): VerifiedApiKey | undefined {
@@ -163,6 +194,7 @@ export class VerifiedKeyCache {
   }
 
   delete(keyId: string): void {
+    this.deletes++;
     this.entries.delete(keyId);
   }
 }
@@ -170,22 +202,17 @@ export class VerifiedKeyCache {
 // SHORTCUT: per-process cache, so a revoke or scope change made by another process (the CLI) lands within VERIFIED_KEY_TTL_MS; a shared revocation epoch in the store if that is too slow.
 const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP, VERIFIED_KEY_TTL_MS);
 
-/** Verify a bearer API key for `hippoRoot`; a cache hit skips both scrypt and the DB open. Null when invalid. */
-export function verifyApiKeyCached(hippoRoot: string, plaintext: string): VerifiedApiKey | null {
-  if (!MINTED_KEY_PATTERN.test(plaintext)) return null;
-  const keyId = plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN);
+/** Verify a bearer API key against `store`, served at `hippoRoot`; a cache hit skips both scrypt and the store. Null when invalid. */
+export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, store: HippoStore): Promise<VerifiedApiKey | null> {
+  const keyId = mintedKeyId(plaintext);
+  if (keyId === null) return null;
   const hit = verifiedKeys.get(hippoRoot, keyId, plaintext, Date.now());
   if (hit) return hit;
   verifyStats.storeLookups++;
-  const db = openHippoDb(hippoRoot);
-  let key: VerifiedApiKey | null;
-  try {
-    key = lookupApiKey(db, plaintext);
-  } finally {
-    closeHippoDb(db);
-  }
+  const epoch = verifiedKeys.epoch;
+  const key = checkApiKey(plaintext, keyId, await store.findApiKey(keyId));
   // Only successes are cached: caching misses would let junk tokens fill the cache and evict real keys.
-  if (key) verifiedKeys.set(hippoRoot, keyId, plaintext, key, Date.now());
+  if (key && verifiedKeys.epoch === epoch) verifiedKeys.set(hippoRoot, keyId, plaintext, key, Date.now());
   return key;
 }
 

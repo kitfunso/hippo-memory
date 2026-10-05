@@ -7,7 +7,7 @@ import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientIpForRateLimit } from './client-ip.js';
 import { requestIds } from './request.js';
-import type { ServeOpts } from './types.js';
+import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString } from '../json.js';
 
 /**
@@ -49,7 +49,7 @@ function buildMcpClientKey(req: IncomingMessage): string {
 // Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
 // loopback no-auth fallback. SSE check runs once at stream-open.
 
-export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ServeOpts): Promise<void> {
+export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
   // Build the same Context the /v1/* routes use so MCP tool calls inherit
   // the server's bound hippoRoot and the auth-resolved tenantId / actor.
   // Without this, executeTool would walk from cwd via findHippoRoot() and
@@ -83,6 +83,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
       viaAuthResolver: ctx.actor.viaAuthResolver,
       hostAdmin: ctx.actor.hostAdmin,
       clientKey: buildMcpClientKey(req),
+      store: ctx.store,
     });
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
@@ -123,7 +124,7 @@ function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map
 export async function handleMcpStream(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: ServeOpts,
+  opts: ResolvedServeOpts,
   streamSlots: Map<string, number>,
 ): Promise<void> {
   await requireAuth(req, opts);
