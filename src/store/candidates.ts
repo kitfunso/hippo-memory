@@ -185,20 +185,24 @@ export function loadStrengthRows(hippoRoot: string, tenantId: string): StrengthR
   }
 }
 
-/** Text and source of tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word. */
-export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words: readonly string[]): Array<Pick<MemoryEntry, 'content' | 'source'>> {
+export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
+
+/** Text, source and origin of tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word.
+ *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. */
+export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[]): HeldText[] {
   const unique = [...new Set(words)];
-  const out: Array<Pick<MemoryEntry, 'content' | 'source'>> = [];
+  const out: HeldText[] = [];
+  const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
   const db = openStore(hippoRoot);
   try {
     // Chunked so one statement stays far under SQLite's bound-parameter limit.
     for (let i = 0; i < unique.length; i += 200) {
       const chunk = unique.slice(i, i + 200);
-      // SAFETY: rows' shape matches the two columns named in the SELECT below.
+      // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source FROM memories WHERE tenant_id = ? AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
-      ).all(tenantId, ...chunk) as Array<{ content: string; source: string | null }>;
-      for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli' });
+        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+      ).all(tenantId, ...(project ?? []), ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
+      for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;
   } finally {

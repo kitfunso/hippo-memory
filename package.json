@@ -9,7 +9,8 @@
     ".": "./dist/index.js",
     "./server": "./dist/server.js",
     "./project-identity": "./dist/entry/project-identity.js",
-    "./json-hooks": "./dist/entry/json-hooks.js"
+    "./json-hooks": "./dist/entry/json-hooks.js",
+    "./session-text": "./dist/entry/session-text.js"
   },
   "openclaw": {
     "extensions": [
