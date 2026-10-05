@@ -1,6 +1,6 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
-import type { Context } from '../api.js';
+import type { Context, RememberOpts } from '../api.js';
 import { HttpError, isJsonObjectRecord, MAX_ID_LEN, readBody } from '../http-util.js';
 import { type JsonValue, isJsonString } from '../json.js';
 
@@ -66,6 +66,20 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
   if (!Array.isArray(v)) return undefined;
   if (!v.every(isJsonString)) return undefined;
   return v;
+}
+
+/** Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never become a row's origin. */
+export function getCallerProject(body: Record<string, JsonValue>): RememberOpts['project'] {
+  const v = body.project;
+  if (v === undefined || v === null) return undefined;
+  if (!isJsonObjectRecord(v) || !isJsonString(v.name)) {
+    throw new HttpError(400, 'project must be an object with a "name" string');
+  }
+  if (v.aliases === undefined) return { name: v.name };
+  if (!Array.isArray(v.aliases) || !v.aliases.every(isJsonString)) {
+    throw new HttpError(400, 'project.aliases must be an array of strings');
+  }
+  return { name: v.name, aliases: v.aliases };
 }
 
 /**

@@ -7,6 +7,7 @@ import { quarantineScopeFor, recordQuarantine } from '../quarantine.js';
 import { createMemory, type MemoryKind } from '../memory.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
+import { assertCallerProject } from '../project-identity.js';
 import type { Context } from './types.js';
 
 export interface RememberOpts {
@@ -27,6 +28,8 @@ export interface RememberOpts {
   afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
   /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
   untrusted?: boolean;
+  /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared store). */
+  project?: { readonly name: string; readonly aliases?: readonly string[] };
 }
 
 export interface RememberResult {
@@ -40,6 +43,7 @@ export interface RememberResult {
 }
 
 export function remember(ctx: Context, opts: RememberOpts): RememberResult {
+  if (opts.project) assertCallerProject(opts.project);
   const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
   const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
   const requestedScope = opts.scope ?? null;
@@ -66,7 +70,9 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
         opts.afterWrite?.(db, memoryId);
       }
     : opts.afterWrite;
-  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor.subject, afterWrite });
+  // Aliases only widen what a reader matches; a row has one origin.
+  const stamped = opts.project ? { ...entry, origin_project: opts.project.name } : entry;
+  writeEntry(ctx.hippoRoot, stamped, { actor: ctx.actor.subject, afterWrite });
 
   const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
   if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };

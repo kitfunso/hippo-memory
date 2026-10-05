@@ -13,7 +13,7 @@ import { isInitialized } from '../store/open.js';
 import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
-import type { HippoConfig } from '../config.js';
+import { isSharedStore, type HippoConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
@@ -234,6 +234,13 @@ export function printAgentImport(report: ImportReport, indent = '   '): void {
   const line = summaryLine(report);
   if (line !== null) console.log(`${indent}${line}`);
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
+}
+
+/** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
+export function skipLearnOnSharedStore(hippoRoot: string): boolean {
+  if (!isSharedStore(hippoRoot)) return false;
+  console.log("Shared store: skipped learning from this account's git commits and coding agents' own memories.");
+  return true;
 }
 
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */

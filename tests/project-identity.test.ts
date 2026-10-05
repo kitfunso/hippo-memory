@@ -6,7 +6,11 @@ import {
   resolveProjectIdentity,
   deriveOriginProject,
   clearProjectIdentityCache,
+  assertCallerProject,
+  MAX_PROJECT_ALIASES,
 } from '../src/project-identity.js';
+import { BadRequestError } from '../src/api-errors.js';
+import { MAX_ID_LEN } from '../src/http-util.js';
 
 let tmpRoot: string;
 let home: string;
@@ -200,5 +204,48 @@ describe('deriveOriginProject', () => {
     expect(deriveOriginProject(home, { homeDir: home })).toBe('');
     const misc = mkdirs('home', 'downloads');
     expect(deriveOriginProject(misc, { homeDir: home })).toBe('');
+  });
+});
+
+describe('assertCallerProject', () => {
+  const aliases = (n: number): string[] => Array.from({ length: n }, (_, i) => `alias-${i}`);
+
+  it('refuses a blank name, too many aliases and an overlong name or alias', () => {
+    for (const project of [
+      { name: '' },
+      { name: '   ' },
+      { name: 'acme/app', aliases: aliases(MAX_PROJECT_ALIASES + 1) },
+      { name: 'x'.repeat(MAX_ID_LEN + 1) },
+      { name: 'acme/app', aliases: ['y'.repeat(MAX_ID_LEN + 1)] },
+    ]) {
+      expect(() => assertCallerProject(project), JSON.stringify(project).slice(0, 60)).toThrow(BadRequestError);
+    }
+  });
+
+  it('accepts a name with up to ten aliases', () => {
+    expect(MAX_PROJECT_ALIASES).toBe(10);
+    expect(() => assertCallerProject({ name: 'acme/app', aliases: aliases(10) })).not.toThrow();
+    expect(() => assertCallerProject({ name: 'x'.repeat(MAX_ID_LEN) })).not.toThrow();
+  });
+
+  it('refuses a name or alias with capitals, padding, a colon or a control character rather than rewriting it', () => {
+    for (const project of [
+      { name: 'Acme/App' },
+      { name: ' acme/app' },
+      { name: 'acme/app ' },
+      { name: 'acme:app' },
+      { name: 'acme\napp' },
+      { name: 'acme/app', aliases: ['App'] },
+      { name: 'acme/app', aliases: ['a:b'] },
+      { name: 'acme/app', aliases: ['a\tb'] },
+    ]) {
+      expect(() => assertCallerProject(project), JSON.stringify(project)).toThrow(BadRequestError);
+    }
+  });
+
+  it('accepts the names the resolver gives: a remote id, a project file id, a folder name', () => {
+    expect(() => assertCallerProject({ name: 'github.com/acme/app', aliases: ['acme-app', 'app'] })).not.toThrow();
+    expect(() => assertCallerProject({ name: 'dev.azure.com/org/proj/repo', aliases: ['repo_1.2'] })).not.toThrow();
+    expect(() => assertCallerProject({ name: 'my app' })).not.toThrow();
   });
 });
