@@ -145,6 +145,12 @@ keys have none. The first key with an expiry raises the store's binary floor, si
 binary would ignore it.
 _Avoid_: TTL (that is the setting, not the time), expiry (alone; a reclaim is something else)
 
+**Public JSON path**:
+A fixed GET `/v1/` path that `serve()`'s caller pairs with a JSON value (`publicJson`). Anyone can read it, with no key and
+under any store, so it must hold nothing secret. The value is serialized once at boot and may be at most 64 KiB; a path a
+core GET route already serves is refused at boot.
+_Avoid_: public route (`PUBLIC_ROUTES` holds the signed connector webhooks), open endpoint, metadata route
+
 **Audit cursor**:
 The last audit event id an exporter has read; `listAuditEventsAfter` returns the events after it.
 Retention prune deletes events whether or not they were exported, so an exporter must keep up with
