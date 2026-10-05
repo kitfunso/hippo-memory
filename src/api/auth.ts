@@ -78,6 +78,7 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
 }
 
 const DAY_MS = 86_400_000;
+const MAX_TTL_DAYS = 3650;
 
 export interface AuthCreateSelfOpts {
   label?: string;
@@ -92,11 +93,22 @@ export interface AuthCreateSelfResult extends AuthCreateResult {
   expiresAt: string;
 }
 
-/** Mint a member key for the SSO caller itself, whatever its role; the cap's revokes, the mint and its audit rows commit or fail together. */
+/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a departed user's key short-lived. */
+function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
+  if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
+    throw new RangeError(`authCreateSelf: ttlDays must be above 0 and at most ${MAX_TTL_DAYS}, got ${String(ttlDays)}`);
+  }
+  if (!Number.isInteger(perSubject) || perSubject < 1) {
+    throw new RangeError(`authCreateSelf: perSubject must be a whole number of at least 1, got ${String(perSubject)}`);
+  }
+}
+
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the cap's revokes, the mint and its audit rows commit or fail together. */
 export function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): AuthCreateSelfResult {
   if (!ctx.actor.viaAuthResolver) {
-    throw new ForbiddenError('Only a caller signed in through SSO can mint its own key');
+    throw new ForbiddenError('Only a caller signed in through the auth resolver can mint its own key');
   }
+  assertSelfMintOpts(opts);
   const { tenantId, actor: { subject } } = ctx;
   const now = Date.now();
   const expiresAt = new Date(now + opts.ttlDays * DAY_MS).toISOString();

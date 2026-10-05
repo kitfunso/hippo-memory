@@ -53,7 +53,7 @@ export interface CreateApiKeyOpts {
   label?: string;
   /** 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify). */
   role?: 'admin' | 'member';
-  /** The SSO subject a self-service key belongs to; unset for keys an admin or the CLI mints. */
+  /** The auth-resolver subject a self-service key belongs to; unset for keys an admin or the CLI mints. */
   ownerSubject?: string;
   /** ISO time the key stops working; unset means it never expires. */
   expiresAt?: string;
@@ -281,7 +281,7 @@ export interface ListApiKeysOpts {
   active: boolean;
   /** Only this tenant's keys; omit for every tenant (the CLI's single-tenant view). */
   tenantId?: string;
-  /** Only keys minted by this SSO subject. */
+  /** Only keys minted by this auth-resolver subject. */
   ownerSubject?: string;
   /** Only this one key. */
   keyId?: string;

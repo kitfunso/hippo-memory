@@ -42,8 +42,9 @@ export async function parseJsonBody(req: IncomingMessage, _authed: Context): Pro
   return parseJsonObjectText(await readBody(req));
 }
 
-// The key-mint routes read their body before auth, so an unauthenticated caller can make the server buffer at most this.
+// POST /v1/auth/keys reads its body before auth, so an unauthenticated caller can make the server buffer at most this many bytes and wait at most this many ms.
 export const MINT_BODY_MAX_BYTES = 4 * 1024;
+export const MINT_BODY_DEADLINE_MS = 10_000;
 
 export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   if (raw.length === 0) return {};

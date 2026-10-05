@@ -105,7 +105,6 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'GET', pattern: '/v1/context' },
   { method: 'POST', pattern: '/v1/sleep' },
   { method: 'POST', pattern: '/v1/auth/keys', body: '{"label":"x"}' },
-  { method: 'POST', pattern: '/v1/auth/keys/self', body: '{"label":"x"}' },
   { method: 'GET', pattern: '/v1/auth/keys' },
   { method: 'DELETE', pattern: '/v1/auth/keys/:keyId' },
   { method: 'GET', pattern: '/v1/audit' },
@@ -159,8 +158,6 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'GET', pattern: '/mcp/stream' },
 ];
 
-const CONNECT_INFO = { issuer: 'https://login.example.com/t/v2.0', clientId: 'cli-app', scopes: ['openid'], redirectUris: ['http://localhost'] };
-
 function requestPath(pattern: string, query?: string): string {
   const path = pattern.replace(/:\w+/g, '1');
   return query ? `${path}${query}` : path;
@@ -177,8 +174,7 @@ describe('server Bearer lockdown', () => {
     // '0' disables the default limiter (20 rps/burst 40), which would
     // 429 the ~120 /v1 requests this file sends.
     process.env.HIPPO_V1_RPS = '0';
-    // Both SSO options on, so /v1/auth/keys/self reaches its auth check instead of a 404.
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, selfServiceKeys: { ttlDays: 1, perSubject: 1 }, connectInfo: CONNECT_INFO });
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
@@ -199,22 +195,12 @@ describe('server Bearer lockdown', () => {
     ).toBe(derived.size);
   });
 
-  it('PUBLIC_ROUTES contains exactly the three documented unauth routes', () => {
+  it('PUBLIC_ROUTES contains exactly the two documented unauth routes', () => {
     const publicRoutes = publicRoutesFromServerSource(serverSource);
     expect([...publicRoutes].sort()).toEqual([
-      'GET /v1/auth/connect',
       'POST /v1/connectors/github/events',
       'POST /v1/connectors/slack/events',
     ]);
-  });
-
-  it('GET /v1/auth/connect answers with no Bearer, and is a 404 rather than a 401 when connectInfo is unset', async () => {
-    const res = await fetch(`http://127.0.0.1:${handle.port}/v1/auth/connect`);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(CONNECT_INFO);
-    await handle.stop();
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
-    expect((await fetch(`http://127.0.0.1:${handle.port}/v1/auth/connect`)).status).toBe(404);
   });
 
   it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus GET /health', () => {

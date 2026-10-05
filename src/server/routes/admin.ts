@@ -5,7 +5,7 @@ import { HttpError, readBody, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isSetMember, MINT_BODY_MAX_BYTES, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
+import { isSetMember, MINT_BODY_DEADLINE_MS, MINT_BODY_MAX_BYTES, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
 import { isJsonString } from '../../json.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
@@ -22,8 +22,8 @@ const MAX_AUTH_KEYS_PAGE = 1000;
 // body: the HTTP layer hands it to the client; the user-facing
 // "store this somewhere safe" warning belongs in the CLI client, not here.
 export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
-  // Body first, so the resolver's check (and any SCIM gate in it) runs right before the mint with no wait between.
-  const raw = await readBody(req, MINT_BODY_MAX_BYTES);
+  // Body first, so the resolver's check (and any gate in it) runs right before the mint with no wait between.
+  const raw = await readBody(req, { maxBytes: MINT_BODY_MAX_BYTES, deadlineMs: MINT_BODY_DEADLINE_MS });
   const ctx = await buildContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
   const labelRaw = body['label'];

@@ -8,10 +8,10 @@ import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { type Actor, authRevoke, type Context, RecallContractError } from './api.js';
+import { type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type Context, RecallContractError } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
@@ -28,20 +28,19 @@ import { handleClosePrediction, handleCreatePrediction, handleGetPrediction, han
 import { handleCloseProcess, handleCreateProcess, handleGetProcess, handleListProcesses, handleSupersedeProcess } from './server/routes/processes.js';
 import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrief, handleListProjectBriefs, handleRefreshProjectBrief, handleSupersedeProjectBrief } from './server/routes/project-briefs.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
-import { assertSelfServiceKeys, handleConnectInfo, handleCreateSelfAuthKey } from './server/routes/self-service.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
 import { parseJsonBody } from './server/validation.js';
 import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 
-// Add-on packages revoke keys through these without importing the whole api surface.
-export { authRevoke, ForbiddenError, type Context, type Actor };
+// Add-on packages mint and revoke keys through these without importing the whole api surface.
+export { authCreateSelf, authRevoke, ForbiddenError, type AuthCreateSelfOpts, type AuthCreateSelfResult, type Context, type Actor };
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 // The code behind these lives in src/server/; this subpath keeps exporting them.
 export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
-export type { AddonCall, AddonRoute, AuthResolver, ConnectInfo, ResolvedBearer, SelfServiceKeysOpts, ServeOpts, ServerHandle } from './server/types.js';
+export type { AddonCall, AddonRoute, AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
 // What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a hook route, JsonValue for its body.
 export { HttpError } from './http-util.js';
 export { promptHookContext } from './prompt-hook.js';
@@ -63,7 +62,6 @@ export { StoreBusyError } from './db.js';
 const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   'POST /v1/connectors/slack/events',
   'POST /v1/connectors/github/events',
-  'GET /v1/auth/connect',
 ]);
 
 function isPublicRoute(method: string, path: string): boolean {
@@ -101,7 +99,6 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'GET', path: '/v1/context', handler: handleGetContext },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
   { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
-  { method: 'POST', path: '/v1/auth/keys/self', handler: handleCreateSelfAuthKey },
   { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
   { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', handler: handleRevokeAuthKey },
   { method: 'GET', path: '/v1/quarantine', handler: handleListQuarantine },
@@ -279,13 +276,6 @@ async function handleRequest(
     return;
   }
 
-  if (method === 'GET' && path === '/v1/auth/connect') {
-    // Public by design: a client asks here before it has any credential.
-    if (!isPublicRoute(method, path)) throw new HttpError(401, 'auth required');
-    handleConnectInfo(res, opts);
-    return;
-  }
-
   if (method === 'POST' && path === '/mcp') {
     await refuseUnportedRoute(req, opts);
     await handleMcpPost(req, res, opts);
@@ -405,8 +395,8 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     return;
   }
   sendError(res, mapped.status, mapped.message);
-  // readBody hit its cap, so drop the socket rather than drain unbounded bytes.
-  if (err instanceof BodyTooLargeError) req.destroy();
+  // readBody hit its cap or deadline, so drop the socket rather than drain what the client keeps sending.
+  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) req.destroy();
 }
 
 function setKeepAliveTimeouts(server: Server): void {
@@ -456,8 +446,7 @@ function installSignalHandlers(stop: () => Promise<void>): void {
  * Refuses non-loopback hosts at boot unless
  * HIPPO_REQUIRE_AUTH=1 is set. The auth middleware (buildContextWithAuth /
  * requireAuth) has shipped and every route checks it except GET /health
- * (public by design for platform health checks), GET /v1/auth/connect
- * (public SSO sign-in info, a 404 unless connectInfo is set) and the two connector
+ * (public by design for platform health checks) and the two connector
  * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
  * secrets and 404 when those secrets are unset. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
@@ -480,7 +469,6 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
   assertAddonRoutes(routes);
   assertBindable(host);
-  assertSelfServiceKeys(opts.selfServiceKeys);
   await assertNoLiveServer(opts.hippoRoot);
 
   // The server's start time. Single source of truth: it is returned by every
