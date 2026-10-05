@@ -257,6 +257,12 @@ async function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: Dirt
         gTenants += 1;
         gEntities += ext.entities;
         gRelations += ext.relations;
+        if (ext.skipped) {
+          result.details = [
+            ...(result.details ?? []),
+            `graph: ${ext.skipped} stale op(s) skipped for a tenant; the next sleep redoes them`,
+          ];
+        }
         // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
         // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
         markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);

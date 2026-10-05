@@ -276,4 +276,16 @@ describe('E3 sleep enqueue-hook', () => {
     }
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
+
+  it('18. stale ops a rebuild skipped show in the details', async () => {
+    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
+    const phases: Partial<SleepPhases> = {
+      extractGraph: (root, tid) => ({ ...realExtractGraph(root, tid), skipped: 2 }),
+    };
+
+    const r = await runSleep(tc.ctx, { noShare: true }, phases);
+
+    expect(r.graph?.tenants).toBe(1);
+    expect(r.details).toContain('graph: 2 stale op(s) skipped for a tenant; the next sleep redoes them');
+  });
 });
