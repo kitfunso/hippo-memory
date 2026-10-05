@@ -10,6 +10,7 @@ import {
   type ContextCandidateFilter,
   type AmbientRecallRequest,
   type AmbientLoadResult,
+  type RecentOrigins,
 } from '../store/candidates.js';
 import { loadIndex, saveIndex, updateStats } from '../store/index-and-stats.js';
 import { loadFreshActiveTaskSnapshot, listSessionEvents, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
@@ -92,12 +93,18 @@ interface ContextQueryWindow {
   project: readonly string[] | undefined;
 }
 
-// The pinned-only branch needs pins and recent-N candidates, not the corpus; `recall` applies there only.
+/** The pinned-only branch's recent-N backfill: how many rows, and the origins they may carry. */
+interface RecentRequest {
+  needed: number;
+  origins: RecentOrigins | undefined;
+}
+
+// The pinned-only branch needs pins and recent-N candidates, not the corpus; `recent` and `recall` apply there only.
 function loadAmbientEntries(
   hippoRoot: string,
   tenantId: string,
   pinnedOnly: boolean,
-  includeRecent: number,
+  recent: RecentRequest,
   admit: (e: MemoryEntry) => boolean,
   window: ContextCandidateFilter | ContextQueryWindow,
   recall?: AmbientRecallRequest,
@@ -117,7 +124,7 @@ function loadAmbientEntries(
     onQualityDrop?.(e);
     return false;
   };
-  return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient, recall);
+  return loadAmbientCandidates(hippoRoot, tenantId, recent.needed, admitAmbient, recall, recent.origins);
 }
 
 /** The task-state sections printed ahead of the memories, and the budget left once they are paid. */
@@ -203,7 +210,9 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
   const hasLocal = isInitialized(ctx.hippoRoot);
   const query = (opts.q ?? '').trim() || '*';
   const globalRoot = getGlobalRoot();
-  const hasGlobal = isInitialized(globalRoot);
+  const sharedStore = opts.sharedStore === true;
+  // A store serving many people is not its operator's, so the operator's own global store stays out.
+  const hasGlobal = !sharedStore && isInitialized(globalRoot);
   const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
@@ -233,6 +242,7 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
     globalRoot,
     primaryIsGlobal,
     hasLocalTaskState: hasLocal && !primaryIsGlobal,
+    sharedStore,
     config,
     currentProject,
     includeCrossProject,
@@ -266,49 +276,50 @@ function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): 
     : blockBudget;
 }
 
+interface RawTaskState {
+  readonly snapshot: TaskSnapshot | null;
+  readonly handoff: SessionHandoff | null;
+  readonly events: readonly SessionEvent[];
+}
+
+const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] };
+
+// Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
+function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): RawTaskState {
+  if (!plan.hasLocalTaskState) return NO_TASK_STATE;
+  // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
+  const snapshot = loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, { sessionId: opts.currentSessionId });
+  // On a shared store the task state is one person's, so it reaches only the session that saved it.
+  if (plan.sharedStore && (!snapshot?.session_id || snapshot.session_id !== opts.currentSessionId)) return NO_TASK_STATE;
+  const sessionId = snapshot?.session_id;
+  const handoff = sessionId
+    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, sessionId)
+    : loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, undefined, {
+        unfinishedOnly: true,
+        maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
+        // Scope is admitted in SQL so a newer denied row can't hide an older eligible one before LIMIT 1.
+        scopeFilter: 'default-deny',
+      });
+  // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
+  const events = sessionId ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId, limit: 5 }) : [];
+  return { snapshot, handoff, events };
+}
+
 // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry is.
 function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPlan, startLeft: number): TaskSections {
-  const { exactScope, hasLocalTaskState, cost } = plan;
+  const { exactScope, cost } = plan;
   let left = startLeft;
   const pays = (tokens: number): boolean => {
     if (tokens > left) return false;
     left -= tokens;
     return true;
   };
-  // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
-  const rawActiveSnapshot = hasLocalTaskState
-    ? loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, {
-        sessionId: opts.currentSessionId,
-      })
-    : null;
+  const raw = loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
-  const activeSnapshot =
-    rawActiveSnapshot && passesScopeFilterForRecall(rowScope(rawActiveSnapshot), exactScope)
-      ? rawActiveSnapshot
-      : null;
-  // Key on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
-  const rawSessionHandoff = !hasLocalTaskState
-    ? null
-    : rawActiveSnapshot?.session_id
-      ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, rawActiveSnapshot.session_id)
-      : loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, undefined, {
-          unfinishedOnly: true,
-          maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
-          // Scope is admitted in SQL so a newer denied row can't hide an older eligible one before LIMIT 1.
-          scopeFilter: 'default-deny',
-        });
-  const sessionHandoff =
-    rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), exactScope)
-      ? rawSessionHandoff
-      : null;
-  // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
-  const recentSessionEvents = hasLocalTaskState && rawActiveSnapshot?.session_id
-    ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
-        session_id: rawActiveSnapshot.session_id,
-        limit: 5,
-      }).filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope))
-    : [];
+  const activeSnapshot = raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope) ? raw.snapshot : null;
+  const sessionHandoff = raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope) ? raw.handoff : null;
+  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope));
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
   const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
@@ -343,8 +354,15 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
   return { ambientAdmit, admit, bothStoresAdmit, digestHidden: () => digestHiddenForHandoff };
 }
 
+/** Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows. */
+function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
+  if (plan.sharedStore) return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
+  return plan.originProject && { names: plan.originProject, userGlobal: true };
+}
+
 function loadPools(ctx: Context, plan: ContextPlan, admission: ContextAdmission, recallRequest: AmbientRecallRequest | undefined): ContextPools {
   const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope } = plan;
+  const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
   const searches = plan.query !== '*' && !pinnedOnly;
   const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
   const poolAdmit = searchesBoth ? admission.bothStoresAdmit : admission.admit;
@@ -363,10 +381,10 @@ function loadPools(ctx: Context, plan: ContextPlan, admission: ContextAdmission,
       };
   // Tenant-scoped loads: never resolveTenantId({}) here.
   const local: AmbientLoadResult = plan.hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, plan.includeRecent, loadAdmit, window, recallRequest, qualityDrop(primaryIsGlobal))
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, recent, loadAdmit, window, recallRequest, qualityDrop(primaryIsGlobal))
     : { entries: [] };
   const global: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? loadAmbientEntries(plan.globalRoot, ctx.tenantId, pinnedOnly, plan.includeRecent, loadAdmit, window, recallRequest, qualityDrop(true))
+    ? loadAmbientEntries(plan.globalRoot, ctx.tenantId, pinnedOnly, recent, loadAdmit, window, recallRequest, qualityDrop(true))
     : { entries: [] };
   return { local, global };
 }

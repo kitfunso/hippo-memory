@@ -43,14 +43,21 @@ export const INTERNAL_ERROR_MESSAGE = 'internal server error';
 
 /** Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text stays in the server log. */
 export function mapApiError<E>(err: E): ApiErrorReply {
+  // An add-on can build an HttpError from any number, and writeHead throws on one outside 100-999.
+  if (err instanceof HttpError && !(Number.isInteger(err.status) && err.status >= 100 && err.status <= 999)) {
+    return { status: 500, message: INTERNAL_ERROR_MESSAGE };
+  }
   if (err instanceof HttpError || err instanceof ApiError) return { status: err.status, message: err.message };
   if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
   return { status: 500, message: INTERNAL_ERROR_MESSAGE };
 }
 
+/** Serialises before the head goes out, so a body that is not JSON still reaches the caller's error reply. */
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {
+  const text = JSON.stringify(body);
+  if (text === undefined) throw new Error('response body is not JSON');
   res.writeHead(status, JSON_HEADERS);
-  res.end(JSON.stringify(body));
+  res.end(text);
 }
 
 /**
