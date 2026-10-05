@@ -70,6 +70,16 @@ function seedGlobal(root: string): void {
   writeEntry(root, seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z'));
 }
 
+/** writeEntry stamps updated_at from SQLite's real clock and recall breaks bm25 ties on it, so one stamp keeps the order fixed. */
+function pinUpdatedAt(root: string): void {
+  const db = openHippoDb(root);
+  try {
+    db.prepare('UPDATE memories SET updated_at = ?').run('2026-02-01 00:00:00');
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 interface Store { home: string; root: string; globalRoot: string }
 
 /** A fresh copy of a template store plus the global store, with HIPPO_HOME pointed at that global store. */
@@ -209,6 +219,7 @@ beforeAll(() => {
   seedLocal(join(templates, 'local'));
   seedWide(join(templates, 'wide'));
   seedGlobal(join(templates, 'global'));
+  for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(templates, kind));
 });
 
 afterAll(() => {
