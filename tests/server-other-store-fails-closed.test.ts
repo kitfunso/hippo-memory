@@ -91,7 +91,7 @@ describe('serve() under a store that is not hippo.db', () => {
 
   it('answers 501 on every /v1 route, POST /mcp and both connectors, and never runs the handler', async () => {
     const routes = [...v1Routes(), 'POST /mcp', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
-    expect(routes).toHaveLength(65);
+    expect(routes).toHaveLength(66);
     for (const route of routes) {
       const [method, path] = route.split(' ');
       const res = await fetch(`${handle.url}${path}`, {
