@@ -31,6 +31,7 @@ import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecal
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
 import { parseJsonBody } from './server/validation.js';
 import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
+import type { JsonValue } from './json.js';
 
 // Add-on packages revoke keys through these without importing the whole api surface.
 export { authRevoke, ForbiddenError, type Context, type Actor };
@@ -59,6 +60,7 @@ export { StoreBusyError } from './db.js';
 // `buildContextWithAuth` / `requireAuth`. Adding a route here without
 // adding the corresponding `isPublicRoute` short-circuit in a handler is
 // a no-op (auth still applies), so the failure mode is fail-closed.
+// The only other unauthenticated paths are ServeOpts.publicJson's: GET only, checked at boot by assertPublicJson.
 const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   'POST /v1/connectors/slack/events',
   'POST /v1/connectors/github/events',
@@ -174,24 +176,43 @@ async function dispatchV1Route(r: RouteRequest, method: string, path: string): P
   return false;
 }
 
-const ADDON_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
+const PLAIN_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
 
-// A path with only ADDON_SEGMENT_RE characters never holds a `%`, so matchPath cannot throw here.
-function isCorePostPath(path: string): boolean {
-  return PUBLIC_ROUTES.has(`POST ${path}`) || V1_ROUTES.some((route) => routeMatches(route, 'POST', path) !== null);
+function isPlainV1Path(path: string): boolean {
+  return path.startsWith('/v1/') && new URL(path, 'http://h').pathname === path
+    && path.slice('/v1/'.length).split('/').every((segment) => PLAIN_SEGMENT_RE.test(segment));
+}
+
+// A plain path never holds a `%`, so matchPath cannot throw here.
+function isCorePath(method: string, path: string): boolean {
+  return PUBLIC_ROUTES.has(`${method} ${path}`) || V1_ROUTES.some((route) => routeMatches(route, method, path) !== null);
 }
 
 /** Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or hides from dispatch. */
 function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
   for (const { path } of routes) {
-    const plain = path.startsWith('/v1/') && new URL(path, 'http://h').pathname === path
-      && path.slice('/v1/'.length).split('/').every((segment) => ADDON_SEGMENT_RE.test(segment));
-    if (!plain) throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    if (!isPlainV1Path(path)) throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
     if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
-    if (isCorePostPath(path)) throw new Error(`add-on route '${path}' is already served by core`);
+    if (isCorePath('POST', path)) throw new Error(`add-on route '${path}' is already served by core`);
     seen.add(path);
   }
+}
+
+const PUBLIC_JSON_MAX_BYTES = 64 * 1024;
+
+/** Boot-time check and serialization: a public path that a core GET route serves would open that route to anyone. */
+function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>): ReadonlyMap<string, string> {
+  const bodies = new Map<string, string>();
+  for (const [path, value] of Object.entries(publicJson)) {
+    if (!isPlainV1Path(path)) throw new Error(`public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    if (isCorePath('GET', path)) throw new Error(`public JSON path '${path}' is already served by core`);
+    const text = JSON.stringify(value);
+    if (text === undefined) throw new Error(`public JSON at '${path}' is not JSON`);
+    if (Buffer.byteLength(text) > PUBLIC_JSON_MAX_BYTES) throw new Error(`public JSON at '${path}' is over 64 KiB`);
+    bodies.set(path, text);
+  }
+  return bodies;
 }
 
 /** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a core one. */
@@ -202,6 +223,15 @@ async function dispatchAddonRoute({ req, res, opts }: RouteRequest, method: stri
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   sendJson(res, 200, await route.handler({ ctx, body }));
+  return true;
+}
+
+/** No auth, body read or store access, so a caller with no key gets it under any store. */
+function dispatchPublicJson({ res, opts }: RouteRequest, method: string, path: string): boolean {
+  const text = method === 'GET' ? opts.publicJsonBodies.get(path) : undefined;
+  if (text === undefined) return false;
+  res.writeHead(200, { ...JSON_HEADERS, 'cache-control': 'no-store' });
+  res.end(text);
   return true;
 }
 
@@ -241,6 +271,7 @@ async function handleRequest(
 
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (await dispatchV1Route(routeRequest, method, path)) return;
+  if (dispatchPublicJson(routeRequest, method, path)) return;
   if (await dispatchAddonRoute(routeRequest, method, path)) return;
 
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
@@ -445,7 +476,7 @@ function installSignalHandlers(stop: () => Promise<void>): void {
  * requireAuth) has shipped and every route checks it except GET /health
  * (public by design for platform health checks) and the two connector
  * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
- * secrets and 404 when those secrets are unset. But the loopback
+ * secrets and 404 when those secrets are unset, and any publicJson GET path. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
  * requests from a loopback remote address (unless they carry Forwarded,
  * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip or True-Client-Ip, which mark a same-host proxy and get
@@ -465,6 +496,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
   assertAddonRoutes(routes);
+  const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
@@ -478,7 +510,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served: ResolvedServeOpts = { ...opts, routes, store: opts.store ?? sqliteStore(opts.hippoRoot) };
+  const served: ResolvedServeOpts = { ...opts, routes, publicJsonBodies, store: opts.store ?? sqliteStore(opts.hippoRoot) };
   const { kind } = served.store;
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 

@@ -705,6 +705,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
 - `assertNoLiveServer`: H3: refuse to start if a live hippo server already serves this hippoRoot.
 - `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
+- `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
 - `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
 - `serve`: Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth / requireAuth) has shipped and every route checks it
 - `serve.stop`: an unconditional unlink here would orphan it. (v0.37.0 server-hardening.)

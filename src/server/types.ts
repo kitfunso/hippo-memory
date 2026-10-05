@@ -54,9 +54,14 @@ export interface ServeOpts {
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   routes?: readonly AddonRoute[];
+  /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
+  publicJson?: Readonly<Record<string, JsonValue>>;
 }
 
-export type ResolvedServeOpts = ServeOpts & { store: HippoStore };
+export type ResolvedServeOpts = ServeOpts & {
+  store: HippoStore;
+  publicJsonBodies: ReadonlyMap<string, string>;
+};
 
 /** Per-request values the /v1 route handlers read. */
 export interface RouteRequest {
