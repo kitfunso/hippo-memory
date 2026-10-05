@@ -230,6 +230,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `pinnedInject.promptRecallMaxItems`: Z1: max prompt-recall entries injected per prompt. Default 5 (tuned).
 - `pinnedInject.promptRecallCandidates`: Z1: FTS candidate pool size per store before gating. Default 100.
 - `contextProjectIsolation`: Memory scope isolation (v39): when true (default), ambient context ... See docs/plans/2026-07-01-memory-scope-isolation.md.
+- `sharedStore`: set `true` on a store that a team server serves. Its folder is no caller's project, so a write that names none stores NULL (no known project, hidden from every project's context) instead of the folder's project or `''` (user-global, shown everywhere). Callers name their project: `POST /v1/memories` takes `project: {name, aliases?}` and `GET /v1/context` takes `project` and repeated `alias`; a context read with none answers 400. MCP `hippo_context` and `hippo sync` refuse the store. Once a process reads the flag as true it stays true, so a broken edit cannot reopen reads.
 - `memoryValue`: LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen E2 weights (src/memory-value-weights.ts) only run when explicitly enabled; no other knobs in v1 (the rescue budget is a code constant tied to E2 evidence, not user-tunable).
 - `churnStaleness`: FE2: tags a memory `churn-stale` when its named file/symbol/script changed since storage. Default OFF - FE3 measures before it flips.
 
@@ -569,7 +570,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `MemoryEntry`: v28 (reserved for E5): ISO 8601 timestamp the level-3 entity profile
 - `MemoryEntry`: A3 provenance envelope (schema v14)
 - `MemoryEntry`: A5 stub auth (schema v16)
-- `MemoryEntry`: Memory scope isolation (schema v39): owning project for ambient-context ... everywhere), or null for legacy pre-v39 rows - ambient context treats null as other-project (deny). Stamped from the store's location at write time (store.ts stampOriginProject); undefined only on entries not yet written. See docs/plans/2026-07-01-memory-scope-isolation.md.
+- `MemoryEntry`: Memory scope isolation (schema v39): owning project for ambient-context ... everywhere), or null for no known project (a legacy pre-v39 row, or a shared-store write that named none) - ambient context treats null as other-project (deny). Stamped at write time by store/entry-row.ts stampOriginProject via fallbackOrigin; undefined only on entries not yet written. See docs/plans/2026-07-01-memory-scope-isolation.md.
 - `MemoryEntry`: F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
 - `CHURN_STALE_TAG`: FE2: tag on a memory whose named file/symbol/script changed after it was stored.
 - `EMOTIONAL_MULTIPLIERS`: Emotional multipliers from PLAN.md. v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics: losses ~2x larger than equivalent gains). Defaults rebalanced: - positive (success-tagged): 1.3 -> 1.0 - negative (error-tagged): 1.5 -> 2.0 - critical stays at 2.0 (literal roadmap reading; J5 silent on critical; ranking signal in consolidate.ts/salience.ts/ambient.ts unchanged) - neutral stays at 1.0
@@ -634,7 +635,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/project-identity.ts
 - `module header`: Project identity resolution for memory scope isolation (ROADMAP.md Part I [Committed] "Memory scope isolation"; plan docs/plans/2026-07-01-memory-scope-isolation.md S1).
 - `findHippoStoreDir`: Design notes: docs/plans/2026-09-05-*.md
-- `deriveOriginProject`: a NULL origin_project column is reserved for legacy pre-migration rows, which ambient context treats as deny (see plan docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
+- `deriveOriginProject`: NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny (see plan docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
+- `fallbackOrigin`: the origin for a write that names none. A store whose `config.json` sets `"sharedStore": true` gets NULL, because its folder is no caller's project; any other store gets its folder's project.
 
 ### src/prompt-recall.ts
 - `module header`: Z1: recall gated on the hook prompt, not the five newest memories (pure, no I/O). See docs/plans/2026-09-26-z1-prompt-recall.md.

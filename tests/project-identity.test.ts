@@ -6,7 +6,11 @@ import {
   resolveProjectIdentity,
   deriveOriginProject,
   clearProjectIdentityCache,
+  assertCallerProject,
+  MAX_PROJECT_ALIASES,
 } from '../src/project-identity.js';
+import { BadRequestError } from '../src/api-errors.js';
+import { MAX_ID_LEN } from '../src/http-util.js';
 
 let tmpRoot: string;
 let home: string;
@@ -200,5 +204,27 @@ describe('deriveOriginProject', () => {
     expect(deriveOriginProject(home, { homeDir: home })).toBe('');
     const misc = mkdirs('home', 'downloads');
     expect(deriveOriginProject(misc, { homeDir: home })).toBe('');
+  });
+});
+
+describe('assertCallerProject', () => {
+  const aliases = (n: number): string[] => Array.from({ length: n }, (_, i) => `alias-${i}`);
+
+  it('refuses a blank name, too many aliases and an overlong name or alias', () => {
+    for (const project of [
+      { name: '' },
+      { name: '   ' },
+      { name: 'acme/app', aliases: aliases(MAX_PROJECT_ALIASES + 1) },
+      { name: 'x'.repeat(MAX_ID_LEN + 1) },
+      { name: 'acme/app', aliases: ['y'.repeat(MAX_ID_LEN + 1)] },
+    ]) {
+      expect(() => assertCallerProject(project), JSON.stringify(project).slice(0, 60)).toThrow(BadRequestError);
+    }
+  });
+
+  it('accepts a name with up to ten aliases', () => {
+    expect(MAX_PROJECT_ALIASES).toBe(10);
+    expect(() => assertCallerProject({ name: 'acme/app', aliases: aliases(10) })).not.toThrow();
+    expect(() => assertCallerProject({ name: 'x'.repeat(MAX_ID_LEN) })).not.toThrow();
   });
 });

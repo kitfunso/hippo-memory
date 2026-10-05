@@ -24,7 +24,8 @@ import { getGlobalRoot } from '../shared.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { evalNow, isRecallBoostAblated } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
-import { loadConfig } from '../config.js';
+import { BadRequestError } from '../api-errors.js';
+import { isSharedStore, loadConfig } from '../config.js';
 import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
 import { detectSecret } from '../secret-detect.js';
@@ -210,7 +211,8 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
   const hasLocal = isInitialized(ctx.hippoRoot);
   const query = (opts.q ?? '').trim() || '*';
   const globalRoot = getGlobalRoot();
-  const sharedStore = opts.sharedStore === true;
+  // The store's own flag counts too, so no surface can read a shared store as its owner.
+  const sharedStore = opts.sharedStore === true || isSharedStore(ctx.hippoRoot);
   // A store serving many people is not its operator's, so the operator's own global store stays out.
   const hasGlobal = !sharedStore && isInitialized(globalRoot);
   const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
@@ -221,6 +223,8 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
   const isolationEnabled = config.contextProjectIsolation !== false;
   const currentProject =
     opts.currentProject ?? resolveProjectIdentity(process.cwd());
+  // A caller with no project reads every row as its own; on a shared store those rows are other people's.
+  if (sharedStore && projectId(currentProject).trim() === '') throw new BadRequestError('a shared store needs the caller\'s project');
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
 
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their connection.
