@@ -53,7 +53,7 @@ const RULE_WORD = /\b(?:never|always|must|don't|do not|make sure|ensure|prefer|a
 
 function isRoutineReleaseActivity(text: string): boolean {
   if (isReleaseCommitNoise(text)) return true;
-  // "Deploy v1.2 only after the migration has run" is a rule about releases, not a log line.
+  // "Deploy only after the migration has run" is a rule about releases, not a log line.
   if (RELATION_WORD.test(text) || RULE_WORD.test(text)) return false;
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
   if (/^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)/i.test(subject)) return true;
