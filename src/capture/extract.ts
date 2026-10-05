@@ -44,7 +44,8 @@ export function splitSentences(text: string): string[] {
 function proseOnly(text: string): string {
   let fence: string | null = null;
   return text.split('\n').map(line => {
-    const marker = line.trimStart().match(/^(`{3,}|~{3,})/);
+    // A list item may open a fence on its own line: "- ```".
+    const marker = line.trimStart().match(/^(?:(?:[-*]|\d+\.)\s+)?(`{3,}|~{3,})/);
     if (marker) {
       if (fence === null) fence = marker[1][0];
       else if (marker[1][0] === fence) fence = null;

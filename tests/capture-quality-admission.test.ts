@@ -67,6 +67,7 @@ describe('capture retains complete supported assertions', () => {
     const turns: SessionTurn[] = [
       { role: 'user', text: 'Never edit the lockfile by hand' },
       { role: 'user', text: 'thanks' },
+      { role: 'user', text: '```\nNever push from the VM\n```' },
       { role: 'assistant', text: 'You must never run the migration twice, because the second run deletes the seed rows' },
       { role: 'assistant', text: 'succeeds (inserts or updates)' },
       { role: 'assistant', text: 'Here is the file:' },
