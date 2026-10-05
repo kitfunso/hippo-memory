@@ -93,11 +93,11 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
     const result = installJsonHooks('claude-code');
     expect(result.migratedPinnedInjectRecent).toBe(false);
-    expect(result.installedUserPromptSubmit).toBe(true);
+    // The install test is the loose substring one, so a mention counts as installed and nothing is appended.
+    expect(result.installedUserPromptSubmit).toBe(false);
 
     const groups = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.UserPromptSubmit;
-    expect(groups).toHaveLength(2);
-    expect(groups[0]).toEqual({ hooks: [mine] });
+    expect(groups).toEqual([{ hooks: [mine] }]);
   });
 
   it('migration edits the hippo handler of a group it shares with a user handler, and only that one', () => {

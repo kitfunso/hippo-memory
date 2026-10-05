@@ -1,3 +1,4 @@
+import { envHomeDir, processEnv } from '../env.js';
 import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -192,6 +193,8 @@ export function resolveLastSessionTranscript(
   }
 
   if (!opts.mayScan) return null;
+  // With no home set, os.homedir() would send the scan into the real profile's transcripts.
+  if (!processEnv().CLAUDE_CONFIG_DIR && !envHomeDir()) return null;
 
   const projectsDir = path.join(claudeConfigDir(), 'projects');
   if (!fs.existsSync(projectsDir)) return null;

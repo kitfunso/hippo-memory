@@ -218,6 +218,19 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
   });
 
+  // os.homedir() would still name a real profile, so with no home variable and no CLAUDE_CONFIG_DIR the scan must not start.
+  it('scans nothing when CLAUDE_CONFIG_DIR, HOME and USERPROFILE are all unset', () => {
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.HOME;
+    delete process.env.USERPROFILE;
+    try {
+      expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
+    } finally {
+      if (prev !== undefined) process.env.CLAUDE_CONFIG_DIR = prev;
+    }
+  });
+
   it('scans $CLAUDE_CONFIG_DIR/projects when it is set, and not ~/.claude/projects', () => {
     const prev = process.env.CLAUDE_CONFIG_DIR;
     const config = path.join(tmp.dir, 'elsewhere');

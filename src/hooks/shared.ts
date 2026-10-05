@@ -41,8 +41,8 @@ export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<stri
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
-/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude. */
-export function claudeConfigDir(home: string = homeDir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
+/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
+export function claudeConfigDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }
 
@@ -84,8 +84,9 @@ export function ensureDir(dir: string): void {
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
+  const claudeDir = claudeConfigDir();
   return [
-    { name: 'claude-code', configDir: '~/.claude', detected: fs.existsSync(claudeConfigDir(home)), kind: 'json-hook' },
+    { name: 'claude-code', configDir: claudeDir, detected: fs.existsSync(claudeDir), kind: 'json-hook' },
     { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
     { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },

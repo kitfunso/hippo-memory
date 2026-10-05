@@ -15,10 +15,9 @@ import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVe
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
 import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
-import { readSettingsFile } from './hooks/json-hooks.js';
 import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
-import type { JsonValue } from './json.js';
+import { readJsonFile, type JsonValue } from './json.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -44,7 +43,7 @@ export interface DoctorReport {
 /** Inputs for {@link runDoctor}; defaults come from the process. */
 export interface DoctorOpts {
   cwd?: string;
-  /** Home directory used to find agent configuration (~/.claude, ~/.codex). */
+  /** Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set, ~/.codex unless CODEX_HOME is). */
   home?: string;
   version: string;
   nodeVersion?: string;
@@ -67,7 +66,7 @@ function versionAtLeast(actual: string, min: string): boolean {
 
 function readJson(file: string): JsonValue | null {
   try {
-    return readSettingsFile(file);
+    return readJsonFile(file);
   } catch {
     // A missing or corrupt file is the finding doctor reports, so null is the answer.
     return null;

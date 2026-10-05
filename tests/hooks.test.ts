@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -199,7 +200,7 @@ describe('JSON hook installer', () => {
                 hooks: [
                   {
                     type: 'command',
-                    command: "echo '[hippo] consolidating...' && hippo sleep",
+                    command: "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')",
                     timeout: 30,
                   },
                 ],
@@ -541,6 +542,18 @@ describe('JSON hook installer', () => {
       expect(resolveJsonHookPaths('claude-code').settings).toBe(path.join(env.home, '.claude', 'settings.json'));
     });
 
+    // Claude Code finds ~/.claude through os.homedir() (USERPROFILE on Windows, HOME elsewhere), so the other variable, as Git Bash sets it, must not move hippo's edit.
+    it('keeps ~/.claude under os.homedir() when the other home variable points elsewhere', () => {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      process.env[process.platform === 'win32' ? 'HOME' : 'USERPROFILE'] = fs.mkdtempSync(path.join(env.home, 'stray-'));
+      const expected = path.join(os.homedir(), '.claude');
+
+      expect(expected).toBe(path.join(env.home, '.claude'));
+      expect(resolveJsonHookPaths('claude-code').settings).toBe(path.join(expected, 'settings.json'));
+      fs.mkdirSync(expected);
+      expect(detectInstalledTools().find((t) => t.name === 'claude-code')).toMatchObject({ detected: true, configDir: expected });
+    });
+
     it('makes detectInstalledTools look there for Claude Code', () => {
       process.env.CLAUDE_CONFIG_DIR = path.join(env.home, 'elsewhere');
       expect(detectInstalledTools().find((t) => t.name === 'claude-code')?.detected).toBe(false);
@@ -581,20 +594,38 @@ describe('JSON hook installer', () => {
   });
 
   describe('writing settings.json', () => {
-    // A hard link to the old file keeps the old bytes only if the write replaced the file instead of truncating it.
+    const seedForStep = (step: string): string => seedSettings(step === 'install' ? { theme: 'dark' } : {
+      hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file "x"' }] }] },
+    });
+    const runStep = (step: string): void => {
+      if (step === 'install') installJsonHooks('claude-code');
+      else uninstallJsonHooks('claude-code');
+    };
+
+    // A new file number means the write swapped a finished file in instead of truncating the old one.
     it.each(['install', 'uninstall'])('%s replaces the file whole, so a crash mid-write cannot truncate it', (step) => {
-      const file = seedSettings(step === 'install' ? { theme: 'dark' } : {
-        hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file "x"' }] }] },
-      });
+      const file = seedForStep(step);
+      const before = fs.readFileSync(file, 'utf8');
+      const inode = fs.statSync(file, { bigint: true }).ino;
+
+      runStep(step);
+
+      expect(fs.readFileSync(file, 'utf8')).not.toBe(before);
+      expect(fs.statSync(file, { bigint: true }).ino).not.toBe(inode);
+      expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
+    });
+
+    // A rename would give the file a new inode and leave the other link on the old content.
+    it.each(['install', 'uninstall'])('%s writes a hard-linked file in place, so every link sees the new content', (step) => {
+      const file = seedForStep(step);
       const before = fs.readFileSync(file, 'utf8');
       const link = path.join(path.dirname(file), 'settings.link');
       fs.linkSync(file, link);
 
-      if (step === 'install') installJsonHooks('claude-code');
-      else uninstallJsonHooks('claude-code');
+      runStep(step);
 
       expect(fs.readFileSync(file, 'utf8')).not.toBe(before);
-      expect(fs.readFileSync(link, 'utf8')).toBe(before);
+      expect(fs.readFileSync(link, 'utf8')).toBe(fs.readFileSync(file, 'utf8'));
       expect(fs.readdirSync(path.dirname(file)).sort()).toEqual(['settings.json', 'settings.link']);
     });
 
@@ -616,6 +647,23 @@ describe('JSON hook installer', () => {
       expect(readSettings(real).hooks.SessionEnd).toHaveLength(1);
     });
 
+    // The link points into a folder that does not exist yet, as a dotfile manager leaves it before its first checkout.
+    it('writes through a dangling symlink, creating the folder it points into', (ctx) => {
+      const real = path.join(env.home, 'dotfiles', 'claude', 'settings.json');
+      const { settings: link } = resolveJsonHookPaths('claude-code');
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      try {
+        fs.symlinkSync(real, link);
+      } catch {
+        ctx.skip(); // creating a symlink needs a privilege some Windows boxes lack
+      }
+
+      installJsonHooks('claude-code');
+
+      expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+      expect(readSettings(real).hooks.SessionEnd).toHaveLength(1);
+    });
+
     it.skipIf(process.platform === 'win32')('keeps the file mode, so a private settings.json stays private', () => {
       const file = seedSettings({ env: { SECRET: 'x' } });
       fs.chmodSync(file, 0o600);
@@ -623,6 +671,21 @@ describe('JSON hook installer', () => {
       installJsonHooks('claude-code');
 
       expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    });
+
+    // The umask trims the mode a new file is created with, so only a chmod after the write restores 0664.
+    it.skipIf(process.platform === 'win32')('keeps a group-writable mode through a restrictive umask', () => {
+      const file = seedSettings({ theme: 'dark' });
+      fs.chmodSync(file, 0o664);
+      const previous = process.umask(0o077);
+
+      try {
+        installJsonHooks('claude-code');
+      } finally {
+        process.umask(previous);
+      }
+
+      expect(fs.statSync(file).mode & 0o777).toBe(0o664);
     });
   });
 
