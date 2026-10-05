@@ -1,7 +1,8 @@
 ### Fixed
 
-- **Automatic capture and derived memories reject incomplete assertions and routine build activity.** Complete lessons retain their conditions and context.
+- **Automatic capture keeps whole sentences instead of cutting them at commas.** A decision such as "we use pnpm, never npm, because the lockfile is pnpm-lock.yaml" is now stored complete. A sentence over 500 characters is skipped rather than cut.
+- **Automatic capture and sleep's derived memories refuse sentence fragments, raw tool output and routine build activity.** Sleep still merges, extracts and summarises short memories the checks are only unsure about.
 
 ### Added
 
-- **`hippo audit repair` previews recoverable quality cleanup and applies it with `--apply`.** Eligible defects retain full dormant snapshots and a database backup; protected rows and unsupported schemas are reported without changes.
+- **`hippo audit repair` previews cleanup of memories hippo wrote itself and applies it with `--apply`.** Only capture, autolearn, git learning, compaction, consolidation and extracted rows are judged; hand-written and imported memories never are. `--apply` hides only certain defects, keeps dormant snapshots and a database backup, and lists uncertain ones for review.

@@ -11,15 +11,16 @@ describe('automatic assertion quality', () => {
     ['The cache refresh depends on', 'sentence-fragment'],
     ['Deploy the API only if the', 'sentence-fragment'],
     ['when the API succeeds', 'sentence-fragment'],
+    ['If the build fails', 'sentence-fragment'],
     ['succeeds (inserts or updates)', 'subjectless-outcome'],
     ['returned 3 matching rows', 'subjectless-outcome'],
     ['TypeError: Cannot read properties of undefined', 'raw-output'],
     ["Command 'npm test' failed (exit 1): test suite failed", 'raw-output'],
     ['stdout: inserted 3 records', 'raw-output'],
     ['{"success":true,"rows":3}', 'raw-output'],
-    ['bump build 78 for codemagic deploy', 'release-activity'],
+    ['bump build 78 for testflight deploy', 'release-activity'],
     ['increment iOS build number to 79', 'release-activity'],
-    ['deployed build 78 to Codemagic', 'release-activity'],
+    ['deployed build 78 to TestFlight', 'release-activity'],
     ['release v1.63.1', 'release-activity'],
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
@@ -35,9 +36,15 @@ describe('automatic assertion quality', () => {
     'If the API fails, retry after the Retry-After delay',
     'The migration failed because test setup was placed in production migrations; move setup to the test directory',
     'bump pool timeout to 30s in src/db.ts',
-    'Codemagic deployment requires a build number greater than the previous upload',
-    'Always bump the iOS build number before uploading through Codemagic',
+    'TestFlight deployment requires a build number greater than the previous upload',
+    'Always bump the iOS build number before uploading through TestFlight',
     'Never use `--no-verify` because it skips the commit checks',
+    'Returns 404 when the API key is missing from the header',
+    'When CI is red rerun the failed jobs before touching code',
+    '[deploy] note: wrangler deploys the site, git push does not',
+    'Updated the publish workflow so prepublishOnly runs the full suite',
+    'Always run the linter before you push to master',
+    'Error: the migration silently dropped the last batch of rows.',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
   });
@@ -45,7 +52,7 @@ describe('automatic assertion quality', () => {
   it('new defect reasons warn without widening automatic audit removal', () => {
     const entry = (content: string) => createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     expect(auditMemory(entry('Found local migration files to be'))?.severity).toBe('warning');
-    expect(auditMemory(entry('bump build 78 for codemagic deploy'))?.severity).toBe('warning');
+    expect(auditMemory(entry('bump build 78 for testflight deploy'))?.severity).toBe('warning');
     expect(auditMemory(entry('succeeds (inserts or updates)'))?.severity).toBe('warning');
     expect(auditMemory(entry('bump 1.63.1'))?.severity).toBe('error');
     expect(auditMemory(entry('fix'))?.severity).toBe('error');

@@ -41,6 +41,7 @@ describe('DF2: every pattern family still extracts', () => {
     // The EXPECT_NULL guard is what surfaced the change - it failed loudly
     // rather than letting a behaviour shift pass unnoticed.
     ['error/issuewas', 'The issue was the reserve loop did not dedupe entries.'],
+    ['decision/goingwith', "We're going with the batched writer approach."],
   ];
 
   // Shapes that extract NOTHING on this branch and extracted nothing on
@@ -49,7 +50,6 @@ describe('DF2: every pattern family still extracts', () => {
   // starting to match - or a live one going dark - would be invisible. That
   // is the same vacuity trap as the mangled regex below. Codex P2, r8.
   const EXPECT_NULL: Array<[string, string]> = [
-    ['decision/goingwith', "We're going with the batched writer approach."],
     ['pref/rather', 'I would rather batch the writes than lock the table.'],
     ['error/failed', 'The build failed because the token had expired.'],
     ['error/bugwas', 'The bug was the offset assumed group one started the match.'],

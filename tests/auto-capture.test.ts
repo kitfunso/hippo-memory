@@ -41,12 +41,10 @@ function run(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string
 }
 
 describe('transcript mining', () => {
-  it('documents a known miss: a comma-split decision is too thin to keep (heuristics, no model)', () => {
-    // Found in the real /compact run on 2026-09-24. Clause bounding cuts this
-    // sentence at its commas, and both halves fall under the quality floor.
-    // LLM extraction (config `extraction`) or better bounding is the fix;
-    // this test fails when that lands, as a reminder to update it.
-    expect(extractFromText('Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.')).toEqual([]);
+  it('keeps a comma-split decision as one whole sentence', () => {
+    // The real /compact run on 2026-09-24 lost this when clause bounding cut it at the commas.
+    expect(extractFromText('Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.').map((i) => i.content))
+      .toEqual(['we use pnpm, never npm, because the lockfile is pnpm-lock.yaml']);
   });
 
   it('SessionEnd capture scrubs a token from a VS Code prompt before it becomes a memory', () => {

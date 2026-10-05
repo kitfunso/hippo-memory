@@ -341,7 +341,7 @@ export const VERB_USAGE = {
                            Re-ingest a DLQ entry (--force skips sig check)`],
   audit: [`
   audit [--fix]            Check memory quality (--fix removes junk)
-    audit repair [--apply] Preview recoverable quality repair; --apply hides eligible defects
+    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply hides certain defects
       --json               Report ids, reasons, protections and schema blockers as JSON
       --global             Operate on the global store without changing its schema
                            Keeps dormant snapshots and a database backup; undo with unreject,

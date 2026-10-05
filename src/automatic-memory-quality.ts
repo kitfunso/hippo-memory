@@ -53,21 +53,29 @@ function isRoutineReleaseActivity(text: string): boolean {
     || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject);
 }
 
+const RELATION_WORD = /\b(?:when|if|unless|because|since|after|before|until|while|so|instead)\b/i;
+
 function isDanglingAssertion(text: string): boolean {
   const bare = text.replace(/[.!?,;:\s]+$/, '');
-  if (/^(?:to|for|and)\s/i.test(bare) && bare.length < 50) return true;
-  if (/\b(?:to be|has been|will be|needs to|instead of|rather than|such as|depends on|because|if|unless|when|while|until|after|before|with|without|into|than|and|or|but|requires|must|should|could|would|might|is|are|was|were|the|a|an|to|for|of|by)\s*$/i.test(bare)) return true;
-  // A leading condition needs a consequent; named complete assertions elsewhere remain valid.
-  return /^(?:if|unless|when|while|until)\b/i.test(bare) && !/[,;]|\bthen\b/i.test(bare);
+  if (/^(?:to|and)\s/i.test(bare) && bare.length < 50) return true;
+  if (/\b(?:to be|has been|will be|needs to|instead of|rather than|such as|depends on|because|if|unless|when|while|until|with|without|into|than|and|or|but|requires|must|should|could|would|might|is|are|was|were|the|a|an|to|for|of|by)\s*$/i.test(bare)) return true;
+  // Only a short leading condition is a bare clause; "When CI is red rerun the jobs" carries its consequent unpunctuated.
+  return /^(?:if|unless|when|while|until)\b/i.test(bare) && !/[,;]|\bthen\b/i.test(bare) && bare.split(/\s+/).length <= 6;
+}
+
+function isSubjectlessOutcome(text: string): boolean {
+  return /^(?:succeeds?|succeeded|fails?|failed|passes|passed|completed|done|successful|success|returned|returns|inserted|updated|deleted)\b/i.test(text)
+    && !RELATION_WORD.test(text);
 }
 
 function isRawOutput(text: string): boolean {
-  return /^(?:\$\s|>\s|(?:stdout|stderr|output|result|response|exit code):|Command\s+['"].*\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i.test(text)
-    || /^(?:[\w.$]*Error|[\w.$]*Exception):\s/.test(text)
+  return /^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"].*\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i.test(text)
+    || /^(?:[\w.$]+Error|[\w.$]+Exception):\s/.test(text)
     || /^at\s+\S+.*:\d+(?::\d+)?\)?$/.test(text)
     || /^\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-][\d:]+)?\s+(?:\[?\w+\]?\s+)?/.test(text)
     || /^\[(?:info|warn|error|debug)\]/i.test(text)
-    || /^[{[]/.test(text) && /["']?\w+["']?\s*:/.test(text);
+    || /^\{\s*["']?[\w$-]+["']?\s*:/.test(text)
+    || /^\[\s*[{["\d]/.test(text);
 }
 
 /** Rejects named automatic-capture defects without inventing missing context. */
@@ -78,8 +86,17 @@ export function assessAutomaticMemory(content: string): AutomaticMemoryAssessmen
   else if (isRoutineReleaseActivity(text)) reason = 'release-activity';
   else if (isRawOutput(text)) reason = 'raw-output';
   else if (isDanglingAssertion(text)) reason = 'sentence-fragment';
-  else if (/^(?:succeeds?|succeeded|fails?|failed|passes|passed|completed|done|successful|success|returned|returns|inserted|updated|deleted)\b/i.test(text)) reason = 'subjectless-outcome';
+  else if (isSubjectlessOutcome(text)) reason = 'subjectless-outcome';
   else if (substantiveWordCount(text) < 2) reason = 'too-vague';
   else if (text.length < 40 && hasNoSpecificity(text)) reason = 'no-specificity';
   return { accepted: reason === null, reason };
+}
+
+/** Reasons the heuristics can get wrong: repair only flags them for review and derivation still admits them. */
+export const UNCERTAIN_REASONS: ReadonlySet<AutomaticMemoryRejectionReason> = new Set(['too-short', 'too-vague', 'no-specificity']);
+
+/** The bar for sleep's derived memories and for repair: a defect the checks are sure of, else null. */
+export function certainDefect(content: string): AutomaticMemoryRejectionReason | null {
+  const { reason } = assessAutomaticMemory(content);
+  return reason !== null && !UNCERTAIN_REASONS.has(reason) ? reason : null;
 }

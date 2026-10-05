@@ -62,21 +62,37 @@ describe('recoverable automatic memory quality repair', () => {
   });
 
   it('keeps pinned, raw, imported and object-backed memories with their links', () => {
-    const content = 'bump build 78 for codemagic deploy';
+    const content = 'bump build 78 for testflight deploy';
     const pinned = seed(content, { pinned: true });
     const raw = seed(content, { kind: 'raw' });
     const imported = seed(content, { tags: ['claude-code-memory'], source: 'agent-memory:claude-code:p-001/note.md#abc' });
+    const backing = seed(content);
     const prediction = savePrediction(root, 'default', { classTag: 'delivery', claimText: content });
+    withDb((db) => db.prepare('UPDATE predictions SET memory_id = ? WHERE id = ?').run(backing.id, prediction.id));
     const result = run(true);
     expect(result.appliedIds).toEqual([]);
     expect(result.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: pinned.id, protection: 'pinned' }),
       expect.objectContaining({ id: raw.id, protection: 'raw receipt' }),
-      expect.objectContaining({ id: imported.id, protection: 'trusted imported note' }),
-      expect.objectContaining({ id: prediction.memoryId, protection: 'backs an object' }),
+      expect.objectContaining({ id: backing.id, protection: 'backs an object' }),
     ]));
-    expect(loadAllEntries(root)).toHaveLength(4);
-    expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({ memory_id: prediction.memoryId });
+    expect(result.issues.map((issue) => issue.id)).not.toContain(imported.id);
+    expect(result.issues.map((issue) => issue.id)).not.toContain(prediction.memoryId);
+    expect(loadAllEntries(root)).toHaveLength(5);
+    expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({ memory_id: backing.id });
+  });
+
+  it('never judges hand-written memories, only rows hippo wrote itself', () => {
+    const manual = [
+      'Returns 404 when the API key is missing from the header',
+      'If the build fails',
+      'more detail soon',
+    ].map((content) => seed(content, { source: 'cli' }));
+    const compaction = seed('If the build fails', { source: 'compaction:s-1' });
+    const extracted = seed('If the build fails', { source: 'cli', extracted_from: manual[0].id, dag_level: 1 });
+    const ids = run().issues.map((issue) => issue.id);
+    for (const row of manual) expect(ids).not.toContain(row.id);
+    expect(ids).toEqual(expect.arrayContaining([compaction.id, extracted.id]));
   });
 
   it('flags ambiguity and mixed bundles while preserving complete parts and structured records', () => {
@@ -99,8 +115,8 @@ describe('recoverable automatic memory quality repair', () => {
 
   it('quarantines a shared exact bundle only when every known constituent is defective', () => {
     const bad = seed(mergedText('[Consolidated from 2 related memories, newest first]', [
-      'bump build 78 for codemagic deploy', 'bump build 79 for codemagic deploy',
-    ]), { source: 'shared:phzse:2026-01-01', layer: Layer.Semantic });
+      'bump build 78 for testflight deploy', 'bump build 79 for testflight deploy',
+    ]), { source: 'shared:peer-a:2026-01-01', layer: Layer.Semantic });
     expect(run(true).appliedIds).toEqual([bad.id]);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))?.entry.content).toBe(bad.content);
   });

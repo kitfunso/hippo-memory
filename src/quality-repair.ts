@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { assessAutomaticMemory } from './automatic-memory-quality.js';
+import { assessAutomaticMemory, UNCERTAIN_REASONS, type AutomaticMemoryAssessment } from './automatic-memory-quality.js';
 import { appendAuditEvent } from './audit.js';
 import { DatabaseSync, type DatabaseSyncLike } from './db/sqlite.js';
 import { getMeta } from './db/meta.js';
+import { tableColumns } from './db/tables.js';
 import { assertBinaryCompatible } from './db/migrate.js';
 import { insertDormantRow } from './dormant.js';
-import { calculateStrength, isKeptForGood, type MemoryEntry } from './memory.js';
+import { calculateStrength, COMPACTION_SOURCE_PREFIX, isKeptForGood, type MemoryEntry } from './memory.js';
 import { backupStore } from './project-merge.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from './rejection.js';
 import { heldTexts } from './same-text.js';
@@ -34,27 +35,33 @@ export interface QualityRepairResult {
   readonly warnings: readonly string[];
 }
 
-const REQUIRED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+const REQUIRED_COLUMNS = {
   memories: MEMORY_SELECT_COLUMNS.split(',').map((s) => s.trim()),
   meta: ['key', 'value'],
   dormant_memories: ['tenant_id', 'id', 'content', 'entry_json', 'reason', 'strength', 'dormant_at'],
   rejected_values: ['tenant_id', 'digest', 'reason', 'rejected_by', 'rejected_at', 'source_memory_id', 'normalized_chars'],
   audit_log: ['ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json'],
   ...Object.fromEntries(MEMORY_BACKED_TABLES.map((table) => [table, ['memory_id']])),
-};
-const REVIEW_REASONS = new Set(['too-short', 'too-vague', 'no-specificity']);
+} satisfies Record<string, readonly string[]>;
+const AUTOMATIC_SOURCES = new Set(['capture', 'autolearn', 'git-learn', 'git', 'consolidation']);
+const BUNDLE_HEADER = /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
+
+/** Hand-written and imported memories are never judged by the automatic checks: only rows hippo wrote itself. */
+function automaticSource(source: string): boolean {
+  return AUTOMATIC_SOURCES.has(source) || source.startsWith(COMPACTION_SOURCE_PREFIX);
+}
 
 function capabilityBlockers(db: DatabaseSyncLike): string[] {
   const blockers: string[] = [];
   for (const [table, required] of Object.entries(REQUIRED_COLUMNS)) {
-    const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((row) => (row as { name: string }).name));
+    const columns = tableColumns(db, table);
     if (columns.size === 0) blockers.push(`missing table: ${table}`);
     else for (const column of required) if (!columns.has(column)) blockers.push(`missing column: ${table}.${column}`);
   }
   if (blockers.some((blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.'))) return blockers;
   assertBinaryCompatible(db);
   if (getMeta(db, 'fts5_available', '0') === '1') {
-    const columns = new Set(db.prepare('PRAGMA table_info(memories_fts)').all().map((row) => (row as { name: string }).name));
+    const columns = tableColumns(db, 'memories_fts');
     for (const column of ['id', 'content', 'tags']) {
       if (!columns.has(column)) blockers.push(`missing column: memories_fts.${column}`);
     }
@@ -65,9 +72,9 @@ function capabilityBlockers(db: DatabaseSyncLike): string[] {
 function backingIds(db: DatabaseSyncLike): Set<string> {
   const ids = new Set<string>();
   for (const table of MEMORY_BACKED_TABLES) {
-    for (const row of db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all()) {
-      ids.add((row as { memory_id: string }).memory_id);
-    }
+    // SAFETY: the SELECT names one memory_id column and filters out NULLs.
+    const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
+    for (const row of rows) ids.add(row.memory_id);
   }
   return ids;
 }
@@ -84,26 +91,30 @@ function structured(entry: MemoryEntry): boolean {
   return entry.trace_outcome !== null || entry.tags.includes('session-digest') || entry.source === 'auto-promote';
 }
 
+function isCertain(assessment: AutomaticMemoryAssessment): boolean {
+  return assessment.reason !== null && !UNCERTAIN_REASONS.has(assessment.reason);
+}
+
 function contentIssue(entry: MemoryEntry): Omit<QualityRepairIssue, 'id'> | null {
   if (structured(entry)) return null;
-  const bundle = /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/.test(entry.content);
+  const bundle = BUNDLE_HEADER.test(entry.content);
+  if (!bundle && !automaticSource(entry.source) && entry.extracted_from === null && entry.dag_level < 1) return null;
   const texts = heldTexts(bundle ? { ...entry, source: 'consolidation' } : entry);
   if (texts.length > 0) {
     const bad = texts.map(assessAutomaticMemory).filter((assessment) => !assessment.accepted);
     if (bad.length === 0) return null;
     const reason = [...new Set(bad.map((assessment) => assessment.reason ?? 'automatic quality defect'))].join('; ');
-    const certain = bad.every((assessment) => assessment.reason !== null && !REVIEW_REASONS.has(assessment.reason));
-    return { reason: `derived constituents: ${reason}`, disposition: bad.length === texts.length && certain ? 'quarantine' : 'review' };
+    return { reason: `derived constituents: ${reason}`, disposition: bad.length === texts.length && bad.every(isCertain) ? 'quarantine' : 'review' };
   }
   if (bundle) return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
   const assessment = assessAutomaticMemory(entry.content);
   return assessment.accepted ? null : {
     reason: assessment.reason ?? 'automatic quality defect',
-    disposition: assessment.reason !== null && REVIEW_REASONS.has(assessment.reason) ? 'review' : 'quarantine',
+    disposition: isCertain(assessment) ? 'quarantine' : 'review',
   };
 }
 
-function planRows(db: DatabaseSyncLike, tenantId: string): { entries: MemoryEntry[]; issues: QualityRepairIssue[] } {
+function planRows(db: DatabaseSyncLike, tenantId: string) {
   const entries = selectAllEntries(db, tenantId).filter((entry) => !entry.superseded_by && entry.kind !== 'archived');
   const backing = backingIds(db);
   const issues: QualityRepairIssue[] = [];
@@ -111,18 +122,21 @@ function planRows(db: DatabaseSyncLike, tenantId: string): { entries: MemoryEntr
     const issue = contentIssue(entry);
     if (issue === null) continue;
     const kept = protection(entry, backing);
-    issues.push({ id: entry.id, ...issue, ...(kept ? { disposition: 'protected', protection: kept } as const : {}) });
+    issues.push(kept === undefined ? { id: entry.id, ...issue } : { id: entry.id, ...issue, disposition: 'protected', protection: kept });
   }
-  return { entries, issues };
+  return { total: entries.length, issues };
 }
 
-function unsupportedPreview(db: DatabaseSyncLike, tenantId: string): { total: number; issues: QualityRepairIssue[] } {
-  const columns = new Set(db.prepare('PRAGMA table_info(memories)').all().map((row) => (row as { name: string }).name));
+function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
+  const columns = tableColumns(db, 'memories');
   if (!columns.has('id') || !columns.has('content')) return { total: 0, issues: [] };
   const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
-  const statement = db.prepare(`SELECT id, content FROM memories${tenant}`);
-  const rows = (tenant ? statement.all(tenantId) : statement.all()) as { id: string; content: string }[];
+  const source = columns.has('source') ? 'source' : "'' AS source";
+  const statement = db.prepare(`SELECT id, content, ${source} FROM memories${tenant}`);
+  // SAFETY: the SELECT names id, content and source (an empty literal when the column is missing).
+  const rows = (tenant ? statement.all(tenantId) : statement.all()) as { id: string; content: string; source: string | null }[];
   const issues = rows.flatMap((row): QualityRepairIssue[] => {
+    if (!automaticSource(row.source ?? '') && !BUNDLE_HEADER.test(row.content)) return [];
     const assessment = assessAutomaticMemory(row.content);
     return assessment.accepted ? [] : [{ id: row.id, reason: assessment.reason ?? 'automatic quality defect', disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
   });
@@ -131,11 +145,12 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string): { total: nu
 
 function initialResult(db: DatabaseSyncLike, root: string, tenantId: string): QualityRepairResult {
   const blockers = capabilityBlockers(db);
+  // SAFETY: PRAGMA user_version returns one row with one integer column.
   const schema = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
   const plan = blockers.length > 0 ? unsupportedPreview(db, tenantId) : planRows(db, tenantId);
   return {
     root, schema, supported: blockers.length === 0, blockers,
-    total: 'entries' in plan ? plan.entries.length : plan.total,
+    total: plan.total,
     issues: plan.issues, appliedIds: [], backup: null, warnings: [],
   };
 }

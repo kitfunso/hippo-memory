@@ -7,7 +7,7 @@ import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
 import { log } from './log.js';
 import { isJsonString } from './json.js';
-import { assessAutomaticMemory } from './automatic-memory-quality.js';
+import { certainDefect } from './automatic-memory-quality.js';
 
 export interface ExtractedFact {
   content: string;
@@ -124,9 +124,9 @@ export function storeExtractedFacts(
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
-    const assessment = assessAutomaticMemory(fact.content);
-    if (!assessment.accepted) {
-      log.warn(`storeExtractedFacts: skipped automatic quality defect (${assessment.reason})`);
+    const defect = certainDefect(fact.content);
+    if (defect !== null) {
+      log.warn(`storeExtractedFacts: skipped automatic quality defect (${defect})`);
       continue;
     }
     const tags = ['extracted', ...inheritedTags, ...fact.tags];

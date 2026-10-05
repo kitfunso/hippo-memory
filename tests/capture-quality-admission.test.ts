@@ -16,8 +16,8 @@ describe('capture retains complete supported assertions', () => {
   it('rejects the reported fragment, outcome and stripped build commit', () => {
     expect(extractFromText('Error: Found local migration files to be')).toEqual([]);
     expect(extractFromText('Rule: succeeds (inserts or updates)')).toEqual([]);
-    const parsed = extractLessons('0f26e3e chore: bump build 78 for codemagic deploy');
-    expect(parsed).toEqual(['bump build 78 for codemagic deploy']);
+    const parsed = extractLessons('0f26e3e chore: bump build 78 for testflight deploy');
+    expect(parsed).toEqual(['bump build 78 for testflight deploy']);
     expect(partitionLessons(parsed)).toEqual({ kept: [], dropped: parsed });
   });
 

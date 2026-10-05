@@ -9,7 +9,7 @@ import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { derivationScope, derivationPartitionKey } from '../recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
-import { assessAutomaticMemory } from '../automatic-memory-quality.js';
+import { certainDefect } from '../automatic-memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
@@ -61,7 +61,7 @@ export function mergePass(run: SleepRun): number {
   const mergeCandidates = run.survivors.filter(
     (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
       && !e.pinned // a pin merged with a look-alike would read as one of two values
-      && tokenize(e.content).length > 0 && assessAutomaticMemory(e.content).accepted,
+      && tokenize(e.content).length > 0 && certainDefect(e.content) === null,
   );
   const used = new Set<string>();
 

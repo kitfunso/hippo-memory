@@ -1,8 +1,6 @@
 {
   "src/api/drill-down.ts": 9,
   "src/api/quarantine.ts": 1,
-  "src/audit.ts": 3,
-  "src/capture/extract.ts": 1,
   "src/card.ts": 1,
   "src/dedupe.ts": 9,
   "src/doctor.ts": 1,
