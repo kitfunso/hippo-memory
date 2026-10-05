@@ -21,9 +21,10 @@ export const site = {
   version: pkg.version, // Build-source version; publication is verified separately.
   positioning: pkg.description,
   tagline: {
-    lead: "Make your agent's memory",
-    accent: 'work like a brain.',
-    summary: 'Hippo is long-term memory for coding agents.',
+    lead: 'Stop re‑teaching', // non-breaking hyphen keeps the word whole
+    accent: 'your agent.',
+    summary:
+      "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.",
   },
   description: pkg.description,
   installCmd: 'npm install -g hippo-memory',
