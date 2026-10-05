@@ -1,11 +1,11 @@
 // Admin routes: API keys, quarantine and the audit log.
 import { AUDIT_OPS, type AuditOp } from '../../audit.js';
 import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { HttpError, readBody, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { isSetMember, MINT_BODY_MAX_BYTES, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
 import { isJsonString } from '../../json.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
@@ -22,8 +22,10 @@ const MAX_AUTH_KEYS_PAGE = 1000;
 // body: the HTTP layer hands it to the client; the user-facing
 // "store this somewhere safe" warning belongs in the CLI client, not here.
 export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
+  // Body first, so the resolver's check (and any SCIM gate in it) runs right before the mint with no wait between.
+  const raw = await readBody(req, MINT_BODY_MAX_BYTES);
   const ctx = await buildContextWithAuth(req, opts);
-  const body = await parseJsonBody(req, ctx);
+  const body = parseJsonObjectText(raw);
   const labelRaw = body['label'];
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {
     throw new HttpError(400, 'label must be a string');

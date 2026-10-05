@@ -39,6 +39,19 @@ export interface AddonRoute {
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
 }
 
+/** Turns on POST /v1/auth/keys/self (a 404 without it): keys last ttlDays (above 0), and a mint past perSubject (at least 1) live keys revokes the oldest. */
+export interface SelfServiceKeysOpts {
+  ttlDays: number;
+  perSubject: number;
+}
+
+export interface ConnectInfo {
+  issuer: string;
+  clientId: string;
+  scopes: readonly string[];
+  redirectUris: readonly string[];
+}
+
 export interface ServeOpts {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
@@ -54,6 +67,8 @@ export interface ServeOpts {
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   routes?: readonly AddonRoute[];
+  selfServiceKeys?: SelfServiceKeysOpts;
+  connectInfo?: ConnectInfo;
 }
 
 export type ResolvedServeOpts = ServeOpts & { store: HippoStore };

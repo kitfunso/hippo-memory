@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getMeta, type DatabaseSyncLike } from '../src/db.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { compareSemver } from '../src/version.js';
 
 interface TableColumnInfo {
   cid: number;
@@ -116,11 +117,11 @@ describe('schema v24 — github connector tables', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('writes min_compatible_binary to meta (v24 stamped 1.2.1; v39 forward-bumps to 1.24.0)', () => {
+  it('writes min_compatible_binary to meta (v24 stamped 1.2.1; v39 forward-bumps to 1.24.0; later migrations only raise it)', () => {
     const db = openHippoDb(root);
     try {
       const v = getMeta(db, 'min_compatible_binary', '');
-      expect(v).toBe('1.24.0');
+      expect(compareSemver(v, '1.24.0')).toBeGreaterThanOrEqual(0);
     } finally { closeHippoDb(db); }
   });
 

@@ -1,9 +1,9 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import { createApiKey, listApiKeyRows, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem, type ApiKeyListRow } from '../auth.js';
+import { createApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem, type ApiKeyListRow, type ListApiKeysOpts } from '../auth.js';
 import type { KeysetPosition } from '../keyset.js';
 import { isRestrictedScope } from '../recall-scope.js';
 import { selectApiKeyOwner } from '../store/tenant-lookup.js';
@@ -77,6 +77,57 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
   }
 }
 
+const DAY_MS = 86_400_000;
+
+export interface AuthCreateSelfOpts {
+  label?: string;
+  /** Days until the new key expires. */
+  ttlDays: number;
+  /** Live self-minted keys one subject may hold; minting past it revokes the oldest. */
+  perSubject: number;
+}
+
+export interface AuthCreateSelfResult extends AuthCreateResult {
+  /** ISO time the key stops working. */
+  expiresAt: string;
+}
+
+/** Mint a member key for the SSO caller itself, whatever its role; the cap's revokes, the mint and its audit rows commit or fail together. */
+export function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): AuthCreateSelfResult {
+  if (!ctx.actor.viaAuthResolver) {
+    throw new ForbiddenError('Only a caller signed in through SSO can mint its own key');
+  }
+  const { tenantId, actor: { subject } } = ctx;
+  const now = Date.now();
+  const expiresAt = new Date(now + opts.ttlDays * DAY_MS).toISOString();
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    // IMMEDIATE takes the write lock before the count, so two mints for one subject cannot both see room under the cap.
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const live = listLiveOwnedKeyIds(db, tenantId, subject, now);
+      const replaced = live.slice(0, Math.max(0, live.length - opts.perSubject + 1));
+      const result = createApiKey(db, { tenantId, label: opts.label, role: 'member', ownerSubject: subject, expiresAt });
+      for (const keyId of replaced) {
+        revokeApiKey(db, keyId);
+        appendAuditEvent(db, { tenantId, actor: subject, op: 'auth_revoke', targetId: keyId, metadata: { replacedBy: result.keyId } });
+      }
+      // Same op and actor as an admin mint, so the add-on's revoke tail finds this key when the IdP deprovisions the subject.
+      appendAuditEvent(db, {
+        tenantId, actor: subject, op: 'auth_create', targetId: result.keyId,
+        metadata: { label: opts.label ?? null, role: 'member', self: true, expiresAt },
+      });
+      db.exec('COMMIT');
+      return { keyId: result.keyId, plaintext: result.plaintext, tenantId, role: 'member', expiresAt };
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw err;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /**
  * List API keys visible to the calling tenant.
  *
@@ -99,10 +150,21 @@ export function authListRows(
 ): ApiKeyListRow[] {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    return listApiKeyRows(db, { ...opts, tenantId: ctx.tenantId });
+    return listApiKeyRows(db, { ...opts, tenantId: ctx.tenantId, ...memberListFilter(db, ctx) });
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** A member sees only the keys its person minted, or just its own key when that has no owner; an admin sees the whole tenant. */
+function memberListFilter(db: DatabaseSyncLike, ctx: Context): Pick<ListApiKeysOpts, 'ownerSubject' | 'keyId'> {
+  const { actor } = ctx;
+  if (actor.role === 'admin') return {};
+  if (actor.viaAuthResolver) return { ownerSubject: actor.subject };
+  // Any other member subject maps to an empty key id, which matches no row.
+  const keyId = actor.subject.startsWith('api_key:') ? actor.subject.slice('api_key:'.length) : '';
+  const owner = selectApiKeyOwner(db, keyId)?.ownerSubject;
+  return owner ? { ownerSubject: owner } : { keyId };
 }
 
 /**

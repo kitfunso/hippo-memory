@@ -422,6 +422,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/db/migrations/v48.ts
 - migration v48: Quarantine (src/quarantine.ts, CD5)
 
+### src/db/migrations/v53.ts
+- migration v53: SSO self-service keys (enterprise design 2026-10-05-sso-connect, steps 1-3). `api_keys` gains `owner_subject` and `expires_at`, plus a partial index on live keys per (tenant, owner) for the per-subject cap.
+- migration v53: Raises `min_compatible_binary` to the version of the binary that runs it, forward-only. A fixed stamp would have to name the first release that ships v53, which is unknown when the code is written: too low and an older binary that ignores `expires_at` keeps honouring expired keys; above the dev version and the dev tree refuses its own store. The cost is that a store migrated by 1.x.5 refuses 1.x.4 even when both know v53, so every binary sharing a store upgrades together.
+
 ### src/decisions.ts
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).

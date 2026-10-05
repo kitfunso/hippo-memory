@@ -46,7 +46,7 @@ describe('auth runs before the request body is read', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'hippo-auth-before-body-'));
     initStore(root);
-    handle = await serve({ hippoRoot: root, port: 0 });
+    handle = await serve({ hippoRoot: root, port: 0, selfServiceKeys: { ttlDays: 1, perSubject: 1 } });
   });
 
   afterEach(async () => {
@@ -57,7 +57,6 @@ describe('auth runs before the request body is read', () => {
   it.each([
     '/v1/memories',
     '/v1/outcome',
-    '/v1/auth/keys',
     '/v1/predictions',
     '/v1/decisions',
     '/v1/memories/mem_abc/archive',
@@ -65,5 +64,15 @@ describe('auth runs before the request body is read', () => {
     '/mcp',
   ])('POST %s answers 401 without waiting for the promised body', async (path) => {
     expect(await statusBeforeBodyArrives(handle.port, path)).toBe('HTTP/1.1 401 Unauthorized');
+  });
+
+  // The key-mint routes read the body before auth on purpose, so what bounds an unauthenticated caller there is a 4 KB cap.
+  it.each(['/v1/auth/keys', '/v1/auth/keys/self'])('POST %s answers 413 for a body over its 4 KB cap', async (path) => {
+    const res = await fetch(`${handle.url}${path}`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer hk_bogus.notakey', 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'x'.repeat(5000) }),
+    });
+    expect(res.status).toBe(413);
   });
 });

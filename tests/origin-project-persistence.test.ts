@@ -11,6 +11,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { compareSemver } from '../src/version.js';
 
 let tmpRoot: string;
 
@@ -198,7 +199,7 @@ describe('v39 migration backfill', () => {
     expect(plain?.origin_project).toBe('proj-a');
   });
 
-  it('stamps min_compatible_binary 1.24.0 so pre-isolation binaries refuse the DB', () => {
+  it('stamps min_compatible_binary at least 1.24.0 so pre-isolation binaries refuse the DB', () => {
     const storeRoot = makeProjectStore('proj-a');
     const db = openHippoDb(storeRoot);
     try {
@@ -206,7 +207,7 @@ describe('v39 migration backfill', () => {
       // row (if present) has that shape; absence is handled via optional
       // chaining below.
       const row = db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string };
-      expect(row?.value).toBe('1.24.0');
+      expect(compareSemver(row?.value ?? '', '1.24.0')).toBeGreaterThanOrEqual(0);
     } finally {
       closeHippoDb(db);
     }

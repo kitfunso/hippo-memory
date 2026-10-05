@@ -39,7 +39,13 @@ export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxL
 
 /** `_authed` is proof the caller passed auth: an unauthenticated request must never make the server read its body. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
-  const raw = await readBody(req);
+  return parseJsonObjectText(await readBody(req));
+}
+
+// The key-mint routes read their body before auth, so an unauthenticated caller can make the server buffer at most this.
+export const MINT_BODY_MAX_BYTES = 4 * 1024;
+
+export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   if (raw.length === 0) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
