@@ -27,12 +27,8 @@ import {
 } from '../src/graph/read.js';
 import { markGraphDirty, runGraphRebuildTransaction, insertEntity } from '../src/graph/write.js';
 import { extractGraph as realExtractGraph } from '../src/graph-extract.js';
-import {
-  sleep,
-  adminActor,
-  type Context,
-  type SleepPhases,
-} from '../src/api.js';
+import { sleep, adminActor, type Context } from '../src/api.js';
+import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
 
 const T = 'default';
 
@@ -163,7 +159,7 @@ describe('E3 sleep enqueue-hook', () => {
         return realExtractGraph(root, tid);
       },
     };
-    await sleep(tc.ctx, { noShare: true, __phases: phases });
+    await runSleep(tc.ctx, { noShare: true }, phases);
     // The original (<= watermark) is processed; the mid-rebuild arrival is still pending.
     const stillPending = pending(tc.hippoRoot);
     expect(stillPending).toHaveLength(1);
@@ -179,7 +175,7 @@ describe('E3 sleep enqueue-hook', () => {
         return realExtractGraph(root, tid);
       },
     };
-    const r = await sleep(tc.ctx, { noShare: true, __phases: phases }); // must NOT reject
+    const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
     expect(loadEntities(tc.hippoRoot, 'tenantOk', { limit: 100 }).length).toBe(1);
     expect(pending(tc.hippoRoot, 'tenantOk')).toHaveLength(0);   // ok tenant drained
     expect(pending(tc.hippoRoot, 'tenantFail')).toHaveLength(1); // failed tenant left pending
@@ -214,7 +210,7 @@ describe('E3 sleep enqueue-hook', () => {
         return { removed: 1, pairs: [] };
       },
     };
-    const r = await sleep(tc.ctx, { noShare: true, __phases: phases });
+    const r = await runSleep(tc.ctx, { noShare: true }, phases);
     expect(r.graph?.tenants).toBe(1);              // T rebuilt despite the mid-sleep deletion
     expect(pending(tc.hippoRoot)).toHaveLength(0); // its queue row cascade-deleted (mark = no-op)
   });
@@ -224,7 +220,7 @@ describe('E3 sleep enqueue-hook', () => {
     const phases: Partial<SleepPhases> = {
       loadPendingExtractionTenants: () => { throw new Error('boom: queue read failed'); },
     };
-    const r = await sleep(tc.ctx, { noShare: true, __phases: phases }); // must NOT reject
+    const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
     expect(r.active).toBeGreaterThanOrEqual(0);    // consolidation still ran (result built)
     expect(r.graph).toBeUndefined();               // graph refresh skipped, not crashed
     expect((r.details ?? []).some((d) => d.includes('dirty-tenant snapshot failed'))).toBe(true);

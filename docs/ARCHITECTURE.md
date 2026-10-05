@@ -93,8 +93,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `SleepResult.rejectedSkipped`: AT1: count of auto-share candidates the GLOBAL store's rejection tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md plan §3 — copy paths must not let one rejected candidate abort the batch).
 - `SleepResult.graph`: E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt this sleep.
 - `sleep`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands — at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
-- `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies.
-- `sleep`: v1.12.2: resolve phase dependencies, allowing test-only `__phases` override to inject deterministic throws for mid-phase failure coverage.
+- `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep-run.ts`, so the package root's declarations never name it.
+- `runSleep` (`src/api/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleep` calls it with none.
 - `sleep`: v1.11.5: phase counters for the consolidate audit emit (in finally).
 
 ### src/api/tokens.ts

@@ -55,6 +55,7 @@ export interface ServeOpts {
   store?: HippoStore;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
+  autoSleep?: false;
 }
 
 export type ResolvedServeOpts = ServeOpts & { store: HippoStore };
