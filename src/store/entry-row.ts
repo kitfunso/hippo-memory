@@ -4,22 +4,16 @@ import { fallbackOrigin, originFromSource } from '../project-identity.js';
 import { checkRejectionGuard } from '../rejection.js';
 import { log } from '../log.js';
 
-/**
- * `bypassRejectionGuard`: ONLY `batchWriteAndDelete` passes `true`; its merges concatenate
- * already-guarded facts, and it re-probes tombstones in-transaction before each upsert.
- */
-export function upsertEntryRow(
-  db: ReturnType<typeof openHippoDb>,
-  entry: MemoryEntry,
-  bypassRejectionGuard = false,
-): void {
-  if (!bypassRejectionGuard) {
-    checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
-  }
+export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
+  checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+  syncFtsRow(db, entry, upsertMemoryRow(db, entry));
+}
+
+/** The row alone, with no rejection guard or full-text row: only `batchWriteAndDelete` calls it, which probes tombstones and indexes per batch. Returns whether the row is new. */
+export function upsertMemoryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): boolean {
   const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
   db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
-
-  syncFtsRow(db, entry, isNewRow);
+  return isNewRow;
 }
 
 const UPSERT_MEMORY_SQL = `
@@ -143,6 +137,31 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
   } catch (err) {
     log.warnThenDebug('fts-delete', `FTS index delete failed for ${id}; recall may return a stale hit: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one insert per row. */
+export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonly MemoryEntry[], staleIds: readonly string[]): void {
+  if (!isFtsAvailable(db)) return;
+  let kept: ReadonlySet<string> = new Set();
+  if (staleIds.length > 0) {
+    try {
+      db.prepare(`DELETE FROM memories_fts WHERE id IN (SELECT value FROM json_each(?))`).run(JSON.stringify(staleIds));
+    } catch (err) {
+      // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
+      kept = new Set(staleIds);
+      log.warnThenDebug('fts-delete', `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  const toInsert = rows.filter((row) => !kept.has(row.id));
+  if (toInsert.length === 0) return;
+  const insert = db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`);
+  for (const row of toInsert) {
+    try {
+      insert.run(row.id, row.content, row.tags.join(' '));
+    } catch (err) {
+      log.warnThenDebug('fts-sync', `FTS index update failed for ${row.id}; keyword recall may miss it: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 

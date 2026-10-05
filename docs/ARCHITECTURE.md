@@ -512,7 +512,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `resolveConsolidatedSource`: source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (E2 objects are consolidated by construction).
 - `extraction queue section`: Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
 - `enqueueExtraction`: The producer hook in `hippo sleep` is deferred (E3.1); this is the API it will call.
-- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`.
+- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Removed in E8b: the rebuild applies the difference graph/delta.ts reads through `applyGraphOps`, and `updateEntity` renames in place so relations keep their endpoints.
 - `sleep enqueue-hook section`: E3 sleep enqueue-hook — producer helper + drain support
 - `markGraphDirty`: NEVER throws into the caller — a graph-dirty signal failing must not abort a core E2 write. ... Called POST-COMMIT from the E2 graph-source save/close mutations of decision, policy, customer_note and project_brief. / swallowed so the already-committed E2 write is never rolled back.
 - `removeGraphEntitiesForObject`: Remove the graph rows sourced from one E2 object, by its (type, id). ... Fail-soft like `markGraphDirty` (never throws into the E2 close caller; graph staleness is recoverable).

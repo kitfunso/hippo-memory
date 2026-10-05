@@ -26,7 +26,10 @@ import {
   loadPendingExtractionTenants,
 } from '../src/graph/read.js';
 import { markGraphDirty, runGraphRebuildTransaction, insertEntity } from '../src/graph/write.js';
-import { extractGraph as realExtractGraph } from '../src/graph-extract.js';
+import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph-extract.js';
+import { graphDelta } from '../src/graph/delta.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { WRITE_BUDGET } from '../src/write-budget.js';
 import { sleep, adminActor, type Context } from '../src/api.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
 
@@ -239,5 +242,38 @@ describe('E3 sleep enqueue-hook', () => {
       }),
     ).toThrow('mid-rebuild boom');
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // insert rolled back
+  });
+
+  it('17. a sleep stopped between graph chunks leaves the tenant pending, and the next sleep converges', async () => {
+    savePolicy(tc.hippoRoot, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    for (const team of ['billing', 'search', 'checkout']) {
+      saveDecision(tc.hippoRoot, T, { decisionText: `${team} adopts RetryPolicy for its outbound calls` });
+    }
+    const queued = pending(tc.hippoRoot).length;
+    const stopAtSecondChunk: Partial<SleepPhases> = {
+      extractGraph: (root, tid) => extractGraphChunked(root, tid, {
+        ...WRITE_BUDGET,
+        holdMs: 0,
+        pause: async () => { throw new Error('stopped between chunks'); },
+      }),
+    };
+
+    const stopped = await runSleep(tc.ctx, { noShare: true }, stopAtSecondChunk);
+
+    expect(stopped.graph).toBeUndefined();
+    expect(pending(tc.hippoRoot)).toHaveLength(queued);
+    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(1); // the first chunk's one op stays
+
+    await sleep(tc.ctx, { noShare: true });
+
+    expect(pending(tc.hippoRoot)).toHaveLength(0);
+    const desired = deriveGraph(loadGraphSources(tc.hippoRoot, T));
+    const db = openHippoDb(tc.hippoRoot);
+    try {
+      expect(graphDelta(db, T, desired)).toEqual([]);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 });
