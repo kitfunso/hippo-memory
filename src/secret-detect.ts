@@ -53,9 +53,9 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
   // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and doc templates like user:password@ would hide code lessons from ambient context.
-  // A lookbehind, not \b, since \b never fires after the _ of an env prefix (DB_PASSWORD); capping the suffix parts keeps the scan linear.
-  { name: 'secret-assignment', re: /(?<![A-Za-z0-9])(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d)(?:[_-][A-Za-z0-9]+){0,3}\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
-  { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@]*:(?=[^\s/@]*\d)[^\s/@]+(?=@)/ },
+  // Secret names end in the keyword (dbPassword, PGPASSWORD) and token_url does not, so the match opens there and scans no prefix; pwd and pass need a _ as OLDPWD and bypass are not secrets.
+  { name: 'secret-assignment', re: /(?:(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d|(?<=_)(?:pwd|pass))(?:[_-]?(?:key(?:[_-]?base)?|value|secret))?['"]?\s*(?::=?|=>?)\s*['"]?|(?<=--)password(?:=|\s+))(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:(?=[^\s/@?#]*\d)[^\s/@?#]+(?=@)/ },
 ];
 
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
@@ -66,7 +66,7 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
-  /(?<=[A-Za-z0-9]:\/\/)[^\s/:@]*:[^\s/@]+(?=@)/g,
+  /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:[^\s/@?#]+(?=@)/g,
 ];
 
 /**

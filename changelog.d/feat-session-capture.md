@@ -6,4 +6,5 @@
 
 ### Fixed
 
+- **Secret detection catches assignments whose name ends in a secret word.** `DB_PASSWORD=`, `PGPASSWORD=`, `dbPassword = "..."`, `{"api_key": "..."}`, `MYSQL_PWD=`, `password := "..."`, `--password <value>` and `SECRET_KEY_BASE=` used to pass the remember gate, so such a memory could reach ambient context. A name that only starts with a secret word, such as `token_url` or `password_policy_id`, is not flagged.
 - **The SessionEnd hook no longer crashes when its background worker fails to start.** A spawn failure such as `EAGAIN` arrived as an `'error'` event with no listener, which Node treats as an uncaught exception. It is now logged as a warning.

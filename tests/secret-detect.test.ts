@@ -16,6 +16,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRoot } from '../src/shared.js';
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
 
 // Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
@@ -93,6 +94,23 @@ describe('detectSecret patterns', () => {
     ['an ssh remote with a user and no password', 'clone ssh://git@github.com:22/acme/repo2.git'],
   ])('does not flag %s', (_name, content) => {
     expect(flagged(content)).toBe(false);
+  });
+
+  it.each(ASSIGNED_SECRET_LINES)('flags the assigned secret in %s', (content) => {
+    expect(detectSecret({ content, tags: [] })).toEqual({ flagged: true, reason: 'pattern:secret-assignment' });
+  });
+
+  it.each(ORDINARY_CONFIG_LINES)('does not flag the ordinary config %s', (content) => {
+    expect(detectSecret({ content, tags: [] })).toEqual({ flagged: false, reason: null });
+  });
+
+  it('reads no password from a URL whose query holds an @, and still reads one before the host', () => {
+    const query = 'http://localhost:8080?next=a@b.co';
+    expect(flagged(query)).toBe(false);
+    expect(redactSecretsStrict(query)).toBe(query);
+    const withPassword = `https://user:${'p4ss' + 'w0rd'}@host/x`;
+    expect(detectSecret({ content: withPassword, tags: [] }).reason).toBe('pattern:url-password');
+    expect(redactSecretsStrict(withPassword)).toBe('https://[REDACTED]@host/x');
   });
 });
 
