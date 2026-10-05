@@ -28,7 +28,7 @@ export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
   /** Explicit transcript path for `--last-session`. Without one, `stdinText`
-   * is used, then auto-discovery under `~/.claude/projects/` on a manual run. */
+   * is used, then auto-discovery under `<claude config dir>/projects/` on a manual run. */
   transcriptPath?: string;
   /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
