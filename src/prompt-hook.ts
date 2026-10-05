@@ -2,7 +2,7 @@
 // promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './api.js';
 import { BadRequestError } from './api-errors.js';
-import { loadConfig } from './config.js';
+import { isSharedStore, loadConfig } from './config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
 import { isSqliteBusy, noteStoreBusy, type openHippoDb } from './db.js';
 import type { DeliveryRecorder } from './delivery-recorder.js';
@@ -11,6 +11,7 @@ import { isJsonString, type JsonValue } from './json.js';
 import { withLedgerDb } from './ledger-db.js';
 import type { MemoryEntry } from './memory.js';
 import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
+import { assertCallerProject, MAX_PROJECT_ALIASES } from './project-identity.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-trace.js';
 import { blockHash, estimateTokens, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
 
@@ -186,8 +187,6 @@ const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = 1500;
 const HOOK_FRAMING = 'observe';
 
-// Each project name is matched against every candidate row, so the caller's list stays short.
-const MAX_PROJECT_ALIASES = 10;
 // blockHash's shape (token-ledger.ts).
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 
@@ -230,13 +229,15 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
 
 /** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
  *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
- *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only. Throws BadRequestError past the input caps. */
+ *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only.
+ *  Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
 export async function promptHookContext(
   ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
+  if (sharedStore || isSharedStore(ctx.hippoRoot)) assertCallerProject(req.project);
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;

@@ -159,6 +159,9 @@ export interface HippoConfig {
   projectIdentity: {
     remote: boolean;
   };
+  /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project,
+   *  and a context read must name the caller's project. Default false. Read it through isSharedStore. */
+  sharedStore: boolean;
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -250,6 +253,7 @@ const DEFAULT_CONFIG: HippoConfig = {
   projectIdentity: {
     remote: true,
   },
+  sharedStore: false,
 };
 
 function isMemoryValueConfig(
@@ -409,6 +413,14 @@ function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
   return days;
 }
 
+// Only a real true turns it on; anything else present warns and stays off.
+function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
+  const value = raw.sharedStore;
+  if (value === undefined || value === true || value === false) return value === true;
+  log.warn(`config.json's "sharedStore" must be true or false (got ${JSON.stringify(value)}) - using false.`);
+  return false;
+}
+
 export function loadConfig(hippoRoot: string): HippoConfig {
   const configPath = path.join(hippoRoot, 'config.json');
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
@@ -455,6 +467,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
       pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
       projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
+      sharedStore: sharedStoreFlag(raw),
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
@@ -462,4 +475,42 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     }
     return { ...DEFAULT_CONFIG };
   }
+}
+
+const sharedStoreRoots = new Set<string>();
+
+/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
+function sharedStoreKey(hippoRoot: string): string {
+  let real: string;
+  try {
+    real = fs.realpathSync.native(hippoRoot);
+  } catch (err) {
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${err instanceof Error ? err.message : String(err)}`);
+    real = path.resolve(hippoRoot);
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+}
+
+/** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
+ *  so a broken edit while a server runs cannot turn it off. Reads only this key: loadConfig has no cache. */
+export function isSharedStore(hippoRoot: string): boolean {
+  const key = sharedStoreKey(hippoRoot);
+  if (sharedStoreRoots.has(key)) return true;
+  const configPath = path.join(path.resolve(hippoRoot), 'config.json');
+  if (!fs.existsSync(configPath)) return false;
+  let raw: Partial<HippoConfig> | null;
+  try {
+    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (err) {
+    log.warn(`failed to read ${configPath}: ${err instanceof Error ? err.message : err} - sharedStore read as false.`);
+    return false;
+  }
+  if (raw?.sharedStore !== true) return false;
+  sharedStoreRoots.add(key);
+  return true;
+}
+
+/** Test seam: forget every root seen as shared. */
+export function _resetSharedStoreCacheForTests(): void {
+  sharedStoreRoots.clear();
 }

@@ -52,6 +52,9 @@ export { sqliteStore, type HippoStore } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 export { StoreBusyError } from './db.js';
 
+// An add-on that serves a team store checks the flag before it starts.
+export { isSharedStore } from './config.js';
+
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
 // tests/server-bearer-lockdown.test.ts. Do not gate auth elsewhere by

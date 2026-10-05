@@ -23,7 +23,8 @@ import { fitBudget } from './search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
 import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
-import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
+import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
+import { isSharedStore } from './config.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
@@ -92,14 +93,12 @@ export function promoteToGlobal(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // Mint a new ID for the global store. origin_project rides along from the
-  // local entry's write-time stamp via the spread; back-stop it for pre-v39
-  // local rows so a promoted copy never lands NULL in the global store.
+  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and the label names no path.
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `promoted:${localRoot}`,
-    origin_project: entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot))),
+    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
+    origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 
   writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: opts?.afterWrite });
@@ -426,15 +425,14 @@ export function shareMemory(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // v39: canonical origin comes from the entry's own stamp (write-time,
-  // store-location-derived); the localRoot parent basename is only a
-  // fallback for pre-v39 rows and keeps the legacy source format intact.
+  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as no project.
   const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot)));
+  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
+  const label = originName === '' ? fallbackName : (originName ?? '');
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `shared:${originName === '' ? fallbackName : originName}:${new Date().toISOString()}`,
+    source: `shared:${label}:${new Date().toISOString()}`,
     origin_project: originName,
   };
 
@@ -633,6 +631,9 @@ export function syncGlobalToLocal(
   globalRoot: string,
   opts: { includeCrossProject?: boolean } = {},
 ): number {
+  if (isSharedStore(localRoot)) {
+    throw new BadRequestError(`Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, whose rows would reach every member.`);
+  }
   if (!fs.existsSync(globalRoot)) return 0;
 
   // Host-wide read. syncGlobalToLocal copies the global union into a
