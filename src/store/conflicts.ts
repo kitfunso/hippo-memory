@@ -84,51 +84,62 @@ export function replaceDetectedConflicts(
   detectedAt: string = new Date().toISOString()
 ): void {
   const db = openStore(hippoRoot);
-
   try {
-    db.exec('BEGIN IMMEDIATE');
-
-    const sameTenant = loadSameTenantCheck(db);
-
-    const canonicalDetected = detected.map((conflict) => ({
-      ...canonicalConflictPair(conflict.memory_a_id, conflict.memory_b_id),
-      reason: conflict.reason,
-      score: conflict.score,
-    }));
-
-    resolveStaleOpenConflicts(db, canonicalDetected, sameTenant, detectedAt);
-    upsertDetectedConflicts(db, canonicalDetected, sameTenant, detectedAt);
-    const changedIds = rebuildConflictsWithJson(db, sameTenant);
-
-    db.exec('COMMIT');
+    const changedIds = writeConflictRefresh(db, readConflictRefresh(db), detected, detectedAt);
     syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
-  } catch (error) {
-    try {
-      db.exec('ROLLBACK');
-    } catch {
-      // Ignore nested rollback failures.
-    }
-    throw error;
   } finally {
     closeHippoDb(db);
   }
 }
 
-function loadSameTenantCheck(db: DatabaseSyncLike): SameTenant {
-  // Tenant guard (E2): a conflict is meaningful only within one tenant.
-  // Build id -> tenant_id once and skip cross-tenant pairs both when
-  // inserting rows and when rebuilding conflicts_with_json, so a stale
-  // cross-tenant row can neither persist nor leak a foreign id.
+/** Every memory's tenant, and each stored conflicts_with_json other than '[]', read before the refresh takes the write lock. */
+export interface ConflictRefreshReads {
+  sameTenant: SameTenant;
+  storedRefs: ReadonlyMap<string, string | null>;
+}
+
+/** The refresh's read of the whole memories table, kept out of the write lock because it grows with the store. */
+export function readConflictRefresh(db: DatabaseSyncLike): ConflictRefreshReads {
+  // Tenant guard (E2): a conflict is meaningful only within one tenant, so cross-tenant pairs are
+  // skipped on insert and on rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
-  // SAFETY: rows' shape matches the two columns named in the SELECT below.
-  for (const r of db.prepare(`SELECT id, tenant_id FROM memories`).all() as Array<{ id: string; tenant_id: string }>) {
+  const storedRefs = new Map<string, string | null>();
+  // SAFETY: rows' shape matches the three columns named in the SELECT.
+  for (const r of db.prepare(`SELECT id, tenant_id, conflicts_with_json FROM memories`).all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>) {
     tenantById.set(r.id, r.tenant_id);
+    if (r.conflicts_with_json !== '[]') storedRefs.set(r.id, r.conflicts_with_json);
   }
-  return (a: string, b: string): boolean => {
+  const sameTenant = (a: string, b: string): boolean => {
     const ta = tenantById.get(a);
     const tb = tenantById.get(b);
     return ta !== undefined && tb !== undefined && ta === tb;
   };
+  return { sameTenant, storedRefs };
+}
+
+/** Under the write lock: the memory_conflicts rows, then each memory whose refs change; returns the ids it rewrote. */
+export function writeConflictRefresh(
+  db: DatabaseSyncLike,
+  reads: ConflictRefreshReads,
+  detected: readonly DetectedConflict[],
+  detectedAt: string,
+): string[] {
+  const canonicalDetected = detected.map((conflict) => ({
+    ...canonicalConflictPair(conflict.memory_a_id, conflict.memory_b_id),
+    reason: conflict.reason,
+    score: conflict.score,
+  }));
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    resolveStaleOpenConflicts(db, canonicalDetected, reads.sameTenant, detectedAt);
+    upsertDetectedConflicts(db, canonicalDetected, reads.sameTenant, detectedAt);
+    const changedIds = rebuildConflictsWithJson(db, reads);
+    db.exec('COMMIT');
+    return changedIds;
+  } catch (error) {
+    if (db.isTransaction !== false) db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function resolveStaleOpenConflicts(
@@ -191,7 +202,7 @@ function upsertDetectedConflicts(
 }
 
 /** Rewrites only the rows whose conflicts_with_json changes, and returns their ids. */
-function rebuildConflictsWithJson(db: DatabaseSyncLike, sameTenant: SameTenant): string[] {
+function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs }: ConflictRefreshReads): string[] {
   // SAFETY: openConflicts' shape matches the two columns named above.
   const openConflicts = db.prepare(`
     SELECT memory_a_id, memory_b_id
@@ -210,15 +221,14 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, sameTenant: SameTenant):
     refMap.get(row.memory_b_id)!.add(row.memory_a_id);
   }
 
-  // SAFETY: memoryRows' shape matches the two columns selected below.
-  const memoryRows = db.prepare(`SELECT id, conflicts_with_json FROM memories`).all() as Array<{ id: string; conflicts_with_json: string | null }>;
-  const update = db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`);
+  // Only a row holding refs, or due some, can change. Compare-and-set, so a writer since the read keeps its value and the next sleep redoes the row.
+  const update = db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ? AND conflicts_with_json IS ?`);
   const changedIds: string[] = [];
-  for (const memory of memoryRows) {
-    const refsJson = JSON.stringify(Array.from(refMap.get(memory.id) ?? []).sort());
-    if (memory.conflicts_with_json === refsJson) continue;
-    update.run(refsJson, memory.id);
-    changedIds.push(memory.id);
+  for (const id of new Set([...storedRefs.keys(), ...refMap.keys()])) {
+    const stored = storedRefs.has(id) ? storedRefs.get(id) ?? null : '[]';
+    const refsJson = JSON.stringify(Array.from(refMap.get(id) ?? []).sort());
+    if (stored === refsJson) continue;
+    if (Number(update.run(refsJson, id, stored).changes ?? 0) > 0) changedIds.push(id);
   }
   return changedIds;
 }

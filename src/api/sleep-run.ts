@@ -6,6 +6,7 @@ import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.j
 import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../audit.js';
 import { autoShare } from '../shared.js';
 import { consolidate } from '../consolidate/sleep.js';
+import { failedUnitOf } from '../consolidate/flush-units.js';
 import { loadConfig } from '../config.js';
 import { deduplicateStore } from '../dedupe.js';
 import { computeAmbientState } from '../ambient.js';
@@ -305,6 +306,7 @@ function emitSleepAudit(
         partial: boolean;
         triggeredByTenant: string;
         errorMessage?: string;
+        nextUnitIds?: string[];
       }
       const sleepAuditMetadata: SleepAuditMetadata = {
         consolidationCount: counts.consolidation,
@@ -317,6 +319,9 @@ function emitSleepAudit(
         triggeredByTenant: ctx.tenantId, // preserve for audit forensics
       };
       if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
+      // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
+      const nextUnitIds = failedUnitOf(phaseError);
+      if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
       appendAuditEvent(db, {
         tenantId: '__host__',
         actor: ctx.actor.subject,
