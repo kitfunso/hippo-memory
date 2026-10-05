@@ -1,12 +1,12 @@
 // authCreateSelf mints a signed-in caller its own expiring member key; the member key list and the body-first admin mint are covered beside it.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { listAuditEventsAfter } from '../src/audit.js';
-import { adminActor, authCreateSelf, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult } from '../src/api.js';
+import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult } from '../src/api.js';
 import { ForbiddenError } from '../src/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -14,11 +14,11 @@ import { makeRoot } from './_helpers/make-root.js';
 const TENANT = 'ext-tenant';
 const DAY_MS = 86_400_000;
 const PEOPLE = new Map<string, ResolvedBearer>([
-  ['sso.alice', { tenantId: TENANT, subject: 'alice@corp.example', role: 'member' }],
-  ['sso.bob', { tenantId: TENANT, subject: 'bob@corp.example', role: 'member' }],
-  ['sso.boss', { tenantId: TENANT, subject: 'boss@corp.example', role: 'admin' }],
+  ['tok.alice', { tenantId: TENANT, subject: 'alice@corp.example', role: 'member' }],
+  ['tok.bob', { tenantId: TENANT, subject: 'bob@corp.example', role: 'member' }],
+  ['tok.boss', { tenantId: TENANT, subject: 'boss@corp.example', role: 'admin' }],
 ]);
-const ALICE = 'sso.alice';
+const ALICE = 'tok.alice';
 const OPTS: AuthCreateSelfOpts = { ttlDays: 90, perSubject: 3 };
 
 let home: string;
@@ -67,6 +67,12 @@ function auditRows(): ReturnType<typeof listAuditEventsAfter> {
   return withDb((db) => listAuditEventsAfter(db, { afterId: 0, tenantId: TENANT }));
 }
 
+function breakAuditLog(): void {
+  withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
+}
+
+const revokeAs = (token: string, keyId: string): ReturnType<typeof authRevoke> => authRevoke({ hippoRoot: home, tenantId: TENANT, actor: actorOf(token) }, keyId);
+
 async function listKeys(token: string): Promise<string[]> {
   const res = await fetch(`${handle!.url}/v1/auth/keys?active=false`, { headers: { authorization: `Bearer ${token}` } });
   expect(res.status).toBe(200);
@@ -96,6 +102,8 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   await handle?.stop();
   handle = undefined;
   rmSync(home, { recursive: true, force: true });
@@ -113,7 +121,7 @@ describe('authCreateSelf', () => {
   });
 
   it('gives a signed-in admin a member key too', () => {
-    const minted = selfMint('sso.boss');
+    const minted = selfMint('tok.boss');
     expect(minted.role).toBe('member');
     expect(keyRows()).toEqual([expect.objectContaining({ role: 'member', owner_subject: 'boss@corp.example' })]);
     expect(withDb((db) => validateApiKey(db, minted.plaintext)).role).toBe('member');
@@ -133,7 +141,7 @@ describe('authCreateSelf', () => {
     const cap = { perSubject: 2 };
     const first = selfMint(ALICE, 'one', cap);
     const second = selfMint(ALICE, 'two', cap);
-    selfMint('sso.bob', 'bob', cap);
+    selfMint('tok.bob', 'bob', cap);
     const third = selfMint(ALICE, 'three', cap);
     expect(liveOwned('alice@corp.example').map((r) => r.key_id)).toEqual([second.keyId, third.keyId]);
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
@@ -164,7 +172,7 @@ describe('authCreateSelf', () => {
     ['a mint that replaces a key', 1],
   ])('leaves no new key and revokes nothing when the audit write fails: %s', (_name, perSubject) => {
     const kept = selfMint(ALICE, 'kept', { perSubject });
-    withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
+    breakAuditLog();
     expect(() => selfMint(ALICE, 'second', { perSubject })).toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([expect.objectContaining({ key_id: kept.keyId, revoked_at: null })]);
   });
@@ -185,6 +193,19 @@ describe('authCreateSelf', () => {
     expect(existsSync(ctx.hippoRoot)).toBe(false);
   });
 
+  it('does not count or revoke keys that expired before the next mint', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-05T12:00:00Z'));
+    const cap = { ttlDays: 1, perSubject: 2 };
+    selfMint(ALICE, 'a', cap);
+    selfMint(ALICE, 'b', cap);
+    vi.setSystemTime(new Date('2026-10-07T12:00:00Z'));
+    const latest = selfMint(ALICE, 'c', cap);
+    expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([]);
+    const unexpired = liveOwned('alice@corp.example').filter((r) => Date.parse(r.expires_at!) > Date.now());
+    expect(unexpired.map((r) => r.key_id)).toEqual([latest.keyId]);
+  });
+
   it('accepts a fractional day count, the 3650-day ceiling and a cap of one', () => {
     expect(() => selfMint(ALICE, 'half-day', { ttlDays: 0.5 })).not.toThrow();
     const longest = selfMint(ALICE, 'ceiling', { ttlDays: 3650, perSubject: 1 });
@@ -192,16 +213,63 @@ describe('authCreateSelf', () => {
   });
 });
 
+describe('authCreate audit rows', () => {
+  it('leaves no key behind when a resolver admin mint cannot write its audit row', () => {
+    breakAuditLog();
+    expect(() => authCreate({ hippoRoot: home, tenantId: TENANT, actor: actorOf('tok.boss') }, { label: 'x' })).toThrow(/audit table unwritable/);
+    expect(keyRows()).toEqual([]);
+  });
+
+  it('still returns the key to the local admin when the audit write fails', () => {
+    breakAuditLog();
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const minted = authCreate({ hippoRoot: home, tenantId: TENANT, actor: adminActor('cli') }, { label: 'x' });
+    expect(keyRows()).toEqual([expect.objectContaining({ key_id: minted.keyId, revoked_at: null })]);
+  });
+});
+
+describe('authRevoke by a member signed in through the auth resolver', () => {
+  it('revokes its own self-minted key and audits it', () => {
+    const own = selfMint();
+    expect(revokeAs(ALICE, own.keyId).ok).toBe(true);
+    expect(liveOwned('alice@corp.example')).toEqual([]);
+    expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([
+      expect.objectContaining({ actor: 'alice@corp.example', targetId: own.keyId }),
+    ]);
+  });
+
+  it('refuses another member\'s self-minted key', () => {
+    const bobs = selfMint('tok.bob');
+    expect(() => revokeAs(ALICE, bobs.keyId)).toThrow(ForbiddenError);
+    expect(liveOwned('bob@corp.example')).toHaveLength(1);
+  });
+
+  it('refuses an admin-minted member key, which has no owner', () => {
+    const plain = mintDirect('member');
+    expect(() => revokeAs(ALICE, plain.keyId)).toThrow(ForbiddenError);
+    expect(keyRows().find((r) => r.key_id === plain.keyId)?.revoked_at).toBeNull();
+  });
+
+  it('refuses its own subject\'s key in another tenant, and an unknown key, with the same error', () => {
+    const elsewhere = authCreateSelf({ hippoRoot: home, tenantId: 'other-tenant', actor: actorOf(ALICE) }, OPTS);
+    const bobs = selfMint('tok.bob');
+    for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
+      expect(() => revokeAs(ALICE, keyId)).toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
+    }
+    expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
+  });
+});
+
 describe('POST /v1/auth/keys reads its body before auth', () => {
-  it('gives no key to an SSO admin deactivated between headers and body', async () => {
+  it('gives no key to a resolver admin deactivated between headers and body', async () => {
     let active = true;
     let checks = 0;
     await start((t) => {
-      if (t !== 'sso.boss') return null;
+      if (t !== 'tok.boss') return null;
       checks++;
-      return active ? PEOPLE.get('sso.boss')! : null;
+      return active ? PEOPLE.get('tok.boss')! : null;
     });
-    const status = await postInTwoParts('/v1/auth/keys', 'sso.boss', '{"label":"handed-out"}', async () => {
+    const status = await postInTwoParts('/v1/auth/keys', 'tok.boss', '{"label":"handed-out"}', async () => {
       await new Promise((ok) => setTimeout(ok, 200));
       expect(checks).toBe(0);
       active = false;
@@ -216,7 +284,7 @@ describe('GET /v1/auth/keys for members', () => {
     await start();
     const a1 = selfMint(ALICE, 'a1');
     const a2 = selfMint(ALICE, 'a2');
-    const b1 = selfMint('sso.bob', 'b1');
+    const b1 = selfMint('tok.bob', 'b1');
     const plain = mintDirect('member');
     const admin = mintDirect('admin');
     expect(await listKeys(ALICE)).toEqual([a1.keyId, a2.keyId].sort());
@@ -224,7 +292,7 @@ describe('GET /v1/auth/keys for members', () => {
     expect(await listKeys(b1.plaintext)).toEqual([b1.keyId]);
     expect(await listKeys(plain.plaintext)).toEqual([plain.keyId]);
     const all = [a1.keyId, a2.keyId, b1.keyId, plain.keyId, admin.keyId].sort();
-    expect(await listKeys('sso.boss')).toEqual(all);
+    expect(await listKeys('tok.boss')).toEqual(all);
     expect(await listKeys(admin.plaintext)).toEqual(all);
   });
 });

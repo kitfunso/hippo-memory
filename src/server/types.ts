@@ -8,7 +8,10 @@ export interface ServerHandle {
   port: number;
   url: string;
   stop: () => Promise<void>;
-  /** Introspection-only, so tests can assert keep-alive and headers-timeout hardening; do not depend on it for control flow. */
+  /** Introspection-only: the underlying node:http Server, exposed so
+   *  tests can assert keep-alive/headers timeout hardening without reaching
+   *  into serve()'s closure. Additive field — do not depend on it for control
+   *  flow outside tests. */
   server?: import('node:http').Server;
 }
 
@@ -51,6 +54,7 @@ export interface ServeOpts {
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   routes?: readonly AddonRoute[];
+  mintBodyDeadlineMs?: number;
 }
 
 export type ResolvedServeOpts = ServeOpts & { store: HippoStore };

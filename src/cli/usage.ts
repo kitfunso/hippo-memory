@@ -294,7 +294,7 @@ export const VERB_USAGE = {
       --json               Output as JSON
       --global             Operate on the global store
     auth list              List API keys (active by default)
-      --all                Include revoked keys
+      --all                Include revoked and expired keys
       --json               Output as JSON
       --global             Operate on the global store
     auth revoke <key_id>   Revoke an API key (subsequent validate fails)

@@ -37,14 +37,10 @@ export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxL
   return limit;
 }
 
-/** `_authed` is proof the caller passed auth: an unauthenticated request must never make the server read its body. */
+/** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key mint reads first under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
   return parseJsonObjectText(await readBody(req));
 }
-
-// POST /v1/auth/keys reads its body before auth, so an unauthenticated caller can make the server buffer at most this many bytes and wait at most this many ms.
-export const MINT_BODY_MAX_BYTES = 4 * 1024;
-export const MINT_BODY_DEADLINE_MS = 10_000;
 
 export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   if (raw.length === 0) return {};

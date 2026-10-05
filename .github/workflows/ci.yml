@@ -43,6 +43,7 @@ jobs:
         run: node scripts/check-comment-history.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
+      - run: node scripts/check-expiring-keys-floor.mjs
       - run: node scripts/check-graph-writes.mjs
       - name: No runtime import cycles in src
         run: node scripts/check-import-cycles.mjs

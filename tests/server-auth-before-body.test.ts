@@ -1,7 +1,7 @@
-// An authenticated route must reject a bad credential before it reads the body, so an
-// unauthenticated caller cannot make the server wait on (or buffer) a large upload.
+// No unauthenticated caller can make the server buffer a large body or wait long for one: most routes check
+// the credential before they read, and the key mint, which reads first, has a 4 KB cap and a deadline.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,15 +55,6 @@ function statusUntilServerCloses(port: number, path: string): Promise<string> {
   });
 }
 
-/** Real-time wait until something has armed a (faked) timer, so the test fires the deadline instead of sleeping through it. */
-async function untilTimerArmed(timeoutMs = 3000): Promise<void> {
-  const started = Date.now();
-  while (vi.getTimerCount() === 0) {
-    if (Date.now() - started > timeoutMs) throw new Error(`no deadline timer was armed within ${timeoutMs} ms`);
-    await new Promise((ok) => setImmediate(ok));
-  }
-}
-
 describe('no route reads an unauthenticated body beyond a stated cap and deadline', () => {
   let root: string;
   let handle: ServerHandle;
@@ -75,7 +66,6 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   });
 
   afterEach(async () => {
-    vi.useRealTimers();
     await handle.stop();
     rmSync(root, { recursive: true, force: true });
   });
@@ -103,10 +93,8 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   });
 
   it('POST /v1/auth/keys answers 408 and drops the socket when the promised body never arrives', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const answered = statusUntilServerCloses(handle.port, '/v1/auth/keys');
-    await untilTimerArmed();
-    vi.runOnlyPendingTimers();
-    expect(await answered).toBe('HTTP/1.1 408 Request Timeout');
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
+    expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys')).toBe('HTTP/1.1 408 Request Timeout');
   });
 });

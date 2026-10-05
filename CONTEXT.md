@@ -118,9 +118,22 @@ Returns a tenant, subject, role and scope grants, or nothing (a 401). It throws 
 upstream is down; a throw or a missed deadline is a 503, which a stream heartbeat skips rather than
 treating as revocation. It runs on every authenticated request and every stream heartbeat, so it
 must be cache-backed. Its admin role is tenant admin: no other tenant's audit log, no host-wide
-sleep. It can mint and revoke member API keys only, and those outlive the user's removal from the
-identity provider.
+sleep. It can mint and revoke member API keys only. A key a member mints for itself expires; a
+member key an admin mints never does, so it keeps working after the user leaves the identity
+provider until someone revokes it.
 _Avoid_: auth plugin, identity provider
+
+**Key owner**:
+The auth-resolver subject that minted a self-service API key for itself. A member signed in
+through the resolver lists and may revoke only the keys it owns; a key an admin or the CLI mints
+has no owner.
+_Avoid_: owner (alone; a claimant or assignee is something else), creator, minter
+
+**Key expiry**:
+The time after which an API key fails on every route. Self-service keys always have one; other
+keys have none. The first key with an expiry raises the store's binary floor, since an older
+binary would ignore it.
+_Avoid_: TTL (that is the setting, not the time), expiry (alone; a reclaim is something else)
 
 **Audit cursor**:
 The last audit event id an exporter has read; `listAuditEventsAfter` returns the events after it.

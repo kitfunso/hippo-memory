@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
-import { v50 } from '../src/db/migrations/v50.js';
 
 const EVENT_COLUMNS = [
   'id', 'ts', 'ledger_version', 'tenant_id', 'runtime', 'event_type', 'surface', 'store_hash', 'write_store',
@@ -105,7 +104,7 @@ describe('delivery ledger schema v50', () => {
     });
   });
 
-  it('a v49 store re-migrates to v50, and v50 leaves min_compatible_binary unchanged', () => {
+  it('a v49 store re-migrates to v50 and min_compatible_binary is unchanged', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-delivery-mig-'));
     // A value no migration writes, below the running binary, so any v50 write to it shows.
     const minBefore = '1.30.7';
@@ -114,6 +113,7 @@ describe('delivery ledger schema v50', () => {
       db.exec('DROP TABLE IF EXISTS delivery_candidates');
       db.exec('DROP TABLE IF EXISTS delivery_events');
       db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '49')`).run();
+      db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('min_compatible_binary', ?)`).run(minBefore);
     } finally {
       closeHippoDb(db);
     }
@@ -123,12 +123,6 @@ describe('delivery ledger schema v50', () => {
       const tables = names(db, `SELECT name FROM sqlite_master WHERE type='table'`);
       expect(tables).toContain('delivery_events');
       expect(tables).toContain('delivery_candidates');
-      // v53 raises the floor on any re-open, so v50 runs alone here to show it never writes it.
-      db.exec('DROP TABLE delivery_candidates');
-      db.exec('DROP TABLE delivery_events');
-      db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('min_compatible_binary', ?)`).run(minBefore);
-      v50.up(db);
-      expect(names(db, `SELECT name FROM sqlite_master WHERE type='table'`)).toContain('delivery_events');
       expect(meta(db, 'min_compatible_binary')).toBe(minBefore);
     } finally {
       closeHippoDb(db);

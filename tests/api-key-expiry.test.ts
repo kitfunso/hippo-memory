@@ -1,12 +1,16 @@
-// Schema v53 gives API keys an owner and an expiry; an expired key fails everywhere, cached or not, and older binaries refuse the store.
+// Schema v53 gives API keys an owner and an expiry; an expired key fails everywhere, cached or not, and the first expiring key raises the binary floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, getSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from '../src/db.js';
-import { createApiKey, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats } from '../src/auth.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { raiseMinBinary } from '../src/db/meta.js';
+import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/auth.js';
+import { adminActor, authCreateSelf, authList, authListRows, type Actor, type AuthCreateSelfResult } from '../src/api.js';
+import { cmdAuth } from '../src/cli/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { sqliteStore } from '../src/store-port.js';
-import { PACKAGE_VERSION } from '../src/version.js';
+import { sqliteStore, type HippoStore } from '../src/store-port.js';
+import { EXPIRING_KEYS_MIN_BINARY } from '../src/version.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 let home: string;
@@ -29,11 +33,12 @@ function mint(expiresAt?: string): { keyId: string; plaintext: string } {
   return withDb((db) => createApiKey(db, { tenantId: 'default', label: 'expiry', role: 'member', ownerSubject: 'alice', expiresAt }));
 }
 
-/** One patch above `v`. */
-function nextPatch(v: string): string {
-  const [major = 0, minor = 0, patch = 0] = v.split('.').map(Number);
-  return `${major}.${minor}.${patch + 1}`;
+function selfMint(): AuthCreateSelfResult {
+  const actor: Actor = { subject: 'alice', role: 'member', viaAuthResolver: true };
+  return authCreateSelf({ hippoRoot: home, tenantId: 'default', actor }, { ttlDays: 30, perSubject: 3 });
 }
+
+const floor = (): string | undefined => withDb((db) => meta(db, 'min_compatible_binary'));
 
 beforeEach(() => {
   home = makeRoot('key-expiry');
@@ -57,7 +62,7 @@ describe('schema v53', () => {
     });
   });
 
-  it('upgrades a v52 store: keys keep working with no owner or expiry, and the binary floor rises', () => {
+  it('upgrades a v52 store: keys keep working with no owner or expiry, and the binary floor stays', () => {
     const legacy = withDb((db) => {
       const key = createApiKey(db, { tenantId: 'default', label: 'pre-v53', role: 'admin' });
       db.exec('DROP INDEX idx_api_keys_live_owner');
@@ -70,7 +75,7 @@ describe('schema v53', () => {
     });
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      expect(meta(db, 'min_compatible_binary')).toBe(PACKAGE_VERSION);
+      expect(meta(db, 'min_compatible_binary')).toBe('1.24.0');
       // SAFETY: the SELECT names exactly these two nullable TEXT columns.
       const row = db.prepare(`SELECT owner_subject, expires_at FROM api_keys WHERE key_id = ?`).get(legacy.keyId) as { owner_subject: string | null; expires_at: string | null };
       expect(row).toEqual({ owner_subject: null, expires_at: null });
@@ -78,7 +83,7 @@ describe('schema v53', () => {
     });
   });
 
-  it('re-runs on a store that already has the columns and still raises the floor', () => {
+  it('re-runs on a store that already has the columns and leaves the floor where it was', () => {
     withDb((db) => {
       db.prepare(`UPDATE meta SET value = '52' WHERE key = 'schema_version'`).run();
       db.prepare(`UPDATE meta SET value = '0.0.1' WHERE key = 'min_compatible_binary'`).run();
@@ -86,15 +91,37 @@ describe('schema v53', () => {
     });
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      expect(meta(db, 'min_compatible_binary')).toBe(PACKAGE_VERSION);
+      expect(meta(db, 'min_compatible_binary')).toBe('0.0.1');
     });
   });
+});
 
-  it('an older binary refuses a v53 store', () => {
-    withDb((db) => expect(meta(db, 'min_compatible_binary')).toBe(PACKAGE_VERSION));
-    // The guard compares floor to binary, so a floor one patch above this binary is how a v53 store looks to the release before it.
-    withDb((db) => db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(nextPatch(PACKAGE_VERSION)));
-    expect(() => openHippoDb(home)).toThrow(IncompatibleBinaryError);
+describe('the binary floor for expiring keys', () => {
+  it('a store with no expiring key keeps its old floor, even after a key that never expires', () => {
+    withDb((db) => createApiKey(db, { tenantId: 'default', label: 'admin', role: 'admin' }));
+    expect(floor()).toBe('1.24.0');
+  });
+
+  it('the first self-minted key raises the floor and a second leaves it', () => {
+    expect(floor()).toBe('1.24.0');
+    selfMint();
+    expect(floor()).toBe(EXPIRING_KEYS_MIN_BINARY);
+    selfMint();
+    expect(floor()).toBe(EXPIRING_KEYS_MIN_BINARY);
+  });
+
+  it('a self-mint that fails leaves the floor where it was', () => {
+    withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
+    expect(() => selfMint()).toThrow(/audit table unwritable/);
+    expect(floor()).toBe('1.24.0');
+  });
+
+  it('never lowers a higher floor', () => {
+    withDb((db) => {
+      db.prepare(`UPDATE meta SET value = '9.9.9' WHERE key = 'min_compatible_binary'`).run();
+      raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
+      expect(meta(db, 'min_compatible_binary')).toBe('9.9.9');
+    });
   });
 });
 
@@ -118,6 +145,15 @@ describe('API key expiry', () => {
     });
   });
 
+  it('treats a store record with no expiresAt field as malformed, not as never expiring', async () => {
+    const key = mint(new Date(Date.now() + 60_000).toISOString());
+    const { expiresAt: _dropped, ...rest } = withDb((db) => readApiKeyRecord(db, key.keyId))!;
+    // SAFETY: a store written against the port before expiresAt existed returns exactly this shape.
+    const record = rest as ApiKeyRecord;
+    const store: HippoStore = { kind: 'test', findApiKey: async () => record, close: async () => {} };
+    expect(await verifyApiKeyCached(home, key.plaintext, store)).toBeNull();
+  });
+
   it('a cached key stops at its expiry, not a cache TTL later', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-05T12:00:00Z'));
@@ -130,6 +166,45 @@ describe('API key expiry', () => {
     expect(apiKeyVerifyStats().storeLookups).toBe(before.storeLookups);
     vi.setSystemTime(Date.now() + 1);
     expect(await verifyApiKeyCached(home, key.plaintext, store)).toBeNull();
+  });
+});
+
+interface ListedKeys {
+  expired: string;
+  live: string;
+  liveExpiry: string;
+  plain: string;
+}
+
+describe('key lists', () => {
+  function threeKeys(): ListedKeys {
+    const liveExpiry = new Date(Date.now() + 60_000).toISOString();
+    const live = mint(liveExpiry).keyId;
+    const plain = withDb((db) => createApiKey(db, { tenantId: 'default', label: 'plain', role: 'admin' })).keyId;
+    // Minted last, so it sits first in a newest-first page.
+    const expired = mint(new Date(Date.now() - 1000).toISOString()).keyId;
+    return { expired, live, liveExpiry, plain };
+  }
+
+  it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', () => {
+    const keys = threeKeys();
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
+    expect(authList(ctx, { active: true }).map((k) => k.keyId)).toEqual([keys.plain, keys.live]);
+    expect(authList(ctx, { active: false }).map((k) => k.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
+    const [first] = authListRows(ctx, { active: true, limit: 1 });
+    expect(first?.key.keyId).toBe(keys.plain);
+    const byId = new Map(authList(ctx, { active: true }).map((k) => [k.keyId, k]));
+    expect(byId.get(keys.live)).toMatchObject({ ownerSubject: 'alice', expiresAt: keys.liveExpiry });
+    expect(byId.get(keys.plain)).toMatchObject({ ownerSubject: null, expiresAt: null });
+  });
+
+  it('hippo auth list prints each expiry and leaves out expired keys unless --all', async () => {
+    const keys = threeKeys();
+    const active = await runInProcess(() => cmdAuth(home, ['list'], {}));
+    expect(active.stdout).toContain('created  expires  revoked');
+    expect(active.stdout).toContain(keys.liveExpiry);
+    expect(active.stdout).not.toContain(keys.expired);
+    expect((await runInProcess(() => cmdAuth(home, ['list'], { all: true }))).stdout).toContain(keys.expired);
   });
 });
 
