@@ -10,7 +10,7 @@ export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: Memory
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
-/** The row alone, with no rejection guard or full-text row: only `batchWriteAndDelete` calls it, which probes tombstones and indexes per batch. Returns whether the row is new. */
+/** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for `batchWriteAndDelete`, which probes tombstones and indexes per batch. Returns whether the row is new. */
 export function upsertMemoryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): boolean {
   const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
   db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));

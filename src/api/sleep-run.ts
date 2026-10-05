@@ -6,7 +6,7 @@ import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.j
 import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../audit.js';
 import { autoShare } from '../shared.js';
 import { consolidate } from '../consolidate/sleep.js';
-import { failedUnitOf } from '../consolidate/flush-units.js';
+import { failedUnitOf } from '../store/delete-and-batch.js';
 import { loadConfig } from '../config.js';
 import { deduplicateStore } from '../dedupe.js';
 import { computeAmbientState } from '../ambient.js';

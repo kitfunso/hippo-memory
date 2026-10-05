@@ -229,18 +229,17 @@ export function purgeDormantByDigest(db: DatabaseSyncLike, tenantId: string, dig
   return removed;
 }
 
-/** How many dormant memories went dormant before `cutoffIso` (a dry-run count). */
-export function countExpiredDormant(db: DatabaseSyncLike, cutoffIso: string): number {
-  // SAFETY: row's shape matches the single aliased COUNT column in the SELECT.
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM dormant_memories WHERE dormant_at < ?`).get(cutoffIso) as { n: number };
-  return Number(row.n);
+export interface DormantKey {
+  readonly tenantId: string;
+  readonly id: string;
 }
 
-/**
- * Delete every dormant memory (all tenants) that went dormant before
- * `cutoffIso`: the `dormant.retentionDays` window. Returns how many went.
- */
-export function purgeExpiredDormant(db: DatabaseSyncLike, cutoffIso: string): number {
-  const result = db.prepare(`DELETE FROM dormant_memories WHERE dormant_at < ?`).run(cutoffIso);
-  return Number(result.changes ?? 0);
+export function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
+  const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
+  return db.prepare(sql).all(cutoffIso) as DormantKey[];
+}
+
+export function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
+  const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
+  return Number(db.prepare(sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
 }

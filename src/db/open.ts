@@ -59,6 +59,9 @@ export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>, opts?:
 /** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall every other request on the event loop. */
 export const SERVER_DB_WAIT_MS = 250;
 
+/** Lock wait for each of sleep's short write transactions, even inside a server request: a run stops only on a writer that holds the lock longer. */
+export const SLEEP_DB_WAIT_MS = 5000;
+
 const scopedBusyWaitMs = new AsyncLocalStorage<number>();
 
 /** Runs `fn` so that every store opened inside it, across awaits, waits at most `busyWaitMs` for a lock unless the open passes its own. */
