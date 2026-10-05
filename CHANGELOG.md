@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.63.2 - 2026-10-05
+
+### Documentation
+
+- **The README and hippo-memory.com open with "Stop re-teaching your agent." again, with the full description under it.** 1.63.1 had cut the opening down to the tagline alone.
+
 ## 1.63.1 - 2026-10-04
 
 ### Changed
