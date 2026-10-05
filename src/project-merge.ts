@@ -7,6 +7,7 @@ import { containerId, containerPrefix } from './agent-memories/source.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import type { DatabaseSyncLike } from './db.js';
+import { withBackup } from './db/backup.js';
 import { getMeta, setMeta } from './db/meta.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
 import { processEnv } from './env.js';
@@ -100,15 +101,6 @@ export function listProjects(db: DatabaseSyncLike, tenantId: string): ProjectSum
   }).sort((a, b) => b.newest.localeCompare(a.newest));
 }
 
-/** Copies the database before a repair writes, so the audit ids plus this file are the way back. */
-export function backupStore(db: DatabaseSyncLike, hippoRoot: string, label: string, now = new Date()): string {
-  const dir = path.join(hippoRoot, 'backups');
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, `hippo-${label}-${now.toISOString().replace(/[:.]/g, '-')}.db`);
-  db.prepare('VACUUM INTO ?').run(file);
-  return file;
-}
-
 function inTransaction<T>(db: DatabaseSyncLike, dryRun: boolean, body: () => T): T {
   db.exec(dryRun ? 'BEGIN' : 'BEGIN IMMEDIATE');
   try {
@@ -135,12 +127,12 @@ export function mergeProjects(
   const refusal = validateMergeNames(opts.from, opts.into);
   if (refusal) throw new Error(refusal);
   const { tenantId, from, into, dryRun } = opts;
-  const backup = dryRun ? null : backupStore(db, hippoRoot, 'before-merge');
-  const result = inTransaction(db, dryRun, () => {
+  const fold = (backup: string | null): MergeResult => inTransaction(db, dryRun, () => {
     const folded = foldInTx(db, tenantId, from, into);
     appendAuditEvent(db, { tenantId, actor: ACTOR, op: 'project_merge', metadata: { from, into, backup, ...folded } });
     return { from, into, ...folded, backup };
   });
+  const result = dryRun ? fold(null) : withBackup(db, hippoRoot, 'before-merge', fold);
   if (!dryRun) refreshMirrors(db, hippoRoot, tenantId, result.restamped, result.setAside);
   return result;
 }
@@ -321,8 +313,7 @@ export function repairProjects(
 ): RepairResult {
   const { tenantId, dryRun, globalFolds = true } = opts;
   if (dryRun) return { ...planProjectRepair(db, hippoRoot, tenantId, globalFolds), backup: null };
-  const backup = backupStore(db, hippoRoot, 'before-repair');
-  const { result, rewrite, purge } = inTransaction(db, false, () => {
+  const { result, rewrite, purge } = withBackup(db, hippoRoot, 'before-repair', (backup) => inTransaction(db, false, () => {
     const copies: string[] = [];
     for (const row of strayImports(db, hippoRoot, tenantId)) {
       const tag = toolTag(row.source);
@@ -345,7 +336,7 @@ export function repairProjects(
       rewrite: [...plan.toProject.map((r) => r.id), ...folded.flatMap((f) => f.restamped)],
       purge: [...copies, ...plan.setAside, ...folded.flatMap((f) => f.setAside)],
     };
-  });
+  }));
   refreshMirrors(db, hippoRoot, tenantId, rewrite, purge);
   return result;
 }

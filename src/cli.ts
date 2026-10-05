@@ -42,6 +42,7 @@ import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
 import type { CommandContext } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 
@@ -662,7 +663,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
-    printError('Error:', err instanceof Error ? err.message : err);
+    printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
     process.exit(1);
   }
 }

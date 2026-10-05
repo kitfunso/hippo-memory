@@ -8,7 +8,7 @@ import { importForStore, type Machine, type SyncOptions } from '../src/agent-mem
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { createMemory } from '../src/memory.js';
-import { isContentWorthStoring } from '../src/audit.js';
+import { isContentWorthStoring } from '../src/memory-quality.js';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { isInitialized } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';

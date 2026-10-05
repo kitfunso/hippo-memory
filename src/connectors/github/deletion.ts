@@ -1,5 +1,5 @@
 import { type Context } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope } from '../../db.js';
 import { archiveRawMemory } from '../../raw-archive.js';
 import { hasSeenKey, markKeySeen } from './idempotency.js';
 
@@ -31,7 +31,7 @@ export interface DeletionResult {
  * match a single deletion event. Archive ALL of them.
  *
  * ONE shared DB handle wraps ALL archives + the idempotency mark in a single
- * outer SAVEPOINT: a per-row failure rolls back the whole batch, idempotency
+ * outer write scope: a per-row failure rolls back the whole batch, idempotency
  * included, so a retry re-attempts cleanly instead of leaving searchable
  * survivors. archiveRawMemory's own inner SAVEPOINT nests safely inside it.
  *
@@ -67,11 +67,10 @@ export function handleCommentDeleted(ctx: Context, input: DeletionInput): Deleti
       return { status: 'archive_skipped_not_found', archivedCount: 0 };
     }
 
-    // Outer SAVEPOINT wrapping all archives + the idempotency mark. Any throw
+    // Outer write scope wrapping all archives + the idempotency mark. Any throw
     // rolls back the whole batch so retry sees neither archive nor mark — and
     // re-attempts the full set.
-    db.exec('SAVEPOINT github_delete_all');
-    try {
+    withWriteScope(db, 'github_delete_all', () => {
       for (const id of memoryIds) {
         archiveRawMemory(db, id, {
           reason: `source_deleted:github:${input.eventName}:${input.deliveryId}`,
@@ -84,16 +83,7 @@ export function handleCommentDeleted(ctx: Context, input: DeletionInput): Deleti
         eventName: input.eventName,
         memoryId: memoryIds[0]!,
       });
-      db.exec('RELEASE SAVEPOINT github_delete_all');
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK TO SAVEPOINT github_delete_all');
-        db.exec('RELEASE SAVEPOINT github_delete_all');
-      } catch {
-        // Best effort. Surface the original error.
-      }
-      throw e;
-    }
+    });
     return { status: 'archived', archivedCount: memoryIds.length };
   } finally {
     closeHippoDb(db);

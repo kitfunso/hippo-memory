@@ -13,6 +13,7 @@ import { errorMessage, log } from '../log.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { repairOnceOnSleep } from '../project-merge.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport } from './shared.js';
+import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
@@ -190,6 +191,7 @@ async function cmdSleepCore(
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
     repairProjectTagsOnce(hippoRoot);
+    repairQualityOnceAt(hippoRoot);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
