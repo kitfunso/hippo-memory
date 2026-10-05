@@ -150,8 +150,9 @@ export function certainDefect(content: string): AutomaticMemoryDefect | null {
 
 // Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by design, so they are not judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
-// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy.
+// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy; elsewhere a person may set it.
 const AUTOMATIC_TAGS = new Set(['captured', COMPACTION_MEMORY_TAG, 'git-learned']);
+const COPY_SOURCE = /^(?:promoted|shared):/;
 export const BUNDLE_HEADER = /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
 
 type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extracted_from' | 'dag_level' | 'tags'>;
@@ -160,7 +161,7 @@ type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extra
 export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;
   return AUTOMATIC_SOURCES.has(entry.source) || entry.source.startsWith(COMPACTION_SOURCE_PREFIX)
-    || entry.tags.some((tag) => AUTOMATIC_TAGS.has(tag))
+    || (COPY_SOURCE.test(entry.source) && entry.tags.some((tag) => AUTOMATIC_TAGS.has(tag)))
     || entry.extracted_from !== null || entry.dag_level >= 1 || BUNDLE_HEADER.test(entry.content);
 }
 
@@ -172,6 +173,14 @@ function bundleParts(entry: Pick<MemoryEntry, 'content'>): string[] {
 function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
   const parts = bundleParts(entry);
   return (parts.length > 0 ? parts : [entry.content]).every((text) => certainDefect(text) !== null);
+}
+
+/** The audit's check: a person's row is never judged, and a bundle is flagged only when every part is, as reuse and recent context judge it. */
+export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
+  if (!isAutomaticEntry(entry)) return null;
+  const parts = bundleParts(entry);
+  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map((text) => assessAutomaticMemory(text).reason);
+  return reasons.every((reason) => reason !== null) ? reasons[0] ?? null : null;
 }
 
 /** Whether sleep may derive from a row or share it: a person's text and watch failures always, hippo's own text only without a certain defect. */

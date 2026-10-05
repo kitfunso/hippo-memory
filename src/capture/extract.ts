@@ -67,14 +67,19 @@ function proseOnly(text: string): string {
     }
     // Quotes, table rows and indented code are not the speaker's own; indented code cannot interrupt a paragraph or list item.
     const dropped = /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
-    afterProse = !dropped && trimmed !== '';
+    afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
     return dropped ? '' : line;
   }).join('\n');
 }
 
-/** A lowercase line continues the line above only when that line has not ended its sentence. */
+function masked(text: string): string {
+  return text.replace(NO_BREAK, span => 'x'.repeat(span.length));
+}
+
+/** A lowercase line continues the line above only when that line has not ended its sentence; "e.g." at a line end has not. */
 function continues(line: string, previous: string | undefined): boolean {
-  return previous !== undefined && /^[a-z]/.test(line) && !SENTENCE_END.test(previous) && !LABEL.test(line);
+  if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;
+  return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
 }
 
 function proseBlocks(text: string): string[] {
@@ -97,8 +102,7 @@ function proseBlocks(text: string): string[] {
 
 function completeSentences(text: string): string[] {
   // Masking keeps offsets, so each sentence is cut from the unchanged source.
-  const masked = text.replace(NO_BREAK, span => 'x'.repeat(span.length));
-  const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked);
+  const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(text));
   return [...segments].map(({ index, segment }) => text.slice(index, index + segment.length).trim());
 }
 

@@ -92,10 +92,10 @@ describe('recoverable automatic memory quality repair', () => {
     expect(result.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: pinned.id, protection: 'pinned' }),
       expect.objectContaining({ id: raw.id, protection: 'raw receipt' }),
-      expect.objectContaining({ id: kept.id, protection: 'trusted imported note' }),
       expect.objectContaining({ id: backing.id, protection: 'backs an object' }),
     ]));
-    expect(result.issues.map((issue) => issue.id)).not.toContain(imported.id);
+    // An agent's note is never judged, even when it carries a hippo writer's tag.
+    for (const row of [imported, kept]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
     expect(loadAllEntries(root)).toHaveLength(6);
     expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({ memory_id: backing.id });
   });
@@ -114,7 +114,7 @@ describe('recoverable automatic memory quality repair', () => {
       seed(FRAGMENT, { source: 'cli', dag_level: 1 }),
       seed(FRAGMENT, { source: 'git-learn' }),
       seed(FRAGMENT, { source: 'git' }),
-      seed(FRAGMENT, { source: 'promote', tags: ['captured'] }),
+      seed(FRAGMENT, { source: 'promoted:/work/app/.hippo', tags: ['captured'] }),
       seed(FRAGMENT, { source: 'consolidation', layer: Layer.Semantic }),
     ];
     const issues = run().issues;

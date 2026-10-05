@@ -41,6 +41,8 @@ describe('capture reads markdown the way it renders', () => {
       .toEqual(['We decided to use pnpm 9 for installs']);
     expect(contents('The API must retry after HTTP 429\nbecause the provider enforces a quota.'))
       .toEqual(['The API must retry after HTTP 429 because the provider enforces a quota']);
+    expect(contents('We should always prefer fast tools, e.g.\nripgrep over grep.'))
+      .toEqual(['We should always prefer fast tools, e.g. ripgrep over grep']);
   });
 
   it('starts a new statement at a lowercase label', () => {
@@ -71,5 +73,6 @@ describe('capture reads markdown the way it renders', () => {
     expect(contents('The API must retry after HTTP 429\n    because the provider enforces a quota.'))
       .toEqual(['The API must retry after HTTP 429 because the provider enforces a quota']);
     expect(contents(`${TAG_RULE}\n\n    Never push from the VM because it has no tests.`)).toEqual([TAG_RULE.slice(0, -1)]);
+    expect(contents(`## Notes\n    Never push from the VM because it has no tests.\n${TAG_RULE}`)).toEqual([TAG_RULE.slice(0, -1)]);
   });
 });

@@ -102,7 +102,9 @@ describe('automatic provenance', () => {
       expect(isAutomaticEntry({ ...base, source }), source).toBe(true);
     }
     for (const tag of ['captured', 'compaction-memory', 'git-learned']) {
-      expect(isAutomaticEntry({ ...base, source: 'promote', tags: [tag] }), tag).toBe(true);
+      for (const source of ['promoted:/work/app/.hippo', 'shared:app:2026-10-05T10:00:00.000Z']) {
+        expect(isAutomaticEntry({ ...base, source, tags: [tag] }), `${source} ${tag}`).toBe(true);
+      }
     }
     expect(isAutomaticEntry({ ...base, extracted_from: 'm_1' })).toBe(true);
     expect(isAutomaticEntry({ ...base, dag_level: 1 })).toBe(true);
@@ -115,6 +117,13 @@ describe('automatic provenance', () => {
     expect(isAutomaticEntry({ ...base, source: 'tool-failure', confidence: 'observed' })).toBe(false);
     for (const confidence of ['verified', 'stale'] as const) {
       expect(isAutomaticEntry({ ...base, source: 'capture', confidence }), confidence).toBe(false);
+    }
+  });
+
+  it('reads a writer tag as provenance only on a promoted or shared copy', () => {
+    // A "## Captured" heading in an imported MEMORY.md becomes the tag "captured" on a person's note.
+    for (const source of ['import:markdown', 'cli', 'mcp']) {
+      expect(isAutomaticEntry(make('Found local migration files to be', { source, confidence: 'observed', tags: ['imported', 'captured'] })), source).toBe(false);
     }
   });
 
@@ -137,6 +146,8 @@ describe('automatic provenance', () => {
     const allCut = bundle(['Found local migration files to be', 'Retry the API request because']);
     expect(isReusable(allCut)).toBe(false);
     expect(isWorthSurfacing(allCut)).toBe(false);
+    expect(auditMemory(lastPartCut)).toBeNull();
+    expect(auditMemory(allCut)?.severity).toBe('warning');
   });
 
   it('audit warns about automatic defects on automatic rows only', () => {

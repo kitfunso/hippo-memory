@@ -6,7 +6,7 @@ import { log } from './log.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
 import type { JsonValue } from './json.js';
 import {
-  assessAutomaticMemory, hasNoSpecificity, isAutomaticEntry, isFragment, isReleaseCommitNoise, substantiveWordCount,
+  automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
 } from './memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
@@ -62,7 +62,7 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
     return { memoryId: entry.id, content, severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
   }
 
-  const { reason } = isAutomaticEntry(entry) ? assessAutomaticMemory(content) : { reason: null };
+  const reason = automaticDefect(entry);
   if (reason !== null) {
     return { memoryId: entry.id, content, severity: 'warning', reason: `automatic memory defect: ${reason}` };
   }

@@ -56,7 +56,8 @@ function loadStore(dir) {
   try {
     const rows = db
       .prepare(
-        `SELECT id, content, tags_json, created, pinned, superseded_by, origin_project, scope
+        `SELECT id, content, tags_json, created, pinned, superseded_by, origin_project, scope,
+                source, confidence, extracted_from, dag_level
          FROM memories WHERE tenant_id = ?`,
       )
       .all('default');
@@ -69,6 +70,11 @@ function loadStore(dir) {
       superseded_by: r.superseded_by ?? null,
       origin_project: r.origin_project ?? null,
       scope: r.scope ?? null,
+      // isWorthSurfacing judges by provenance, so without these every row would get a person's looser floor.
+      source: String(r.source ?? ''),
+      confidence: r.confidence ?? null,
+      extracted_from: r.extracted_from ?? null,
+      dag_level: Number(r.dag_level ?? 0),
     }));
   } finally {
     db.close();

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
+import { log } from '../log.js';
 
 /** Copies the database before a repair writes, so the audit ids plus this file are the way back. */
 export function backupStore(db: DatabaseSyncLike, hippoRoot: string, label: string, now = new Date()): string {
@@ -17,7 +18,8 @@ export function withBackup<T>(db: DatabaseSyncLike, hippoRoot: string, label: st
   try {
     return transaction(backup);
   } catch (err) {
-    fs.rmSync(backup, { force: true });
+    // A locked file on Windows must not hide why the transaction failed.
+    try { fs.rmSync(backup, { force: true }); } catch (cleanupError) { log.warn(`Could not delete the unused backup ${backup}: ${String(cleanupError)}`); }
     throw err;
   }
 }

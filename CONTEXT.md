@@ -18,7 +18,7 @@ _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
 **Automatic memory**:
 A memory hippo wrote without a person choosing the words: session capture, git learning,
 a sleep merge, a compaction memory, an extracted fact or a DAG summary, at confidence observed
-or inferred. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
+or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
 one with a certain defect is never reused by sleep or shared, and `hippo audit repair` can set
 it aside. A person's memory is never judged on its wording.
 _Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
