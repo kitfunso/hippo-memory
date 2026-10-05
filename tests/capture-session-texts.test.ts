@@ -109,8 +109,26 @@ describe('captureSessionTexts', () => {
   });
 
   it('throws on an empty project name and writes nothing', () => {
-    expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, { project: { name: '', legacyName: 'web' } }))).toThrow(BadRequestError);
+    expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, { project: { name: '', legacyName: 'web' } }))).toThrow('project name must not be blank');
     expect(loadAllEntries(root)).toEqual([]);
+  });
+
+  // The shared store's own check: rows match names verbatim, so a rewritten name would split a project.
+  it.each([
+    ['an upper-case name', { name: 'Api', legacyName: 'api' }],
+    ['a padded name', { name: ' api', legacyName: 'api' }],
+    ['a name with a colon', { name: 'a:b', legacyName: 'api' }],
+    ['an upper-case alias', { name: 'api', legacyName: 'api', aliases: ['Old-Api'] }],
+    ['eleven aliases', { name: 'api', legacyName: 'api', aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) }],
+  ])('throws on %s and writes nothing', (_name, project) => {
+    expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, { project }))).toThrow(BadRequestError);
+    expect(loadAllEntries(root)).toEqual([]);
+  });
+
+  it('captures for a lower-case name with aliases beside an upper-case legacy name', () => {
+    const project = { name: 'api', legacyName: 'Api', aliases: ['acme-api', 'api-old'] };
+    expect(captureSessionTexts(ctxFor(root), req(TEXTS, { project })).captured).toBe(3);
+    expect(loadAllEntries(root).map((r) => r.origin_project)).toEqual(['api', 'api', 'api']);
   });
 
   it.each([

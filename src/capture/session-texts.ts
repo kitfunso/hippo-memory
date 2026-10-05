@@ -2,7 +2,7 @@
 import { BadRequestError } from '../api-errors.js';
 import type { Context } from '../api/types.js';
 import { assertCallerIds, type CallerProject } from '../prompt-hook.js';
-import { projectId, projectNames } from '../project-identity.js';
+import { assertCallerProject, projectNames } from '../project-identity.js';
 import { longestWord, storedTextKeys } from '../same-text.js';
 import { scrubForSharing } from '../share-scrub.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
@@ -26,8 +26,8 @@ export type SessionCaptureResult = Readonly<CaptureTally>;
 function assertSessionCapture(req: SessionCaptureRequest): void {
   assertCallerIds(req.sessionId, req.project);
   if (req.sessionId.trim() === '') throw new BadRequestError('session id: required');
-  // A '' project would read every project's rows as its own and write user-global rows; a blank one names no project anyone reads.
-  if (projectId(req.project).trim() === '') throw new BadRequestError('project name: required');
+  // A '' project would read every project's rows as its own and write user-global rows; a rewritten one would split a project.
+  assertCallerProject(req.project);
   if (req.texts.length > MAX_TEXTS) throw new BadRequestError(`texts: at most ${MAX_TEXTS}`);
   const sizes = req.texts.map((t) => Buffer.byteLength(t, 'utf8'));
   if (sizes.some((n) => n > MAX_TEXT_BYTES)) throw new BadRequestError(`each text: at most ${MAX_TEXT_BYTES} bytes`);
