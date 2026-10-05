@@ -10,19 +10,19 @@
 import { evalNow } from '../ablation.js';
 import { MemoryEntry, canAutoDelete, type DecayOptions } from '../memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { batchWriteAndDeleteOn, type FlushComponent, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { batchWriteAndDeleteOn, type FlushComponent, memoriesBackingObjects, noteFailedUnit } from '../store/delete-and-batch.js';
 import { openStore } from '../store/open.js';
 import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from '../store/index-and-stats.js';
 import { replaceDetectedConflicts } from '../store/conflicts.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { countExpiredDormant, purgeExpiredDormant } from '../dormant.js';
+import { openHippoDb, closeHippoDb, SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../db.js';
+import { deleteExpiredDormantRow, type DormantKey, expiredDormantKeys } from '../dormant.js';
 import { loadConfig } from '../config.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from '../half-life-migration.js';
 import { log } from '../log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
-import { familyUnits, groupFlush, noteFailedUnit } from './flush-units.js';
+import { familyUnits, groupFlush } from './flush-units.js';
 import { retireHeldTexts, mergePass } from './merge.js';
 import { detectConflicts } from './conflicts.js';
 import { type ConsolidationResult, lazyConsolidateDb, type SleepRun, newConsolidationResult, syncFtsIndex } from './run.js';
@@ -93,8 +93,9 @@ export async function consolidate(
     );
   }
 
-  await flushPending(run, snapshot, options.budget ?? WRITE_BUDGET);
-  expireDormant(run);
+  const budget = options.budget ?? WRITE_BUDGET;
+  await flushPending(run, snapshot, budget);
+  await expireDormant(run, budget);
   if (!dryRun) logRun(run, decay);
   return result;
 }
@@ -137,11 +138,10 @@ async function commitInChunks(
 ): Promise<string[]> {
   if (components.length === 0) return [];
   const removed: string[] = [];
-  const db = openStore(hippoRoot);
+  // Its own wait, not a server request's 250 ms, and an option rather than a PRAGMA so a shared hook handle keeps its own.
+  const db = openStore(hippoRoot, { busyWaitMs: SLEEP_DB_WAIT_MS });
   let next = 0;
   try {
-    // A sleep inside a server request would otherwise keep the request's 250 ms wait and fail behind a hook's write.
-    db.exec('PRAGMA busy_timeout = 5000');
     let committedAt = 0;
     while (next < components.length) {
       if (next > 0) await budget.pause(committedAt);
@@ -151,7 +151,7 @@ async function commitInChunks(
       for (const id of chunk.removedIds) removed.push(id);
     }
   } catch (err) {
-    // SHORTCUT: names the first unit of the chunk that failed, not the op inside it; per-op tagging if a pilot needs it.
+    // A unit that threw is already tagged; a throw outside one (a pause, BEGIN or COMMIT) names the chunk's first unit.
     if (err instanceof Error) noteFailedUnit(err, components[next]);
     throw err;
   } finally {
@@ -160,17 +160,43 @@ async function commitInChunks(
   return removed;
 }
 
+/** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between; returns how many went. */
+async function expireInChunks(db: DatabaseSyncLike, keys: readonly DormantKey[], cutoff: string, budget: WriteBudget): Promise<number> {
+  let gone = 0;
+  let next = 0;
+  let committedAt = 0;
+  while (next < keys.length) {
+    if (next > 0) await budget.pause(committedAt);
+    db.exec('BEGIN IMMEDIATE');
+    const begunAt = budget.clock();
+    try {
+      do gone += deleteExpiredDormantRow(db, keys[next++], cutoff);
+      while (next < keys.length && budget.clock() - begunAt < budget.holdMs);
+      db.exec('COMMIT');
+    } catch (err) {
+      if (db.isTransaction !== false) {
+        try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
+      }
+      throw err;
+    }
+    committedAt = budget.clock();
+  }
+  return gone;
+}
+
 // Dormant retention: a dormant memory nobody restored within
 // dormant.retentionDays is deleted for good (0 keeps them forever). Runs
 // even when dormant.enabled is off, so turning it off still ages out what
 // earlier sleeps kept.
-function expireDormant(run: SleepRun): void {
+async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> {
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;
   const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-  const db = openHippoDb(run.hippoRoot);
+  const db = openHippoDb(run.hippoRoot, { busyWaitMs: SLEEP_DB_WAIT_MS });
   try {
-    result.dormantExpired = dryRun ? countExpiredDormant(db, cutoff) : purgeExpiredDormant(db, cutoff);
+    // The keys come from a read, so a sleep with nothing to expire never takes the write lock; one DELETE scanned every stored entry under it.
+    const keys = expiredDormantKeys(db, cutoff);
+    result.dormantExpired = dryRun ? keys.length : await expireInChunks(db, keys, cutoff, budget);
   } finally {
     closeHippoDb(db);
   }

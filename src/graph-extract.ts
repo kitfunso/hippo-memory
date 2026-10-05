@@ -24,6 +24,7 @@ import { applyGraphOps, runGraphRebuildTransaction } from './graph/write.js';
 import { MAX_ENTITY_NAME_LEN, type EntityType, type SourceObjectType, type SourceObjectRef } from './graph/types.js';
 import { graphDelta, readGraphDelta, type DesiredEntity, type DesiredGraph, type DesiredRelation, type NaturalKey } from './graph/delta.js';
 import { WRITE_BUDGET, type WriteBudget } from './write-budget.js';
+import { SLEEP_DB_WAIT_MS } from './db.js';
 import { loadDecisions } from './decisions.js';
 import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
@@ -355,9 +356,10 @@ export async function extractGraphChunked(hippoRoot: string, tenantId: string, b
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
     const from = next;
+    // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
     const chunk = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
       applyGraphOps(txDb, hippoRoot, tenantId, ops, from, { holdMs: budget.holdMs, clock: budget.clock }),
-    );
+    { busyWaitMs: SLEEP_DB_WAIT_MS });
     committedAt = budget.clock();
     next = chunk.next;
     skipped += chunk.skipped;

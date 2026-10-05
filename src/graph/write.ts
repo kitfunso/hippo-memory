@@ -396,9 +396,10 @@ export function runGraphRebuildTransaction<T>(
   hippoRoot: string,
   tenantId: string,
   fn: (txDb: GraphTxDb) => T,
+  opts?: { busyWaitMs?: number },
 ): T {
   assertTenantId('runGraphRebuildTransaction', tenantId);
-  const db = openHippoDb(hippoRoot);
+  const db = openHippoDb(hippoRoot, opts);
   try {
     db.exec('BEGIN IMMEDIATE');
     let committed = false;

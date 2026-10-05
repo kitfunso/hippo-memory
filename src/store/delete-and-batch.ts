@@ -169,6 +169,20 @@ export interface FlushComponent {
   dormant: readonly DormantMove[];
 }
 
+const failedUnits = new WeakMap<Error, string[]>();
+
+/** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag wins. */
+export function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
+  if (!component || failedUnits.has(err)) return;
+  const ids = [...component.writes.map((e) => e.id), ...component.deletes, ...component.dormant.map((m) => m.entry.id)];
+  failedUnits.set(err, [...new Set(ids)]);
+}
+
+/** The ids noteFailedUnit tagged `err` with, if a flush threw it. */
+export function failedUnitOf(err: Error | null): string[] | undefined {
+  return err ? failedUnits.get(err) : undefined;
+}
+
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole, closing the transaction at the
  *  first component boundary after `holdMs`. Returns the next component's index and the ids that left `memories`. */
 export function batchWriteAndDeleteOn(
@@ -187,7 +201,13 @@ export function batchWriteAndDeleteOn(
   let next = from;
   try {
     do {
-      applyComponent(db, hippoRoot, components[next++], opts.snapshot, out);
+      const at = next++;
+      try {
+        applyComponent(db, hippoRoot, components[at], opts.snapshot, out);
+      } catch (err) {
+        if (err instanceof Error) noteFailedUnit(err, components[at]);
+        throw err;
+      }
     } while (next < components.length && now() - begunAt < opts.holdMs);
     const removed = new Set(out.removedIds);
     replaceFtsRows(db, out.fts.rows.filter((row) => !removed.has(row.id)), [...out.fts.staleIds, ...out.removedIds]);
@@ -198,7 +218,9 @@ export function batchWriteAndDeleteOn(
     }
     db.exec('COMMIT');
   } catch (error) {
-    if (db.isTransaction !== false) db.exec('ROLLBACK');
+    if (db.isTransaction !== false) {
+      try { db.exec('ROLLBACK'); } catch { /* preserve the original throw and its unit tag */ }
+    }
     throw error;
   }
   reportChunk(hippoRoot, out);

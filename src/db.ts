@@ -10,6 +10,7 @@ export {
   noteStoreBusy,
   withSharedStoreHandles,
   SERVER_DB_WAIT_MS,
+  SLEEP_DB_WAIT_MS,
   withBusyWait,
   scopedBusyWait,
   SqliteBlockedError,

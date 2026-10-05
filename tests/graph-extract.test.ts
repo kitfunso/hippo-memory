@@ -8,7 +8,9 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cpSync, rmSync } from 'node:fs';
+import { once } from 'node:events';
 import { createRequire } from 'node:module';
+import { Worker } from 'node:worker_threads';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
@@ -17,7 +19,7 @@ import { saveProjectBrief } from '../src/project-briefs.js';
 import { loadEntities, loadRelations, loadNeighborRelations, loadRelationsAmong } from '../src/graph/read.js';
 import type { Entity } from '../src/graph/types.js';
 import { extractGraph, extractGraphChunked } from '../src/graph-extract.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
 import { WRITE_BUDGET, type WriteBudget } from '../src/write-budget.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -27,6 +29,19 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
 };
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+// A thread, not a timer: the rebuild's busy wait blocks this thread until the holder commits.
+const HOLD_LOCK_WORKER = `
+const { parentPort, workerData } = require('node:worker_threads');
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(workerData.file);
+db.exec('PRAGMA busy_timeout = 5000');
+db.exec('BEGIN IMMEDIATE');
+parentPort.postMessage('locked');
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, workerData.ms);
+db.exec('COMMIT');
+db.close();
+`;
 
 /** The real clock with the hold a test picks, and a pause that yields once instead of waiting out the real gap. */
 const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({ ...WRITE_BUDGET, holdMs, pause });
@@ -304,5 +319,23 @@ describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', 
     expect(fromNames(loadRelations(home, 'default', { limit: 10 }))).toEqual(newestFirst);
     expect(fromNames(loadNeighborRelations(home, 'default', [pol.id]))).toEqual(newestFirst);
     expect(fromNames(loadRelationsAmong(home, 'default', [d1.id, d2.id, pol.id]))).toEqual(newestFirst);
+  });
+
+  it('a chunked rebuild inside a server request waits out a writer that holds the lock between chunks', async () => {
+    savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    for (let i = 0; i < 10; i++) saveDecision(home, 'default', { decisionText: `Call ${i} adopts RetryPolicy` });
+    let exited: Promise<unknown[]> | undefined;
+    const holdsOnFirstPause = budget(0, async () => {
+      if (exited) return yieldOnce();
+      const holder = new Worker(HOLD_LOCK_WORKER, { eval: true, workerData: { file: getHippoDbPath(home), ms: 400 } });
+      exited = once(holder, 'exit');
+      await once(holder, 'message');
+    });
+
+    const r = await withBusyWait(250, () => extractGraphChunked(home, 'default', holdsOnFirstPause));
+
+    expect(exited).toBeDefined();
+    expect(await exited).toEqual([0]);
+    expect(r.entities).toBe(11);
   });
 });
