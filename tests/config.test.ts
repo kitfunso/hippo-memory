@@ -193,6 +193,40 @@ describe('config.sharedStore', () => {
     }
   });
 
+  /** Flags `seen`, breaks its config, then asks through `other`, a second spelling of the same folder. */
+  function stickyThrough(seen: string, other: string): boolean {
+    writeConfig(JSON.stringify({ sharedStore: true }));
+    expect(isSharedStore(seen)).toBe(true);
+    writeConfig('{not json');
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    try {
+      return isSharedStore(other);
+    } finally {
+      warn.mockRestore();
+    }
+  }
+
+  it('stays true under a second spelling of the same folder', () => {
+    const other = process.platform === 'win32' ? `${tmp.toUpperCase()}${path.sep}` : `${tmp}${path.sep}.${path.sep}`;
+    expect(stickyThrough(tmp, other)).toBe(true);
+  });
+
+  it('stays true through a symlink to the same folder', () => {
+    const link = `${tmp}-link`;
+    try {
+      fs.symlinkSync(tmp, link, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (err) {
+      // Some boxes refuse links to a normal user; the spelling test still runs there.
+      if (err instanceof Error && 'code' in err && err.code === 'EPERM') return;
+      throw err;
+    }
+    try {
+      expect(stickyThrough(link, tmp)).toBe(true);
+    } finally {
+      fs.rmSync(link, { force: true });
+    }
+  });
+
   it('is exported from hippo-memory/server', () => {
     expect(server.isSharedStore).toBe(isSharedStore);
   });

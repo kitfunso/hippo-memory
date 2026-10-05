@@ -14,7 +14,11 @@ import { BadRequestError } from '../src/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { clearProjectIdentityCache, originFromSource } from '../src/project-identity.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
+import { repairOnceOnSleep } from '../src/project-merge.js';
+import { saveCompaction } from '../src/compaction-record.js';
+import { COMPACTION_MEMORY_TAG } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { summaryWith } from './_helpers/compaction-hooks.js';
 
 let tmp: string;
 const origHome = process.env.HIPPO_HOME;
@@ -100,6 +104,8 @@ describe('shared store origin stamp', () => {
       writeEntry(store, entry);
       const promoted = promoteToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
+      expect(promoted.source.startsWith('shared::')).toBe(true);
+      expect(originFromSource(promoted.source)).toBeNull();
       const shared = shareMemory(store, entry.id, { force: true, skipEmbed: true });
       expect(shared?.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(shared?.source)).toBeNull();
@@ -113,6 +119,7 @@ describe('shared store origin stamp', () => {
       writeEntry(store, entry);
       const promoted = promoteToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
+      expect(promoted.source).toBe(`promoted:${store}`);
       const shared = shareMemory(store, entry.id, { force: true, skipEmbed: true });
       const label = folderStamp === '' ? path.basename(path.dirname(store)) : folderStamp;
       expect(shared?.source.startsWith(`shared:${label}:`)).toBe(true);
@@ -150,6 +157,81 @@ describe('shared store origin stamp', () => {
       }
       rebuildIndex(store);
       expect(originOf(store, entry.id)).toBeNull();
+    }
+  });
+});
+
+interface TaggedStore { readonly store: string; readonly id: string }
+
+/** `<tmp>/c/hippo-team/.hippo`, whose folder's id `server-id` is unlike its legacy name `hippo-team`, holding one row a member tagged `hippo-team`. */
+function storeWithFoldableTag(flagged: boolean): TaggedStore {
+  const folder = path.join(tmp, 'c', 'hippo-team');
+  const store = path.join(folder, '.hippo');
+  fs.mkdirSync(store, { recursive: true });
+  fs.writeFileSync(path.join(folder, '.hippo-project.json'), JSON.stringify({ id: 'server-id' }));
+  initStore(store);
+  if (flagged) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
+  const entry = { ...createMemory('the member checkout is also called hippo-team'), origin_project: 'hippo-team' };
+  writeEntry(store, entry);
+  return { store, id: entry.id };
+}
+
+function repairOnce(store: string): void {
+  const db = openHippoDb(store);
+  try {
+    repairOnceOnSleep(db, store, 'default');
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+describe('the one-time sleep repair', () => {
+  it("leaves a flagged store's rows under the tag the caller gave them", () => {
+    const { store, id } = storeWithFoldableTag(true);
+    repairOnce(store);
+    expect(originOf(store, id)).toBe('hippo-team');
+  });
+
+  it("folds the legacy name into the folder's id on a store that is not shared", () => {
+    const { store, id } = storeWithFoldableTag(false);
+    repairOnce(store);
+    expect(originOf(store, id)).toBe('server-id');
+  });
+});
+
+const ITEM = 'The billing service drains its queue before every deploy.';
+
+function compact(store: string, cwd: string | null): void {
+  const payload = { sessionId: `s-${cwd === null ? 'none' : 'cwd'}`, trigger: 'auto', cwd, transcriptPath: null, compactSummary: summaryWith([ITEM]) };
+  expect(saveCompaction(store, payload, () => undefined).written).toBe(1);
+}
+
+const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>
+  loadAllEntries(store).filter((e) => e.tags.includes(COMPACTION_MEMORY_TAG)).map((e) => e.origin_project);
+
+describe('compaction items', () => {
+  it("take the session folder's project on a flagged store", () => {
+    const member = path.join(tmp, 'member', 'app');
+    fs.mkdirSync(path.join(member, '.git'), { recursive: true });
+    for (const { store } of layouts(true)) {
+      compact(store, member);
+      expect(itemOrigins(store)).toEqual(['app']);
+    }
+  });
+
+  it('are stamped NULL on a flagged store when the session folder is unknown', () => {
+    for (const { store } of layouts(true)) {
+      compact(store, null);
+      expect(itemOrigins(store)).toEqual([null]);
+    }
+  });
+
+  it('keep the folder stamp on a store that is not shared', () => {
+    const member = path.join(tmp, 'member', 'app');
+    fs.mkdirSync(path.join(member, '.git'), { recursive: true });
+    for (const { store, folderStamp } of layouts(false)) {
+      compact(store, member);
+      expect(itemOrigins(store)).toEqual([folderStamp]);
     }
   });
 });

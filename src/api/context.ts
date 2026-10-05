@@ -26,6 +26,7 @@ import { evalNow, isRecallBoostAblated } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
 import { BadRequestError } from '../api-errors.js';
 import { isSharedStore, loadConfig } from '../config.js';
+import { log } from '../log.js';
 import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
 import { detectSecret } from '../secret-detect.js';
@@ -205,6 +206,15 @@ export async function getContext(
   };
 }
 
+const isolationWarned = new Set<string>();
+
+/** A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses there. */
+function warnIsolationIgnored(hippoRoot: string): void {
+  if (isolationWarned.has(hippoRoot)) return;
+  isolationWarned.add(hippoRoot);
+  log.warn(`${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`);
+}
+
 function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
   // Global memories do not establish a project boundary for task state.
@@ -225,7 +235,8 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
     opts.currentProject ?? resolveProjectIdentity(process.cwd());
   // A caller with no project reads every row as its own; on a shared store those rows are other people's.
   if (sharedStore && projectId(currentProject).trim() === '') throw new BadRequestError('a shared store needs the caller\'s project');
-  const includeCrossProject = opts.crossProject === true || !isolationEnabled;
+  if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.hippoRoot);
+  const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
 
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their connection.
   const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;

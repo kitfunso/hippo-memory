@@ -6,6 +6,7 @@ import { transcriptNotesProject } from './agent-memories/claude-code.js';
 import { containerId, containerPrefix } from './agent-memories/source.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
+import { isSharedStore } from './config.js';
 import type { DatabaseSyncLike } from './db.js';
 import { getMeta, setMeta } from './db/meta.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
@@ -247,6 +248,8 @@ function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, gl
 
 /** A project store's rows, dormant snapshots and compaction records written before its id existed carry its folder name. */
 function ownLegacyFold(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): ProjectFold[] {
+  // A shared store's rows carry their callers' names, so one matching its folder's is a member's project, not a legacy tag.
+  if (isSharedStore(hippoRoot)) return [];
   const { name, legacyName } = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   if (legacyName === '' || legacyName === name) return [];
   const heldIn = (table: string) => db.prepare(`SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(tenantId, legacyName) !== undefined;

@@ -12,7 +12,7 @@ import { renderAmbientSummary } from '../ambient.js';
 import { errorMessage, log } from '../log.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { repairOnceOnSleep } from '../project-merge.js';
-import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport } from './shared.js';
+import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore } from './shared.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
@@ -165,9 +165,10 @@ async function cmdSleepCore(
 
   // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
   // Stays in cli.ts; api.sleep covers Phase 2-6 only.
-  if (!flags['no-learn'] && flags['dry-run']) {
+  const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
+  if (learn && flags['dry-run']) {
     console.log("Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` previews those).");
-  } else if (!flags['no-learn']) {
+  } else if (learn) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
       const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);

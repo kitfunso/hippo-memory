@@ -241,16 +241,19 @@ export function projectNames(project: ProjectRef): readonly string[] {
   return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter((n) => n !== '');
 }
 
-// SHORTCUT: prompt-hook.ts holds its own copy of this cap until its in-flight edit lands, then imports this one.
+// Each project name is matched against every candidate row, so the caller's list stays short.
 export const MAX_PROJECT_ALIASES = 10;
 
-/** Refuses a caller's project that is blank, which would stamp user-global, or past the alias and length caps. */
+/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
 export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
   if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   if ([name, ...aliases].some((n) => n.length > MAX_ID_LEN)) {
     throw new BadRequestError(`project names: at most ${MAX_ID_LEN} characters each`);
+  }
+  if ([name, ...aliases].some((n) => n !== n.trim().toLowerCase() || /[:\p{Cc}]/u.test(n))) {
+    throw new BadRequestError('project names: lowercase, not padded, with no colon or control character');
   }
 }
 

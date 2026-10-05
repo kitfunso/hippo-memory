@@ -1,40 +1,45 @@
 // The CLI thin client sends no project, so a routed remember stamps what the direct path stamps on the same store.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as client from '../src/client.js';
+import { cmdRemember } from '../src/cli/remember.js';
 import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { readEntry } from '../src/store/entry-reads.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import type { JsonValue } from '../src/json.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let tmp: string;
 let handle: ServerHandle | null = null;
 const origHome = process.env.HIPPO_HOME;
 
-/** `<tmp>/proj/.hippo` inside a git checkout, so the folder stamp is `proj`. */
+/** `<tmp>/proj/.hippo` inside a git checkout, so the folder stamp is `proj`; no embedder, so a write starts no model load. */
 function projectStore(config: Record<string, JsonValue>): string {
   fs.mkdirSync(path.join(tmp, 'proj', '.git'), { recursive: true });
   const store = path.join(tmp, 'proj', '.hippo');
   fs.mkdirSync(store, { recursive: true });
   initStore(store);
-  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify(config));
+  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ ...config, embeddings: { enabled: false } }));
   return store;
 }
 
-/** cmdRemember's store write (cli/remember.ts:138-155), without its salience gate, embedder and fact extraction. */
-function directRemember(store: string, text: string): string {
-  const entry = createMemory(text, { source: 'cli', tags: ['path:proj'] });
-  writeEntry(store, entry);
-  return entry.id;
+/** The real direct path, `hippo remember` with no server up; `force` skips the salience gate, which is not under test. */
+async function directRemember(store: string, text: string): Promise<string> {
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  try {
+    await cmdRemember(store, text, { force: true });
+  } finally {
+    log.mockRestore();
+  }
+  const row = loadAllEntries(store).find((e) => e.content === text);
+  expect(row).toBeDefined();
+  return row?.id ?? '';
 }
 
-/** The body the thin path posts (cli/remember.ts:514-521): no `project`. */
+/** The body the thin path posts (cli/remember.ts:515-522): no `project`. */
 async function thinRemember(store: string, text: string): Promise<string> {
   handle = await serve({ hippoRoot: store, port: 0 });
   const { id } = await client.remember(handle.url, undefined, {
@@ -49,7 +54,7 @@ async function thinRemember(store: string, text: string): Promise<string> {
 }
 
 async function bothOrigins(store: string): Promise<ReadonlyArray<string | null | undefined>> {
-  const direct = directRemember(store, 'the build cache lives under the shared drive');
+  const direct = await directRemember(store, 'the build cache lives under the shared drive');
   const thin = await thinRemember(store, 'the release branch is cut on thursdays');
   return [readEntry(store, direct)?.origin_project, readEntry(store, thin)?.origin_project];
 }

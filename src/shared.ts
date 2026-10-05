@@ -92,11 +92,11 @@ export function promoteToGlobal(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // A NULL row from a project store gets its folder back; a shared store's folder is no caller's project, so NULL stays.
+  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and the label names no path.
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `promoted:${localRoot}`,
+    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
     origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 

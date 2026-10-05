@@ -90,11 +90,21 @@ describe('POST /v1/memories on a shared store', () => {
       { name: 'acme/app', aliases: eleven },
       { name: 'x'.repeat(257) },
       { name: '' },
+      { name: 'Acme/App' },
+      { name: ' acme/app' },
+      { name: 'acme:app' },
+      { name: 'acme/app', aliases: ['App'] },
     ];
     for (const project of refused) {
       expect((await post(h, { content: ROW, project })).status, JSON.stringify(project).slice(0, 60)).toBe(400);
     }
     expect(loadAllEntries(store)).toHaveLength(0);
+  });
+
+  it('accepts the shape the resolver sends: a remote id with its aliases', async () => {
+    const h = await start({ sharedStore: true });
+    const project = { name: 'github.com/acme/app', aliases: ['acme-app', 'app'] };
+    expect(await originAfterPost(h, { content: ROW, project })).toBe('github.com/acme/app');
   });
 
   it('ignores legacy_name, so a folder name never lands', async () => {

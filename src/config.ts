@@ -479,12 +479,24 @@ export function loadConfig(hippoRoot: string): HippoConfig {
 
 const sharedStoreRoots = new Set<string>();
 
+/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
+function sharedStoreKey(hippoRoot: string): string {
+  let real: string;
+  try {
+    real = fs.realpathSync.native(hippoRoot);
+  } catch (err) {
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${err instanceof Error ? err.message : String(err)}`);
+    real = path.resolve(hippoRoot);
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+}
+
 /** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
  *  so a broken edit while a server runs cannot turn it off. Reads only this key: loadConfig has no cache. */
 export function isSharedStore(hippoRoot: string): boolean {
-  const root = path.resolve(hippoRoot);
-  if (sharedStoreRoots.has(root)) return true;
-  const configPath = path.join(root, 'config.json');
+  const key = sharedStoreKey(hippoRoot);
+  if (sharedStoreRoots.has(key)) return true;
+  const configPath = path.join(path.resolve(hippoRoot), 'config.json');
   if (!fs.existsSync(configPath)) return false;
   let raw: Partial<HippoConfig> | null;
   try {
@@ -494,7 +506,7 @@ export function isSharedStore(hippoRoot: string): boolean {
     return false;
   }
   if (raw?.sharedStore !== true) return false;
-  sharedStoreRoots.add(root);
+  sharedStoreRoots.add(key);
   return true;
 }
 
