@@ -7,7 +7,7 @@ import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
 import { log } from './log.js';
 import { isJsonString } from './json.js';
-import { certainDefect } from './automatic-memory-quality.js';
+import { certainDefect } from './memory-quality.js';
 
 export interface ExtractedFact {
   content: string;

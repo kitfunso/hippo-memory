@@ -18,21 +18,26 @@ const AUTOMATIC_DELETE_SQL = `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map((t
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing from an older schema is skipped. */
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
-  const ids = new Set<string>();
   const db = openHippoDb(hippoRoot);
   try {
-    for (const table of MEMORY_BACKED_TABLES) {
-      try {
-        // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
-        const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
-        for (const r of rows) ids.add(r.memory_id);
-      } catch (err) {
-        // A missing table is an older schema; any other error could hide a backing memory, so the caller stops.
-        if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
-      }
-    }
+    return memoriesBackingObjectsOn(db);
   } finally {
     closeHippoDb(db);
+  }
+}
+
+/** memoriesBackingObjects on the caller's handle. */
+export function memoriesBackingObjectsOn(db: DatabaseSyncLike): Set<string> {
+  const ids = new Set<string>();
+  for (const table of MEMORY_BACKED_TABLES) {
+    try {
+      // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
+      const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
+      for (const r of rows) ids.add(r.memory_id);
+    } catch (err) {
+      // A missing table is an older schema; any other error could hide a backing memory, so the caller stops.
+      if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
+    }
   }
   return ids;
 }

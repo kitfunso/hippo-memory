@@ -141,10 +141,11 @@ export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
     console.log(`Quality repair ${apply ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
     for (const issue of result.issues) console.log(`  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`);
     for (const blocker of result.blockers) console.log(`  Blocked: ${blocker}. Repair never upgrades a store; any other hippo command does, then run repair again.`);
-    if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: hippo dormant restore <id>.`);
+    const restore = `hippo dormant restore <id>${flags['global'] ? ' --global' : ''}`;
+    if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`);
     else if (apply && result.supported) console.log('Nothing moved: no unprotected memory has a certain defect.');
     for (const warning of result.warnings) console.log(`Warning: ${warning}`);
-    if (!apply) console.log('Preview only. Add --apply to preserve and hide eligible defects.');
+    if (!apply) console.log('Preview only. Add --apply to move set-aside memories to dormant storage. Pin a review memory to keep it.');
     return;
   }
   // `audit list` and `audit prune` -> audit-log subcommands.

@@ -22,7 +22,7 @@ import type { MemoryEntry } from './memory.js';
 import { rejectionDigest } from './rejection.js';
 import { escapeLike } from './escape.js';
 
-/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, or `hippo projects repair` splitting a two-project merge. */
+/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain defect. */
 export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
@@ -44,7 +44,7 @@ export interface DormantMemory {
   tags: string[];
   /** Live strength when it went dormant. */
   strength: number;
-  /** Why it went dormant (`decay` or `source-deleted`). */
+  /** Why it went dormant: one of the {@link DormantReason} values. */
   reason: string;
   /** ISO time it went dormant. */
   dormantAt: string;

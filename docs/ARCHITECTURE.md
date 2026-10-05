@@ -111,7 +111,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
 
 ### src/audit.ts
-- `CJK_LETTERS`: SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)
 
 ### src/auth.ts
@@ -148,6 +147,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `saveDerivedSnapshot`: Per-field merge (X1): a tool-heavy tail whose only user turns are tool_result arrays derives an empty task even though the summary is non-empty.
 
 ### src/capture/extract.ts
+- `extractFromTexts`: #493 replaced the DF2 clause-bounding below with whole sentences: capture keeps the full sentence a keyword sits in (Intl.Segmenter, with inline code and abbreviation dots masked) and the shared quality gate decides. The follow-up parses each transcript turn on its own, so a fence or spec heading never runs into the next turn, follows CommonMark fence rules, joins wrapped lowercase lines only when the line above has not ended its sentence, and dedupes across turns. The DF2 entries below describe code that no longer exists; T1's negation guarantee holds because the whole sentence is kept.
 - `DECISION_PATTERNS`: T1 (DF2): each pattern now carries TWO capture groups — group 1 is the discriminating keyword (plus its trailing separator, verbatim), group 2 is the content that follows it. Previously only the after-keyword content was captured, so a negation like "never" / "must not" was discarded and a prohibition inverted into an instruction ("Never use X" stored as "use X"). `extractFromPatterns` reassembles group1 + a clause-bounded group2 (T2, via `boundToClause` below) rather than reading a single fixed-width group — group 2's own reach is widened to {1,500} because the true stopping point is now found by content, not counted characters. Keeping the keyword in its own group (rather than folding it into one bigger capture) matters: `boundToClause` must scan for a clause boundary only in group 2, never in group 1 — several keywords end in their own colon ("error:", "rule:", "decision:") which is not a clause boundary in the prose sense and would wrongly truncate the capture down to just the keyword if scanned.
 - `PREFERENCE_PATTERNS`: PREFERENCE_PATTERNS[0] keeps its pre-DF2 two-capture-group shape (match[1]-only, unbounded) — out of scope here, backlogged. See extractFromPatterns' reference check against this exact array element.
 - `boundToClause`: T2 (DF2): bound a keyword+content capture to its clause instead of a fixed character count.
@@ -541,6 +541,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/mcp/session-state.ts
 - `sessionRecallHistoryMcp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the MCP pipeline. Separate from CLI/HTTP rings per plan v3 architecture (per-pipeline rings; no IPC).
+
+### src/memory-quality.ts
+- `CJK_LETTERS` (moved from src/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
+- `module header`: #493 moved the audit's text checks here and made them the one gate for automatic memories: capture, git learning, sleep merges, compaction memories, extracted facts and DAG summaries. A person's memory is never judged on its wording. The follow-up split the defects into certain ones (rejected, never reused by sleep or auto-share, set aside by `hippo audit repair`) and uncertain ones (`possible-fragment` is stored and listed for review). Provenance, not text, decides who is held to the gate: `isAutomaticEntry` reads source, tags, `extracted_from`, `dag_level` and confidence.
 
 ### src/memory-value-weights.ts
 - `module header`: LC2-E2 frozen learned memory-value weight vector. GENERATED FROM the E2 frozen artifact
