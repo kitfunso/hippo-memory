@@ -41,12 +41,14 @@ import { type JsonValue, isJsonString, readJsonFile } from '../json.js';
 import { escapeRegex } from '../escape.js';
 import { errorMessage, log } from '../log.js';
 
+/** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {
   settings: string;
   logFile: string;
   display: string;
 }
 
+/** What installJsonHooks wrote, migrated or left alone in one target's settings file. */
 export interface InstallResult {
   target: JsonHookTarget;
   settingsPath: string;
@@ -67,6 +69,7 @@ export interface InstallResult {
   invalidJson: boolean;
 }
 
+/** The paths for `target` under the current home directory; reads and writes nothing. */
 export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
   const home = homeDir();
   const logsDir = path.join(home, '.hippo', 'logs');
@@ -220,6 +223,7 @@ function installCodexHooks(settingsPath: string, settings: JsonValue): InstallRe
   return { ...result, installedUserPromptSubmit, installedCompactResume };
 }
 
+/** Adds hippo's hooks to `target`'s settings file and migrates older hippo entries; a file that is not JSON stays untouched. */
 export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const { settings: settingsPath, logFile } = resolveJsonHookPaths(target);
   const dir = path.dirname(settingsPath);
@@ -316,7 +320,7 @@ function writeInPlace(target: string, text: string): void {
 }
 
 /** Swaps the file in with one rename, so a crash mid-write cannot leave a truncated settings.json that Claude Code cannot parse. */
-function writeSettingsFile(file: string, settings: JsonValue): void {
+export function writeSettingsFile(file: string, settings: JsonValue): void {
   const target = writeTarget(file);
   const text = JSON.stringify(settings, null, 2) + '\n';
   const old = fs.statSync(target, { throwIfNoEntry: false });
@@ -481,6 +485,7 @@ function warnKeptHippoHandlers(settingsPath: string, hooks: JsonObject): void {
   process.stderr.write(`hippo kept these hook handlers in ${settingsPath} because they do not start with a hippo command; remove any that are hippo's by hand: ${kept.map((c) => JSON.stringify(c)).join(', ')}\n`);
 }
 
+/** Removes hippo's own hook handlers from `target`'s settings file and keeps every other handler; true when the file changed. */
 export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return false;

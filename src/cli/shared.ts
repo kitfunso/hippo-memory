@@ -13,9 +13,10 @@ import { isInitialized } from '../store/open.js';
 import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
-import { type HippoConfig, loadConfig } from '../config.js';
+import type { HippoConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
-import { ensurePilotArm, hashArm, readPilotArm } from '../pilot-arm.js';
+import { withLedgerDb } from '../ledger-db.js';
+import { sessionPilotArm } from '../pilot-arm.js';
 import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
@@ -487,35 +488,6 @@ export function hookStoreRoot(hippoRoot: string): string {
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
 }
 
-/**
- * Run `fn` against the token ledger's store: the local store when it is
- * initialized, else the global one (the per-prompt hook runs in directories
- * without a local store). Best-effort: returns undefined and never throws,
- * because a ledger failure must not break context or recall.
- */
-export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T | undefined {
-  let root: string | null = null;
-  try {
-    if (isInitialized(hippoRoot)) root = hippoRoot;
-    else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
-  } catch {
-    // An unreadable store root means no ledger write; the ledger must never break context or recall.
-    return undefined;
-  }
-  if (root === null) return undefined;
-  let db: ReturnType<typeof openHippoDb> | undefined;
-  try {
-    db = openHippoDb(root);
-    return fn(db);
-  } catch (error) {
-    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
-    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
-    return undefined;
-  } finally {
-    if (db) closeHippoDb(db);
-  }
-}
-
 export function learnFromRepo(
   hippoRoot: string,
   repoPath: string,
@@ -566,17 +538,7 @@ export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T 
   }
 }
 
-/**
- * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
- * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
- */
+/** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
 export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
-  if (sessionId === undefined || sessionId.trim() === '') return false;
-  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
-  if (root === null) return false;
-  const rate = loadConfig(root).pilot.holdoutRateBp;
-  if (rate <= 0) return false;
-  const arm = withLedgerDb(hippoRoot, (db) =>
-    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
-  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
+  return sessionPilotArm(hippoRoot, tenantId, sessionId, write) === 'holdout';
 }
