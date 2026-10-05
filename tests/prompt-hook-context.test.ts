@@ -138,6 +138,13 @@ describe('promptHookContext', () => {
     expect(ledger(store, `event = 'inject'`)).toEqual([]);
   });
 
+  it('books the holdout arm row under the caller tenant, never the default one', async () => {
+    const store = makeProject(path.join(tmp, 'p'), 10000);
+    const ctx: Context = { hippoRoot: store, tenantId: 't1', actor: adminActor('prompt-hook-test') };
+    expect(await promptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({ arm: 'holdout', stdout: '' });
+    expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.tenant_id])).toEqual([['h-t1', 't1']]);
+  });
+
   it('a treatment session gets the block and a `hippo` arm row', async () => {
     const store = makeProject(path.join(tmp, 'p'), 5000);
     pin(store, 'PINNED: always check the rollback plan', 'p');

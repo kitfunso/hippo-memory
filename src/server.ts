@@ -465,7 +465,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
-  assertAddonRoutes(opts.routes ?? []);
+  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
+  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
+  assertAddonRoutes(routes);
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
@@ -479,7 +481,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served: ResolvedServeOpts = { ...opts, store: opts.store ?? sqliteStore(opts.hippoRoot) };
+  const served: ResolvedServeOpts = { ...opts, routes, store: opts.store ?? sqliteStore(opts.hippoRoot) };
   const { kind } = served.store;
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 

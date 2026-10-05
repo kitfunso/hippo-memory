@@ -92,6 +92,28 @@ describe('an add-on route behind serve()', () => {
     expect(await post(ECHO, '{}')).toEqual({ status: 404, reply: { error: 'no such thing' } });
   });
 
+  it('answers 500 with a request id, never a 200, when the handler value is not JSON', async () => {
+    const circular: unknown[] = [];
+    circular.push(circular);
+    const bad: unknown[] = [undefined, circular];
+    // SAFETY: both values break the JsonValue contract on purpose, the way an untyped add-on could.
+    await start(bad.map((value, i) => route(`/v1/x-bad-${i}`, async () => value as JsonValue)));
+    for (const i of [0, 1]) {
+      expect(await post(`/v1/x-bad-${i}`, '{}')).toEqual({ status: 500, reply: { error: 'internal server error', requestId: expect.any(String) } });
+    }
+  });
+
+  it('keeps the routes it checked at boot when the caller changes its array or a route afterwards', async () => {
+    const first = { ...echo() };
+    const routes: AddonRoute[] = [first];
+    await start(routes);
+    routes.push(route('/v1/x-late', async () => ({ late: true })));
+    first.path = '/v1/x-renamed';
+    expect((await post('/v1/x-late', '{}')).status).toBe(404);
+    expect((await post('/v1/x-renamed', '{}')).status).toBe(404);
+    expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
+  });
+
   it('serves POST only: a GET on the add-on path is core\'s 404', async () => {
     await start([echo()]);
     const res = await fetch(`${handle!.url}${ECHO}`, { headers: { authorization: `Bearer ${apiKey}` } });

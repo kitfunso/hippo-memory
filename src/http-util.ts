@@ -48,9 +48,12 @@ export function mapApiError<E>(err: E): ApiErrorReply {
   return { status: 500, message: INTERNAL_ERROR_MESSAGE };
 }
 
+/** Serialises before the head goes out, so a body that is not JSON still reaches the caller's error reply. */
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {
+  const text = JSON.stringify(body);
+  if (text === undefined) throw new Error('response body is not JSON');
   res.writeHead(status, JSON_HEADERS);
-  res.end(JSON.stringify(body));
+  res.end(text);
 }
 
 /**
