@@ -1,22 +1,11 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
-import { evalNow } from '../ablation.js';
 import * as path from 'path';
 import { MemoryEntry } from '../memory.js';
 import { isInitialized } from '../store/open.js';
-import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from '../recall-trace.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../delivery-recorder.js';
 import { loadConfig } from '../config.js';
-import { openHippoDb, isSqliteBusy, noteStoreBusy } from '../db.js';
-import {
-  blockHash,
-  estimateTokens,
-  isSubagentPayload,
-  lastSentState,
-  recordTokenUse,
-  shouldSkipUnchanged,
-  type TokenSurface,
-} from '../token-ledger.js';
+import { blockHash, estimateTokens, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { isGlobalStoreRoot } from '../project-identity.js';
 import { autoDetectContext } from '../context-auto.js';
 import { detectScope } from '../scope.js';
@@ -25,14 +14,15 @@ import { readStdinBounded } from '../stdin.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { renderAmbientSummary } from '../ambient.js';
+import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../context-render.js';
 import {
-  contextCost,
-  contextHeading,
-  contextLine,
-  crossProjectHeading,
-  crossProjectLine,
-  settleTokens,
-} from '../context-render.js';
+  additionalContextOutput,
+  type ContextView,
+  flushDeliveryRecorder,
+  hasContextData,
+  toRenderItems,
+  withLedgerDb,
+} from '../prompt-hook.js';
 import { printError } from './output.js';
 import {
   parseLimitFlag,
@@ -46,7 +36,6 @@ import {
   hostSessionId,
   captureConsole,
   hookStoreRoot,
-  withLedgerDb,
   runHookWithStores,
   inPilotHoldout,
 } from './shared.js';
@@ -87,29 +76,6 @@ function startDeliveryRecorder(
     printError(`[hippo] delivery ledger skipped:${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
-}
-
-/** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
-function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
-  if (rec === null) return;
-  try {
-    rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
-  } catch (error) {
-    // Pinned stderr text, as in the recorder build above.
-    printError(`[hippo] delivery ledger write failed:${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-/** What one render needs once api.getContext has answered. */
-interface ContextView {
-  readonly hippoRoot: string;
-  readonly tenantId: string;
-  readonly ledgerSessionId: string | undefined;
-  readonly payloadSessionId: string | undefined;
-  readonly pinnedOnly: boolean;
-  readonly framing: string;
-  readonly rec: DeliveryRecorder | null;
-  readonly result: api.ContextResult;
 }
 
 interface HookPayload {
@@ -189,7 +155,8 @@ async function renderContext(
   if (format === 'json') {
     renderContextJson(view, query);
   } else if (format === 'additional-context') {
-    renderAdditionalContext(view);
+    const stdout = additionalContextOutput(view);
+    if (stdout) process.stdout.write(stdout);
   } else {
     renderContextMarkdown(view);
   }
@@ -247,21 +214,6 @@ function buildContextOpts(flags: Record<string, string | boolean | string[]>, in
   };
 }
 
-function hasContextData(result: api.ContextResult): boolean {
-  return Boolean(
-    result.entries.length > 0 ||
-    result.activeSnapshot ||
-    result.sessionHandoff ||
-    (result.recentEvents && result.recentEvents.length > 0),
-  );
-}
-
-type RenderItem = { entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean };
-
-function toRenderItems(entries: api.ContextResultEntry[]): RenderItem[] {
-  return entries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
-}
-
 function renderContextJson(view: ContextView, query: string): void {
   const { result, rec } = view;
   const output = result.entries.map((r) => ({
@@ -291,117 +243,6 @@ function renderContextJson(view: ContextView, query: string): void {
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
     });
     flushDeliveryRecorder(rec, db);
-  });
-}
-
-/** The hook format: a skippable static block (snapshot, handoff, events, pins, recent-N) and a never-skipped recall block. */
-function renderAdditionalContext(view: ContextView): void {
-  const { result, rec, framing } = view;
-  const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
-  const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
-  const staticItems = toRenderItems(staticEntries);
-  const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
-
-  const staticBlock = settleTokens((t) => captureConsole(() => {
-    if (result.activeSnapshot) printActiveTaskSnapshot(result.activeSnapshot);
-    if (result.sessionHandoff) printHandoff(result.sessionHandoff);
-    if (result.recentEvents && result.recentEvents.length > 0) {
-      printSessionEvents(result.recentEvents);
-    }
-    // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
-    if (staticItems.length > 0) printContextMarkdown(staticItems, t, framing, { showStrength: false });
-    printCrossProjectSection(staticCrossEntries);
-  }));
-  const recallBlock = recallItems.length > 0
-    ? settleTokens((t) => captureConsole(() => printContextMarkdown(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' })))
-    : '';
-  if (!staticBlock.trim() && !recallBlock.trim()) {
-    rec?.delivered({ state: 'empty' });
-    return;
-  }
-
-  const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
-  const sendStatic = staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
-
-  const finalStatic = sendStatic ? staticBlock : '';
-  const additionalContext = finalStatic && recallBlock
-    ? `${finalStatic}\n\n${recallBlock}`
-    : finalStatic || recallBlock;
-  const staticReused = !sendStatic && staticBlock.trim().length > 0;
-  if (!additionalContext.trim()) {
-    rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
-    return;
-  }
-
-  const payload = {
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext,
-    },
-  };
-  process.stdout.write(JSON.stringify(payload));
-  rec?.delivered({
-    state: staticReused ? 'reused-recall-sent' : 'sent',
-    staticHash: staticBlock.trim() ? blockHash(staticBlock) : null,
-    recallHash: recallBlock ? blockHash(recallBlock) : null,
-    emittedText: additionalContext,
-    staticReused,
-  });
-  if (finalStatic || recallBlock) {
-    recordAdditionalContextRows(view, surface, { text: finalStatic, items: staticItems.length }, { text: recallBlock, items: recallItems.length });
-  }
-}
-
-/** True, after booking the skip row, when the hook may omit a static block this session already holds. */
-function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlock: string, recallBlock: string, staticCount: number): boolean {
-  const { hippoRoot, payloadSessionId, rec } = view;
-  if (!view.pinnedOnly || payloadSessionId === undefined) return false;
-  const injectCfg = loadConfig(hippoRoot).pinnedInject;
-  if (injectCfg.skipUnchanged === false) return false;
-  const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
-    ? injectCfg.refreshTurns
-    : 10;
-  // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
-  const staticHash = blockHash(staticBlock);
-  const last = withLedgerDb(hippoRoot, (db) =>
-    lastSentState(db, view.tenantId, payloadSessionId, surface));
-  if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
-  withLedgerDb(hippoRoot, (db) => {
-    recordTokenUse(db, {
-      tenantId: view.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-      items: staticCount, tokens: estimateTokens(staticBlock), hash: staticHash,
-    });
-    if (recallBlock.trim()) return;
-    rec?.delivered({ state: 'reused', staticHash, staticReused: true });
-    flushDeliveryRecorder(rec, db);
-  });
-  return true;
-}
-
-interface InjectedBlock { readonly text: string; readonly items: number }
-
-/** One connection for both rows; each insert in its own try so one failing doesn't skip the other. */
-function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, staticPart: InjectedBlock, recallPart: InjectedBlock): void {
-  withLedgerDb(view.hippoRoot, (db) => {
-    if (staticPart.text) {
-      try {
-        recordTokenUse(db, {
-          tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface, event: 'inject',
-          items: staticPart.items, tokens: estimateTokens(staticPart.text), hash: blockHash(staticPart.text),
-        });
-      // Best-effort row: only a busy store is actionable, and a ledger failure must not break the hook.
-      } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
-    }
-    if (recallPart.text) {
-      try {
-        recordTokenUse(db, {
-          tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: 'hook_recall', event: 'inject',
-          items: recallPart.items, tokens: estimateTokens(recallPart.text), hash: blockHash(recallPart.text),
-        });
-      // Same best-effort rule as the inject row above.
-      } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
-    }
-    flushDeliveryRecorder(view.rec, db);
   });
 }
 
@@ -438,11 +279,8 @@ function renderContextMarkdown(view: ContextView): void {
   });
 }
 
-/** An explicit header lets agents and humans tell borrowed context from project memory. */
 function printCrossProjectSection(items: api.ContextResultEntry[]): void {
-  if (items.length === 0) return;
-  console.log(crossProjectHeading(items.length));
-  for (const item of items) console.log(crossProjectLine(item));
+  for (const line of crossProjectLines(items)) console.log(line);
 }
 
 /** @internal Exported for the render snapshot test; not a stable public API. */
@@ -452,10 +290,7 @@ export function printContextMarkdown(
   framing: string = 'observe',
   opts: { showStrength?: boolean; heading?: string } = {}
 ): void {
-  const now = evalNow();
-  const showStrength = opts.showStrength !== false;
-  console.log(contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens));
-  for (const item of items) console.log(contextLine(item, framing, showStrength, now));
+  for (const line of contextBlockLines(items, totalTokens, framing, opts)) console.log(line);
 }
 
 export async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {

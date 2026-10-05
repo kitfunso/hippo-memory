@@ -38,6 +38,7 @@ import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
 import { readStdinBounded } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
+import { withLedgerDb } from '../prompt-hook.js';
 import { printError } from './output.js';
 import {
   type CommandContext,
@@ -49,7 +50,6 @@ import {
   resetHookInjection,
   captureConsole,
   hookStoreRoot,
-  withLedgerDb,
   runHookWithStores,
   inPilotHoldout,
 } from './shared.js';

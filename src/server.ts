@@ -21,6 +21,7 @@ import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFo
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './server/routes/admin.js';
 import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './server/routes/customer-notes.js';
 import { handleCloseDecision, handleCreateDecision, handleGetDecision, handleListDecisions, handleSupersedeDecision } from './server/routes/decisions.js';
+import { handleHookEvent } from './server/routes/hooks.js';
 import { handleCloseIncident, handleCreateIncident, handleGetIncident, handleListIncidents, handleResolveIncident } from './server/routes/incidents.js';
 import { handleApplyOutcome, handleArchiveMemory, handleCreateMemory, handleForgetMemory, handleGetGraph, handlePromoteMemory, handleSleep, handleSupersedeMemory } from './server/routes/memories.js';
 import { handleClosePolicy, handleCreatePolicy, handleGetPolicy, handleListPolicies, handlePoliciesAsOf, handleSupersedePolicy } from './server/routes/policies.js';
@@ -92,6 +93,7 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'DELETE', pattern: '/v1/memories/:id', handler: handleForgetMemory },
   { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
   { method: 'GET', path: '/v1/context', handler: handleGetContext },
+  { method: 'POST', pattern: '/v1/hooks/:event', handler: handleHookEvent },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
   { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
   { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
