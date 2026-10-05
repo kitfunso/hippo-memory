@@ -12,7 +12,7 @@ const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
 const { textOverlap } = await distImport('tokenize.js');
 const { estimateTokens, blockHash, shouldSkipUnchanged } = await distImport('token-ledger.js');
-const { isContentWorthStoring } = await distImport('audit.js');
+const { isWorthSurfacing } = await distImport('memory-quality.js');
 const { ambientSecretAdmit } = await distImport('api.js');
 const { resolveProjectIdentity, classifyOriginProject } = await distImport('project-identity.js');
 const { passesScopeFilterForRecall } = await distImport('recall-scope.js');
@@ -275,7 +275,7 @@ function selectA1(localEntries, globalEntries, ts, projectName) {
       if (byCreated !== 0) return byCreated;
       return b.entry.id < a.entry.id ? -1 : b.entry.id > a.entry.id ? 1 : 0;
     })
-    .filter(({ entry }) => entry.pinned || isContentWorthStoring(entry.content))
+    .filter(({ entry }) => entry.pinned || isWorthSurfacing(entry))
     .slice(0, 5);
 
   for (const r of recent) {
@@ -335,7 +335,7 @@ function z1Candidates(localAdm, globalAdm, promptTok, opts = {}) {
     { entries: globalAdm, isGlobal: true },
   ]) {
     for (const entry of entries) {
-      if (entry.pinned || seen.has(entry.id) || !isContentWorthStoring(entry.content)) continue;
+      if (entry.pinned || seen.has(entry.id) || !isWorthSurfacing(entry)) continue;
       if (excludeAutoCaptured && entry.tags.includes('auto-captured')) continue;
       seen.add(entry.id);
       const tokens = tokensOf(entry);

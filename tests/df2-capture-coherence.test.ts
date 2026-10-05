@@ -232,7 +232,7 @@ describe('DF2 capture coherence', () => {
     expect(isItems[0].content.toLowerCase()).toContain('config file');
   });
 
-  // Shapes that each broke the old clause scanner in review; whole-sentence capture must return every one intact.
+  // Commas, brackets and apostrophes inside a sentence must not cut it.
   it('13. adversarial prose corpus: real-world text shapes come through as whole sentences', () => {
     const corpus = [
       "Always ensure it's enabled, then restart the service.",

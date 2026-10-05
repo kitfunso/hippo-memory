@@ -5,8 +5,9 @@ import type { JsonObject } from './working-memory.js';
 import { log } from './log.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
 import type { JsonValue } from './json.js';
-import { assessAutomaticMemory, hasNoSpecificity, isAutomaticEntry, isReleaseCommitNoise, substantiveWordCount } from './automatic-memory-quality.js';
-export { STOP_WORDS } from './automatic-memory-quality.js';
+import {
+  assessAutomaticMemory, hasNoSpecificity, isAutomaticEntry, isFragment, isReleaseCommitNoise, substantiveWordCount,
+} from './memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -21,14 +22,6 @@ export interface AuditResult {
   total: number;
   issues: AuditIssue[];
   clean: number;
-}
-
-function isFragment(text: string): boolean {
-  const trimmed = text.trim();
-  if (trimmed.startsWith('to ') && trimmed.length < 50) return true;
-  if (trimmed.startsWith('for ') && trimmed.length < 50) return true;
-  if (trimmed.startsWith('and ') && trimmed.length < 50) return true;
-  return false;
 }
 
 export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
@@ -69,9 +62,9 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
     return { memoryId: entry.id, content, severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
   }
 
-  const assessment = assessAutomaticMemory(content);
-  if (!assessment.accepted) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: `automatic memory defect: ${assessment.reason}` };
+  const { reason } = isAutomaticEntry(entry) ? assessAutomaticMemory(content) : { reason: null };
+  if (reason !== null) {
+    return { memoryId: entry.id, content, severity: 'warning', reason: `automatic memory defect: ${reason}` };
   }
 
   return null;
@@ -89,19 +82,6 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
     issues,
     clean: entries.length - issues.length,
   };
-}
-
-/** Admission check for text no person typed: capture and compaction items. */
-export function isContentWorthStoring(content: string): boolean {
-  return assessAutomaticMemory(content).accepted;
-}
-
-/** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the older, looser floor. */
-export function isWorthSurfacing(entry: MemoryEntry): boolean {
-  if (isAutomaticEntry(entry)) return isContentWorthStoring(entry.content);
-  const text = entry.content.trim();
-  return text.length >= 10 && !isReleaseCommitNoise(text) && !isFragment(text)
-    && substantiveWordCount(text) >= 2 && !(text.length < 40 && hasNoSpecificity(text));
 }
 
 // ---------------------------------------------------------------------------

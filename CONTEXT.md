@@ -8,10 +8,20 @@ claim cards. These terms have one fixed meaning in the hippo code, the `hippo` C
 ### Memory lifecycle
 
 **Dormant memory**:
-A memory sleep moved out of active memory instead of deleting it, because it faded
-(`dormant.enabled`, on by default). It keeps its content and can be restored or forgotten for
-good until `dormant.retentionDays` expires it.
+A memory moved out of active memory instead of being deleted: sleep's decay pass when it
+faded (`dormant.enabled`, on by default), an imported agent memory whose note was deleted,
+`hippo projects repair`, or `hippo audit repair` setting aside an automatic memory with a certain
+defect. It keeps its content and can be restored or forgotten for good until
+`dormant.retentionDays` expires it. A memory audit repair set aside comes back `verified`.
 _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
+
+**Automatic memory**:
+A memory hippo wrote without a person choosing the words: session capture, git learning,
+a sleep merge, a compaction memory, an extracted fact or a DAG summary, at confidence observed
+or inferred. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
+one with a certain defect is never reused by sleep or shared, and `hippo audit repair` can set
+it aside. A person's memory is never judged on its wording.
+_Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
 
 **Churn-stale memory**:
 A memory whose named file, code symbol or `npm run` script changed or disappeared in its own

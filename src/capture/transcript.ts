@@ -6,8 +6,8 @@ import { isObjectLike, isStringValue } from '../capture-contract.js';
 /**
  * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
- * thinking blocks, tool_use, and tool_result noise. Output is fed to the
- * existing `extractFromText` pipeline.
+ * thinking blocks, tool_use, and tool_result noise. Capture reads the same
+ * turns through `sessionTail`, one text per turn.
  *
  * Exported for tests.
  */
@@ -139,15 +139,17 @@ export function summariseTranscript(jsonl: string): string {
   return summariseSessionTurns(collectSessionTurns(jsonl));
 }
 
-export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
-  const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.text);
-  const assistantTexts = turns.filter((t) => t.role === 'assistant').map((t) => t.text);
-  if (userMessages.length === 0 && assistantTexts.length === 0) return '';
+/** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
+export function sessionTail(turns: readonly SessionTurn[]) {
+  return {
+    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-20),
+    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-10),
+  };
+}
 
-  // Keep the tail: last ~20 user turns and last ~10 assistant replies.
-  // Session-end is about what was decided near the end, not at the start.
-  const tailUsers = userMessages.slice(-20);
-  const tailAssistants = assistantTexts.slice(-10);
+export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
+  const { users: tailUsers, assistants: tailAssistants } = sessionTail(turns);
+  if (tailUsers.length === 0 && tailAssistants.length === 0) return '';
 
   return [
     '# Session Summary',

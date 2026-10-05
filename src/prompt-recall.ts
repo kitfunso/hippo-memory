@@ -1,6 +1,6 @@
 /** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
 import { tokenize } from './tokenize.js';
-import { STOP_WORDS } from './audit.js';
+import { STOP_WORDS } from './memory-quality.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
 
