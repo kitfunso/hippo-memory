@@ -342,8 +342,9 @@ export const VERB_USAGE = {
   audit: [`
   audit [--fix]            Check memory quality (--fix removes junk)
     audit repair [--apply] Preview repair of memories hippo wrote itself; --apply moves certain
-                           defects to dormant storage
-      --json               Report ids, reasons, protections and schema blockers as JSON
+                           defects to dormant storage. Sleep and the daily runner apply it once
+                           per store after an upgrade
+      --json              Report ids, reasons, protections and schema blockers as JSON
       --global             Operate on the global store without changing its schema
                            Writes a database backup first; undo with hippo dormant restore <id>,
                            which marks the memory verified so repair leaves it alone. Sleep's

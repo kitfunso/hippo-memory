@@ -3,7 +3,7 @@ import path from 'node:path';
 import { appendAuditEvent } from './audit.js';
 import { withBackup } from './db/backup.js';
 import { DatabaseSync, type DatabaseSyncLike } from './db/sqlite.js';
-import { getMeta } from './db/meta.js';
+import { getMeta, setMeta } from './db/meta.js';
 import { tableColumns } from './db/tables.js';
 import { assertBinaryCompatible } from './db/migrate.js';
 import { insertDormantRow, listDormantSnapshots } from './dormant.js';
@@ -156,7 +156,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
   return true;
 }
 
-function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string): QualityRepairResult {
+function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string, doneKey?: string): QualityRepairResult {
   db.exec('BEGIN IMMEDIATE');
   try {
     const result = initialResult(db, root, tenantId);
@@ -170,6 +170,7 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
       if (setAsideIssue(db, entries.get(issue.id)!, issue.reason, now, backup)) appliedIds.push(issue.id);
       else warnings.push(`Kept ${issue.id}: the store's delete guard protects it.`);
     }
+    if (doneKey) setMeta(db, doneKey, '1');
     db.exec('COMMIT');
     return { ...result, appliedIds, backup, warnings };
   } catch (error) {
@@ -178,25 +179,47 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
   }
 }
 
-/** Preview by default; apply backs the database up, then moves certain defects to dormant storage, without running migrations. */
-export function repairAutomaticMemories(root: string, opts: { tenantId: string; apply?: boolean }): QualityRepairResult {
+function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneKey?: string }): QualityRepairResult {
+  db.exec('BEGIN');
+  const initial = initialResult(db, root, opts.tenantId);
+  db.exec('ROLLBACK');
+  if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) return initial;
+  db.exec('PRAGMA foreign_keys = ON');
+  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneKey));
+  const warnings = [...result.warnings];
+  for (const id of result.appliedIds) {
+    if (!purgeMirrorBestEffort(root, id, false, 'quality repair')) warnings.push(`Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`);
+  }
+  return { ...result, warnings };
+}
+
+function openForRepair<T>(root: string, readOnly: boolean, fn: (db: DatabaseSyncLike) => T): T {
   const file = path.join(root, 'hippo.db');
   if (!fs.existsSync(file)) throw new Error(`No existing Hippo database at ${file}`);
-  const db = new DatabaseSync(file, { readOnly: !opts.apply });
+  const db = new DatabaseSync(file, { readOnly });
   try {
     db.exec('PRAGMA busy_timeout = 5000');
-    db.exec('BEGIN');
-    const initial = initialResult(db, root, opts.tenantId);
-    db.exec('ROLLBACK');
-    if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) return initial;
-    db.exec('PRAGMA foreign_keys = ON');
-    const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup));
-    const warnings = [...result.warnings];
-    for (const id of result.appliedIds) {
-      if (!purgeMirrorBestEffort(root, id, false, 'quality repair')) warnings.push(`Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`);
-    }
-    return { ...result, warnings };
+    return fn(db);
   } finally {
     db.close();
   }
+}
+
+/** Preview by default; apply backs the database up, then moves certain defects to dormant storage, without running migrations. */
+export function repairAutomaticMemories(root: string, opts: { tenantId: string; apply?: boolean }): QualityRepairResult {
+  return openForRepair(root, !opts.apply, (db) => repairOn(db, root, opts));
+}
+
+const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
+
+/** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command; null once done. */
+export function repairQualityOnce(root: string, tenantId: string): QualityRepairResult | null {
+  return openForRepair(root, false, (db) => {
+    if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
+    // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
+    const result = repairOn(db, root, { tenantId, apply: true, doneKey: AUTO_REPAIR_META_KEY });
+    // An unsupported schema changed nothing, so the next run tries again once a migration has run.
+    if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
+    return result;
+  });
 }

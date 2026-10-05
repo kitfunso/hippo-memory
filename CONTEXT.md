@@ -11,7 +11,7 @@ claim cards. These terms have one fixed meaning in the hippo code, the `hippo` C
 A memory moved out of active memory instead of being deleted: sleep's decay pass when it
 faded (`dormant.enabled`, on by default), an imported agent memory whose note was deleted,
 `hippo projects repair`, or `hippo audit repair` setting aside an automatic memory with a certain
-defect. It keeps its content and can be restored or forgotten for good until
+defect, which sleep and the daily runner also do once per store after an upgrade. It keeps its content and can be restored or forgotten for good until
 `dormant.retentionDays` expires it. A memory audit repair set aside comes back `verified`.
 _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
 
