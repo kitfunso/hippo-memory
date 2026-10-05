@@ -263,9 +263,13 @@ describe('POST /v1/hooks/prompt', () => {
   });
 });
 
-describe('hippo-memory/project-identity', () => {
-  it('resolves by package name from the build, for the enterprise hook client', () => {
-    const script = "const m = await import('hippo-memory/project-identity'); console.log(typeof m.resolveProjectIdentity);";
+describe('package exports the enterprise hook client loads', () => {
+  it.each([
+    ['hippo-memory/project-identity', 'resolveProjectIdentity'],
+    ['hippo-memory/json-hooks', 'uninstallJsonHooks'],
+    ['hippo-memory/json-hooks', 'resolveJsonHookPaths'],
+  ])('%s exports %s from the build', (specifier, name) => {
+    const script = `const m = await import('${specifier}'); console.log(typeof m.${name});`;
     // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: REPO, encoding: 'utf-8', timeout: 30_000 });
     expect(child.status, child.stderr).toBe(0);
