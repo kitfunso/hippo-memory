@@ -5,7 +5,7 @@ import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields, isContentWorthStoring } from '../audit.js';
+import { appendAuditEvent, auditQueryFields, isWorthSurfacing } from '../audit.js';
 import { rankBothStores } from '../shared.js';
 import { evalNow } from '../ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
@@ -261,7 +261,7 @@ function promptRecallCandidates(
   const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
     !admit(e) ? 'scope'
       : e.pinned ? 'pinned'
-        : !isContentWorthStoring(e.content) ? 'quality'
+        : !isWorthSurfacing(e) ? 'quality'
           : pinnedText.has(e.content) ? 'duplicate'
             : null;
   const eligible = (e: MemoryEntry): boolean => {
@@ -310,7 +310,7 @@ function backfillRecent(
     })
     // Filter before slice so a junk row is backfilled past, not counted against N. Pins bypass the floor: a dropped
     // pin's share of the shared budget would go to a backfilled row, and the pin loop could not win it back.
-    .filter(({ entry }) => entry.pinned || isContentWorthStoring(entry.content))
+    .filter(({ entry }) => entry.pinned || isWorthSurfacing(entry))
     .slice(0, plan.includeRecent)
     .map(({ entry, isGlobal }) => ({
       entry,

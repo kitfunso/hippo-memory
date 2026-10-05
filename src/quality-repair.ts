@@ -1,15 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { assessAutomaticMemory, UNCERTAIN_REASONS, type AutomaticMemoryAssessment } from './automatic-memory-quality.js';
+import {
+  assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, UNCERTAIN_REASONS, type AutomaticMemoryAssessment,
+} from './automatic-memory-quality.js';
 import { appendAuditEvent } from './audit.js';
 import { DatabaseSync, type DatabaseSyncLike } from './db/sqlite.js';
 import { getMeta } from './db/meta.js';
 import { tableColumns } from './db/tables.js';
 import { assertBinaryCompatible } from './db/migrate.js';
 import { insertDormantRow } from './dormant.js';
-import { calculateStrength, COMPACTION_SOURCE_PREFIX, isKeptForGood, type MemoryEntry } from './memory.js';
+import { calculateStrength, isKeptForGood, type MemoryEntry } from './memory.js';
 import { backupStore } from './project-merge.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from './rejection.js';
 import { heldTexts } from './same-text.js';
 import { deleteEntryCore, MEMORY_BACKED_TABLES } from './store/delete-and-batch.js';
 import { selectAllEntries } from './store/entry-reads.js';
@@ -39,17 +40,9 @@ const REQUIRED_COLUMNS = {
   memories: MEMORY_SELECT_COLUMNS.split(',').map((s) => s.trim()),
   meta: ['key', 'value'],
   dormant_memories: ['tenant_id', 'id', 'content', 'entry_json', 'reason', 'strength', 'dormant_at'],
-  rejected_values: ['tenant_id', 'digest', 'reason', 'rejected_by', 'rejected_at', 'source_memory_id', 'normalized_chars'],
   audit_log: ['ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json'],
   ...Object.fromEntries(MEMORY_BACKED_TABLES.map((table) => [table, ['memory_id']])),
 } satisfies Record<string, readonly string[]>;
-const AUTOMATIC_SOURCES = new Set(['capture', 'autolearn', 'git-learn', 'git', 'consolidation']);
-const BUNDLE_HEADER = /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
-
-/** Hand-written and imported memories are never judged by the automatic checks: only rows hippo wrote itself. */
-function automaticSource(source: string): boolean {
-  return AUTOMATIC_SOURCES.has(source) || source.startsWith(COMPACTION_SOURCE_PREFIX);
-}
 
 function capabilityBlockers(db: DatabaseSyncLike): string[] {
   const blockers: string[] = [];
@@ -79,11 +72,19 @@ function backingIds(db: DatabaseSyncLike): Set<string> {
   return ids;
 }
 
-function protection(entry: MemoryEntry, backing: ReadonlySet<string>): string | undefined {
+/** Rows a person brought back from dormant storage: hiding them again would undo that decision. */
+function restoredIds(db: DatabaseSyncLike, tenantId: string): Set<string> {
+  // SAFETY: the SELECT names one target_id column and filters out NULLs.
+  const rows = db.prepare("SELECT target_id FROM audit_log WHERE tenant_id = ? AND op = 'dormant_restore' AND target_id IS NOT NULL").all(tenantId) as { target_id: string }[];
+  return new Set(rows.map((row) => row.target_id));
+}
+
+function protection(entry: MemoryEntry, backing: ReadonlySet<string>, restored: ReadonlySet<string>): string | undefined {
   if (entry.pinned) return 'pinned';
   if (entry.kind === 'raw') return 'raw receipt';
   if (isKeptForGood(entry)) return 'trusted imported note';
   if (backing.has(entry.id)) return 'backs an object';
+  if (restored.has(entry.id)) return 'restored by hand';
   return undefined;
 }
 
@@ -96,10 +97,10 @@ function isCertain(assessment: AutomaticMemoryAssessment): boolean {
 }
 
 function contentIssue(entry: MemoryEntry): Omit<QualityRepairIssue, 'id'> | null {
-  if (structured(entry)) return null;
+  if (structured(entry) || !isAutomaticEntry(entry)) return null;
   const bundle = BUNDLE_HEADER.test(entry.content);
-  if (!bundle && !automaticSource(entry.source) && entry.extracted_from === null && entry.dag_level < 1) return null;
-  const texts = heldTexts(bundle ? { ...entry, source: 'consolidation' } : entry);
+  // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
+  const texts = bundle ? heldTexts({ ...entry, source: 'consolidation' }) : [];
   if (texts.length > 0) {
     const bad = texts.map(assessAutomaticMemory).filter((assessment) => !assessment.accepted);
     if (bad.length === 0) return null;
@@ -117,11 +118,12 @@ function contentIssue(entry: MemoryEntry): Omit<QualityRepairIssue, 'id'> | null
 function planRows(db: DatabaseSyncLike, tenantId: string) {
   const entries = selectAllEntries(db, tenantId).filter((entry) => !entry.superseded_by && entry.kind !== 'archived');
   const backing = backingIds(db);
+  const restored = restoredIds(db, tenantId);
   const issues: QualityRepairIssue[] = [];
   for (const entry of entries) {
     const issue = contentIssue(entry);
     if (issue === null) continue;
-    const kept = protection(entry, backing);
+    const kept = protection(entry, backing, restored);
     issues.push(kept === undefined ? { id: entry.id, ...issue } : { id: entry.id, ...issue, disposition: 'protected', protection: kept });
   }
   return { total: entries.length, issues };
@@ -131,12 +133,15 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
   const columns = tableColumns(db, 'memories');
   if (!columns.has('id') || !columns.has('content')) return { total: 0, issues: [] };
   const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
-  const source = columns.has('source') ? 'source' : "'' AS source";
-  const statement = db.prepare(`SELECT id, content, ${source} FROM memories${tenant}`);
-  // SAFETY: the SELECT names id, content and source (an empty literal when the column is missing).
-  const rows = (tenant ? statement.all(tenantId) : statement.all()) as { id: string; content: string; source: string | null }[];
+  const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
+  const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')} FROM memories${tenant}`);
+  // SAFETY: the SELECT names every Row field, each a literal fallback when its column is missing.
+  const rows = (tenant ? statement.all(tenantId) : statement.all()) as Array<{
+    id: string; content: string; source: string | null; confidence: MemoryEntry['confidence'] | null; extracted_from: string | null; dag_level: number | null;
+  }>;
   const issues = rows.flatMap((row): QualityRepairIssue[] => {
-    if (!automaticSource(row.source ?? '') && !BUNDLE_HEADER.test(row.content)) return [];
+    const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0 };
+    if (!isAutomaticEntry(provenance)) return [];
     const assessment = assessAutomaticMemory(row.content);
     return assessment.accepted ? [] : [{ id: row.id, reason: assessment.reason ?? 'automatic quality defect', disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
   });
@@ -155,23 +160,16 @@ function initialResult(db: DatabaseSyncLike, root: string, tenantId: string): Qu
   };
 }
 
-function archiveIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, now: Date): boolean {
+// No rejection record, as in project repair: the writers refuse these defects themselves, and a record would also refuse a person's copy.
+function archiveIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, now: Date, backup: string): boolean {
   const actor = 'quality-repair';
-  const digest = rejectionDigest(entry.content);
   insertDormantRow(db, { entry, strength: calculateStrength(entry, now), reason: 'quality-repair', dormantAt: now.toISOString() });
-  insertRejectedValue(db, {
-    tenantId: entry.tenantId, digest, reason, rejectedBy: actor, rejectedAt: now.toISOString(),
-    sourceMemoryId: entry.id, normalizedChars: normalizeValueForRejection(entry.content).length,
-  });
   const removed = deleteEntryCore(db, entry.id, { actor, automatic: true, suppressForgetAudit: true });
   if (!removed) throw new Error(`Quality repair refused ${entry.id}; its protection changed.`);
   if (getMeta(db, 'fts5_available', '0') === '1' && db.prepare('SELECT id FROM memories_fts WHERE id = ?').get(entry.id)) {
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
-  appendAuditEvent(db, {
-    tenantId: entry.tenantId, actor, op: 'reject_value', targetId: entry.id,
-    metadata: { digest, reason, removedIds: [entry.id], count: 1, preservedDormant: true },
-  });
+  appendAuditEvent(db, { tenantId: entry.tenantId, actor, op: 'quality_repair', targetId: entry.id, metadata: { reason, backup } });
   return true;
 }
 
@@ -184,7 +182,7 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
     const appliedIds: string[] = [];
     const now = new Date();
     for (const issue of result.issues) {
-      if (issue.disposition === 'quarantine' && archiveIssue(db, entries.get(issue.id)!, issue.reason, now)) appliedIds.push(issue.id);
+      if (issue.disposition === 'quarantine' && archiveIssue(db, entries.get(issue.id)!, issue.reason, now, backup)) appliedIds.push(issue.id);
     }
     db.exec('COMMIT');
     return { ...result, appliedIds, backup };

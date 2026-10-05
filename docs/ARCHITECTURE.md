@@ -21,7 +21,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `getContext` (section banner): getContext (extracted from cmdContext — Task 5 of the api.ts refactor)
 - `ContextOpts`: Extracted from `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
 - `ContextOpts`: Scope narrow (T5 execute decision): rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) are NOT included here. The print helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`, `printSessionEvents`) are shared with `cmdRecall` / `cmdSnapshot` / `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire those commands. CLI handles rendering + auto-resolution. Episode B can add `api.renderContext` once a shared rendering need actually materializes.
-- `ContextOpts.includeRecent`: quality floor (`isContentWorthStoring`, DF3).
+- `ContextOpts.includeRecent`: quality floor (`isWorthSurfacing`, DF3): rows hippo wrote meet the automatic check, a person's rows the older floor.
 - `ContextOpts.currentSessionId`: DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): the calling session's id.
 - `ContextOpts.prompt`: Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`.
 - `ContextResultEntry.promptRecall`: Z1: admitted by the prompt-recall gate, not the recent-N backfill or a pin.

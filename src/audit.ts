@@ -5,7 +5,7 @@ import type { JsonObject } from './working-memory.js';
 import { log } from './log.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
 import type { JsonValue } from './json.js';
-import { assessAutomaticMemory, hasNoSpecificity, isReleaseCommitNoise, substantiveWordCount } from './automatic-memory-quality.js';
+import { assessAutomaticMemory, hasNoSpecificity, isAutomaticEntry, isReleaseCommitNoise, substantiveWordCount } from './automatic-memory-quality.js';
 export { STOP_WORDS } from './automatic-memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
@@ -91,9 +91,17 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
   };
 }
 
-/** Shared automatic admission and recent-context quality floor. */
+/** Admission check for text no person typed: capture and compaction items. */
 export function isContentWorthStoring(content: string): boolean {
   return assessAutomaticMemory(content).accepted;
+}
+
+/** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the older, looser floor. */
+export function isWorthSurfacing(entry: MemoryEntry): boolean {
+  if (isAutomaticEntry(entry)) return isContentWorthStoring(entry.content);
+  const text = entry.content.trim();
+  return text.length >= 10 && !isReleaseCommitNoise(text) && !isFragment(text)
+    && substantiveWordCount(text) >= 2 && !(text.length < 40 && hasNoSpecificity(text));
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +171,7 @@ export const AUDIT_OPS = [
   'agent_memory_set_aside', // emitted by the agent memory sync when a note is deleted or refused
   'project_merge', // emitted by `hippo projects merge --apply` with every id it touched
   'project_repair', // emitted by `hippo projects repair --apply` with every id it touched
+  'quality_repair', // emitted by `hippo audit repair --apply` for each memory it moved to dormant storage
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];

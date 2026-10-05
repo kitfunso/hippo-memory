@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { extractFromText } from '../src/capture/extract.js';
-import { summariseSessionTurns } from '../src/capture/transcript.js';
+import { summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../src/autolearn.js';
 import { getContext, type Context } from '../src/api.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
@@ -62,6 +62,41 @@ describe('capture retains complete supported assertions', () => {
     expect(summary).toContain(assistant);
     expect(extractFromText(summary)).toEqual([]);
   });
+
+  it('never joins adjacent transcript turns into one memory', () => {
+    const turns: SessionTurn[] = [
+      { role: 'user', text: 'Never edit the lockfile by hand' },
+      { role: 'user', text: 'thanks' },
+      { role: 'assistant', text: 'You must never run the migration twice, because the second run deletes the seed rows' },
+      { role: 'assistant', text: 'succeeds (inserts or updates)' },
+      { role: 'assistant', text: 'Here is the file:' },
+    ];
+    expect(extractFromText(summariseSessionTurns(turns)).map((item) => item.content)).toEqual([
+      'Never edit the lockfile by hand',
+      'You must never run the migration twice, because the second run deletes the seed rows',
+    ]);
+  });
+
+  it('splits one statement per capitalised line and drops non-statements', () => {
+    const text = [
+      'Never edit the lockfile by hand',
+      'Always run the linter before you push',
+      'Should we always rebase before merging?',
+      '- [x] Never skip the migration check on release branches',
+      '| Never | trust a table cell as a rule |',
+      '    always = true  # indented code, never a rule',
+      '```',
+      'Never push from the VM',
+      '```',
+      'The fallback (never used in prod) must stay behind the feature flag.',
+    ].join('\n');
+    expect(extractFromText(text).map((item) => item.content)).toEqual([
+      'Never edit the lockfile by hand',
+      'Always run the linter before you push',
+      'Never skip the migration check on release branches',
+      'The fallback (never used in prod) must stay behind the feature flag',
+    ]);
+  });
 });
 
 describe('automatic quality does not govern manual or trusted import storage', () => {
@@ -91,7 +126,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
     const manual = createMemory('Prefer pnpm for dependency installs', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic });
     const imported = createMemory('Use SQLite for the offline cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'claude-code', tags: ['agent-memory'], layer: Layer.Episodic });
     const pin = { ...createMemory('Use tabs', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true };
-    const noise = createMemory('Found local migration files to be', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const noise = createMemory('Found local migration files to be', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed', layer: Layer.Episodic });
     for (const entry of [manual, pin, noise]) writeEntry(root, entry);
     const db = openStore(root);
     try { expect(gatedWrite(db, root, imported, { worthCheck: false })).toBe('written'); }
@@ -102,5 +137,18 @@ describe('automatic quality does not govern manual or trusted import storage', (
     expect(ids).toContain(imported.id);
     expect(ids).toContain(pin.id);
     expect(ids).not.toContain(noise.id);
+  });
+
+  it('surfaces hand-written rules the automatic check would refuse', async () => {
+    const texts = [
+      'Failed migrations must be rolled back by hand on the VM',
+      'Never force-push unless you must',
+      'Always check which branch the PR merges into',
+      'To deploy the site run npm run deploy in website/',
+    ];
+    const manual = texts.map((text) => createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic }));
+    for (const entry of manual) writeEntry(root, entry);
+    const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
+    expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
   });
 });

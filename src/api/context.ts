@@ -18,7 +18,7 @@ import { loadLatestHandoff } from '../store/handoffs.js';
 import type { SessionHandoff } from '../handoff.js';
 import { estimateTokens } from '../token-ledger.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
-import { isContentWorthStoring } from '../audit.js';
+import { isWorthSurfacing } from '../audit.js';
 import { getGlobalRoot } from '../shared.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { evalNow, isRecallBoostAblated } from '../ablation.js';
@@ -113,7 +113,7 @@ function loadAmbientEntries(
   // counts by it too, or it stops short of a store whose newest rows are junk.
   const admitAmbient = (e: MemoryEntry): boolean => {
     if (!admit(e)) return false;
-    if (e.pinned || isContentWorthStoring(e.content)) return true;
+    if (e.pinned || isWorthSurfacing(e)) return true;
     onQualityDrop?.(e);
     return false;
   };

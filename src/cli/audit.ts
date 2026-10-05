@@ -132,19 +132,19 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
 
 export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
   if (args[0] === 'repair') {
-    const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, {
-      tenantId: resolveTenantId({}), apply: flags['apply'] === true && flags['dry-run'] !== true,
-    });
+    const apply = flags['apply'] === true && flags['dry-run'] !== true;
+    const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, { tenantId: resolveTenantId({}), apply });
     if (flags['json']) {
       console.log(JSON.stringify(result));
       return;
     }
-    console.log(`Quality repair ${flags['apply'] === true && !flags['dry-run'] ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
+    console.log(`Quality repair ${apply ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
     for (const issue of result.issues) console.log(`  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`);
-    for (const blocker of result.blockers) console.log(`  Blocked: ${blocker}. Schema upgrade requires explicit approval.`);
-    if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: hippo unreject <digest>, then hippo dormant restore <id>.`);
+    for (const blocker of result.blockers) console.log(`  Blocked: ${blocker}. Repair never upgrades a store; any other hippo command does, then run repair again.`);
+    if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: hippo dormant restore <id>.`);
+    else if (apply && result.supported) console.log('Nothing moved: no unprotected memory has a certain defect.');
     for (const warning of result.warnings) console.log(`Warning: ${warning}`);
-    if (!flags['apply']) console.log('Preview only. Add --apply to preserve and hide eligible defects.');
+    if (!apply) console.log('Preview only. Add --apply to preserve and hide eligible defects.');
     return;
   }
   // `audit list` and `audit prune` -> audit-log subcommands.

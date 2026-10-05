@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { assessAutomaticMemory } from '../src/automatic-memory-quality.js';
+import { assessAutomaticMemory, certainDefect } from '../src/automatic-memory-quality.js';
 import { auditMemory, isContentWorthStoring } from '../src/audit.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 describe('automatic assertion quality', () => {
   it.each([
     ['Found local migration files to be', 'sentence-fragment'],
-    ['The store requires the migration to', 'sentence-fragment'],
+    ['The store requires the migration to', 'possible-fragment'],
     ['Retry the API request because', 'sentence-fragment'],
-    ['The cache refresh depends on', 'sentence-fragment'],
+    ['The cache refresh depends on', 'possible-fragment'],
     ['Deploy the API only if the', 'sentence-fragment'],
     ['when the API succeeds', 'sentence-fragment'],
     ['If the build fails', 'sentence-fragment'],
@@ -45,8 +45,23 @@ describe('automatic assertion quality', () => {
     'Updated the publish workflow so prepublishOnly runs the full suite',
     'Always run the linter before you push to master',
     'Error: the migration silently dropped the last batch of rows.',
+    'Deleted rows must never be resurrected by the sync job',
+    'Failed jobs are retried eight times with a ten minute gap',
+    'Returns 404 for unknown ids',
+    'Use option B rather than option A',
+    'if in doubt never force-push',
+    'If in doubt never force-push',
+    'When unsure always ask first',
+    'Set version to 2.0 in both package.json and Cargo.toml, never just one',
+    'Deploy v1.2 only after the migration has run on the VM',
+    '[2026-09-30] decided to keep the VM fork on 1.58',
   ])('retains supported memory: %s', (content) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
+  });
+
+  it('only flags an ending that can close a whole sentence', () => {
+    expect(certainDefect('The store requires the migration to')).toBeNull();
+    expect(certainDefect('Retry the API request because')).toBe('sentence-fragment');
   });
 
   it('new defect reasons warn without widening automatic audit removal', () => {

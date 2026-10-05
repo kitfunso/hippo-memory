@@ -152,11 +152,12 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
   return [
     '# Session Summary',
     '',
+    // A blank line between turns keeps capture from joining two turns, and leaves each turn's code fences at line start.
     '## User Messages',
-    ...tailUsers.map((m) => `- ${m}`),
+    tailUsers.join('\n\n'),
     '',
     '## Assistant Responses',
-    ...tailAssistants,
+    tailAssistants.join('\n\n'),
   ].join('\n');
 }
 

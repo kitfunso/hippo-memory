@@ -13,7 +13,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { savePrediction } from '../src/predictions/store.js';
 import { mergedText } from '../src/same-text.js';
-import { restoreDormant, unreject, type Context } from '../src/api.js';
+import { restoreDormant, type Context } from '../src/api.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
 
@@ -25,7 +25,7 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 function seed(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(content, { source: 'capture', layer: Layer.Episodic }), ...extra };
+  const entry = { ...createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic }), ...extra };
   writeEntry(root, entry);
   return entry;
 }
@@ -39,7 +39,7 @@ const ctx = (): Context => ({ hippoRoot: root, tenantId: 'default', actor: { sub
 const run = (apply = false) => repairAutomaticMemories(root, { tenantId: 'default', apply });
 
 describe('recoverable automatic memory quality repair', () => {
-  it('previews without writes, then preserves full history, refuses resync, and supports explicit recovery', () => {
+  it('previews without writes, then preserves full history, audits each move, and leaves a restored row alone', () => {
     const bad = seed('Found local migration files to be', { retrieval_count: 7, tags: ['error', 'captured'] });
     const good = seed('Keep test schema setup outside production migrations because production applies every sorted migration.');
     const before = readFileSync(join(root, 'hippo.db'));
@@ -53,12 +53,19 @@ describe('recoverable automatic memory quality repair', () => {
     expect(loadAllEntries(root).map((entry) => entry.id)).toEqual([good.id]);
     const restoredSnapshot = withDb((db) => readDormantSnapshot(db, 'default', bad.id));
     expect(restoredSnapshot?.entry).toMatchObject({ content: bad.content, retrieval_count: 7, tags: bad.tags, source: bad.source });
-    expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).not.toBeNull();
-    expect(() => writeEntry(root, createMemory(bad.content))).toThrow(/rejected value/);
-    expect(() => restoreDormant(ctx(), bad.id)).toThrow(/rejected value/);
+    expect(withDb((db) => db.prepare("SELECT target_id, metadata_json FROM audit_log WHERE op = 'quality_repair'").all())).toEqual([
+      { target_id: bad.id, metadata_json: JSON.stringify({ reason: 'sentence-fragment', backup: applied.backup }) },
+    ]);
+    expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null });
-    unreject(ctx(), rejectionDigest(bad.content));
+
     expect(restoreDormant(ctx(), bad.id)).toMatchObject({ id: bad.id, content: bad.content, retrieval_count: 7 });
+    const again = run(true);
+    expect(again).toMatchObject({ appliedIds: [], backup: null });
+    expect(again.issues).toEqual([expect.objectContaining({ id: bad.id, disposition: 'protected', protection: 'restored by hand' })]);
+    const typed = createMemory(bad.content, { source: 'cli' });
+    writeEntry(root, typed);
+    expect(loadAllEntries(root).map((entry) => entry.id)).toContain(typed.id);
   });
 
   it('keeps pinned, raw, imported and object-backed memories with their links', () => {
@@ -88,11 +95,22 @@ describe('recoverable automatic memory quality repair', () => {
       'If the build fails',
       'more detail soon',
     ].map((content) => seed(content, { source: 'cli' }));
+    const vouched = seed('If the build fails', { confidence: 'verified' });
+    const watch = seed("Command 'npm test' failed (exit 1)", { source: 'autolearn' });
     const compaction = seed('If the build fails', { source: 'compaction:s-1' });
     const extracted = seed('If the build fails', { source: 'cli', extracted_from: manual[0].id, dag_level: 1 });
-    const ids = run().issues.map((issue) => issue.id);
-    for (const row of manual) expect(ids).not.toContain(row.id);
-    expect(ids).toEqual(expect.arrayContaining([compaction.id, extracted.id]));
+    const refined = seed('If the build fails', { source: 'consolidation', layer: Layer.Semantic });
+    const sound = seed('Production migrations must exclude test setup because sorted filenames control application order.', { source: 'consolidation' });
+    const issues = run().issues;
+    const ids = issues.map((issue) => issue.id);
+    for (const row of [...manual, vouched, watch, sound]) expect(ids).not.toContain(row.id);
+    expect(ids).toEqual(expect.arrayContaining([compaction.id, extracted.id, refined.id]));
+    expect(issues.find((issue) => issue.id === refined.id)).toMatchObject({ reason: 'sentence-fragment', disposition: 'quarantine' });
+  });
+
+  it('only flags an ending that can close a whole sentence', () => {
+    const possible = seed('Always check which branch the PR merges into');
+    expect(run(true)).toMatchObject({ appliedIds: [], issues: [{ id: possible.id, reason: 'possible-fragment', disposition: 'review' }] });
   });
 
   it('flags ambiguity and mixed bundles while preserving complete parts and structured records', () => {
@@ -121,13 +139,12 @@ describe('recoverable automatic memory quality repair', () => {
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))?.entry.content).toBe(bad.content);
   });
 
-  it('rolls back snapshots, tombstones and removal when audit fails', () => {
+  it('rolls back snapshots and removal when audit fails', () => {
     const bad = seed('succeeds (inserts or updates)');
-    withDb((db) => db.exec("CREATE TRIGGER refuse_repair_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'reject_value' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END"));
+    withDb((db) => db.exec("CREATE TRIGGER refuse_repair_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'quality_repair' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END"));
     expect(() => run(true)).toThrow(/audit unavailable/);
     expect(loadAllEntries(root).map((entry) => entry.id)).toContain(bad.id);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))).toBeNull();
-    expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
   });
 
   it('aborts before mutation if the consistent backup cannot be created', () => {
@@ -173,15 +190,15 @@ describe('recoverable automatic memory quality repair', () => {
     expect(loadAllEntries(root).map((entry) => entry.id)).toContain(other.id);
   });
 
-  it('refuses unchanged note import after an earlier captured value was repaired', () => {
+  it('still imports a note a person wrote after a captured copy was repaired', () => {
     const world = openWorld();
     try {
-      const bad = createMemory('succeeds (inserts or updates)', { source: 'capture' });
+      const bad = createMemory('succeeds (inserts or updates)', { source: 'capture', confidence: 'observed' });
       writeEntry(world.local, bad);
-      repairAutomaticMemories(world.local, { tenantId: 'default', apply: true });
+      expect(repairAutomaticMemories(world.local, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       importForStore(world.local, { machine: world.machine });
-      expect(loadAllEntries(world.local)).toEqual([]);
+      expect(loadAllEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
     } finally { closeWorld(world); }
   });
 });
