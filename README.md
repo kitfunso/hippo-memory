@@ -967,7 +967,7 @@ The AI-memory category matured fast in 2026. Hippo's specific take (bio-decay, s
 | Auto-hook install | Yes | No | No | No | No | No | No | No | No | No |
 | MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (stdio + HTTP/OAuth) | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (first-party Claude/LangGraph) | Yes | ? |
 | Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (npm deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
-| LongMemEval (best published) | 98.0% local / 99.8% voyage any-evidence R@5; 88.5% local all-evidence R@5 (s_cleaned, per-haystack)\* | 96.6% raw / 100% reranked R@5 | 94.4 (hosted platform)\*\* | N/A | 95.53% all-evidence R@5 reranked, 93.19% without (s_cleaned\*) | 90.2% accuracy\*\* (LoCoMo 94.7%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
+| LongMemEval (best published) | 98.0% any / 88.5% all R@5\* (local MiniLM; 99.8% any-evidence with voyage-3-large; s_cleaned, per-haystack) | 96.6% raw / 100% reranked R@5 | 94.4 (hosted platform)\*\* | N/A | 95.53% all R@5\* (paid reranker; 93.19% without; s_cleaned) | 90.2% accuracy\*\* (LoCoMo 94.7%) | N/A | N/A | 88.78% accuracy\*\* (overall, with a reader) | 83.00% accuracy\*\* (overall; LoCoMo 93.05%, HaluMem 93.04%) |
 | Git-friendly | Yes | No | No | Yes | Yes | No | Yes (memory tracked in git) | No | Yes (Git is the model) | ? |
 | Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | License | MIT | (open) | Apache-2.0 | (open) | MIT | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
