@@ -38,7 +38,18 @@ export interface ContextView {
   readonly result: ContextResult;
   /** Ledger rows stay in `hippoRoot`, never the global store; see promptHookContext. */
   readonly sharedStore?: boolean;
+  /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule;
+   *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have shown. */
+  readonly printedHash?: string | null;
 }
+
+/** A hook render's stdout and the hash of the static block it carries, null when it carries none. */
+interface RenderedContext {
+  readonly stdout: string;
+  readonly staticHash: string | null;
+}
+
+const NOTHING_RENDERED: RenderedContext = Object.freeze({ stdout: '', staticHash: null });
 
 export function hasContextData(result: ContextResult): boolean {
   return Boolean(
@@ -57,6 +68,10 @@ export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
 
 /** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins, recent-N) and a never-skipped recall block. */
 export function additionalContextOutput(view: ContextView): string {
+  return renderAdditionalContext(view).stdout;
+}
+
+function renderAdditionalContext(view: ContextView): RenderedContext {
   const { result, rec, framing } = view;
   const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
   const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
@@ -76,7 +91,7 @@ export function additionalContextOutput(view: ContextView): string {
     : '';
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
-    return '';
+    return NOTHING_RENDERED;
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
@@ -89,7 +104,7 @@ export function additionalContextOutput(view: ContextView): string {
   const staticReused = !sendStatic && staticBlock.trim().length > 0;
   if (!additionalContext.trim()) {
     rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
-    return '';
+    return NOTHING_RENDERED;
   }
 
   const stdout = JSON.stringify({
@@ -108,7 +123,7 @@ export function additionalContextOutput(view: ContextView): string {
   if (finalStatic || recallBlock) {
     recordAdditionalContextRows(view, surface, { text: finalStatic, items: staticItems.length }, { text: recallBlock, items: recallItems.length });
   }
-  return stdout;
+  return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
 }
 
 /** True, after booking the skip row, when the hook may omit a static block this session already holds. */
@@ -123,6 +138,8 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
     : 10;
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
   const staticHash = blockHash(staticBlock);
+  // Before the ledger read, so a caller that did not print this block books no skip row.
+  if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
   const last = withLedgerDb(hippoRoot, (db) =>
     lastSentState(db, view.tenantId, payloadSessionId, surface), ledgerOpts);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
@@ -170,10 +187,22 @@ const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = 1500;
 const HOOK_FRAMING = 'observe';
 
+// blockHash's shape (token-ledger.ts).
+const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
+
+/** The project a hook caller runs in: its id, the folder name its older rows carry, and any other names it resolves to. */
+export interface CallerProject {
+  readonly name: string;
+  readonly legacyName: string;
+  readonly aliases?: readonly string[];
+}
+
 interface PromptHookRequest {
   readonly sessionId: string;
-  readonly project: { readonly name: string; readonly legacyName: string; readonly aliases?: readonly string[] };
+  readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
+  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, the block is always sent. */
+  readonly printedHash?: string;
 }
 
 interface PromptHookOpts {
@@ -182,19 +211,29 @@ interface PromptHookOpts {
   readonly sharedStore?: true;
 }
 
-function assertPromptHookRequest(req: PromptHookRequest): void {
-  const { name, legacyName, aliases = [] } = req.project;
+/** The caps on a hook caller's session id and project names, so a caller other than an HTTP route is bounded too. */
+export function assertCallerIds(sessionId: string, project: CallerProject): void {
+  const { name, legacyName, aliases = [] } = project;
   if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
-  if ([req.sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
+  if ([sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
     throw new BadRequestError(`session id and project names: at most ${MAX_ID_LEN} characters each`);
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project.
- *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout.
+function assertPromptHookRequest(req: PromptHookRequest): void {
+  assertCallerIds(req.sessionId, req.project);
+  if (req.printedHash !== undefined && !BLOCK_HASH_RE.test(req.printedHash)) {
+    throw new BadRequestError('printed hash: 16 lowercase hex characters');
+  }
+}
+
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
+ *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
  *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only.
  *  Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
-export async function promptHookContext(ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {}): Promise<{ arm: PilotArm | null; stdout: string }> {
+export async function promptHookContext(
+  ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {},
+): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
@@ -203,7 +242,7 @@ export async function promptHookContext(ctx: Context, req: PromptHookRequest, op
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { sharedStore, ownTenantOnly: true });
-  if (arm === 'holdout') return { arm, stdout: '' };
+  if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {
     budget: HOOK_BUDGET,
@@ -216,11 +255,12 @@ export async function promptHookContext(ctx: Context, req: PromptHookRequest, op
     cost: contextCost('additional-context', HOOK_FRAMING),
     sharedStore,
   });
-  const stdout = hasContextData(result)
-    ? additionalContextOutput({
+  const rendered = hasContextData(result)
+    ? renderAdditionalContext({
         hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
-        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, sharedStore,
+        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, sharedStore, printedHash: req.printedHash ?? null,
       })
-    : '';
-  return { arm, stdout };
+    : NOTHING_RENDERED;
+  // A sub-agent's output is not the session's, so its caller must not record it as printed.
+  return { arm, stdout: rendered.stdout, staticHash: subagent ? null : rendered.staticHash };
 }

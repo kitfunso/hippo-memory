@@ -43,8 +43,10 @@ export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AddonCall, AddonRoute, AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
 // What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a caller that renders the prompt hook elsewhere, JsonValue for its body.
 export { HttpError } from './http-util.js';
-export { promptHookContext } from './prompt-hook.js';
+export { promptHookContext, type CallerProject } from './prompt-hook.js';
 export type { JsonValue } from './json.js';
+// A session-end route stores the turns its caller read from a transcript on the caller's own machine.
+export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
 export { sqliteStore, type HippoStore } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
