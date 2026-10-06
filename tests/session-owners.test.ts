@@ -91,6 +91,18 @@ describe('bindSessionOwner', () => {
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
   });
 
+  it('a new bind prunes bindings older than 90 days, in every tenant, and keeps younger ones', () => {
+    const daysAgo = (d: number): string => new Date(Date.now() - d * 86_400_000).toISOString();
+    withDb((db) => {
+      const insert = db.prepare(`INSERT INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`);
+      insert.run('default', 'old', 'alice', daysAgo(91));
+      insert.run('acme', 'old-acme', 'bob', daysAgo(91));
+      insert.run('default', 'young', 'alice', daysAgo(89));
+    });
+    bindSessionOwner(ctx('carol'), 'new');
+    expect(bindings().map((b) => b.session_id).sort()).toEqual(['new', 'young']);
+  });
+
   it('two tenants may hold one session id', () => {
     bindSessionOwner(ctx('alice'), 's1');
     bindSessionOwner(ctx('bob', 'acme'), 's1');
