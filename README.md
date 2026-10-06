@@ -893,6 +893,12 @@ No global install needed: `"command": "npx", "args": ["-y", "hippo-memory", "mcp
 
 Exposes 13 tools: `hippo_recall`, `hippo_assemble`, `hippo_drill`, `hippo_remember`, `hippo_outcome`, `hippo_context`, `hippo_status`, `hippo_learn`, `hippo_conflicts`, `hippo_resolve`, `hippo_share`, `hippo_peers`, `hippo_predict_baserate`.
 
+On a store whose `config.json` sets `"sharedStore": true`, `hippo serve` answers MCP at `POST /mcp`, and each request names the caller's repo in two headers: `X-Hippo-Project` and an optional comma-separated `X-Hippo-Project-Aliases` (at most 10). The client percent-encodes each name, so any lowercase Unicode name fits. The server answers 400 for either header sent twice, aliases with no project, a blank, padded or uppercase name, a colon, a name over 256 characters, or a bad percent escape; a bad key still gets 401 first. With a project, `hippo_remember` stamps it on the row, and recall, assemble, drill, context and conflicts show only that project's rows and user-global ones; `hippo_outcome` rates only the recall made under that project. Without one, every tool returns an `isError` refusal that names the header, except `hippo_peers` and `hippo_predict_baserate`. `hippo_learn`, `hippo_share` and `hippo_resolve` are off on a shared store whatever the headers say; the admin resolves conflicts with the CLI. All headers must fit Node's 16 KB limit, and a larger request gets 431. Other stores ignore both headers.
+
+The headers are a filter the caller picks, not access control: any member key can name another project. The tenant is the security boundary, and binding a key to its projects is a backlog item.
+
+`hippo_peers` lists every project's name and memory count in the tenant, so a caller sees which other repos share the store.
+
 ### OpenClaw Plugin
 
 Native plugin with auto-context injection, workspace-aware memory lookup, and

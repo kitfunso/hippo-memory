@@ -10,6 +10,7 @@ import type { Actor as ApiActor } from '../api.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
 import type { JsonValue } from '../json.js';
+import type { CallerProject } from '../prompt-hook.js';
 import type { HippoStore } from '../store-port.js';
 
 // ── Find hippo root ──
@@ -85,6 +86,7 @@ export interface McpContext {
   /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */
   hostAdmin?: true;
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
+  project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   store?: HippoStore;
   autoSleep?: false;
   /**

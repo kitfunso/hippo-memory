@@ -52,7 +52,7 @@ describe('continuity on a shared store', () => {
     expect(forB?.sessionHandoff).toBeNull();
   });
 
-  it('no project: empty block on REST recall and MCP hippo_recall', async () => {
+  it('no project: empty block on REST recall, and MCP hippo_recall refuses', async () => {
     // Ownerless rows and other people's rows are what an unkeyed read would hand to anyone.
     saveActiveTaskSnapshot(home, 'default', snap('legacy task', 'sl'));
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
@@ -76,8 +76,10 @@ describe('continuity on a shared store', () => {
     });
     expect(mcp.status).toBe(200);
     // SAFETY: a tools/call reply carries one text content item.
-    const text = ((await mcp.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]!.text;
-    expect(text).toContain('ops/deploy.sh');
+    const { content, isError } = ((await mcp.json()) as { result: { content: Array<{ text: string }>; isError?: boolean } }).result;
+    const text = content[0]!.text;
+    expect(isError).toBe(true);
+    expect(text).toBe("hippo_recall needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header");
     expect(text).not.toContain('alice task');
     expect(text).not.toContain('legacy task');
   });

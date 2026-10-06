@@ -282,11 +282,12 @@ export interface VectorCandidateSpec {
   includeSuperseded: boolean;
   /** How many nearest rows to add; default 50. */
   limit?: number;
+  origin?: OriginFilter;
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first. */
 export function loadVectorCandidateEntries(hippoRoot: string, queryVector: readonly number[], spec: VectorCandidateSpec): MemoryEntry[] {
-  const scope = recallScopeClause('m.', spec.scope);
+  const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const params = [...(spec.tenantId !== undefined ? [spec.tenantId] : []), ...scope.params];

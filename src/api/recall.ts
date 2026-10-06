@@ -23,7 +23,7 @@ import type { RerankStep } from '../search/types.js';
 import { compareEntryIdentity } from '../compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { isSharedStore, loadConfig } from '../config.js';
-import { projectNames } from '../project-identity.js';
+import { classifyOriginProject, projectNames } from '../project-identity.js';
 import { computePlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from '../recall-history.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
@@ -76,7 +76,15 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
   const own = personalScopeOf(ctx.actor) ?? undefined;
-  return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, undefined, own), own);
+  return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, recallOrigin(opts), own), own);
+}
+
+function recallOrigin(opts: RecallOpts): readonly string[] | undefined {
+  return opts.project ? projectNames(opts.project) : undefined;
+}
+
+function inCallerProject(entry: MemoryEntry, opts: RecallOpts): boolean {
+  return !opts.project || classifyOriginProject(entry.origin_project, opts.project) !== 'cross-project';
 }
 
 /** Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (contract lock). */
@@ -86,7 +94,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   // From the authenticated actor, never from RecallOpts, which a caller fills in.
   const own = personalScopeOf(ctx.actor) ?? undefined;
   if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked, own);
-  let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, undefined, own);
+  let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, recallOrigin(opts), own);
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own) };
     const ranked = opts.mode === 'physics'
@@ -106,6 +114,7 @@ function recallVectorSpec(ctx: Context, opts: RecallOpts, own: string | undefine
     tenantId: ctx.tenantId,
     scope: recallScopeFilter(opts.scope, 'exact', own),
     includeSuperseded: false,
+    origin: recallOrigin(opts),
     admit: (e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own),
   };
 }
@@ -122,7 +131,7 @@ async function retrieveFromStore(
   own: string | undefined,
 ): Promise<RecallResult> {
   const loaded = loadRecallSearchEntries(
-    ctx.hippoRoot, opts.query, Math.max(windowSize, SHOW_RANKED_LEXICAL_WINDOW), ctx.tenantId, opts.scope, 'exact', false, undefined, own,
+    ctx.hippoRoot, opts.query, Math.max(windowSize, SHOW_RANKED_LEXICAL_WINDOW), ctx.tenantId, opts.scope, 'exact', false, recallOrigin(opts), own,
   );
   const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
@@ -365,7 +374,7 @@ function substituteOverflow(
   if (eligibleParentIds.length === 0) return [];
   const parents = loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId);
   const eligibleParents = parents.filter(
-    (p) => (p.dag_level ?? 0) === 2 && !p.superseded_by && passesScopeFilterForRecall(p.scope ?? null, opts.scope, own),
+    (p) => (p.dag_level ?? 0) === 2 && !p.superseded_by && passesScopeFilterForRecall(p.scope ?? null, opts.scope, own) && inCallerProject(p, opts),
   );
   const maxSub = Math.max(1, Math.ceil(limit * 0.3));
   // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to scan order.
@@ -424,7 +433,7 @@ function freshTailBand(
   own: string | undefined,
 ): RecallResultItem[] {
   // The session-id contract was already checked by recallWindowSize's preflight.
-  const recent = loadFreshRawMemories(ctx.hippoRoot, opts.freshTailCount ?? 0, ctx.tenantId, opts.freshTailSessionId);
+  const recent = loadFreshRawMemories(ctx.hippoRoot, opts.freshTailCount ?? 0, ctx.tenantId, opts.freshTailSessionId, recallOrigin(opts));
   const recentScoped = recent.filter((m) => passesScopeFilterForRecall(m.scope ?? null, opts.scope, own));
   const recentIdSet = new Set(recentScoped.map((m) => m.id));
   for (const r of baseRanked) {

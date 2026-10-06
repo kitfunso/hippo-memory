@@ -94,7 +94,7 @@ export interface RecallOpts {
    * `hippo session resume`.
    */
   includeContinuity?: boolean;
-  project?: CallerProject; // keys the continuity block on a shared store
+  project?: CallerProject; // keeps rows to this project and user-global ones, and keys the continuity block
   /**
    * When set AND `(ctx.tenantId, sessionId)` has active goals AND
    * `goalTag` is unset, `api.recall` applies the dlPFC goal-stack boost lifted

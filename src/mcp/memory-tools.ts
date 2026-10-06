@@ -30,6 +30,7 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
     content: text,
     tags,
     personal: args.personal === true,
+    project: ctx?.project,
   });
   const entry = readEntry(hippoRoot, result.id, tenantId);
 

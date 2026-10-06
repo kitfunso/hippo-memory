@@ -4,6 +4,8 @@ import { loadEntriesByIds, loadSessionRawMemories, countSessionRawMemories } fro
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
+import { classifyOriginProject, projectNames } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from './types.js';
 
 export const DEFAULT_ASSEMBLE_BUDGET = 4000;
@@ -35,6 +37,7 @@ export interface AssembleOpts {
    */
   rowCap?: number;
   cost?: AssembleCost;
+  project?: CallerProject;
 }
 
 // Absent, the budget pays for content alone. `fixed` gets the largest count the header can print.
@@ -119,7 +122,8 @@ export function assemble(
     return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0, truncated: false };
   }
 
-  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap);
+  const origins = opts.project ? projectNames(opts.project) : undefined;
+  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap, origins);
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
   const scoped = rows.filter((r) =>
@@ -129,7 +133,7 @@ export function assemble(
   if (truncated) {
     // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
     // caller cannot infer private rows by comparing totalRaw to items.length.
-    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope, own);
+    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope, own, origins);
   } else {
     totalRaw = scoped.length;
   }
@@ -144,7 +148,7 @@ export function assemble(
 
   // Substitute parent summaries for older rows that share one.
   const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
-    ? substituteSummaries(ctx, olderRows, opts.scope, own)
+    ? substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
     : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
@@ -187,6 +191,7 @@ function substituteSummaries(
   olderRows: MemoryEntry[],
   scope: string | undefined,
   own: string | undefined,
+  project: CallerProject | undefined,
 ): SubstitutedOlder {
   const olderItems: AssembledContextItem[] = [];
   let summarized = 0;
@@ -204,6 +209,7 @@ function substituteSummaries(
     ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
         .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
         .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope, own))
+        .filter((p) => !project || classifyOriginProject(p.origin_project, project) !== 'cross-project')
     : [];
   const claimedRawIds = new Set<string>();
   for (const parent of parents) {

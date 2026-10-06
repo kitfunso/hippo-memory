@@ -118,6 +118,10 @@ export function loadEntriesByIds(
   }
 }
 
+function originClause(origins: readonly string[] | undefined): string {
+  return origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
+}
+
 /**
  * All `kind='raw'` rows for a given session, tenant-scoped, returned
  * oldest-first. Used by `api.assemble` to walk a session's chronological
@@ -133,6 +137,7 @@ export function loadSessionRawMemories(
   sessionId: string,
   tenantId?: string,
   cap?: number,
+  origins?: readonly string[],
 ): MemoryEntry[] {
   if (!sessionId) return [];
   const db = openStore(hippoRoot);
@@ -144,6 +149,8 @@ export function loadSessionRawMemories(
       sql += ' AND tenant_id = ?';
       params.push(tenantId);
     }
+    sql += originClause(origins);
+    params.push(...(origins ?? []));
     if (cap !== undefined && cap > 0) {
       sql += ' ORDER BY created DESC, id DESC LIMIT ?';
       params.push(cap);
@@ -179,6 +186,7 @@ export function countSessionRawMemories(
   tenantId?: string,
   scope?: string,
   ownScope?: string,
+  origins?: readonly string[],
 ): number {
   if (!sessionId) return 0;
   const db = openStore(hippoRoot);
@@ -190,6 +198,8 @@ export function countSessionRawMemories(
       sql += ' AND tenant_id = ?';
       params.push(tenantId);
     }
+    sql += originClause(origins);
+    params.push(...(origins ?? []));
     if (scope !== undefined && scope !== '') {
       sql += ' AND scope = ?';
       params.push(scope);
@@ -225,6 +235,7 @@ export function loadFreshRawMemories(
   count: number,
   tenantId?: string,
   sessionId?: string,
+  origins?: readonly string[],
 ): MemoryEntry[] {
   if (count <= 0) return [];
   const capped = Math.min(count, 200);
@@ -240,6 +251,8 @@ export function loadFreshRawMemories(
       sql += ' AND source_session_id = ?';
       params.push(sessionId);
     }
+    sql += originClause(origins);
+    params.push(...(origins ?? []));
     // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
     // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
     sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';

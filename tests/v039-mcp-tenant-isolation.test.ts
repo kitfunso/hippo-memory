@@ -21,7 +21,7 @@ function callTool(
   reqId: number,
   name: string,
   args: Record<string, string | number | boolean>,
-  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -237,6 +237,21 @@ describe('v039 mcp tenant + client-key isolation', () => {
     // A's recalled set is intact.
     const aOutcome = await callTool(3, 'hippo_outcome', { good: true }, ctxA);
     expect(extractText(aOutcome)).toMatch(/Applied positive outcome to 1 memories/);
+  });
+
+  // One key held by a session in each repo: the project is part of the outcome key, so beta cannot rate acme's recall.
+  it('one clientKey with two projects keeps a lastRecalledIds entry per project', async () => {
+    apiRemember(
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+      { content: 'per-project outcome key canary', project: { name: 'acme' } },
+    );
+    const base = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:shared-key:1.2.3.4' };
+    const acme: McpContext = { ...base, project: { name: 'acme', legacyName: 'acme' } };
+    const beta: McpContext = { ...base, project: { name: 'beta', legacyName: 'beta' } };
+
+    await callTool(1, 'hippo_recall', { query: 'per-project outcome', budget: 1500 }, acme);
+    expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, beta))).toMatch(/No recent recalls/i);
+    expect(extractText(await callTool(3, 'hippo_outcome', { good: true }, acme))).toMatch(/Applied positive outcome to 1 memories/);
   });
 
   // ---- Test 6: hippo_share cross-tenant denied -----------------------------

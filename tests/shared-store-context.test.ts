@@ -17,6 +17,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const REFUSAL = 'hippo_context needs a project on a shared store; use hippo_recall';
+const GATE = "hippo_context needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header";
 const ROWS = {
   acme: 'acme deploys go through the blue green switch',
   alias: 'acme alias rows keep the old repo name',
@@ -26,7 +27,7 @@ const ROWS = {
 } as const;
 
 interface ContextBody { readonly entries: ReadonlyArray<{ readonly entry: { readonly content: string } }> }
-interface McpBody { readonly result?: { readonly content: ReadonlyArray<{ readonly text: string }> } }
+interface McpBody { readonly result?: { readonly content: ReadonlyArray<{ readonly text: string }>; readonly isError?: boolean } }
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: only this file's /v1/context and /mcp replies, whose fields the callers assert on next.
@@ -59,14 +60,15 @@ async function contextTexts(h: ServerHandle, query: string, headers: Record<stri
   return { status: 200, texts: body.entries.map((e) => e.entry.content) };
 }
 
-async function mcpContext(h: ServerHandle): Promise<string> {
+async function mcpContext(h: ServerHandle, headers: Record<string, string> = {}): Promise<{ text: string; isError: boolean }> {
   const res = await fetch(`${h.url}/mcp`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: {} } }),
   });
   expect(res.status).toBe(200);
-  return (await jsonAs<McpBody>(res)).result?.content?.[0]?.text ?? '';
+  const result = (await jsonAs<McpBody>(res)).result;
+  return { text: result?.content?.[0]?.text ?? '', isError: result?.isError === true };
 }
 
 beforeEach(() => {
@@ -145,9 +147,18 @@ describe('context reads on a shared store', () => {
     }
   });
 
-  it('MCP hippo_context answers with a refusal', async () => {
+  it('MCP hippo_context with no project header answers with an error refusal', async () => {
     const h = await start(true);
-    expect(await mcpContext(h)).toBe(REFUSAL);
+    expect(await mcpContext(h)).toEqual({ text: GATE, isError: true });
+  });
+
+  it("MCP hippo_context with X-Hippo-Project returns the caller's and alias rows and no other project's, NULL or global row", async () => {
+    const h = await start(true);
+    const { text, isError } = await mcpContext(h, { 'x-hippo-project': 'acme%2Fapp', 'x-hippo-project-aliases': 'app' });
+    expect(isError, text).toBe(false);
+    expect(text).toContain(ROWS.acme);
+    expect(text).toContain(ROWS.alias);
+    for (const hidden of [ROWS.beta, ROWS.none, ROWS.global]) expect(text).not.toContain(hidden);
   });
 
   it("getContext refuses a caller with no project", async () => {
@@ -172,7 +183,7 @@ describe('context reads on a store that is not shared', () => {
 
   it('MCP hippo_context answers without a refusal', async () => {
     const h = await start(false);
-    expect(await mcpContext(h)).not.toBe(REFUSAL);
+    expect((await mcpContext(h)).text).not.toBe(REFUSAL);
   });
 });
 

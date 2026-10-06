@@ -23,8 +23,7 @@ export function __resetSessionRecallHistoryMcp(): void {
 export const lastRecalledIds = new Map<string, string[]>();
 export const autoSleepInFlight = new Set<string>();
 
-export function resolveClientKey(ctx: { clientKey?: string; tenantId: string } | undefined): string {
-  if (ctx?.clientKey) return ctx.clientKey;
-  if (ctx?.tenantId) return `stdio-${process.pid}:${ctx.tenantId}`;
-  return `stdio-${process.pid}:default`;
+export function resolveClientKey(ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined): string {
+  const base = ctx?.clientKey ? ctx.clientKey : `stdio-${process.pid}:${ctx?.tenantId || 'default'}`;
+  return ctx?.project ? `${base}:${ctx.project.name}` : base;
 }

@@ -3,8 +3,11 @@ import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import type { Context } from '../api.js';
+import { isSharedStore } from '../config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.js';
+import { assertCallerProject } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientIpForRateLimit } from './client-ip.js';
 import { requestIds } from './request.js';
@@ -50,8 +53,37 @@ function buildMcpClientKey(req: IncomingMessage): string {
 // Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
 // loopback no-auth fallback. SSE check runs once at stream-open.
 
-export function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep']): McpContext {
-  return {
+// Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
+const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
+
+function decodeHeaderPiece(raw: string, header: string): string {
+  if (!HEADER_PIECE.test(raw)) throw new HttpError(400, `${header} must be percent-encoded, with no empty names`);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new HttpError(400, `${header} holds a bad percent escape`);
+  }
+}
+
+/** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any other store ignores both. */
+export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string): CallerProject | undefined {
+  if (!isSharedStore(hippoRoot)) return undefined;
+  const names = req.headersDistinct['x-hippo-project'];
+  const aliasHeaders = req.headersDistinct['x-hippo-project-aliases'];
+  if (names === undefined) {
+    if (aliasHeaders !== undefined) throw new HttpError(400, 'X-Hippo-Project-Aliases needs X-Hippo-Project');
+    return undefined;
+  }
+  if (names.length > 1 || (aliasHeaders?.length ?? 0) > 1) throw new HttpError(400, 'send X-Hippo-Project and X-Hippo-Project-Aliases once each');
+  const name = decodeHeaderPiece(names[0]!, 'X-Hippo-Project');
+  const rawAliases = aliasHeaders?.[0] ?? '';
+  const aliases = rawAliases === '' ? [] : rawAliases.split(',').map((a) => decodeHeaderPiece(a, 'X-Hippo-Project-Aliases'));
+  assertCallerProject({ name, aliases });
+  return { name, legacyName: name, aliases };
+}
+
+export function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
+  const mcpCtx: McpContext = {
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,
     // McpContext.actor stays string; extract subject at the boundary.
@@ -66,6 +98,8 @@ export function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpCon
     store: ctx.store,
     autoSleep,
   };
+  if (project !== undefined) mcpCtx.project = project;
+  return mcpCtx;
 }
 
 export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
@@ -75,6 +109,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
   // back to whatever the env says.
   const ctx = await buildContextWithAuth(req, opts);
+  const project = callerProjectFromHeaders(req, ctx.hippoRoot);
   const raw = await readBody(req);
   let mcpReq: JsonValue;
   try {
@@ -91,7 +126,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep));
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
   }

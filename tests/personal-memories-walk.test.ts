@@ -18,7 +18,7 @@ import { clearProjectIdentityCache } from '../src/project-identity.js';
 import { promptHookContext } from '../src/prompt-hook.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { AuthResolver } from '../src/server/types.js';
-import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
+import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
@@ -72,8 +72,8 @@ function ctxOf(who: Who): api.Context {
   return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' } };
 }
 
-async function http(token: string | null, method: string, route: string, body?: JsonValue): Promise<Reply> {
-  const plain = { 'content-type': 'application/json', accept: 'application/json' };
+async function http(token: string | null, method: string, route: string, body?: JsonValue, extra: Record<string, string> = {}): Promise<Reply> {
+  const plain = { 'content-type': 'application/json', accept: 'application/json', ...extra };
   const headers = token ? { ...plain, authorization: `Bearer ${token}` } : plain;
   const res = await fetch(`${handle!.url}${route}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: res.status, text: await res.text() };
@@ -108,9 +108,10 @@ async function contextIds(token: string, query: string): Promise<string[]> {
   return json<{ entries: Array<{ entry: { id: string } }> }>(r).entries.map((x) => x.entry.id);
 }
 
-/** A tools/call reply as text: the tool's own text, or the JSON-RPC error message a thrown API error becomes. */
+/** A tools/call reply as text, sent from the alpha repo: the tool's own text, or the JSON-RPC error message a thrown API error becomes. */
 async function tool(token: string, name: string, args: Record<string, JsonValue>): Promise<string> {
-  const r = await http(token, 'POST', '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+  const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
+  const r = await http(token, 'POST', '/mcp', call, { 'x-hippo-project': 'alpha' });
   expect(r.status, r.text).toBe(200);
   const body = json<{ result?: { content: Array<{ text: string }> }; error?: { message: string } }>(r);
   return body.result?.content[0]?.text ?? body.error?.message ?? '';
@@ -158,7 +159,7 @@ beforeAll(async () => {
   ids.child = seedRow('the umberline ledger closed at noon', A_SCOPE, '', {
     layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dag_level: 1, dag_parent_id: summary.id, source_session_id: SESSION,
   }).id;
-  ids.teamRaw = seedRow('the tealraw ledger opened at nine', null, null,
+  ids.teamRaw = seedRow('the tealraw ledger opened at nine', null, 'alpha',
     { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', source_session_id: SESSION }).id;
 });
 
@@ -237,8 +238,8 @@ describe('personal memories walk (plan lane T)', () => {
     expect(await say('A', 'hippo_recall', { query: 'cold start' })).toContain('quillonmarsh');
     expect(await say('A', 'hippo_assemble', { session_id: SESSION })).toContain('umberline');
     expect(await say('A', 'hippo_drill', { summary_id: ids.summary })).toContain(ids.child);
-    // The plan gives hippo_context no project, and a shared store refuses that, so A's side is its row or that refusal.
-    expect(await say('A', 'hippo_context', {})).toMatch(/quillonmarsh|needs a project on a shared store/);
+    // A's personal rows are user-global, so the alpha header still shows them.
+    expect(await say('A', 'hippo_context', {})).toContain('quillonmarsh');
     for (const who of OTHERS) {
       const recalled = await say(who, 'hippo_recall', { query: 'cold start' });
       expect(recalled, who).toContain('tealwickharbour');
@@ -299,12 +300,13 @@ describe('personal memories walk (plan lane T)', () => {
     expect(json<{ ids: string[] }>(await http(keys.A.plaintext, 'POST', '/v1/outcome', { good: true })).ids).toContain(ids.aZircon);
   });
 
-  it('line 8: MCP hippo_share, hippo_conflicts and hippo_resolve, and a team rejectLoser spares A\'s row (F1)', async () => {
+  it('line 8: MCP hippo_share and hippo_resolve are off, hippo_conflicts, and a team rejectLoser spares A\'s row (F1)', async () => {
     const off = 'the gravelpine cache must stay off during load tests';
+    const alpha = { name: 'alpha' };
     const p1 = await post(keys.A.plaintext, { content: off, personal: true });
     const p2 = await post(keys.A.plaintext, { content: 'the gravelpine cache must stay on during load tests', personal: true });
-    const t1 = await post(keys.B.plaintext, { content: off });
-    const t2 = await post(keys.B.plaintext, { content: 'the gravelpine cache must stay on during soak tests' });
+    const t1 = await post(keys.B.plaintext, { content: off, project: alpha });
+    const t2 = await post(keys.B.plaintext, { content: 'the gravelpine cache must stay on during soak tests', project: alpha });
     replaceDetectedConflicts(store, [
       { memory_a_id: p1, memory_b_id: p2, reason: 'walk: A pair', score: 0.9 },
       { memory_a_id: t1, memory_b_id: t2, reason: 'walk: team pair', score: 0.9 },
@@ -313,13 +315,10 @@ describe('personal memories walk (plan lane T)', () => {
     const pairOf = (id: string): number => open.find((c) => c.memory_a_id === id || c.memory_b_id === id)!.id;
     const [aPair, teamPair] = [pairOf(p1), pairOf(t1)];
 
-    const share = (who: Who, id: string): Promise<string> => tool(keys[who].plaintext, 'hippo_share', { id, force: true });
-    for (const who of OTHERS) {
-      expect(await share(who, p1), who).toContain('Memory not found');
-      await sameAsMissing(p1, async (id) => ({ status: 200, text: await share(who, id) }));
+    for (const who of ['A', 'B', 'ADM'] as const) {
+      expect(await tool(keys[who].plaintext, 'hippo_share', { id: who === 'A' ? p1 : t2, force: true }), who).toContain('hippo_share is off on a shared store');
+      expect(await tool(keys[who].plaintext, 'hippo_resolve', { conflict_id: aPair, keep: p1 }), who).toContain('hippo_resolve is off on a shared store');
     }
-    expect(await share('A', p1)).not.toMatch(/^Shared \[/);
-    expect(await share('B', t2)).toMatch(/^Shared \[/);
 
     expect(await tool(keys.A.plaintext, 'hippo_conflicts', {})).toContain(`conflict_${aPair}:`);
     for (const who of OTHERS) {
@@ -328,9 +327,8 @@ describe('personal memories walk (plan lane T)', () => {
       expect(listed, who).not.toContain(`conflict_${aPair}:`);
     }
 
-    const resolve = (who: Who, args: Record<string, JsonValue>): Promise<string> => tool(keys[who].plaintext, 'hippo_resolve', args);
-    for (const who of OTHERS) expect(await resolve(who, { conflict_id: aPair, keep: p1 }), who).toContain('Could not resolve');
-    expect(await resolve('B', { conflict_id: teamPair, keep: t2, rejectLoser: true })).toContain('Resolved conflict');
+    // The admin resolves with the CLI on a shared store, which runs this.
+    expect(resolveConflict(store, teamPair, t2, false, 'default', { rejectLoserValue: true, rejectedBy: 'walk' })).not.toBeNull();
     expect(readEntry(store, t1)).toBeFalsy();
     expect(readEntry(store, p1)?.content).toBe(off);
   });

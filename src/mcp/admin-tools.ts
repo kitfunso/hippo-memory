@@ -8,7 +8,11 @@ import { shareMemory, listPeers } from '../shared.js';
 import { computePredictionBaserate } from '../predictions/store.js';
 import { closeHippoDb, openHippoDb } from '../db.js';
 import { NotFoundError } from '../api-errors.js';
-import { canTouchScope } from '../recall-scope.js';
+import { classifyOriginProject } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
+import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
+import { selectEntriesByIds } from '../store/entry-reads.js';
+import type { MemoryConflict } from '../store/rows.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../json.js';
@@ -69,8 +73,27 @@ export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string
   ].join('\n');
 }
 
-export function runConflictsTool({ ctx, hippoRoot, tenantId }: ToolCall): string {
-  const conflicts = listTouchableConflicts(hippoRoot, 'open', tenantId, mcpActor(ctx));
+/** Pairs whose two rows the caller could recall: its repo or user-global, and no scope it was not asked for. */
+function recallablePairs(call: ToolCall, conflicts: MemoryConflict[], project: CallerProject): MemoryConflict[] {
+  const own = personalScopeOf(mcpActor(call.ctx));
+  const db = openHippoDb(call.hippoRoot);
+  try {
+    const rows = selectEntriesByIds(db, conflicts.flatMap((c) => [c.memory_a_id, c.memory_b_id]), call.tenantId);
+    const shown = (id: string): boolean => {
+      const row = rows.get(id);
+      return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
+        && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
+    };
+    return conflicts.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function runConflictsTool(call: ToolCall): string {
+  const { ctx, hippoRoot, tenantId } = call;
+  const touchable = listTouchableConflicts(hippoRoot, 'open', tenantId, mcpActor(ctx));
+  const conflicts = ctx?.project ? recallablePairs(call, touchable, ctx.project) : touchable;
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
