@@ -33,8 +33,11 @@ function importClosure(entry: string): string[] {
 describe('light subpath import closures', () => {
   it('hippo-memory/session-text reaches no store, db, server, api or index module', () => {
     const closure = importClosure('entry/session-text.ts');
-    // The walk follows re-exports, so the two modules the entry names are in it.
-    expect(closure).toEqual(expect.arrayContaining(['capture/transcript.ts', 'share-scrub.ts', 'home-path.ts', 'secret-detect.ts']));
+    // The walk follows re-exports, so every module the entry names is in it.
+    expect(closure).toEqual(expect.arrayContaining([
+      'capture/transcript.ts', 'share-scrub.ts', 'home-path.ts', 'secret-detect.ts',
+      'capture/working-state.ts', 'capture/failure-reading.ts', 'handoff-evidence.ts', 'compaction-items.ts',
+    ]));
     expect(closure.filter((f) => HEAVY.test(f))).toEqual([]);
   });
 });

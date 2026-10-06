@@ -10,7 +10,7 @@ import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
-import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
+import type { SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
 import { isSharedStore, type HippoConfig } from '../config.js';
@@ -366,31 +366,6 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
  * `__session-end-worker` subcommand (not user-facing). Failures in one stage
  * do not block the other.
  */
-// Best-effort git state; a missing git, non-repo cwd, or the timeout all
-// yield null fields rather than throw (autolearn.ts execFileSync shape).
-export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testStatus']): HandoffEvidence {
-  let gitRef: string | null = null;
-  try {
-    gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    }).trim() || null;
-  } catch {
-    // No git, not a repo, or timed out: evidence is optional, so the field stays null.
-    gitRef = null;
-  }
-  let dirtyTree: boolean | null = null;
-  try {
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    });
-    dirtyTree = status.trim().length > 0;
-  } catch {
-    // Same as gitRef: unknown tree state is reported as null, never as an error.
-    dirtyTree = null;
-  }
-  return { gitRef, dirtyTree, testStatus };
-}
-
 /** A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here. */
 export function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
   try {

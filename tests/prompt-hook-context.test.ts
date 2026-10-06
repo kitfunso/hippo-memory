@@ -358,6 +358,15 @@ describe('subpath exports resolve', () => {
     ['hippo-memory/session-text', 'collectSessionTurns', 'function'],
     ['hippo-memory/session-text', 'sessionTail', 'function'],
     ['hippo-memory/session-text', 'scrubForSharing', 'function'],
+    ['hippo-memory/session-text', 'transcriptWorkingState', 'function'],
+    ['hippo-memory/session-text', 'WORKING_STATE_CAPS', 'object'],
+    ['hippo-memory/session-text', 'lessonFromFailure', 'function'],
+    ['hippo-memory/session-text', 'failureReport', 'function'],
+    ['hippo-memory/session-text', 'collectHandoffEvidence', 'function'],
+    ['hippo-memory/session-text', 'compactSummaryBody', 'function'],
+    ['hippo-memory/session-text', 'parseCompactionItems', 'function'],
+    ['hippo-memory/session-text', 'COMPACTION_ITEM_MAX_CHARS', 'number'],
+    ['hippo-memory/session-text', 'COMPACTION_ITEM_ROW_CAP', 'number'],
     ['hippo-memory/session-text', 'summariseTranscript', 'undefined'],
   ])('%s: typeof %s is %s in the build', (specifier, name, type) => {
     const script = `const m = await import('${specifier}'); console.log(typeof m.${name});`;

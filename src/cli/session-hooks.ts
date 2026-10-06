@@ -31,7 +31,9 @@ import { summaryLine } from '../agent-memories/report.js';
 import { resolveProjectIdentity } from '../project-identity.js';
 import { getGlobalRoot } from '../shared.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
-import { cmdPreCompact, cmdPostCompact, transcriptWorkingState } from '../capture/compact.js';
+import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
+import { transcriptWorkingState } from '../capture/working-state.js';
+import { collectHandoffEvidence } from '../handoff-evidence.js';
 import { resolveLastSessionTranscript } from '../capture/transcript.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
@@ -42,7 +44,6 @@ import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
 import {
   type CommandContext,
-  collectHandoffEvidence,
   logSessionEndImport,
   appendSessionEndCloseLog,
   printActiveTaskSnapshot,
