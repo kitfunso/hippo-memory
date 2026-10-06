@@ -1,5 +1,6 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 import { META_TABLE_DDL } from './meta.js';
+import { tableExists } from './tables.js';
 
 // Shared by migration v48 and the stamped-store self-heal below.
 export const MEMORY_QUARANTINE_DDL = `
@@ -176,10 +177,16 @@ const CONTINUITY_INDEX_DDL = [
   `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, origin_project, created_at DESC)`,
 ] as const;
 
+// A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.
+const REQUEST_INDEX_DDL = {
+  compactions: `CREATE UNIQUE INDEX IF NOT EXISTS idx_compactions_request ON compactions(tenant_id, request_id) WHERE request_id IS NOT NULL`,
+  failure_log: `CREATE UNIQUE INDEX IF NOT EXISTS idx_failure_log_request ON failure_log(tenant_id, request_id) WHERE request_id IS NOT NULL`,
+} as const;
+
 // Lives with the other re-asserted DDL so the required-object list below derives from one place.
 export const MEMORIES_FTS_DDL = `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(id UNINDEXED, content, tags)`;
 
-const CREATED_NAME = /CREATE\s+(?:VIRTUAL\s+)?(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
+const CREATED_NAME = /CREATE\s+(?:VIRTUAL\s+|UNIQUE\s+)?(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
 
 /** Names of every table and index a `CREATE ... IF NOT EXISTS` in `ddl` makes. */
 export function createdObjectNames(ddl: string): string[] {
@@ -188,10 +195,12 @@ export function createdObjectNames(ddl: string): string[] {
 
 /** Every object runMigrations re-asserts on a stamped store; the open fast path requires all of them. */
 export const REQUIRED_SCHEMA_OBJECTS: readonly string[] = Object.freeze(
-  [META_TABLE_DDL, ...CONTINUITY_TABLE_DDL, ...CONTINUITY_INDEX_DDL, MEMORIES_FTS_DDL].flatMap(createdObjectNames),
+  [META_TABLE_DDL, ...CONTINUITY_TABLE_DDL, ...CONTINUITY_INDEX_DDL, ...Object.values(REQUEST_INDEX_DDL), MEMORIES_FTS_DDL].flatMap(createdObjectNames),
 );
 
 // After the loop: tenant_id (v16) and scope (v23) do not exist yet on a genuine old store.
 export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
   for (const ddl of CONTINUITY_INDEX_DDL) db.exec(ddl);
+  // A store that lost one of these tables still opens, so its hooks can log the failed step and run the rest.
+  for (const [table, ddl] of Object.entries(REQUEST_INDEX_DDL)) if (tableExists(db, table)) db.exec(ddl);
 }

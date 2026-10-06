@@ -1,6 +1,13 @@
-// A caller that renders compact-resume itself must hand the model the same bytes the local hook prints.
+// A caller's compaction must store the snapshot the local hook stores, and its resume must hand the model the bytes the local hook prints.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from './_helpers/compaction-hooks.js';
+import type { Context } from '../src/api/types.js';
+import { transcriptWorkingState } from '../src/capture/working-state.js';
+import { preCompactForCaller } from '../src/server.js';
+import { initStore } from '../src/store/open.js';
+import type { TaskSnapshot } from '../src/store/rows.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../src/context-render.js';
 import { truncateCodePointSafe } from '../src/transcript-tail.js';
@@ -56,5 +63,33 @@ describe('compactResumeText', () => {
     expect(stdout).toContain('## Restored after compaction');
     expect(stdout).not.toContain('Session Trail');
     expect(stdout).toBe(expectedText() + '\n');
+  });
+});
+
+describe('preCompactForCaller', () => {
+  it('stores the snapshot local pre-compact stores for the same transcript, email masked in both', () => {
+    const email = 'dev@acme.io';
+    const transcript = path.join(s.proj, 't.jsonl');
+    const turns = [
+      { type: 'user', message: { role: 'user', content: `Fix the flaky login test and mail ${email} once it passes.` } },
+      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Adding a lock around the session refresh.' }] } },
+    ];
+    fs.writeFileSync(transcript, turns.map((t) => JSON.stringify(t)).join('\n') + '\n');
+    const payload = { transcript_path: transcript, cwd: s.proj, hook_event_name: 'PreCompact', trigger: 'auto', session_id: 's1' };
+    const r = runHippo(['pre-compact', '--log-file', path.join(s.dir, 'pre-compact.log')], s.proj, s.env, JSON.stringify(payload));
+    expect(r.status, r.stderr).toBe(0);
+    const local = loadActiveTaskSnapshot(s.hippoRoot, resolveTenantId({}));
+
+    const server = path.join(s.dir, 'server', '.hippo');
+    fs.mkdirSync(server, { recursive: true });
+    initStore(server);
+    fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
+    const ctx: Context = { hippoRoot: server, tenantId: 'acme', actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
+    preCompactForCaller(ctx, { sessionId: 's1', project: { name: 'proj', legacyName: 'proj' }, trigger: 'auto', workingState: transcriptWorkingState(transcript, () => {}) });
+    const stored = loadActiveTaskSnapshot(server, 'acme', { owner: 'alice', project: ['proj'] });
+
+    const fields = (x: TaskSnapshot | null) => ({ task: x?.task, summary: x?.summary, next_step: x?.next_step, source: x?.source, session_id: x?.session_id });
+    expect(local?.task).toBe('Fix the flaky login test and mail [email] once it passes.');
+    expect(fields(stored)).toEqual(fields(local));
   });
 });

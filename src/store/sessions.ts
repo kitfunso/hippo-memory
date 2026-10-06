@@ -1,3 +1,4 @@
+import { isSharedStore } from '../config.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../project-identity.js';
@@ -45,6 +46,11 @@ export function continuityStamp(key: ContinuityKey): ContinuityStamp {
   return { owner: key.owner, origin };
 }
 
+// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
+function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: ContinuityKey | undefined): void {
+  if (!key && isSharedStore(hippoRoot)) throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
+}
+
 type SnapshotInput = {
   task: string;
   summary: string;
@@ -81,6 +87,7 @@ export function saveActiveTaskSnapshot(
   key?: ContinuityKey,
 ): TaskSnapshot {
   assertTenantId('saveActiveTaskSnapshot', tenantId);
+  assertKeyedOnSharedStore('saveActiveTaskSnapshot', hippoRoot, key);
   const stamp = key ? continuityStamp(key) : null;
   const owned = key ? continuityWhere(key) : null;
   const db = openStore(hippoRoot);
@@ -210,6 +217,7 @@ export function loadFreshActiveTaskSnapshot(
 
 export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, clearedStatus: string = 'cleared'): boolean {
   assertTenantId('clearActiveTaskSnapshot', tenantId);
+  assertKeyedOnSharedStore('clearActiveTaskSnapshot', hippoRoot, undefined);
   const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 

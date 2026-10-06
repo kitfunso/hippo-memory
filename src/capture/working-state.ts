@@ -21,6 +21,16 @@ export const WORKING_STATE_CAPS = {
 
 export type WorkingState = Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>;
 
+/** Cuts each field to {@link WORKING_STATE_CAPS}, for after a scrub, as a mask can run longer than what it hides. */
+export function fitWorkingState(state: WorkingState): WorkingState {
+  return {
+    task: truncateCodePointSafe(state.task, WORKING_STATE_CAPS.task),
+    // Only past the cap, since re-trimming a summary that fits would drop its head again; the cut keeps the newest turns.
+    summary: state.summary.length > WORKING_STATE_CAPS.summary ? truncateKeepNewest(state.summary, PRE_COMPACT_SUMMARY_CAP) : state.summary,
+    next_step: truncateCodePointSafe(state.next_step, WORKING_STATE_CAPS.next_step),
+  };
+}
+
 /** Each empty field falls back to `existing`'s, since a tool-heavy tail derives no task; null when all are empty, so blanks never replace a snapshot.
  *  Never across sessions: another session's task saved under this id would pass compact-resume's session check. */
 export function mergeWorkingState(derived: WorkingState, existing: TaskSnapshot | null, sessionId: string | null): WorkingState | null {

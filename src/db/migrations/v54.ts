@@ -21,10 +21,6 @@ export const v54: Migration = {
       for (const [t, c] of OWNER_COLUMNS) {
         if (tableExists(db, t) && !tableHasColumn(db, t, c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);
       }
-      // A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.
-      for (const t of ['compactions', 'failure_log']) {
-        if (tableExists(db, t)) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${t}_request ON ${t}(tenant_id, request_id) WHERE request_id IS NOT NULL`);
-      }
       db.exec(SESSION_OWNERS_DDL);
     },
 };

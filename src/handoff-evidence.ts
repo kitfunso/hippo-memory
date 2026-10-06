@@ -2,13 +2,18 @@
 import { execFileSync } from 'child_process';
 import type { HandoffEvidence } from './handoff.js';
 
-// Best-effort git state; a missing git, non-repo cwd, or the timeout all
-// yield null fields rather than throw (autolearn.ts execFileSync shape).
-export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testStatus']): HandoffEvidence {
+// Best-effort git state; a missing git, non-repo cwd, or a call past timeoutMs (each call, default 2 s)
+// yields null fields rather than throw, so a hook with a hard deadline can cap a slow repo.
+export function collectHandoffEvidence(
+  cwd: string,
+  testStatus: HandoffEvidence['testStatus'],
+  options: { timeoutMs?: number } = {},
+): HandoffEvidence {
+  const timeout = options.timeoutMs ?? 2000;
   let gitRef: string | null = null;
   try {
     gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
+      cwd, encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     }).trim() || null;
   } catch {
     // No git, not a repo, or timed out: evidence is optional, so the field stays null.
@@ -17,7 +22,7 @@ export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence[
   let dirtyTree: boolean | null = null;
   try {
     const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
+      cwd, encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
     });
     dirtyTree = status.trim().length > 0;
   } catch {

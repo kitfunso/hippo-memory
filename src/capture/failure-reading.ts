@@ -2,6 +2,7 @@
 import { redactSecretsStrict } from '../secret-detect.js';
 import { scrubForSharing } from '../share-scrub.js';
 import { blockHash } from '../token-ledger.js';
+import { truncateCodePointSafe } from '../transcript-tail.js';
 import type { JsonValue } from '../json.js';
 
 /** Why a failure was not stored, or `stored`. */
@@ -76,7 +77,7 @@ export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => s
   if (!isString(p.error) || p.error.trim().length < 12) return { skip: 'skipped-invalid', text: null, detail: null };
   const tool = isString(p.tool_name) ? p.tool_name : 'tool';
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
-  const text = scrub(`${tool}: ${error}`).slice(0, FAILURE_TEXT_MAX_CHARS);
+  const text = truncateCodePointSafe(scrub(`${tool}: ${error}`), FAILURE_TEXT_MAX_CHARS);
   const command = isObject(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
   const head = command.trim().split(/\s+/).slice(0, 2).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;

@@ -83,4 +83,12 @@ describe('failureReport', () => {
     captureToolFailure(root, 'default', { tool_name: 'Bash', error });
     expect(report.detail_hash).toBe(logRows()[0]?.detail_hash);
   });
+
+  it('cuts the text on a code point, never inside a surrogate pair', () => {
+    // 'Bash: ' plus 193 characters puts the emoji's halves at 199 and 200, so a 200-unit cut would keep a lone high surrogate.
+    const before = 'build failed '.repeat(20).slice(0, 193);
+    const error = `${before}\u{1F600} after it`;
+    expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toBe(`Bash: ${before}`);
+    expect(failureReport({ tool_name: 'Bash', error }).text).toBe(`Bash: ${before}`);
+  });
 });

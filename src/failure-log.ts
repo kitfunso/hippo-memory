@@ -1,4 +1,5 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
+import { ConflictError } from './api-errors.js';
 import type { CaptureErrorOutcome, RoutineRule } from './capture/failure-reading.js';
 import type { DatabaseSyncLike } from './db.js';
 
@@ -57,10 +58,14 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
 }
 
-/** The outcome logged for a caller's request id, or null, so a retried send finds the first one. */
-export function requestOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string): FailureOutcome | null {
-  return db.prepare(`SELECT outcome FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
-    .get<{ outcome: FailureOutcome } | undefined>(tenantId, requestId)?.outcome ?? null;
+/** The outcome logged for a caller's request id, or null, so a retried send finds the first one; another session's id is a ConflictError. */
+export function requestOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): FailureOutcome | null {
+  const row = db.prepare(`SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
+    .get<{ outcome: FailureOutcome; session_id: string | null } | undefined>(tenantId, requestId);
+  if (row === undefined) return null;
+  // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
+  if (row.session_id !== sessionId.slice(0, MAX_FIELD)) throw new ConflictError('request id belongs to another session');
+  return row.outcome;
 }
 
 /** A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant. */

@@ -69,6 +69,12 @@ describe('check-expiring-keys-floor.mjs', () => {
     expect(r.stderr).toContain('v1.0.0 does not ship schema v53');
   });
 
+  it('fails when a floor names an untagged version that is not the package version', () => {
+    const r = runGate(makeRepo('1.2.0', { expiring: '1.1.5', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('EXPIRING_KEYS_MIN_BINARY 1.1.5 names no release tag and is not the package version 1.2.0');
+  });
+
   it('TASK_OWNER_MIN_BINARY above the package fails', () => {
     const r = runGate(makeRepo('1.1.0', { expiring: '1.1.0', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }));
     expect(r.status).toBe(1);

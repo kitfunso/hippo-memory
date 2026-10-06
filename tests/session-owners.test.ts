@@ -5,8 +5,9 @@ import { openHippoDb, closeHippoDb, withBusyWait, type DatabaseSyncLike } from '
 import { ConflictError } from '../src/api-errors.js';
 import type { Context } from '../src/api.js';
 import { bindSessionOwner } from '../src/server.js';
+import { insertBinding } from '../src/session-owners.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { TASK_OWNER_MIN_BINARY } from '../src/version.js';
+import { TASK_OWNER_MIN_BINARY, compareSemver } from '../src/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
@@ -32,6 +33,9 @@ function bindings(): Array<{ tenant_id: string; session_id: string; owner_subjec
 function setFloor(v: string): void {
   withDb((db) => db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(v));
 }
+
+/** The released binary that shipped neither v53 nor v54. */
+const PREVIOUS_RELEASE = '1.63.2';
 
 function floor(): string | undefined {
   // SAFETY: one TEXT `value` column by primary key.
@@ -83,12 +87,46 @@ describe('bindSessionOwner', () => {
     expect(bindings()).toHaveLength(1);
   });
 
+  it('a floor raise that fails takes the binding with it, since both are one transaction', () => {
+    setFloor('0.0.1');
+    withDb((db) => db.exec(`CREATE TRIGGER fail_floor BEFORE INSERT ON meta WHEN NEW.key = 'min_compatible_binary' BEGIN SELECT RAISE(ABORT, 'floor boom'); END`));
+    expect(() => bindSessionOwner(ctx('alice'), 's1')).toThrow('floor boom');
+    expect(bindings()).toEqual([]);
+    expect(floor()).toBe('0.0.1');
+  });
+
+  it('the first bind lifts the floor above the last release before v54, which the open then refuses', () => {
+    setFloor('0.0.1');
+    bindSessionOwner(ctx('alice'), 's1');
+    // The open refuses any binary below the floor (github-v1.3.1-hotfix.test.ts), so a floor above the release shuts it out.
+    expect(compareSemver(floor() ?? '', PREVIOUS_RELEASE)).toBeGreaterThan(0);
+  });
+
+  it('a bind that lost the race to another owner returns the stored owner, not its own', () => {
+    bindSessionOwner(ctx('alice'), 's1');
+    // Bob's read ran before Alice committed, so he reaches the insert with her row already there.
+    expect(withDb((db) => insertBinding(db, 'default', 's1', 'bob'))).toBe('alice');
+    expect(bindings().map((b) => b.owner_subject)).toEqual(['alice']);
+  });
+
   it('an owner snapshot save raises the floor', () => {
     setFloor('0.0.1');
     saveActiveTaskSnapshot(home, 'default', { task: 't', summary: 's', next_step: 'n' });
     expect(floor()).toBe('0.0.1');
     saveActiveTaskSnapshot(home, 'default', { task: 't', summary: 's', next_step: 'n' }, { owner: 'alice', project: ['p'] });
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
+  });
+
+  it('a new bind prunes bindings older than 90 days, in every tenant, and keeps younger ones', () => {
+    const daysAgo = (d: number): string => new Date(Date.now() - d * 86_400_000).toISOString();
+    withDb((db) => {
+      const insert = db.prepare(`INSERT INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`);
+      insert.run('default', 'old', 'alice', daysAgo(91));
+      insert.run('acme', 'old-acme', 'bob', daysAgo(91));
+      insert.run('default', 'young', 'alice', daysAgo(89));
+    });
+    bindSessionOwner(ctx('carol'), 'new');
+    expect(bindings().map((b) => b.session_id).sort()).toEqual(['new', 'young']);
   });
 
   it('two tenants may hold one session id', () => {
