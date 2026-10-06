@@ -354,6 +354,8 @@ describe('promptHookContext on a shared store', () => {
 describe('subpath exports resolve', () => {
   it.each([
     ['hippo-memory/project-identity', 'resolveProjectIdentity', 'function'],
+    ['hippo-memory/project-identity', 'MAX_PROJECT_ALIASES', 'number'],
+    ['hippo-memory/project-identity', 'MCP_PROJECT_SCOPED_HEADER', 'string'],
     ['hippo-memory/project-identity', 'originInSql', 'undefined'],
     ['hippo-memory/project-identity', 'clearProjectIdentityCache', 'undefined'],
     ['hippo-memory/json-hooks', 'installJsonHooks', 'function'],

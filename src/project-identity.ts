@@ -243,6 +243,7 @@ export function projectNames(project: ProjectRef): readonly string[] {
 
 // Each project name is matched against every candidate row, so the caller's list stays short.
 export const MAX_PROJECT_ALIASES = 10;
+export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 
 /** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
 export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {

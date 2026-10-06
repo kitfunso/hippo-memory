@@ -17,6 +17,7 @@ import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from 
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
+import { MCP_PROJECT_SCOPED_HEADER } from './project-identity.js';
 import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFor, requestIds, resolveRequestId, sendError } from './server/request.js';
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './server/routes/admin.js';
 import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './server/routes/customer-notes.js';
@@ -278,6 +279,8 @@ async function handleRequest(
   rejectEncodedSlash(req.url ?? '/');
 
   const { method, path, query } = parseRequest(req);
+  // An older core ignores X-Hippo-Project, so every /mcp reply, a 429 or 401 too, tells the client this one filters by it.
+  if (path === '/mcp') res.setHeader(MCP_PROJECT_SCOPED_HEADER, '1');
 
   if (method === 'GET' && path === '/health') {
     sendHealth(req, res, startedAt);
