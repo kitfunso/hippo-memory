@@ -119,7 +119,7 @@ function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map
   const max = envMcpSseMaxStreams() ?? DEFAULT_MAX_STREAMS_PER_CLIENT;
   const key = streamSlotKey(req);
   const open = slots.get(key) ?? 0;
-  if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`);
+  if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`, 60);
   slots.set(key, open + 1);
   res.once('close', () => {
     const left = (slots.get(key) ?? 1) - 1;
