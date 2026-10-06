@@ -1,6 +1,6 @@
 import type { MemoryEntry, StrengthInputs } from '../memory.js';
 import { closeHippoDb } from '../db.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from '../recall-scope.js';
+import { scopeAdmitSql } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
 import { originInSql } from '../project-identity.js';
@@ -9,6 +9,7 @@ import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows
 export interface AmbientRecallRequest {
   terms: string[];
   limit: number;
+  ownScope?: string;
 }
 
 export interface AmbientLoadResult {
@@ -101,7 +102,7 @@ export function loadAmbientCandidates(
     if (!recall) return { entries };
     const ftsQuery = pickRarestFtsQuery(db, recall.terms);
     const recallEntries = ftsQuery
-      ? loadRecallSearchEntriesFromDb(db, ftsQuery, recall.limit, tenantId, undefined, 'exact', false)
+      ? loadRecallSearchEntriesFromDb(db, ftsQuery, recall.limit, tenantId, undefined, 'exact', false, undefined, recall.ownScope)
       : [];
     return { entries, recall: recallEntries };
   } finally {
@@ -113,6 +114,8 @@ export function loadAmbientCandidates(
 export interface ContextCandidateFilter {
   /** Envelope scope asked for by name; absent applies recall's default deny. */
   exactScope?: string;
+  /** The caller's personal scope, which the default deny admits. */
+  ownScope?: string;
   /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
   project?: readonly string[];
   /** Most rows returned; past it, the rows decay has worn least win. */
@@ -135,9 +138,9 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
     where.push('scope = ?');
     params.push(filter.exactScope);
   } else {
-    // isRestrictedScope's rule; NOT LIKE folds ASCII case as its /:private:/i does.
-    where.push(`(scope IS NULL OR (scope NOT IN (${RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ')}) AND scope NOT LIKE '%:private:%'))`);
-    params.push(...RECALL_DEFAULT_DENY_SCOPES);
+    const admit = scopeAdmitSql('', filter.ownScope);
+    where.push(admit.sql);
+    params.push(...admit.params);
   }
   if (filter.project !== undefined) {
     where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
@@ -187,12 +190,14 @@ export function loadStrengthRows(hippoRoot: string, tenantId: string): StrengthR
 
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
 
-/** Text, source and origin of tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word.
+/** Text, source and origin of team-visible tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word.
  *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. */
 export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[]): HeldText[] {
   const unique = [...new Set(words)];
   const out: HeldText[] = [];
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
+  // No owner: a personal or connector-private row must never stop a team copy being written.
+  const deny = scopeAdmitSql('');
   const db = openStore(hippoRoot);
   try {
     // Chunked so one statement stays far under SQLite's bound-parameter limit.
@@ -200,8 +205,8 @@ export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words
       const chunk = unique.slice(i, i + 200);
       // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
-      ).all(tenantId, ...(project ?? []), ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
+        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND ${deny.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+      ).all(tenantId, ...(project ?? []), ...deny.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
       for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;

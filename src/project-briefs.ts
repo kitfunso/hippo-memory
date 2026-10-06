@@ -25,7 +25,7 @@ import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+import { scopeAdmitSql } from './recall-scope.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
@@ -558,7 +558,7 @@ function receiptHeadline(content: string): string {
 function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: string): ReceiptRow[] {
   const tag = `path:${normalizedRepo.toLowerCase()}`;
   const likeParam = `%"${escapeLike(tag)}"%`;
-  const denyPlaceholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+  const deny = scopeAdmitSql('');
 
   const db = openHippoDb(hippoRoot);
   try {
@@ -569,10 +569,10 @@ function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: 
       WHERE tenant_id = ?
         AND source != 'project_brief'
         AND LOWER(tags_json) LIKE ? ESCAPE '\\'
-        AND (scope IS NULL OR (scope NOT IN (${denyPlaceholders}) AND scope NOT LIKE '%:private:%'))
+        AND ${deny.sql}
       ORDER BY created DESC, id DESC
       LIMIT ?
-    `).all(tenantId, likeParam, ...RECALL_DEFAULT_DENY_SCOPES, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
+    `).all(tenantId, likeParam, ...deny.params, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
   } finally {
     closeHippoDb(db);
   }

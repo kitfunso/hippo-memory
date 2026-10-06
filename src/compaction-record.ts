@@ -8,6 +8,7 @@ import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from '
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
 import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
+import { scopeAdmitSql } from './recall-scope.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
@@ -312,11 +313,12 @@ interface Held {
 
 /** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
 function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): Held[] {
+  const deny = scopeAdmitSql('');
   // SAFETY: the SELECT names the id, source_session_id and content columns.
   const rows = db.prepare(
     `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND superseded_by IS NULL AND kind != 'raw'
-       AND (scope IS NULL OR (scope != 'unknown:legacy' AND scope NOT LIKE '%:private:%'))`,
-  ).all(tenantId, ...origins) as Array<{ id: string; source_session_id: string | null; content: string }>;
+       AND ${deny.sql}`,
+  ).all(tenantId, ...origins, ...deny.params) as Array<{ id: string; source_session_id: string | null; content: string }>;
   return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
 }
 

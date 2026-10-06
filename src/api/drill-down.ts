@@ -5,7 +5,7 @@ import { openStore } from '../store/open.js';
 import { selectEntriesByIds, selectChildrenByParent } from '../store/entry-reads.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall } from '../recall-scope.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,8 @@ function drillDownOn(
   // unauthorised tenants. The two cases collapse into not_found.
   if (!summary) return { failure: 'not_found' };
   if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
-  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined)) {
+  const own = personalScopeOf(ctx.actor) ?? undefined;
+  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined, own)) {
     // codex round 3 P1: collapse to not_found. A distinguishable
     // "scope_blocked" tells a no-scope caller "this row exists, just
     // not for you" — same existence-leak the HTTP 404 collapse was
@@ -128,7 +129,7 @@ function drillDownOn(
     return { failure: 'not_found' };
   }
 
-  const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, depth);
+  const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, depth, own);
 
   const summaryOut: DrillDownSummary = {
     id: summary.id,
@@ -177,6 +178,7 @@ function collectDescendants(
   tenantId: string,
   summaryId: string,
   depth: number,
+  own: string | undefined,
 ): DescendantWalk {
   const collected: MemoryEntry[] = [];
   const visited = new Set<string>([summaryId]);
@@ -187,7 +189,7 @@ function collectDescendants(
     const kidsByParent = selectChildrenByParent(db, frontier, tenantId);
     for (const parentId of frontier) {
       const kids = kidsByParent.get(parentId) ?? [];
-      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
+      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined, own));
       for (const k of eligibleKids) {
         if (visited.has(k.id)) continue;
         visited.add(k.id);

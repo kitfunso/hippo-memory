@@ -16,7 +16,7 @@ import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
 import { tallySources } from './store/candidates.js';
 import { loadIndex } from './store/index-and-stats.js';
-import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
+import { isPersonalScope, passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
 import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';
 import { fitBudget } from './search/finalize.js';
@@ -78,6 +78,9 @@ export function promoteToGlobal(
   // Same quarantine veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+  }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`);
   }
 
   // Secret producer veto: promote is a producer path to the global store
@@ -223,7 +226,7 @@ export interface HybridSearchOptions extends SearchOptions {
    *  `null` a different meaning (boost-neutral), so a flat `string | null`
    *  here would overload null with contradictory semantics. Do NOT pass an
    *  empty object casually from non-recall paths. */
-  recallScope?: { requested?: string; additive?: boolean };
+  recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
 /**
@@ -256,13 +259,15 @@ export async function searchBothHybrid(
           root, query, searchWindow, tenantId, recallScope.requested,
           recallScope.additive ? 'additive' : 'exact',
           Boolean(includeSuperseded) || Boolean(asOf),
+          undefined,
+          recallScope.ownScope,
         )
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
   const passesScope = (e: MemoryEntry): boolean =>
     !recallScope || (recallScope.additive
-      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
-      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested));
+      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested) || passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
+      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
   const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
   const localEntries = loadEntries(localRoot).filter(admit);
   const globalEntries = loadEntries(globalRoot).filter(admit);
@@ -270,7 +275,7 @@ export async function searchBothHybrid(
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates = {
     tenantId,
-    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact') : undefined,
+    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope) : undefined,
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
@@ -418,6 +423,9 @@ export function shareMemory(
       `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`);
+  }
 
   const score = transferScore(entry);
   if (score < 0.3 && !options.force) return null;
@@ -502,8 +510,8 @@ export function listPeers(
 type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
 
 function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>, minScore: number, stats: AutoShareStats | undefined): boolean {
-  // shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
-  if (isQuarantineScope(entry.scope ?? null) || !isReusable(entry)) return false;
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
+  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) return false;
   // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
   if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
