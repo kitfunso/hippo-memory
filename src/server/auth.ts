@@ -6,7 +6,7 @@ import { log } from '../log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
 import { type Actor, type Context, ownerOrSubject } from '../api.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
-import { clientIpForRateLimit } from './client-ip.js';
+import { clientIpForRateLimit, subscriberKey } from './client-ip.js';
 import { requestIds } from './request.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../json.js';
@@ -158,27 +158,17 @@ interface BearerIdentity extends ResolvedBearer {
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
+/** Runs only before scrypt, so junk, unknown, revoked and expired tokens and a proven key's re-check never spend a colleague's budget. */
+function chargeScryptRun(req: IncomingMessage, opts: AuthOpts): void {
+  const limiter = opts.failedAuthLimiter;
+  // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
+  if (limiter && !limiter.check(subscriberKey(clientIpForRateLimit(req)))) {
+    throw new HttpError(429, 'too many key checks from this address', limiter.retryAfterSec);
+  }
+}
+
 /** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
 async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts): Promise<BearerIdentity> {
-  try {
-    return await identifyBearer(req, token, opts);
-  } catch (err) {
-    // A failure never reaches a caller bucket, so the address pays for it, or a known key id buys unlimited scrypt runs.
-    if (err instanceof HttpError && err.status === 401) opts.failedAuthLimiter?.check(clientIpForRateLimit(req));
-    throw err;
-  }
-}
-
-/** Cache hits skip this, so a developer whose key is cached is never blocked by someone else's bad key. */
-function refuseWhenFailedAuthSpent(req: IncomingMessage, opts: AuthOpts): void {
-  const limiter = opts.failedAuthLimiter;
-  // SHORTCUT: peeks here and charges on the 401, so a store with real async reads lets concurrent misses all pass; reserve a token here if one ships.
-  if (limiter && !limiter.hasToken(clientIpForRateLimit(req))) {
-    throw new HttpError(429, 'too many failed auth attempts from this address', limiter.retryAfterSec);
-  }
-}
-
-async function identifyBearer(req: IncomingMessage, token: string, opts: AuthOpts): Promise<BearerIdentity> {
   // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's identity.
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
@@ -186,7 +176,7 @@ async function identifyBearer(req: IncomingMessage, token: string, opts: AuthOpt
     const clean = await askResolver(opts.authResolver, token, deadlineMs);
     return { ...clean, viaAuthResolver: true, owner: clean.subject }; // a resolver vouches for a person, never names one
   }
-  const key = await verifyApiKeyCached(opts.hippoRoot, token, opts.store, () => refuseWhenFailedAuthSpent(req, opts));
+  const key = await verifyApiKeyCached(opts.hippoRoot, token, opts.store, () => chargeScryptRun(req, opts));
   if (!key) throw new HttpError(401, 'invalid api key');
   const id: BearerIdentity = { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
   if (key.ownerSubject) id.owner = key.ownerSubject;
@@ -279,7 +269,7 @@ export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise
   if (id !== null) chargeCaller(req, id.tenantId, bearerActor(id), opts);
 }
 
-/** Never rejects or charges: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx denial closes the stream. */
+/** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx denial closes the stream. */
 export async function heartbeatVerdict(req: IncomingMessage, opts: AuthOpts): Promise<'ok' | 'revoked' | 'unavailable'> {
   try {
     await checkAuth(req, opts);

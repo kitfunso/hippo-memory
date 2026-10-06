@@ -1,11 +1,12 @@
-// Each person gets one bucket across their keys, an address's failed sign-ins stop before scrypt, and every 429 says when to come back.
+// Each person gets one bucket across their keys, an address's scrypt runs are capped, and every 429 says when to come back.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { apiKeyVerifyStats, createApiKey, type CreateApiKeyOpts } from '../src/auth.js';
+import { apiKeyVerifyStats, createApiKey, revokeApiKey, VERIFIED_KEY_TTL_MS, type CreateApiKeyOpts } from '../src/auth.js';
 import { log } from '../src/log.js';
 import { serve, sqliteStore, StoreBusyError, type AddonRoute, type HippoStore, type ServeOpts } from '../src/server.js';
+import { subscriberKey } from '../src/server/client-ip.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
@@ -29,6 +30,7 @@ beforeEach(() => {
 afterEach(async () => {
   await stop?.();
   stop = undefined;
+  vi.useRealTimers();
   vi.restoreAllMocks();
   for (const [k, v] of saved) {
     if (v === undefined) delete process.env[k];
@@ -67,23 +69,39 @@ const bearer = (token: string, extra: Record<string, string> = {}) => ({ authori
 const recall = (headers: Record<string, string> = {}): Promise<Reply> => send('/v1/memories?q=x', { headers });
 const addonRoute = (onRun: () => void): AddonRoute => ({ path: '/v1/x-addon', handler: async () => { onRun(); return {}; } });
 
-async function statuses(call: () => Promise<Reply>, n: number): Promise<number[]> {
-  const out: number[] = [];
-  for (let i = 0; i < n; i++) out.push((await call()).status);
+async function replies(call: () => Promise<Reply>, n: number): Promise<Reply[]> {
+  const out: Reply[] = [];
+  for (let i = 0; i < n; i++) out.push(await call());
   return out;
 }
 
+async function statuses(call: () => Promise<Reply>, n: number): Promise<number[]> {
+  return (await replies(call, n)).map((r) => r.status);
+}
+
+const OK = { status: 200, retryAfter: null };
+const UNAUTHORISED = { status: 401, retryAfter: null };
+
+/** Stops the clock so no bucket refills while a test counts tokens; timers still run. */
+function freezeClock(): void {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-06T09:00:00Z'));
+}
+
 describe('per-caller buckets', () => {
-  it('gives two owners behind one proxy address their own buckets', async () => {
+  it('gives two owners behind one proxy address their own buckets, though they share its address bucket', async () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
     process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    freezeClock();
     const a = mint({ ownerSubject: 'oid-a' });
     const b = mint({ ownerSubject: 'oid-b' });
-    await start({ perCaller: { ratePerSec: 1, burst: 2 }, perAddress: WIDE });
-    const viaProxy = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.7' }));
-    expect(await statuses(() => viaProxy(a), 2)).toEqual([200, 200]);
-    expect(await viaProxy(a)).toEqual({ status: 429, retryAfter: '1' });
-    expect((await viaProxy(b)).status).toBe(200);
+    await start({ perCaller: { ratePerSec: 1, burst: 2 }, perAddress: { ratePerSec: 0.1, burst: 4 } });
+    const via = (token: string, address: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': address }));
+    expect(await replies(() => via(a, '203.0.113.7'), 3)).toEqual([OK, OK, { status: 429, retryAfter: '1' }]);
+    expect(await via(b, '203.0.113.7')).toEqual(OK);
+    // A and B together spent the office address's four tokens; another address still has its own.
+    expect(await via(b, '203.0.113.7')).toEqual({ status: 429, retryAfter: '10' });
+    expect(await via(b, '203.0.113.8')).toEqual(OK);
   });
 
   it('shares one bucket between two keys of one owner', async () => {
@@ -141,9 +159,9 @@ describe('per-caller buckets', () => {
     await start({ perCaller: SLOW, perAddress: WIDE }, { routes: [addonRoute(() => { runs += 1; })] });
     const addon = (): Promise<Reply> => send('/v1/x-addon', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{}' });
     const mcp = (): Promise<Reply> => send('/mcp', { method: 'POST', headers: bearer(m, JSON_BODY), body: TOOLS_LIST });
-    expect(await statuses(addon, 3)).toEqual([200, 200, 429]);
+    expect(await replies(addon, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
     expect(runs).toBe(2);
-    expect(await statuses(mcp, 3)).toEqual([200, 200, 429]);
+    expect(await replies(mcp, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
   });
 });
 
@@ -156,7 +174,8 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
     await start({ perCaller: SLOW, perAddress: WIDE }, { store, routes: [addonRoute(() => { runs += 1; })] });
     const v1 = (): Promise<Reply> => recall(bearer(key));
     const addon = (): Promise<Reply> => send('/v1/x-addon', { method: 'POST', headers: bearer(key, JSON_BODY), body: '{}' });
-    expect([(await v1()).status, (await addon()).status, (await v1()).status]).toEqual([501, 501, 429]);
+    const notHippoDb = { status: 501, retryAfter: null };
+    expect([await v1(), await addon(), await v1()]).toEqual([notHippoDb, notHippoDb, { status: 429, retryAfter: '10' }]);
     expect(runs).toBe(0);
   });
 });
@@ -204,23 +223,100 @@ describe('the MCP stream heartbeat', () => {
   });
 });
 
-describe('the per-address failed-auth bucket', () => {
+const wrongSecretOf = (key: string): string => `${key.slice(0, key.indexOf('.'))}.${'a'.repeat(32)}`;
+const scryptRunsSince = (before: number): number => apiKeyVerifyStats().scryptRuns - before;
+
+describe('the per-address scrypt bucket', () => {
   it('caps scrypt runs for bad secrets on a known key id, then answers 429 before scrypt; a cached key still passes', async () => {
+    freezeClock();
     const good = mint({ ownerSubject: 'oid-f4' });
     const uncached = mint({ ownerSubject: 'oid-f4-other' });
     await start({ perAddress: WIDE, failedAuthPerAddress: { ratePerSec: 0.05, burst: 5 } });
-    expect((await recall(bearer(good))).status).toBe(200);
-    const wrong = `${good.slice(0, good.indexOf('.'))}.${'a'.repeat(32)}`;
+    // The good key's first check runs scrypt, so it spends one of the five tokens.
+    expect(await recall(bearer(good))).toEqual(OK);
     const before = apiKeyVerifyStats().scryptRuns;
-    const replies: Reply[] = [];
-    for (let i = 0; i < 100; i++) replies.push(await recall(bearer(wrong)));
-    expect(apiKeyVerifyStats().scryptRuns - before).toBeLessThanOrEqual(5);
-    expect(replies.slice(0, 5).map((r) => r.status)).toEqual([401, 401, 401, 401, 401]);
-    expect(replies.slice(5).filter((r) => r.status !== 429 || r.retryAfter !== '20')).toEqual([]);
-    expect((await recall(bearer(good))).status).toBe(200);
+    const flood = await replies(() => recall(bearer(wrongSecretOf(good))), 100);
+    expect(scryptRunsSince(before)).toBe(4);
+    expect(flood.slice(0, 4)).toEqual(Array(4).fill(UNAUTHORISED));
+    expect(flood.slice(4).filter((r) => r.status !== 429 || r.retryAfter !== '20')).toEqual([]);
+    expect(await recall(bearer(good))).toEqual(OK);
     const runs = apiKeyVerifyStats().scryptRuns;
-    expect((await recall(bearer(uncached))).status).toBe(429);
+    expect(await recall(bearer(uncached))).toEqual({ status: 429, retryAfter: '20' });
     expect(apiKeyVerifyStats().scryptRuns).toBe(runs);
+  });
+
+  it('by default allows 40 scrypt runs from an address, then answers 429 with Retry-After: 1', async () => {
+    process.env.HIPPO_V1_RPS = '0';
+    freezeClock();
+    const key = mint({ ownerSubject: 'oid-default' });
+    await start();
+    const before = apiKeyVerifyStats().scryptRuns;
+    const flood = await replies(() => recall(bearer(wrongSecretOf(key))), 41);
+    expect(flood.slice(0, 40)).toEqual(Array(40).fill(UNAUTHORISED));
+    expect(flood[40]).toEqual({ status: 429, retryAfter: '1' });
+    expect(scryptRunsSince(before)).toBe(40);
+  }, 60_000);
+
+  it('never charges a token that ran no scrypt, so a colleague behind the same address re-checks a lapsed key while junk floods it', async () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    freezeClock();
+    const dev = mint({ ownerSubject: 'oid-dev' });
+    const revoked = mint({ ownerSubject: 'oid-gone' });
+    const expired = mint({ ownerSubject: 'oid-old', expiresAt: '2026-10-01T00:00:00.000Z' });
+    const db = openHippoDb(root);
+    try {
+      revokeApiKey(db, revoked.slice(0, revoked.indexOf('.')));
+    } finally {
+      closeHippoDb(db);
+    }
+    // Burst 40 as the default, but a refill slow enough that a TTL's wait adds under one token.
+    await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.005, burst: 40 } }, { authResolver: () => null });
+    const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
+    const start0 = Date.now();
+    expect(await office(dev)).toEqual(OK);
+    const before = apiKeyVerifyStats().scryptRuns;
+    // Junk shape, a resolver refusal, an unknown id, a revoked key and an expired key: 63 in all, past the burst.
+    const junk = ['hk_junk', 'not-a-key-$HIPPO_KEY', `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
+    for (let i = 0; i < 63; i++) expect(await office(junk[i % junk.length]!)).toEqual(UNAUTHORISED);
+    expect(scryptRunsSince(before)).toBe(0);
+    // Real-shaped wrong secrets run scrypt, so they spend all 39 tokens the developer's first check left, then meet 429.
+    vi.setSystemTime(start0 + VERIFIED_KEY_TTL_MS / 2);
+    const flood = await replies(() => office(wrongSecretOf(dev)), 40);
+    expect(flood.slice(0, 39)).toEqual(Array(39).fill(UNAUTHORISED));
+    expect(flood[39]).toEqual({ status: 429, retryAfter: '200' });
+    expect(scryptRunsSince(before)).toBe(39);
+    // The bucket is still empty when the developer's entry lapses, yet the key re-checks, because its secret is already proved.
+    vi.setSystemTime(start0 + VERIFIED_KEY_TTL_MS);
+    expect(await office(dev)).toEqual(OK);
+    expect(scryptRunsSince(before)).toBe(39);
+  }, 60_000);
+
+  it('keys an IPv6 address on its /64, so rotating inside one /64 buys no fresh scrypt budget', async () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    freezeClock();
+    const key = mint({ ownerSubject: 'oid-v6' });
+    await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.1, burst: 2 } });
+    const from = (address: string): Promise<Reply> => recall(bearer(wrongSecretOf(key), { 'x-forwarded-for': address }));
+    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:2:ffff:1:2:3')]).toEqual([UNAUTHORISED, UNAUTHORISED]);
+    expect(await from('2001:0db8:0001:0002::b')).toEqual({ status: 429, retryAfter: '10' });
+    expect(await from('2001:db8:1:3::a')).toEqual(UNAUTHORISED);
+  });
+});
+
+describe('subscriberKey', () => {
+  it.each([
+    ['2001:db8:1:2::a', '2001:db8:1:2::/64'],
+    ['2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::/64'],
+    ['::1', '0:0:0:0::/64'],
+    ['fe80::1%eth0', 'fe80:0:0:0::/64'],
+    ['64:ff9b::192.0.2.1', '64:ff9b:0:0::/64'],
+    ['::ffff:203.0.113.9', '203.0.113.9'],
+    ['203.0.113.9', '203.0.113.9'],
+    ['unknown', 'unknown'],
+  ])('%s keys as %s', (ip, key) => {
+    expect(subscriberKey(ip)).toBe(key);
   });
 });
 

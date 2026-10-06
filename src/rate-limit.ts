@@ -13,7 +13,6 @@ export interface RateLimiter {
    * for deterministic tests.
    */
   check(key: string, now?: number): boolean;
-  hasToken(key: string, now?: number): boolean;
   readonly retryAfterSec: number;
 }
 
@@ -62,10 +61,10 @@ export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
         // Unseen key: a full bucket, so a fresh client's first request passes.
         bucket = { tokens: burst, last: now };
       } else {
-        // Refill capped at burst; a clock stepped back refills nothing instead of draining the bucket for the length of the step.
+        // A clock stepped back refills nothing, and keeping the later time stops the step forward again refilling that span twice.
         const refill = (Math.max(0, now - existing.last) / 1000) * ratePerSec;
         existing.tokens = Math.min(burst, existing.tokens + refill);
-        existing.last = now;
+        existing.last = Math.max(existing.last, now);
         bucket = existing;
         // Drop the old slot so the re-insert below puts the key last in Map
         // iteration order — Map order then tracks least-recently-used.
@@ -83,11 +82,6 @@ export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
       buckets.set(key, bucket);
 
       return allowed;
-    },
-    hasToken(key: string, now: number = Date.now()): boolean {
-      sweep(now);
-      const b = buckets.get(key);
-      return b === undefined || Math.min(burst, b.tokens + (Math.max(0, now - b.last) / 1000) * ratePerSec) >= 1;
     },
     // A refused bucket holds under one token and refills at ratePerSec, so one token is back within this.
     retryAfterSec: Math.max(1, Math.ceil(1 / ratePerSec)),

@@ -1,8 +1,10 @@
 // E10 lane A: every SQL read site admits the caller's own personal row only when handed its owner, and deny-only sites admit none.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { adminActor, CLI_LEARN, learn, MCP_LEARN, type LearnProfile } from '../src/api.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../src/memory.js';
 import { initStore } from '../src/store/open.js';
@@ -12,7 +14,8 @@ import { saveEmbeddingIndex } from '../src/embeddings.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../src/store/candidates.js';
 import { loadAmbientTallies } from '../src/ambient-store.js';
-import { countSessionRawMemories } from '../src/store/entry-reads.js';
+import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '../src/store/entry-reads.js';
+import { canReadScope, personalScopeOf, touchableScopeSql, type ScopeActor } from '../src/recall-scope.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 import { assembleBriefFromReceipts } from '../src/project-briefs.js';
 import { saveItems, type ItemContext } from '../src/compaction-record.js';
@@ -67,6 +70,14 @@ describe('owner-taking read sites', () => {
     expect(load(OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B)).toEqual(['b', 'team']);
     expect(load()).toEqual(['team']);
+  });
+
+  it('additive recall: a personal scope adds only the caller\'s own row, a connector scope adds its rows', () => {
+    const load = (scope: string, own?: string): string[] => keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, scope, 'additive', false, undefined, own));
+    expect(load(OWN_A)).toEqual(['team']);
+    expect(load(OWN_A, OWN_A)).toEqual(['a', 'team']);
+    expect(load(OWN_B, OWN_A)).toEqual(['a', 'team']);
+    expect(load(SCOPES.slack)).toEqual(['slack', 'team']);
   });
 
   it('vector recall: A sees its row, B and no-owner do not', () => {
@@ -152,4 +163,51 @@ describe('deny-only read sites', () => {
     }
     expect(loadTextsHoldingWords(root, T, ['zebrafish']).map((r) => r.content)).toEqual(['zebrafish note team keeps the build cache warm']);
   });
+
+  it('failure dedup: only the team row carries the tag', () => {
+    expect(loadContentsWithTag(root, T, 'path:hippo')).toEqual(['zebrafish note team keeps the build cache warm']);
+  });
+});
+
+describe('admin read sites', () => {
+  it('touchableScopeSql admits what canReadScope admits for an admin, owned or not, case variants included', () => {
+    const scopes = [null, SCOPES.slack, SCOPES.legacy, OWN_A, OWN_B, 'PERSONAL:PRIVATE:alice', 'Personal:Private:bob', 'personal:privatex'];
+    scopes.forEach((scope, i) => writeEntry(root, mem(`gannet row ${i}`, { scope })));
+    const actors: ScopeActor[] = [{ role: 'admin', owner: 'alice' }, { role: 'admin' }];
+    for (const actor of actors) {
+      const rows = loadTextsHoldingWords(root, T, ['gannet'], undefined, touchableScopeSql('', personalScopeOf(actor)));
+      const viaSql = rows.map((r) => scopes[Number(r.content.split(' ')[2])]);
+      const viaJs = scopes.filter((s) => s === null || canReadScope(actor, s));
+      expect(new Set(viaSql), actor.owner).toEqual(new Set(viaJs));
+    }
+  });
+
+  it.each<[string, LearnProfile]>([['MCP', MCP_LEARN], ['CLI', CLI_LEARN]])(
+    '%s learn: another person\'s personal row never answers duplicate; a legacy row and the caller\'s own do',
+    (_, profile) => {
+      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+      const repo = path.join(dir, 'repo');
+      fs.mkdirSync(repo);
+      const git = (...args: string[]): void => { execFileSync('git', args, { cwd: repo, stdio: 'ignore' }); };
+      git('init');
+      git('config', 'user.name', 'Test User');
+      git('config', 'user.email', 'test@example.com');
+      fs.writeFileSync(path.join(repo, 'db.ts'), 'export const timeout = 30;\n');
+      git('add', '.');
+      git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db.ts');
+      const ctx = { hippoRoot: root, tenantId: T, actor: { ...adminActor('learn-test'), owner: 'alice' } };
+      const run = () => learn(ctx, { repoPath: repo, days: 7, profile });
+      const move = (from: string | null, to: string): void => {
+        const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;
+        writeEntry(root, { ...row, scope: to });
+      };
+      expect(run()).toMatchObject({ added: 1, skipped: 0 });
+      move(null, OWN_B);
+      expect(run()).toMatchObject({ added: 1, skipped: 0 });
+      move(null, SCOPES.legacy);
+      expect(run()).toMatchObject({ added: 0, skipped: 1 });
+      move(SCOPES.legacy, OWN_A);
+      expect(run()).toMatchObject({ added: 0, skipped: 1 });
+    },
+  );
 });

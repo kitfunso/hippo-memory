@@ -1,6 +1,6 @@
 import type { MemoryEntry, StrengthInputs } from '../memory.js';
 import { closeHippoDb } from '../db.js';
-import { scopeAdmitSql } from '../recall-scope.js';
+import { scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
 import { originInSql } from '../project-identity.js';
@@ -190,14 +190,17 @@ export function loadStrengthRows(hippoRoot: string, tenantId: string): StrengthR
 
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
 
-/** Text, source and origin of team-visible tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word.
+// No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
+const TEAM_VISIBLE = scopeAdmitSql('');
+
+/** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by default the team-visible ones; a row equal to a text apart from spacing holds its every word.
  *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. */
-export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[]): HeldText[] {
+export function loadTextsHoldingWords(
+  hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
+): HeldText[] {
   const unique = [...new Set(words)];
   const out: HeldText[] = [];
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  // No owner: a personal or connector-private row must never stop a team copy being written.
-  const deny = scopeAdmitSql('');
   const db = openStore(hippoRoot);
   try {
     // Chunked so one statement stays far under SQLite's bound-parameter limit.
@@ -205,8 +208,8 @@ export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words
       const chunk = unique.slice(i, i + 200);
       // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND ${deny.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
-      ).all(tenantId, ...(project ?? []), ...deny.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
+        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+      ).all(tenantId, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
       for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;
