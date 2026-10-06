@@ -1,5 +1,5 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
-import type { CaptureErrorOutcome, RoutineRule } from './capture-error.js';
+import type { CaptureErrorOutcome, RoutineRule } from './capture/failure-reading.js';
 import type { DatabaseSyncLike } from './db.js';
 
 /** Rows older than this are pruned on write, which also bounds how far back a repeat can be found. */
@@ -55,6 +55,17 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
   );
   const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * 86_400_000).toISOString();
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
+}
+
+/** The outcome logged for a caller's request id, or null, so a retried send finds the first one. */
+export function requestOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string): FailureOutcome | null {
+  return db.prepare(`SELECT outcome FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
+    .get<{ outcome: FailureOutcome } | undefined>(tenantId, requestId)?.outcome ?? null;
+}
+
+/** A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant. */
+export function settleFailureOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string, outcome: FailureOutcome): void {
+  db.prepare(`UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`).run(outcome, tenantId, requestId);
 }
 
 /** Rated failures and repeats in one session, for {@link failuresBySession}. */

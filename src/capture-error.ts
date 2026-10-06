@@ -17,9 +17,6 @@ import {
 } from './capture/failure-reading.js';
 import type { JsonValue } from './json.js';
 
-// failure-log.ts reads these two types from here.
-export type { CaptureErrorOutcome, RoutineRule } from './capture/failure-reading.js';
-
 /** Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws. */
 export function captureToolFailure(hippoRoot: string, tenantId: string, payload: JsonValue): CaptureErrorOutcome {
   const lesson = lessonFromFailure(payload);

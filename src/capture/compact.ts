@@ -18,7 +18,7 @@ import { defaultPreCompactLogPath } from '../hooks/shared.js';
 import { readClaudeCodePreCompact } from '../capture-contract.js';
 import { errorMessage } from '../log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
-import { transcriptWorkingState } from './working-state.js';
+import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
 
 // ---------------------------------------------------------------------------
 // `hippo pre-compact` — PreCompact hook producer
@@ -138,15 +138,10 @@ function saveDerivedSnapshot(
   logFile: string,
   sessionId: string | null,
   recordId: string | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>,
+  derived: WorkingState,
 ): void {
   const tenantId = resolveTenantId({});
 
-  // Per-field merge: a tool-heavy tail whose only user turns are
-  // tool_result arrays derives an empty task even though the summary is
-  // non-empty. Loading the existing snapshot first lets each field fall
-  // back independently instead of the whole write clobbering a
-  // user-authored field with blank text.
   let existing: TaskSnapshot | null = null;
   try {
     existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
@@ -154,35 +149,13 @@ function saveDerivedSnapshot(
     // No existing snapshot to merge against — proceed with derived-only.
   }
 
-  // Field fallback must never move content across
-  // sessions — session A's task carried into a snapshot saved under session
-  // B's id would pass compact-resume's session gate wearing the wrong
-  // badge. Fall back only when the existing snapshot has no session, this
-  // payload has none, or they match.
-  const fallback =
-    existing !== null &&
-    (existing.session_id === null || sessionId === null || existing.session_id === sessionId)
-      ? existing
-      : null;
-
   // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.
-  const task = derived.task || (fallback?.task ?? '');
-  const summary = derived.summary || (fallback?.summary ?? '');
-  const nextStep = derived.next_step || (fallback?.next_step ?? '');
-
-  // All-empty fields (cross-session tail with nothing derivable) skip the
-  // write so a foreign session's junk never displaces the owning snapshot.
-  if (!task && !summary && !nextStep) {
+  const merged = mergeWorkingState(derived, existing, sessionId);
+  if (merged === null) {
     appendPreCompactLog(logFile, 'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)');
   } else {
     try {
-      saveActiveTaskSnapshot(hippoRoot, tenantId, {
-        task,
-        summary,
-        next_step: nextStep,
-        source: 'pre-compact',
-        session_id: sessionId,
-      });
+      saveActiveTaskSnapshot(hippoRoot, tenantId, { ...merged, source: 'pre-compact', session_id: sessionId });
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
     } catch (err) {

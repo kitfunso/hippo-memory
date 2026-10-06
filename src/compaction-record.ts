@@ -112,6 +112,11 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   return { summary: truncateCodePointSafe(scrub(body), SUMMARY_MAX_CHARS), items: parsed.items.map(scrub), found: parsed.found };
 }
 
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted. */
+export function scrubCompactionItems(items: readonly string[]): string[] {
+  return items.map(scrub);
+}
+
 function toRecord(row: CompactionRow): CompactionRecord {
   const listed: unknown = row.items_json === null ? [] : JSON.parse(row.items_json);
   return {
@@ -162,6 +167,11 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
   return selectRecords(db, 'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1', tenantId, sessionId)[0] ?? null;
 }
 
+/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record. */
+export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRecord | null {
+  return selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+}
+
 /** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
 function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
   return selectRecords(
@@ -174,11 +184,14 @@ function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string
   )[0] ?? null;
 }
 
-/** Moves a `started` record to `summarised`; false when another process already moved it. */
-function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string): boolean {
+/** Moves a `started` record to `summarised`; false when another process already moved it. The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
+function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string, requestId?: string): boolean {
+  // Only a caller names the column, so a store from before it was added still takes local writes.
+  const stamp = requestId === undefined ? [] : [requestId];
   const result = db.prepare(
-    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-  ).run(text.summary, JSON.stringify(text.items), summarisedAt, tenantId, id);
+    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
+     WHERE tenant_id = ? AND id = ? AND status = 'started'`,
+  ).run(text.summary, JSON.stringify(text.items), summarisedAt, ...stamp, tenantId, id);
   return (result.changes ?? 0) > 0;
 }
 
@@ -224,7 +237,7 @@ export interface SummaryCaller {
   requestId?: string;
 }
 
-/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each, plus the request stamp on a `started` record. */
+/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
 export function recordSummary(
   db: DatabaseSyncLike,
   hippoRoot: string,
@@ -238,8 +251,7 @@ export function recordSummary(
   const itemsJson = JSON.stringify(text.items);
   const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
-  if (started && markSummarised(db, tenantId, started.id, text, now)) {
-    if (requestId !== undefined) db.prepare(`UPDATE compactions SET request_id = ? WHERE tenant_id = ? AND id = ?`).run(requestId, tenantId, started.id);
+  if (started && markSummarised(db, tenantId, started.id, text, now, requestId)) {
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
