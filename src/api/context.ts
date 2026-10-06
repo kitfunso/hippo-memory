@@ -13,7 +13,7 @@ import {
   type RecentOrigins,
 } from '../store/candidates.js';
 import { loadIndex, saveIndex, updateStats } from '../store/index-and-stats.js';
-import { loadFreshActiveTaskSnapshot, listSessionEvents, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
+import { type ContinuityKey, loadFreshActiveTaskSnapshot, listSessionEvents, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
 import type { SessionHandoff } from '../handoff.js';
@@ -44,7 +44,7 @@ import {
   type ContextPools,
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
-import type { Context } from './types.js';
+import { type Context, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -302,19 +302,21 @@ const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] 
 // Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
 function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): RawTaskState {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
+  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next session.
+  const key: ContinuityKey | undefined = plan.sharedStore
+    ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
+    : undefined;
   // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
-  const snapshot = loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, { sessionId: opts.currentSessionId });
-  // On a shared store the task state is one person's, so it reaches only the session that saved it.
-  if (plan.sharedStore && (!snapshot?.session_id || snapshot.session_id !== opts.currentSessionId)) return NO_TASK_STATE;
+  const snapshot = loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, { sessionId: opts.currentSessionId }, key);
   const sessionId = snapshot?.session_id;
   const handoff = sessionId
-    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, sessionId)
+    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, sessionId, {}, key)
     : loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, undefined, {
         unfinishedOnly: true,
         maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
         // Scope is admitted in SQL so a newer denied row can't hide an older eligible one before LIMIT 1.
         scopeFilter: 'default-deny',
-      });
+      }, key);
   // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
   const events = sessionId ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId, limit: 5 }) : [];
   return { snapshot, handoff, events };

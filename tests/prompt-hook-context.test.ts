@@ -317,15 +317,16 @@ describe('promptHookContext on a shared store', () => {
     expect(shared.stdout).not.toContain('personal note');
   });
 
-  it('shows task state only to the session that saved it', async () => {
+  it('shows task state only to the owner that saved it, in any of its sessions', async () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' });
+    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' }, { owner: 'prompt-hook-test', project: ['p'] });
     expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');
-    const other = await ask(store, 'someone-else-shared', true);
+    const otherCtx: Context = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
+    const other = await promptHookContext(otherCtx, { sessionId: 'someone-else-shared', project: PROJECT_P }, SHARED);
     expect(other.stdout).toContain('rollback plan');
     expect(other.stdout).not.toContain('Active Task Snapshot');
-    expect((await ask(store, 'owner', true)).stdout).toContain('Active Task Snapshot');
+    expect((await ask(store, 'owner-next-session', true)).stdout).toContain('Active Task Snapshot');
   });
 
   it('records nothing and books no arm when the served root has no store, never falling back to the global one', async () => {

@@ -7,7 +7,7 @@ import { strengthenRetrieved } from '../store/entry-writes.js';
 import { isRecallBoostAblated } from '../ablation.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../store/entry-reads.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
-import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
+import { type ContinuityKey, loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
 import { estimateTokens } from '../token-ledger.js';
 import { formatHandoffEvidenceLine } from '../handoff.js';
@@ -22,13 +22,14 @@ import type { HybridVectorCandidates } from '../search/vector.js';
 import type { RerankStep } from '../search/types.js';
 import { compareEntryIdentity } from '../compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
-import { loadConfig } from '../config.js';
+import { isSharedStore, loadConfig } from '../config.js';
+import { projectNames } from '../project-identity.js';
 import { computePlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from '../recall-history.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, isRestrictedScope } from '../recall-scope.js';
 import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultItem, ContinuityBlock } from './recall-types.js';
-import { type Context, RecallContractError } from './types.js';
+import { type Context, ownerOrSubject, RecallContractError } from './types.js';
 
 /**
  * Shared construction helper for `RecallSuppressionSummary`. Used by
@@ -474,10 +475,14 @@ function auditAndTraceRecall(db: DatabaseSyncLike, ctx: Context, opts: RecallOpt
 
 // No active snapshot means no anchor, so no handoff or events: a stale handoff from a closed session never resurfaces.
 function loadContinuity(ctx: Context, opts: RecallOpts): ContinuityPart {
-  const snapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId);
+  // On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
+  const key: ContinuityKey | undefined = isSharedStore(ctx.hippoRoot)
+    ? { owner: ownerOrSubject(ctx.actor), project: opts.project ? projectNames(opts.project) : [] }
+    : undefined;
+  const snapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, key);
   const sessionId = snapshot?.session_id ?? undefined;
   const sessionHandoff = sessionId
-    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, sessionId)
+    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, sessionId, {}, key)
     : null;
   const recentSessionEvents = sessionId
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId, limit: 5 })

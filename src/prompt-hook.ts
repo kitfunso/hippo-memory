@@ -207,7 +207,7 @@ interface PromptHookRequest {
 
 interface PromptHookOpts {
   /** The store serves many people, so the caller is not its owner: no global store, no user-global recent rows,
-   *  task state only for the caller's own session, and no ledger rows outside this store. */
+   *  task state only for the caller's own owner and project, and no ledger rows outside this store. */
   readonly sharedStore?: true;
 }
 
