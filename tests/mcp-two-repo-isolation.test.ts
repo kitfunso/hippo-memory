@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { recall, type Context } from '../src/api.js';
+import { assemble, recall, type Context } from '../src/api.js';
 import { createApiKey } from '../src/auth.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
@@ -17,6 +17,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -77,6 +78,10 @@ async function shown(repo: Repo, name: 'hippo_recall' | 'hippo_context', args: R
 function expectOnly(seen: readonly string[], present: readonly string[], absent: readonly string[], label: string): void {
   for (const id of present) expect(seen, `${label} should show ${id}`).toContain(id);
   for (const id of absent) expect(seen, `${label} should hide ${id}`).not.toContain(id);
+}
+
+function apiCtx(): Context {
+  return { hippoRoot: store, tenantId: TENANT, actor: { subject: 'api_key:two-repo', role: 'member', owner: 'alice' } };
 }
 
 function writeConfig(extra: Record<string, JsonValue> = {}): void {
@@ -165,6 +170,8 @@ beforeAll(async () => {
 
   saveActiveTaskSnapshot(store, TENANT, { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' }, { owner: 'alice', project: ['acme'] });
   saveActiveTaskSnapshot(store, TENANT, { task: 'betatask fix the build', summary: 'beta summary', next_step: 'beta next', session_id: 'beta-s' }, { owner: 'alice', project: ['beta'] });
+  saveSessionHandoff(store, TENANT, { version: 1, sessionId: 'acme-s', summary: 'acmehandoff tagged the release' }, { owner: 'alice', project: ['acme'] });
+  saveSessionHandoff(store, TENANT, { version: 1, sessionId: 'beta-s', summary: 'betahandoff pinned the compiler' }, { owner: 'alice', project: ['beta'] });
 
   handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0 });
 });
@@ -217,6 +224,12 @@ describe('MCP on a shared store with two repos', () => {
     }
   });
 
+  it('assemble cut short by its row cap counts only the caller\'s repo rows, not beta\'s or the NULL-origin one', () => {
+    const r = assemble(apiCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
+    expect(r.truncated).toBe(true);
+    expect(r.totalRaw).toBe(4);
+  });
+
   it('hippo_drill answers not found for the other repo\'s summary and drops its children', async () => {
     const own = await tool('acme', 'hippo_drill', { summary_id: ids.acmeSum });
     expect(own.isError, own.text).toBe(false);
@@ -230,9 +243,25 @@ describe('MCP on a shared store with two repos', () => {
     expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeSum })).text).toBe(`No drillable summary at id=${ids.acmeSum}.`);
   });
 
+  it('hippo_drill on the other repo\'s leaf answers not found, and only the owning repo hears it is a leaf', async () => {
+    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toBe(`No drillable summary at id=${ids.acmeRaw1}.`);
+    expect((await tool('acme', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toContain('is a leaf row');
+  });
+
   it('hippo_context returns the caller\'s repo and user-global rows only', async () => {
     expectOnly(await shown('acme', 'hippo_context'), [ids.acme, ids.global], HIDDEN_FROM_ACME(), 'acme context');
     expectOnly(await shown('beta', 'hippo_context'), [ids.beta, ids.global], HIDDEN_FROM_BETA(), 'beta context');
+  });
+
+  it('hippo_context gives each repo its own task snapshot and handoff, even when the other repo saved last', async () => {
+    const taskState = async (repo: Repo): Promise<string[]> => {
+      const r = await tool(repo, 'hippo_context');
+      expect(r.isError, r.text).toBe(false);
+      return ['acmetask', 'acmehandoff', 'betatask', 'betahandoff'].filter((word) => r.text.includes(word));
+    };
+    expect(await taskState('acme')).toEqual(['acmetask', 'acmehandoff']);
+    saveActiveTaskSnapshot(store, TENANT, { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' }, { owner: 'alice', project: ['acme'] });
+    expect(await taskState('beta')).toEqual(['betatask', 'betahandoff']);
   });
 
   it('hippo_conflicts lists the caller\'s repo pairs and hides NULL-origin and private-scope pairs', async () => {
@@ -246,8 +275,7 @@ describe('MCP on a shared store with two repos', () => {
   });
 
   it('overflow substitution never brings in another repo\'s parent summary', () => {
-    const ctx: Context = { hippoRoot: store, tenantId: TENANT, actor: { subject: 'api_key:two-repo', role: 'member', owner: 'alice' } };
-    const summaries = recall(ctx, { query: 'harbourline', limit: 4, project: ACME }).results.filter((r) => r.isSummary).map((r) => r.id);
+    const summaries = recall(apiCtx(), { query: 'harbourline', limit: 4, project: ACME }).results.filter((r) => r.isSummary).map((r) => r.id);
     expect(summaries).toContain(ids.acmeSumO);
     expect(summaries).not.toContain(ids.betaSumO);
   });

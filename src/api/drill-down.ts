@@ -122,7 +122,6 @@ function drillDownOn(
   // Distinguishing them via an unscoped lookup would leak existence to
   // unauthorised tenants. The two cases collapse into not_found.
   if (!summary) return { failure: 'not_found' };
-  if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
   const own = personalScopeOf(ctx.actor) ?? undefined;
   if (!passesScopeFilterForRecall(summary.scope ?? null, undefined, own)) {
     // codex round 3 P1: collapse to not_found. A distinguishable
@@ -134,6 +133,7 @@ function drillDownOn(
   const shown = (row: MemoryEntry): boolean =>
     !opts.project || classifyOriginProject(row.origin_project, opts.project) !== 'cross-project';
   if (!shown(summary)) return { failure: 'not_found' };
+  if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
 
   const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, depth, own, shown);
 
