@@ -211,3 +211,100 @@ describe('one replayer at a time', () => {
     expect(fs.readdirSync(spoolDir())).toEqual([]);
   });
 });
+
+describe('failures are counted and set aside', () => {
+  const A = '0000000001000-aaaaaaaa';
+  const B = '0000000002000-bbbbbbbb';
+  const busyError = (): Error => Object.assign(new Error('database is locked'), { errcode: 5 });
+
+  it('a non-busy throw moves a0 to a1, a2, then failed.bad', () => {
+    const body = fs.readFileSync(put(`${A}.a0.json`, 's1'), 'utf8');
+    const failing: SpoolImporter = () => {
+      throw new Error('blocked');
+    };
+    expect(replay(failing)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a1.json`]);
+    expect(replay(failing)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a2.json`]);
+    expect(replay(failing)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.failed.bad`]);
+    expect(fs.readFileSync(path.join(spoolDir(), `${A}.failed.bad`), 'utf8')).toBe(body);
+    expect(logs).toEqual([
+      `spool file ${A}.a0.json failed to import (try 1 of 3): blocked`,
+      `spool file ${A}.a1.json failed to import (try 2 of 3): blocked`,
+      `spool problem: spool file ${A}.a2.json set aside as .bad after 3 tries: blocked`,
+    ]);
+  });
+
+  it('a busy throw keeps a0 and stops the loop', () => {
+    put(`${A}.a0.json`, 's1');
+    put(`${B}.a0.json`, 's2');
+    const seen: string[] = [];
+    expect(replay((spooled) => {
+      seen.push(spooled.payload.sessionId);
+      throw busyError();
+    })).toBe(0);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a0.json`, `${B}.a0.json`]);
+    expect(logs).toEqual([`spool file ${A}.a0.json waits for the next run: the store is busy`]);
+  });
+
+  it('a stale claim at a2 becomes interrupted.bad', () => {
+    const stale = `${A}.a2.claim-${stamp(Date.now() - 11 * MINUTE)}`;
+    const body = fs.readFileSync(put(stale, 's1'), 'utf8');
+    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.interrupted.bad`]);
+    expect(fs.readFileSync(path.join(spoolDir(), `${A}.interrupted.bad`), 'utf8')).toBe(body);
+    expect(logs).toEqual([`spool problem: spool file ${stale} was claimed by a replayer that never finished 3 times, set aside as .bad`]);
+  });
+
+  it('EPERM on the .bad write releases the claim and the rest of the spool still imports', () => {
+    fs.mkdirSync(spoolDir(), { recursive: true });
+    fs.writeFileSync(path.join(spoolDir(), `${A}.a0.json`), '{ not json');
+    put(`${B}.a0.json`, 's2');
+    withFs({
+      writeFileSync: (file, data, options) => {
+        if (file.includes('.bad')) throw fsError('EPERM');
+        fs.writeFileSync(file, data, options);
+      },
+      renameSync: (from, to) => {
+        if (to.endsWith('.bad')) throw fsError('EPERM');
+        fs.renameSync(from, to);
+      },
+    });
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s2']);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
+  });
+
+  it('a claim that vanishes before the read is skipped and the rest still import', () => {
+    put(`${A}.a0.json`, 's1');
+    put(`${B}.a0.json`, 's2');
+    withFs({
+      readFileSync: (file, encoding) => {
+        if (path.basename(file).startsWith(`${A}.a0.claim-`)) fs.unlinkSync(file);
+        return fs.readFileSync(file, encoding);
+      },
+    });
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s2']);
+    expect(logs).toEqual([`spool file ${A}.a0.json vanished`]);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
+  it('EPERM on the claim unlink after the record logs the duplicate risk', () => {
+    put(`${A}.a0.json`, 's1');
+    withFs({
+      unlinkSync: (file) => {
+        if (file.includes('.claim')) throw fsError('EPERM');
+        fs.unlinkSync(file);
+      },
+    });
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(logs).toEqual([`spool file ${A}.a0.json saved; its claim could not be removed (EPERM); it will be imported again`]);
+  });
+});
