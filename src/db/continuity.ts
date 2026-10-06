@@ -30,7 +30,9 @@ const TASK_SNAPSHOTS_DDL = `
       updated_at TEXT NOT NULL,
       session_id TEXT,
       tenant_id TEXT NOT NULL DEFAULT 'default',
-      scope TEXT
+      scope TEXT,
+      owner_subject TEXT,
+      origin_project TEXT
     )
   `;
 
@@ -65,7 +67,20 @@ const SESSION_HANDOFFS_DDL = `
       evidence_json TEXT,
       outcome TEXT,
       target_runtime TEXT,
-      card_id TEXT
+      card_id TEXT,
+      owner_subject TEXT,
+      origin_project TEXT
+    )
+  `;
+
+// Shared by migration v54 and the self-heal: a session id belongs to the first owner that binds it.
+export const SESSION_OWNERS_DDL = `
+    CREATE TABLE IF NOT EXISTS session_owners (
+      tenant_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      owner_subject TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, session_id)
     )
   `;
 
@@ -138,6 +153,7 @@ const CONTINUITY_TABLE_DDL = [
   CARD_RUNS_DDL,
   CARD_COMMENTS_DDL,
   MEMORY_QUARANTINE_DDL,
+  SESSION_OWNERS_DDL,
 ] as const;
 
 const CONTINUITY_INDEX_DDL = [
@@ -156,6 +172,8 @@ const CONTINUITY_INDEX_DDL = [
   `CREATE INDEX IF NOT EXISTS idx_card_runs_tenant_card ON card_runs(tenant_id, card, started DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_card_comments_tenant_card ON card_comments(tenant_id, card_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_card ON session_handoffs(tenant_id, card_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, status, updated_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, origin_project, created_at DESC)`,
 ] as const;
 
 // Lives with the other re-asserted DDL so the required-object list below derives from one place.

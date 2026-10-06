@@ -51,6 +51,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "index",
     },
     {
+      "name": "idx_compactions_request",
+      "sql": "CREATE UNIQUE INDEX idx_compactions_request ON compactions(tenant_id, request_id) WHERE request_id IS NOT NULL",
+      "type": "index",
+    },
+    {
       "name": "idx_compactions_session",
       "sql": "CREATE INDEX idx_compactions_session
           ON compactions(tenant_id, session_id, started_at)",
@@ -137,6 +142,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     {
       "name": "idx_entities_tenant",
       "sql": "CREATE INDEX idx_entities_tenant ON entities(tenant_id)",
+      "type": "index",
+    },
+    {
+      "name": "idx_failure_log_request",
+      "sql": "CREATE UNIQUE INDEX idx_failure_log_request ON failure_log(tenant_id, request_id) WHERE request_id IS NOT NULL",
       "type": "index",
     },
     {
@@ -416,6 +426,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "index",
     },
     {
+      "name": "idx_session_handoffs_owner",
+      "sql": "CREATE INDEX idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, origin_project, created_at DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_session_handoffs_session",
       "sql": "CREATE INDEX idx_session_handoffs_session
         ON session_handoffs(session_id, created_at DESC)",
@@ -459,6 +474,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     {
       "name": "idx_slack_event_log_memory",
       "sql": "CREATE INDEX idx_slack_event_log_memory ON slack_event_log(memory_id) WHERE memory_id IS NOT NULL",
+      "type": "index",
+    },
+    {
+      "name": "idx_task_snapshots_owner",
+      "sql": "CREATE INDEX idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, status, updated_at DESC)",
       "type": "index",
     },
     {
@@ -573,6 +593,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     },
     {
       "name": "sqlite_autoindex_retrieval_policy_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
+      "name": "sqlite_autoindex_session_owners_1",
       "sql": null,
       "type": "index",
     },
@@ -707,7 +732,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           summary         TEXT,
           items_json      TEXT,
           items_written   INTEGER NOT NULL DEFAULT 0,
-          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done','no-summary')),
+          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done','no-summary')), request_id TEXT,
           PRIMARY KEY (tenant_id, id)
         )",
       "type": "table",
@@ -867,7 +892,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           skip_rule   TEXT,
           sig_hash    TEXT,
           detail_hash TEXT
-        )",
+        , owner_subject TEXT, origin_project TEXT, request_id TEXT)",
       "type": "table",
     },
     {
@@ -1342,7 +1367,18 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           next_action TEXT,
           artifacts_json TEXT NOT NULL DEFAULT '[]',
           created_at TEXT NOT NULL
-        , tenant_id TEXT NOT NULL DEFAULT 'default', scope TEXT, constraints_json TEXT, evidence_json TEXT, outcome TEXT, target_runtime TEXT, card_id TEXT)",
+        , tenant_id TEXT NOT NULL DEFAULT 'default', scope TEXT, constraints_json TEXT, evidence_json TEXT, outcome TEXT, target_runtime TEXT, card_id TEXT, owner_subject TEXT, origin_project TEXT)",
+      "type": "table",
+    },
+    {
+      "name": "session_owners",
+      "sql": "CREATE TABLE session_owners (
+      tenant_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      owner_subject TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, session_id)
+    )",
       "type": "table",
     },
     {
@@ -1424,7 +1460,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           source TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
-        , session_id TEXT, tenant_id TEXT NOT NULL DEFAULT 'default', scope TEXT)",
+        , session_id TEXT, tenant_id TEXT NOT NULL DEFAULT 'default', scope TEXT, owner_subject TEXT, origin_project TEXT)",
       "type": "table",
     },
     {
@@ -2021,6 +2057,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "trigger",
     },
   ],
-  "userVersion": 53,
+  "userVersion": 54,
 }
 `;
