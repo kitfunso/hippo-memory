@@ -46,7 +46,6 @@ jobs:
         run: node scripts/check-comment-history.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
-      - run: node scripts/check-expiring-keys-floor.mjs
       - run: node scripts/check-graph-writes.mjs
       - name: No runtime import cycles in src
         run: node scripts/check-import-cycles.mjs
@@ -81,6 +80,10 @@ jobs:
           path: provenance-coverage.json
           if-no-files-found: warn
           retention-days: 14
+      # Last and always, so floors still waiting on their release stay visible without hiding the checks above.
+      - name: Binary floors name a release that ships their schema
+        if: always()
+        run: node scripts/check-expiring-keys-floor.mjs
 
   # The suite is about 28 minutes of test time on a 4-core runner; three shards run it in parallel.
   test:
