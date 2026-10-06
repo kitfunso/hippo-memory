@@ -12,7 +12,9 @@
  */
 
 import { closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { BadRequestError } from './api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { isPersonalScope } from './recall-scope.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
 import { stampOriginProject } from './store/entry-row.js';
@@ -42,6 +44,8 @@ export interface RejectFlowOpts {
   memoryId?: string;
   /** Pre-emptive form: reject a value not currently stored (or already gone). */
   value?: string;
+  /** The caller's own personal scope: the only personal rows the sweep may remove. Unset (the CLI) skips every personal row. */
+  ownScope?: string;
 }
 
 export interface RejectFlowResult {
@@ -82,14 +86,21 @@ function assertRejectOpts(opts: RejectFlowOpts): void {
 
 function contentToReject(db: DatabaseSyncLike, opts: RejectFlowOpts): string {
   if (opts.memoryId === undefined) return opts.value!;
-  // SAFETY: row's shape matches the two columns named in the SELECT above.
+  // SAFETY: row's shape matches the three columns named in the SELECT above.
   const row = db
-    .prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`)
-    .get(opts.memoryId) as { content: string; tenant_id: string } | undefined;
+    .prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`)
+    .get(opts.memoryId) as { content: string; tenant_id: string; scope: string | null } | undefined;
   if (!row || row.tenant_id !== opts.tenantId) {
     throw new Error(`memory not found: ${opts.memoryId}`);
   }
+  // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
+  if (isPersonalScope(row.scope)) throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");
   return row.content;
+}
+
+/** Every row but another person's personal one, which is outside the caller's recall and so outside its reject. */
+function inReach(opts: RejectFlowOpts, scope: string | null | undefined): boolean {
+  return !isPersonalScope(scope) || scope === opts.ownScope;
 }
 
 /** What one reject removed and wrote, accumulated across the live and dormant passes. */
@@ -106,6 +117,7 @@ function removeLiveRows(db: DatabaseSyncLike, opts: RejectFlowOpts, holdsValue: 
   const { removedIds, removedRawIds, successors } = removal;
   const merged: MemoryEntry[] = [];
   for (const row of selectAllEntries(db, opts.tenantId)) {
+    if (!inReach(opts, row.scope)) continue;
     if (!holdsValue(row.content)) {
       if (heldTexts(row).some(holdsValue)) merged.push(row);
       continue;
@@ -139,10 +151,12 @@ function removeLiveRows(db: DatabaseSyncLike, opts: RejectFlowOpts, holdsValue: 
 // bring it back. They have no markdown mirror, so the post-commit
 // mirror purge below is a no-op for them; they join removedIds for the
 // audit trail and the caller's report.
-function removeDormantCopies(db: DatabaseSyncLike, tenantId: string, digest: string, holdsValue: HoldsValue, removal: RejectRemoval): void {
+function removeDormantCopies(db: DatabaseSyncLike, opts: RejectFlowOpts, digest: string, holdsValue: HoldsValue, removal: RejectRemoval): void {
+  const { tenantId } = opts;
   const { removedIds, dormantSuccessorIds } = removal;
-  removedIds.push(...purgeDormantByDigest(db, tenantId, digest));
+  removedIds.push(...purgeDormantByDigest(db, tenantId, digest, (scope) => inReach(opts, scope)));
   for (const dormant of listDormantSnapshots(db, tenantId)) {
+    if (!inReach(opts, dormant.entry.scope)) continue;
     const successor = mergedSuccessor(dormant.entry, holdsValue, new Set(removedIds));
     if (successor === undefined) continue;
     removedIds.push(dormant.entry.id);
@@ -225,7 +239,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       // memories is the escape if stores grow 100x; not needed now.
       const holdsValue = (text: string): boolean => rejectionDigest(text) === digest;
       removeLiveRows(db, opts, holdsValue, removal);
-      removeDormantCopies(db, opts.tenantId, digest, holdsValue, removal);
+      removeDormantCopies(db, opts, digest, holdsValue, removal);
       auditRejectValue(db, opts, digest, removal.removedIds);
 
       db.exec('COMMIT');

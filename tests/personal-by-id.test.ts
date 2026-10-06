@@ -1,10 +1,13 @@
-// A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), and the owner still gets through.
+// A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), the owner still gets through, and no reject sweep reaches another person's row.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { archiveRaw, forget, listRejections, outcome, promote, reject, remember, supersede, type Actor, type Context } from '../src/api.js';
+import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { insertDormantRow, readDormantSnapshot } from '../src/dormant.js';
 import { mapApiError } from '../src/http-util.js';
-import { generateId, type MemoryKind } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, generateId, type MemoryKind } from '../src/memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
+import { rejectValue } from '../src/reject-flow.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -66,7 +69,6 @@ afterEach(() => {
 describe('by-id writes on someone else\'s personal row', () => {
   const ownerWrites: ReadonlyArray<[string, MemoryKind, (ctx: Context, id: string) => void]> = [
     ['forget', 'distilled', (ctx, id) => { forget(ctx, id); }],
-    ['reject', 'distilled', (ctx, id) => { reject(ctx, { memoryId: id, reason: 'wrong' }); }],
     ['archive', 'raw', (ctx, id) => { archiveRaw(ctx, id, 'cleanup'); }],
     ['supersede', 'distilled', (ctx, id) => { supersede(ctx, id, 'a newer version of the note'); }],
   ];
@@ -124,5 +126,59 @@ describe('by-id writes on someone else\'s personal row', () => {
     expect(readEntry(root, id, 'default')?.outcome_negative ?? 0).toBe(0);
     expect(outcome(ctxFor(actorA), [id], false)).toEqual({ applied: 1, appliedIds: [id] });
     expect(readEntry(root, id, 'default')?.outcome_negative).toBe(1);
+  });
+});
+
+describe('reject next to personal rows', () => {
+  const SHARED_TEXT = 'the staging cluster restarts every friday at noon';
+  const PERSONAL_REFUSAL = "Personal memories can't be rejected. Use forget to remove it.";
+
+  it('reject by id: another owner and an unowned admin get the missing-id 404, the owner and the CLI get a 400, and no tombstone is made', async () => {
+    const id = personalRow();
+    for (const [, actor] of outsiders) {
+      await expectMissingIdAnswer(id, (target) => { reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }); });
+    }
+    expect(await masked(id, () => { reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }); })).toEqual({ status: 400, message: PERSONAL_REFUSAL });
+    expect(() => rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id })).toThrow(PERSONAL_REFUSAL);
+    expect(listRejections(ctxFor(actorA))).toHaveLength(0);
+    expect(readEntry(root, id, 'default')?.scope).toBe('personal:private:a');
+  });
+
+  it('reject by value removes team copies and the caller\'s own personal copy, never another person\'s', () => {
+    const mineA = remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true }).id;
+    const mineB = remember(ctxFor(actorB), { content: SHARED_TEXT, personal: true }).id;
+    const team = remember(ctxFor(actorB), { content: SHARED_TEXT }).id;
+    const { removedIds } = reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' });
+    expect([...removedIds].sort()).toEqual([mineB, team].sort());
+    expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
+    expect(readEntry(root, mineB, 'default')).toBeNull();
+    expect(readEntry(root, team, 'default')).toBeNull();
+  });
+
+  it('the CLI reject by value, which has no owner, leaves every personal row', () => {
+    const mineA = remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true }).id;
+    const team = remember(ctxFor(actorB), { content: SHARED_TEXT }).id;
+    const { removedIds } = rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'stale', value: SHARED_TEXT });
+    expect(removedIds).toEqual([team]);
+    expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
+  });
+
+  it('reject by value leaves another person\'s dormant personal copy and removes a dormant team copy', () => {
+    const personal = createMemory(SHARED_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'personal:private:a' });
+    const team = createMemory(SHARED_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const db = openHippoDb(root);
+    try {
+      for (const entry of [personal, team]) insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' }).removedIds).toEqual([team.id]);
+    const after = openHippoDb(root);
+    try {
+      expect(readDormantSnapshot(after, 'default', personal.id)?.entry.scope).toBe('personal:private:a');
+      expect(readDormantSnapshot(after, 'default', team.id)).toBeNull();
+    } finally {
+      closeHippoDb(after);
+    }
   });
 });

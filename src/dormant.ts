@@ -211,18 +211,18 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/**
- * Delete every dormant memory in the tenant whose content has this rejection
- * digest, so a rejected value cannot linger in dormant storage. Returns the
- * ids removed. Same O(N) scan as the live-row sweep in reject-flow.ts.
- */
-export function purgeDormantByDigest(db: DatabaseSyncLike, tenantId: string, digest: string): string[] {
-  // SAFETY: rows' shape matches the two columns named in the SELECT.
-  const rows = db.prepare(`SELECT id, content FROM dormant_memories WHERE tenant_id = ?`)
-    .all(tenantId) as Array<{ id: string; content: string }>;
+/** Deletes the tenant's dormant copies of a rejected digest whose snapshot scope `inReach` admits, so the value cannot linger; returns their ids. */
+export function purgeDormantByDigest(
+  db: DatabaseSyncLike, tenantId: string, digest: string, inReach: (scope: string | null) => boolean,
+): string[] {
+  // SAFETY: rows' shape matches the three columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope
+       FROM dormant_memories WHERE tenant_id = ?`,
+  ).all(tenantId) as Array<{ id: string; content: string; scope: string | null }>;
   const removed: string[] = [];
   for (const row of rows) {
-    if (rejectionDigest(row.content) !== digest) continue;
+    if (rejectionDigest(row.content) !== digest || !inReach(row.scope)) continue;
     deleteDormantRow(db, tenantId, row.id);
     removed.push(row.id);
   }

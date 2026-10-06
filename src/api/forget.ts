@@ -8,7 +8,7 @@ import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import type { Context } from './types.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
-import { canTouchScope } from '../recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // forget
@@ -80,7 +80,7 @@ export interface RejectResult {
  * forms — pass exactly one:
  *  - `memoryId`: reject the CURRENT content of an existing memory. Removes
  *    that row and every other live row in the tenant whose normalized
- *    digest matches (not just the id passed).
+ *    digest matches (not just the id passed), except another person's personal rows.
  *  - `value`: pre-emptive form — tombstone content that may not currently
  *    be stored (or is already gone). Zero removals.
  *
@@ -110,6 +110,7 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     reason: opts.reason,
     memoryId: opts.memoryId,
     value: opts.value,
+    ownScope: personalScopeOf(ctx.actor) ?? undefined,
   });
   return { digest: result.digest, removedIds: result.removedIds };
 }
