@@ -35,6 +35,7 @@ export {
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
+  type ContinuityKey,
 } from './store/sessions.js';
 export { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from './store/conflicts.js';
 export {

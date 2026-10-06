@@ -24,6 +24,11 @@ export interface FailureEvent {
   sigHash?: string | null;
   /** Hash of the untruncated error plus the command's first two words, finer than `sigHash`. */
   detailHash?: string | null;
+  /** A shared-store caller's owner and project; null on a local store. */
+  ownerSubject?: string | null;
+  originProject?: string | null;
+  /** The client's queue record id, so a retried send finds the earlier row. */
+  requestId?: string | null;
   /** Override the timestamp (tests). ISO string. */
   now?: string;
 }
@@ -33,8 +38,8 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
   // Normalised, because the window and prune compare timestamps as strings.
   const now = new Date(event.now ?? Date.now()).toISOString();
   db.prepare(
-    `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, owner_subject, origin_project, request_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     now,
     event.tenantId,
@@ -44,6 +49,9 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
     event.rule ?? null,
     event.sigHash ?? null,
     event.detailHash ?? null,
+    event.ownerSubject ?? null,
+    event.originProject ?? null,
+    event.requestId ?? null,
   );
   const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * 86_400_000).toISOString();
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
