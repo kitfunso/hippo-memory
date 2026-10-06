@@ -7,7 +7,7 @@ import {
   type HandoffEvidence,
   isHandoffOutcome,
 } from '../handoff.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from '../recall-scope.js';
+import { scopeAdmitSql } from '../recall-scope.js';
 import { assertTenantId } from '../tenant.js';
 import type { TaskSnapshot } from './rows.js';
 import { openStore } from './open.js';
@@ -100,9 +100,9 @@ function handoffConditions(tenantId: string, sessionId: string | undefined, opts
   }
   if (opts.scopeFilter === 'default-deny') {
     // Admit scope before LIMIT 1, else a newer denied row hides an older eligible one.
-    const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-    conditions.push(`(scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%'))`);
-    params.push(...RECALL_DEFAULT_DENY_SCOPES);
+    const deny = scopeAdmitSql('');
+    conditions.push(deny.sql);
+    params.push(...deny.params);
   }
   return { conditions, params };
 }

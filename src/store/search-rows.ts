@@ -2,7 +2,7 @@ import { envForceLikePath } from '../env.js';
 import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { tokenize } from '../tokenize.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from '../recall-scope.js';
+import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { RAREST_TERM_COUNT, rarestPromptTerms } from '../prompt-recall.js';
 import { log } from '../log.js';
 import { originInSql } from '../project-identity.js';
@@ -31,26 +31,18 @@ import { escapeLike } from '../escape.js';
 /** @internal Internal SQL-builder shape; not on the public API
  *  surface (not re-exported from `src/index.ts`). Subject to change. */
 export type RecallScopeFilter =
-  | { mode: 'default-deny' }
+  | { mode: 'default-deny'; ownScope?: string }
   | { mode: 'exact'; value: string }
-  | { mode: 'default-deny-or-exact'; value: string };
-
-interface SqlFragment {
-  sql: string;
-  params: string[];
-}
+  | { mode: 'default-deny-or-exact'; value: string; ownScope?: string };
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is its JS twin. */
 function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | undefined): SqlFragment {
   if (scopeFilter === undefined) return { sql: '', params: [] };
   if (scopeFilter.mode === 'exact') return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
-  // `IS NULL OR` admits NULL scopes, which NOT IN alone drops. NOT LIKE denies a superset of private scopes before the
-  // window cut so private rows cannot starve admitted ones; the anchored JS regex stays the exact post-filter.
-  const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${placeholders}) AND ${col}scope NOT LIKE '%:private:%')`;
-  if (scopeFilter.mode === 'default-deny') return { sql: ` AND (${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
+  const admit = scopeAdmitSql(col, scopeFilter.ownScope);
+  if (scopeFilter.mode === 'default-deny') return { sql: ` AND ${admit.sql}`, params: admit.params };
   // The trailing arm keeps a deliberately requested scope loadable, private or quarantined included.
-  return { sql: ` AND (${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value] };
+  return { sql: ` AND (${admit.sql} OR ${col}scope = ?)`, params: [...admit.params, scopeFilter.value] };
 }
 
 /** One project name, or every name a project's rows carry. */
@@ -64,10 +56,10 @@ function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | 
   return { sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`, params: [...scope.params, ...originProjects] };
 }
 
-/** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set. */
-export function recallScopeFilter(requestedScope: string | undefined, mode: 'exact' | 'additive'): RecallScopeFilter {
-  if (!requestedScope) return { mode: 'default-deny' };
-  return mode === 'additive' ? { mode: 'default-deny-or-exact', value: requestedScope } : { mode: 'exact', value: requestedScope };
+/** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set, unless it is personal, which only `ownScope` opens. */
+export function recallScopeFilter(requestedScope: string | undefined, mode: 'exact' | 'additive', ownScope?: string): RecallScopeFilter {
+  if (!requestedScope || (mode === 'additive' && isPersonalScope(requestedScope))) return { mode: 'default-deny', ownScope };
+  return mode === 'additive' ? { mode: 'default-deny-or-exact', value: requestedScope, ownScope } : { mode: 'exact', value: requestedScope };
 }
 
 const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
@@ -235,7 +227,7 @@ export function loadSearchEntries(
  * Recall-mode loader. Pushes the recall-side scope predicate into SQL so
  * `unknown:legacy` cannot leak via any consumer that hasn't remembered to re-filter.
  *
- * - `requestedScope` undefined / '': default-deny on `unknown:legacy`.
+ * - `requestedScope` undefined / '': default-deny on `unknown:legacy`, admitting `ownScope`, the caller's personal scope.
  * - `requestedScope` non-empty string: exact match on `m.scope = requestedScope`.
  *
  * Private scopes: SQL applies a conservative `NOT LIKE '%:private:%'` before the LIMIT window so private
@@ -257,10 +249,11 @@ export function loadRecallSearchEntries(
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
   originProjects?: OriginFilter,
+  ownScope?: string,
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects);
+    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope);
   } finally {
     closeHippoDb(db);
   }
@@ -277,8 +270,9 @@ export function loadRecallSearchEntriesFromDb(
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
   originProjects?: OriginFilter,
+  ownScope?: string,
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode), includeSuperseded, originProjects).map(rowToEntry);
+  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode, ownScope), includeSuperseded, originProjects).map(rowToEntry);
 }
 
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */
