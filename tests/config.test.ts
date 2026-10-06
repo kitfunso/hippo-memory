@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { loadConfig, type HippoConfig } from '../src/config.js';
+import { loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig } from '../src/config.js';
+import * as server from '../src/server.js';
 import { log } from '../src/log.js';
 
 describe('config.pinnedInject', () => {
@@ -139,5 +140,94 @@ describe('loadConfig characterization', () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toMatch(/^failed to parse <root>[\\/]config\.json: /);
     }
+  });
+});
+
+describe('config.sharedStore', () => {
+  let tmp: string;
+  beforeEach(() => {
+    _resetSharedStoreCacheForTests();
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-shared-'));
+    return () => fs.rmSync(tmp, { recursive: true, force: true });
+  });
+  const writeConfig = (json: string): void => fs.writeFileSync(path.join(tmp, 'config.json'), json);
+
+  it('reads true from config.json on both readers', () => {
+    writeConfig(JSON.stringify({ sharedStore: true }));
+    expect(loadConfig(tmp).sharedStore).toBe(true);
+    expect(isSharedStore(tmp)).toBe(true);
+  });
+
+  it('is false when the key is absent or there is no config file', () => {
+    expect(loadConfig(tmp).sharedStore).toBe(false);
+    expect(isSharedStore(tmp)).toBe(false);
+    writeConfig('{}');
+    expect(loadConfig(tmp).sharedStore).toBe(false);
+    expect(isSharedStore(tmp)).toBe(false);
+  });
+
+  it('reads a non-boolean as false with one warning', () => {
+    writeConfig(JSON.stringify({ sharedStore: 'yes' }));
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(loadConfig(tmp).sharedStore).toBe(false);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('"sharedStore"');
+    } finally {
+      warn.mockRestore();
+    }
+    expect(isSharedStore(tmp)).toBe(false);
+  });
+
+  it('stays true for the process once seen, so a broken edit cannot turn it off', () => {
+    writeConfig(JSON.stringify({ sharedStore: true }));
+    expect(isSharedStore(tmp)).toBe(true);
+    writeConfig('{not json');
+    expect(isSharedStore(tmp)).toBe(true);
+    _resetSharedStoreCacheForTests();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(isSharedStore(tmp)).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  /** Flags `seen`, breaks its config, then asks through `other`, a second spelling of the same folder. */
+  function stickyThrough(seen: string, other: string): boolean {
+    writeConfig(JSON.stringify({ sharedStore: true }));
+    expect(isSharedStore(seen)).toBe(true);
+    writeConfig('{not json');
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    try {
+      return isSharedStore(other);
+    } finally {
+      warn.mockRestore();
+    }
+  }
+
+  it('stays true under a second spelling of the same folder', () => {
+    const other = process.platform === 'win32' ? `${tmp.toUpperCase()}${path.sep}` : `${tmp}${path.sep}.${path.sep}`;
+    expect(stickyThrough(tmp, other)).toBe(true);
+  });
+
+  it('stays true through a symlink to the same folder', () => {
+    const link = `${tmp}-link`;
+    try {
+      fs.symlinkSync(tmp, link, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (err) {
+      // Some boxes refuse links to a normal user; the spelling test still runs there.
+      if (err instanceof Error && 'code' in err && err.code === 'EPERM') return;
+      throw err;
+    }
+    try {
+      expect(stickyThrough(link, tmp)).toBe(true);
+    } finally {
+      fs.rmSync(link, { force: true });
+    }
+  });
+
+  it('is exported from hippo-memory/server', () => {
+    expect(server.isSharedStore).toBe(isSharedStore);
   });
 });

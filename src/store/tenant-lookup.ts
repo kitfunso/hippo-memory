@@ -2,20 +2,21 @@
 
 import type { DatabaseSyncLike } from '../db.js';
 
-/** The api_keys fields a tenant, revocation or rank check reads. */
+/** The api_keys fields a tenant, revocation, rank or self-service ownership check reads. */
 export interface ApiKeyOwner {
   tenantId: string;
   revokedAt: string | null;
   role: string;
+  ownerSubject: string | null;
 }
 
 /** The owner row of `keyId`, or undefined when no such key exists. */
 export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwner | undefined {
-  // SAFETY: row's shape matches the three columns named in the SELECT.
+  // SAFETY: row's shape matches the four columns named in the SELECT.
   const row = db
-    .prepare(`SELECT tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { tenant_id: string; revoked_at: string | null; role: string } | undefined;
-  return row && { tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role };
+    .prepare(`SELECT tenant_id, revoked_at, role, owner_subject FROM api_keys WHERE key_id = ?`)
+    .get(keyId) as { tenant_id: string; revoked_at: string | null; role: string; owner_subject: string | null } | undefined;
+  return row && { tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, ownerSubject: row.owner_subject };
 }
 
 /** The tenant that owns memory `id`, or undefined when no such memory exists. */

@@ -1,7 +1,9 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DatabaseSyncLike } from './db.js';
+import { raiseMinBinary } from './db/meta.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
 import type { HippoStore } from './store-port.js';
+import { EXPIRING_KEYS_MIN_BINARY } from './version.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
@@ -53,6 +55,10 @@ export interface CreateApiKeyOpts {
   label?: string;
   /** 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify). */
   role?: 'admin' | 'member';
+  /** The auth-resolver subject a self-service key belongs to; unset for keys an admin or the CLI mints. */
+  ownerSubject?: string;
+  /** ISO time the key stops working; unset means it never expires. */
+  expiresAt?: string;
 }
 
 export interface CreateApiKeyResult {
@@ -67,9 +73,11 @@ export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): Crea
   const hash = hashKey(plaintext);
   // openHippoDb runs runMigrations synchronously before returning the db handle,
   // so migration v26 (adds role column) is in place before this INSERT runs.
+  // An older binary ignores expires_at and would honour an expired key, so the store shuts it out before the first one exists.
+  if (opts.expiresAt !== undefined) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   db.prepare(
-    `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role) VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(keyId, hash, opts.tenantId, opts.label ?? null, new Date().toISOString(), opts.role ?? 'admin');
+    `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(keyId, hash, opts.tenantId, opts.label ?? null, new Date().toISOString(), opts.role ?? 'admin', opts.ownerSubject ?? null, opts.expiresAt ?? null);
   return { keyId, plaintext };
 }
 
@@ -91,25 +99,41 @@ export interface VerifiedApiKey {
   scopes: string[];
 }
 
-/** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret and the role. */
+/** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret, the role and the expiry. */
 export interface ApiKeyRecord {
   keyHash: string;
   tenantId: string;
   revokedAt: string | null;
   role: string;
   scopes: string[];
+  /** ISO time the key stops working; null when it never expires. */
+  expiresAt: string | null;
 }
 
 /** The api_keys row for `keyId` with its scope grants; null when no row matches. */
 export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
   // SAFETY: row comes from the SELECT above, which projects exactly
-  // key_hash, tenant_id, revoked_at, role; `.get` returns undefined when no
+  // key_hash, tenant_id, revoked_at, role, expires_at; `.get` returns undefined when no
   // row matches key_id.
   const row = db
-    .prepare(`SELECT key_hash, tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string } | undefined;
+    .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at FROM api_keys WHERE key_id = ?`)
+    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string; expires_at: string | null } | undefined;
   if (!row) return null;
-  return { keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId) };
+  return { keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId), expiresAt: row.expires_at };
+}
+
+/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
+function keyExpiryMs(expiresAt: string | null | undefined): number {
+  if (expiresAt === null) return Infinity;
+  if (expiresAt === undefined) return -Infinity;
+  const ms = Date.parse(expiresAt);
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
+/** A key that passed every check, with the time it stops working so a cache entry never outlives it. */
+interface CheckedApiKey {
+  key: VerifiedApiKey;
+  expiresAtMs: number;
 }
 
 /** The key id of a minted-key-shaped token, else null. */
@@ -117,24 +141,26 @@ function mintedKeyId(plaintext: string): string | null {
   return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
 }
 
-/** Revocation, then scrypt, against a stored record. Null for any failure. */
-function checkApiKey(plaintext: string, keyId: string, record: ApiKeyRecord | null): VerifiedApiKey | null {
+/** Revocation, expiry, then scrypt, against a stored record. Null for any failure. */
+function checkApiKey(plaintext: string, keyId: string, record: ApiKeyRecord | null, now: number): CheckedApiKey | null {
   // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn CPU.
-  if (!record || record.revokedAt || !verifyKey(plaintext, record.keyHash)) return null;
+  if (!record) return null;
+  const expiresAtMs = keyExpiryMs(record.expiresAt);
+  if (record.revokedAt || now >= expiresAtMs || !verifyKey(plaintext, record.keyHash)) return null;
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
-  return { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
+  return { key: { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] }, expiresAtMs };
 }
 
-/** One full check against the store: shape, row, revocation, then scrypt. Null for any failure. */
-function lookupApiKey(db: DatabaseSyncLike, plaintext: string): VerifiedApiKey | null {
+/** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */
+function lookupApiKey(db: DatabaseSyncLike, plaintext: string, now: number): CheckedApiKey | null {
   const keyId = mintedKeyId(plaintext);
-  return keyId === null ? null : checkApiKey(plaintext, keyId, readApiKeyRecord(db, keyId));
+  return keyId === null ? null : checkApiKey(plaintext, keyId, readApiKeyRecord(db, keyId), now);
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
-  const key = lookupApiKey(db, plaintext);
-  return key ? { valid: true, ...key } : { valid: false };
+  const found = lookupApiKey(db, plaintext, Date.now());
+  return found ? { valid: true, ...found.key } : { valid: false };
 }
 
 /** How long a verified key is trusted without a store read; also the ceiling on a revoke made by another process. */
@@ -183,14 +209,16 @@ export class VerifiedKeyCache {
     return { ...entry.key, scopes: [...entry.key.scopes] };
   }
 
-  set(hippoRoot: string, keyId: string, plaintext: string, key: VerifiedApiKey, now: number): void {
+  set(hippoRoot: string, keyId: string, plaintext: string, key: VerifiedApiKey, now: number, keyExpiresAtMs = Infinity): void {
     this.entries.delete(keyId);
     if (this.entries.size >= this.capacity) {
       const oldest = this.entries.keys().next();
       if (!oldest.done) this.entries.delete(oldest.value);
     }
     const frozen = Object.freeze({ ...key, scopes: [...key.scopes] });
-    this.entries.set(keyId, { hippoRoot, digest: secretDigest(plaintext), key: frozen, expiresAt: now + this.ttlMs });
+    // A key that expires inside the TTL leaves the cache at its expiry, so the cache never extends its life.
+    const expiresAt = Math.min(now + this.ttlMs, keyExpiresAtMs);
+    this.entries.set(keyId, { hippoRoot, digest: secretDigest(plaintext), key: frozen, expiresAt });
   }
 
   delete(keyId: string): void {
@@ -210,10 +238,10 @@ export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, s
   if (hit) return hit;
   verifyStats.storeLookups++;
   const epoch = verifiedKeys.epoch;
-  const key = checkApiKey(plaintext, keyId, await store.findApiKey(keyId));
+  const found = checkApiKey(plaintext, keyId, await store.findApiKey(keyId), Date.now());
   // Only successes are cached: caching misses would let junk tokens fill the cache and evict real keys.
-  if (key && verifiedKeys.epoch === epoch) verifiedKeys.set(hippoRoot, keyId, plaintext, key, Date.now());
-  return key;
+  if (found && verifiedKeys.epoch === epoch) verifiedKeys.set(hippoRoot, keyId, plaintext, found.key, Date.now(), found.expiresAtMs);
+  return found?.key ?? null;
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {
@@ -259,12 +287,21 @@ export interface ApiKeyListItem {
   role: 'admin' | 'member';
   /** Restricted scopes this key may read. */
   scopes: string[];
+  /** ISO time the key stops working; null when it never expires. */
+  expiresAt: string | null;
+  /** The auth-resolver subject that minted this key for itself; null for keys an admin or the CLI minted. */
+  ownerSubject: string | null;
 }
 
 export interface ListApiKeysOpts {
+  /** Only keys that still work: unrevoked and unexpired. */
   active: boolean;
   /** Only this tenant's keys; omit for every tenant (the CLI's single-tenant view). */
   tenantId?: string;
+  /** Only keys minted by this auth-resolver subject. */
+  ownerSubject?: string;
+  /** Only this one key. */
+  keyId?: string;
   /** Resume after this row: the position the previous page ended on (key and id are both the row id). */
   after?: KeysetPosition;
   limit?: number;
@@ -280,19 +317,32 @@ export interface ApiKeyListRow {
 export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
   const where: string[] = ['1 = 1'];
   const params: Array<string | number> = [];
-  if (opts.active) where.push('revoked_at IS NULL');
+  if (opts.active) {
+    // In SQL so a page holds `limit` usable keys; toISOString stamps compare correctly as strings.
+    where.push('revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)');
+    params.push(new Date().toISOString());
+  }
   if (opts.tenantId !== undefined) {
     where.push('tenant_id = ?');
     params.push(opts.tenantId);
+  }
+  if (opts.ownerSubject !== undefined) {
+    where.push('owner_subject = ?');
+    params.push(opts.ownerSubject);
+  }
+  if (opts.keyId !== undefined) {
+    where.push('key_id = ?');
+    params.push(opts.keyId);
   }
   const after = keysetAfter('id', 'id', opts.after);
   params.push(...after.params);
   const limitSql = opts.limit === undefined ? '' : ' LIMIT ?';
   if (opts.limit !== undefined) params.push(opts.limit);
-  const sql = `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
-  // SAFETY: the SELECT above projects exactly these 7 columns, in this order.
+  const sql = `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
+  // SAFETY: the SELECT above projects exactly these 9 columns, in this order.
   const rows = db.prepare(sql).all(...params) as Array<{
     id: number; key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null; role: string;
+    expires_at: string | null; owner_subject: string | null;
   }>;
   return rows.map(r => ({
     rowId: r.id,
@@ -301,10 +351,21 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
       createdAt: r.created_at, revokedAt: r.revoked_at,
       role: r.role === 'admin' ? 'admin' : 'member',
       scopes: listScopeGrants(db, r.key_id),
+      expiresAt: r.expires_at, ownerSubject: r.owner_subject,
     },
   }));
 }
 
 export function listApiKeys(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListItem[] {
   return listApiKeyRows(db, opts).map(r => r.key);
+}
+
+/** Ids of the unrevoked, unexpired keys `ownerSubject` minted in `tenantId`, oldest first. */
+export function listLiveOwnedKeyIds(db: DatabaseSyncLike, tenantId: string, ownerSubject: string, now: number): string[] {
+  // SAFETY: the SELECT names exactly these two columns.
+  const rows = db
+    .prepare(`SELECT key_id, expires_at FROM api_keys WHERE tenant_id = ? AND owner_subject = ? AND revoked_at IS NULL ORDER BY id`)
+    .all(tenantId, ownerSubject) as Array<{ key_id: string; expires_at: string | null }>;
+  // Expiry is filtered here, not in SQL, so it follows the same Date.parse rule the key check uses.
+  return rows.filter((r) => now < keyExpiryMs(r.expires_at)).map((r) => r.key_id);
 }

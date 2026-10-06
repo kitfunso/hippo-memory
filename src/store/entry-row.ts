@@ -1,7 +1,6 @@
-import * as path from 'path';
 import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable } from '../db.js';
-import { deriveOriginProject, originFromSource } from '../project-identity.js';
+import { fallbackOrigin, originFromSource } from '../project-identity.js';
 import { checkRejectionGuard } from '../rejection.js';
 import { log } from '../log.js';
 
@@ -188,15 +187,12 @@ export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonl
  * origin (shareMemory, syncGlobalToLocal) set entry.origin_project before
  * writing and this is a no-op. Returns a stamped copy; never mutates.
  *
- * NULL is deliberately PRESERVED, not re-stamped: null means "legacy row the
- * v39 migration found no evidence for" and is deny-by-default in ambient
- * context. A writeback (e.g. markRetrieved on a crossProject-included row)
- * must not launder it into an injectable origin - the migration is the only
- * evidence-based NULL converter.
+ * NULL is PRESERVED, not re-stamped: it means no known project (a legacy row with no evidence, or a write to a
+ * shared store that named none) and ambient context denies it, so a writeback must not launder it.
  */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
-  return { ...entry, origin_project: deriveOriginProject(path.dirname(hippoRoot)) };
+  return { ...entry, origin_project: fallbackOrigin(hippoRoot) };
 }
 
 /**
@@ -213,6 +209,6 @@ export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntr
   const fromSource = originFromSource(entry.source);
   return {
     ...entry,
-    origin_project: fromSource ?? deriveOriginProject(path.dirname(hippoRoot)),
+    origin_project: fromSource ?? fallbackOrigin(hippoRoot),
   };
 }
