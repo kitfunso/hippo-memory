@@ -23,15 +23,24 @@ let handle: ServerHandle | undefined;
 
 const ctx = (owner: string): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } });
 
-function snap(task: string, session: string): { task: string; summary: string; next_step: string; session_id: string } {
+function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
 }
 
 /** B's row first, then A's newer one: an unkeyed read would give A's row to both. */
-function seedTwoOwners(): { a: number; b: number } {
+function seedTwoOwners() {
   const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), KEY_B).id;
   const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), KEY_A).id;
   return { a, b };
+}
+
+function mintOwned(owner: string): string {
+  const db = openHippoDb(home);
+  try {
+    return createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: owner }).plaintext;
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 beforeEach(() => {
@@ -81,16 +90,7 @@ describe('task state on a shared store', () => {
 
   it('REST GET /v1/context with owned keys: A sees A\'s snapshot by id, B sees B\'s own by id, never A\'s', async () => {
     const { a, b } = seedTwoOwners();
-    const db = openHippoDb(home);
-    let keys: { alice: string; bob: string };
-    try {
-      keys = {
-        alice: createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'alice' }).plaintext,
-        bob: createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'bob' }).plaintext,
-      };
-    } finally {
-      closeHippoDb(db);
-    }
+    const keys = { alice: mintOwned('alice'), bob: mintOwned('bob') };
     handle = await serve({ hippoRoot: home, host: '127.0.0.1', port: 0 });
     const snapshotId = async (token: string): Promise<number | undefined> => {
       const res = await fetch(`${handle!.url}/v1/context?project=p`, { headers: { authorization: `Bearer ${token}` } });

@@ -4,6 +4,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { recordFailure } from '../src/failure-log.js';
+import type { SessionHandoff } from '../src/handoff.js';
 import {
   closeTaskSnapshotsForSession,
   loadActiveTaskSnapshot,
@@ -30,11 +31,11 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-function snap(task: string, session = 's1'): { task: string; summary: string; next_step: string; session_id: string } {
+function snap(task: string, session = 's1') {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
 }
 
-function handoff(summary: string, sessionId = 's1'): { version: 1; sessionId: string; summary: string } {
+function handoff(summary: string, sessionId = 's1'): Omit<SessionHandoff, 'updatedAt'> {
   return { version: 1, sessionId, summary };
 }
 

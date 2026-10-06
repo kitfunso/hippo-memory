@@ -21,15 +21,25 @@ export interface ContinuityKey {
   readonly project: readonly string[];
 }
 
+export interface ContinuityFilter {
+  readonly sql: string;
+  readonly params: readonly string[];
+}
+
+export interface ContinuityStamp {
+  readonly owner: string;
+  readonly origin: string;
+}
+
 /** All or nothing: a key missing its owner or every project name matches no row, never the tenant's newest. */
-export function continuityWhere(key: ContinuityKey): { sql: string; params: string[] } {
+export function continuityWhere(key: ContinuityKey): ContinuityFilter {
   const names = key.project.filter((n) => n !== '');
   if (key.owner === '' || names.length === 0) return { sql: '0', params: [] };
   return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
 }
 
 /** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no reader. */
-export function continuityStamp(key: ContinuityKey): { owner: string; origin: string } {
+export function continuityStamp(key: ContinuityKey): ContinuityStamp {
   const origin = key.project.find((n) => n !== '');
   if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
   return { owner: key.owner, origin };
@@ -44,7 +54,7 @@ type SnapshotInput = {
   scope?: string | null;
 };
 
-function insertSnapshot(db: DatabaseSyncLike, tenantId: string, snapshot: SnapshotInput, now: string, stamp: ReturnType<typeof continuityStamp> | null): number {
+function insertSnapshot(db: DatabaseSyncLike, tenantId: string, snapshot: SnapshotInput, now: string, stamp: ContinuityStamp | null): number {
   const result = db.prepare(`
     INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at, owner_subject, origin_project)
     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)

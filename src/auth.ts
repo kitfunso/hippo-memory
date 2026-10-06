@@ -157,7 +157,7 @@ function checkApiKey(plaintext: string, keyId: string, record: ApiKeyRecord | nu
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
   const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
   // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
-  if (typeof record.ownerSubject === 'string' && record.ownerSubject !== '') key.ownerSubject = record.ownerSubject;
+  if (record.ownerSubject) key.ownerSubject = record.ownerSubject;
   return { key, expiresAtMs };
 }
 

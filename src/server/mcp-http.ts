@@ -2,7 +2,8 @@
 import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
-import { handleMcpRequest, mcpErrorResponse, type McpRequest } from '../mcp/server.js';
+import type { Context } from '../api.js';
+import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientIpForRateLimit } from './client-ip.js';
@@ -49,6 +50,24 @@ function buildMcpClientKey(req: IncomingMessage): string {
 // Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
 // loopback no-auth fallback. SSE check runs once at stream-open.
 
+export function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep']): McpContext {
+  return {
+    hippoRoot: ctx.hippoRoot,
+    tenantId: ctx.tenantId,
+    // McpContext.actor stays string; extract subject at the boundary.
+    actor: ctx.actor.subject,
+    // The caller's real role: MCP tools must not run a member key as admin.
+    role: ctx.actor.role,
+    scopes: ctx.actor.scopes,
+    viaAuthResolver: ctx.actor.viaAuthResolver,
+    hostAdmin: ctx.actor.hostAdmin,
+    owner: ctx.actor.owner,
+    clientKey,
+    store: ctx.store,
+    autoSleep,
+  };
+}
+
 export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
   // Build the same Context the /v1/* routes use so MCP tool calls inherit
   // the server's bound hippoRoot and the auth-resolved tenantId / actor.
@@ -72,21 +91,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, {
-      hippoRoot: ctx.hippoRoot,
-      tenantId: ctx.tenantId,
-      // McpContext.actor stays string; extract subject at the boundary.
-      actor: ctx.actor.subject,
-      // The caller's real role: MCP tools must not run a member key as admin.
-      role: ctx.actor.role,
-      scopes: ctx.actor.scopes,
-      viaAuthResolver: ctx.actor.viaAuthResolver,
-      hostAdmin: ctx.actor.hostAdmin,
-      owner: ctx.actor.owner,
-      clientKey: buildMcpClientKey(req),
-      store: ctx.store,
-      autoSleep: opts.autoSleep,
-    });
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
   }

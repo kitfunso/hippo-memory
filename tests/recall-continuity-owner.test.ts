@@ -20,7 +20,7 @@ let handle: ServerHandle | undefined;
 
 const ctx = (owner: string): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } });
 
-function snap(task: string, session: string): { task: string; summary: string; next_step: string; session_id: string } {
+function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
 }
 

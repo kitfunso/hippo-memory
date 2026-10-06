@@ -56,8 +56,7 @@ describe('bindSessionOwner', () => {
       err = e;
     }
     expect(err).toBeInstanceOf(ConflictError);
-    expect((err as ConflictError).status).toBe(409);
-    expect((err as ConflictError).message).toBe('session id belongs to another caller');
+    expect(err).toMatchObject({ status: 409, message: 'session id belongs to another caller' });
     expect(bindings().map((b) => b.owner_subject)).toEqual(['alice']);
   });
 

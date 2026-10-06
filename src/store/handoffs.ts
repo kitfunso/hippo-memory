@@ -70,7 +70,7 @@ export function saveSessionHandoff(
 
 interface HandoffFilter { unfinishedOnly?: boolean; maxAgeMs?: number; scopeFilter?: 'default-deny'; excludeSessionId?: string }
 
-function handoffConditions(tenantId: string, sessionId: string | undefined, opts: HandoffFilter, key: ContinuityKey | undefined): { conditions: string[]; params: Array<string | number> } {
+function handoffConditions(tenantId: string, sessionId: string | undefined, opts: HandoffFilter, key: ContinuityKey | undefined) {
   const owned = key ? continuityWhere(key) : null;
   const conditions: string[] = ['tenant_id = ?'];
   const params: Array<string | number> = [tenantId];

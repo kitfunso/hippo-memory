@@ -79,13 +79,13 @@ describe('schema v54', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: the SELECT names exactly these four columns.
-      const s = db.prepare(`SELECT id, task, owner_subject, origin_project FROM task_snapshots`).all() as Array<Record<string, unknown>>;
+      const s = db.prepare(`SELECT id, task, owner_subject, origin_project FROM task_snapshots`).all() as Array<{ id: number; task: string; owner_subject: string | null; origin_project: string | null }>;
       expect(s).toEqual([{ id: snap.id, task: 'ship v54', owner_subject: null, origin_project: null }]);
       // SAFETY: the SELECT names exactly these four columns.
-      const h = db.prepare(`SELECT session_id, summary, owner_subject, origin_project FROM session_handoffs`).all() as Array<Record<string, unknown>>;
+      const h = db.prepare(`SELECT session_id, summary, owner_subject, origin_project FROM session_handoffs`).all() as Array<{ session_id: string; summary: string; owner_subject: string | null; origin_project: string | null }>;
       expect(h).toEqual([{ session_id: 's1', summary: 'half done', owner_subject: null, origin_project: null }]);
       // SAFETY: the SELECT names exactly these four columns.
-      const f = db.prepare(`SELECT sig_hash, owner_subject, origin_project, request_id FROM failure_log`).all() as Array<Record<string, unknown>>;
+      const f = db.prepare(`SELECT sig_hash, owner_subject, origin_project, request_id FROM failure_log`).all() as Array<{ sig_hash: string; owner_subject: string | null; origin_project: string | null; request_id: string | null }>;
       expect(f).toEqual([{ sig_hash: 'abc', owner_subject: null, origin_project: null, request_id: null }]);
       expect(tableExists(db, 'session_owners')).toBe(true);
       for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) expect(indexSql(db, idx)).toBeDefined();
