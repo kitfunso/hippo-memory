@@ -349,13 +349,9 @@ function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPlan, st
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
-  let digestHiddenForHandoff = false;
   const ambientAdmit = (e: MemoryEntry): boolean => {
     // A printed handoff already carries the session's closing message, which its digest would print a second time.
-    if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) {
-      digestHiddenForHandoff = true;
-      return false;
-    }
+    if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) return false;
     return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope);
   };
   const ownSessionId = opts.currentSessionId || '';
@@ -368,7 +364,7 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
   const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
-  return { ambientAdmit, admit, bothStoresAdmit, digestHidden: () => digestHiddenForHandoff };
+  return { ambientAdmit, admit, bothStoresAdmit };
 }
 
 /** Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows. */

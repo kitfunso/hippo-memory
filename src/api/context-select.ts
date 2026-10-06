@@ -54,13 +54,12 @@ export interface ContextPlan {
   obs: DeliveryObserver | undefined;
 }
 
-/** The ambient admit rules; `digestHidden` is read late because a prompt-recall eligibility check can still set it. */
+/** The ambient admit rules. */
 export interface ContextAdmission {
   ambientAdmit: (e: MemoryEntry) => boolean;
   admit: (e: MemoryEntry) => boolean;
   /** What the two-store search admits: `admit` without the own-session compaction rule. */
   bothStoresAdmit: (e: MemoryEntry) => boolean;
-  digestHidden: () => boolean;
 }
 
 export interface ContextPools {
@@ -107,7 +106,7 @@ interface PromptCandidate {
   isGlobal: boolean;
 }
 
-/** Pins plus the prompt-recall or recent-N backfill; null means the block is empty. */
+/** Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out too. */
 export function selectPinned(
   opts: ContextOpts,
   plan: ContextPlan,
@@ -146,14 +145,6 @@ export function selectPinned(
     backfillRecent(plan, localPool, globalPool, picked, recentBudget, nowP);
   }
 
-  if (
-    pinnedLocal.length === 0 &&
-    pinnedGlobal.length === 0 &&
-    picked.items.length === 0 &&
-    !admission.digestHidden()
-  ) {
-    return null;
-  }
   admitWithinBudget(rankedPinned, picked, effBudget, obs);
   return picked.items;
 }
