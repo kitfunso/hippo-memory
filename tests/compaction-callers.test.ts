@@ -568,3 +568,51 @@ describe('a second owner on the same session', () => {
     expect(thrown(() => call(owned('alice')))).toBeNull();
   });
 });
+
+describe('a request id another session sent', () => {
+  const senders: Array<[string, string, string]> = [
+    ['another session of the same owner', 'alice', 'sA2'],
+    ['another owner', 'bob', 'sB'],
+  ];
+  const items = (owner: string, sessionId: string, list: readonly string[] = ITEMS) =>
+    saveCompactionItemsForCaller(owned(owner), { sessionId, project: PROJECT, trigger: 'auto', items: list, requestId: 'cmp-1' });
+
+  it('capture-error: the same id with a different body from the same session gets the first outcome and writes nothing', () => {
+    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
+    const other = failure({ tool: 'Grep', text: 'Grep: no matches found', skip: 'skipped-routine', rule: 'search-tool' });
+    expect(captureFailureForCaller(owned('alice'), other)).toEqual({ outcome: 'stored' });
+    expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 1 });
+  });
+
+  it.each(senders)('capture-error: the same id from %s is a 409 and leaves the first row alone', (_who, owner, sessionId) => {
+    // A failed first store leaves a row a retry settles, which a foreign id would otherwise rewrite.
+    const undo = failOn('memories', 'INSERT', 'store boom');
+    expect(() => captureFailureForCaller(owned('alice'), failure())).toThrow('store boom');
+    undo();
+    const err = thrown(() => captureFailureForCaller(owned(owner), failure({ sessionId })));
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
+    withDb((db) => expect(failureRows(db)).toEqual([expect.objectContaining({ outcome: 'store-failed', owner_subject: 'alice' })]));
+    expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 0 });
+    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
+  });
+
+  it('post-compact: the same id with different items from the same session gets the first count and writes none of them', () => {
+    expect(items('alice', 'sA')).toEqual({ written: 2 });
+    expect(items('alice', 'sA', ['The staging deploy needs the VPN up first or the health check times out.'])).toEqual({ written: 2 });
+    expect(rowCounts()).toMatchObject({ compactions: 1, memories: 2 });
+  });
+
+  it.each(senders)('post-compact: the same id from %s is a 409 and never finishes the first record', (_who, owner, sessionId) => {
+    // Items that failed leave the record summarised, which a foreign id would otherwise finish under its own session.
+    const undo = failOn('memories', 'INSERT', 'items boom');
+    expect(() => items('alice', 'sA')).toThrow('items boom');
+    undo();
+    const err = thrown(() => items(owner, sessionId));
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
+    withDb((db) => expect(count(db, 'compactions', `status = 'summarised' AND session_id = 'sA'`)).toBe(1));
+    expect(rowCounts()).toMatchObject({ compactions: 1, memories: 0 });
+    expect(items('alice', 'sA')).toEqual({ written: 2 });
+  });
+});

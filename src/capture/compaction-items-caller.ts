@@ -25,7 +25,7 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
   return withCallerDb(ctx, (db) => {
-    const earlier = compactionByRequest(db, ctx.tenantId, req.requestId);
+    const earlier = compactionByRequest(db, ctx.tenantId, req.requestId, req.sessionId);
     // Past `summarised` the first try finished, so its count is the answer; a `summarised` one failed at the items and is reused.
     if (earlier !== null && earlier.status !== 'summarised') return { written: earlier.itemsWritten };
     const meta = { sessionId: req.sessionId, trigger: req.trigger, cwd: null, transcriptPath: null };

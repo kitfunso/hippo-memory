@@ -55,7 +55,7 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): CallerFailureResult {
   const failure = checkedFailure(req);
   const key = bindCaller(ctx, req.sessionId, req.project);
-  const earlier = withCallerDb(ctx, (db) => requestOutcome(db, ctx.tenantId, req.requestId));
+  const earlier = withCallerDb(ctx, (db) => requestOutcome(db, ctx.tenantId, req.requestId, req.sessionId));
   // A retry after a lost reply gets the first answer and writes nothing; one whose store failed tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';

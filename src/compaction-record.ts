@@ -1,6 +1,7 @@
 // One record per Claude Code compaction, and what turns its summary into kept memories.
 import * as fs from 'fs';
 import * as path from 'path';
+import { ConflictError } from './api-errors.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { isSharedStore, loadConfig } from './config.js';
@@ -167,9 +168,12 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
   return selectRecords(db, 'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1', tenantId, sessionId)[0] ?? null;
 }
 
-/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record. */
-export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRecord | null {
-  return selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record; another session's id is a ConflictError. */
+export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): CompactionRecord | null {
+  const record = selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+  // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
+  if (record !== null && record.sessionId !== sessionId) throw new ConflictError('request id belongs to another session');
+  return record;
 }
 
 /** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
