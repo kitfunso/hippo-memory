@@ -4,6 +4,7 @@ import type { MemoryKind } from '../../memory.js';
 import { buildGraphModel } from '../../graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
 import { HttpError, sendJson } from '../../http-util.js';
+import { canReadScope } from '../../recall-scope.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { getCallerProject, getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
@@ -59,6 +60,7 @@ export async function handleGetGraph({ req, res, opts, query }: RouteRequest): P
   const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
     entity: entityRaw ?? undefined,
     limit,
+    canRead: (s) => s === null || canReadScope(ctx.actor, s),
   });
   sendJson(res, 200, model);
   return;
