@@ -54,7 +54,14 @@ describe('continuity on a shared store', () => {
 
   it('no project: empty block on REST recall and MCP hippo_recall', async () => {
     // Ownerless rows and other people's rows are what an unkeyed read would hand to anyone.
-    saveActiveTaskSnapshot(home, 'default', snap('legacy task', 'sl'));
+    // Seeded by hand, as a row from before v54: an unkeyed save on a shared store throws.
+    const seed = openHippoDb(home);
+    try {
+      const at = new Date().toISOString();
+      seed.prepare(`INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at) VALUES ('legacy task', 's', 'n', 'active', 'cli', 'sl', 'default', ?, ?)`).run(at, at);
+    } finally {
+      closeHippoDb(seed);
+    }
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
     writeEntry(home, createMemory('the deploy script lives in ops/deploy.sh'));
     expect(recall(ctx('alice'), { query: 'deploy', includeContinuity: true, project: P }).continuity?.activeSnapshot?.id).toBe(a.id);
