@@ -8,12 +8,12 @@ import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { type Actor, authRevoke, type Context, RecallContractError } from './api.js';
+import { type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type Context, RecallContractError } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
-import { isLoopback, requireAuth } from './server/auth.js';
+import { buildContextWithAuth, isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
@@ -29,21 +29,31 @@ import { handleCloseProcess, handleCreateProcess, handleGetProcess, handleListPr
 import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrief, handleListProjectBriefs, handleRefreshProjectBrief, handleSupersedeProjectBrief } from './server/routes/project-briefs.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
-import type { ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
+import { parseJsonBody } from './server/validation.js';
+import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 
-// Add-on packages revoke keys through these without importing the whole api surface.
-export { authRevoke, ForbiddenError, type Context, type Actor };
+// Add-on packages mint and revoke keys through these without importing the whole api surface.
+export { authCreateSelf, authRevoke, ForbiddenError, type AuthCreateSelfOpts, type AuthCreateSelfResult, type Context, type Actor };
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 // The code behind these lives in src/server/; this subpath keeps exporting them.
 export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
-export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+export type { AddonCall, AddonRoute, AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a caller that renders the prompt hook elsewhere, JsonValue for its body.
+export { HttpError } from './http-util.js';
+export { promptHookContext, type CallerProject } from './prompt-hook.js';
+export type { JsonValue } from './json.js';
+// A session-end route stores the turns its caller read from a transcript on the caller's own machine.
+export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
 export { sqliteStore, type HippoStore } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 export { StoreBusyError } from './db.js';
+
+// An add-on that serves a team store checks the flag before it starts.
+export { isSharedStore } from './config.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -145,35 +155,59 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'GET', regex: /^\/v1\/customer-notes\/(\d+)$/, handler: handleGetCustomerNote },
 ];
 
-/**
- * Run the first /v1 route whose method and path match. Each matcher runs before its method check, as the
- * inline route blocks did, so a malformed `%` escape still throws from matchPath on any method.
- */
+/** The route's handler bound to this request's path params, or null when method or path differ. The matcher runs before the
+ *  method check, as the inline route blocks did, so a malformed `%` escape still throws from matchPath on any method. */
+function routeMatches(route: Route, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
+  if ('path' in route) return method === route.method && path === route.path ? route.handler : null;
+  if ('pattern' in route) {
+    const params = matchPath(route.pattern, path);
+    return method === route.method && params ? (r) => route.handler(r, params) : null;
+  }
+  const match = path.match(route.regex);
+  return method === route.method && match ? (r) => route.handler(r, match) : null;
+}
+
+/** Run the first /v1 route whose method and path match. */
 async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
   for (const route of V1_ROUTES) {
-    if ('path' in route) {
-      if (method === route.method && path === route.path) {
-        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
-        await route.handler(r);
-        return true;
-      }
-    } else if ('pattern' in route) {
-      const params = matchPath(route.pattern, path);
-      if (method === route.method && params) {
-        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
-        await route.handler(r, params);
-        return true;
-      }
-    } else {
-      const match = path.match(route.regex);
-      if (method === route.method && match) {
-        if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
-        await route.handler(r, match);
-        return true;
-      }
-    }
+    const run = routeMatches(route, method, path);
+    if (run === null) continue;
+    if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
+    await run(r);
+    return true;
   }
   return false;
+}
+
+const ADDON_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
+
+// A path with only ADDON_SEGMENT_RE characters never holds a `%`, so matchPath cannot throw here.
+function isCorePostPath(path: string): boolean {
+  return PUBLIC_ROUTES.has(`POST ${path}`) || V1_ROUTES.some((route) => routeMatches(route, 'POST', path) !== null);
+}
+
+/** Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or hides from dispatch. */
+function assertAddonRoutes(routes: readonly AddonRoute[]): void {
+  const seen = new Set<string>();
+  for (const { path } of routes) {
+    const plain = path.startsWith('/v1/') && new URL(path, 'http://h').pathname === path
+      && path.slice('/v1/'.length).split('/').every((segment) => ADDON_SEGMENT_RE.test(segment));
+    if (!plain) throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
+    if (isCorePostPath(path)) throw new Error(`add-on route '${path}' is already served by core`);
+    seen.add(path);
+  }
+}
+
+/** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a core one. */
+async function dispatchAddonRoute({ req, res, opts }: RouteRequest, method: string, path: string): Promise<boolean> {
+  const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
+  if (!route) return false;
+  await refuseUnportedRoute(req, opts);
+  const ctx = await buildContextWithAuth(req, opts);
+  const body = await parseJsonBody(req, ctx);
+  sendJson(res, 200, await route.handler({ ctx, body }));
+  return true;
 }
 
 const NOT_ON_STORE_MESSAGE = 'not available on this store';
@@ -210,7 +244,9 @@ async function handleRequest(
 
   enforceRateLimit(req, path, limiter);
 
-  if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
+  const routeRequest: RouteRequest = { req, res, opts, query };
+  if (await dispatchV1Route(routeRequest, method, path)) return;
+  if (await dispatchAddonRoute(routeRequest, method, path)) return;
 
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
     // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
@@ -350,9 +386,19 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     sendJson(res, 400, { error: err.message, code: err.code });
     return;
   }
+  // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what the client keeps sending.
+  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) res.once('finish', () => closeAfterReply(req));
   sendError(res, mapped.status, mapped.message);
-  // readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
-  if (err instanceof BodyTooLargeError) req.destroy();
+}
+
+function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
+  try {
+    replyWithFailure(req, res, err, requestId);
+  } catch (replyErr) {
+    // A throw here would be an unhandled rejection, which stops the daemon for every caller.
+    log.error(`serve: failure reply not sent, socket closed: ${replyErr instanceof Error ? replyErr.message : String(replyErr)}`, { requestId });
+    res.destroy();
+  }
 }
 
 function setKeepAliveTimeouts(server: Server): void {
@@ -421,6 +467,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
+  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
+  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
+  assertAddonRoutes(routes);
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
@@ -434,7 +483,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served: ResolvedServeOpts = { ...opts, store: opts.store ?? sqliteStore(opts.hippoRoot) };
+  const served: ResolvedServeOpts = { ...opts, routes, store: opts.store ?? sqliteStore(opts.hippoRoot) };
   const { kind } = served.store;
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
@@ -448,9 +497,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     res.setHeader('X-Request-Id', requestId);
     const run = (): Promise<void> => withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, served, startedAt, streamSlots, limiter));
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => {
-      replyWithFailure(req, res, err, requestId);
-    });
+    (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => replyOrClose(req, res, err, requestId));
   });
 
   setKeepAliveTimeouts(server);

@@ -1,13 +1,33 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import { createApiKey, listApiKeyRows, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem, type ApiKeyListRow } from '../auth.js';
+import { createApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem, type ApiKeyListRow, type CreateApiKeyResult, type ListApiKeysOpts } from '../auth.js';
+import { DAY_MS } from '../dashboard-snapshot.js';
 import type { KeysetPosition } from '../keyset.js';
 import { isRestrictedScope } from '../recall-scope.js';
-import { selectApiKeyOwner } from '../store/tenant-lookup.js';
+import { selectApiKeyOwner, type ApiKeyOwner } from '../store/tenant-lookup.js';
 import type { Context } from './types.js';
+
+const API_KEY_SUBJECT = 'api_key:';
+
+/** The key id an API-key actor's subject names, or null for any other actor. */
+function keyIdOfSubject(subject: string): string | null {
+  return subject.startsWith(API_KEY_SUBJECT) ? subject.slice(API_KEY_SUBJECT.length) : null;
+}
+
+function inTransaction<T>(db: DatabaseSyncLike, fn: () => T): T {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const out = fn();
+    db.exec('COMMIT');
+    return out;
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* keep the original error */ }
+    throw err;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // auth: create / list / revoke
@@ -53,25 +73,86 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
   const db = openHippoDb(ctx.hippoRoot);
   try {
     const role = opts.role ?? (ctx.actor.viaAuthResolver ? 'member' : 'admin');
-    const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label, role });
-    // Same try/catch as authRevoke so audit failure can't crash a successful mint.
+    const mint = (): CreateApiKeyResult => createApiKey(db, { tenantId: ctx.tenantId, label: opts.label, role });
     // The plaintext is NEVER logged; metadata carries label + role, keyId is non-secret.
-    try {
-      appendAuditEvent(db, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'auth_create',
-        targetId: result.keyId,
-        metadata: {
-          label: opts.label ?? null,
-          role,
-        },
+    const audit = (keyId: string): void => appendAuditEvent(db, {
+      tenantId: ctx.tenantId, actor: ctx.actor.subject, op: 'auth_create', targetId: keyId, metadata: { label: opts.label ?? null, role },
+    });
+    // A resolver admin's keys are found again only through their audit rows, so the key and its row commit together.
+    if (ctx.actor.viaAuthResolver) {
+      const result = inTransaction(db, () => {
+        const minted = mint();
+        audit(minted.keyId);
+        return minted;
       });
+      return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId, role };
+    }
+    const result = mint();
+    try {
+      audit(result.keyId);
     } catch (error) {
       // Audit must not crash a successful mint.
       reportAuditWriteFailure('auth_create', String(error), result.keyId);
     }
     return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId, role };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+const MAX_TTL_DAYS = 3650;
+
+export interface AuthCreateSelfOpts {
+  label?: string;
+  /** Days until the new key expires. */
+  ttlDays: number;
+  /** Live self-minted keys one subject may hold; minting past it revokes the oldest. */
+  perSubject: number;
+}
+
+export interface AuthCreateSelfResult extends AuthCreateResult {
+  /** ISO time the key stops working. */
+  expiresAt: string;
+}
+
+/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a departed user's key short-lived. */
+function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
+  if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
+    throw new RangeError(`authCreateSelf: ttlDays must be above 0 and at most ${MAX_TTL_DAYS}, got ${String(ttlDays)}`);
+  }
+  if (!Number.isInteger(perSubject) || perSubject < 1) {
+    throw new RangeError(`authCreateSelf: perSubject must be a whole number of at least 1, got ${String(perSubject)}`);
+  }
+}
+
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
+export function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): AuthCreateSelfResult {
+  if (!ctx.actor.viaAuthResolver) {
+    throw new ForbiddenError('Only a caller signed in through the auth resolver can mint its own key');
+  }
+  assertSelfMintOpts(opts);
+  const { tenantId, actor: { subject } } = ctx;
+  const now = Date.now();
+  const expiresAt = new Date(now + opts.ttlDays * DAY_MS).toISOString();
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    // IMMEDIATE takes the write lock before the count, so two mints for one subject cannot both see room under the cap.
+    const result = inTransaction(db, () => {
+      const live = listLiveOwnedKeyIds(db, tenantId, subject, now);
+      const replaced = live.slice(0, Math.max(0, live.length - opts.perSubject + 1));
+      const minted = createApiKey(db, { tenantId, label: opts.label, role: 'member', ownerSubject: subject, expiresAt });
+      for (const keyId of replaced) {
+        revokeApiKey(db, keyId);
+        appendAuditEvent(db, { tenantId, actor: subject, op: 'auth_revoke', targetId: keyId, metadata: { replacedBy: minted.keyId } });
+      }
+      // Same op and actor as an admin mint, so a lookup by audit row finds this key too.
+      appendAuditEvent(db, {
+        tenantId, actor: subject, op: 'auth_create', targetId: minted.keyId,
+        metadata: { label: opts.label ?? null, role: 'member', self: true, expiresAt },
+      });
+      return minted;
+    });
+    return { keyId: result.keyId, plaintext: result.plaintext, tenantId, role: 'member', expiresAt };
   } finally {
     closeHippoDb(db);
   }
@@ -99,44 +180,57 @@ export function authListRows(
 ): ApiKeyListRow[] {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    return listApiKeyRows(db, { ...opts, tenantId: ctx.tenantId });
+    const filter = memberListFilter(db, ctx);
+    return filter === null ? [] : listApiKeyRows(db, { ...opts, tenantId: ctx.tenantId, ...filter });
   } finally {
     closeHippoDb(db);
   }
 }
 
-/**
- * Revoke an API key.
- *
- * Security: the key must belong to `ctx.tenantId`. Cross-tenant revoke is
- * rejected with the "not found" message used for missing keys, and a member may
- * revoke only its own key (checked first), so no caller can probe other key_ids.
- *
- * Audit: emits 'auth_revoke' with `tenantId` set to the KEY ROW's tenant_id
- * (mirrors src/cli.ts:cmdAuthRevoke). Skipped on no-op
- * revoke (already revoked) so re-running doesn't pad the audit log.
- */
+/** A member sees only the keys its person minted, or just its own key when that has no owner; an admin sees the whole tenant; null means no keys. */
+function memberListFilter(db: DatabaseSyncLike, ctx: Context): Pick<ListApiKeysOpts, 'ownerSubject' | 'keyId'> | null {
+  const { actor } = ctx;
+  if (actor.role === 'admin') return {};
+  if (actor.viaAuthResolver) return { ownerSubject: actor.subject };
+  const keyId = keyIdOfSubject(actor.subject);
+  if (keyId === null) return null;
+  const owner = selectApiKeyOwner(db, keyId)?.ownerSubject;
+  return owner ? { ownerSubject: owner } : { keyId };
+}
+
+/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or unowned key, so it cannot probe key ids. */
+function assertMayRevoke(ctx: Context, keyId: string, row: ApiKeyOwner | undefined): asserts row is ApiKeyOwner {
+  const { actor } = ctx;
+  if (actor.role !== 'admin' && actor.viaAuthResolver && (row?.tenantId !== ctx.tenantId || row.ownerSubject !== actor.subject)) {
+    throw new ForbiddenError('A member can revoke only the keys it minted');
+  }
+  // Cross-tenant access denied: same message as missing key, no info leak.
+  if (!row || row.tenantId !== ctx.tenantId) {
+    throw new NotFoundError(`Unknown key_id: ${keyId}`);
+  }
+  if (actor.viaAuthResolver && row.role === 'admin') {
+    throw new ForbiddenError('An auth resolver admin cannot revoke an admin key, which outranks it');
+  }
+}
+
 export interface AuthRevokeResult {
   ok: true;
   revokedAt: string;
 }
+
+/** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it minted.
+ *  The auth_revoke row carries the KEY ROW's tenant, as cmdAuthRevoke does, and is skipped for an already-revoked key. */
 export function authRevoke(
   ctx: Context,
   keyId: string,
 ): AuthRevokeResult {
-  if (ctx.actor.role !== 'admin' && ctx.actor.subject !== `api_key:${keyId}`) {
+  if (ctx.actor.role !== 'admin' && !ctx.actor.viaAuthResolver && keyIdOfSubject(ctx.actor.subject) !== keyId) {
     throw new ForbiddenError('A member key can revoke only itself');
   }
   const db = openHippoDb(ctx.hippoRoot);
   try {
     const row = selectApiKeyOwner(db, keyId);
-    // Cross-tenant access denied: same message as missing key, no info leak.
-    if (!row || row.tenantId !== ctx.tenantId) {
-      throw new NotFoundError(`Unknown key_id: ${keyId}`);
-    }
-    if (ctx.actor.viaAuthResolver && row.role === 'admin') {
-      throw new ForbiddenError('An auth resolver admin cannot revoke an admin key, which outranks it');
-    }
+    assertMayRevoke(ctx, keyId, row);
 
     let revokedAt: string;
     let alreadyRevoked = false;

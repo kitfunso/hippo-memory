@@ -69,6 +69,11 @@ export function withBusyWait<T>(busyWaitMs: number, fn: () => T): T {
   return scopedBusyWaitMs.run(busyWaitMs, fn);
 }
 
+/** The lock wait an open here would get without its own `busyWaitMs`, in openHippoDb's order; undefined outside both scopes. */
+export function scopedBusyWait(): number | undefined {
+  return shareBusyWaitMs ?? scopedBusyWaitMs.getStore();
+}
+
 /** Thrown by a hippo.db open inside a request served from another store: the code path is not ported to the store port yet. */
 export class SqliteBlockedError extends Error {
   constructor(readonly storeKind: string) {
