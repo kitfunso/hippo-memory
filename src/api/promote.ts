@@ -17,7 +17,8 @@ import { promoteToGlobal } from '../shared.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { loadConfig } from '../config.js';
 import type { Context } from './types.js';
-import { selectMemoryTenant } from '../store/tenant-lookup.js';
+import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { canTouchScope } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // promote
@@ -50,7 +51,8 @@ export function promote(
   // another tenant).
   const ownerDb = openHippoDb(ctx.hippoRoot);
   try {
-    if (selectMemoryTenant(ownerDb, id) !== ctx.tenantId) {
+    const reach = selectMemoryReach(ownerDb, id);
+    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
@@ -125,10 +127,10 @@ export function supersede(
   return { ok: true, oldId, newId: newEntry.id };
 }
 
-/** The tenant-scoped row to supersede; readEntry's tenant filter makes another tenant's id read as not found. */
+/** The tenant-scoped row to supersede; another tenant's id, or someone else's personal row, reads as not found. */
 function readSupersedable(ctx: Context, oldId: string): MemoryEntry {
   const old: MemoryEntry | null = readEntry(ctx.hippoRoot, oldId, ctx.tenantId);
-  if (!old) {
+  if (!old || !canTouchScope(ctx.actor, old.scope ?? null)) {
     throw new NotFoundError(`Memory not found: ${oldId}`);
   }
   // The CAS UPDATE closes the race; this check only gives a clearer error in the common single-writer case.
@@ -217,7 +219,8 @@ export function archiveRaw(
     // pre-check. Deny cross-tenant access with the same not-found message
     // archiveRawMemory itself would throw on a missing row, so we don't
     // leak whether the id exists in another tenant.
-    if (selectMemoryTenant(db, id) !== ctx.tenantId) {
+    const reach = selectMemoryReach(db, id);
+    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
     archiveRawMemory(db, id, {

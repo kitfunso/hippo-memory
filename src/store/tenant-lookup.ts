@@ -1,4 +1,4 @@
-// Owner lookups by id: the tenant checks in src/api and the CLI's key-tenant lookup share these queries.
+// Owner lookups by id: the tenant and scope checks in src/api and the CLI's key-tenant lookup share these queries.
 
 import type { DatabaseSyncLike } from '../db.js';
 
@@ -19,9 +19,9 @@ export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOw
   return row && { tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, ownerSubject: row.owner_subject };
 }
 
-/** The tenant that owns memory `id`, or undefined when no such memory exists. */
-export function selectMemoryTenant(db: DatabaseSyncLike, id: string): string | undefined {
-  // SAFETY: row's shape matches the single tenant_id column named in the SELECT.
-  const row = db.prepare(`SELECT tenant_id FROM memories WHERE id = ?`).get(id) as { tenant_id?: string } | undefined;
-  return row?.tenant_id;
+/** Who may reach memory `id`: its tenant and scope, or undefined when no such memory exists. */
+export function selectMemoryReach(db: DatabaseSyncLike, id: string): { tenantId: string; scope: string | null } | undefined {
+  // SAFETY: row's shape matches the tenant_id and scope columns named in the SELECT.
+  const row = db.prepare(`SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as { tenant_id: string; scope: string | null } | undefined;
+  return row && { tenantId: row.tenant_id, scope: row.scope };
 }
