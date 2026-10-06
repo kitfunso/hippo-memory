@@ -239,12 +239,13 @@ export class VerifiedKeyCache {
 // SHORTCUT: per-process cache, so a revoke or scope change made by another process (the CLI) lands within VERIFIED_KEY_TTL_MS; a shared revocation epoch in the store if that is too slow.
 const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP, VERIFIED_KEY_TTL_MS);
 
-/** Verify a bearer API key against `store`, served at `hippoRoot`; a cache hit skips both scrypt and the store. Null when invalid. */
-export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, store: HippoStore): Promise<VerifiedApiKey | null> {
+/** Verify a bearer API key against `store`, served at `hippoRoot`; a cache hit skips both scrypt and the store. Null when invalid. A throw from `beforeLookup` refuses a miss before the store read and scrypt. */
+export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, store: HippoStore, beforeLookup?: () => void): Promise<VerifiedApiKey | null> {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
   const hit = verifiedKeys.get(hippoRoot, keyId, plaintext, Date.now());
   if (hit) return hit;
+  beforeLookup?.();
   verifyStats.storeLookups++;
   const epoch = verifiedKeys.epoch;
   const found = checkApiKey(plaintext, keyId, await store.findApiKey(keyId), Date.now());

@@ -2,6 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../api.js';
 import type { JsonValue } from '../json.js';
+import type { RateLimiter } from '../rate-limit.js';
 import type { HippoStore } from '../store-port.js';
 
 export interface ServerHandle {
@@ -39,6 +40,8 @@ export interface AddonRoute {
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
 }
 
+export interface RateLimitSpec { ratePerSec: number; burst: number }
+
 export interface ServeOpts {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
@@ -58,11 +61,19 @@ export interface ServeOpts {
   autoSleep?: false;
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
+  /** Request limits: perCaller after auth; perAddress replaces HIPPO_V1_RPS when set, 'off' disables it; failedAuthPerAddress guards scrypt. */
+  rateLimits?: {
+    perCaller?: RateLimitSpec;
+    perAddress?: RateLimitSpec | 'off';
+    failedAuthPerAddress?: RateLimitSpec;
+  };
 }
 
 export type ResolvedServeOpts = ServeOpts & {
   store: HippoStore;
   publicJsonBodies: ReadonlyMap<string, string>;
+  callerLimiter?: RateLimiter;
+  failedAuthLimiter: RateLimiter;
 };
 
 /** Per-request values the /v1 route handlers read. */
