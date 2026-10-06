@@ -29,6 +29,7 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
   const result = apiRemember(apiCtx, {
     content: text,
     tags,
+    personal: args.personal === true,
   });
   const entry = readEntry(hippoRoot, result.id, tenantId);
 

@@ -28,6 +28,10 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
   if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
     throw new HttpError(400, `invalid kind: ${kindRaw}`);
   }
+  const personalRaw = body['personal'];
+  if (personalRaw !== undefined && !isJsonBoolean(personalRaw)) {
+    throw new HttpError(400, 'personal must be a boolean');
+  }
   const result = remember(ctx, {
     content,
     kind: kindRaw,
@@ -36,6 +40,7 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
     artifactRef: getString(body, 'artifactRef'),
     tags: getStringArray(body, 'tags'),
     project: getCallerProject(body),
+    personal: personalRaw === true,
   });
   sendJson(res, 200, result);
   return;

@@ -26,6 +26,7 @@ import { embedMemory } from '../embeddings.js';
 import { loadConfig, type HippoConfig } from '../config.js';
 import { extractPathTags } from '../path-context.js';
 import { detectScope } from '../scope.js';
+import { assertClientScope } from '../recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { vetSecrets } from '../secret-detect.js';
 import * as client from '../client.js';
@@ -106,6 +107,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const owner = ownerCheck.value ?? null;
   const artifactRef = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
   const scope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
+  assertClientScope(scope);
   return { kind, owner, artifactRef, scope };
 }
 

@@ -89,10 +89,10 @@ describe('MCP writes on a shared store', () => {
     expect(rows[0]?.origin_project).toBeNull();
   });
 
-  it('hippo_remember still takes exactly text, error, pin and tag', async () => {
+  it('hippo_remember takes exactly text, error, pin, tag and personal', async () => {
     handle = await serve({ hippoRoot: flaggedStore(), port: 0 });
     const body = await mcp<{ result?: { tools: Array<{ name: string; inputSchema: { properties: object } }> } }>(handle, 'tools/list');
     const tool = body.result?.tools.find((t) => t.name === 'hippo_remember');
-    expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual(['error', 'pin', 'tag', 'text']);
+    expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual(['error', 'personal', 'pin', 'tag', 'text']);
   });
 });

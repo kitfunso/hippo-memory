@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
 import { initStore } from '../store/open.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from '../api.js';
+import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
@@ -173,6 +174,7 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   // isPrivateScope as the single source of truth: reject a scope that names a
   // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
   // `private:x`, and `vault:private` with a missing trailing segment).
+  assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
       `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
