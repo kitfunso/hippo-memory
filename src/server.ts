@@ -13,7 +13,7 @@ import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
-import { buildContextWithAuth, isLoopback, requireAuth } from './server/auth.js';
+import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
@@ -30,7 +30,7 @@ import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrie
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
 import { parseJsonBody } from './server/validation.js';
-import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
+import type { AddonRoute, RateLimitSpec, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 import type { JsonValue } from './json.js';
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.
@@ -41,7 +41,7 @@ export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
-export type { AddonCall, AddonRoute, AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+export type { AddonCall, AddonRoute, AuthResolver, RateLimitSpec, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
 // What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a caller that renders the prompt hook elsewhere, JsonValue for its body.
 export { HttpError } from './http-util.js';
 export { promptHookContext, type CallerProject } from './prompt-hook.js';
@@ -369,15 +369,46 @@ async function assertNoLiveServer(hippoRoot: string): Promise<void> {
   }
 }
 
-function bootRateLimiter(): RateLimiter | undefined {
+// SHORTCUT: buckets live in this process and reset on restart or LRU eviction; move them to the store if serve ever runs as several processes.
+function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
+  return createRateLimiter({ ratePerSec, burst, idleEvictMs: 60000, maxKeys: LIMITER_MAX_KEYS });
+}
+
+function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLimiter | undefined {
+  if (perAddress === 'off') return undefined;
+  if (perAddress !== undefined) return limiterFor(perAddress);
   // Per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
   // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
   // set the rate before serve(). A non-positive or non-finite value disables
   // limiting (the opt-out knob).
   const v1Rps = Number(envV1Rps() ?? 20);
-  return Number.isFinite(v1Rps) && v1Rps > 0
-    ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
-    : undefined;
+  return Number.isFinite(v1Rps) && v1Rps > 0 ? limiterFor({ ratePerSec: v1Rps, burst: v1Rps * 2 }) : undefined;
+}
+
+const DEFAULT_FAILED_AUTH: RateLimitSpec = { ratePerSec: 20, burst: 40 };
+
+function assertRateLimitSpec(name: string, { ratePerSec, burst }: RateLimitSpec): void {
+  if (!Number.isFinite(ratePerSec) || ratePerSec <= 0) throw new Error(`rateLimits.${name}.ratePerSec must be a finite number above 0`);
+  if (!Number.isFinite(burst) || burst < 1) throw new Error(`rateLimits.${name}.burst must be a finite number of at least 1`);
+}
+
+interface BootedLimiters {
+  perAddress: RateLimiter | undefined;
+  callerLimiter: RateLimiter | undefined;
+  failedAuthLimiter: RateLimiter;
+}
+
+/** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
+function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
+  const { perCaller, perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
+  if (perCaller !== undefined) assertRateLimitSpec('perCaller', perCaller);
+  if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
+  assertRateLimitSpec('failedAuthPerAddress', failedAuthPerAddress);
+  return {
+    perAddress: bootRateLimiter(perAddress),
+    callerLimiter: perCaller === undefined ? undefined : limiterFor(perCaller),
+    failedAuthLimiter: limiterFor(failedAuthPerAddress),
+  };
 }
 
 interface StoreHolder {
@@ -515,6 +546,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
   assertAddonRoutes(routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
+  const { perAddress: limiter, callerLimiter, failedAuthLimiter } = bootLimiters(opts.rateLimits);
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
@@ -523,12 +555,12 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // can match the two and prove a pid-reusing impostor is not the real server.
   const startedAt = new Date().toISOString();
 
-  const limiter = bootRateLimiter();
-
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served: ResolvedServeOpts = { ...opts, routes, publicJsonBodies, store: opts.store ?? sqliteStore(opts.hippoRoot) };
+  const served: ResolvedServeOpts = {
+    ...opts, routes, publicJsonBodies, store: opts.store ?? sqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
+  };
   const { kind } = served.store;
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 

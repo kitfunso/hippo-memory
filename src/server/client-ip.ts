@@ -85,7 +85,7 @@ export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: R
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     const ip = clientIpForRateLimit(req);
     if (!limiter.check(ip)) {
-      throw new HttpError(429, 'rate limit exceeded');
+      throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);
     }
   }
 }
