@@ -111,10 +111,10 @@ export interface MemoryEntry {
   /**
    * Memory scope isolation: owning project for ambient-context
    * partitioning. A lowercased project name, '' for user-global (injectable
-   * everywhere), or null for legacy rows written before the column - ambient
-   * context treats null as other-project (deny). Stamped from the store's location
-   * at write time (store.ts stampOriginProject); undefined only on entries not yet
-   * written.
+   * everywhere), or null for no known project (a legacy row, or a shared-store
+   * write that named none) - ambient context treats null as other-project (deny).
+   * Stamped at write time by store/entry-row.ts stampOriginProject via fallbackOrigin;
+   * undefined only on entries not yet written.
    */
   origin_project?: string | null;
   /**

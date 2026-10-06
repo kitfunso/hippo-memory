@@ -41,7 +41,7 @@ function newKey(): TestKey {
   const plaintext = `${keyId}.${base32(32)}`;
   const salt = randomBytes(16);
   const keyHash = `scrypt$${salt.toString('hex')}$${scryptSync(plaintext, salt, 32).toString('hex')}`;
-  return { keyId, plaintext, record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [] } };
+  return { keyId, plaintext, record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [], expiresAt: null } };
 }
 
 const bearer = (key: TestKey) => ({ authorization: `Bearer ${key.plaintext}` });
@@ -55,6 +55,7 @@ describe('serve() under a store that is not hippo.db', () => {
   const records = new Map([[valid.keyId, valid.record]]);
   const blocked: Error[] = [];
   const lookups = new Map<string, number>();
+  let addonRuns = 0;
   const store: HippoStore = {
     kind: 'stub',
     async findApiKey(keyId: string): Promise<ApiKeyRecord | null> {
@@ -76,7 +77,7 @@ describe('serve() under a store that is not hippo.db', () => {
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     root = mkdtempSync(join(tmpdir(), 'hippo-other-store-'));
-    handle = await serve({ hippoRoot: root, port: 0, store });
+    handle = await serve({ hippoRoot: root, port: 0, store, routes: [{ path: '/v1/x-addon', handler: async () => { addonRuns += 1; return {}; } }] });
   });
 
   afterEach(() => {
@@ -105,6 +106,14 @@ describe('serve() under a store that is not hippo.db', () => {
         body: { error: 'not available on this store' },
       });
     }
+  });
+
+  it('answers 501 on an add-on route and never runs its handler; a bad key is still a 401', async () => {
+    const send = async (key: TestKey) => fetch(`${handle.url}/v1/x-addon`, { method: 'POST', headers: { ...bearer(key), 'content-type': 'application/json' }, body: '{}' });
+    const res = await send(valid);
+    expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: 'not available on this store' } });
+    expect((await send(newKey())).status).toBe(401);
+    expect(addonRuns).toBe(0);
   });
 
   it('checks the caller first, so a bad or missing key is still a 401', async () => {

@@ -6,6 +6,7 @@ import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
+import { USER_SEGMENT } from './home-path.js';
 import { errorMessage } from './log.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
@@ -345,17 +346,6 @@ function changedFiles(edits: readonly DigestEdit[], repoRoot: string): string[] 
   return files;
 }
 
-// A home-directory path names its user and the store may be shared, so such a sentence is dropped.
-export const USER_SEGMENT: readonly RegExp[] = [
-  /[A-Za-z]:[\\/]+(?:Users|Documents and Settings)[\\/]+[^\\/\s]+/i,
-  /(?<![\w.])(?:\/mnt)?\/[A-Za-z]\/Users\/[^/\s]+/i,
-  /\\\\\?\\/,
-  /(?<![\w.~-])(?:\/var)?\/home\/[^/\s]+/,
-  /(?<![\w.~-])(?:\/var)?\/root(?![\w.-])/,
-  /(?<![\w.~-])\/Users\/[^/\s]+/,
-  /[\\/][A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?(?![\w~])|\b[A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?[\\/]/,
-];
-
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
 
 function rewriteRepoPaths(sentence: string, repoRoot: string): string {
@@ -466,6 +456,7 @@ function rankedSentences(finalText: string, windows: ReadonlySet<string>, repoRo
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, repoRoot);
+    // A home-directory path names its user and the store may be shared, so such a sentence is dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });

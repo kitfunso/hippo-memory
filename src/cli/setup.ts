@@ -3,7 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
-import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../hooks/json-hooks.js';
+import { installJsonHooks, uninstallJsonHooks, checkUninstallable, resolveJsonHookPaths } from '../hooks/json-hooks.js';
 import { detectInstalledTools, type JsonHookTarget, type ToolDetection } from '../hooks/shared.js';
 import {
   ensureCodexWrapperInstalled,
@@ -19,7 +19,7 @@ import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
 import { replayCompactionsAt } from '../compaction-record.js';
 import { log } from '../log.js';
 import { printError } from './output.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule } from './shared.js';
+import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
 import { escapeRegex } from '../escape.js';
@@ -118,6 +118,7 @@ function patchAgentFile(hook: HookSpec, target: string): void {
 }
 
 function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): void {
+  warnClaudeSettingsUnusable(result, '');
   if (result.installedSessionEnd) {
     console.log(`Installed hippo session-end SessionEnd hook in ${result.target} settings`);
   }
@@ -176,6 +177,8 @@ function hookUninstall(target: string | undefined): void {
   if (target === 'claude-code') {
     if (uninstallJsonHooks(target)) {
       console.log(`Removed hippo hooks from ${target} settings`);
+    } else {
+      warnClaudeSettingsUnusable(checkUninstallable(target), '', 'uninstall');
     }
   } else if (target === 'opencode') {
     // opencode uses a TS plugin; uninstall removes the plugin file AND
@@ -307,6 +310,7 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
     return;
   }
   const result = installJsonHooks(tool.name as JsonHookTarget);
+  if (warnClaudeSettingsUnusable(result, `  ${tool.name.padEnd(14)} `)) return;
   const bits: string[] = [];
   if (result.installedSessionEnd) bits.push('SessionEnd (session-end)');
   if (result.installedSessionStart) bits.push('SessionStart');

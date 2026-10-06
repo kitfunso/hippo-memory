@@ -255,7 +255,7 @@ export const VERB_USAGE = {
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
     --no-share             Skip auto-sharing to global store`],
   'last-sleep': [`
-  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing`],
   'session-end': [`
@@ -294,7 +294,7 @@ export const VERB_USAGE = {
       --json               Output as JSON
       --global             Operate on the global store
     auth list              List API keys (active by default)
-      --all                Include revoked keys
+      --all                Include revoked and expired keys
       --json               Output as JSON
       --global             Operate on the global store
     auth revoke <key_id>   Revoke an API key (subsequent validate fails)
@@ -557,17 +557,18 @@ export const VERB_USAGE = {
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code adds 7 hooks to ~/.claude/settings.json;
-                           opencode installs a plugin; codex adds 2 hooks to
-                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default); opencode installs a plugin; codex
+                           adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; all but claude-code
                            also patch an existing AGENTS.md
     hook uninstall <target> Remove hook`],
   setup: [`
   setup                    One-shot: detect installed AI tools and install their hooks:
-                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
-                           a plugin, codex 2 hooks in its hooks.json plus a launcher
-                           wrapper; other tools get a hint. Then imports each agent's
+                           claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default), opencode a plugin, codex 2 hooks in
+                           its hooks.json plus a launcher wrapper; other tools get a
+                           hint. Then imports each agent's
                            user-level memories into the global store
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing

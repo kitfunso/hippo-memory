@@ -1,4 +1,5 @@
-import { envHomeDir } from '../env.js';
+import { envHomeDir, processEnv } from '../env.js';
+import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../capture-contract.js';
@@ -169,7 +170,7 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
  * Priority, where the first source present is the only one tried:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
+ *   3. Most recent `.jsonl` under `<claude config dir>/projects/<any>/` (`~/.claude` unless CLAUDE_CONFIG_DIR is set), only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
  *
  * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
  */
@@ -194,10 +195,10 @@ export function resolveLastSessionTranscript(
   }
 
   if (!opts.mayScan) return null;
+  // With no home set, os.homedir() would send the scan into the real profile's transcripts.
+  if (!processEnv().CLAUDE_CONFIG_DIR && !envHomeDir()) return null;
 
-  const home = envHomeDir();
-  if (!home) return null;
-  const projectsDir = path.join(home, '.claude', 'projects');
+  const projectsDir = path.join(claudeConfigDir(), 'projects');
   if (!fs.existsSync(projectsDir)) return null;
 
   let newest: { path: string; mtime: number } | null = null;

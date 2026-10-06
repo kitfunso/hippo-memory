@@ -61,7 +61,7 @@ The wrapper starts the real Codex binary, waits for the session to exit, then sp
 
 Both commands tee output to `~/.hippo/logs/codex-sleep.log`.
 
-On the next wrapped Codex start, Hippo prints that log via `hippo last-sleep` before launching the real Codex process, so you can see what was consolidated.
+On the next wrapped Codex start, Hippo prints that log via `hippo last-sleep` before launching the real Codex process, so you can see what was consolidated. When the last sleep failed or a compaction summary was set aside, the wrapper also prints one line that points you to `hippo doctor`.
 
 ## Install and updates
 

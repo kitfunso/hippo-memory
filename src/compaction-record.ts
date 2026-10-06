@@ -3,11 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
-import { loadConfig } from './config.js';
+import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
+import { isSharedStore, loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
-import { isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
+import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
@@ -29,8 +30,6 @@ export const REPLAY_AFTER_MS = 10 * 60_000;
 /** Claude Code deletes transcripts after 30 days, so an older gap can never be filled. */
 export const TRANSCRIPT_FILL_WINDOW_MS = 30 * 24 * 60 * 60_000;
 const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
-const SPOOL_DIR = 'compactions-spool';
-const CLAIMED_SUFFIX = '.claimed';
 /** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
@@ -72,11 +71,16 @@ interface CompactionRow {
 
 export type Log = (message: string) => void;
 
-/** Where the session ran: rows written through the global store keep the project the session was in. */
+/** Where the session ran: rows written through the global store or a shared store keep the project the session was in. */
 function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
-  if (!isGlobalStoreRoot(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
+  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
   return cwd === null ? '' : resolveProjectIdentity(cwd);
+}
+
+/** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as user-global. */
+function itemOrigin(hippoRoot: string, ctx: ItemContext): string | null {
+  return ctx.cwd === null && isSharedStore(hippoRoot) ? fallbackOrigin(hippoRoot) : ctx.originProject;
 }
 
 function compactionOrigin(hippoRoot: string, cwd: string | null): string {
@@ -291,7 +295,7 @@ interface ItemWrites {
   restated: string[];
 }
 
-function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: number): MemoryEntry {
+function compactionEntry(text: string, ctx: ItemContext, origin: string | null, baseHalfLifeDays: number): MemoryEntry {
   return {
     ...createMemory(text, {
       layer: Layer.Episodic,
@@ -303,7 +307,7 @@ function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: numbe
       tenantId: ctx.tenantId,
       baseHalfLifeDays,
     }),
-    origin_project: ctx.originProject,
+    origin_project: origin,
   };
 }
 
@@ -311,6 +315,7 @@ function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: numbe
 function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
   const held = heldRows(db, ctx.tenantId, heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
+  const origin = itemOrigin(hippoRoot, ctx);
   const restated = new Set<string>();
   for (const text of rows) {
     const itemWords = words(text);
@@ -325,7 +330,7 @@ function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext
       out.refused++;
       continue;
     }
-    const entry = compactionEntry(text, ctx, baseHalfLifeDays);
+    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
     if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
       out.written.push(entry);
       held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
@@ -422,19 +427,6 @@ export interface CompactionSaveResult {
   /** True when the rest waits for the next sleep or post-compact. */
   deferred: boolean;
   snapshotSaved: boolean;
-}
-
-function spoolFile(hippoRoot: string, sessionId: string): string {
-  return path.join(hippoRoot, SPOOL_DIR, `${sessionId.replace(/[^\w-]/g, '_').slice(0, 80)}-${Date.now()}.json`);
-}
-
-function spool(hippoRoot: string, tenantId: string, payload: PostCompactPayload, text: CompactionText, at: Date): void {
-  const file = spoolFile(hippoRoot, payload.sessionId);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const body = { tenantId, sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
-  // Renamed into place so a replayer listing `.json` files never reads half a file.
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(body), 'utf8');
-  fs.renameSync(`${file}.tmp`, file);
 }
 
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or defers. Never throws. */
@@ -550,102 +542,14 @@ function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string |
   return row?.at ?? null;
 }
 
-interface SpooledCompaction {
-  tenantId: string;
-  payload: PostCompactPayload;
-  text: CompactionText;
-  at: Date;
-}
-
-function readSpooled(file: string, fallbackTenantId: string): SpooledCompaction | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null; // a half-written or vanished spool file is skipped; the caller treats null as unreadable
-  }
-  if (!isObjectLike(raw) || !('sessionId' in raw) || !isStringValue(raw.sessionId) || !('summary' in raw) || !isStringValue(raw.summary)) return null;
-  if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;
-  const items: string[] = 'items' in raw && Array.isArray(raw.items) ? raw.items.filter(isStringValue) : [];
-  return {
-    tenantId: 'tenantId' in raw && isStringValue(raw.tenantId) && raw.tenantId !== '' ? raw.tenantId : fallbackTenantId,
-    payload: {
-      sessionId: raw.sessionId,
-      trigger: 'trigger' in raw && isStringValue(raw.trigger) ? raw.trigger : null,
-      cwd: 'cwd' in raw && isStringValue(raw.cwd) ? raw.cwd : null,
-      transcriptPath: 'transcriptPath' in raw && isStringValue(raw.transcriptPath) ? raw.transcriptPath : null,
-      compactSummary: null,
-    },
-    text: { summary: raw.summary, items },
-    at: new Date(raw.at),
+/** Records a spooled summary, then writes its items. */
+function spoolImporter(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolImporter {
+  return (spooled, recorded) => {
+    const record = recordSummary(db, hippoRoot, spooled.tenantId, spooled.payload, spooled.text, spooled.at);
+    // The record holds the items now, so the file is done even if the write below fails.
+    recorded();
+    saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
   };
-}
-
-function isMissingFile(cause: unknown): boolean {
-  return cause instanceof Error && 'code' in cause && cause.code === 'ENOENT';
-}
-
-/** A live replayer refreshes its claim's mtime when it takes it, so an old claim means the replayer died. */
-function recoverStaleClaims(dir: string, log: Log): void {
-  const staleBefore = Date.now() - REPLAY_AFTER_MS;
-  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(`.json${CLAIMED_SUFFIX}`))) {
-    const claimed = path.join(dir, name);
-    try {
-      if (fs.statSync(claimed).mtimeMs >= staleBefore) continue;
-      fs.renameSync(claimed, claimed.slice(0, -CLAIMED_SUFFIX.length));
-      log(`spool file ${name} was claimed by a replayer that never finished, put back`);
-    } catch (err) {
-      if (!isMissingFile(err)) log(`spool file ${name} not recovered: ${errorMessage(err)}`);
-    }
-  }
-}
-
-function releaseClaim(claimed: string, file: string, log: Log): void {
-  try {
-    fs.renameSync(claimed, file);
-  } catch (err) {
-    log(`spool file ${path.basename(file)} could not be put back: ${errorMessage(err)}`);
-  }
-}
-
-/** Each file is claimed by rename before it is read, so two replayers never import the same one. */
-function importSpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, log: Log, deadline: number): number {
-  const dir = path.join(hippoRoot, SPOOL_DIR);
-  if (!fs.existsSync(dir)) return 0;
-  recoverStaleClaims(dir, log);
-  let finished = 0;
-  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort()) {
-    if (Date.now() > deadline) break;
-    const file = path.join(dir, name);
-    const claimed = `${file}${CLAIMED_SUFFIX}`;
-    try {
-      fs.renameSync(file, claimed);
-      const now = new Date();
-      fs.utimesSync(claimed, now, now);
-    } catch (err) {
-      if (!isMissingFile(err)) log(`spool file ${name} not claimed: ${errorMessage(err)}`);
-      continue;
-    }
-    const spooled = readSpooled(claimed, tenantId);
-    if (!spooled) {
-      log(`spool file ${name} is not readable, set aside`);
-      fs.renameSync(claimed, `${file}.bad`);
-      continue;
-    }
-    let removed = false;
-    try {
-      const record = recordSummary(db, hippoRoot, spooled.tenantId, spooled.payload, spooled.text, spooled.at);
-      // The record holds the items now, so the file is done even if the write below fails.
-      fs.rmSync(claimed, { force: true });
-      removed = true;
-      saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
-      finished++;
-    } catch (err) {
-      log(`spool file ${name} not imported: ${errorMessage(err)}`);
-      if (!removed) releaseClaim(claimed, file, log);
-    }
-  }
-  return finished;
 }
 
 /** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the transcript can fill. Returns how many compactions it saved. */
@@ -666,7 +570,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
   }
 
   try {
-    finished += importSpool(db, hippoRoot, tenantId, log, deadline);
+    finished += importSpool(hippoRoot, tenantId, log, deadline, spoolImporter(db, hippoRoot, log));
   } catch (err) {
     log(`spool import failed: ${errorMessage(err)}`);
   }
