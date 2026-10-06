@@ -3,7 +3,7 @@
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { AddressInfo } from 'net';
+import type { AddressInfo, Socket } from 'net';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { evalNow } from './ablation.js';
 import { readEntry } from './store/entry-reads.js';
@@ -37,6 +37,8 @@ const MIME_TYPES = {
 
 const BODY_MAX_BYTES = 4096;
 const BODY_DRAIN_MAX_BYTES = 64 * 1024;
+// How long a refused upload is still read and discarded after its 400, so a client that never stops cannot hold the socket.
+const REFUSED_UPLOAD_LINGER_MS = 2000;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
 const CARD_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -82,6 +84,14 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
 
 /** Raised once a body passes the drain ceiling; the caller answers 400 and drops the socket. */
 class BodyDrainExceeded extends ParamError {}
+
+// A full close with request bytes unread sends a TCP reset, which discards the 400 before the client reads it (RFC 9112 9.6).
+function closeAfterReply(socket: Socket): void {
+  socket.end();
+  const timer = setTimeout(() => socket.destroy(), REFUSED_UPLOAD_LINGER_MS);
+  timer.unref();
+  socket.once('close', () => clearTimeout(timer));
+}
 
 // Past the cap it keeps draining so the socket stays usable, up to a ceiling, then refuses.
 function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
@@ -294,8 +304,9 @@ export function serveDashboard(
         return;
       }
       if (err instanceof BodyDrainExceeded) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', Connection: 'close' });
-        res.end(JSON.stringify({ error: err.message }), () => req.destroy());
+        // No `Connection: close` header: Node then destroys the socket as soon as the reply is written.
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }), () => closeAfterReply(req.socket));
         return;
       }
       if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);
