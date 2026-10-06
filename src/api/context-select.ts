@@ -37,6 +37,8 @@ export interface ContextPlan {
   includeRecent: number;
   activeScope: string;
   exactScope: string | undefined;
+  /** The caller's personal scope, from its authenticated owner; the default deny admits it. */
+  ownScope: string | undefined;
   query: string;
   hasLocal: boolean;
   hasGlobal: boolean;
@@ -403,7 +405,7 @@ async function searchBothStores(
 
 /** The vector arm under the lexical window's own tenant, scope and current-row rules. */
 function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEntry) => boolean): HybridVectorCandidates {
-  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact'), includeSuperseded: false, admit };
+  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope), includeSuperseded: false, admit };
 }
 
 async function searchLocalRows(

@@ -33,7 +33,7 @@ import { detectSecret } from '../secret-detect.js';
 import { isSessionDigestRow } from '../session-digest.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState } from '../ambient.js';
 import { loadAmbientTallies } from '../ambient-store.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed } from '../recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
 import {
   finiteOr,
   selectBySearch,
@@ -65,10 +65,11 @@ function ambientAdmitEntry(
   e: MemoryEntry,
   currentProject: ProjectRef,
   includeCrossProject: boolean,
-  exactScope?: string,
+  exactScope: string | undefined,
+  own: string | undefined,
 ): boolean {
   if (!ambientSecretAdmit(e, currentProject)) return false;
-  if (!passesScopeFilterForRecall(e.scope ?? null, exactScope)) return false;
+  if (!passesScopeFilterForRecall(e.scope ?? null, exactScope, own)) return false;
   if (includeCrossProject) return true;
   return classifyOriginProject(e.origin_project, currentProject) !== 'cross-project';
 }
@@ -92,6 +93,7 @@ export const CONTEXT_CANDIDATE_CAP = 2000;
 interface ContextQueryWindow {
   query: string;
   exactScope: string | undefined;
+  ownScope: string | undefined;
   project: readonly string[] | undefined;
 }
 
@@ -114,7 +116,7 @@ function loadAmbientEntries(
 ): AmbientLoadResult {
   if (!pinnedOnly) {
     const rows = 'query' in window
-      ? loadRecallSearchEntries(hippoRoot, window.query, DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, window.exactScope, 'exact', false, window.project)
+      ? loadRecallSearchEntries(hippoRoot, window.query, DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, window.exactScope, 'exact', false, window.project, window.ownScope)
       : loadContextCandidates(hippoRoot, tenantId, window);
     return { entries: rows.filter(admit) };
   }
@@ -251,6 +253,7 @@ function planContext(ctx: Context, opts: ContextOpts): ContextPlan {
     includeRecent: opts.includeRecent ?? 0,
     activeScope: opts.scope ?? '',
     exactScope: opts.exactScope || undefined,
+    ownScope: personalScopeOf(ctx.actor) ?? undefined,
     query,
     hasLocal,
     hasGlobal,
@@ -276,7 +279,7 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
     ? Array.from(promptTokens(opts.prompt ?? ''))
     : [];
   return promptRecallTerms.length > 0
-    ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)) }
+    ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)), ownScope: plan.ownScope }
     : undefined;
 }
 
@@ -324,7 +327,7 @@ function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): R
 
 // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry is.
 function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPlan, startLeft: number): TaskSections {
-  const { exactScope, cost } = plan;
+  const { exactScope, ownScope, cost } = plan;
   let left = startLeft;
   const pays = (tokens: number): boolean => {
     if (tokens > left) return false;
@@ -334,9 +337,9 @@ function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPlan, st
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
   const raw = loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
-  const activeSnapshot = raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope) ? raw.snapshot : null;
-  const sessionHandoff = raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope) ? raw.handoff : null;
-  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope));
+  const activeSnapshot = raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
+  const sessionHandoff = raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
+  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
   const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
@@ -356,7 +359,7 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
       digestHiddenForHandoff = true;
       return false;
     }
-    return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope);
+    return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope, plan.ownScope);
   };
   const ownSessionId = opts.currentSessionId || '';
   // Inside admit, not after the load, so the loader's window widens past a session's own items.
@@ -378,7 +381,7 @@ function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
 }
 
 function loadPools(ctx: Context, plan: ContextPlan, admission: ContextAdmission, recallRequest: AmbientRecallRequest | undefined): ContextPools {
-  const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope } = plan;
+  const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope, ownScope } = plan;
   const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
   const searches = plan.query !== '*' && !pinnedOnly;
   const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
@@ -389,9 +392,10 @@ function loadPools(ctx: Context, plan: ContextPlan, admission: ContextAdmission,
 
   // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
   const window: ContextCandidateFilter | ContextQueryWindow = searches
-    ? { query: plan.query, exactScope, project: plan.originProject }
+    ? { query: plan.query, exactScope, ownScope, project: plan.originProject }
     : {
         exactScope,
+        ownScope,
         project: plan.originProject,
         cap: CONTEXT_CANDIDATE_CAP,
         now: evalNow(),
@@ -500,7 +504,7 @@ function recordRetrieval(
 }
 
 function readAmbientState(ctx: Context, plan: ContextPlan): AmbientState | undefined {
-  const filter = { exactScope: plan.exactScope, project: plan.originProject, currentProject: projectNames(plan.currentProject), now: evalNow() };
+  const filter = { exactScope: plan.exactScope, ownScope: plan.ownScope, project: plan.originProject, currentProject: projectNames(plan.currentProject), now: evalNow() };
   const roots = [...(plan.hasLocal ? [ctx.hippoRoot] : []), ...(plan.hasGlobal && !plan.primaryIsGlobal ? [plan.globalRoot] : [])];
   const tallies = roots.map((root) => loadAmbientTallies(root, ctx.tenantId, filter));
   const total = tallies.length > 0 ? tallies.reduce(addAmbientTallies) : undefined;

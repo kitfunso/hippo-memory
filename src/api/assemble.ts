@@ -3,7 +3,7 @@
 import { loadEntriesByIds, loadSessionRawMemories, countSessionRawMemories } from '../store/entry-reads.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed } from '../recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
 import type { Context } from './types.js';
 
 export const DEFAULT_ASSEMBLE_BUDGET = 4000;
@@ -113,6 +113,7 @@ export function assemble(
   const freshTailCount = opts.freshTailCount ?? 10;
   const summarizeOlder = opts.summarizeOlder ?? true;
   const rowCap = opts.rowCap ?? 5000;
+  const own = personalScopeOf(ctx.actor) ?? undefined;
 
   if (!sessionId) {
     return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0, truncated: false };
@@ -122,13 +123,13 @@ export function assemble(
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
   const scoped = rows.filter((r) =>
-    passesScopeFilterForRecall(r.scope ?? null, opts.scope),
+    passesScopeFilterForRecall(r.scope ?? null, opts.scope, own),
   );
   let totalRaw: number;
   if (truncated) {
     // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
     // caller cannot infer private rows by comparing totalRaw to items.length.
-    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope);
+    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope, own);
   } else {
     totalRaw = scoped.length;
   }
@@ -143,7 +144,7 @@ export function assemble(
 
   // Substitute parent summaries for older rows that share one.
   const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
-    ? substituteSummaries(ctx, olderRows, opts.scope)
+    ? substituteSummaries(ctx, olderRows, opts.scope, own)
     : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
@@ -185,6 +186,7 @@ function substituteSummaries(
   ctx: Context,
   olderRows: MemoryEntry[],
   scope: string | undefined,
+  own: string | undefined,
 ): SubstitutedOlder {
   const olderItems: AssembledContextItem[] = [];
   let summarized = 0;
@@ -201,7 +203,7 @@ function substituteSummaries(
   const parents = eligibleParentIds.length > 0
     ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
         .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
-        .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope))
+        .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope, own))
     : [];
   const claimedRawIds = new Set<string>();
   for (const parent of parents) {
