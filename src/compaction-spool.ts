@@ -24,6 +24,7 @@ const WAITING = /^([\w-]+)(?:\.a(\d+))?\.json$/;
 const CLAIM = /^([\w-]+)\.a(\d+)\.claim-(\d{13})$/;
 // An old binary's claim carries no claim time, so its mtime stands in.
 const LEGACY_CLAIM = /^([\w-]+)(?:\.a(\d+))?\.json\.claimed$/;
+const TMP = /^([\w-]+)(?:\.a\d+)?\.json\.tmp$/;
 const NEW_STEM = /^(\d{13})-[0-9a-f]{8}$/;
 const LEGACY_STEM_TIME = /-(\d+)$/;
 
@@ -89,22 +90,28 @@ function errCode(cause: unknown): string {
   return cause instanceof Error && 'code' in cause && isStringValue(cause.code) ? cause.code : '';
 }
 
-/** Runs one fs step: ENOENT means gone, a busy code is retried briefly, and any other error is logged and counted busy, so a replay never throws. */
-function settle(step: () => void, log: Log, what: string): Settled {
+/** Runs one fs step, retrying a busy code briefly; false when it stayed busy. Any other error throws. */
+function retryBusy(step: () => void): boolean {
   for (let retry = 0; ; retry++) {
     try {
       step();
-      return 'done';
+      return true;
     } catch (err) {
-      const code = errCode(err);
-      if (code === 'ENOENT') return 'gone';
-      if (!BUSY_CODES.has(code)) {
-        log(`${SPOOL_PROBLEM}${what}: ${errorMessage(err)}`);
-        return 'busy';
-      }
-      if (retry === BUSY_RETRIES) return 'busy';
+      if (!BUSY_CODES.has(errCode(err))) throw err;
+      if (retry === BUSY_RETRIES) return false;
       Atomics.wait(idle, 0, 0, BUSY_WAIT_MS);
     }
+  }
+}
+
+/** Runs one fs step: ENOENT means gone, a busy code is retried briefly, and any other error is logged and counted busy, so a replay never throws. */
+function settle(step: () => void, log: Log, what: string): Settled {
+  try {
+    return retryBusy(step) ? 'done' : 'busy';
+  } catch (err) {
+    if (errCode(err) === 'ENOENT') return 'gone';
+    log(`${SPOOL_PROBLEM}${what}: ${errorMessage(err)}`);
+    return 'busy';
   }
 }
 
@@ -140,8 +147,9 @@ export function spool(hippoRoot: string, tenantId: string, payload: PostCompactP
   fsx.mkdirSync(path.dirname(file), { recursive: true });
   const body = { tenantId, sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
   // Renamed into place so a replayer listing `.json` files never reads half a file.
-  fsx.writeFileSync(`${file}.tmp`, JSON.stringify(body), { encoding: 'utf8' });
-  fsx.renameSync(`${file}.tmp`, file);
+  fsx.writeFileSync(`${file}.tmp`, JSON.stringify(body), { encoding: 'utf8', flag: 'wx' });
+  // A rename that stays busy leaves a whole tmp, which a replay promotes once it is STALE_MS old.
+  retryBusy(() => fsx.renameSync(`${file}.tmp`, file));
 }
 
 /** null when the text is not a spooled compaction. */
@@ -275,21 +283,47 @@ function putBack(dir: string, claim: string, stem: string, attempt: number, log:
   }
 }
 
-/** Writes `<stem>.<cause>.bad` through a temp file before the claim goes, so a crash between leaves a whole copy; a busy write puts the claim back. */
+/** Writes `<stem>.<cause>.bad` through a random temp file, so the rename replaces any torn `.bad` a crash left. */
+function writeBad(dir: string, stem: string, cause: BadCause, text: string, log: Log, what: string): boolean {
+  const tmp = path.join(dir, `${stem}.${cause}.bad.${randomBytes(4).toString('hex')}.tmp`);
+  const written = settle(() => fsx.writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' }), log, what);
+  const moved = written === 'done' ? settle(() => fsx.renameSync(tmp, path.join(dir, `${stem}.${cause}.bad`)), log, what) : written;
+  if (moved !== 'done' && written === 'done') settle(() => fsx.unlinkSync(tmp), log, what);
+  return moved === 'done';
+}
+
+/** Sets a claim aside as `.bad` before the claim goes, so a crash between leaves a whole copy; a busy write puts the claim back. */
 function moveBad(dir: string, claim: string, stem: string, attempt: number, cause: BadCause, log: Log, raw?: string): boolean {
   const what = `spool file ${path.basename(claim)} not set aside`;
   let text = raw ?? '';
   if (raw === undefined && settle(() => { text = fsx.readFileSync(claim, 'utf8'); }, log, what) !== 'done') return false;
-  const tmp = path.join(dir, `${stem}.${cause}.bad.${randomBytes(4).toString('hex')}.tmp`);
-  const written = settle(() => fsx.writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' }), log, what);
-  const moved = written === 'done' ? settle(() => fsx.renameSync(tmp, path.join(dir, `${stem}.${cause}.bad`)), log, what) : written;
-  if (moved !== 'done') {
-    if (written === 'done') settle(() => fsx.unlinkSync(tmp), log, what);
+  if (!writeBad(dir, stem, cause, text, log, what)) {
     putBack(dir, claim, stem, attempt, log);
     return false;
   }
   settle(() => fsx.unlinkSync(claim), log, what);
   return true;
+}
+
+/** A tmp over STALE_MS old belongs to a spool that never renamed it: a whole one joins the waiting files, a torn one is set aside. */
+function promoteTmp(dir: string, tenantId: string, log: Log): void {
+  const now = Date.now();
+  for (const name of fsx.readdirSync(dir)) {
+    const m = TMP.exec(name);
+    if (m === null) continue;
+    const file = path.join(dir, name);
+    const what = `spool file ${name} not promoted`;
+    let mtime = 0;
+    let text = '';
+    if (settle(() => { mtime = fsx.statSync(file).mtimeMs; }, log, what) !== 'done' || Math.abs(now - mtime) <= STALE_MS) continue;
+    if (settle(() => { text = fsx.readFileSync(file, 'utf8'); }, log, what) !== 'done') continue;
+    if (parseSpooled(text, tenantId) !== null) {
+      if (settle(() => fsx.renameSync(file, file.slice(0, -'.tmp'.length)), log, what) === 'done') log(`spool file ${name} was never renamed into place, promoted`);
+    } else if (writeBad(dir, m[1], 'unreadable', text, log, what)) {
+      settle(() => fsx.unlinkSync(file), log, what);
+      log(`${SPOOL_PROBLEM}spool file ${name} was never finished, set aside as .bad`);
+    }
+  }
 }
 
 /** Removes a claim once the store holds its summary; a claim left behind is imported again, so the log says so. */
@@ -370,6 +404,7 @@ export function importSpool(hippoRoot: string, tenantId: string, log: Log, deadl
   if (token === null) return 0;
   try {
     if (!ownsLock(dir, token, log)) return 0;
+    promoteTmp(dir, tenantId, log);
     recoverStaleClaims(dir, log);
     let finished = 0;
     for (const entry of waitingFiles(dir)) {

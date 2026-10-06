@@ -308,3 +308,66 @@ describe('failures are counted and set aside', () => {
     expect(logs).toEqual([`spool file ${A}.a0.json saved; its claim could not be removed (EPERM); it will be imported again`]);
   });
 });
+
+describe('temp files a spool left', () => {
+  const A = '0000000001000-aaaaaaaa';
+  const B = '0000000002000-bbbbbbbb';
+  const age = (file: string): void => {
+    const old = new Date(Date.now() - 11 * MINUTE);
+    fs.utimesSync(file, old, old);
+  };
+
+  it('promotes an old parsable tmp and imports it in the same run', () => {
+    age(put(`${A}.a0.json.tmp`, 's1'));
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+    expect(logs).toEqual([`spool file ${A}.a0.json.tmp was never renamed into place, promoted`]);
+  });
+
+  it('sets an old torn tmp aside as unreadable.bad', () => {
+    fs.mkdirSync(spoolDir(), { recursive: true });
+    const torn = path.join(spoolDir(), `${A}.a0.json.tmp`);
+    fs.writeFileSync(torn, '{"sessionId": "s1", "summ');
+    age(torn);
+    expect(replay(collector().importer)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.unreadable.bad`]);
+    expect(fs.readFileSync(path.join(spoolDir(), `${A}.unreadable.bad`), 'utf8')).toBe('{"sessionId": "s1", "summ');
+    expect(logs).toEqual([`spool problem: spool file ${A}.a0.json.tmp was never finished, set aside as .bad`]);
+  });
+
+  it('leaves a fresh tmp alone', () => {
+    age(put(`${A}.a0.json.tmp`, 's1'));
+    put(`${B}.a0.json.tmp`, 's2');
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${B}.a0.json.tmp`]);
+  });
+
+  it('promotes a legacy <sid>-<ms>.json.tmp', () => {
+    age(put('s1-1700000000000.json.tmp', 's1'));
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
+  it('a spool whose rename stays busy leaves a whole tmp for promotion', () => {
+    withFs({
+      renameSync: (from, to) => {
+        if (from.endsWith('.tmp')) throw fsError('EPERM');
+        fs.renameSync(from, to);
+      },
+    });
+    expect(() => spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date())).not.toThrow();
+    __setSpoolFs(null);
+    const [name] = fs.readdirSync(spoolDir());
+    expect(name).toMatch(/^\d{13}-[0-9a-f]{8}\.a0\.json\.tmp$/);
+    age(path.join(spoolDir(), name));
+    const summaries: string[] = [];
+    expect(replay((spooled, recorded) => { summaries.push(spooled.text.summary); recorded(); })).toBe(1);
+    expect(summaries).toEqual(['kept']);
+  });
+});
