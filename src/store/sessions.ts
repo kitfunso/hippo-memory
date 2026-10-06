@@ -29,7 +29,7 @@ export function saveActiveTaskSnapshot(
   const now = new Date().toISOString();
 
   try {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ?`).run(now, tenantId);
 
     const result = db.prepare(`

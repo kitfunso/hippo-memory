@@ -4,7 +4,7 @@
  *
  * Covers the plan's 7-test list against the `includeRecent` block inside
  * `api.getContext`'s `pinnedOnly` branch (src/api.ts:2456-2491), which now
- * filters candidates with `isContentWorthStoring` (src/audit.ts:117) before
+ * filters candidates with `isWorthSurfacing` (src/memory-quality.ts) before
  * slicing to `includeRecent`.
  *
  * Real-DB per project convention. Tests 1-6 seed entries directly via

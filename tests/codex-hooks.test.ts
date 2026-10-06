@@ -140,6 +140,17 @@ describe('installJsonHooks(codex)', () => {
     expect(readJson(hooksFile)).toEqual({ hooks: { UserPromptSubmit: [alike], SessionStart: [{ matcher: 'compact', hooks: [mine] }] } });
   });
 
+  it('reads a hooks.json saved with a UTF-8 byte order mark and writes it back without one', () => {
+    const BOM = String.fromCodePoint(0xfeff);
+    writeFile(hooksFile, BOM + JSON.stringify({ hooks: { SessionStart: [USER_GROUP] } }));
+    expect(installJsonHooks('codex')).toMatchObject({ invalidJson: false, installedUserPromptSubmit: true });
+    expect(fs.readFileSync(hooksFile, 'utf8').startsWith(BOM)).toBe(false);
+
+    writeFile(hooksFile, BOM + fs.readFileSync(hooksFile, 'utf8'));
+    expect(uninstallJsonHooks('codex')).toBe(true);
+    expect(readJson(hooksFile)).toEqual({ hooks: { SessionStart: [USER_GROUP] } });
+  });
+
   it.each([
     ['unparseable JSON', '{ "hooks": '],
     ['null', 'null'],

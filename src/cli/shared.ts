@@ -5,7 +5,7 @@ import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer 
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
-import { installJsonHooks } from '../hooks/json-hooks.js';
+import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
@@ -251,6 +251,13 @@ export function installCodexMemoryHooks(indent: string): void {
     ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
     : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
   console.log(`${indent}${CODEX_TRUST_LINE}`);
+}
+
+/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was left unchanged; true when it printed. */
+export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>, indent: string, action: 'install' | 'uninstall' = 'install'): boolean {
+  if (!result.invalidJson) return false;
+  console.log(`${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook ${action} claude-code\`.`);
+  return true;
 }
 
 /**

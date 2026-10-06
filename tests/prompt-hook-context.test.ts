@@ -276,6 +276,9 @@ describe('subpath exports resolve', () => {
     ['hippo-memory/json-hooks', 'installJsonHooks', 'function'],
     ['hippo-memory/json-hooks', 'uninstallJsonHooks', 'function'],
     ['hippo-memory/json-hooks', 'resolveJsonHookPaths', 'function'],
+    ['hippo-memory/json-hooks', 'readJsonFile', 'function'],
+    ['hippo-memory/json-hooks', 'writeSettingsFile', 'function'],
+    ['hippo-memory/json-hooks', 'checkUninstallable', 'undefined'],
     ['hippo-memory/server', 'promptHookContext', 'function'],
     ['hippo-memory/server', 'HttpError', 'function'],
   ])('%s: typeof %s is %s in the build', (specifier, name, type) => {

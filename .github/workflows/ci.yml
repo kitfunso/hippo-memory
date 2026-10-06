@@ -62,7 +62,7 @@ jobs:
       - name: Request-path timing at 10k memories
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
-      # Warm-up drops the cold first queries and the median of 5 rounds drops a runner stall that hits one round.
+      # Warm-up drops the cold first queries; gating on the fastest of 5 rounds drops runner stalls, which hit 3 of 5 rounds on 2026-10-06.
       # Healthy runners measure a p99 of 16 to 40 ms here, so 60 ms passes them and a 4x slowdown (64 ms or more) fails.
       - name: p99 recall at 1k memories
         run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --gate-ms 60

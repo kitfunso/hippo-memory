@@ -22,6 +22,9 @@ function sizeLabel(bytes: number): string {
   return bytes % (1024 * 1024) === 0 ? `${bytes / (1024 * 1024)}MB` : `${Math.ceil(bytes / 1024)}KB`;
 }
 
+// How long a refused upload is still read and discarded after its reply, so a client that never stops cannot hold the socket.
+const REFUSED_UPLOAD_LINGER_MS = 2000;
+
 // Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values, small enough to bound logs and indexes.
 export const MAX_ID_LEN = 256;
 
@@ -76,35 +79,49 @@ export interface ReadBodyOpts {
 }
 
 /** The body as text, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow sender cannot tie up the server. */
-export async function readBody(req: IncomingMessage, { maxBytes = MAX_BODY_BYTES, deadlineMs }: ReadBodyOpts = {}): Promise<string> {
-  const read = readChunks(req, maxBytes);
-  if (deadlineMs === undefined) return read;
-  let timer: NodeJS.Timeout | undefined;
-  const expired = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
+export function readBody(req: IncomingMessage, { maxBytes = MAX_BODY_BYTES, deadlineMs }: ReadBodyOpts = {}): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let timer: NodeJS.Timeout | undefined;
+    const refuse = (err: Error): void => {
+      clearTimeout(timer);
+      req.off('data', onData);
+      chunks.length = 0;
+      reject(err);
+    };
+    // Not for-await: leaving that loop early destroys the request, so the socket stops reading and the 413 caller cannot close it cleanly.
+    const onData = (chunk: Buffer): void => {
+      total += chunk.length;
+      if (total <= maxBytes) {
+        chunks.push(chunk);
+        return;
+      }
+      refuse(new BodyTooLargeError(`request body exceeds ${sizeLabel(maxBytes)}`));
+    };
+    if (deadlineMs !== undefined) {
+      timer = setTimeout(() => refuse(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
+    }
+    req.on('data', onData);
+    req.once('end', () => {
+      clearTimeout(timer);
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+    req.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
   });
-  try {
-    // The race keeps a late failure of the abandoned read from surfacing as an unhandled rejection.
-    return await Promise.race([read, expired]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
-async function readChunks(req: IncomingMessage, maxBytes: number): Promise<string> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of req) {
-    // SAFETY: IncomingMessage never runs setEncoding() here, so every
-    // streamed chunk is a Buffer, not a decoded string.
-    const buf = chunk as Buffer;
-    total += buf.length;
-    if (total > maxBytes) {
-      throw new BodyTooLargeError(`request body exceeds ${sizeLabel(maxBytes)}`);
-    }
-    chunks.push(buf);
-  }
-  return Buffer.concat(chunks).toString('utf8');
+// A full close with request bytes unread sends a TCP reset, which discards the reply before the client reads it (RFC 9112 9.6).
+export function closeAfterReply(req: IncomingMessage): void {
+  const socket = req.socket;
+  req.resume();
+  socket.end();
+  const timer = setTimeout(() => socket.destroy(), REFUSED_UPLOAD_LINGER_MS);
+  timer.unref();
+  socket.once('close', () => clearTimeout(timer));
 }
 
 // Any other Host on a loopback socket is DNS rebinding: a hostile page resolved to 127.0.0.1.

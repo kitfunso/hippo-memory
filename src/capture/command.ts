@@ -17,8 +17,8 @@ import { loadConfig } from '../config.js';
 import { classifyOriginProject, projectId, type ProjectRef } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
 import { errorMessage, log } from '../log.js';
-import { extractFromText, type ExtractedItem } from './extract.js';
-import { type SessionTurn, collectSessionTurns, summariseSessionTurns, resolveLastSessionTranscript } from './transcript.js';
+import { extractFromTexts, type ExtractedItem } from './extract.js';
+import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
 // ---------------------------------------------------------------------------
 // Command
@@ -28,7 +28,7 @@ export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
   /** Explicit transcript path for `--last-session`. Without one, `stdinText`
-   * is used, then auto-discovery under `~/.claude/projects/` on a manual run. */
+   * is used, then auto-discovery under `<claude config dir>/projects/` on a manual run. */
   transcriptPath?: string;
   /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
@@ -154,17 +154,16 @@ function cmdCaptureCore(
     }
   }
 
-  // Read input text
-  const text = readCaptureText(options);
-  if (text === null) return;
+  const texts = readCaptureTexts(options);
+  if (texts === null) return;
 
-  if (!text || text.trim().length === 0) {
+  if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
     return;
   }
 
   // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromText(maskEmails(redactSecretsStrict(text)));
+  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))));
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -190,12 +189,12 @@ function cmdCaptureCore(
   );
 }
 
-/** The raw text for the chosen source; null after printing why a last-session capture has nothing. */
-function readCaptureText(options: CaptureOptions): string | null {
+/** The raw texts for the chosen source, one per session turn; null after printing why a last-session capture has nothing. */
+function readCaptureTexts(options: CaptureOptions): string[] | null {
   switch (options.source) {
     case 'stdin': {
       try {
-        return fs.readFileSync(0, 'utf8');
+        return [fs.readFileSync(0, 'utf8')];
       } catch {
         console.error('No input on stdin. Pipe text in or use --file <path>.');
         process.exit(1);
@@ -210,7 +209,7 @@ function readCaptureText(options: CaptureOptions): string | null {
         console.error(`File not found: ${options.filePath}`);
         process.exit(1);
       }
-      return fs.readFileSync(options.filePath, 'utf8');
+      return [fs.readFileSync(options.filePath, 'utf8')];
     }
     case 'last-session': {
       let turns = options.sessionTurns;
@@ -222,12 +221,12 @@ function readCaptureText(options: CaptureOptions): string | null {
         }
         turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
       }
-      const text = summariseSessionTurns(turns);
-      if (!text) {
+      const { users, assistants } = sessionTail(turns);
+      if (users.length === 0 && assistants.length === 0) {
         console.log('Transcript had no user/assistant messages to summarise.');
         return null;
       }
-      return text;
+      return [...users, ...assistants];
     }
   }
 }
