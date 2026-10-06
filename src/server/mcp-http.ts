@@ -82,6 +82,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
       scopes: ctx.actor.scopes,
       viaAuthResolver: ctx.actor.viaAuthResolver,
       hostAdmin: ctx.actor.hostAdmin,
+      owner: ctx.actor.owner,
       clientKey: buildMcpClientKey(req),
       store: ctx.store,
       autoSleep: opts.autoSleep,

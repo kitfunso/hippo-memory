@@ -84,6 +84,7 @@ export interface McpContext {
   viaAuthResolver?: true;
   /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */
   hostAdmin?: true;
+  owner?: string; // copied by mcpActor so MCP task state keys the same as REST
   store?: HippoStore;
   autoSleep?: false;
   /**
@@ -104,6 +105,7 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
   const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
   if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
   if (ctx?.role === undefined || ctx.hostAdmin) actor.hostAdmin = true;
+  if (ctx?.owner !== undefined) actor.owner = ctx.owner;
   return actor;
 }
 
