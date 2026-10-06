@@ -1,6 +1,7 @@
 ### Added
 
 - **MCP over HTTP on a shared store carries the caller's project.** A client sends `X-Hippo-Project` and an optional comma-separated `X-Hippo-Project-Aliases`, each name percent-encoded. `hippo_remember` stamps that project on the row. Recall, assemble, drill, context and conflicts show only that project's rows and user-global ones, including the embedding and overflow summary paths. `hippo_outcome` rates only the recall made under that project, even when two repos share one key. A header sent twice, aliases with no project, a bad name or a bad percent escape gets 400. Other stores ignore both headers.
+- **Every `/mcp` reply carries `X-Hippo-Project-Scoped: 1`,** errors included, so a client can tell this server reads the project headers. `hippo-memory/project-identity` exports the header name as `MCP_PROJECT_SCOPED_HEADER` and the alias cap as `MAX_PROJECT_ALIASES`; `hippo_peers` is now off on a shared store (see Changed).
 
 ### Changed
 

@@ -2,7 +2,7 @@
 // over one store, so each difference in docs/recall-surface-differences.md is visible here and moves only on purpose.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -15,6 +15,7 @@ import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpResponse } fr
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 import { retrieve, RecallContractError, type RecallResult } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 import type { CliFlags } from '../src/cli/shared.js';
 
@@ -421,5 +422,40 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
   it.each(CONTEXT_INPUTS)('context: %s', async (_name, args) => {
     const got = { mcp: await mcpOutcome(s.root, 'hippo_context', args), http: await httpOutcome(handle, '/v1/context', args) };
     expect(normalise(got, s)).toMatchSnapshot();
+  }, 60_000);
+});
+
+// D18: on a shared store MCP recall keeps to the caller's repo, while GET /v1/memories takes no project.
+describe('shared store recall, MCP vs HTTP', () => {
+  it('MCP hippo_recall shows only the named repo; HTTP GET /v1/memories returns both repos', async () => {
+    for (const k of CLEARED_ENV) vi.stubEnv(k, '');
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    const home = mkdtempSync(join(tmpdir(), 'hippo-parity-shared-'));
+    const root = join(home, 'store');
+    vi.stubEnv('HIPPO_HOME', join(home, 'global'));
+    _resetSharedStoreCacheForTests();
+    let handle: ServerHandle | undefined;
+    try {
+      initStore(root);
+      writeFileSync(join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
+      writeEntry(root, seeded('lighthouse rota for the acme repo', 'mem_d18_acme', '2026-01-20T00:00:00.000Z', { origin_project: 'acme' }));
+      writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
+      const mcp = toolReply(await handleMcpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
+        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', project: { name: 'acme', legacyName: 'acme' } },
+      ));
+      expect(mcp.isError, mcp.text).toBe(false);
+      expect(mcp.text).toContain('the acme repo');
+      expect(mcp.text).not.toContain('the beta repo');
+      handle = await serve({ hippoRoot: root, port: 0 });
+      const http = await viaHttp(handle, { query: 'lighthouse' });
+      expect(http.output.status).toBe(200);
+      expect(http.output.body.results.map((r) => r.id).sort()).toEqual(['mem_d18_acme', 'mem_d18_beta']);
+    } finally {
+      await handle?.stop();
+      vi.unstubAllEnvs();
+      _resetSharedStoreCacheForTests();
+      rmSync(home, { recursive: true, force: true });
+    }
   }, 60_000);
 });
