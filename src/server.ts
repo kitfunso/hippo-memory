@@ -44,6 +44,8 @@ export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './se
 export { sqliteStore, type HippoStore } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 export { StoreBusyError } from './db.js';
+// An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
+export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in

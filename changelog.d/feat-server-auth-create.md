@@ -1,0 +1,3 @@
+### Added
+
+- **`hippo-memory/server` exports `authCreate`, with its `AuthCreateOpts` and `AuthCreateResult` types.** An add-on's install step can now mint the first admin key into a store folder it names. `hippo auth create` reaches only the current folder's store or the global one. The function is the one the CLI and `POST /v1/auth/keys` already use, so its rules are unchanged: only an admin actor can mint, and an actor vouched for by an auth resolver mints member keys only. `tests/server-auth-create-export.test.ts` mints a key through the subpath and checks it validates for the right tenant and role.
