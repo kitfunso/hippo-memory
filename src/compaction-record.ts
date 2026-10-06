@@ -174,11 +174,14 @@ function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string
   )[0] ?? null;
 }
 
-/** Moves a `started` record to `summarised`; false when another process already moved it. */
-function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string): boolean {
+/** Moves a `started` record to `summarised`; false when another process already moved it. The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
+function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string, requestId?: string): boolean {
+  // Only a caller names the column, so a store from before it was added still takes local writes.
+  const stamp = requestId === undefined ? [] : [requestId];
   const result = db.prepare(
-    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-  ).run(text.summary, JSON.stringify(text.items), summarisedAt, tenantId, id);
+    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
+     WHERE tenant_id = ? AND id = ? AND status = 'started'`,
+  ).run(text.summary, JSON.stringify(text.items), summarisedAt, ...stamp, tenantId, id);
   return (result.changes ?? 0) > 0;
 }
 
@@ -224,7 +227,7 @@ export interface SummaryCaller {
   requestId?: string;
 }
 
-/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each, plus the request stamp on a `started` record. */
+/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
 export function recordSummary(
   db: DatabaseSyncLike,
   hippoRoot: string,
@@ -238,8 +241,7 @@ export function recordSummary(
   const itemsJson = JSON.stringify(text.items);
   const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
-  if (started && markSummarised(db, tenantId, started.id, text, now)) {
-    if (requestId !== undefined) db.prepare(`UPDATE compactions SET request_id = ? WHERE tenant_id = ? AND id = ?`).run(requestId, tenantId, started.id);
+  if (started && markSummarised(db, tenantId, started.id, text, now, requestId)) {
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
