@@ -84,6 +84,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
       hostAdmin: ctx.actor.hostAdmin,
       clientKey: buildMcpClientKey(req),
       store: ctx.store,
+      autoSleep: opts.autoSleep,
     });
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));

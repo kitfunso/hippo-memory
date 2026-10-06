@@ -22,7 +22,7 @@ import type { MemoryEntry } from './memory.js';
 import { rejectionDigest } from './rejection.js';
 import { escapeLike } from './escape.js';
 
-/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, or `hippo projects repair` splitting a two-project merge. */
+/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain defect. */
 export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
@@ -44,7 +44,7 @@ export interface DormantMemory {
   tags: string[];
   /** Live strength when it went dormant. */
   strength: number;
-  /** Why it went dormant (`decay` or `source-deleted`). */
+  /** Why it went dormant: one of the {@link DormantReason} values. */
   reason: string;
   /** ISO time it went dormant. */
   dormantAt: string;
@@ -229,18 +229,18 @@ export function purgeDormantByDigest(db: DatabaseSyncLike, tenantId: string, dig
   return removed;
 }
 
-/** How many dormant memories went dormant before `cutoffIso` (a dry-run count). */
-export function countExpiredDormant(db: DatabaseSyncLike, cutoffIso: string): number {
-  // SAFETY: row's shape matches the single aliased COUNT column in the SELECT.
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM dormant_memories WHERE dormant_at < ?`).get(cutoffIso) as { n: number };
-  return Number(row.n);
+export interface DormantKey {
+  readonly tenantId: string;
+  readonly id: string;
 }
 
-/**
- * Delete every dormant memory (all tenants) that went dormant before
- * `cutoffIso`: the `dormant.retentionDays` window. Returns how many went.
- */
-export function purgeExpiredDormant(db: DatabaseSyncLike, cutoffIso: string): number {
-  const result = db.prepare(`DELETE FROM dormant_memories WHERE dormant_at < ?`).run(cutoffIso);
-  return Number(result.changes ?? 0);
+export function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
+  const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
+  // SAFETY: rows' shape matches the two columns named in the SELECT.
+  return db.prepare(sql).all(cutoffIso) as DormantKey[];
+}
+
+export function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
+  const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
+  return Number(db.prepare(sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
 }

@@ -208,7 +208,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     const now = new Date().toISOString();
     const removal: RejectRemoval = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
 
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       insertRejectedValue(db, {
         tenantId: opts.tenantId,

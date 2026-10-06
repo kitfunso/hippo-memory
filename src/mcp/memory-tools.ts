@@ -35,6 +35,7 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
   // Auto-sleep: one run per store at a time, triggered by what arrived since the last one.
   // Consolidation is host-wide, so only the host tenant's writes may start it.
   if (
+    ctx?.autoSleep !== false &&
     config.autoSleep.enabled &&
     tenantId === resolveTenantId({}) &&
     !autoSleepInFlight.has(hippoRoot) &&

@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, type DatabaseSyncLike, withWriteScope } from '../db.js';
 import { assertTenantId } from '../tenant.js';
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
 import { log } from '../log.js';
@@ -203,7 +203,7 @@ export interface RebuildPatch {
 
 /**
  * Apply a rebuild result to a dirty summary. Atomic: one
- * prepared UPDATE statement plus syncFtsRow inside one SAVEPOINT.
+ * prepared UPDATE statement plus syncFtsRow inside one write scope.
  * WHERE includes `AND summary_dirty = 1` so concurrent sleep's race-loser
  * becomes a no-op (no rebuild_count bump, no audit row).
  *
@@ -221,20 +221,7 @@ export function applyRebuildResult(
   assertTenantId('applyRebuildResult', summary.tenantId);
   const db = openStore(hippoRoot);
   try {
-    db.exec('SAVEPOINT rebuild_summary');
-    try {
-      const outcome = applyRebuildInSavepoint(db, summary, patch);
-      db.exec('RELEASE SAVEPOINT rebuild_summary');
-      return outcome;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK TO SAVEPOINT rebuild_summary');
-        db.exec('RELEASE SAVEPOINT rebuild_summary');
-      } catch {
-        // Ignore rollback failures — throw below is what matters.
-      }
-      throw e;
-    }
+    return withWriteScope(db, 'rebuild_summary', () => applyRebuildInSavepoint(db, summary, patch));
   } finally {
     closeHippoDb(db);
   }

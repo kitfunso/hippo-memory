@@ -37,7 +37,7 @@ import { truncateCodePointSafe } from '../transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
 import { readStdinBounded } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
 import {
@@ -245,6 +245,8 @@ export async function cmdSessionEnd(
       stdio: 'ignore',
       windowsHide: true,
     });
+    // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught exception.
+    child.on('error', (err) => log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`));
     child.unref();
   } catch {
     // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.

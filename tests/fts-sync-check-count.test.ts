@@ -10,6 +10,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { repairFtsDrift } from '../src/db/migrate.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
@@ -60,5 +61,34 @@ describe('FTS sync check does not count the virtual table itself', () => {
     const found = loadSearchEntries(root, 'gribblesnort', 10);
 
     expect(found.some((e) => e.content.includes('gribblesnort'))).toBe(true);
+  });
+});
+
+describe('FTS drift repair', () => {
+  // `id` is UNINDEXED in memories_fts, so a per-row lookup scans the whole index and the repair grows with the square of the store.
+  it('heals one missing row in a 10,000-row store in under a second', () => {
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: pragma_table_info yields one row per column with its name.
+      const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>).map((c) => c.name);
+      db.exec(`
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
+        INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n;
+        DELETE FROM memories_fts;
+        INSERT INTO memories_fts(id, content, tags) SELECT id, content, tags_json FROM memories;
+        DELETE FROM memories_fts WHERE id = 'mem_bulk_5000';
+      `);
+
+      const started = performance.now();
+      expect(repairFtsDrift(db)).toBe(true);
+      const elapsed = performance.now() - started;
+
+      // SAFETY: both SELECTs return one COUNT(*) AS c row.
+      const missing = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)`).get() as { c: number };
+      expect(Number(missing.c)).toBe(0);
+      expect(elapsed).toBeLessThan(1_000);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

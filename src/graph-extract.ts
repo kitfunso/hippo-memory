@@ -3,11 +3,11 @@
  *
  * Populates the graph from the already-structured consolidated first-class object tables -
  * NO NLP, no precision gate for entities + supersedes. The graph is a pure derived
- * function of the current object state, so `extractGraph` is an idempotent REBUILD: clear
- * the tenant's graph, then re-derive entities + `supersedes` relations from decisions /
+ * function of the current object state, so `extractGraph` is an idempotent REBUILD: derive
+ * entities + `supersedes` relations from decisions /
  * policies / customer_notes / project_briefs (the four object types whose kind maps to the
- * `entity_type` enum). All writes go through the src/graph.ts consolidated-source guard
- * (insertEntity / insertRelation / clearGraph); this module issues no raw SQL.
+ * `entity_type` enum), then write only their difference from the stored rows. All writes go
+ * through the src/graph/write.ts consolidated-source guard; this module issues no raw SQL.
  *
  * Pass 3 adds the
  * first CROSS-OBJECT relations: a deterministic NAME-MATCH heuristic that emits a
@@ -20,8 +20,11 @@
  * `hippo sleep` enqueue-hook.
  */
 
-import { clearGraph, insertEntity, insertRelation, runGraphRebuildTransaction } from './graph/write.js';
-import { MAX_ENTITY_NAME_LEN, type EntityType, type GraphTxDb, type SourceObjectType, type SourceObjectRef } from './graph/types.js';
+import { applyGraphOps, runGraphRebuildTransaction } from './graph/write.js';
+import { MAX_ENTITY_NAME_LEN, type EntityType, type SourceObjectType, type SourceObjectRef } from './graph/types.js';
+import { graphDelta, readGraphDelta, type DesiredEntity, type DesiredGraph, type DesiredRelation, type NaturalKey } from './graph/delta.js';
+import { WRITE_BUDGET, type WriteBudget } from './write-budget.js';
+import { SLEEP_DB_WAIT_MS } from './db.js';
 import { loadDecisions } from './decisions.js';
 import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
@@ -57,10 +60,12 @@ export interface ExtractResult {
   /** Entity types whose active or superseded load hit MAX_EXTRACT_PER_TYPE (the graph
    *  is under-extracted for those). */
   truncated: string[];
+  /** Writes left out because a writer changed their row or object after the diff; set only when above 0. */
+  skipped?: number;
 }
 
 /** A consolidated object row normalised to the fields extraction needs. */
-interface ExtractRow {
+export interface ExtractRow {
   entityType: EntityType;
   /** The object table id (unique only WITHIN its table, hence keyed with entityType). */
   e2Id: number;
@@ -96,8 +101,8 @@ function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   return { type, id: e2Id };
 }
 
-/** Unordered entity-id pair key, so a relation between a,b is found in either direction. */
-function pairKey(a: number, b: number): string {
+/** Unordered entity-key pair, so a relation between a,b is found in either direction. */
+function pairKey(a: string, b: string): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
@@ -116,7 +121,7 @@ function loadType(
   nameOf: (row: any) => string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   textOf: (row: any) => string,
-) {
+): LoadedType {
   const rows: ExtractRow[] = [];
   let hitCap = false;
   for (const status of ['active', 'superseded'] as const) {
@@ -124,7 +129,7 @@ function loadType(
     if (loaded.length === MAX_EXTRACT_PER_TYPE) hitCap = true;
     for (const r of loaded) {
       // SAFETY: loadFn is always one of loadDecisions/loadPolicies/loadCustomerNotes/
-      // loadProjectBriefs (wired at each extractGraph call site); every one of their row
+      // loadProjectBriefs (wired in GRAPH_SOURCES); every one of their row
       // types declares id: number, memoryId: string | null, supersededBy: number | null.
       // `any` here is the deliberate type-erasure boundary (see eslint-disable above)
       // that lets one loop handle all four object row shapes.
@@ -138,272 +143,228 @@ function loadType(
       });
     }
   }
-  return { rows, hitCap };
+  return { entityType, rows, hitCap };
 }
 
-/** A Pass-1-created entity, the unit Pass 3 traverses (never `allRows` - a row with an
- *  empty name produced NO entity and must never be a references source). Carries its
- *  source object so a references edge stays anchored to the object even when the mirror
- *  memory is gone (memoryId null). */
-interface CreatedEntity {
-  entityId: number;
+/** One object type's loaded rows. */
+export interface LoadedType {
   entityType: EntityType;
-  /** The source mirror memory, or null once forgotten/pruned (the edge then anchors to
-   *  the source object only). */
-  memoryId: string | null;
-  /** The source object this entity descends from (always set). */
-  sourceObject: SourceObjectRef;
-  name: string;
+  rows: ExtractRow[];
+  /** True when either status load filled MAX_EXTRACT_PER_TYPE. */
+  hitCap: boolean;
+}
+
+const GRAPH_SOURCES: Array<{
+  entityType: EntityType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  loadFn: (root: string, tenant: string, opts: any) => any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  nameOf: (row: any) => string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  textOf: (row: any) => string;
+}> = [
+  { entityType: 'decision', loadFn: loadDecisions, nameOf: (r) => r.decisionText, textOf: (r) => [r.decisionText, r.context].filter(Boolean).join(' ') },
+  { entityType: 'policy', loadFn: loadPolicies, nameOf: (r) => r.policyName, textOf: (r) => [r.policyName, r.policyText].filter(Boolean).join(' ') },
+  { entityType: 'customer', loadFn: loadCustomerNotes, nameOf: (r) => r.customer, textOf: (r) => [r.customer, r.note].filter(Boolean).join(' ') },
+  { entityType: 'project', loadFn: loadProjectBriefs, nameOf: (r) => r.repo, textOf: (r) => [r.repo, r.summary].filter(Boolean).join(' ') },
+];
+
+/** Every source type's rows, each read on its own connection; callers load before any write lock is taken. */
+export function loadGraphSources(hippoRoot: string, tenantId: string): LoadedType[] {
+  assertTenantId('loadGraphSources', tenantId);
+  return GRAPH_SOURCES.map((src) => loadType(hippoRoot, tenantId, src.entityType, src.loadFn, src.nameOf, src.textOf));
+}
+
+/** The graph the loaded objects imply, plus the counts ExtractResult reports. */
+export interface DerivedGraph extends DesiredGraph {
+  byType: Record<string, number>;
+  truncated: string[];
+  references: number;
+}
+
+/** A derived entity with what Pass 3 needs; `key` stands in for the entity id the rebuild no longer has. */
+interface DerivedEntity extends DesiredEntity {
+  key: string;
   searchText: string;
-  /** True when this row was superseded by a successor. References are extracted among
-   *  ACTIVE entities only - an edge to/from a superseded (outdated) row is stale. */
+  /** References are among active entities only; an edge to or from a superseded row is stale. */
   superseded: boolean;
 }
 
-/**
- * Idempotent rebuild of the tenant's deterministic graph from its consolidated first-class
- * objects. Returns the entity/relation counts (+ which types were truncated at the
- * per-type cap). Safe to re-run: output is a pure function of the current object state.
- */
-export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult {
-  assertTenantId('extractGraph', tenantId);
-
-  const sources: Array<{
-    entityType: EntityType;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    loadFn: (root: string, tenant: string, opts: any) => any[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    nameOf: (row: any) => string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    textOf: (row: any) => string;
-  }> = [
-    { entityType: 'decision', loadFn: loadDecisions, nameOf: (r) => r.decisionText, textOf: (r) => [r.decisionText, r.context].filter(Boolean).join(' ') },
-    { entityType: 'policy', loadFn: loadPolicies, nameOf: (r) => r.policyName, textOf: (r) => [r.policyName, r.policyText].filter(Boolean).join(' ') },
-    { entityType: 'customer', loadFn: loadCustomerNotes, nameOf: (r) => r.customer, textOf: (r) => [r.customer, r.note].filter(Boolean).join(' ') },
-    { entityType: 'project', loadFn: loadProjectBriefs, nameOf: (r) => r.repo, textOf: (r) => [r.repo, r.summary].filter(Boolean).join(' ') },
-  ];
-
-  // READ PHASE: load every source's rows on their own connections BEFORE the
-  // write transaction. Holding the rebuild's BEGIN IMMEDIATE write lock while
-  // opening a second connection for these reads dead-locks ('database is
-  // locked'); preloading keeps the transaction single-connection.
-  const loaded = sources.map((src) => {
-    const { rows, hitCap } = loadType(hippoRoot, tenantId, src.entityType, src.loadFn, src.nameOf, src.textOf);
-    return { entityType: src.entityType, rows, hitCap };
-  });
-
-  // WRITE PHASE: clear + every insert run in ONE transaction, so two
-  // concurrent rebuilds serialize on the SQLite write lock (no duplicate rows)
-  // and a throw mid-rebuild rolls back the clear (no bricked graph). No second
-  // connection is opened inside.
-  return runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-    rebuildGraphRows(txDb, hippoRoot, tenantId, loaded),
-  );
-}
-
-/** What Pass 1 leaves for Passes 2 and 3. */
-interface EntityPass {
+interface DerivedEntities {
   byType: Record<string, number>;
   truncated: string[];
   allRows: ExtractRow[];
-  entityIdByKey: Map<string, number>;
-  // The mirror memory per extracted key, null once forgotten/pruned (so a supersedes
-  // edge anchors to the successor's object when the mirror is gone but still passes the
-  // memory through when it lives).
-  memoryIdByKey: Map<string, string | null>;
-  // Created entities ONLY (drives Pass 3 sources + targets), in stable insertion order.
-  created: CreatedEntity[];
+  byKey: Map<string, DerivedEntity>;
+  /** In load order, which fixes insert order on a first build. */
+  created: DerivedEntity[];
 }
 
-// Pass 1: entities. Every ACTIVE/SUPERSEDED object row becomes an entity ANCHORED to its
-// authoritative object (source_object_type/id) - it survives a forgotten mirror
-// (memory_id NULL). The mirror memory is passed through only when it still exists
-// (it remains a recall pointer until forgotten/pruned).
-function insertEntityRows(
-  txDb: GraphTxDb,
-  hippoRoot: string,
-  tenantId: string,
-  loaded: Array<{ entityType: EntityType; rows: ExtractRow[]; hitCap: boolean }>,
-): EntityPass {
-  const pass: EntityPass = { byType: {}, truncated: [], allRows: [], entityIdByKey: new Map(), memoryIdByKey: new Map(), created: [] };
+/** The tenant's graph as a pure function of its loaded objects; the write side diffs it against what is stored. */
+export function deriveGraph(loaded: readonly LoadedType[]): DerivedGraph {
+  const pass = deriveEntities(loaded);
+  const supersedes = deriveSupersedes(pass);
+  const references = deriveReferences(pass.created, supersedes.supersededPairs, pass.truncated);
+  return {
+    entities: pass.created.map((e) => ({ entityType: e.entityType, sourceObject: e.sourceObject, name: e.name, memoryId: e.memoryId })),
+    relations: [...supersedes.relations, ...references],
+    byType: pass.byType,
+    truncated: pass.truncated,
+    references: references.length,
+  };
+}
+
+const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({ entityType: e.entityType, sourceObject: e.sourceObject });
+
+// Pass 1: every active or superseded object row becomes an entity anchored to its object, so it survives a
+// forgotten mirror; the mirror memory rides along only while it exists.
+function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
+  const pass: DerivedEntities = { byType: {}, truncated: [], allRows: [], byKey: new Map(), created: [] };
   for (const { entityType, rows, hitCap } of loaded) {
     if (hitCap) pass.truncated.push(entityType);
     pass.byType[entityType] = 0;
     for (const row of rows) {
       pass.allRows.push(row);
-      // Name fields are uncapped at source and insertEntity rejects an over-cap or empty name,
-      // which after clearGraph would brick the rebuild. Trim before capping so leading
-      // whitespace cannot slice to ''; skip a still-empty label rather than throw.
-      const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN);
-      if (name.length === 0) continue;
-      const sourceObject = sourceObjectOf(row.entityType, row.e2Id);
-      const entity = insertEntity(hippoRoot, tenantId, {
+      // Names are uncapped at source; trimming on both sides of the cap gives the exact name insertEntity stores.
+      const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN).trim();
+      const key = keyOf(row.entityType, row.e2Id);
+      // A row seen twice was superseded between the two status loads; its first sighting stands.
+      if (name.length === 0 || pass.byKey.has(key)) continue;
+      const entity: DerivedEntity = {
         entityType: row.entityType,
+        sourceObject: sourceObjectOf(row.entityType, row.e2Id),
         name,
         memoryId: row.memoryId,
-        sourceObject,
-      }, txDb);
-      const k = keyOf(row.entityType, row.e2Id);
-      pass.entityIdByKey.set(k, entity.id);
-      pass.memoryIdByKey.set(k, row.memoryId);
-      pass.created.push({ entityId: entity.id, entityType: row.entityType, memoryId: row.memoryId, sourceObject, name, searchText: row.searchText ?? '', superseded: row.supersededBy !== null });
+        key,
+        searchText: row.searchText ?? '',
+        superseded: row.supersededBy !== null,
+      };
+      pass.byKey.set(key, entity);
+      pass.created.push(entity);
       pass.byType[entityType] += 1;
     }
   }
   return pass;
 }
 
-// Pass 2: `supersedes` relations. For X superseded by Y (Y is the successor), emit
 interface SupersedesPass {
-  relations: number;
-  supersededPairs: Set<string>;
+  readonly relations: DesiredRelation[];
+  readonly supersededPairs: Set<string>;
 }
 
-// "Y supersedes X" - but only when BOTH X and Y were EXTRACTED (e.g. Y may be closed
-// and absent). The emit guard is ENTITY presence (entityIdByKey), not memory presence:
-// a forgotten successor mirror must still emit the edge. The relation is anchored to Y's
-// authoritative object; Y's mirror memory is passed only when it still lives.
-function insertSupersedesRelations(
-  txDb: GraphTxDb,
-  hippoRoot: string,
-  tenantId: string,
-  pass: EntityPass,
-): SupersedesPass {
-  let relations = 0;
-  // Entity-id pairs already related by supersedes (unordered). Pass 3 skips a references
-  // edge for such a pair: a version-extends-its-predecessor's-name containment (e.g.
-  // "Adopt X (managed)" contains "Adopt X") is a name artifact, not a cross-reference,
-  // and supersedes already captures their relationship.
+// Pass 2: "Y supersedes X" when both were derived (Y may be closed and absent). The edge is anchored to the
+// successor's object and carries its mirror memory only while that lives.
+function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
+  const relations: DesiredRelation[] = [];
+  // Pass 3 skips these pairs: "Adopt X (managed)" containing "Adopt X" is a version, not a cross-reference.
   const supersededPairs = new Set<string>();
   for (const row of pass.allRows) {
     if (row.supersededBy === null) continue;
-    const xKey = keyOf(row.entityType, row.e2Id);
-    const yKey = keyOf(row.entityType, row.supersededBy);
-    const fromId = pass.entityIdByKey.get(yKey); // successor Y
-    const toId = pass.entityIdByKey.get(xKey); // superseded X
-    if (fromId === undefined || toId === undefined) continue;
-    const yMemoryId = pass.memoryIdByKey.get(yKey) ?? null; // successor's mirror, null if gone
-    insertRelation(hippoRoot, tenantId, {
-      fromEntityId: fromId,
-      toEntityId: toId,
+    const successor = pass.byKey.get(keyOf(row.entityType, row.supersededBy));
+    const superseded = pass.byKey.get(keyOf(row.entityType, row.e2Id));
+    if (!successor || !superseded) continue;
+    relations.push({
+      from: naturalKeyOf(successor),
+      to: naturalKeyOf(superseded),
       relType: 'supersedes',
-      memoryId: yMemoryId,
-      sourceObject: sourceObjectOf(row.entityType, row.supersededBy), // successor Y's object
-    }, txDb);
-    supersededPairs.add(pairKey(fromId, toId));
-    relations += 1;
+      memoryId: successor.memoryId,
+      sourceObject: successor.sourceObject,
+    });
+    supersededPairs.add(pairKey(successor.key, superseded.key));
   }
   return { relations, supersededPairs };
 }
 
-/**
- * The deterministic rebuild WRITES, run inside `runGraphRebuildTransaction`'s
- * transaction (`txDb` is its connection). Clears the tenant's graph then
- * re-derives entities + `supersedes` + `references` from the preloaded rows. All
- * DB access here is on `txDb` (or in-memory) — no other connection is opened.
- */
-function rebuildGraphRows(
-  txDb: GraphTxDb,
-  hippoRoot: string,
-  tenantId: string,
-  loaded: Array<{ entityType: EntityType; rows: ExtractRow[]; hitCap: boolean }>,
-): ExtractResult {
-  // Rebuild from scratch: the graph is derived, so clear then re-derive.
-  clearGraph(hippoRoot, tenantId, txDb);
-
-  const pass = insertEntityRows(txDb, hippoRoot, tenantId, loaded);
-  const { byType, truncated, created } = pass;
-  const supersedes = insertSupersedesRelations(txDb, hippoRoot, tenantId, pass);
-  let relations = supersedes.relations;
-
-  // Pass 3: cross-object `references` edges via conservative name matching. A source's
-  // text containing a target entity's name -> "source references target". Sources +
-  // targets are CREATED entities only, each anchored to its source object (so the
-  // edge survives a forgotten source mirror).
-  const references = extractReferences(hippoRoot, tenantId, created, supersedes.supersededPairs, truncated, txDb);
-  relations += references;
-
-  const entities = created.length;
-  return { entities, relations, references, byType, truncated };
-}
-
-/**
- * Pass 3. Build a target-name index from the created entities (names within the length
- * bounds, ambiguous names dropped), scan each created entity's text once with one
- * combined word-boundary regex, and emit `references` edges (self-skipped, deduped,
- * per-source capped). Each edge is anchored to the source entity's object (memoryId
- * passed through only when the mirror lives). Returns the number of references edges written.
- */
-function extractReferences(
-  hippoRoot: string,
-  tenantId: string,
-  created: CreatedEntity[],
-  supersededPairs: Set<string>,
-  truncated: string[],
-  txDb: GraphTxDb,
-): number {
-  // Build the target index: normalised name -> single entity id. A name is a target only
-  // if its length is in bounds; a name shared by >1 entity is AMBIGUOUS and dropped.
-  const nameToId = new Map<string, number>();
+/** Normalised name to its single target; a name two entities share is ambiguous and dropped. */
+function referenceTargets(created: readonly DerivedEntity[]): Map<string, DerivedEntity> {
+  const byName = new Map<string, DerivedEntity>();
   const ambiguous = new Set<string>();
   for (const e of created) {
-    // References are among ACTIVE entities only: a superseded (outdated) row is not a
-    // current cross-reference target.
     if (e.superseded) continue;
-    // Decisions are SOURCE-only: their name is decision prose, referenced by supersedes,
-    // not by name-mention. Excluding them as targets also prevents a decision's own name
-    // (== its searchText) from whole-string self-matching and shadowing embedded targets.
+    // Decisions are sources only: their name is their prose, which would self-match and shadow embedded targets.
     if (e.entityType === 'decision') continue;
     const norm = e.name.trim().toLowerCase();
     if (norm.length < MIN_REF_NAME_LEN || norm.length > MAX_REF_NAME_LEN) continue;
     if (ambiguous.has(norm)) continue;
-    if (nameToId.has(norm)) {
-      // Second distinct entity with this name (and not its own id repeated) -> ambiguous.
-      if (nameToId.get(norm) !== e.entityId) {
-        nameToId.delete(norm);
-        ambiguous.add(norm);
-      }
-      continue;
+    const seen = byName.get(norm);
+    if (seen === undefined) byName.set(norm, e);
+    else if (seen.key !== e.key) {
+      byName.delete(norm);
+      ambiguous.add(norm);
     }
-    nameToId.set(norm, e.entityId);
   }
-  if (nameToId.size === 0) return 0;
+  return byName;
+}
 
-  // Record the truncation (observability, mirroring MAX_EXTRACT_PER_TYPE) so a >cap
-  // store's under-matched references are not silent.
-  if (nameToId.size > MAX_TARGET_NAMES) truncated.push('references-targets');
-  // LONGEST name first, then alphabetical: JS regex alternation is leftmost-first, so
-  // ordering longer names before their prefixes makes the match longest-at-position
-  // (`postgres pro` wins over `postgres`). Deterministic, so truncation is stable.
-  const targetNames = [...nameToId.keys()]
+// Pass 3: a `references` edge when one object's text names another entity, matched on word boundaries,
+// self-skipped, deduped and capped per source; the edge is anchored to the source object.
+function deriveReferences(created: readonly DerivedEntity[], supersededPairs: ReadonlySet<string>, truncated: string[]): DesiredRelation[] {
+  const byName = referenceTargets(created);
+  if (byName.size === 0) return [];
+  if (byName.size > MAX_TARGET_NAMES) truncated.push('references-targets');
+  // Longest first, then alphabetical: regex alternation is leftmost-first, so `postgres pro` beats `postgres`.
+  const targetNames = [...byName.keys()]
     .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0))
     .slice(0, MAX_TARGET_NAMES);
-  const pattern = `\\b(?:${targetNames.map(escapeRegex).join('|')})\\b`;
-  const re = new RegExp(pattern, 'gi');
-
-  let references = 0;
+  const re = new RegExp(`\\b(?:${targetNames.map(escapeRegex).join('|')})\\b`, 'gi');
+  const relations: DesiredRelation[] = [];
   for (const src of created) {
-    if (src.superseded) continue; // superseded sources hold only stale references
-    if (!src.searchText) continue;
-    const targets = new Set<number>();
+    if (src.superseded || !src.searchText) continue;
+    const targets = new Map<string, DerivedEntity>();
     for (const m of src.searchText.matchAll(re)) {
-      const targetId = nameToId.get(m[0].toLowerCase());
-      if (targetId === undefined || targetId === src.entityId) continue; // miss / self
-      if (supersededPairs.has(pairKey(src.entityId, targetId))) continue; // already version-related
-      targets.add(targetId);
-      if (targets.size >= MAX_REFERENCES_PER_OBJECT) break; // per-source cap
+      const target = byName.get(m[0].toLowerCase());
+      if (target === undefined || target.key === src.key) continue;
+      if (supersededPairs.has(pairKey(src.key, target.key))) continue;
+      targets.set(target.key, target);
+      if (targets.size >= MAX_REFERENCES_PER_OBJECT) break;
     }
-    for (const targetId of targets) {
-      insertRelation(hippoRoot, tenantId, {
-        fromEntityId: src.entityId,
-        toEntityId: targetId,
-        relType: 'references',
-        // Anchored to the source object; its mirror memory is passed only when it lives.
-        memoryId: src.memoryId,
-        sourceObject: src.sourceObject,
-      }, txDb);
-      references += 1;
+    for (const target of targets.values()) {
+      relations.push({ from: naturalKeyOf(src), to: naturalKeyOf(target), relType: 'references', memoryId: src.memoryId, sourceObject: src.sourceObject });
     }
   }
-  return references;
+  return relations;
 }
+
+function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
+  const { entities, relations, references, byType, truncated } = derived;
+  const result: ExtractResult = { entities: entities.length, relations: relations.length, references, byType, truncated };
+  if (skipped > 0) result.skipped = skipped;
+  return result;
+}
+
+/** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
+ *  Returns the derived counts and which types hit the per-type cap. */
+export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult {
+  assertTenantId('extractGraph', tenantId);
+  // Loaded first: opening a second connection under the rebuild's BEGIN IMMEDIATE dead-locks ('database is locked').
+  const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
+  // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
+  const skipped = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
+    applyGraphOps(txDb, hippoRoot, tenantId, graphDelta(txDb, tenantId, derived), 0, { holdMs: Infinity }).skipped,
+  );
+  return resultOf(derived, skipped);
+}
+
+/** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
+ *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
+export async function extractGraphChunked(hippoRoot: string, tenantId: string, budget: WriteBudget = WRITE_BUDGET): Promise<ExtractResult> {
+  assertTenantId('extractGraphChunked', tenantId);
+  const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
+  const ops = readGraphDelta(hippoRoot, tenantId, derived);
+  let next = 0;
+  let skipped = 0;
+  let committedAt = 0;
+  while (next < ops.length) {
+    if (next > 0) await budget.pause(committedAt);
+    const from = next;
+    // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
+    const chunk = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
+      applyGraphOps(txDb, hippoRoot, tenantId, ops, from, { holdMs: budget.holdMs, clock: budget.clock }),
+    { busyWaitMs: SLEEP_DB_WAIT_MS });
+    committedAt = budget.clock();
+    next = chunk.next;
+    skipped += chunk.skipped;
+  }
+  return resultOf(derived, skipped);
+}
+
+

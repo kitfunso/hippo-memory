@@ -294,7 +294,7 @@ export const VERB_USAGE = {
       --json               Output as JSON
       --global             Operate on the global store
     auth list              List API keys (active by default)
-      --all                Include revoked keys
+      --all                Include revoked and expired keys
       --json               Output as JSON
       --global             Operate on the global store
     auth revoke <key_id>   Revoke an API key (subsequent validate fails)
@@ -341,12 +341,14 @@ export const VERB_USAGE = {
                            Re-ingest a DLQ entry (--force skips sig check)`],
   audit: [`
   audit [--fix]            Check memory quality (--fix removes junk)
-    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply hides certain defects
-      --json               Report ids, reasons, protections and schema blockers as JSON
+    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply moves certain
+                           defects to dormant storage. Sleep and the daily runner apply it once
+                           per store after an upgrade
+      --json              Report ids, reasons, protections and schema blockers as JSON
       --global             Operate on the global store without changing its schema
-                           Keeps dormant snapshots and a database backup; undo with unreject,
-                           then dormant restore. Sleep's dormant retention still applies;
-                           the database backup remains until you remove it.`, `
+                           Writes a database backup first; undo with hippo dormant restore <id>,
+                           which marks the memory verified so repair leaves it alone. Sleep's
+                           dormant retention still applies; the backup stays until you remove it.`, `
   audit <sub>              Query the append-only audit log (A5 stub auth)
     audit list             List audit events for the active tenant
       --op <op>            Filter by op (remember | recall | promote |
@@ -555,17 +557,18 @@ export const VERB_USAGE = {
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code adds 7 hooks to ~/.claude/settings.json;
-                           opencode installs a plugin; codex adds 2 hooks to
-                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default); opencode installs a plugin; codex
+                           adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; all but claude-code
                            also patch an existing AGENTS.md
     hook uninstall <target> Remove hook`],
   setup: [`
   setup                    One-shot: detect installed AI tools and install their hooks:
-                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
-                           a plugin, codex 2 hooks in its hooks.json plus a launcher
-                           wrapper; other tools get a hint. Then imports each agent's
+                           claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default), opencode a plugin, codex 2 hooks in
+                           its hooks.json plus a launcher wrapper; other tools get a
+                           hint. Then imports each agent's
                            user-level memories into the global store
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing

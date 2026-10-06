@@ -93,8 +93,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `SleepResult.rejectedSkipped`: AT1: count of auto-share candidates the GLOBAL store's rejection tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md plan §3 — copy paths must not let one rejected candidate abort the batch).
 - `SleepResult.graph`: E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt this sleep.
 - `sleep`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands — at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
-- `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies.
-- `sleep`: v1.12.2: resolve phase dependencies, allowing test-only `__phases` override to inject deterministic throws for mid-phase failure coverage.
+- `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep-run.ts`, so the package root's declarations never name it.
+- `runSleep` (`src/api/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleep` calls it with none.
 - `sleep`: v1.11.5: phase counters for the consolidate audit emit (in finally).
 
 ### src/api/tokens.ts
@@ -111,7 +111,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
 
 ### src/audit.ts
-- `CJK_LETTERS`: SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)
 
 ### src/auth.ts
@@ -148,6 +147,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `saveDerivedSnapshot`: Per-field merge (X1): a tool-heavy tail whose only user turns are tool_result arrays derives an empty task even though the summary is non-empty.
 
 ### src/capture/extract.ts
+- `extractFromTexts`: #493 replaced the DF2 clause-bounding below with whole sentences: capture keeps the full sentence a keyword sits in (Intl.Segmenter, with inline code and abbreviation dots masked) and the shared quality gate decides. The follow-up parses each transcript turn on its own, so a fence or spec heading never runs into the next turn, follows CommonMark fence rules, joins wrapped lowercase lines only when the line above has not ended its sentence, and dedupes across turns. The DF2 entries below describe code that no longer exists; T1's negation guarantee holds because the whole sentence is kept.
 - `DECISION_PATTERNS`: T1 (DF2): each pattern now carries TWO capture groups — group 1 is the discriminating keyword (plus its trailing separator, verbatim), group 2 is the content that follows it. Previously only the after-keyword content was captured, so a negation like "never" / "must not" was discarded and a prohibition inverted into an instruction ("Never use X" stored as "use X"). `extractFromPatterns` reassembles group1 + a clause-bounded group2 (T2, via `boundToClause` below) rather than reading a single fixed-width group — group 2's own reach is widened to {1,500} because the true stopping point is now found by content, not counted characters. Keeping the keyword in its own group (rather than folding it into one bigger capture) matters: `boundToClause` must scan for a clause boundary only in group 2, never in group 1 — several keywords end in their own colon ("error:", "rule:", "decision:") which is not a clause boundary in the prose sense and would wrongly truncate the capture down to just the keyword if scanned.
 - `PREFERENCE_PATTERNS`: PREFERENCE_PATTERNS[0] keeps its pre-DF2 two-capture-group shape (match[1]-only, unbounded) — out of scope here, backlogged. See extractFromPatterns' reference check against this exact array element.
 - `boundToClause`: T2 (DF2): bound a keyword+content capture to its clause instead of a fixed character count.
@@ -230,6 +230,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `pinnedInject.promptRecallMaxItems`: Z1: max prompt-recall entries injected per prompt. Default 5 (tuned).
 - `pinnedInject.promptRecallCandidates`: Z1: FTS candidate pool size per store before gating. Default 100.
 - `contextProjectIsolation`: Memory scope isolation (v39): when true (default), ambient context ... See docs/plans/2026-07-01-memory-scope-isolation.md.
+- `sharedStore`: set `true` on a store that a team server serves. Its folder is no caller's project, so a write that names none stores NULL (no known project, hidden from every project's context) instead of the folder's project or `''` (user-global, shown everywhere). Callers name their project: `POST /v1/memories` takes `project: {name, aliases?}` and `GET /v1/context` takes `project` and repeated `alias`; a context read with none answers 400. MCP `hippo_context` and `hippo sync` refuse the store. Once a process reads the flag as true it stays true, so a broken edit cannot reopen reads.
+- `isSharedStore` cost: a false answer is not cached, so a store that is not shared pays one realpath and one `config.json` read on every write that names no project and on every context call (once per prompt from the local hook); a broken `config.json` warns on each.
 - `memoryValue`: LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen E2 weights (src/memory-value-weights.ts) only run when explicitly enabled; no other knobs in v1 (the rescue budget is a code constant tied to E2 evidence, not user-tunable).
 - `churnStaleness`: FE2: tags a memory `churn-stale` when its named file/symbol/script changed since storage. Default OFF - FE3 measures before it flips.
 
@@ -422,6 +424,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/db/migrations/v48.ts
 - migration v48: Quarantine (src/quarantine.ts, CD5)
 
+### src/db/migrations/v53.ts
+- migration v53: Self-service keys. `api_keys` gains `owner_subject` (the auth-resolver subject that minted the key for itself) and `expires_at`, plus a partial index on live keys per (tenant, owner) for the per-subject cap.
+- migration v53: Does not touch `min_compatible_binary`. A store with no expiring key is safe for an older binary, so it keeps its floor and every binary that shares it keeps working.
+- `authCreateSelf` (src/api/auth.ts): The first write of a non-null `expires_at` raises `min_compatible_binary` to `EXPIRING_KEYS_MIN_BINARY` (src/version.ts), in the same transaction as the key, and never lowers a higher floor. A binary older than that ignores `expires_at` and would keep honouring expired keys, so it must refuse the store from then on.
+- `EXPIRING_KEYS_MIN_BINARY`: Names the first release that ships schema v53, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` runs on `npm version`, `prepublishOnly` and CI: it fails when the constant is above `package.json`'s version, or when a tag `v<constant>` exists whose migration index lacks v53. Until that release the constant equals the dev version, so a dev build never locks itself out.
+- Way back: to let an older binary open a store again, revoke every key that has an `expires_at` (`hippo auth list --all` shows the expires column; `hippo auth revoke <key_id>`), then lower the floor to what it was before, 1.24.0 on most stores (set by v39): `UPDATE meta SET value = '1.24.0' WHERE key = 'min_compatible_binary'`. A revoked key is safe because every binary honours `revoked_at`.
+
 ### src/decisions.ts
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).
@@ -503,7 +512,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `resolveConsolidatedSource`: source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (E2 objects are consolidated by construction).
 - `extraction queue section`: Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
 - `enqueueExtraction`: The producer hook in `hippo sleep` is deferred (E3.1); this is the API it will call.
-- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`.
+- `clearGraph`: Lives in graph.ts (the sole sanctioned graph writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Removed in E8b: the rebuild applies the difference graph/delta.ts reads through `applyGraphOps`, and `updateEntity` renames in place so relations keep their endpoints.
 - `sleep enqueue-hook section`: E3 sleep enqueue-hook — producer helper + drain support
 - `markGraphDirty`: NEVER throws into the caller — a graph-dirty signal failing must not abort a core E2 write. ... Called POST-COMMIT from the E2 graph-source save/close mutations of decision, policy, customer_note and project_brief. / swallowed so the already-committed E2 write is never rolled back.
 - `removeGraphEntitiesForObject`: Remove the graph rows sourced from one E2 object, by its (type, id). ... Fail-soft like `markGraphDirty` (never throws into the E2 close caller; graph staleness is recoverable).
@@ -542,6 +551,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/mcp/session-state.ts
 - `sessionRecallHistoryMcp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the MCP pipeline. Separate from CLI/HTTP rings per plan v3 architecture (per-pipeline rings; no IPC).
 
+### src/memory-quality.ts
+- `CJK_LETTERS` (moved from src/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
+- `module header`: #493 moved the audit's text checks here and made them the one gate for automatic memories: capture, git learning, sleep merges, compaction memories, extracted facts and DAG summaries. A person's memory is never judged on its wording. The follow-up split the defects into certain ones (rejected, never reused by sleep or auto-share, set aside by `hippo audit repair`) and uncertain ones (`possible-fragment` is stored and listed for review). Provenance, not text, decides who is held to the gate: `isAutomaticEntry` reads source, tags, `extracted_from`, `dag_level` and confidence.
+
 ### src/memory-value-weights.ts
 - `module header`: LC2-E2 frozen learned memory-value weight vector. GENERATED FROM the E2 frozen artifact
 - `module header`: CAVEAT (verbatim from the E2 result doc, carried by design decision D3 / binding constraint 4 in docs/plans/2026-08-10-lc2-e3-mv-wiring.md): usage-feature signs reflect E1's anti-oracle simulation, NOT real usage value. Never read this as production ranking advice — LC3 tests real usage value.
@@ -569,7 +582,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `MemoryEntry`: v28 (reserved for E5): ISO 8601 timestamp the level-3 entity profile
 - `MemoryEntry`: A3 provenance envelope (schema v14)
 - `MemoryEntry`: A5 stub auth (schema v16)
-- `MemoryEntry`: Memory scope isolation (schema v39): owning project for ambient-context ... everywhere), or null for legacy pre-v39 rows - ambient context treats null as other-project (deny). Stamped from the store's location at write time (store.ts stampOriginProject); undefined only on entries not yet written. See docs/plans/2026-07-01-memory-scope-isolation.md.
+- `MemoryEntry`: Memory scope isolation (schema v39): owning project for ambient-context ... everywhere), or null for no known project (a legacy pre-v39 row, or a shared-store write that named none) - ambient context treats null as other-project (deny). Stamped at write time by store/entry-row.ts stampOriginProject via fallbackOrigin; undefined only on entries not yet written. See docs/plans/2026-07-01-memory-scope-isolation.md.
 - `MemoryEntry`: F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
 - `CHURN_STALE_TAG`: FE2: tag on a memory whose named file/symbol/script changed after it was stored.
 - `EMOTIONAL_MULTIPLIERS`: Emotional multipliers from PLAN.md. v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics: losses ~2x larger than equivalent gains). Defaults rebalanced: - positive (success-tagged): 1.3 -> 1.0 - negative (error-tagged): 1.5 -> 2.0 - critical stays at 2.0 (literal roadmap reading; J5 silent on critical; ranking signal in consolidate.ts/salience.ts/ambient.ts unchanged) - neutral stays at 1.0
@@ -634,7 +647,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/project-identity.ts
 - `module header`: Project identity resolution for memory scope isolation (ROADMAP.md Part I [Committed] "Memory scope isolation"; plan docs/plans/2026-07-01-memory-scope-isolation.md S1).
 - `findHippoStoreDir`: Design notes: docs/plans/2026-09-05-*.md
-- `deriveOriginProject`: a NULL origin_project column is reserved for legacy pre-migration rows, which ambient context treats as deny (see plan docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
+- `deriveOriginProject`: NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny (see plan docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
+- `fallbackOrigin`: the origin for a write that names none. A store whose `config.json` sets `"sharedStore": true` gets NULL, because its folder is no caller's project; any other store gets its folder's project.
 
 ### src/prompt-recall.ts
 - `module header`: Z1: recall gated on the hook prompt, not the five newest memories (pure, no I/O). See docs/plans/2026-09-26-z1-prompt-recall.md.

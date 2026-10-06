@@ -200,13 +200,12 @@ export function repairFtsDrift(db: DatabaseSyncLike): boolean {
   const counts = ftsRowCounts(db);
   if (counts === null || counts.memories === counts.fts) return false;
 
+  // NOT IN reads the UNINDEXED id column once, not once per memory; one NULL id would make NOT IN match nothing.
   db.exec(`
     INSERT INTO memories_fts(id, content, tags)
     SELECT m.id, m.content, m.tags_json
     FROM memories m
-    WHERE NOT EXISTS (
-      SELECT 1 FROM memories_fts f WHERE f.id = m.id
-    )
+    WHERE m.id NOT IN (SELECT id FROM memories_fts WHERE id IS NOT NULL)
   `);
 
   db.exec(`

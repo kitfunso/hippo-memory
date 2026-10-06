@@ -5,7 +5,7 @@ import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer 
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
-import { installJsonHooks } from '../hooks/json-hooks.js';
+import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
@@ -13,7 +13,7 @@ import { isInitialized } from '../store/open.js';
 import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
-import type { HippoConfig } from '../config.js';
+import { isSharedStore, type HippoConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
@@ -236,6 +236,13 @@ export function printAgentImport(report: ImportReport, indent = '   '): void {
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
+/** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
+export function skipLearnOnSharedStore(hippoRoot: string): boolean {
+  if (!isSharedStore(hippoRoot)) return false;
+  console.log("Shared store: skipped learning from this account's git commits and coding agents' own memories.");
+  return true;
+}
+
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
 export function installCodexMemoryHooks(indent: string): void {
   const result = installJsonHooks('codex');
@@ -251,6 +258,13 @@ export function installCodexMemoryHooks(indent: string): void {
     ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
     : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
   console.log(`${indent}${CODEX_TRUST_LINE}`);
+}
+
+/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was left unchanged; true when it printed. */
+export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>, indent: string, action: 'install' | 'uninstall' = 'install'): boolean {
+  if (!result.invalidJson) return false;
+  console.log(`${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook ${action} claude-code\`.`);
+  return true;
 }
 
 /**

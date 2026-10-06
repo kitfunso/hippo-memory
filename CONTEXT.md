@@ -8,10 +8,20 @@ claim cards. These terms have one fixed meaning in the hippo code, the `hippo` C
 ### Memory lifecycle
 
 **Dormant memory**:
-A memory sleep moved out of active memory instead of deleting it, because it faded
-(`dormant.enabled`, on by default). It keeps its content and can be restored or forgotten for
-good until `dormant.retentionDays` expires it.
+A memory moved out of active memory instead of being deleted: sleep's decay pass when it
+faded (`dormant.enabled`, on by default), an imported agent memory whose note was deleted,
+`hippo projects repair`, or `hippo audit repair` setting aside an automatic memory with a certain
+defect, which sleep and the daily runner also do once per store after an upgrade. It keeps its content and can be restored or forgotten for good until
+`dormant.retentionDays` expires it. A memory audit repair set aside comes back `verified`.
 _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
+
+**Automatic memory**:
+A memory hippo wrote without a person choosing the words: session capture, git learning,
+a sleep merge, a compaction memory, an extracted fact or a DAG summary, at confidence observed
+or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
+one with a certain defect is never reused by sleep or shared, and `hippo audit repair` can set
+it aside. A person's memory is never judged on its wording.
+_Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
 
 **Churn-stale memory**:
 A memory whose named file, code symbol or `npm run` script changed or disappeared in its own
@@ -118,8 +128,9 @@ Returns a tenant, subject, role and scope grants, or nothing (a 401). It throws 
 upstream is down; a throw or a missed deadline is a 503, which a stream heartbeat skips rather than
 treating as revocation. It runs on every authenticated request and every stream heartbeat, so it
 must be cache-backed. Its admin role is tenant admin: no other tenant's audit log, no host-wide
-sleep. It can mint and revoke member API keys only, and those outlive the user's removal from the
-identity provider.
+sleep. It can mint and revoke member API keys only. A key a member mints for itself expires; a
+member key an admin mints never does, so it keeps working after the user leaves the identity
+provider until someone revokes it.
 _Avoid_: auth plugin, identity provider
 
 **Public JSON path**:
@@ -127,6 +138,18 @@ A fixed GET `/v1/` path that `serve()`'s caller pairs with a JSON value (`public
 under any store, so it must hold nothing secret. The value is serialized once at boot and may be at most 64 KiB; a path a
 core GET route already serves is refused at boot.
 _Avoid_: public route (`PUBLIC_ROUTES` holds the signed connector webhooks), open endpoint, metadata route
+
+**Key owner**:
+The auth-resolver subject that minted a self-service API key for itself. A member signed in
+through the resolver lists and may revoke only the keys it owns; a key an admin or the CLI mints
+has no owner.
+_Avoid_: owner (alone; a claimant or assignee is something else), creator, minter
+
+**Key expiry**:
+The time after which an API key fails on every route. Self-service keys always have one; other
+keys have none. The first key with an expiry raises the store's binary floor, since an older
+binary would ignore it.
+_Avoid_: TTL (that is the setting, not the time), expiry (alone; a reclaim is something else)
 
 **Audit cursor**:
 The last audit event id an exporter has read; `listAuditEventsAfter` returns the events after it.
