@@ -396,6 +396,43 @@ function importFile(dir: string, entry: Waiting, tenantId: string, log: Log, imp
   }
 }
 
+export interface SpoolCounts {
+  waiting: number;
+  stale: number;
+  bad: number;
+}
+
+function mtimeOf(file: string): number | null {
+  try {
+    return fsx.statSync(file).mtimeMs;
+  } catch (err) {
+    if (errCode(err) === 'ENOENT') return null; // a replay moved it after the listing; it is counted under its new name or not at all
+    throw err;
+  }
+}
+
+/** What doctor reports, read only: files a replay should have taken by now, claims and tmp files a dead process left, and `.bad` files. */
+export function spoolCounts(hippoRoot: string, now: Date, waitingAfterMs: number): SpoolCounts {
+  const counts: SpoolCounts = { waiting: 0, stale: 0, bad: 0 };
+  const dir = path.join(hippoRoot, SPOOL_DIR);
+  if (!fsx.existsSync(dir)) return counts;
+  const at = now.getTime();
+  for (const name of fsx.readdirSync(dir)) {
+    const file = path.join(dir, name);
+    const waiting = WAITING.exec(name);
+    const claim = claimOf(name);
+    if (name.endsWith('.bad')) counts.bad++;
+    else if (waiting !== null) {
+      const spooled = NEW_STEM.test(waiting[1]) ? created(waiting[1]) : mtimeOf(file);
+      if (spooled !== null && at - spooled > waitingAfterMs) counts.waiting++;
+    } else if (claim !== null || TMP.test(name)) {
+      const since = claim?.claimedAt ?? mtimeOf(file);
+      if (since !== null && Math.abs(at - since) > STALE_MS) counts.stale++;
+    }
+  }
+  return counts;
+}
+
 /** One replayer at a time holds `replay.lock`, so only one process claims a file even where Windows lets two renames of it both land. */
 export function importSpool(hippoRoot: string, tenantId: string, log: Log, deadline: number, importOne: SpoolImporter): number {
   const dir = path.join(hippoRoot, SPOOL_DIR);
