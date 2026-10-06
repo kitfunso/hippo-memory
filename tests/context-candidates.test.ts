@@ -73,5 +73,7 @@ describe('loadContextCandidates over the cap', () => {
     expect(tallySources(root, 'default').map((t) => [t.source, t.count])).toEqual([['cli', 10]]);
     expect(tallySources(root).reduce((n, t) => n + t.count, 0)).toBe(11);
     expect(loadTextsHoldingWords(root, 'default', ['e-mid', 'nothing']).map((r) => r.content)).toEqual(['row e-mid body']);
+    const scoped = loadTextsHoldingWords(root, 'default', ['e-mid', 'g-other', 'h-global', 'j-acme'], ['proj']);
+    expect(scoped.map((r) => [r.content, r.origin_project]).sort()).toEqual([['row e-mid body', 'proj'], ['row h-global body', '']]);
   });
 });

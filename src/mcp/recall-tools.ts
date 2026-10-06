@@ -7,6 +7,7 @@ import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';
 import { resolveProjectIdentity } from '../project-identity.js';
+import { isSharedStore } from '../config.js';
 import { appendAuditEvent, auditQueryFields } from '../audit.js';
 import {
   detectAnchoring,
@@ -339,6 +340,8 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
 }
 
 export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
+  // The tool has no way to name the caller's project yet, and the store's folder or the daemon's cwd is no caller's.
+  if (isSharedStore(hippoRoot)) return 'hippo_context needs a project on a shared store; use hippo_recall';
   const budget = args.budget === undefined
     ? config.defaultContextBudget
     : Number(args.budget);

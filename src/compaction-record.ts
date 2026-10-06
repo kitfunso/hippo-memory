@@ -4,11 +4,11 @@ import * as path from 'path';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
-import { loadConfig } from './config.js';
+import { isSharedStore, loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
-import { isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
+import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
@@ -71,11 +71,16 @@ interface CompactionRow {
 
 export type Log = (message: string) => void;
 
-/** Where the session ran: rows written through the global store keep the project the session was in. */
+/** Where the session ran: rows written through the global store or a shared store keep the project the session was in. */
 function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
-  if (!isGlobalStoreRoot(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
+  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
   return cwd === null ? '' : resolveProjectIdentity(cwd);
+}
+
+/** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as user-global. */
+function itemOrigin(hippoRoot: string, ctx: ItemContext): string | null {
+  return ctx.cwd === null && isSharedStore(hippoRoot) ? fallbackOrigin(hippoRoot) : ctx.originProject;
 }
 
 function compactionOrigin(hippoRoot: string, cwd: string | null): string {
@@ -290,7 +295,7 @@ interface ItemWrites {
   restated: string[];
 }
 
-function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: number): MemoryEntry {
+function compactionEntry(text: string, ctx: ItemContext, origin: string | null, baseHalfLifeDays: number): MemoryEntry {
   return {
     ...createMemory(text, {
       layer: Layer.Episodic,
@@ -302,7 +307,7 @@ function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: numbe
       tenantId: ctx.tenantId,
       baseHalfLifeDays,
     }),
-    origin_project: ctx.originProject,
+    origin_project: origin,
   };
 }
 
@@ -310,6 +315,7 @@ function compactionEntry(text: string, ctx: ItemContext, baseHalfLifeDays: numbe
 function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
   const held = heldRows(db, ctx.tenantId, heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
+  const origin = itemOrigin(hippoRoot, ctx);
   const restated = new Set<string>();
   for (const text of rows) {
     const itemWords = words(text);
@@ -324,7 +330,7 @@ function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext
       out.refused++;
       continue;
     }
-    const entry = compactionEntry(text, ctx, baseHalfLifeDays);
+    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
     if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
       out.written.push(entry);
       held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });

@@ -87,7 +87,7 @@ export function syncFtsIndex(hippoRoot: string, dryRun: boolean, result: Consoli
   }
 }
 
-/** State every sleep stage reads or appends to; the pending lists are flushed in one transaction at the end. */
+/** State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one transaction. */
 export interface SleepRun {
   hippoRoot: string;
   now: Date;
@@ -102,6 +102,7 @@ export interface SleepRun {
   pendingWrites: MemoryEntry[];
   pendingDeletes: string[];
   pendingDormant: DormantMove[];
+  units: string[][];
 }
 
 export function newConsolidationResult(dryRun: boolean): ConsolidationResult {

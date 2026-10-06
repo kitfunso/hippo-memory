@@ -195,6 +195,8 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 
 ### src/consolidate/sleep.ts
 - `auditRescues`: Review-round F5: per-row try/catch, not one try/catch around the whole loop — a single failed appendAuditEvent must not silently drop every remaining row. Mirrors the physics pass's skipped-warning precedent: count losses, keep the overall fail-soft posture, tell the operator via details.
+- `expireDormant`: E8b lock-hold check (2026-10-05, enterprise worker under server load, 20,000 memories): after the flush was chunked, the one span over 200 ms in every run was `DELETE FROM dormant_memories WHERE dormant_at < ?`, which held the write lock 311 to 973 ms while deleting nothing, and one `/v1/context` answered 503 inside it. On a copy of a post-sleep store with 5,743 dormant rows the DELETE took 272 ms and a SELECT with the same filter, which reads the covering time index, 0.2 ms. The keys now come from that read and the deletes run in budgeted transactions.
+- `commitInChunks`: same check: chunk holds creep through a 20,000-memory sleep, a median of 112 ms in the first half and 173 ms in the second, a few at 200 to 208 ms inside the worker; an outside prober saw at most 190 ms. Not chased; the margin under 200 ms is thin on bigger stores.
 
 ### src/consolidate/traces.ts
 - `sessionTrace`: T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME tenant the traceExistsForSession idempotency check (above) runs under. Before this, createMemory omitted tenantId and the trace always landed 'default' (memory.ts:535) while the idempotency check ran under consolidationTenant — for any non-default tenant that check never hit, and the trace regenerated every sleep.

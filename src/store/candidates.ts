@@ -23,14 +23,53 @@ export const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY c
 export const AMBIENT_DRIFT_SQL =
   `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
 
-// The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient
-// injection. One connection; `recall` piggybacks the prompt-recall FTS query on it too.
+/** The origins a caller's recent rows may carry: its project names, and user-global ('') rows when `userGlobal`. */
+export interface RecentOrigins {
+  readonly names: readonly string[];
+  readonly userGlobal: boolean;
+}
+
+type RunSql = (where: string, params: Array<string | number>) => MemoryEntry[];
+
+function inOrigins(e: MemoryEntry, origins: RecentOrigins): boolean {
+  const origin = e.origin_project ?? null;
+  return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
+}
+
+// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the
+// delivery ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
+function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, needed: number, admit: (e: MemoryEntry) => boolean, origins?: RecentOrigins): MemoryEntry[] {
+  const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
+  // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
+  // cross-ingest-stable order: that would change what the hook injects.
+  const newest = 'ORDER BY created DESC, id DESC';
+  const window = Math.max(needed * 4, 32);
+  const originSql = origins && (origins.userGlobal ? `(origin_project = '' OR ${originInSql(origins.names)})` : originInSql(origins.names));
+  const ownWhere = originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED;
+  const ownParams = [tenantId, ...(origins?.names ?? [])];
+  if (!drifted) {
+    const windowed = run(`${AMBIENT_SCOPED} ${newest} LIMIT ?`, [tenantId, window]);
+    const kept = windowed.filter(keep);
+    if (kept.length >= needed || windowed.length < window) return kept;
+    if (origins) {
+      const ownWindow = run(`${ownWhere} ${newest} LIMIT ?`, [...ownParams, window]);
+      const ownKept = ownWindow.filter(keep);
+      if (ownKept.length >= needed || ownWindow.length < window) return ownKept;
+    }
+  }
+  // Text order is chronological only for standard UTC ISO (memory.ts), and a window of junk can hide older rows.
+  return run(`${ownWhere} ${newest}`, ownParams).filter(keep);
+}
+
+// The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient injection. One connection;
+// `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the recent rows past the first window.
 export function loadAmbientCandidates(
   hippoRoot: string,
   tenantId: string,
   recentNeeded: number,
   admit: (e: MemoryEntry) => boolean,
   recall?: AmbientRecallRequest,
+  origins?: RecentOrigins,
 ): AmbientLoadResult {
   // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
   // and include_recent is any non-negative finite number at the HTTP edge.
@@ -38,31 +77,19 @@ export function loadAmbientCandidates(
   const db = openStore(hippoRoot);
   try {
     // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
-    const run = (where: string, params: Array<string | number>): MemoryEntry[] =>
+    const run: RunSql = (where, params) =>
       (db.prepare(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`,
       ).all(...params) as MemoryRow[]).map(rowToEntry);
 
     const byId = new Map<string, MemoryEntry>();
-    const scoped = AMBIENT_SCOPED;
     for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
       if (admit(e)) byId.set(e.id, e);
     }
 
     if (needed > 0) {
-      // Text order is chronological only for canonical UTC ISO (memory.ts).
       const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
-      // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
-      // cross-ingest-stable order: that would change what the hook injects.
-      const window = Math.max(needed * 4, 32);
-      const windowed = drifted
-        ? []
-        : run(`${scoped} ORDER BY created DESC, id DESC LIMIT ?`, [tenantId, window]);
-      let kept = windowed.filter(admit);
-      if (drifted || (kept.length < needed && windowed.length === window)) {
-        kept = run(`${scoped} ORDER BY created DESC, id DESC`, [tenantId]).filter(admit);
-      }
-      for (const e of kept) byId.set(e.id, e);
+      for (const e of loadRecentRows(run, drifted, tenantId, needed, admit, origins)) byId.set(e.id, e);
     }
 
     // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
@@ -158,20 +185,24 @@ export function loadStrengthRows(hippoRoot: string, tenantId: string): StrengthR
   }
 }
 
-/** Text and source of tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word. */
-export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words: readonly string[]): Array<Pick<MemoryEntry, 'content' | 'source'>> {
+export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
+
+/** Text, source and origin of tenant rows holding any of `words`; a row equal to a text apart from spacing holds its every word.
+ *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. */
+export function loadTextsHoldingWords(hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[]): HeldText[] {
   const unique = [...new Set(words)];
-  const out: Array<Pick<MemoryEntry, 'content' | 'source'>> = [];
+  const out: HeldText[] = [];
+  const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
   const db = openStore(hippoRoot);
   try {
     // Chunked so one statement stays far under SQLite's bound-parameter limit.
     for (let i = 0; i < unique.length; i += 200) {
       const chunk = unique.slice(i, i + 200);
-      // SAFETY: rows' shape matches the two columns named in the SELECT below.
+      // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source FROM memories WHERE tenant_id = ? AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
-      ).all(tenantId, ...chunk) as Array<{ content: string; source: string | null }>;
-      for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli' });
+        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+      ).all(tenantId, ...(project ?? []), ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
+      for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;
   } finally {

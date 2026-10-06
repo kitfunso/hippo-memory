@@ -79,6 +79,21 @@ export function contextLine(
   return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
 }
 
+/** A memory block as printed: the heading, then one line per item. */
+export function contextBlockLines(
+  items: ReadonlyArray<{ entry: MemoryEntry; isGlobal: boolean }>,
+  totalTokens: number,
+  framing: string,
+  opts: { showStrength?: boolean; heading?: string } = {},
+): string[] {
+  const now = evalNow();
+  const showStrength = opts.showStrength !== false;
+  return [
+    contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens),
+    ...items.map((item) => contextLine(item, framing, showStrength, now)),
+  ];
+}
+
 export function crossProjectHeading(entries: number): string {
   return `\n## Other-project memory (explicitly requested, ${entries} entries)\n`;
 }
@@ -87,6 +102,11 @@ export function crossProjectLine(item: Pick<ContextResultEntry, 'entry' | 'origi
   const originLabel = item.origin === null || item.origin === '' ? 'unknown-origin' : item.origin;
   const tagStr = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
   return `- **[${originLabel}]** ${item.entry.content}${tagStr}`;
+}
+
+/** An explicit header lets agents and humans tell borrowed context from project memory; no items print nothing. */
+export function crossProjectLines(items: ReadonlyArray<Pick<ContextResultEntry, 'entry' | 'origin'>>): string[] {
+  return items.length === 0 ? [] : [crossProjectHeading(items.length), ...items.map((item) => crossProjectLine(item))];
 }
 
 /** A header's token figure is part of the text it counts, so render until the figure matches the text. */

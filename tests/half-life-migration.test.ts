@@ -163,6 +163,30 @@ describe('default half-life migration', () => {
     expect(result.details.join('\n')).not.toMatch(/half-life/);
     expect([...byContent(root).values()][0]).toBeLessThan(20);
   });
+
+  // The migration holds the write lock throughout, so its audit record must grow with the store, not with its square.
+  it('moves 10,000 memories in under two seconds', () => {
+    const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: pragma_table_info yields one row per column with its name.
+      const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]).map((c) => c.name);
+      db.exec(`
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
+        INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
+      `);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const started = performance.now();
+    const r = migrateDefaultHalfLife(root, 365);
+    const elapsed = performance.now() - started;
+
+    expect(r).toMatchObject({ from: 7, to: 365, rescaled: 10_000 });
+    expect(migrateAudits(root)[0]).toHaveProperty('ids.length', 10_000);
+    expect(elapsed).toBeLessThan(2_000);
+  }, 120_000);
 });
 
 /** Rewrites memory `id` as a typed writer pinned it before it took the default: 90 days plus 2 per recall. */
