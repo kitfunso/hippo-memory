@@ -78,13 +78,15 @@ describe('hippo_remember personal over HTTP MCP', () => {
   });
 
   // Needs lane A's read sites (the owner's own scope admitted on recall); red on lane B alone.
-  it('hippo_recall by the same key finds it, and another owner\'s key does not', async () => {
+  it('hippo_recall by the same key finds it, and another owner\'s key finds only the team row', async () => {
     await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
+    await callTool(keyB, 'hippo_remember', { text: 'quartzlamp: the team deploy script lives in ops' });
     const own = await callTool(keyA, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
-    expect(own.result?.content[0]?.text).toContain('quartzlamp');
-    const other = await callTool(keyB, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
-    expect(JSON.stringify(other)).not.toContain('quartzlamp');
-    const admin = await callTool(keyAdmin, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
-    expect(JSON.stringify(admin)).not.toContain('quartzlamp');
+    expect(own.result?.content[0]?.text).toContain('my own shell alias');
+    for (const key of [keyB, keyAdmin]) {
+      const other = await callTool(key, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
+      expect(other.result?.content[0]?.text).toContain('the team deploy script');
+      expect(JSON.stringify(other)).not.toContain('my own shell alias');
+    }
   });
 });
