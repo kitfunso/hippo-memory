@@ -1,3 +1,0 @@
-### Changed
-
-- **After an upgrade, hippo runs `hippo audit repair --apply` once on each store, so old junk is cleaned with no command.** `hippo sleep` does it for a project store and the daily runner for the global store. It writes a database backup first, moves only automatic memories with a certain defect to dormant storage, keeps every memory a person wrote, and prints how many it moved with the command that brings one back (`hippo dormant restore <id>`). Memories it is unsure about are kept and counted. A dry run never does it, a store is marked done only after a run that worked, and a failed run warns and tries again at the next sleep.

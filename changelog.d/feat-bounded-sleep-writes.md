@@ -1,3 +1,0 @@
-### Fixed
-
-- **A sleep no longer holds the store's write lock for seconds at a time, so a `hippo remember`, a hook or a server request made during a nightly run goes through.** Sleep wrote its whole consolidation in one transaction: 8.7 s at 6,000 memories and 103 s at 20,000, and a server answered 503 to every write in that time. It now commits in short steps of about a tenth of a second and lets waiting writers in between. A run that is killed keeps the steps it finished, and the next run does the rest. Dormant memories past `dormant.retentionDays` are deleted in the same short steps, and a sleep with none to delete takes no lock for them. The one longer step is the half-life migration, about half a second, once, when the default half-life changes.
