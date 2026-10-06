@@ -56,7 +56,11 @@ if (tags.size === 0) fail('no git tags in this checkout, so no floor can be chec
 
 for (const { name, schema, floor } of floors) {
   const tag = `v${floor}`;
-  if (!tags.has(tag)) continue;
+  // An untagged floor can only be the release being cut; any other untagged version was never checked against a schema.
+  if (!tags.has(tag)) {
+    if (floor !== packageVersion) fail(`${name} ${floor} names no release tag and is not the package version ${packageVersion}.`);
+    continue;
+  }
   const index = git('show', `${tag}:${MIGRATIONS_INDEX}`);
   if (index.status !== 0 || !new RegExp(`\\bv${schema}\\b`).test(index.stdout)) fail(`release ${tag} does not ship schema v${schema}, so it cannot be ${name}.`);
 }

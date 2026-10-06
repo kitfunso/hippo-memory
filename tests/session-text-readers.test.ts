@@ -23,7 +23,8 @@ const tmp = (): string => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  // Retries: a killed git's sleeping hook still holds its repo as cwd for a moment on Windows.
+  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 100 });
 });
 
 function git(cwd: string, ...args: string[]): void {
@@ -67,5 +68,19 @@ describe('collectHandoffEvidence', () => {
     const dir = tmp();
     vi.stubEnv('GIT_CEILING_DIRECTORIES', path.dirname(dir));
     expect(collectHandoffEvidence(dir, 'unknown')).toEqual({ gitRef: null, dirtyTree: null, testStatus: 'unknown' });
+  });
+
+  it('gives up on a slow git call at timeoutMs instead of the 2 s default', () => {
+    const repo = tmp();
+    git(repo, 'init', '-q');
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
+    // An fsmonitor hook that sleeps makes `git status` slow, as a huge tree or a cold network drive does.
+    const hook = path.join(tmp(), 'slow-fsmonitor.sh');
+    fs.writeFileSync(hook, '#!/bin/sh\nsleep 3\n', { mode: 0o755 });
+    git(repo, 'config', 'core.fsmonitor', hook.replace(/\\/g, '/'));
+    const started = Date.now();
+    const evidence = collectHandoffEvidence(repo, 'unknown', { timeoutMs: 300 });
+    expect(Date.now() - started).toBeLessThan(1500);
+    expect(evidence).toEqual({ gitRef: expect.stringMatching(/^[0-9a-f]{40}$/), dirtyTree: null, testStatus: 'unknown' });
   });
 });

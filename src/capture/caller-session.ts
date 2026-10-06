@@ -9,7 +9,7 @@ import { assertCallerProject, projectNames } from '../project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
 import { bindSessionOwner } from '../session-owners.js';
 import type { ContinuityKey } from '../store/sessions.js';
-import { WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
+import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
 
 /** Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns the key the call's rows go under. */
 export function bindCaller(ctx: Context, sessionId: string, project: CallerProject): ContinuityKey {
@@ -26,7 +26,7 @@ export function callerInHoldout(ctx: Context, sessionId: string): boolean {
   return sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { sharedStore: true, ownTenantOnly: true }) === 'holdout';
 }
 
-/** Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the caller's scrub is not trusted. */
+/** Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the caller's scrub is not trusted, then cut back to the cap. */
 export function checkedWorkingState(state: WorkingState | null): WorkingState | null {
   if (state === null) return null;
   for (const field of ['task', 'summary', 'next_step'] as const) {
@@ -34,7 +34,7 @@ export function checkedWorkingState(state: WorkingState | null): WorkingState | 
     if (state[field].length > cap) throw new BadRequestError(`working state ${field}: at most ${cap} characters`);
   }
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
-  return { task: scrub(state.task), summary: scrub(state.summary), next_step: scrub(state.next_step) };
+  return fitWorkingState({ task: scrub(state.task), summary: scrub(state.summary), next_step: scrub(state.next_step) });
 }
 
 export function assertTrigger(trigger: string | null): void {

@@ -6,6 +6,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { recordFailure } from '../src/failure-log.js';
 import type { SessionHandoff } from '../src/handoff.js';
 import {
+  clearActiveTaskSnapshot,
   closeTaskSnapshotsForSession,
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
@@ -115,6 +116,18 @@ describe('task snapshots keyed by owner and project', () => {
     expect(existsSync(mirror())).toBe(true);
     saveSessionHandoff(home, T, handoff('local'));
     expect(handoffRows('s1')).toEqual([{ summary: 'local', owner_subject: null, origin_project: null }]);
+  });
+
+  it('on a shared store an unkeyed save or clear throws and every owner\'s snapshot stays active', () => {
+    rmSync(home, { recursive: true, force: true });
+    home = makeRoot('owner-task-state-shared', { config: { sharedStore: true } });
+    const a = saveActiveTaskSnapshot(home, T, snap('a'), A);
+    const b = saveActiveTaskSnapshot(home, T, snap('b'), B);
+    expect(() => saveActiveTaskSnapshot(home, T, snap('admin'))).toThrow(/needs their continuity key/);
+    expect(() => clearActiveTaskSnapshot(home, T)).toThrow(/needs their continuity key/);
+    expect([statusOf(a.id), statusOf(b.id)]).toEqual(['active', 'active']);
+    // SAFETY: COUNT(*) returns one row with one integer column.
+    expect(withDb((db) => (db.prepare(`SELECT COUNT(*) AS n FROM task_snapshots`).get() as { n: number }).n)).toBe(2);
   });
 
   it('owner calls write and delete no mirror', () => {
