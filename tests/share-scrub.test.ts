@@ -143,8 +143,8 @@ describe('scrubForSharing on hostile input', () => {
     ...UNITS.map((unit) => [JSON.stringify(unit), fill(unit)] as const),
     ['a@ then a long a. run', `a@${fill('a.')}`.slice(0, SIZE)] as const,
     ['long names that end in a keyword', fill(`${'a_'.repeat(1024)}password=`)] as const,
-  ])('scrubs 64 KiB of %s within 5x the time of prose', (_name, text) => {
-    // A ratio to prose holds on any runner speed, and a backtracking pattern costs hundreds of times prose at this size.
-    expect(costOverProse(text)).toBeLessThan(5);
+  ])('scrubs 64 KiB of %s within 25x the time of prose', (_name, text) => {
+    // A backtracking pattern costs hundreds of times prose at this size; dense matches alone reach 7x on shared macOS runners.
+    expect(costOverProse(text)).toBeLessThan(25);
   });
 });
