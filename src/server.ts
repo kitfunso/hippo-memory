@@ -11,7 +11,7 @@ import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { type Actor, authRevoke, type Context, RecallContractError } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
+import { BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
 import { isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
@@ -350,9 +350,9 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     sendJson(res, 400, { error: err.message, code: err.code });
     return;
   }
+  // readBody hit the 1 MB cap mid-stream, so close once the 413 is out rather than drain unbounded bytes.
+  if (err instanceof BodyTooLargeError) res.once('finish', () => closeAfterReply(req));
   sendError(res, mapped.status, mapped.message);
-  // readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
-  if (err instanceof BodyTooLargeError) req.destroy();
 }
 
 function setKeepAliveTimeouts(server: Server): void {

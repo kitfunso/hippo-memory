@@ -18,6 +18,9 @@ export function isHeaderString(value: string | string[] | undefined): value is s
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.
 const MAX_BODY_BYTES = 1024 * 1024;
 
+// How long a refused upload is still read and discarded after its reply, so a client that never stops cannot hold the socket.
+const REFUSED_UPLOAD_LINGER_MS = 2000;
+
 // Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values, small enough to bound logs and indexes.
 export const MAX_ID_LEN = 256;
 
@@ -58,20 +61,35 @@ export function sendJson<T>(res: ServerResponse, status: number, body: T): void 
  * a malicious or buggy client from exhausting memory. The cap is enforced
  * mid-stream so we don't wait for an attacker to finish before erroring out.
  */
-export async function readBody(req: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of req) {
-    // SAFETY: IncomingMessage never runs setEncoding() here, so every
-    // streamed chunk is a Buffer, not a decoded string.
-    const buf = chunk as Buffer;
-    total += buf.length;
-    if (total > MAX_BODY_BYTES) {
-      throw new BodyTooLargeError('request body exceeds 1MB');
-    }
-    chunks.push(buf);
-  }
-  return Buffer.concat(chunks).toString('utf8');
+export function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    // Not for-await: leaving that loop early destroys the request, so the socket stops reading and the 413 caller cannot close it cleanly.
+    const onData = (chunk: Buffer): void => {
+      total += chunk.length;
+      if (total <= MAX_BODY_BYTES) {
+        chunks.push(chunk);
+        return;
+      }
+      req.off('data', onData);
+      chunks.length = 0;
+      reject(new BodyTooLargeError('request body exceeds 1MB'));
+    };
+    req.on('data', onData);
+    req.once('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+// A full close with request bytes unread sends a TCP reset, which discards the reply before the client reads it (RFC 9112 9.6).
+export function closeAfterReply(req: IncomingMessage): void {
+  const socket = req.socket;
+  req.resume();
+  socket.end();
+  const timer = setTimeout(() => socket.destroy(), REFUSED_UPLOAD_LINGER_MS);
+  timer.unref();
+  socket.once('close', () => clearTimeout(timer));
 }
 
 // Any other Host on a loopback socket is DNS rebinding: a hostile page resolved to 127.0.0.1.
