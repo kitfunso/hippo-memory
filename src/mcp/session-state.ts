@@ -20,7 +20,20 @@ export function __resetSessionRecallHistoryMcp(): void {
 // back to `'stdio-${pid}'` (one process = one client) or
 // `${tenantId}:default` if a McpContext is constructed in tests without a
 // pid-bound transport.
-export const lastRecalledIds = new Map<string, string[]>();
+export const MAX_RECALL_CLIENTS = 4096;
+
+// The caller names the project half of each key, so a set past the cap drops the client that recalled longest ago.
+class RecentRecalls extends Map<string, string[]> {
+  override set(key: string, ids: string[]): this {
+    this.delete(key);
+    super.set(key, ids);
+    const oldest = this.keys().next().value;
+    if (this.size > MAX_RECALL_CLIENTS && oldest !== undefined) this.delete(oldest);
+    return this;
+  }
+}
+
+export const lastRecalledIds: Map<string, string[]> = new RecentRecalls();
 export const autoSleepInFlight = new Set<string>();
 
 export function resolveClientKey(ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined): string {
