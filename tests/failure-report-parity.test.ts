@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { captureToolFailure } from '../src/capture-error.js';
-import { failureHash, failureReport } from '../src/capture/failure-reading.js';
+import { failureHash, failureReport, lessonFromFailure } from '../src/capture/failure-reading.js';
 import type { JsonValue } from '../src/json.js';
 
 interface LogRow {
@@ -72,5 +72,15 @@ describe('failureReport', () => {
     expect(report.text!.length).toBe(200);
     expect(Object.keys(report).sort()).toEqual(['detail_hash', 'rule', 'skip', 'text', 'tool']);
     expect(JSON.stringify(report)).not.toContain(LONG_TAIL);
+  });
+
+  it('scrubs the text for sharing before it cuts it, so a mask longer than what it hides still fits in 200', () => {
+    const error = `mail to a@b.co and /root/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`;
+    const report = failureReport({ tool_name: 'Bash', error });
+    expect(report.text).toBe(`Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(0, 200));
+    // Only what leaves the machine is masked: the local reading and the detail hash are as before.
+    expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toContain('a@b.co');
+    captureToolFailure(root, 'default', { tool_name: 'Bash', error });
+    expect(report.detail_hash).toBe(logRows()[0]?.detail_hash);
   });
 });

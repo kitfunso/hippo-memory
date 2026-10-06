@@ -5,6 +5,7 @@ import { storeLesson } from '../capture-error.js';
 import { recordFailure, requestOutcome, settleFailureOutcome, type FailureOutcome } from '../failure-log.js';
 import { errorMessage, log } from '../log.js';
 import type { CallerProject } from '../prompt-hook.js';
+import { scrubForSharing } from '../share-scrub.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { assertRequestId, bindCaller, withCallerDb } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash, type CaptureErrorOutcome, type RoutineRule } from './failure-reading.js';
@@ -47,7 +48,8 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   }
   if (skip === 'skipped-interrupt' || skip === 'skipped-invalid') throw new BadRequestError('text: null for an interrupt or an unreadable failure');
   if (text.length > FAILURE_TEXT_MAX_CHARS) throw new BadRequestError(`text: at most ${FAILURE_TEXT_MAX_CHARS} characters`);
-  return { skip, text };
+  // Scrubbed again, as the caller's scrub is not trusted, and cut after it, as a mask can be longer than what it hides.
+  return { skip, text: scrubForSharing(text).slice(0, FAILURE_TEXT_MAX_CHARS) };
 }
 
 export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): CallerFailureResult {
@@ -63,7 +65,8 @@ export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest)
     logged = outcome;
     return { outcome };
   } finally {
-    logOutcome(ctx, req, key, logged, earlier !== null);
+    // The hash is of the text as stored, so a repeat counts against the lesson it repeats.
+    logOutcome(ctx, { ...req, text: failure.text }, key, logged, earlier !== null);
   }
 }
 
