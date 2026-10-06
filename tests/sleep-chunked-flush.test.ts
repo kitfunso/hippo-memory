@@ -336,7 +336,9 @@ describe('chunked consolidation flush', () => {
 
     const [audit] = onStore(fx.root, (db) => queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
     expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(bad) });
-    expect((audit?.metadata as { nextUnitIds: string[] }).nextUnitIds).not.toContain(fx.clusters[0]![0]);
+    // SAFETY: consolidate writes nextUnitIds into the partial audit metadata as an array of unit ids.
+    const meta = audit?.metadata as { nextUnitIds: string[] } | undefined;
+    expect(meta?.nextUnitIds).not.toContain(fx.clusters[0]![0]);
   }, 60_000);
 
   it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
