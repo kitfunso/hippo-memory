@@ -255,7 +255,7 @@ export const COMMANDS = {
     usage: VERB_USAGE.sleep,
   },
   'last-sleep': {
-    run: async ({ flags }) => { (await import('./cli/session-hooks.js')).cmdLastSleep(flags); },
+    run: async ({ hippoRoot, flags }) => { (await import('./cli/last-sleep.js')).cmdLastSleep(hippoRoot, flags); },
     usage: VERB_USAGE['last-sleep'],
   },
   'session-end': {

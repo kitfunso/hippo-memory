@@ -3,7 +3,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { defaultSleepLogPath } from '../hooks/shared.js';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
 import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
 import { SessionEvent } from '../store/rows.js';
@@ -39,6 +38,7 @@ import { readStdinBounded } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
 import { printError } from './output.js';
+import { cmdLastSleep } from './last-sleep.js';
 import {
   type CommandContext,
   collectHandoffEvidence,
@@ -54,35 +54,6 @@ import {
   inPilotHoldout,
 } from './shared.js';
 import type { JsonValue } from '../json.js';
-
-/** Prints the SessionEnd sleep log, then clears it. Stderr, because Claude Code adds
- *  SessionStart stdout to the model's context and this log is for the user. */
-export function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void {
-  const logPath = typeof flags['path'] === 'string'
-    ? (flags['path'] as string)
-    : defaultSleepLogPath();
-
-  if (!fs.existsSync(logPath)) return;
-
-  let content: string;
-  try {
-    content = fs.readFileSync(logPath, 'utf8');
-  } catch {
-    // Removed or locked since the exists check: there is nothing to show this session.
-    return;
-  }
-
-  if (content.trim().length > 0) {
-    printError('=== Previous session hippo consolidation ===');
-    process.stderr.write(content);
-    if (!content.endsWith('\n')) printError();
-    printError('===========================================');
-  }
-
-  if (!flags['keep']) {
-    try { fs.unlinkSync(logPath); } catch { /* non-fatal */ }
-  }
-}
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent
@@ -472,7 +443,7 @@ export function cmdCodexRun(
   const startOffsetBytes = fs.existsSync(historyPath) ? fs.statSync(historyPath).size : 0;
 
   try {
-    cmdLastSleep({ path: metadata.logFile });
+    cmdLastSleep(hippoRoot, { path: metadata.logFile }, 'terminal');
   } catch {
     // best-effort only
   }
