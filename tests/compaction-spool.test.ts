@@ -98,6 +98,15 @@ describe('one replayer at a time', () => {
     expect(fs.readdirSync(spoolDir())).toEqual([]);
   });
 
+  it('a lock dated 20 minutes ahead is taken over', () => {
+    put(`${A}.a0.json`, 's1');
+    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now() + 20 * MINUTE, token: 'future' }));
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
   it('judges an unparsable lock by its mtime', () => {
     put(`${A}.a0.json`, 's1');
     fs.writeFileSync(lockFile(), '{"pid": 42');
@@ -133,6 +142,15 @@ describe('one replayer at a time', () => {
     expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
     expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a1.json`, live]);
     expect(logs).toContain(`spool file ${stale} was claimed by a replayer that never finished, put back (try 1 of 3)`);
+  });
+
+  it('recovery leaves a claim fresh by name whose mtime is an hour old', () => {
+    const live = `${A}.a0.claim-${stamp(Date.now())}`;
+    const old = new Date(Date.now() - 60 * MINUTE);
+    fs.utimesSync(put(live, 's1'), old, old);
+    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([live]);
+    expect(logs).toEqual([]);
   });
 
   it('a second replayer never recovers a live claim', () => {
