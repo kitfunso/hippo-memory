@@ -15,6 +15,7 @@ import { markSnapshotSaved, PRE_COMPACT_INSTRUCTION, recordSnapshotSaved, record
 import { captureToolFailure, storeLesson } from '../src/capture-error.js';
 import { failureHash, failureReport } from '../src/capture/failure-reading.js';
 import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
+import { COMPACTION_ITEM_MAX_CHARS } from '../src/compaction-items.js';
 import { compactResumeText } from '../src/context-render.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../src/api-errors.js';
@@ -295,6 +296,18 @@ describe('preCompactForCaller', () => {
     expect(preCompact(owned('alice'), { ...STATE, summary: summary.slice(1) })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
   });
 
+  it('cuts each field back to its cap after the scrub, the summary keeping its newest turns', () => {
+    // a@b.co masks to [email], one longer, so a field sent at its cap runs one over after the scrub.
+    const atCap = (cap: number, tail: string): string => `Mail a@b.co first. ${'Then run the build. '.repeat(120)}`.slice(0, cap - tail.length) + tail;
+    preCompact(owned('alice'), { task: atCap(WORKING_STATE_CAPS.task, 'T'), summary: atCap(WORKING_STATE_CAPS.summary, 'NEWEST'), next_step: atCap(WORKING_STATE_CAPS.next_step, 'N') });
+    const saved = loadActiveTaskSnapshot(root, TENANT, ALICE);
+    expect(saved?.task).toHaveLength(WORKING_STATE_CAPS.task);
+    expect(saved?.task.startsWith('Mail [email] first.')).toBe(true);
+    expect(saved?.next_step).toHaveLength(WORKING_STATE_CAPS.next_step);
+    expect(saved?.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
+    expect(saved?.summary.endsWith('NEWEST')).toBe(true);
+  });
+
   it('a snapshot failure still returns the instruction', () => {
     failOn('task_snapshots', 'INSERT', 'snapshot boom');
     expect(preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
@@ -398,6 +411,23 @@ describe('saveCompactionItemsForCaller', () => {
     });
   });
 
+  it('cuts an item back to its cap after the scrub, so one a mask runs past the cap still becomes a row', () => {
+    const item = `Mail a@b.co before the deploy. ${ITEMS.join(' ')} ${ITEMS.join(' ')} ${ITEMS.join(' ')}`.slice(0, COMPACTION_ITEM_MAX_CHARS);
+    expect(item).toHaveLength(COMPACTION_ITEM_MAX_CHARS);
+    const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: [item], requestId: 'cmp-1' };
+    expect(saveCompactionItemsForCaller(owned('alice'), req)).toEqual({ written: 1 });
+    const stored = item.replace('a@b.co', '[email]').slice(0, COMPACTION_ITEM_MAX_CHARS);
+    withDb((db) => expect(writtenRows(db, 'compaction:sA').map((r) => r.content)).toEqual([stored]));
+  });
+
+  it('refuses an item past its cap before the scrub, naming the field, before it binds the session', () => {
+    const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ['x'.repeat(COMPACTION_ITEM_MAX_CHARS + 1)], requestId: 'cmp-1' };
+    const err = thrown(() => saveCompactionItemsForCaller(owned('alice'), req));
+    expect(err).toBeInstanceOf(BadRequestError);
+    expect(err).toMatchObject({ status: 400, message: expect.stringMatching(/^items:/) });
+    withDb((db) => expect(count(db, 'session_owners')).toBe(0));
+  });
+
   it('busy throws, no spool file', () => {
     bindSessionOwner(owned('alice'), 'sA');
     const err = whileLocked(() => thrown(() => postCompact(owned('alice'))));
@@ -475,6 +505,15 @@ describe('captureFailureForCaller', () => {
       expect(row?.content).toBe(`Bash: mail to [email] failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200));
       expect(failureRows(db)[0]?.sig_hash).toBe(failureHash(row?.content ?? ''));
     });
+  });
+
+  it('cuts the scrubbed text on a code point, never inside a surrogate pair', () => {
+    // 200 sent; the mask adds one, so the emoji's halves land at 199 and 200 of the scrubbed text.
+    const filler = 'Retry the deploy. '.repeat(10).slice(0, 169);
+    const text = `Bash: mail to a@b.co failed. ${filler}\u{1F600}`;
+    expect(text).toHaveLength(200);
+    expect(captureFailureForCaller(owned('alice'), failure({ text })).outcome).toBe('stored');
+    withDb((db) => expect(writtenRows(db, 'tool-failure')[0]?.content).toBe(`Bash: mail to [email] failed. ${filler}`));
   });
 
   it('log error never masks a store error', () => {

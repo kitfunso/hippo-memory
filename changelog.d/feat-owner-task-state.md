@@ -14,5 +14,5 @@
 
 ### Fixed
 
-- **A failure text is cut to 200 characters after the sharing scrub, not before.** A mask can be longer than what it hides, so the old order could push the text past the limit. `failureReport` now scrubs and then cuts, and `captureFailureForCaller` scrubs and cuts again.
+- **A failure text is cut to 200 characters after the sharing scrub, not before.** A mask can be longer than what it hides, so the old order could push the text past the limit. `failureReport` now scrubs and then cuts, and `captureFailureForCaller` scrubs and cuts again. The cut never splits an emoji or other character outside the Basic Multilingual Plane. A caller's working state and compaction items are cut back to their caps after the server's scrub in the same way, and an item sent past 500 characters is refused.
 - **The per-prompt hook shows the task snapshot and handoff when no memory is picked.** Before, a prompt that matched no memory, with nothing pinned, printed nothing, and the snapshot and handoff were dropped with it. Since prompt recall became the default, any such prompt hit this. Turning off `pinnedInject` still prints nothing.

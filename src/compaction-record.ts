@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConflictError } from './api-errors.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
-import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
+import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { isSharedStore, loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
@@ -113,9 +113,9 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   return { summary: truncateCodePointSafe(scrub(body), SUMMARY_MAX_CHARS), items: parsed.items.map(scrub), found: parsed.found };
 }
 
-/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted. */
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted; cut after it, as a mask can run longer than what it hides. */
 export function scrubCompactionItems(items: readonly string[]): string[] {
-  return items.map(scrub);
+  return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
 }
 
 function toRecord(row: CompactionRow): CompactionRecord {

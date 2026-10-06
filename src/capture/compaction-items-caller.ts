@@ -1,5 +1,7 @@
 // PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a retried request id writes nothing twice.
+import { BadRequestError } from '../api-errors.js';
 import type { Context } from '../api/types.js';
+import { COMPACTION_ITEM_MAX_CHARS } from '../compaction-items.js';
 import { compactionByRequest, recordSummary, saveItems, scrubCompactionItems } from '../compaction-record.js';
 import { log } from '../log.js';
 import type { CallerProject } from '../prompt-hook.js';
@@ -22,6 +24,8 @@ export interface CallerItemsResult {
 export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsRequest): CallerItemsResult {
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
+  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's growth.
+  if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
   return withCallerDb(ctx, (db) => {

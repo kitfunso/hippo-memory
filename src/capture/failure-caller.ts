@@ -7,6 +7,7 @@ import { errorMessage, log } from '../log.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { scrubForSharing } from '../share-scrub.js';
 import type { ContinuityKey } from '../store/sessions.js';
+import { truncateCodePointSafe } from '../transcript-tail.js';
 import { assertRequestId, bindCaller, withCallerDb } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash, type CaptureErrorOutcome, type RoutineRule } from './failure-reading.js';
 
@@ -49,7 +50,7 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   if (skip === 'skipped-interrupt' || skip === 'skipped-invalid') throw new BadRequestError('text: null for an interrupt or an unreadable failure');
   if (text.length > FAILURE_TEXT_MAX_CHARS) throw new BadRequestError(`text: at most ${FAILURE_TEXT_MAX_CHARS} characters`);
   // Scrubbed again, as the caller's scrub is not trusted, and cut after it, as a mask can be longer than what it hides.
-  return { skip, text: scrubForSharing(text).slice(0, FAILURE_TEXT_MAX_CHARS) };
+  return { skip, text: truncateCodePointSafe(scrubForSharing(text), FAILURE_TEXT_MAX_CHARS) };
 }
 
 export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): CallerFailureResult {
