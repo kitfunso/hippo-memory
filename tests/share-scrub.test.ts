@@ -112,8 +112,23 @@ describe('scrubForSharing', () => {
 });
 
 describe('scrubForSharing on hostile input', () => {
-  const SIZE = 256 * 1024;
+  const SIZE = 64 * 1024;
   const fill = (unit: string): string => unit.repeat(Math.ceil(SIZE / unit.length)).slice(0, SIZE);
+  const PROSE = fill('We decided to pin pnpm in packages/api because npm rewrote the lockfile. ');
+  // The fastest of three interleaved runs of each text, so a GC pause or a busy runner weighs on both alike.
+  const costOverProse = (text: string): number => {
+    let hostile = Infinity;
+    let prose = Infinity;
+    for (let run = 0; run < 3; run++) {
+      let started = performance.now();
+      scrubForSharing(text);
+      hostile = Math.min(hostile, performance.now() - started);
+      started = performance.now();
+      scrubForSharing(PROSE);
+      prose = Math.min(prose, performance.now() - started);
+    }
+    return hostile / prose;
+  };
   // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [
     'a.', 'a-', 'a@a.a.', '%2', '%3A%5C', 'c%3A%5CUsers%5C', 'c%3A/Users/',
@@ -128,9 +143,8 @@ describe('scrubForSharing on hostile input', () => {
     ...UNITS.map((unit) => [JSON.stringify(unit), fill(unit)] as const),
     ['a@ then a long a. run', `a@${fill('a.')}`.slice(0, SIZE)] as const,
     ['long names that end in a keyword', fill(`${'a_'.repeat(1024)}password=`)] as const,
-  ])('scrubs 256 KiB of %s in under 50 ms', (_name, text) => {
-    const started = performance.now();
-    scrubForSharing(text);
-    expect(performance.now() - started).toBeLessThan(50);
+  ])('scrubs 64 KiB of %s within 5x the time of prose', (_name, text) => {
+    // A ratio to prose holds on any runner speed, and a backtracking pattern costs hundreds of times prose at this size.
+    expect(costOverProse(text)).toBeLessThan(5);
   });
 });

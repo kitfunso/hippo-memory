@@ -133,6 +133,16 @@ describe('promptHookContext', () => {
     expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({ arm: null, stdout: expected[1], staticHash });
   });
 
+  it('prints the task state when no pin or memory is there to pick, as the local hook does', async () => {
+    const dir = path.join(tmp, 'p');
+    const store = makeProject(dir);
+    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'state-only' });
+    const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
+    const out = await promptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
+    expect(out.stdout).toContain('Active Task Snapshot');
+    expect(localHook(dir, { ...payload, session_id: 'state-only-cli' })).toContain('Active Task Snapshot');
+  });
+
   it('rate 10000: books a holdout arm row and prints nothing, as the local holdout does', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     pin(store, 'PINNED: always check the rollback plan', 'p');
