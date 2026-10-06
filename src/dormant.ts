@@ -236,6 +236,7 @@ export interface DormantKey {
 
 export function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
   const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
+  // SAFETY: rows' shape matches the two columns named in the SELECT.
   return db.prepare(sql).all(cutoffIso) as DormantKey[];
 }
 

@@ -224,6 +224,7 @@ describe('dormant retention', () => {
       if (pauses++ > 0) return;
       const other = openHippoDb(home);
       try {
+        // SAFETY: the seeded table holds rows, and the SELECT returns the single id column.
         kept = (other.prepare(`SELECT id FROM dormant_memories LIMIT 1`).get() as { id: string }).id;
         other.prepare(`UPDATE dormant_memories SET dormant_at = ? WHERE id = ?`).run(new Date().toISOString(), kept);
       } finally {
