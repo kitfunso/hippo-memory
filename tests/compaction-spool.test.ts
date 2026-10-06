@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../src/compaction-record.js';
-import { __setSpoolFs, importSpool, spool, type SpoolImporter } from '../src/compaction-spool.js';
+import { __setSpoolFs, importSpool, spool, type SpoolFs, type SpoolImporter } from '../src/compaction-spool.js';
 
 let root: string;
 let logs: string[];
@@ -18,10 +18,17 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
+const MINUTE = 60_000;
 const log = (message: string): void => {
   logs.push(message);
 };
 const spoolDir = (): string => path.join(root, 'compactions-spool');
+const lockFile = (): string => path.join(spoolDir(), 'replay.lock');
+const stamp = (ms: number): string => String(ms).padStart(13, '0');
+const realFs: SpoolFs = fs;
+const withFs = (over: Partial<SpoolFs>): void => __setSpoolFs({ ...realFs, ...over });
+const fsError = (code: string): Error => Object.assign(new Error(`${code}: simulated`), { code });
+const leftToAnother = (): string[] => logs.filter((l) => l.startsWith('spool left to another replayer'));
 const payload = (sessionId: string): PostCompactPayload => ({ sessionId, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null });
 
 function put(name: string, sessionId: string): string {
@@ -31,8 +38,13 @@ function put(name: string, sessionId: string): string {
   return file;
 }
 
+interface Collector {
+  seen: string[];
+  importer: SpoolImporter;
+}
+
 /** An importer that notes each session id it is handed and finishes the file. */
-function collector(): { seen: string[]; importer: SpoolImporter } {
+function collector(): Collector {
   const seen: string[] = [];
   return { seen, importer: (spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); } };
 }
@@ -60,5 +72,142 @@ describe('spool names and order', () => {
     const summaries: string[] = [];
     expect(replay((spooled, recorded) => { summaries.push(spooled.text.summary); recorded(); })).toBe(2);
     expect(summaries.sort()).toEqual(['first', 'second']);
+  });
+});
+
+describe('one replayer at a time', () => {
+  const A = '0000000001000-aaaaaaaa';
+  const B = '0000000002000-bbbbbbbb';
+
+  it('skips the spool while another replayer holds a fresh lock', () => {
+    put(`${A}.a0.json`, 's1');
+    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'other' }));
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(0);
+    expect(seen).toEqual([]);
+    expect(JSON.parse(fs.readFileSync(lockFile(), 'utf8')).token).toBe('other');
+    expect(logs).toEqual(['spool left to another replayer (lock held by pid 4242)']);
+  });
+
+  it('takes over a lock older than 10 minutes', () => {
+    put(`${A}.a0.json`, 's1');
+    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now() - 11 * MINUTE, token: 'dead' }));
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
+  it('judges an unparsable lock by its mtime', () => {
+    put(`${A}.a0.json`, 's1');
+    fs.writeFileSync(lockFile(), '{"pid": 42');
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(0);
+    expect(leftToAnother()).toHaveLength(1);
+
+    const old = new Date(Date.now() - 11 * MINUTE);
+    fs.utimesSync(lockFile(), old, old);
+    expect(replay(importer)).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
+  it('leaves no lock behind after a run, including after an importer throw', () => {
+    put(`${A}.a0.json`, 's1');
+    put(`${B}.a0.json`, 's2');
+    const held: boolean[] = [];
+    replay((spooled, recorded) => {
+      held.push(fs.existsSync(lockFile()));
+      if (spooled.payload.sessionId === 's1') throw new Error('boom');
+      recorded();
+    });
+    expect(held).toEqual([true, true]);
+    expect(fs.existsSync(lockFile())).toBe(false);
+  });
+
+  it('puts a stale claim back with the next attempt number', () => {
+    const stale = `${A}.a0.claim-${stamp(Date.now() - 11 * MINUTE)}`;
+    const live = `${B}.a0.claim-${stamp(Date.now())}`;
+    put(stale, 's1');
+    put(live, 's2');
+    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a1.json`, live]);
+    expect(logs).toContain(`spool file ${stale} was claimed by a replayer that never finished, put back (try 1 of 3)`);
+  });
+
+  it('a second replayer never recovers a live claim', () => {
+    const file = put(`${A}.a0.json`, 's1');
+    const old = new Date(Date.now() - 11 * MINUTE);
+    fs.utimesSync(file, old, old);
+    let fired = false;
+    let nested: number | null = null;
+    withFs({
+      renameSync: (from, to) => {
+        fs.renameSync(from, to);
+        if (fired || !String(to).includes('.claim')) return;
+        fired = true;
+        nested = importSpool(root, 'default', log, Number.POSITIVE_INFINITY, collector().importer);
+      },
+    });
+    const outer = collector();
+    replay(outer.importer);
+    expect(nested).toBe(0);
+    expect(leftToAnother()).toHaveLength(1);
+    expect(outer.seen).toEqual(['s1']);
+  });
+
+  it('stops after the current file when the lock is taken over', () => {
+    put(`${A}.a0.json`, 's1');
+    put(`${B}.a0.json`, 's2');
+    const seen: string[] = [];
+    replay((spooled, recorded) => {
+      seen.push(spooled.payload.sessionId);
+      recorded();
+      fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'successor' }));
+    });
+    expect(seen).toEqual(['s1']);
+    expect(logs).toContain('spool left to another replayer (lock taken over)');
+    expect(JSON.parse(fs.readFileSync(lockFile(), 'utf8')).token).toBe('successor');
+    expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${B}.a0.json`, 'replay.lock']);
+  });
+
+  it('a lock create that hits EPERM or EBUSY skips quietly', () => {
+    put(`${A}.a0.json`, 's1');
+    for (const code of ['EPERM', 'EBUSY']) {
+      logs = [];
+      withFs({
+        writeFileSync: (file, data, options) => {
+          if (String(file).endsWith('replay.lock')) throw fsError(code);
+          fs.writeFileSync(file, data, options);
+        },
+      });
+      const { seen, importer } = collector();
+      expect(replay(importer)).toBe(0);
+      expect(seen).toEqual([]);
+      expect(logs).toHaveLength(1);
+      expect(leftToAnother()).toHaveLength(1);
+    }
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
+  });
+
+  it('a lock released between EEXIST and the read is retaken', () => {
+    put(`${A}.a0.json`, 's1');
+    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'leaving' }));
+    let released = false;
+    withFs({
+      readFileSync: (file, encoding) => {
+        if (!released && String(file).endsWith('replay.lock')) {
+          released = true;
+          fs.unlinkSync(file);
+        }
+        return fs.readFileSync(file, encoding);
+      },
+    });
+    const { seen, importer } = collector();
+    expect(replay(importer)).toBe(1);
+    expect(released).toBe(true);
+    expect(seen).toEqual(['s1']);
+    expect(logs).toEqual([]);
+    expect(fs.readdirSync(spoolDir())).toEqual([]);
   });
 });
