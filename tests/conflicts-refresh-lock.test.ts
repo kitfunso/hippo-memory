@@ -11,10 +11,20 @@ import { readConflictRefresh, replaceDetectedConflicts, writeConflictRefresh } f
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
-// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
+interface StatementProto {
+  run(...params: unknown[]): object;
+  get(...params: unknown[]): object | undefined;
+  all(...params: unknown[]): object[];
+  iterate(...params: unknown[]): Iterable<object>;
+}
+// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike, and StatementSync is what its prepare returns.
+const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: { prototype: DatabaseSyncLike };
+  StatementSync: { prototype: StatementProto };
+};
 
 const NOW = '2026-06-01T12:00:00.000Z';
+const STORE_ROWS = 2_000;
 const roots: string[] = [];
 
 afterEach(() => {
@@ -55,27 +65,49 @@ function refsOf(root: string, id: string): string | null {
 const pair = (a: number, b: number) => ({ memory_a_id: `mem_bulk_${a}`, memory_b_id: `mem_bulk_${b}`, reason: 'opposite values', score: 0.9 });
 
 describe('conflict refresh', () => {
-  it('holds the write lock under 10 ms on a 20,000-row store', () => {
-    const root = bulkStore(20_000);
-    const holds: number[] = [];
-    let begunAt = 0;
-    const exec = DatabaseSync.prototype.exec;
+  it('touches only the conflicting rows under the write lock, however large the store', () => {
+    const root = bulkStore(STORE_ROWS);
+    let locked = false;
+    let commits = 0;
+    // Statements run plus rows read while the lock is held: a count, so no runner is too slow for it.
+    let touchedUnderLock = 0;
+    const { exec } = DatabaseSync.prototype;
+    const { run, get, all, iterate } = StatementSync.prototype;
     vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       exec.call(this, sql);
-      if (sql === 'BEGIN IMMEDIATE') begunAt = performance.now();
-      if (sql === 'COMMIT' && begunAt > 0) holds.push(performance.now() - begunAt);
+      if (sql === 'BEGIN IMMEDIATE') locked = true;
+      if (sql === 'COMMIT') { locked = false; commits++; }
+    });
+    vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+      if (locked) touchedUnderLock++;
+      return run.apply(this, params);
+    });
+    vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+      if (locked) touchedUnderLock++;
+      return get.apply(this, params);
+    });
+    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+      const rows = all.apply(this, params);
+      if (locked) touchedUnderLock += rows.length;
+      return rows;
+    });
+    vi.spyOn(StatementSync.prototype, 'iterate').mockImplementation(function* (this: StatementProto, ...params: unknown[]) {
+      for (const row of iterate.apply(this, params)) {
+        if (locked) touchedUnderLock++;
+        yield row;
+      }
     });
 
     replaceDetectedConflicts(root, Array.from({ length: 10 }, (_, i) => pair(2 * i + 1, 2 * i + 2)), NOW);
     vi.restoreAllMocks();
 
-    expect(holds).toHaveLength(1);
-    // A fifth of the 50 ms budget, so a read of the whole table inside the lock fails it even on a fast disk.
-    expect(holds[0]).toBeLessThan(10);
+    expect(commits).toBe(1);
+    // Ten pairs need a few dozen; a pass over the memories table inside the lock adds every one of its rows.
+    expect(touchedUnderLock).toBeLessThan(STORE_ROWS / 10);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_2"]');
     expect(refsOf(root, 'mem_bulk_2')).toBe('["mem_bulk_1"]');
     expect(refsOf(root, 'mem_bulk_21')).toBe('[]');
-  }, 60_000);
+  });
 
   it('keeps a value another writer set between the read and the write', () => {
     const root = bulkStore(4);
