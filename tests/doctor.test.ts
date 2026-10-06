@@ -23,10 +23,13 @@ function sha256(file: string): string {
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 const origHome = process.env.HIPPO_HOME;
+const origConfigDir = process.env.CLAUDE_CONFIG_DIR;
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
   if (origHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = origHome;
+  if (origConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = origConfigDir;
 });
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -122,6 +125,28 @@ describe('hippo doctor', () => {
     expect(r.checks.find((c) => c.id === 'memories')!.status).toBe('warn');
 
     writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'hippo-memory@hippo-memory': true } }));
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
+  });
+
+  it('reads the Claude Code settings from CLAUDE_CONFIG_DIR when it is set, not from <home>/.claude', () => {
+    const cwd = tmp('doctor-config-dir-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    initStore(join(cwd, '.hippo'));
+    const config = join(cwd, 'elsewhere');
+    mkdirSync(config);
+    writeFileSync(join(config, 'settings.json'), '{}');
+    process.env.CLAUDE_CONFIG_DIR = config;
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')).toMatchObject({ status: 'warn', fix: 'hippo hook install claude-code' });
+  });
+
+  it('reads a Claude Code settings.json saved with a byte order mark, which install also reads', () => {
+    const cwd = tmp('doctor-bom-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    initStore(join(cwd, '.hippo'));
+    mkdirSync(join(cwd, '.claude'));
+    const commands = ['hippo context --pinned-only', 'hippo session-end', 'hippo pre-compact', 'hippo compact-resume', 'hippo post-compact', 'hippo capture-error'];
+    const hooks = { Mixed: commands.map((command) => ({ hooks: [{ type: 'command', command }] })) };
+    writeFileSync(join(cwd, '.claude', 'settings.json'), String.fromCodePoint(0xfeff) + JSON.stringify({ hooks }));
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
   });
 

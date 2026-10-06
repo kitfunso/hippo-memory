@@ -54,6 +54,7 @@ export interface ServeOpts {
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   routes?: readonly AddonRoute[];
+  mintBodyDeadlineMs?: number;
 }
 
 export type ResolvedServeOpts = ServeOpts & { store: HippoStore };
