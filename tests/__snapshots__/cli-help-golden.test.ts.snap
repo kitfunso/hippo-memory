@@ -419,7 +419,7 @@ Commands:
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
     --no-learn             Skip the agent memory import
-  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
@@ -1286,7 +1286,7 @@ exports[`built CLI help output is byte-identical > hippo last-sleep --help 1`] =
 {
   "status": 0,
   "stderr": "",
-  "stdout": "  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  "stdout": "  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
 ",
