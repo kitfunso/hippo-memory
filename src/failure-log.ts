@@ -1,5 +1,5 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
-import type { CaptureErrorOutcome, RoutineRule } from './capture-error.js';
+import type { CaptureErrorOutcome, RoutineRule } from './capture/failure-reading.js';
 import type { DatabaseSyncLike } from './db.js';
 
 /** Rows older than this are pruned on write, which also bounds how far back a repeat can be found. */
