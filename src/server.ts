@@ -11,7 +11,7 @@ import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type Context, RecallContractError } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
@@ -461,9 +461,9 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     sendJson(res, 400, { error: err.message, code: err.code });
     return;
   }
+  // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what the client keeps sending.
+  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) res.once('finish', () => closeAfterReply(req));
   sendError(res, mapped.status, mapped.message);
-  // readBody hit its cap or deadline, so drop the socket rather than drain what the client keeps sending.
-  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) req.destroy();
 }
 
 function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {

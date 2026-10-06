@@ -40,6 +40,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:delivery-ledger": "vitest run tests/delivery-ledger",
+    "test:eval": "vitest run --config vitest.eval.config.ts",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
     "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",

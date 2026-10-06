@@ -10,7 +10,7 @@ import { readEntry } from './store/entry-reads.js';
 import { listCards } from './store-cards.js';
 import { resolveTenantId } from './tenant.js';
 import { loadCardDetail } from './card-detail.js';
-import { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
+import { closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 import { log } from './log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
@@ -294,8 +294,9 @@ export function serveDashboard(
         return;
       }
       if (err instanceof BodyDrainExceeded) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', Connection: 'close' });
-        res.end(JSON.stringify({ error: err.message }), () => req.destroy());
+        // No `Connection: close` header: Node then destroys the socket as soon as the reply is written.
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }), () => closeAfterReply(req));
         return;
       }
       if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);

@@ -164,11 +164,23 @@ describe('redactSecrets / redactSecretsStrict', () => {
     }
   });
 
-  it('redactSecretsStrict finishes crafted 128 KiB runs of eyJ- and token= within 250 ms', () => {
-    for (const crafted of ['eyJ-'.repeat(32768), 'token='.repeat(21846)]) {
-      const started = performance.now();
-      redactSecretsStrict(crafted);
-      expect(performance.now() - started, crafted.slice(0, 6)).toBeLessThan(250);
+  it('redactSecretsStrict scrubs crafted 128 KiB runs of eyJ- and token= within 5x the time of prose', () => {
+    const fill = (unit: string): string => unit.repeat(Math.ceil(131072 / unit.length)).slice(0, 131072);
+    const prose = fill('the quarterly review covers risk-free rate assumptions and nothing else. ');
+    for (const crafted of [fill('eyJ-'), fill('token=')]) {
+      // The fastest of five interleaved runs of each text, so a GC pause or a busy runner weighs on both alike.
+      let hostile = Infinity;
+      let baseline = Infinity;
+      for (let run = 0; run < 5; run++) {
+        let started = performance.now();
+        redactSecretsStrict(crafted);
+        hostile = Math.min(hostile, performance.now() - started);
+        started = performance.now();
+        redactSecretsStrict(prose);
+        baseline = Math.min(baseline, performance.now() - started);
+      }
+      // A ratio to prose holds on any runner speed, and rescanning the run from each repeat costs thousands of times prose.
+      expect(hostile / baseline, crafted.slice(0, 6)).toBeLessThan(5);
     }
   });
 });

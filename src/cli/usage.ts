@@ -255,7 +255,7 @@ export const VERB_USAGE = {
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
     --no-share             Skip auto-sharing to global store`],
   'last-sleep': [`
-  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing`],
   'session-end': [`

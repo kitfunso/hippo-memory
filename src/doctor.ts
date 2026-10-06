@@ -13,6 +13,7 @@ import { isInitialized } from './store/open.js';
 import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, ftsRowCounts, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './compaction-spool.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
 import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
 import { planProjectRepair } from './project-merge.js';
@@ -135,8 +136,23 @@ function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
-/** Compaction records the PostCompact hook left unfinished, which `hippo sleep` replays. */
-function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
+interface SpoolRead {
+  counts: SpoolCounts;
+  /** The detail's `; spool not read: <msg>` tail, empty when the spool was read. */
+  unread: string;
+}
+
+/** Spool counts in their own try, so a spool that cannot be read never hides the database counts. */
+function readSpool(store: string, now: Date): SpoolRead {
+  try {
+    return { counts: spoolCounts(store, now, REPLAY_AFTER_MS), unread: '' };
+  } catch (err) {
+    return { counts: { waiting: 0, stale: 0, bad: 0 }, unread: `; spool not read: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+/** Compaction records the PostCompact hook left unfinished and spool files a replay has not finished, which `hippo sleep` replays. */
+function compactionsCheck(db: DatabaseSyncLike, store: string, now: Date): DoctorCheck {
   const stuckBefore = new Date(now.getTime() - REPLAY_AFTER_MS).toISOString();
   const transcriptFloor = new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString();
   try {
@@ -151,13 +167,19 @@ function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
     const summarised = Number(row?.summarised ?? 0);
     const started = Number(row?.started ?? 0);
     const stuck = summarised + started;
-    if (stuck === 0) return { id: 'compactions', status: 'pass', detail: `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck` };
-    return {
-      id: 'compactions',
-      status: 'warn',
-      detail: `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`,
-      fix: 'hippo sleep   (replays them)',
-    };
+    const { counts: spool, unread } = readSpool(store, now);
+    const spooled = spool.waiting + spool.stale + spool.bad > 0;
+    const recorded = `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck`;
+    if (stuck === 0 && !spooled && unread === '') return { id: 'compactions', status: 'pass', detail: recorded };
+    const fix = [
+      stuck + spool.waiting + spool.stale > 0 ? 'hippo sleep   (replays them)' : '',
+      spool.bad > 0 ? `open the .bad files in ${path.join(store, SPOOL_DIR)}, save what you still need with hippo remember, then delete them` : '',
+    ].filter((s) => s !== '');
+    const unfinished = stuck === 0
+      ? `${recorded} in the store`
+      : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
+    const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
+    return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return message.includes('no such table')
@@ -283,7 +305,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     checks.push(tokensCheck(db, since));
     checks.push(failuresCheck(db, since, have));
     checks.push(sleepCheck(db, now));
-    checks.push(compactionsCheck(db, now));
+    checks.push(compactionsCheck(db, store, now));
   } catch (err) {
     checks.push({
       id: 'schema',
