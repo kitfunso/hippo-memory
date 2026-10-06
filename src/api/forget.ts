@@ -7,7 +7,8 @@ import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import type { Context } from './types.js';
-import { selectMemoryTenant } from '../store/tenant-lookup.js';
+import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { canTouchScope } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // forget
@@ -30,7 +31,8 @@ export interface ForgetResult {
 export function forget(ctx: Context, id: string): ForgetResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    if (selectMemoryTenant(db, id) !== ctx.tenantId) {
+    const reach = selectMemoryReach(db, id);
+    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
@@ -93,7 +95,8 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     // keeps the error message consistent with the rest of this module.
     const db = openHippoDb(ctx.hippoRoot);
     try {
-      if (selectMemoryTenant(db, opts.memoryId) !== ctx.tenantId) {
+      const reach = selectMemoryReach(db, opts.memoryId);
+      if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
         throw new NotFoundError(`memory not found: ${opts.memoryId}`);
       }
     } finally {

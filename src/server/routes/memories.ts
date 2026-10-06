@@ -4,6 +4,7 @@ import type { MemoryKind } from '../../memory.js';
 import { buildGraphModel } from '../../graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
 import { HttpError, sendJson } from '../../http-util.js';
+import { canReadScope } from '../../recall-scope.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { getCallerProject, getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
@@ -28,6 +29,10 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
   if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
     throw new HttpError(400, `invalid kind: ${kindRaw}`);
   }
+  const personalRaw = body['personal'];
+  if (personalRaw !== undefined && !isJsonBoolean(personalRaw)) {
+    throw new HttpError(400, 'personal must be a boolean');
+  }
   const result = remember(ctx, {
     content,
     kind: kindRaw,
@@ -36,6 +41,7 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
     artifactRef: getString(body, 'artifactRef'),
     tags: getStringArray(body, 'tags'),
     project: getCallerProject(body),
+    personal: personalRaw === true,
   });
   sendJson(res, 200, result);
   return;
@@ -54,6 +60,7 @@ export async function handleGetGraph({ req, res, opts, query }: RouteRequest): P
   const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
     entity: entityRaw ?? undefined,
     limit,
+    canRead: (s) => s === null || canReadScope(ctx.actor, s),
   });
   sendJson(res, 200, model);
   return;

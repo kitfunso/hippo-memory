@@ -8,6 +8,8 @@ import { createMemory, type MemoryKind } from '../memory.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { assertCallerProject } from '../project-identity.js';
+import { BadRequestError } from '../api-errors.js';
+import { assertClientScope, personalScopeOf } from '../recall-scope.js';
 import type { Context } from './types.js';
 
 export interface RememberOpts {
@@ -30,6 +32,8 @@ export interface RememberOpts {
   untrusted?: boolean;
   /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared store). */
   project?: { readonly name: string; readonly aliases?: readonly string[] };
+  /** Store it in the caller's own personal scope, readable by its owner alone in every project; needs an owner on the actor and no `scope`. */
+  personal?: boolean;
 }
 
 export interface RememberResult {
@@ -42,11 +46,26 @@ export interface RememberResult {
   warnings?: string[];
 }
 
+/** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a personal one. */
+function rememberScope(ctx: Context, opts: RememberOpts): string | null {
+  if (!opts.personal) {
+    assertClientScope(opts.scope);
+    return opts.scope ?? null;
+  }
+  if (opts.untrusted) throw new Error('personal memories come from their owner, never from a connector');
+  if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');
+  const own = personalScopeOf(ctx.actor);
+  if (own === null) {
+    throw new BadRequestError('personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them');
+  }
+  return own;
+}
+
 export function remember(ctx: Context, opts: RememberOpts): RememberResult {
   if (opts.project) assertCallerProject(opts.project);
+  const requestedScope = rememberScope(ctx, opts);
   const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
   const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
-  const requestedScope = opts.scope ?? null;
   const entry = createMemory(vetted.content, {
     kind: opts.kind ?? 'distilled',
     scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
@@ -70,8 +89,9 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
         opts.afterWrite?.(db, memoryId);
       }
     : opts.afterWrite;
-  // Aliases only widen what a reader matches; a row has one origin.
-  const stamped = opts.project ? { ...entry, origin_project: opts.project.name } : entry;
+  // Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its owner into every project.
+  const origin = opts.personal ? '' : opts.project?.name;
+  const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
   writeEntry(ctx.hippoRoot, stamped, { actor: ctx.actor.subject, afterWrite });
 
   const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
