@@ -285,7 +285,7 @@ export interface GoalStackBoost<R> {
 // can compose onto the base goal-tag boost. Composed result is hard-capped
 // at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
 // `errorPriority: 9.0` policy cannot exceed 3.0x.
-function loadGoalPolicies(db: DatabaseSyncLike, active: Goal[]): Map<string, RetrievalPolicy> {
+export function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   for (const g of active) {
     if (!g.retrievalPolicyId) continue;

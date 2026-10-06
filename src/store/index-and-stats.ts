@@ -94,6 +94,11 @@ export function updateStats(
   hippoRoot: string,
   delta: { remembered?: number; recalled?: number; forgotten?: number }
 ): void {
+  writeStatsMirror(hippoRoot, bumpStats(hippoRoot, delta));
+}
+
+/** The counter increments of `updateStats` without the mirror file, returning the counters after them. */
+export function bumpStats(hippoRoot: string, delta: Parameters<typeof updateStats>[1]): LegacyStats {
   const db = openStore(hippoRoot);
   try {
     // One atomic statement per counter, and only for counters the caller
@@ -114,7 +119,7 @@ export function updateStats(
       `).run(key, String(amount), String(amount));
     }
 
-    writeStatsMirror(hippoRoot, buildStatsFromDb(db));
+    return buildStatsFromDb(db);
   } finally {
     closeHippoDb(db);
   }

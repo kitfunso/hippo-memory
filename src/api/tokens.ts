@@ -1,6 +1,6 @@
 // Token-use and failure reports.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
 import { recordTokenUse, summarizeTokenUse, type TokenSummary, type TokenSurface } from '../token-ledger.js';
 import { summarizeFailures, type FailureSummary } from '../failure-log.js';
 import { log } from '../log.js';
@@ -31,6 +31,7 @@ export function recordTokens(
       closeHippoDb(db);
     }
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.warnThenDebug('api-token-ledger', `token ledger write failed; the reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

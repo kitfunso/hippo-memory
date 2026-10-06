@@ -41,8 +41,20 @@ export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
-export { sqliteStore, type HippoStore } from './store-port.js';
+export { sqliteStore, type ActiveGoals, type HippoStore, type PlanningFallacyEvidence, type RecallSearchArgs } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
+// The types HippoStore's recall methods take and return, so an add-on store can implement them from this subpath.
+export type { AppendAuditOpts } from './audit.js';
+export type { ContinuityBlock } from './api/recall-types.js';
+export type { GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
+export type { MemoryEntry } from './memory.js';
+export type { ClassResolution } from './predictions/planning-fallacy.js';
+export type { PredictionBaserate } from './predictions/store.js';
+export type { RecallTraceInput } from './recall-trace.js';
+export type { StrengthenOptions } from './store/entry-writes.js';
+export type { LegacyStats } from './store/rows.js';
+export type { OriginFilter } from './store/search-rows.js';
+export type { TokenUse } from './token-ledger.js';
 export { StoreBusyError } from './db.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.

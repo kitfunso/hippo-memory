@@ -6,7 +6,7 @@ import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../physics-config.js';
 import { loadPhysicsState } from '../physics-state.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
 import { compareScoredResults } from '../compare.js';
 import { log } from '../log.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
@@ -89,6 +89,7 @@ async function physicsQueryVector(query: string, root: string, given: number[] |
     const [vec] = await provider.embed([query], 'query');
     return vec && vec.length > 0 ? vec : null;
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.debug(`physics search: query embed failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
@@ -101,6 +102,7 @@ function withVectorCandidates(
   try {
     return [...entries, ...vectorCandidatesOutside(root, entries, queryVector, spec)];
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.warn(`physics search ranked the lexical pool only; the vector lookup failed: ${err instanceof Error ? err.message : String(err)}`);
     return entries;
   }
@@ -116,6 +118,7 @@ function loadCandidateParticles(root: string, pool: MemoryEntry[]): Map<string, 
       closeHippoDb(db);
     }
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.debug(`physics search: state load failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }

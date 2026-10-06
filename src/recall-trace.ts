@@ -16,7 +16,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from './db.js';
 import type { RerankStep } from './search/types.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
 import { log } from './log.js';
@@ -152,6 +152,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
   try {
     db = openHippoDb(root);
   } catch (error) {
+    rethrowIfSqliteBlocked(error);
     log.error(`recall trace connection failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }

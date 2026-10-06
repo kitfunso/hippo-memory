@@ -10,7 +10,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { MemoryEntry } from './memory.js';
 import { loadAllEntries } from './store/entry-reads.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, getMeta, rethrowIfSqliteBlocked, setMeta, type DatabaseSyncLike } from './db.js';
 import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, replaceAllVectors, storedVectorIds, upsertVectors,
 } from './vector-store.js';
@@ -88,6 +88,7 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
       closeHippoDb(db);
     }
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.debug(`stored embedding model unreadable: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }

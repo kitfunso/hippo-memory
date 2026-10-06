@@ -1,5 +1,5 @@
 import { type MemoryEntry, markRetrieved } from '../memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db.js';
+import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db.js';
 import { RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { log } from '../log.js';
@@ -112,6 +112,7 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], o
     for (const id of strengthenRetrievedOn(db, ids, opts)) found.add(id);
     db.exec('COMMIT');
   } catch (error) {
+    rethrowIfSqliteBlocked(error);
     try { db?.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     log.warn(`retrieval stats not saved (${error instanceof Error ? error.message : String(error)})`);
     found.clear();

@@ -2,6 +2,7 @@ import type { MemoryEntry } from '../memory.js';
 import { cosineSimilarity, embeddingModelRequiresReindex, hasEmbeddings, loadStoredVectors } from '../embeddings.js';
 import { loadVectorCandidateEntries, type VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
+import { rethrowIfSqliteBlocked } from '../db.js';
 import { log } from '../log.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
@@ -43,6 +44,7 @@ export async function resolveVectorArm(query: string, entries: MemoryEntry[], op
   try {
     await fillVectorArm(arm, query, options.hippoRoot, options);
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     warnBm25Fallback('error', err instanceof Error ? err.message : String(err));
   }
   return arm;

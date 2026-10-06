@@ -5,8 +5,9 @@ import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openHippoDb, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
+import { closeHippoDb, openHippoDb, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
 import { VERIFIED_KEY_TTL_MS } from '../src/auth.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type HippoStore, type ServerHandle } from '../src/server.js';
@@ -52,9 +53,14 @@ describe('serve() under a store that is not hippo.db', () => {
   const valid = newKey();
   const busy = newKey();
   const probe = newKey();
+  const leaky = newKey();
   const records = new Map([[valid.keyId, valid.record]]);
   const blocked: Error[] = [];
   const lookups = new Map<string, number>();
+  // Every route here answers 501 before recall runs, so a call reaching one of these is a bug.
+  const unported = async (): Promise<never> => {
+    throw new Error('the stub store does not serve recall');
+  };
   const store: HippoStore = {
     kind: 'stub',
     async findApiKey(keyId: string): Promise<ApiKeyRecord | null> {
@@ -68,8 +74,22 @@ describe('serve() under a store that is not hippo.db', () => {
         }
         return null;
       }
+      // Stands in for any unported path: nothing between this open and the reply catches the error.
+      if (keyId === leaky.keyId) closeHippoDb(openHippoDb(root));
       return records.get(keyId) ?? null;
     },
+    searchRecallEntries: unported,
+    entriesByIds: unported,
+    activeGoals: unported,
+    freshRawEntries: unported,
+    continuity: unported,
+    planningFallacyEvidence: unported,
+    appendAuditEvents: unported,
+    writeRecallTrace: unported,
+    strengthenRetrieved: unported,
+    logGoalRecall: unported,
+    bumpRecallStats: unported,
+    recordTokens: unported,
     async close(): Promise<void> {},
   };
 
@@ -134,6 +154,17 @@ describe('serve() under a store that is not hippo.db', () => {
     expect(blocked).toHaveLength(1);
     expect(blocked[0]).toBeInstanceOf(SqliteBlockedError);
     expect(blocked[0]!.message).toMatch(/'stub' store/);
+  });
+
+  it('a hippo.db open nothing catches answers 501 store_not_ported on /v1 and on /mcp', async () => {
+    for (const [method, path] of [['GET', '/v1/memories'], ['POST', '/mcp']] as const) {
+      const res = await fetch(`${handle.url}${path}`, { method, headers: bearer(leaky), body: method === 'GET' ? undefined : '{}' });
+      expect({ path, status: res.status, body: await res.json() }).toEqual({ path, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+    }
+  });
+
+  it('a SqliteBlockedError inside an MCP tool call answers store_not_ported, not an internal error', () => {
+    expect(mcpErrorResponse(7, new SqliteBlockedError('stub'))).toEqual({ jsonrpc: '2.0', id: 7, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
   });
 
   it('a StoreBusyError from the store is a 503 with Retry-After on /v1 and on /mcp', async () => {

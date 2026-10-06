@@ -81,7 +81,7 @@ export interface ComputePlanningFallacyHintOpts {
   actor?: string;
 }
 
-interface ClassResolution {
+export interface ClassResolution {
   classTag: string | null;
   /** True when ≥2 classes tied at the best overlap score AND best ≥ 1.
    *  Caller emits `recall_autodebias_hint_tiebreak` audit and returns
@@ -115,10 +115,10 @@ interface ClassResolution {
  *     test asserting that scope-set predictions surface via no-scope
  *     recalls (so future "fix" attempts that scope-filter trip CI).
  */
-function resolveClassFromTokens(
+export function resolveClassFromTokens(
   hippoRoot: string,
   tenantId: string,
-  queryTokens: string[],
+  queryTokens: readonly string[],
 ): ClassResolution {
   if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
   const db = openHippoDb(hippoRoot);

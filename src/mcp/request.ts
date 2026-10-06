@@ -4,7 +4,7 @@ import { log } from '../log.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { resolveTenantId } from '../tenant.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
 import { estimateTokens, recordTokenUse, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
@@ -58,6 +58,7 @@ function recordMcpTokens(toolName: string, output: string, ctx?: McpContext): vo
       closeHippoDb(db);
     }
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.warnThenDebug('mcp-token-ledger', `token ledger write failed; the tool reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

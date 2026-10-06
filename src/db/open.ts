@@ -81,6 +81,16 @@ export function withSqliteBlocked<T>(storeKind: string, fn: () => T): T {
   return sqliteBlockedBy.run(storeKind, fn);
 }
 
+/** Runs `fn` with hippo.db opens allowed again, for a store whose own methods are backed by hippo.db. */
+export function withSqliteAllowed<T>(fn: () => T): T {
+  return sqliteBlockedBy.exit(fn);
+}
+
+/** First line of a best-effort catch around a hippo.db open: an unported path must fail closed, not fall back silently. */
+export function rethrowIfSqliteBlocked<E>(err: E): void {
+  if (err instanceof SqliteBlockedError) throw err;
+}
+
 function assertSqliteAllowed(): void {
   const storeKind = sqliteBlockedBy.getStore();
   if (storeKind !== undefined) throw new SqliteBlockedError(storeKind);

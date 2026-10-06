@@ -13,6 +13,8 @@ export {
   withBusyWait,
   SqliteBlockedError,
   withSqliteBlocked,
+  withSqliteAllowed,
+  rethrowIfSqliteBlocked,
   openHippoDb,
   openHippoDbReadOnly,
   closeHippoDb,

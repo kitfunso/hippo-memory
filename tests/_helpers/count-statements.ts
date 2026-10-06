@@ -26,6 +26,26 @@ export interface StatementLog<T> {
 /** Runs `fn` and returns the SQL of every exec and every prepared-statement execution, in call order. */
 export function recordStatements<T>(fn: () => T): StatementLog<T> {
   const statements: string[] = [];
+  const spies = spyOnStatements(statements);
+  try {
+    return { result: fn(), statements };
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+}
+
+/** recordStatements for async work, such as a request to an in-process server, until `fn` settles. */
+export async function recordStatementsAsync<T>(fn: () => Promise<T>): Promise<StatementLog<T>> {
+  const statements: string[] = [];
+  const spies = spyOnStatements(statements);
+  try {
+    return { result: await fn(), statements };
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+}
+
+function spyOnStatements(statements: string[]): Array<{ mockRestore(): void }> {
   const exec = DatabaseSync.prototype.exec;
   const spies: Array<{ mockRestore(): void }> = [vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseProto, sql: string) {
     statements.push(sql);
@@ -39,11 +59,7 @@ export function recordStatements<T>(fn: () => T): StatementLog<T> {
       return original.apply(this, params);
     }));
   }
-  try {
-    return { result: fn(), statements };
-  } finally {
-    for (const spy of spies) spy.mockRestore();
-  }
+  return spies;
 }
 
 export function countMatching(statements: readonly string[], pattern: RegExp | string): number {

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
+import { SqliteBlockedError } from './db/open.js';
 import type { JsonValue } from './json.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
@@ -41,10 +42,14 @@ export interface ApiErrorReply {
 
 export const INTERNAL_ERROR_MESSAGE = 'internal server error';
 
+/** The reply when a request under another store reaches code that still opens hippo.db. */
+export const STORE_NOT_PORTED_MESSAGE = 'store_not_ported';
+
 /** Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text stays in the server log. */
 export function mapApiError<E>(err: E): ApiErrorReply {
   if (err instanceof HttpError || err instanceof ApiError) return { status: err.status, message: err.message };
   if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
+  if (err instanceof SqliteBlockedError) return { status: 501, message: STORE_NOT_PORTED_MESSAGE };
   return { status: 500, message: INTERNAL_ERROR_MESSAGE };
 }
 

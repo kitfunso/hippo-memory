@@ -1,0 +1,356 @@
+// Each sqliteStore recall method returns and writes what the hippo.db function behind it does on the golden seed, and a
+// recall over serve() opens no more hippo.db handles than today, since every open re-runs the PRAGMAs and migrations.
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { recordTokens } from '../src/api.js';
+import { appendAuditEvent, type AppendAuditOpts } from '../src/audit.js';
+import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { detectForwardClaim } from '../src/forward-claim-detector.js';
+import { applyGoalStackBoost, getActiveGoalsWithDb, loadGoalPolicies, pushGoal } from '../src/goals.js';
+import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
+import { lastRecalledIds } from '../src/mcp/session-state.js';
+import { resolveClassFromTokens } from '../src/predictions/planning-fallacy.js';
+import { computePredictionBaserate } from '../src/predictions/store.js';
+import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
+import {
+  serve, sqliteStore, __resetSessionRecallHistoryHttp,
+  type ActiveGoals, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput,
+} from '../src/server.js';
+import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
+import { strengthenRetrieved } from '../src/store/entry-writes.js';
+import { loadLatestHandoff } from '../src/store/handoffs.js';
+import { loadStats, updateStats } from '../src/store/index-and-stats.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { listSessionEvents, loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
+import {
+  CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, TENANT, type Store, type Templates,
+} from './_helpers/recall-golden-seed.js';
+
+type Kind = 'local' | 'wide';
+interface Outcome { value: unknown; rows: unknown; opens: number }
+
+let templates: Templates;
+
+/** Every audit op in order: rowsOf keeps only the recall ones, and a stray predict_baserate row must show too. */
+function auditOps(root: string): unknown[] {
+  const db = openHippoDb(root);
+  try {
+    return db.prepare('SELECT op FROM audit_log ORDER BY id').all();
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Runs `fn` on a fresh copy of a template store: what it returned, every row it left and the handles it opened. */
+async function onCopy(kind: Kind, fn: (s: Store) => unknown): Promise<Outcome> {
+  const s = freshStore(templates, kind);
+  try {
+    const { result, statements } = await recordStatementsAsync(async () => fn(s));
+    const rows = { ...rowsOf(s.root), auditOps: auditOps(s.root) };
+    return normalise({ value: result, rows, opens: countMatching(statements, STORE_OPEN) }, s);
+  } finally {
+    rmSync(s.home, { recursive: true, force: true });
+  }
+}
+
+/** The direct hippo.db call on one copy and the store method on another must return the same value and leave the same rows. */
+async function parity(direct: (s: Store) => unknown, port: (store: HippoStore) => Promise<unknown>, kind: Kind = 'local'): Promise<{ direct: Outcome; port: Outcome }> {
+  const a = await onCopy(kind, direct);
+  const b = await onCopy(kind, (s) => port(sqliteStore(s.root)));
+  expect(b.value).toEqual(a.value);
+  expect(b.rows).toEqual(a.rows);
+  return { direct: a, port: b };
+}
+
+function idsOf(value: unknown): string[] {
+  // SAFETY: called only on the outcome of a method that returns MemoryEntry[].
+  return (value as MemoryEntry[]).map((e) => e.id);
+}
+
+beforeAll(() => {
+  templates = seedTemplates((root) => {
+    seedPortBranches(root);
+    // A goal with a retrieval policy, so activeGoals has a policy row to read.
+    pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-beta', policy: { policyType: 'recency-first', weightRecency: 1.5 } });
+  });
+});
+
+afterAll(() => {
+  rmSync(templates.dir, { recursive: true, force: true });
+});
+
+beforeEach(() => {
+  for (const k of CLEARED_ENV) vi.stubEnv(k, '');
+  vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
+  vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+  vi.stubEnv('HIPPO_V1_RPS', '0');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  _resetAblationCacheForTests();
+});
+
+describe('sqliteStore reads equal the hippo.db functions they wrap and open no more handles', () => {
+  const search = (limit: number, extra: Partial<RecallSearchArgs> = {}): RecallSearchArgs => ({
+    limit, tenantId: TENANT, explicitScopeMode: 'exact', includeSuperseded: false, ...extra,
+  });
+  const SEARCHES: readonly [string, string, RecallSearchArgs, Kind, (ids: string[]) => boolean][] = [
+    ['the FTS path', 'deploy', search(200), 'local', (ids) => ids.includes('mem_p_plain')],
+    ['the LIKE path', 'caf', search(200), 'local', (ids) => ids.includes('mem_x_cafe')],
+    ['a query with no terms', '!!', search(200), 'local', (ids) => ids.includes('mem_p_noise')],
+    ['scope team-alpha, superseded rows kept', 'deploy', search(200, { requestedScope: 'team-alpha', includeSuperseded: true }), 'local', (ids) => ids.join() === 'mem_p_scoped'],
+    ['a 50-row window on the wide store', 'deploy', search(50), 'wide', (ids) => ids.length === 50],
+  ];
+
+  it.each(SEARCHES)('searchRecallEntries: %s', async (_name, query, args, kind, reached) => {
+    const { direct, port } = await parity(
+      (s) => loadRecallSearchEntries(s.root, query, args.limit, args.tenantId, args.requestedScope, args.explicitScopeMode, args.includeSuperseded, args.originProjects),
+      (store) => store.searchRecallEntries(query, args),
+      kind,
+    );
+    expect(reached(idsOf(direct.value))).toBe(true);
+    expect(port.opens).toBe(direct.opens);
+  });
+
+  it.each([['with a tenant', TENANT], ['without one', undefined]] as const)('entriesByIds %s', async (_name, tenantId) => {
+    const ids = ['mem_p_plain', 'mem_x_summary', 'mem_missing'];
+    const { direct, port } = await parity((s) => loadEntriesByIds(s.root, ids, tenantId), (store) => store.entriesByIds(ids, tenantId));
+    expect(idsOf(direct.value)).toEqual(['mem_x_summary', 'mem_p_plain']);
+    expect(port.opens).toBe(direct.opens);
+  });
+
+  it.each([['the golden session', SESSION, 2, 1], ['a session with no goals', 'other-session', 0, 0]] as const)(
+    'activeGoals: %s',
+    async (_name, sessionId, goals, policies) => {
+      const opts = { sessionId, tenantId: TENANT };
+      const plain = (g: ActiveGoals) => ({ goals: g.goals, policies: [...g.policies] });
+      const { direct, port } = await parity((s) => {
+        const db = openHippoDb(s.root);
+        try {
+          const active = getActiveGoalsWithDb(db, opts);
+          return plain({ goals: active, policies: loadGoalPolicies(db, active) });
+        } finally {
+          closeHippoDb(db);
+        }
+      }, async (store) => plain(await store.activeGoals(opts)));
+      // SAFETY: both sides return plain() of an ActiveGoals.
+      const read = direct.value as ReturnType<typeof plain>;
+      expect([read.goals.length, read.policies.length]).toEqual([goals, policies]);
+      expect(port.opens).toBe(direct.opens);
+    },
+  );
+
+  it.each([['a session', 2, SESSION, ['mem_x_raw']], ['the whole tenant', 5, undefined, ['mem_x_raw']], ['a count of 0', 0, SESSION, []]] as const)(
+    'freshRawEntries for %s',
+    async (_name, count, sessionId, ids) => {
+      const { direct, port } = await parity(
+        (s) => loadFreshRawMemories(s.root, count, TENANT, sessionId),
+        (store) => store.freshRawEntries(count, TENANT, sessionId),
+      );
+      expect(idsOf(direct.value)).toEqual(ids);
+      expect(port.opens).toBe(direct.opens);
+    },
+  );
+
+  it.each([['an active snapshot', 'local', true], ['no active snapshot', 'wide', false]] as const)('continuity with %s', async (_name, kind, anchored) => {
+    // api/recall.ts loadContinuity's reads, before its scope filter.
+    const { direct, port } = await parity((s) => {
+      const activeSnapshot = loadActiveTaskSnapshot(s.root, TENANT);
+      const sessionId = activeSnapshot?.session_id ?? undefined;
+      return {
+        activeSnapshot,
+        sessionHandoff: sessionId ? loadLatestHandoff(s.root, TENANT, sessionId) : null,
+        recentSessionEvents: sessionId ? listSessionEvents(s.root, TENANT, { session_id: sessionId, limit: 5 }) : [],
+      };
+    }, (store) => store.continuity(TENANT, 5), kind);
+    const block = anchored
+      ? { activeSnapshot: { session_id: SESSION }, sessionHandoff: { sessionId: SESSION }, recentSessionEvents: [{ content: 'canary passed' }] }
+      : { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
+    expect(direct.value).toMatchObject(block);
+    expect(port.opens).toBe(direct.opens);
+  });
+
+  const claim = detectForwardClaim('the deploy will take 3 days');
+  it.each([
+    ['a forward claim naming one class', claim?.classQueryTokens ?? [], 'deploy-duration'],
+    ['tokens naming no class', ['lunch'], null],
+    ['no tokens', [], null],
+  ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
+    // computePlanningFallacyOutput's reads; its audit rows stay with the caller.
+    const { direct, port } = await parity((s) => {
+      const resolution = resolveClassFromTokens(s.root, TENANT, tokens);
+      const baserate = resolution.classTag ? computePredictionBaserate(s.root, TENANT, resolution.classTag, 'recall', false) : null;
+      return { ...resolution, baserate };
+    }, (store) => store.planningFallacyEvidence(TENANT, tokens));
+    expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
+    expect(port.opens).toBe(direct.opens);
+  });
+});
+
+describe('sqliteStore writes leave the rows the hippo.db functions leave, each on one handle', () => {
+  const recallAudit = (op: AppendAuditOpts['op'], metadata: Record<string, unknown>): AppendAuditOpts => ({ tenantId: TENANT, actor: 'api_key:hk_test', op, metadata });
+  const events: readonly AppendAuditOpts[] = [
+    recallAudit('recall', { query_length: 6, results: 3 }),
+    recallAudit('recall_availability_detected', { recent_fraction: 1, older_passed_over: 2, returned_count: 3 }),
+  ];
+
+  it('appendAuditEvents writes the rows in order on one handle, where each recall audit opens its own today', async () => {
+    const { direct, port } = await parity((s) => {
+      for (const event of events) {
+        const db = openHippoDb(s.root);
+        try {
+          appendAuditEvent(db, event);
+        } finally {
+          closeHippoDb(db);
+        }
+      }
+    }, (store) => store.appendAuditEvents(events));
+    expect(direct.opens).toBe(2);
+    expect(port.opens).toBe(1);
+  });
+
+  it('appendAuditEvents writes none of the rows when one fails, and opens nothing for an empty list', async () => {
+    const loop: Record<string, unknown> = {};
+    loop.self = loop;
+    const s = freshStore(templates, 'local');
+    try {
+      const before = auditOps(s.root);
+      await expect(sqliteStore(s.root).appendAuditEvents([events[0]!, recallAudit('recall', loop)])).rejects.toThrow(TypeError);
+      expect(auditOps(s.root)).toEqual(before);
+      const { statements } = await recordStatementsAsync(() => sqliteStore(s.root).appendAuditEvents([]));
+      expect(countMatching(statements, STORE_OPEN)).toBe(0);
+    } finally {
+      rmSync(s.home, { recursive: true, force: true });
+    }
+  });
+
+  it('writeRecallTrace returns the new trace id and writes the trace and its results', async () => {
+    const input: RecallTraceInput = {
+      tenantId: TENANT,
+      sessionId: SESSION,
+      pipeline: 'api',
+      query: 'deploy',
+      explainMode: true,
+      results: [
+        { memoryId: 'mem_p_goal', score: 1.6, rerankSteps: [{ stage: 'goal-boost', multiplier: 2, scoreBefore: 0.8, scoreAfter: 1.6 }] },
+        { memoryId: 'mem_p_plain', score: 0.9 },
+      ],
+    };
+    const { direct, port } = await parity((s) => writeRecallTraceAtRoot(s.root, input), (store) => store.writeRecallTrace(input));
+    expect(direct.value).toEqual(expect.any(Number));
+    expect(port.opens).toBe(1);
+  });
+
+  it.each([['a live recall', false, ['mem_p_new', 'mem_p_plain'], 1], ['the eval ablation', true, [], 0]] as const)(
+    'strengthenRetrieved under %s returns the ids it found',
+    async (_name, recallBoostAblated, found, opens) => {
+      const ids = ['mem_p_plain', 'mem_p_new', 'mem_missing'];
+      const opts = { tenantId: TENANT, recallBoostAblated };
+      const { direct, port } = await parity(
+        (s) => [...strengthenRetrieved(s.root, ids, opts)].sort(),
+        async (store) => [...(await store.strengthenRetrieved(ids, opts))].sort(),
+      );
+      expect(direct.value).toEqual(found);
+      expect(port.opens).toBe(opens);
+    },
+  );
+
+  it('logGoalRecall writes what the goal boost logs today and drops a row whose memory is not in this store', async () => {
+    const globalRow = seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z', {}, { tags: ['goal-alpha'] });
+    const logRow = (memoryId: string, score: number): GoalRecallLogRow => ({
+      goalId: templates.goalId, memoryId, tenantId: TENANT, sessionId: SESSION, recalledAt: FAKE_NOW, score,
+    });
+    const { direct, port } = await parity((s) => {
+      const [goalRow] = loadEntriesByIds(s.root, ['mem_p_goal']);
+      const db = openHippoDb(s.root);
+      try {
+        applyGoalStackBoost(db, [{ entry: goalRow!, score: 0.8 }, { entry: globalRow, score: 0.7 }], { sessionId: SESSION, tenantId: TENANT, limit: 10 });
+      } finally {
+        closeHippoDb(db);
+      }
+    }, (store) => store.logGoalRecall([logRow('mem_p_goal', 1.6), logRow('mem_p_global', 1.4)]));
+    expect(direct.rows).toMatchObject({ goalRecallLog: [{ memory_id: 'mem_p_goal', score: 1.6 }] });
+    expect(port.opens).toBe(1);
+  });
+
+  it('bumpRecallStats adds to the recall counter and returns every counter, as updateStats leaves them', async () => {
+    const { direct, port } = await parity((s) => {
+      updateStats(s.root, { recalled: 3 });
+      return loadStats(s.root);
+    }, (store) => store.bumpRecallStats(3));
+    expect(direct.rows).toMatchObject({ stats: expect.arrayContaining([{ key: 'total_recalled', value: '3' }]) });
+    expect(port.opens).toBe(1);
+  });
+
+  it('recordTokens writes the ledger row the API helper writes', async () => {
+    const { port } = await parity(
+      (s) => recordTokens({ hippoRoot: s.root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', { items: 2, tokens: 40, sessionId: SESSION }),
+      (store) => store.recordTokens({ tenantId: TENANT, sessionId: SESSION, surface: 'http_recall', event: 'inject', items: 2, tokens: 40 }),
+    );
+    expect(port.rows).toMatchObject({ ledger: [{ surface: 'http_recall', items: 2, tokens: 40 }] });
+    expect(port.opens).toBe(1);
+  });
+
+  it('recordTokens throws where the API helper logs and returns, so the caller decides', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-store-port-'));
+    try {
+      mkdirSync(join(root, 'hippo.db'));
+      const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
+      await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
+      expect(recordTokens({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', use)).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+type Recall = { via: 'http'; params: Record<string, string> } | { via: 'mcp'; args: Record<string, string> };
+
+async function recallOver(url: string, call: Recall): Promise<void> {
+  if (call.via === 'http') {
+    const res = await fetch(`${url}/v1/memories?${new URLSearchParams(call.params).toString()}`);
+    expect(res.status).toBe(200);
+    await res.json();
+    return;
+  }
+  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: call.args } };
+  const res = await fetch(`${url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rpc) });
+  expect(await res.json()).not.toHaveProperty('error');
+}
+
+describe('hippo.db opens per recall over serve()', () => {
+  // Measured on hippo.db before recall moved behind the port; a recall through the port may not open more.
+  const CEILINGS: readonly [string, number, Recall][] = [
+    ['http, no session', 6, { via: 'http', params: { q: 'deploy' } }],
+    ['http, a session with active goals', 5, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
+    ['http, continuity and a forward claim', 12, { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } }],
+    ['mcp, no session', 6, { via: 'mcp', args: { query: 'deploy' } }],
+    ['mcp, a session with active goals', 6, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
+  ];
+
+  beforeEach(() => {
+    __resetSessionRecallHistoryHttp();
+    __resetSessionRecallHistoryMcp();
+    lastRecalledIds.clear();
+  });
+
+  it.each(CEILINGS)('%s: at most %i opens', async (_name, ceiling, call) => {
+    const s = freshStore(templates, 'local');
+    try {
+      const handle = await serve({ hippoRoot: s.root, port: 0 });
+      try {
+        const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
+        expect(countMatching(statements, STORE_OPEN)).toBeLessThanOrEqual(ceiling);
+      } finally {
+        await handle.stop();
+      }
+    } finally {
+      rmSync(s.home, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
