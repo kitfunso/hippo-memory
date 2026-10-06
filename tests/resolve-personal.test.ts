@@ -34,13 +34,18 @@ function replyText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-/** Seeds one open conflict between `aId` and `bId` and returns its id. */
-function seedConflict(aId: string, bId: string): number {
-  replaceDetectedConflicts(root, [{ memory_a_id: aId, memory_b_id: bId, reason: 'contradictory deploy advice', score: 0.9 }]);
-  const conflict = listMemoryConflicts(root, 'open', 'default').find((c) => [c.memory_a_id, c.memory_b_id].includes(aId));
-  if (!conflict) throw new Error('seeded conflict not found');
-  return conflict.id;
+/** Seeds one open conflict per pair, replacing any before, and returns their ids; each pair's first id must be in no other pair. */
+function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>): number[] {
+  replaceDetectedConflicts(root, pairs.map(([a, b]) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradictory deploy advice', score: 0.9 })));
+  const open = listMemoryConflicts(root, 'open', 'default');
+  return pairs.map(([a]) => {
+    const conflict = open.find((c) => [c.memory_a_id, c.memory_b_id].includes(a));
+    if (!conflict) throw new Error('seeded conflict not found');
+    return conflict.id;
+  });
 }
+
+const seedConflict = (aId: string, bId: string): number => seedConflicts([aId, bId])[0]!;
 
 interface PersonalPair {
   personalId: string;
@@ -101,10 +106,16 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('hippo_conflicts hides a pair holding someone else\'s personal row, and the owner sees it', async () => {
-    const { conflictId } = personalPair();
-    expect(replyText(await callTool(actorA, 'hippo_conflicts', {}))).toContain(`conflict_${conflictId}:`);
+    const { personalId, teamId } = personalPair();
+    const otherTeamId = remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' }).id;
+    const [conflictId, teamConflictId] = seedConflicts([personalId, teamId], [otherTeamId, teamId]);
+    const listed = replyText(await callTool(actorA, 'hippo_conflicts', {}));
+    expect(listed).toContain(`conflict_${conflictId}:`);
+    expect(listed).toContain(`conflict_${teamConflictId}:`);
     for (const outsider of [actorB, unownedAdmin]) {
-      expect(replyText(await callTool(outsider, 'hippo_conflicts', {}))).toBe('No open conflicts.');
+      const seen = replyText(await callTool(outsider, 'hippo_conflicts', {}));
+      expect(seen).toContain(`conflict_${teamConflictId}:`);
+      expect(seen).not.toContain(`conflict_${conflictId}:`);
     }
   });
 

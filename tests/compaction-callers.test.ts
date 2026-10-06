@@ -466,6 +466,17 @@ describe('captureFailureForCaller', () => {
     });
   });
 
+  it('scrubs a sent text again and cuts it to 200 after the scrub, so a mask that runs longer still stores', () => {
+    const text = `Bash: mail to a@b.co failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200);
+    expect(text).toHaveLength(200);
+    expect(captureFailureForCaller(owned('alice'), failure({ text })).outcome).toBe('stored');
+    withDb((db) => {
+      const [row] = writtenRows(db, 'tool-failure');
+      expect(row?.content).toBe(`Bash: mail to [email] failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200));
+      expect(failureRows(db)[0]?.sig_hash).toBe(failureHash(row?.content ?? ''));
+    });
+  });
+
   it('log error never masks a store error', () => {
     failOn('memories', 'INSERT', 'store boom');
     failOn('failure_log', 'INSERT', 'log boom');

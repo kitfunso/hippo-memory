@@ -1,5 +1,6 @@
 // What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local log keeps.
 import { redactSecretsStrict } from '../secret-detect.js';
+import { scrubForSharing } from '../share-scrub.js';
 import { blockHash } from '../token-ledger.js';
 import type { JsonValue } from '../json.js';
 
@@ -66,8 +67,8 @@ export function failureHash(text: string): string {
   return blockHash(failureSignature(text));
 }
 
-/** The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. Pure. */
-export function lessonFromFailure(payload: JsonValue): FailureReading {
+/** The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub` runs before the cap, as a mask can be longer than what it hides. Pure. */
+export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => string = (text) => text): FailureReading {
   if (!isObject(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
   // SAFETY: isObject narrowed payload to a plain JSON object; the fields read are all optional.
   const p = payload as ToolFailurePayload;
@@ -75,7 +76,7 @@ export function lessonFromFailure(payload: JsonValue): FailureReading {
   if (!isString(p.error) || p.error.trim().length < 12) return { skip: 'skipped-invalid', text: null, detail: null };
   const tool = isString(p.tool_name) ? p.tool_name : 'tool';
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
-  const text = `${tool}: ${error}`.slice(0, FAILURE_TEXT_MAX_CHARS);
+  const text = scrub(`${tool}: ${error}`).slice(0, FAILURE_TEXT_MAX_CHARS);
   const command = isObject(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
   const head = command.trim().split(/\s+/).slice(0, 2).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;
@@ -92,7 +93,7 @@ export function lessonFromFailure(payload: JsonValue): FailureReading {
 export interface FailureReport {
   /** The payload's tool name; null when it named none. */
   tool: string | null;
-  /** At most 200 chars; null when the payload had no readable error. */
+  /** Scrubbed for sharing, then cut to at most 200 chars; null when the payload had no readable error. */
   text: string | null;
   /** Why it is not stored; null for a lesson. */
   skip: Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'> | null;
@@ -103,7 +104,7 @@ export interface FailureReport {
 
 /** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is elsewhere. Pure. */
 export function failureReport(payload: JsonValue): FailureReport {
-  const reading = lessonFromFailure(payload);
+  const reading = lessonFromFailure(payload, scrubForSharing);
   return {
     tool: payloadString(payload, 'tool_name'),
     text: reading.text,

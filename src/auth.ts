@@ -137,9 +137,10 @@ function keyExpiryMs(expiresAt: string | null | undefined): number {
 }
 
 /** A key that passed every check, with the time it stops working so a cache entry never outlives it. */
-interface CheckedApiKey {
+export interface CheckedApiKey {
   key: VerifiedApiKey;
   expiresAtMs: number;
+  keyHash: string;
 }
 
 /** The key id of a minted-key-shaped token, else null. */
@@ -147,24 +148,26 @@ function mintedKeyId(plaintext: string): string | null {
   return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
 }
 
-/** Revocation, expiry, then scrypt, against a stored record. Null for any failure. */
-function checkApiKey(plaintext: string, keyId: string, record: ApiKeyRecord | null, now: number): CheckedApiKey | null {
+/** Revocation, expiry, then the secret, against a stored record. Null for any failure. */
+function checkApiKey(
+  keyId: string, record: ApiKeyRecord | null, now: number, secretMatches: (keyHash: string) => boolean,
+): CheckedApiKey | null {
   // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn CPU.
   if (!record) return null;
   const expiresAtMs = keyExpiryMs(record.expiresAt);
-  if (record.revokedAt || now >= expiresAtMs || !verifyKey(plaintext, record.keyHash)) return null;
+  if (record.revokedAt || now >= expiresAtMs || !secretMatches(record.keyHash)) return null;
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
   const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
   // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
   if (record.ownerSubject) key.ownerSubject = record.ownerSubject;
-  return { key, expiresAtMs };
+  return { key, expiresAtMs, keyHash: record.keyHash };
 }
 
 /** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */
 function lookupApiKey(db: DatabaseSyncLike, plaintext: string, now: number): CheckedApiKey | null {
   const keyId = mintedKeyId(plaintext);
-  return keyId === null ? null : checkApiKey(plaintext, keyId, readApiKeyRecord(db, keyId), now);
+  return keyId === null ? null : checkApiKey(keyId, readApiKeyRecord(db, keyId), now, (hash) => verifyKey(plaintext, hash));
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
@@ -180,6 +183,7 @@ interface VerifiedKeyEntry {
   readonly hippoRoot: string;
   readonly digest: Buffer;
   readonly key: Readonly<VerifiedApiKey>;
+  readonly keyHash: string;
   readonly expiresAt: number;
 }
 
@@ -204,30 +208,37 @@ export class VerifiedKeyCache {
     return this.deletes;
   }
 
-  get(hippoRoot: string, keyId: string, plaintext: string, now: number): VerifiedApiKey | undefined {
+  /** The entry this exact token was verified into, fresh or lapsed. */
+  private match(hippoRoot: string, keyId: string, plaintext: string): VerifiedKeyEntry | undefined {
     const entry = this.entries.get(keyId);
     if (!entry || entry.hippoRoot !== hippoRoot) return undefined;
-    if (now >= entry.expiresAt) {
-      this.entries.delete(keyId);
-      return undefined;
-    }
     // A wrong secret misses but leaves the entry, so a flood of bad guesses cannot evict a good key.
-    if (!timingSafeEqual(entry.digest, secretDigest(plaintext))) return undefined;
+    return timingSafeEqual(entry.digest, secretDigest(plaintext)) ? entry : undefined;
+  }
+
+  get(hippoRoot: string, keyId: string, plaintext: string, now: number): VerifiedApiKey | undefined {
+    const entry = this.match(hippoRoot, keyId, plaintext);
+    if (!entry || now >= entry.expiresAt) return undefined;
     this.entries.delete(keyId);
     this.entries.set(keyId, entry);
     return { ...entry.key, scopes: [...entry.key.scopes] };
   }
 
-  set(hippoRoot: string, keyId: string, plaintext: string, key: VerifiedApiKey, now: number, keyExpiresAtMs = Infinity): void {
+  /** The key hash this exact token was last verified against, kept past the TTL so a re-check can skip scrypt. */
+  verifiedHash(hippoRoot: string, keyId: string, plaintext: string): string | undefined {
+    return this.match(hippoRoot, keyId, plaintext)?.keyHash;
+  }
+
+  set(hippoRoot: string, keyId: string, plaintext: string, found: CheckedApiKey, now: number): void {
     this.entries.delete(keyId);
     if (this.entries.size >= this.capacity) {
       const oldest = this.entries.keys().next();
       if (!oldest.done) this.entries.delete(oldest.value);
     }
-    const frozen = Object.freeze({ ...key, scopes: [...key.scopes] });
+    const frozen = Object.freeze({ ...found.key, scopes: [...found.key.scopes] });
     // A key that expires inside the TTL leaves the cache at its expiry, so the cache never extends its life.
-    const expiresAt = Math.min(now + this.ttlMs, keyExpiresAtMs);
-    this.entries.set(keyId, { hippoRoot, digest: secretDigest(plaintext), key: frozen, expiresAt });
+    const expiresAt = Math.min(now + this.ttlMs, found.expiresAtMs);
+    this.entries.set(keyId, { hippoRoot, digest: secretDigest(plaintext), key: frozen, keyHash: found.keyHash, expiresAt });
   }
 
   delete(keyId: string): void {
@@ -239,18 +250,22 @@ export class VerifiedKeyCache {
 // SHORTCUT: per-process cache, so a revoke or scope change made by another process (the CLI) lands within VERIFIED_KEY_TTL_MS; a shared revocation epoch in the store if that is too slow.
 const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP, VERIFIED_KEY_TTL_MS);
 
-/** Verify a bearer API key against `store`, served at `hippoRoot`; a cache hit skips both scrypt and the store. Null when invalid. A throw from `beforeLookup` refuses a miss before the store read and scrypt. */
-export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, store: HippoStore, beforeLookup?: () => void): Promise<VerifiedApiKey | null> {
+/** Verify a bearer API key against `store`, served at `hippoRoot`; a cache hit skips both scrypt and the store. Null when invalid. A token whose cache entry lapsed re-reads its record without scrypt; a throw from `beforeScrypt` refuses before scrypt runs. */
+export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, store: HippoStore, beforeScrypt?: () => void): Promise<VerifiedApiKey | null> {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
   const hit = verifiedKeys.get(hippoRoot, keyId, plaintext, Date.now());
   if (hit) return hit;
-  beforeLookup?.();
+  const provenHash = verifiedKeys.verifiedHash(hippoRoot, keyId, plaintext);
   verifyStats.storeLookups++;
   const epoch = verifiedKeys.epoch;
-  const found = checkApiKey(plaintext, keyId, await store.findApiKey(keyId), Date.now());
+  const found = checkApiKey(keyId, await store.findApiKey(keyId), Date.now(), (hash) => {
+    if (hash === provenHash) return true;
+    beforeScrypt?.();
+    return verifyKey(plaintext, hash);
+  });
   // Only successes are cached: caching misses would let junk tokens fill the cache and evict real keys.
-  if (found && verifiedKeys.epoch === epoch) verifiedKeys.set(hippoRoot, keyId, plaintext, found.key, Date.now(), found.expiresAtMs);
+  if (found && verifiedKeys.epoch === epoch) verifiedKeys.set(hippoRoot, keyId, plaintext, found, Date.now());
   return found?.key ?? null;
 }
 

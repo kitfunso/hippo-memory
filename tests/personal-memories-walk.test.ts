@@ -57,8 +57,8 @@ const resolver: AuthResolver = (token) => {
   return null;
 };
 
-function mint(label: string, role: 'admin' | 'member', ownerSubject?: string): Key {
-  const db = openHippoDb(store);
+function mint(label: string, role: 'admin' | 'member', ownerSubject?: string, root = store): Key {
+  const db = openHippoDb(root);
   try {
     return createApiKey(db, { tenantId: 'default', label, role, ownerSubject });
   } finally {
@@ -72,10 +72,10 @@ function ctxOf(who: Who): api.Context {
   return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' } };
 }
 
-async function http(token: string | null, method: string, route: string, body?: JsonValue, extra: Record<string, string> = {}): Promise<Reply> {
+async function http(token: string | null, method: string, route: string, body?: JsonValue, extra: Record<string, string> = {}, base = handle!.url): Promise<Reply> {
   const plain = { 'content-type': 'application/json', accept: 'application/json', ...extra };
   const headers = token ? { ...plain, authorization: `Bearer ${token}` } : plain;
-  const res = await fetch(`${handle!.url}${route}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await fetch(`${base}${route}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: res.status, text: await res.text() };
 }
 
@@ -109,21 +109,22 @@ async function contextIds(token: string, query: string): Promise<string[]> {
 }
 
 /** A tools/call reply as text, sent from the alpha repo: the tool's own text, or the JSON-RPC error message a thrown API error becomes. */
-async function tool(token: string, name: string, args: Record<string, JsonValue>): Promise<string> {
+async function tool(token: string, name: string, args: Record<string, JsonValue>, base?: string): Promise<string> {
   const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
-  const r = await http(token, 'POST', '/mcp', call, { 'x-hippo-project': 'alpha' });
+  const r = await http(token, 'POST', '/mcp', call, { 'x-hippo-project': 'alpha' }, base);
   expect(r.status, r.text).toBe(200);
   const body = json<{ result?: { content: Array<{ text: string }> }; error?: { message: string } }>(r);
   return body.result?.content[0]?.text ?? body.error?.message ?? '';
 }
 
-/** F13: the reply for a real id, masked, equals the reply for an id that never existed. */
-async function sameAsMissing(id: string, run: (id: string) => Promise<Reply>): Promise<void> {
+/** F13: the reply for a real id, masked, equals the reply for an id that never existed, and has `status` when given. */
+async function sameAsMissing(id: string, run: (id: string) => Promise<Reply>, status?: number): Promise<void> {
   const fake = generateId();
   const real = await run(id);
   const missing = await run(fake);
   expect({ status: real.status, text: real.text.split(id).join('<id>') })
     .toEqual({ status: missing.status, text: missing.text.split(fake).join('<id>') });
+  if (status !== undefined) expect(real.status, real.text).toBe(status);
 }
 
 function restoreEnv(name: keyof typeof origEnv): void {
@@ -230,7 +231,7 @@ describe('personal memories walk (plan lane T)', () => {
     const own = await drill('A', ids.summary);
     expect(own.status, own.text).toBe(200);
     expect(json<{ children: Array<{ id: string }> }>(own).children.map((c) => c.id)).toContain(ids.child);
-    for (const who of OTHERS) await sameAsMissing(ids.summary, (id) => drill(who, id));
+    for (const who of OTHERS) await sameAsMissing(ids.summary, (id) => drill(who, id), 404);
   });
 
   it('line 5: POST /mcp hippo_recall, hippo_context, hippo_assemble, hippo_drill and hippo_remember personal', async () => {
@@ -247,7 +248,6 @@ describe('personal memories walk (plan lane T)', () => {
       const window = await say(who, 'hippo_assemble', { session_id: SESSION });
       expect(window, who).toContain('tealraw');
       expect(window, who).not.toContain('umberline');
-      expect(await say(who, 'hippo_context', {}), who).not.toContain('quillonmarsh');
       await sameAsMissing(ids.summary, async (id) => ({ status: 200, text: await say(who, 'hippo_drill', { summary_id: id }) }));
     }
 
@@ -255,6 +255,34 @@ describe('personal memories walk (plan lane T)', () => {
     const newId = /Remembered \[([^\]]+)\]/.exec(remembered)?.[1] ?? '';
     expect(readEntry(store, newId)?.scope, remembered).toBe(A_SCOPE);
     expect(await say('ADM', 'hippo_remember', { text: 'unowned mcp personal try', personal: true })).toContain(OWNER_400);
+  });
+
+  it('line 5, hippo_context: a shared store refuses it without a project, so a second store that is not shared shows A its row and nobody else', async () => {
+    const bare = await http(keys.A.plaintext, 'POST', '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: {} } });
+    expect(bare.text).toContain("hippo_context needs the caller's project on a shared store");
+    const solo = path.join(tmp, 'solo', '.hippo');
+    fs.mkdirSync(solo, { recursive: true });
+    initStore(solo);
+    const soloKeys: Keys = { A: mint('solo-a', 'member', 'oid-a', solo), B: mint('solo-b', 'member', 'oid-b', solo), ADM: mint('solo-adm', 'admin', undefined, solo) };
+    writeEntry(solo, { ...createMemory(QUILL, { tenantId: 'default', scope: A_SCOPE }), origin_project: '' });
+    writeEntry(solo, { ...createMemory(TEAL, { tenantId: 'default', scope: null }), origin_project: '' });
+    const soloHandle = await serve({ hippoRoot: solo, host: '127.0.0.1', port: 0 });
+    const cwd = process.cwd();
+    const away = path.join(tmp, 'away');
+    fs.mkdirSync(away);
+    process.chdir(away); // outside git, so the tool's auto query is empty and it lists by strength
+    try {
+      const context = (who: Who): Promise<string> => tool(soloKeys[who].plaintext, 'hippo_context', {}, soloHandle.url);
+      expect(await context('A')).toContain('quillonmarsh');
+      for (const who of OTHERS) {
+        const out = await context(who);
+        expect(out, who).toContain('tealwickharbour');
+        expect(out, who).not.toContain('quillonmarsh');
+      }
+    } finally {
+      process.chdir(cwd);
+      await soloHandle.stop();
+    }
   });
 
   it('line 6: promptHookContext gives A its row in every project, and B and ADM never', async () => {
@@ -272,17 +300,42 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
+  it('line 6, pinned: pinned-only context, with and without include_recent, and the hook give A its pinned row, and B and ADM never', async () => {
+    const mine = seedRow('the marrowfield pin: my standing rule for every session', A_SCOPE, '', { pinned: true });
+    const team = seedRow('the larchwood pin: the team standing rule for every session', null, '', { pinned: true });
+    for (const route of ['project=alpha&pinned_only=1', 'project=alpha&pinned_only=1&include_recent=5']) {
+      expect(await contextIds(keys.A.plaintext, route), route).toEqual(expect.arrayContaining([mine.id, team.id]));
+      for (const who of OTHERS) {
+        const seen = await contextIds(keys[who].plaintext, route);
+        expect(seen, `${who} ${route}`).toContain(team.id);
+        expect(seen, `${who} ${route}`).not.toContain(mine.id);
+      }
+    }
+    const hook = async (who: Who): Promise<string> => (await promptHookContext(ctxOf(who), {
+      sessionId: `walk-pin-${who}`,
+      project: { name: 'alpha', legacyName: 'alpha' },
+      payload: { prompt: 'what is the standing rule' },
+    }, { sharedStore: true })).stdout;
+    expect(await hook('A')).toContain('marrowfield');
+    for (const who of OTHERS) {
+      const out = await hook(who);
+      expect(out, who).toContain('larchwood');
+      expect(out, who).not.toContain('marrowfield');
+    }
+  });
+
   it('line 7: DELETE, archive, supersede, promote and POST /v1/outcome on A\'s row, then outcome with no ids (F13, F12)', async () => {
-    const paths: ReadonlyArray<{ name: string; kind: string; aStatus: number; call: (token: string, id: string) => Promise<Reply> }> = [
-      { name: 'delete', kind: 'distilled', aStatus: 200, call: (t, id) => http(t, 'DELETE', `/v1/memories/${id}`) },
-      { name: 'archive', kind: 'raw', aStatus: 200, call: (t, id) => http(t, 'POST', `/v1/memories/${id}/archive`, { reason: 'walk' }) },
-      { name: 'supersede', kind: 'distilled', aStatus: 200, call: (t, id) => http(t, 'POST', `/v1/memories/${id}/supersede`, { content: 'walk successor text' }) },
-      { name: 'promote', kind: 'distilled', aStatus: 400, call: (t, id) => http(t, 'POST', `/v1/memories/${id}/promote`, {}) },
-      { name: 'outcome', kind: 'distilled', aStatus: 200, call: (t, id) => http(t, 'POST', '/v1/outcome', { ids: [id], good: true }) },
+    type Path = { name: string; kind: string; aStatus: number; othersStatus: number; call: (token: string, id: string) => Promise<Reply> };
+    const paths: readonly Path[] = [
+      { name: 'delete', kind: 'distilled', aStatus: 200, othersStatus: 404, call: (t, id) => http(t, 'DELETE', `/v1/memories/${id}`) },
+      { name: 'archive', kind: 'raw', aStatus: 200, othersStatus: 404, call: (t, id) => http(t, 'POST', `/v1/memories/${id}/archive`, { reason: 'walk' }) },
+      { name: 'supersede', kind: 'distilled', aStatus: 200, othersStatus: 404, call: (t, id) => http(t, 'POST', `/v1/memories/${id}/supersede`, { content: 'walk successor text' }) },
+      { name: 'promote', kind: 'distilled', aStatus: 400, othersStatus: 404, call: (t, id) => http(t, 'POST', `/v1/memories/${id}/promote`, {}) },
+      { name: 'outcome', kind: 'distilled', aStatus: 200, othersStatus: 200, call: (t, id) => http(t, 'POST', '/v1/outcome', { ids: [id], good: true }) },
     ];
     for (const p of paths) {
       const id = await post(keys.A.plaintext, { content: `walk ${p.name} target row`, personal: true, kind: p.kind });
-      for (const who of OTHERS) await sameAsMissing(id, (x) => p.call(keys[who].plaintext, x));
+      for (const who of OTHERS) await sameAsMissing(id, (x) => p.call(keys[who].plaintext, x), p.othersStatus);
       expect(readEntry(store, id)?.outcome_positive, `${p.name} row untouched`).toBe(0);
       const mine = await p.call(keys.A.plaintext, id);
       expect(mine.status, `${p.name}: ${mine.text}`).toBe(p.aStatus);
@@ -365,7 +418,7 @@ describe('personal memories walk (plan lane T)', () => {
 
     const scoped = `q=zircon&scope=${encodeURIComponent(A_SCOPE)}`;
     expect((await recallIds(SIGNIN_A, scoped)).ids).toContain(ids.aZircon);
-    expect((await recallIds(SIGNIN_B_SCOPED, scoped)).ids).not.toContain(ids.aZircon);
+    expect((await recallIds(SIGNIN_B_SCOPED, scoped)).status).toBe(403);
     const open = await recallIds(SIGNIN_B_SCOPED, 'q=zircon');
     expect(open.ids).toContain(ids.teamZircon);
     expect(open.ids).not.toContain(ids.aZircon);
@@ -395,10 +448,10 @@ describe('personal memories walk (plan lane T)', () => {
     }
   });
 
-  it('line 14: POST /v1/sleep derives from two A rows into A\'s scope and mixes nothing', async () => {
+  it('line 14: POST /v1/sleep derives from each pair of seeds into that pair\'s scope and mixes nothing', async () => {
     const base = 'rotate the cobaltfern staging certificates before expiry';
-    const markers = ['amberquill', 'tealmarker', 'bravomarker'];
-    for (const [scope, marker] of [[A_SCOPE, 'amberquill'], [null, 'tealmarker'], [B_SCOPE, 'bravomarker']] as const) {
+    const scopeOf = new Map<string, string | null>([['amberquill', A_SCOPE], ['tealmarker', null], ['bravomarker', B_SCOPE]]);
+    for (const [marker, scope] of scopeOf) {
       seedRow(`${base} ${marker}`, scope, '');
       seedRow(`${base} ${marker} notify the on-call channel`, scope, '');
     }
@@ -406,10 +459,12 @@ describe('personal memories walk (plan lane T)', () => {
     expect(r.status, r.text).toBe(200);
 
     const derived = loadAllEntries(store).filter((e) => e.source === 'consolidation' && e.content.includes('cobaltfern'));
-    const fromA = derived.filter((e) => e.content.includes('amberquill'));
-    expect(fromA.length).toBeGreaterThan(0);
-    for (const e of fromA) expect(e.scope).toBe(A_SCOPE);
-    for (const e of derived) expect(markers.filter((m) => e.content.includes(m)), e.content).toHaveLength(1);
+    const markerOf = (e: MemoryEntry): string[] => [...scopeOf.keys()].filter((m) => e.content.includes(m));
+    expect(derived.flatMap(markerOf).sort()).toEqual([...scopeOf.keys()].sort());
+    for (const e of derived) {
+      expect(markerOf(e), e.content).toHaveLength(1);
+      expect(e.scope ?? null, e.content).toBe(scopeOf.get(markerOf(e)[0]!));
+    }
   });
 
   it('line 15: local CLI recall --scope personal:private:oid-a returns no personal row', async () => {
@@ -419,6 +474,7 @@ describe('personal memories walk (plan lane T)', () => {
     const run = (flags: Record<string, string | boolean>) => runInProcess(() => cmdRecall(store, 'harrowfen', { json: true, ...flags }));
     expect((await run({})).stdout).toContain(team.id);
     const scoped = await run({ scope: A_SCOPE });
+    expect(scoped.stdout).toContain(team.id);
     const personal = loadAllEntries(store).filter((e) => e.scope?.startsWith('personal:'));
     expect(personal.map((e) => e.id)).toContain(mine.id);
     expect(personal.filter((e) => scoped.stdout.includes(e.id)).map((e) => e.id)).toEqual([]);

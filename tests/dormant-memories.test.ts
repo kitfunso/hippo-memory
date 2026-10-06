@@ -498,6 +498,32 @@ describe('listing, restoring and forgetting dormant memories', () => {
     }
   });
 
+  it('another person\'s dormant personal row reads as missing to every call, and its owner keeps it', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-personal-', DORMANT_ON);
+    try {
+      const mine = aged(createMemory('the quillfen alias is mine alone', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'personal:private:oid-a' }), 90);
+      const team = aged(createMemory('the quillfen gateway serves the whole team', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+      writeEntry(home, mine);
+      writeEntry(home, team);
+      await consolidate(home, { now: new Date() });
+      const as = (owner: string | undefined, role: 'admin' | 'member'): api.Context =>
+        ({ hippoRoot: home, tenantId: 'default', actor: owner === undefined ? { subject: 'adm', role } : { subject: owner, role, owner } });
+      for (const ctx of [as('oid-b', 'member'), as(undefined, 'admin'), as('oid-b', 'admin')]) {
+        expect(api.listDormant(ctx).map((m) => m.id)).toEqual([team.id]);
+        expect(api.isDormant(ctx, team.id)).toBe(true);
+        expect(api.isDormant(ctx, mine.id)).toBe(false);
+        expect(() => api.restoreDormant(ctx, mine.id)).toThrow(`dormant memory not found: ${mine.id}`);
+        expect(() => api.forgetDormant(ctx, mine.id)).toThrow(`dormant memory not found: ${mine.id}`);
+      }
+      const owner = as('oid-a', 'member');
+      expect(api.listDormant(owner).map((m) => m.id).sort()).toEqual([mine.id, team.id].sort());
+      expect(api.isDormant(owner, mine.id)).toBe(true);
+      expect(api.restoreDormant(owner, mine.id).scope).toBe('personal:private:oid-a');
+    } finally {
+      restore();
+    }
+  });
+
   it('forget deletes a dormant memory permanently, tenant-scoped', async () => {
     const { home, restore, ids } = await storeWithDormant('hippo-dormant-forget-', [
       'zanzibar gateway requires the legacy auth header',

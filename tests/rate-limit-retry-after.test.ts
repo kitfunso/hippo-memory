@@ -20,28 +20,27 @@ describe('createRateLimiter', () => {
     expect(limiter(ratePerSec).retryAfterSec).toBe(seconds);
   });
 
-  it('hasToken spends nothing and sees the refill', () => {
-    const rl = limiter(10, 2);
-    expect([rl.hasToken('a', 1000), rl.hasToken('a', 1000)]).toEqual([true, true]);
-    expect([rl.check('a', 1000), rl.check('a', 1000)]).toEqual([true, true]);
-    expect(rl.hasToken('a', 1000)).toBe(false);
-    expect(rl.hasToken('a', 1100)).toBe(true);
-    expect([rl.check('a', 1100), rl.check('a', 1100)]).toEqual([true, false]);
-  });
-
   it('does not drain a bucket when the clock steps back', () => {
     const rl = limiter(20, 40);
     expect(rl.check('a', 86_400_000)).toBe(true);
-    expect(rl.hasToken('a', 0)).toBe(true);
     expect(rl.check('a', 0)).toBe(true);
-    expect(rl.hasToken('a', 50)).toBe(true);
+    expect(rl.check('a', 50)).toBe(true);
+  });
+
+  it('refills the span a stepped-back clock covers once, not again when it comes forward', () => {
+    const rl = limiter(1, 2);
+    expect([rl.check('a', 10_000), rl.check('a', 10_000)]).toEqual([true, true]);
+    expect(rl.check('a', 5_000)).toBe(false);
+    expect(rl.check('a', 10_500)).toBe(false);
+    expect(rl.check('a', 11_000)).toBe(true);
   });
 });
 
-/** Top-level argument count of the call whose `(` sits at `open`; commas inside strings, templates and brackets do not count. -1 when unclosed. */
-function argCount(text: string, open: number): number {
+/** Top-level argument texts of the call whose `(` sits at `open`; commas inside strings, templates and brackets do not split. Null when unclosed. */
+function callArgs(text: string, open: number): string[] | null {
   const stack: string[] = [')'];
-  let commas = 0;
+  const args: string[] = [];
+  let start = open + 1;
   for (let i = open + 1; i < text.length; i++) {
     const c = text[i];
     const top = stack[stack.length - 1];
@@ -57,30 +56,53 @@ function argCount(text: string, open: number): number {
     else if (c === '{') stack.push('}');
     else if (c === top) {
       stack.pop();
-      if (stack.length === 0) return commas + 1;
-    } else if (c === ',' && stack.length === 1) commas++;
+      if (stack.length === 0) return [...args, text.slice(start, i).trim()];
+    } else if (c === ',' && stack.length === 1) {
+      args.push(text.slice(start, i).trim());
+      start = i + 1;
+    }
   }
-  return -1;
+  return null;
+}
+
+/** Lines where `429` is neither a comment, a status comparison, nor an HttpError given a real Retry-After value. */
+function unexplained429s(file: string, text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/\b429\b/g)) {
+    const lineStart = text.lastIndexOf('\n', m.index) + 1;
+    const before = text.slice(lineStart, m.index);
+    if (/^\s*(\*|\/\*)/.test(before) || before.includes('//')) continue;
+    if (/[!=]==\s*$/.test(before) || /^\s*[!=]==/.test(text.slice(m.index + 3))) continue;
+    const call = /HttpError\(\s*$/.exec(before);
+    const args = call ? callArgs(text, lineStart + call.index + 'HttpError'.length) : null;
+    if (args?.length === 3 && args[2] !== 'undefined' && args[2] !== 'void 0') continue;
+    out.push(`${file}:${text.slice(0, m.index).split('\n').length}`);
+  }
+  return out;
 }
 
 describe('every 429 in core src', () => {
-  it('passes HttpError a Retry-After value', () => {
-    const sites: Array<{ at: string; args: number }> = [];
+  it('is an HttpError with a Retry-After value, a status comparison, or a comment', () => {
     const files = readdirSync(join(repoRoot, 'src'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts'));
-    for (const file of files) {
-      const text = readFileSync(join(repoRoot, 'src', file), 'utf8');
-      for (const m of text.matchAll(/HttpError\(\s*429\b/g)) {
-        sites.push({ at: `${file}:${text.slice(0, m.index).split('\n').length}`, args: argCount(text, m.index + m[0].indexOf('(')) });
-      }
-    }
-    expect(sites.length).toBeGreaterThan(0);
-    expect(sites.filter((s) => s.args < 3)).toEqual([]);
+    const texts = files.map((file) => ({ file, text: readFileSync(join(repoRoot, 'src', file), 'utf8') }));
+    expect(texts.some(({ text }) => /HttpError\(\s*429\b/.test(text))).toBe(true);
+    expect(texts.flatMap(({ file, text }) => unexplained429s(file, text))).toEqual([]);
   });
 
-  it('argCount reads a template with a nested call as one argument', () => {
+  it('flags a 429 written any other way', () => {
+    const bad = [
+      'sendJson(res, 429, body);', 'res.writeHead(429);', 'const TOO_MANY = 429;', "throw new HttpError(429, 'x', undefined);",
+      "throw new HttpError(429, 'x');", 'res.statusCode = 429;',
+    ];
+    for (const line of bad) expect(unexplained429s('f.ts', line), line).toEqual(['f.ts:1']);
+    const fine = ["throw new HttpError(429, 'x', limiter.retryAfterSec);", 'if (status === 429) retry();', '// a 429 here', ' * 429 and 5xx'];
+    for (const line of fine) expect(unexplained429s('f.ts', line), line).toEqual([]);
+  });
+
+  it('callArgs reads a template with a nested call as one argument', () => {
     const text = 'new HttpError(429, `limit ${f(a, b)}); x`, 60)';
-    expect(argCount(text, text.indexOf('('))).toBe(3);
-    expect(argCount('HttpError(429, "a, b")', 9)).toBe(2);
+    expect(callArgs(text, text.indexOf('('))).toEqual(['429', '`limit ${f(a, b)}); x`', '60']);
+    expect(callArgs('HttpError(429, "a, b")', 9)).toEqual(['429', '"a, b"']);
   });
 });
 
