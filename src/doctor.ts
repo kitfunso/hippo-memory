@@ -179,7 +179,7 @@ function compactionsCheck(db: DatabaseSyncLike, store: string, now: Date): Docto
     const unfinished = stuck === 0
       ? `${recorded} in the store`
       : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
-    const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} stale, ${spool.bad} .bad` : '';
+    const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
     return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

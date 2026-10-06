@@ -308,6 +308,32 @@ describe('failures are counted and set aside', () => {
     expect(logs).toEqual([`spool file ${stale} was claimed by a replayer that never finished 3 times, set aside as .bad`]);
   });
 
+  it('a stale claim whose .bad already landed is removed, not set aside a second time', () => {
+    put(`${A}.failed.bad`, 's1');
+    put(`${A}.a2.claim-${stamp(Date.now() - 11 * MINUTE)}`, 's1');
+    expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.failed.bad`]);
+    expect(logs).toEqual([]);
+  });
+
+  it('only a busy claim rename is reported as locked by another program', () => {
+    put(`${A}.a0.json`, 's1');
+    const claimFails = (code: string): string[] => {
+      logs = [];
+      withFs({
+        renameSync: (from, to) => {
+          if (to.includes('.claim')) throw fsError(code);
+          fs.renameSync(from, to);
+        },
+      });
+      expect(replay(collector().importer)).toBe(0);
+      expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
+      return logs;
+    };
+    expect(claimFails('EPERM')).toEqual([`spool file ${A}.a0.json is locked by another program, left for the next run`]);
+    expect(claimFails('EIO')).toEqual([`spool problem: spool file ${A}.a0.json not claimed: EIO: simulated`]);
+  });
+
   it('EPERM on the .bad write releases the claim and the rest of the spool still imports', () => {
     fs.mkdirSync(spoolDir(), { recursive: true });
     fs.writeFileSync(path.join(spoolDir(), `${A}.a0.json`), '{ not json');
@@ -385,6 +411,14 @@ describe('temp files a spool left', () => {
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.unreadable.bad`]);
     expect(fs.readFileSync(path.join(spoolDir(), `${A}.unreadable.bad`), 'utf8')).toBe('{"sessionId": "s1", "summ');
     expect(logs).toEqual([`spool file ${A}.a0.json.tmp was never finished, set aside as .bad`]);
+  });
+
+  it('removes an old .bad tmp a cut-off set-aside left, and keeps a fresh one', () => {
+    age(put(`${A}.failed.bad.0123abcd.tmp`, 's1'));
+    put(`${B}.unreadable.bad.89abcdef.tmp`, 's2');
+    expect(replay(collector().importer)).toBe(0);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${B}.unreadable.bad.89abcdef.tmp`]);
+    expect(logs).toEqual([]);
   });
 
   it('leaves a fresh tmp alone', () => {

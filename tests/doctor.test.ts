@@ -158,7 +158,7 @@ describe('hippo doctor', () => {
 
       const check = compactions(cwd);
       expect(check.status).toBe('warn');
-      expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet); spool: 2 waiting, 2 stale, 2 .bad');
+      expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet); spool: 2 waiting, 2 left by a replay that stopped, 2 .bad');
       expect(check.fix).toMatch(/^hippo sleep {3}\(replays them\); open the \.bad files in .+[\\/]\.hippo[\\/]compactions-spool, save what you still need with hippo remember, then delete them$/);
     });
 
@@ -167,7 +167,7 @@ describe('hippo doctor', () => {
       spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
       const check = compactions(cwd);
       expect(check.status).toBe('warn');
-      expect(check.detail).toBe('0 compactions recorded, none stuck in the store; spool: 0 waiting, 0 stale, 1 .bad');
+      expect(check.detail).toBe('0 compactions recorded, none stuck in the store; spool: 0 waiting, 0 left by a replay that stopped, 1 .bad');
       expect(check.fix).toContain('.bad files in');
       expect(check.fix).not.toContain('hippo sleep');
     });
