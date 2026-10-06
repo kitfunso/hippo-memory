@@ -1,5 +1,5 @@
 // Every recall the surface goldens pin, plus the branches they skip, run over serve() once on hippo.db and once on a
-// store that answers only through the port; the replies and the rows written must match. Red until recall is ported.
+// store that answers only through the port; the replies and the rows written must match.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, __resetSessionRecallHistoryHttp, type HippoStore } from '../src/server.js';
@@ -96,7 +96,7 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
   const s = freshStore(templates, scenario.kind);
   try {
     const store = makeStore?.(s.root);
-    const handle = await serve({ hippoRoot: s.root, port: 0, ...(store ? { store } : {}) });
+    const handle = await serve({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];
     try {
       for (const call of scenario.calls) replies.push(await send(handle.url, call));
@@ -131,8 +131,7 @@ describe('recall over the port matches recall on hippo.db', () => {
     _resetAblationCacheForTests();
   });
 
-  // SHORTCUT: red until steps 4 and 5 route recall through the port (port side answers 501); drop .fails as each half turns green.
-  it.fails.each(SCENARIOS.map((s) => [s.name, s] as const))('%s', async (_name, scenario) => {
+  it.each(SCENARIOS.map((s) => [s.name, s] as const))('%s', async (_name, scenario) => {
     const onHippoDb = await runPass(scenario);
     scenario.reaches?.(onHippoDb.replies);
     const onPort = await runPass(scenario, portOnlyStore);

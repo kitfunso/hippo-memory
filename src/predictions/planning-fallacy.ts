@@ -1,8 +1,8 @@
 import { envAutodebiasOff } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent, type AppendAuditOpts } from '../audit.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../forward-claim-detector.js';
-import { computePredictionBaserate } from './store.js';
+import { computePredictionBaserate, type PredictionBaserate } from './store.js';
 
 // ---------------------------------------------------------------------------
 // Auto-injection of reference-class baserate on recall
@@ -88,6 +88,17 @@ export interface ClassResolution {
    *  null hint (silent — prevents the "show wrong class half the time"
    *  failure mode the alphabetical-tiebreak alternative would create). */
   tiebreak: boolean;
+}
+
+/** The prediction class a forward claim resolves to, and that class's closed-prediction stats when one resolved. */
+export interface PlanningFallacyEvidence extends ClassResolution {
+  readonly baserate: PredictionBaserate | null;
+}
+
+/** The output a claim earns from its evidence, and the audit row that records the decision when there is one. */
+export interface PlanningFallacyDecision {
+  output: PlanningFallacyOutput;
+  audit?: AppendAuditOpts;
 }
 
 /**
@@ -192,64 +203,73 @@ export function computePlanningFallacyOutput(
   queryText: string,
   opts: ComputePlanningFallacyHintOpts = {},
 ): PlanningFallacyOutput {
-  // Env read FIRST so AUTODEBIAS=off pays zero regex cost. Per-call read
-  // (rather than module-load cache) is deliberate: tests env-toggle this
-  // via process.env mutation without module reload.
+  const match = detectPlanningClaim(queryText, opts);
+  if (!match) return {};
+  const actor = opts.actor ?? 'recall';
+  const { output, audit } = decidePlanningFallacy(match, planningFallacyEvidenceAt(hippoRoot, tenantId, match.classQueryTokens), tenantId, actor);
+  if (audit) appendAuditEventOnce(hippoRoot, audit);
+  return output;
+}
+
+/** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no claim matches. */
+export function detectPlanningClaim(queryText: string, opts: ComputePlanningFallacyHintOpts = {}): ForwardClaimMatch | null {
+  // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module reload.
   const mode: AutodebiasMode =
     opts.mode ?? (envAutodebiasOff() ? 'off' : 'regex');
-  if (mode === 'off') return {};
-  if (!queryText) return {};
+  if (mode === 'off') return null;
+  if (!queryText) return null;
+  return detectForwardClaim(queryText);
+}
 
-  const match = detectForwardClaim(queryText);
-  if (!match) return {};
+/** Resolves a claim's tokens to one class and reads its baserate, writing no audit row. */
+export function planningFallacyEvidenceAt(hippoRoot: string, tenantId: string, classQueryTokens: readonly string[]): PlanningFallacyEvidence {
+  const resolution = resolveClassFromTokens(hippoRoot, tenantId, classQueryTokens);
+  // emitAudit=false: the recall_autodebias_hint row carries n_closed and mean_ratio, so predict_baserate stays off.
+  const baserate = resolution.classTag ? computePredictionBaserate(hippoRoot, tenantId, resolution.classTag, 'recall', false) : null;
+  return { ...resolution, baserate };
+}
 
-  const actor = opts.actor ?? 'recall';
-
-  const resolution = resolveClassFromTokens(hippoRoot, tenantId, match.classQueryTokens);
-  if (resolution.tiebreak) {
+/** The hint, the watching variant or nothing for a claim and its class evidence; reads and writes nothing itself. */
+export function decidePlanningFallacy(
+  match: ForwardClaimMatch,
+  evidence: PlanningFallacyEvidence,
+  tenantId: string,
+  actor: string,
+): PlanningFallacyDecision {
+  if (evidence.tiebreak) {
     // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets the
     // caller render "watching but no baserate (tiebreak)"; the audit channel stays the source of truth.
-    return watchingWithAudit(hippoRoot, tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
+    return watchingWithAudit(tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
   }
-  if (!resolution.classTag) {
-    // Telemetry: forward-claim detected, no class scored ≥ 1. High volume here means regex+token-overlap
-    // misses real forward-claims with no class signal, the case for an embedding fallback.
-    // The watching variant lets the caller render "watching but no baserate (no class match)".
-    return watchingWithAudit(hippoRoot, tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
+  if (!evidence.classTag) {
+    // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real forward-claims
+    // with no class signal, the case for an embedding fallback.
+    return watchingWithAudit(tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
   }
-
-  // emitAudit=false: avoid double-write to predict_baserate channel.
-  // The recall_autodebias_hint audit below carries n_closed + mean_ratio.
-  const baserate = computePredictionBaserate(
-    hippoRoot,
-    tenantId,
-    resolution.classTag,
-    actor,
-    /*emitAudit=*/ false,
-  );
-  if (baserate.nClosed === 0) return {}; // Silent — wait for closed data.
-
-  appendAuditEventOnce(hippoRoot, {
-    tenantId,
-    actor,
-    op: 'recall_autodebias_hint',
-    targetId: resolution.classTag,
-    metadata: {
-      class_tag: resolution.classTag,
-      detected_phrase: match.phrase,
-      n_closed: baserate.nClosed,
-      mean_ratio: baserate.meanRatio,
-    },
-  });
-
+  const baserate = evidence.baserate;
+  if (!baserate || baserate.nClosed === 0) return { output: {} }; // Silent — wait for closed data.
   return {
-    hint: {
-      classTag: resolution.classTag,
-      baserateSummary: baserate.summary,
-      source: 'j3.2-auto',
-      detectedPhrase: match.phrase,
-      nClosed: baserate.nClosed,
-      meanRatio: baserate.meanRatio,
+    output: {
+      hint: {
+        classTag: evidence.classTag,
+        baserateSummary: baserate.summary,
+        source: 'j3.2-auto',
+        detectedPhrase: match.phrase,
+        nClosed: baserate.nClosed,
+        meanRatio: baserate.meanRatio,
+      },
+    },
+    audit: {
+      tenantId,
+      actor,
+      op: 'recall_autodebias_hint',
+      targetId: evidence.classTag,
+      metadata: {
+        class_tag: evidence.classTag,
+        detected_phrase: match.phrase,
+        n_closed: baserate.nClosed,
+        mean_ratio: baserate.meanRatio,
+      },
     },
   };
 }
@@ -270,25 +290,26 @@ function appendAuditEventOnce(hippoRoot: string, event: Parameters<typeof append
 }
 
 function watchingWithAudit(
-  hippoRoot: string,
   tenantId: string,
   actor: string,
   match: ForwardClaimMatch,
   reason: PlanningFallacyWatching['reason'],
   suggestion: string,
-): PlanningFallacyOutput {
-  appendAuditEventOnce(hippoRoot, {
-    tenantId,
-    actor,
-    op: reason === 'tiebreak' ? 'recall_autodebias_hint_tiebreak' : 'recall_autodebias_hint_no_class_match',
-    targetId: match.phrase.slice(0, 100),
-    metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
-  });
+): PlanningFallacyDecision {
   return {
-    watching: {
-      detectedPhrase: match.phrase,
-      reason,
-      suggestion,
+    output: {
+      watching: {
+        detectedPhrase: match.phrase,
+        reason,
+        suggestion,
+      },
+    },
+    audit: {
+      tenantId,
+      actor,
+      op: reason === 'tiebreak' ? 'recall_autodebias_hint_tiebreak' : 'recall_autodebias_hint_no_class_match',
+      targetId: match.phrase.slice(0, 100),
+      metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
     },
   };
 }

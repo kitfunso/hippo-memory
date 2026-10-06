@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteBlockedError, withSqliteBlocked } from '../src/db.js';
 import { recordTokens } from '../src/api.js';
-import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { recordMcpTokens } from '../src/mcp/request.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import { resolveIndexedEmbeddingModel } from '../src/embeddings.js';
@@ -15,19 +15,7 @@ import { resolveVectorArm } from '../src/search/vector.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
-// The real tool reads hippo.db before the ledger write does, so a stub lets the ledger open be the first one.
-vi.mock('../src/mcp/recall-tools.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/mcp/recall-tools.js')>()),
-  runContextTool: async (): Promise<string> => 'memory text',
-}));
-
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-
-function toolText(res: McpResponse | null): string {
-  // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }] }.
-  const result = res?.result as { content?: { text: string }[] } | undefined;
-  return result?.content?.[0]?.text ?? '';
-}
 
 const ranked = (results: readonly unknown[]): string => `ranked ${results.length}`;
 
@@ -36,13 +24,13 @@ type Row = readonly [string, RegExp, (root: string) => Promise<string>, string];
 
 const ROWS: readonly Row[] = [
   ['api/tokens.ts recordTokens', /recordTokens/, async (root) => {
-    recordTokens({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, 'http_recall', { items: 1, tokens: 1 });
+    await recordTokens({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, 'http_recall', { items: 1, tokens: 1 });
     return 'returned';
   }, 'returned'],
-  ['mcp/request.ts recordMcpTokens', /recordMcpTokens/, async (root) => toolText(await handleMcpRequest(
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: {} } },
-    { hippoRoot: root, tenantId: 'default', actor: 'mcp' },
-  )), 'memory text'],
+  ['mcp/request.ts recordMcpTokens', /recordMcpTokens/, async (root) => {
+    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp' });
+    return 'returned';
+  }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
   ['recall-trace.ts writeRecallTraceAtRoot', /writeRecallTraceAtRoot/, async (root) => String(writeRecallTraceAtRoot(root, {

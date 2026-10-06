@@ -17,7 +17,7 @@ import { computePredictionBaserate } from '../src/predictions/store.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
-  type ActiveGoals, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput,
+  type ActiveGoals, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
 } from '../src/server.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
@@ -31,7 +31,9 @@ import {
 } from './_helpers/recall-golden-seed.js';
 
 type Kind = 'local' | 'wide';
-interface Outcome { value: unknown; rows: unknown; opens: number }
+interface Outcome<T> { value: T; rows: unknown; opens: number }
+/** JSON.stringify throws a TypeError on it, so an audit row carrying it fails mid-write. */
+interface Cycle { self?: Cycle }
 
 let templates: Templates;
 
@@ -46,7 +48,7 @@ function auditOps(root: string): unknown[] {
 }
 
 /** Runs `fn` on a fresh copy of a template store: what it returned, every row it left and the handles it opened. */
-async function onCopy(kind: Kind, fn: (s: Store) => unknown): Promise<Outcome> {
+async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<Outcome<T>> {
   const s = freshStore(templates, kind);
   try {
     const { result, statements } = await recordStatementsAsync(async () => fn(s));
@@ -58,7 +60,11 @@ async function onCopy(kind: Kind, fn: (s: Store) => unknown): Promise<Outcome> {
 }
 
 /** The direct hippo.db call on one copy and the store method on another must return the same value and leave the same rows. */
-async function parity(direct: (s: Store) => unknown, port: (store: HippoStore) => Promise<unknown>, kind: Kind = 'local'): Promise<{ direct: Outcome; port: Outcome }> {
+async function parity<D, P>(
+  direct: (s: Store) => D | Promise<D>,
+  port: (store: HippoStore) => Promise<P>,
+  kind: Kind = 'local',
+): Promise<{ direct: Outcome<D>; port: Outcome<P> }> {
   const a = await onCopy(kind, direct);
   const b = await onCopy(kind, (s) => port(sqliteStore(s.root)));
   expect(b.value).toEqual(a.value);
@@ -66,9 +72,8 @@ async function parity(direct: (s: Store) => unknown, port: (store: HippoStore) =
   return { direct: a, port: b };
 }
 
-function idsOf(value: unknown): string[] {
-  // SAFETY: called only on the outcome of a method that returns MemoryEntry[].
-  return (value as MemoryEntry[]).map((e) => e.id);
+function idsOf(entries: readonly MemoryEntry[]): string[] {
+  return entries.map((e) => e.id);
 }
 
 beforeAll(() => {
@@ -138,9 +143,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
           closeHippoDb(db);
         }
       }, async (store) => plain(await store.activeGoals(opts)));
-      // SAFETY: both sides return plain() of an ActiveGoals.
-      const read = direct.value as ReturnType<typeof plain>;
-      expect([read.goals.length, read.policies.length]).toEqual([goals, policies]);
+      expect([direct.value.goals.length, direct.value.policies.length]).toEqual([goals, policies]);
       expect(port.opens).toBe(direct.opens);
     },
   );
@@ -158,7 +161,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
   );
 
   it.each([['an active snapshot', 'local', true], ['no active snapshot', 'wide', false]] as const)('continuity with %s', async (_name, kind, anchored) => {
-    // api/recall.ts loadContinuity's reads, before its scope filter.
+    // The reads recall made before the port, ahead of its scope filter.
     const { direct, port } = await parity((s) => {
       const activeSnapshot = loadActiveTaskSnapshot(s.root, TENANT);
       const sessionId = activeSnapshot?.session_id ?? undefined;
@@ -193,13 +196,13 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
 });
 
 describe('sqliteStore writes leave the rows the hippo.db functions leave, each on one handle', () => {
-  const recallAudit = (op: AppendAuditOpts['op'], metadata: Record<string, unknown>): AppendAuditOpts => ({ tenantId: TENANT, actor: 'api_key:hk_test', op, metadata });
+  const recallAudit = (op: AppendAuditOpts['op'], metadata: AppendAuditOpts['metadata']): AppendAuditOpts => ({ tenantId: TENANT, actor: 'api_key:hk_test', op, metadata });
   const events: readonly AppendAuditOpts[] = [
     recallAudit('recall', { query_length: 6, results: 3 }),
     recallAudit('recall_availability_detected', { recent_fraction: 1, older_passed_over: 2, returned_count: 3 }),
   ];
 
-  it('appendAuditEvents writes the rows in order on one handle, where each recall audit opens its own today', async () => {
+  it('appendAuditEvents writes the rows in order on one handle, where each recall audit opened its own before the port', async () => {
     const { direct, port } = await parity((s) => {
       for (const event of events) {
         const db = openHippoDb(s.root);
@@ -215,7 +218,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
   });
 
   it('appendAuditEvents writes none of the rows when one fails, and opens nothing for an empty list', async () => {
-    const loop: Record<string, unknown> = {};
+    const loop: Cycle = {};
     loop.self = loop;
     const s = freshStore(templates, 'local');
     try {
@@ -229,53 +232,53 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     }
   });
 
-  it('writeRecallTrace returns the new trace id and writes the trace and its results', async () => {
-    const input: RecallTraceInput = {
-      tenantId: TENANT,
-      sessionId: SESSION,
-      pipeline: 'api',
-      query: 'deploy',
-      explainMode: true,
-      results: [
-        { memoryId: 'mem_p_goal', score: 1.6, rerankSteps: [{ stage: 'goal-boost', multiplier: 2, scoreBefore: 0.8, scoreAfter: 1.6 }] },
-        { memoryId: 'mem_p_plain', score: 0.9 },
-      ],
-    };
-    const { direct, port } = await parity((s) => writeRecallTraceAtRoot(s.root, input), (store) => store.writeRecallTrace(input));
-    expect(direct.value).toEqual(expect.any(Number));
-    expect(port.opens).toBe(1);
+  const trace: RecallTraceInput = {
+    tenantId: TENANT,
+    sessionId: SESSION,
+    pipeline: 'api',
+    query: 'deploy',
+    explainMode: true,
+    results: [
+      { memoryId: 'mem_p_goal', score: 1.6, rerankSteps: [{ stage: 'goal-boost', multiplier: 2, scoreBefore: 0.8, scoreAfter: 1.6 }] },
+      { memoryId: 'mem_p_plain', score: 0.9 },
+    ],
+  };
+  const strengthen = { ids: ['mem_p_plain', 'mem_p_new', 'mem_missing'], opts: { tenantId: TENANT, recallBoostAblated: false } };
+  const logRow = (memoryId: string, score: number): GoalRecallLogRow => ({
+    goalId: templates.goalId, memoryId, tenantId: TENANT, sessionId: SESSION, recalledAt: FAKE_NOW, score,
   });
+  const finishWrites = (): RecallWrites => ({ goalLog: [logRow('mem_p_goal', 1.6), logRow('mem_p_global', 1.4)], audit: events, trace, strengthen });
 
-  it.each([['a live recall', false, ['mem_p_new', 'mem_p_plain'], 1], ['the eval ablation', true, [], 0]] as const)(
-    'strengthenRetrieved under %s returns the ids it found',
-    async (_name, recallBoostAblated, found, opens) => {
-      const ids = ['mem_p_plain', 'mem_p_new', 'mem_missing'];
-      const opts = { tenantId: TENANT, recallBoostAblated };
-      const { direct, port } = await parity(
-        (s) => [...strengthenRetrieved(s.root, ids, opts)].sort(),
-        async (store) => [...(await store.strengthenRetrieved(ids, opts))].sort(),
-      );
-      expect(direct.value).toEqual(found);
-      expect(port.opens).toBe(opens);
-    },
-  );
-
-  it('logGoalRecall writes what the goal boost logs today and drops a row whose memory is not in this store', async () => {
+  it('finishRecall writes what the goal boost, the audit, the trace and the strengthen wrote, on one handle', async () => {
     const globalRow = seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z', {}, { tags: ['goal-alpha'] });
-    const logRow = (memoryId: string, score: number): GoalRecallLogRow => ({
-      goalId: templates.goalId, memoryId, tenantId: TENANT, sessionId: SESSION, recalledAt: FAKE_NOW, score,
-    });
     const { direct, port } = await parity((s) => {
       const [goalRow] = loadEntriesByIds(s.root, ['mem_p_goal']);
       const db = openHippoDb(s.root);
       try {
         applyGoalStackBoost(db, [{ entry: goalRow!, score: 0.8 }, { entry: globalRow, score: 0.7 }], { sessionId: SESSION, tenantId: TENANT, limit: 10 });
+        for (const event of events) appendAuditEvent(db, event);
       } finally {
         closeHippoDb(db);
       }
-    }, (store) => store.logGoalRecall([logRow('mem_p_goal', 1.6), logRow('mem_p_global', 1.4)]));
+      writeRecallTraceAtRoot(s.root, trace);
+      strengthenRetrieved(s.root, strengthen.ids, strengthen.opts);
+    }, (store) => store.finishRecall(finishWrites()));
+    // The global row's memory lives in another store, so its log row is dropped.
     expect(direct.rows).toMatchObject({ goalRecallLog: [{ memory_id: 'mem_p_goal', score: 1.6 }] });
     expect(port.opens).toBe(1);
+  });
+
+  it('finishRecall writes no goal log or audit row when one audit row fails', async () => {
+    const loop: Cycle = {};
+    loop.self = loop;
+    const s = freshStore(templates, 'local');
+    try {
+      const before = rowsOf(s.root);
+      await expect(sqliteStore(s.root).finishRecall({ ...finishWrites(), audit: [events[0]!, recallAudit('recall', loop)] })).rejects.toThrow(TypeError);
+      expect(rowsOf(s.root)).toEqual(before);
+    } finally {
+      rmSync(s.home, { recursive: true, force: true });
+    }
   });
 
   it('bumpRecallStats adds to the recall counter and returns every counter, as updateStats leaves them', async () => {
@@ -302,7 +305,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
       mkdirSync(join(root, 'hippo.db'));
       const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
       await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
-      expect(recordTokens({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', use)).toBeUndefined();
+      await expect(recordTokens({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', use)).resolves.toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -2,10 +2,10 @@
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from '../../project-identity.js';
 import { assembleCost, contextCost, drillCost } from '../../context-render.js';
-import { closeHippoDb, openHippoDb } from '../../db.js';
-import { updateStats } from '../../store/index-and-stats.js';
+import { writeStatsMirror } from '../../store/mirrors.js';
+import { storeFor } from '../../store-port.js';
 import { appendRecall, biasHintEnabled, buildSessionKey, getOrCreateRing, hashQueryText, RingBuffer, snapshotRing } from '../../recall-history.js';
-import { appendAuditEvent, auditQueryFields } from '../../audit.js';
+import { auditQueryFields } from '../../audit.js';
 import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, type RecallOpts, recordTokens, retrieve } from '../../api.js';
 import { HttpError, MAX_ID_LEN, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
@@ -125,7 +125,7 @@ interface SessionRing {
 // hybrid pipeline outside api.recall), HTTP's /v1/memories response
 // body IS api.recall's result directly. So the api.recall-computed
 // hint flows through. HIPPO_ANCHORING=off short-circuits.
-function snapshotSessionRing(ctx: Context, hippoRoot: string, q: string, sessionId: string | undefined): SessionRing {
+async function snapshotSessionRing(ctx: Context, q: string, sessionId: string | undefined): Promise<SessionRing> {
   let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
   let httpRingKey: string | undefined;
   if (biasHintEnabled('anchoring')) {
@@ -142,18 +142,13 @@ function snapshotSessionRing(ctx: Context, hippoRoot: string, q: string, session
       // prompts in audit_log here too — query content can contain
       // secrets, PII, or RTBF-restricted material. hashQueryText is a 32-bit
       // FNV-1a, NOT a privacy hash, so use the recall audit's SHA-256/16 truncation.
-      const dbForAudit = openHippoDb(hippoRoot);
-      try {
-        appendAuditEvent(dbForAudit, {
-          tenantId: ctx.tenantId,
-          actor: ctx.actor.subject,
-          op: 'recall_anchor_skipped_no_session',
-          targetId: undefined,
-          metadata: auditQueryFields(q),
-        });
-      } finally {
-        closeHippoDb(dbForAudit);
-      }
+      await storeFor(ctx).appendAuditEvents([{
+        tenantId: ctx.tenantId,
+        actor: ctx.actor.subject,
+        op: 'recall_anchor_skipped_no_session',
+        targetId: undefined,
+        metadata: auditQueryFields(q),
+      }]);
     }
   }
   return { httpRecallHistory, httpRingKey };
@@ -182,7 +177,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const { q, includeContinuity, sessionId } = parsed;
   const ctx = await buildContextWithAuth(req, opts);
 
-  const { httpRecallHistory, httpRingKey } = snapshotSessionRing(ctx, opts.hippoRoot, q, sessionId);
+  const { httpRecallHistory, httpRingKey } = await snapshotSessionRing(ctx, q, sessionId);
 
   const result = await retrieve(ctx, {
     query: q,
@@ -203,14 +198,14 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
 
   // Each recall surface counts its own hits; api.recall is no chokepoint,
   // since the CLI never calls it and MCP shows the user a different band.
-  updateStats(opts.hippoRoot, { recalled: result.results.length });
+  writeStatsMirror(opts.hippoRoot, await storeFor(ctx).bumpRecallStats(result.results.length));
 
   // Continuity payloads should never be cached. The caller is asking for
   // session-state-aware data; intermediaries must not reuse it across users.
   if (includeContinuity) {
     res.setHeader('Cache-Control', 'no-store');
   }
-  recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
+  await recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
   sendJson(res, 200, result);
   return;
 }
@@ -246,7 +241,7 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
   if (scope !== undefined) assembleExtra.scope = scope;
   const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
-  recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
+  await recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
   sendJson(res, 200, result);
   return;
 }
@@ -361,7 +356,7 @@ export async function handleGetContext({ req, res, opts, query }: RouteRequest):
     currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
-  recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
+  await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
   sendJson(res, 200, result);
   return;
 }

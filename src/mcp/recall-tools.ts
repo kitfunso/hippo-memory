@@ -7,7 +7,7 @@ import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';
 import { resolveProjectIdentity } from '../project-identity.js';
-import { appendAuditEvent, auditQueryFields } from '../audit.js';
+import { auditQueryFields, type AppendAuditOpts } from '../audit.js';
 import {
   detectAnchoring,
   hashQueryText,
@@ -19,7 +19,7 @@ import {
   RingBuffer,
 } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { storeFor } from '../store-port.js';
 import { estimateTokens } from '../token-ledger.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
 import { mcpActor, isJsonBoolean, type ToolCall } from './protocol.js';
@@ -186,24 +186,16 @@ function recallPresenter(
   };
 }
 
-function appendRecallAudit(hippoRoot: string, event: Parameters<typeof appendAuditEvent>[1]): void {
-  const dbForAudit = openHippoDb(hippoRoot);
-  try {
-    appendAuditEvent(dbForAudit, event);
-  } finally {
-    closeHippoDb(dbForAudit);
-  }
-}
-
-function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer | null, queryHash: number, rendered: RenderedRecall): void {
+async function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer | null, queryHash: number, rendered: RenderedRecall): Promise<void> {
   const { hippoRoot, tenantId, ctx } = call;
   const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown } = rendered;
+  const rows: AppendAuditOpts[] = [];
   if (biasHintEnabled('anchoring')) {
     if (anchorRing) {
       // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
       appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);
       if (mcpAnchoringHint?.reason === 'memory_dominance') {
-        appendRecallAudit(hippoRoot, {
+        rows.push({
           tenantId,
           actor: ctx?.actor ?? 'mcp',
           op: 'recall_anchor_detected_memory_dominance',
@@ -214,7 +206,7 @@ function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer 
           },
         });
       } else if (mcpAnchoringHint?.reason === 'query_repeat') {
-        appendRecallAudit(hippoRoot, {
+        rows.push({
           tenantId,
           actor: ctx?.actor ?? 'mcp',
           op: 'recall_anchor_detected_query_repeat',
@@ -225,7 +217,7 @@ function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer 
     } else {
       // No sessionId, so no ring. Hash the prompt with SHA-256/16 as the recall audit does (api.ts:854):
       // hashQueryText is FNV-1a 32-bit, trivial to brute-force on low-entropy queries.
-      appendRecallAudit(hippoRoot, {
+      rows.push({
         tenantId,
         actor: ctx?.actor ?? 'mcp',
         op: 'recall_anchor_skipped_no_session',
@@ -236,7 +228,7 @@ function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer 
   }
 
   if (mcpAvailabilityHint) {
-    appendRecallAudit(hippoRoot, {
+    rows.push({
       tenantId,
       actor: ctx?.actor ?? 'mcp',
       op: 'recall_availability_detected',
@@ -247,6 +239,7 @@ function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer 
       },
     });
   }
+  await storeFor({ hippoRoot, store: ctx?.store }).appendAuditEvents(rows);
 }
 
 export async function runRecallTool(call: ToolCall): Promise<string> {
@@ -278,7 +271,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   });
   if (!out.rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
   lastRecalledIds.set(resolveClientKey(ctx), out.rendered.list.map((r) => r.entry.id));
-  auditRecallHints(call, query, anchorRing, queryHash, out.rendered);
+  await auditRecallHints(call, query, anchorRing, queryHash, out.rendered);
   return out.rendered.text;
 }
 

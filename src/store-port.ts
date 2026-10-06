@@ -4,15 +4,14 @@ import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
 import {
-  getActiveGoalsWithDb, loadGoalPolicies, writeGoalRecallLog,
-  type GetActiveGoalsOpts, type Goal, type GoalRecallLogRow, type RetrievalPolicy,
+  activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
+  type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
 } from './goals.js';
 import type { MemoryEntry } from './memory.js';
-import { resolveClassFromTokens, type ClassResolution } from './predictions/planning-fallacy.js';
-import { computePredictionBaserate, type PredictionBaserate } from './predictions/store.js';
-import { writeRecallTraceAtRoot, type RecallTraceInput } from './recall-trace.js';
+import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
+import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
-import { strengthenRetrieved as strengthenRetrievedAt, type StrengthenOptions } from './store/entry-writes.js';
+import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { bumpStats } from './store/index-and-stats.js';
 import type { LegacyStats } from './store/rows.js';
@@ -30,15 +29,14 @@ export interface RecallSearchArgs {
   readonly originProjects?: OriginFilter;
 }
 
-/** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
-export interface ActiveGoals {
-  readonly goals: Goal[];
-  readonly policies: ReadonlyMap<string, RetrievalPolicy>;
-}
-
-/** The prediction class a forward claim resolves to, and that class's closed-prediction stats when one resolved. */
-export interface PlanningFallacyEvidence extends ClassResolution {
-  readonly baserate: PredictionBaserate | null;
+/** Everything one recall writes once its reply is decided, so a store writes it on one connection. */
+export interface RecallWrites {
+  /** Earliest boost first, since a re-recall within one goal's life keeps the first row; a row whose memory lives in another store is dropped. */
+  readonly goalLog: readonly GoalRecallLogRow[];
+  /** In the order they happened. */
+  readonly audit: readonly AppendAuditOpts[];
+  readonly trace?: RecallTraceInput;
+  readonly strengthen?: { readonly ids: readonly string[]; readonly opts: StrengthenOptions };
 }
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
@@ -61,12 +59,8 @@ export interface HippoStore {
   planningFallacyEvidence(tenantId: string, classQueryTokens: readonly string[]): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
   appendAuditEvents(events: readonly AppendAuditOpts[]): Promise<void>;
-  /** The new trace id, or null when the write failed: a trace is observability, so it never fails a recall. */
-  writeRecallTrace(input: RecallTraceInput): Promise<number | null>;
-  /** The ids found and strengthened; a failed write finds none and never fails the recall. */
-  strengthenRetrieved(ids: readonly string[], opts: StrengthenOptions): Promise<Set<string>>;
-  /** Writes the rows whose memory lives in this store; a re-recall within one goal's life adds nothing. */
-  logGoalRecall(rows: readonly GoalRecallLogRow[]): Promise<void>;
+  /** The goal log and audit rows all or none; then the trace and the strengthen, which log a failure and never fail the recall. */
+  finishRecall(writes: RecallWrites): Promise<void>;
   /** Every counter after adding `recalled`; core still writes the stats mirror file. */
   bumpRecallStats(recalled: number): Promise<LegacyStats>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
@@ -82,6 +76,11 @@ function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T): T {
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** The store a request runs on: the served one, else hippo.db under its root, as the CLI and SDK callers have it. */
+export function storeFor(ctx: { readonly hippoRoot: string; readonly store?: HippoStore }): HippoStore {
+  return ctx.store ?? sqliteStore(ctx.hippoRoot);
 }
 
 /** The built-in store: today's synchronous hippo.db functions behind the port, each call on its own short-lived handles, so close has nothing to release. */
@@ -100,28 +99,16 @@ export function sqliteStore(hippoRoot: string): HippoStore {
       return loadEntriesByIds(hippoRoot, ids, tenantId);
     },
     async activeGoals(opts) {
-      return onHandle(hippoRoot, (db) => {
-        const goals = getActiveGoalsWithDb(db, opts);
-        return { goals, policies: loadGoalPolicies(db, goals) };
-      });
+      return activeGoalsWithPolicies(hippoRoot, opts);
     },
     async freshRawEntries(count, tenantId, sessionId) {
       return loadFreshRawMemories(hippoRoot, count, tenantId, sessionId);
     },
     async continuity(tenantId, eventLimit) {
-      const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-      const sessionId = activeSnapshot?.session_id ?? undefined;
-      return {
-        activeSnapshot,
-        sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId) : null,
-        recentSessionEvents: sessionId ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
-      };
+      return continuityAt(hippoRoot, tenantId, eventLimit);
     },
     async planningFallacyEvidence(tenantId, classQueryTokens) {
-      const resolution = resolveClassFromTokens(hippoRoot, tenantId, classQueryTokens);
-      // The recall's own recall_autodebias_hint row carries the stats, so the predict_baserate row stays off.
-      const baserate = resolution.classTag ? computePredictionBaserate(hippoRoot, tenantId, resolution.classTag, 'recall', false) : null;
-      return { ...resolution, baserate };
+      return planningFallacyEvidenceAt(hippoRoot, tenantId, classQueryTokens);
     },
     async appendAuditEvents(events) {
       if (events.length === 0) return;
@@ -129,22 +116,8 @@ export function sqliteStore(hippoRoot: string): HippoStore {
         for (const event of events) appendAuditEvent(db, event);
       }));
     },
-    async writeRecallTrace(input) {
-      return writeRecallTraceAtRoot(hippoRoot, input);
-    },
-    async strengthenRetrieved(ids, opts) {
-      return strengthenRetrievedAt(hippoRoot, ids, opts);
-    },
-    async logGoalRecall(rows) {
-      if (rows.length === 0) return;
-      onHandle(hippoRoot, (db) => withWriteScope(db, 'log_goal_recall', () => {
-        const ids = [...new Set(rows.map((r) => r.memoryId))];
-        // goal_recall_log.memory_id references memories, so a global row's id would fail the insert.
-        // SAFETY: the SELECT projects exactly one column, `id`.
-        const local = db.prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string }>;
-        const localIds = new Set(local.map((r) => r.id));
-        writeGoalRecallLog(db, rows.filter((r) => localIds.has(r.memoryId)));
-      }));
+    async finishRecall(writes) {
+      finishRecallAt(hippoRoot, writes);
     },
     async bumpRecallStats(recalled) {
       return bumpStats(hippoRoot, { recalled });
@@ -154,4 +127,28 @@ export function sqliteStore(hippoRoot: string): HippoStore {
     },
     async close(): Promise<void> {},
   };
+}
+
+/** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
+export function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number): ContinuityBlock {
+  const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+  const sessionId = activeSnapshot?.session_id ?? undefined;
+  return {
+    activeSnapshot,
+    sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId) : null,
+    recentSessionEvents: sessionId ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
+  };
+}
+
+/** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
+export function finishRecallAt(hippoRoot: string, writes: RecallWrites): void {
+  onHandle(hippoRoot, (db) => {
+    withWriteScope(db, 'finish_recall', () => {
+      writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
+      for (const event of writes.audit) appendAuditEvent(db, event);
+    });
+    // Each opens its own transaction, so neither can share the scope above.
+    if (writes.trace) writeRecallTrace(db, writes.trace);
+    if (writes.strengthen) strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts);
+  });
 }

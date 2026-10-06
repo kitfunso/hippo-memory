@@ -221,6 +221,23 @@ export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goa
   }
 }
 
+/** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
+export interface ActiveGoals {
+  readonly goals: Goal[];
+  readonly policies: ReadonlyMap<string, RetrievalPolicy>;
+}
+
+/** The active goals and their policies on one handle, so a goal and its policy never disagree. */
+export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const goals = getActiveGoalsWithDb(db, opts);
+    return { goals, policies: loadGoalPolicies(db, goals) };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
 export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
   const db = openHippoDb(hippoRoot);
@@ -324,7 +341,7 @@ function goalBoostMultiplier(
   tags: string[],
   matches: string[],
   goalsByTag: Map<string, Goal>,
-  policiesByGoalId: Map<string, RetrievalPolicy>,
+  policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>,
 ): number {
   // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
   let multiplier = Math.min(
@@ -357,34 +374,15 @@ function goalBoostMultiplier(
 
 /** Log rows for the top `limit` boosted rows, one per matched goal. */
 function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
-  db: DatabaseSyncLike,
   boosted: R[],
   matchesByEntryId: Map<string, string[]>,
   goalsByTag: Map<string, Goal>,
   opts: GoalStackBoostOpts,
 ): GoalRecallLogRow[] {
   const { sessionId, tenantId, limit } = opts;
-  // Filter to local memories only -- global memory IDs aren't in this DB's
-  // memories table, so the FK on goal_recall_log.memory_id would fail.
-  // dlPFC depth's outcome propagation is session-scoped to local; boost on
-  // ranking still applies to global results, just no log row -> no
-  // propagation.
-  const topKIds = boosted.slice(0, limit).map((r) => r.entry.id);
-  const localIds = new Set<string>();
-  if (topKIds.length > 0) {
-    const placeholders = topKIds.map(() => '?').join(',');
-    // SAFETY: rows come from the SELECT above, which projects exactly one
-    // column, `id`, from memories.
-    const localRows = db.prepare(
-      `SELECT id FROM memories WHERE id IN (${placeholders})`,
-    ).all(...topKIds) as Array<{ id: string }>;
-    for (const row of localRows) localIds.add(row.id);
-  }
-
   const recalledAt = new Date().toISOString();
   const log: GoalRecallLogRow[] = [];
   for (const r of boosted.slice(0, limit)) {
-    if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
     const matches = matchesByEntryId.get(r.entry.id);
     if (!matches || matches.length === 0) continue;
     for (const tag of matches) {
@@ -394,6 +392,17 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
     }
   }
   return log;
+}
+
+/** The rows whose memory lives in this store: goal_recall_log.memory_id references memories, so a global row would fail
+ *  the insert. A global result keeps its boost; it only earns no log row, so no outcome propagation. */
+export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): GoalRecallLogRow[] {
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.map((r) => r.memoryId))];
+  // SAFETY: the SELECT projects exactly one column, `id`, from memories.
+  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string }>;
+  const localIds = new Set(local.map((r) => r.id));
+  return rows.filter((r) => localIds.has(r.memoryId));
 }
 
 /**
@@ -420,12 +429,24 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
   results: R[],
   opts: GoalStackBoostOpts,
 ): GoalStackBoost<R> {
-  const { sessionId, tenantId, trace } = opts;
-  const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
-  if (active.length === 0) return { results, log: [] };
+  const goals = getActiveGoalsWithDb(db, { sessionId: opts.sessionId, tenantId: opts.tenantId });
+  if (goals.length === 0) return { results, log: [] };
+  const boost = boostByGoals(results, { goals, policies: loadGoalPolicies(db, goals) }, opts);
+  return { results: boost.results, log: localGoalRecallRows(db, boost.log) };
+}
 
-  const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
-  const policiesByGoalId = loadGoalPolicies(db, active);
+/** {@link computeGoalStackBoost} over goals already read, touching no store. Its log keeps rows whose memory is global,
+ *  since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
+export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
+  results: R[],
+  active: ActiveGoals,
+  opts: GoalStackBoostOpts,
+): GoalStackBoost<R> {
+  const { trace } = opts;
+  if (active.goals.length === 0) return { results, log: [] };
+
+  const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
+  const policiesByGoalId = active.policies;
 
   // Goal-tag matches per boosted row, keyed by entry id. Kept as a side table
   // (rather than a spread-on `_goalMatches` marker property) so `boosted`
@@ -461,7 +482,7 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
     // prior (meaningful) rank instead of reordering by content.
     .sort((a, b) => b.score - a.score);
 
-  return { results: boosted, log: buildGoalRecallLog(db, boosted, matchesByEntryId, goalsByTag, opts) };
+  return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };
 }
 
 /**

@@ -41,14 +41,14 @@ export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
-export { sqliteStore, type ActiveGoals, type HippoStore, type PlanningFallacyEvidence, type RecallSearchArgs } from './store-port.js';
+export { sqliteStore, type HippoStore, type RecallSearchArgs, type RecallWrites } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 // The types HippoStore's recall methods take and return, so an add-on store can implement them from this subpath.
 export type { AppendAuditOpts } from './audit.js';
 export type { ContinuityBlock } from './api/recall-types.js';
-export type { GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
+export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
 export type { MemoryEntry } from './memory.js';
-export type { ClassResolution } from './predictions/planning-fallacy.js';
+export type { ClassResolution, PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
 export type { PredictionBaserate } from './predictions/store.js';
 export type { RecallTraceInput } from './recall-trace.js';
 export type { StrengthenOptions } from './store/entry-writes.js';
@@ -95,7 +95,7 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/memories', handler: handleCreateMemory },
   { method: 'GET', path: '/v1/graph', handler: handleGetGraph },
-  { method: 'GET', path: '/v1/memories', handler: handleRecallMemories },
+  { method: 'GET', path: '/v1/memories', storeReady: true, handler: handleRecallMemories },
   { method: 'GET', pattern: '/v1/sessions/:id/assemble', handler: handleAssembleSession },
   { method: 'GET', pattern: '/v1/recall/drill/:id', handler: handleDrillRecall },
   { method: 'POST', pattern: '/v1/memories/:id/archive', handler: handleArchiveMemory },
@@ -244,8 +244,8 @@ async function handleRequest(
     return;
   }
 
+  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
   if (method === 'POST' && path === '/mcp') {
-    await refuseUnportedRoute(req, opts);
     await handleMcpPost(req, res, opts);
     return;
   }

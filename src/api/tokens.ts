@@ -1,7 +1,8 @@
 // Token-use and failure reports.
 
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
-import { recordTokenUse, summarizeTokenUse, type TokenSummary, type TokenSurface } from '../token-ledger.js';
+import { summarizeTokenUse, type TokenSummary, type TokenSurface } from '../token-ledger.js';
+import { storeFor } from '../store-port.js';
 import { summarizeFailures, type FailureSummary } from '../failure-log.js';
 import { log } from '../log.js';
 import type { Context } from './types.js';
@@ -11,25 +12,20 @@ import type { Context } from './types.js';
  * Best-effort: never throws, because a ledger failure must not fail the
  * recall or context call that produced the text.
  */
-export function recordTokens(
+export async function recordTokens(
   ctx: Context,
   surface: TokenSurface,
   use: { items: number; tokens: number; sessionId?: string | null },
-): void {
+): Promise<void> {
   try {
-    const db = openHippoDb(ctx.hippoRoot);
-    try {
-      recordTokenUse(db, {
-        tenantId: ctx.tenantId,
-        sessionId: use.sessionId ?? null,
-        surface,
-        event: 'inject',
-        items: use.items,
-        tokens: use.tokens,
-      });
-    } finally {
-      closeHippoDb(db);
-    }
+    await storeFor(ctx).recordTokens({
+      tenantId: ctx.tenantId,
+      sessionId: use.sessionId ?? null,
+      surface,
+      event: 'inject',
+      items: use.items,
+      tokens: use.tokens,
+    });
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.warnThenDebug('api-token-ledger', `token ledger write failed; the reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);

@@ -103,23 +103,35 @@ export interface StrengthenOptions {
 /** Strengthen what a read returned: update only the four retrieval columns on the live row, never a stale copy.
  *  Best effort: a failure logs and never fails the read. Returns the ids found in this store. */
 export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], opts: StrengthenOptions): Set<string> {
-  const found = new Set<string>();
-  if (ids.length === 0 || opts.recallBoostAblated) return found;
-  let db: DatabaseSyncLike | undefined;
+  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
+  let db: DatabaseSyncLike;
   try {
     db = openHippoDb(hippoRoot);
-    db.exec('BEGIN IMMEDIATE');
-    for (const id of strengthenRetrievedOn(db, ids, opts)) found.add(id);
-    db.exec('COMMIT');
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    try { db?.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    log.warn(`retrieval stats not saved (${error instanceof Error ? error.message : String(error)})`);
-    found.clear();
-  } finally {
-    if (db) closeHippoDb(db);
+    warnStrengthenFailed(error);
+    return new Set();
   }
-  return found;
+  try {
+    return strengthenRetrievedInOwnTx(db, ids, opts);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** strengthenRetrieved on an open handle that holds no transaction, so a recall's last writes share one handle. */
+export function strengthenRetrievedInOwnTx(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
+  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
+  try {
+    return withWriteScope(db, 'strengthen_retrieved', () => strengthenRetrievedOn(db, ids, opts));
+  } catch (error) {
+    warnStrengthenFailed(error);
+    return new Set();
+  }
+}
+
+function warnStrengthenFailed<E>(error: E): void {
+  log.warn(`retrieval stats not saved (${error instanceof Error ? error.message : String(error)})`);
 }
 
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */

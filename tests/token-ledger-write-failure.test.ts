@@ -34,10 +34,10 @@ afterEach(() => {
 });
 
 describe('token ledger write failures', () => {
-  it('api.recordTokens warns once and does not throw', () => {
+  it('api.recordTokens warns once and does not throw', async () => {
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
-    expect(() => recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 })).not.toThrow();
-    recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 });
+    await expect(recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 })).resolves.toBeUndefined();
+    await recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 });
     const lines = ledgerLines();
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/^\[hippo\] warn: .*no such table: token_ledger/);
