@@ -12,14 +12,14 @@ import { hookStoreRoot } from './shared.js';
 const SLEEP_FAILED = '[hippo] sleep failed: ';
 const FAILURE_CHARS = 120;
 
-/** The line the user sees when the last sleep failed, a replay hit a problem, or the spool holds `.bad` files; null when none did. */
+/** The line the user sees when the last sleep failed, a spool step hit an unexpected error, or the spool holds `.bad` files; null when none did. */
 export function sleepProblems(logText: string, bad: number): string | null {
   const lines = logText.split(/\r?\n/);
   const failed = lines.find((line) => line.startsWith(SLEEP_FAILED));
   const errors = lines.filter((line) => line.includes(SPOOL_PROBLEM)).length;
   const parts = [
     failed === undefined ? '' : `the last sleep failed (${truncateCodePointSafe(failed.slice(SLEEP_FAILED.length).trim(), FAILURE_CHARS)})`,
-    errors === 0 ? '' : `${errors} compaction replay error${errors === 1 ? '' : 's'}`,
+    errors === 0 ? '' : `${errors} error${errors === 1 ? '' : 's'} while saving waiting compaction summaries`,
     bad === 0 ? '' : `${bad} compaction ${bad === 1 ? 'summary' : 'summaries'} set aside as .bad`,
   ].filter((part) => part !== '');
   return parts.length === 0 ? null : `Hippo: ${parts.join('; ')}. Run hippo doctor for details.`;

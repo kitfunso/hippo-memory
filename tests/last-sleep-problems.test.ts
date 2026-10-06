@@ -30,24 +30,26 @@ describe('sleepProblems', () => {
 
   it('counts only marked lines', () => {
     const log = [
-      '[hippo] compaction replay: spool problem: spool file a.a0.json is not readable, set aside as .bad',
-      '[hippo] compaction replay: spool problem: spool file b.a2.json set aside as .bad after 3 tries: boom',
+      '[hippo] compaction replay: spool file a.a0.json is not readable, set aside as .bad',
+      '[hippo] compaction replay: spool file b.a2.json set aside as .bad after 3 tries: boom',
+      '[hippo] compaction replay: spool problem: spool file f.a0.json not claimed: EIO: i/o error',
+      '[hippo] compaction replay: spool problem: spool lock not released: EIO: i/o error',
       '[hippo] compaction replay: replay failed: database is locked',
       '[hippo] compaction replay: spool file c.a0.json failed to import (try 1 of 3): boom',
       '[hippo] compaction replay: spool file d.a0.json waits for the next run: the store is busy',
       '[hippo] compaction replay: spool left to another replayer (lock held by pid 4)',
       '[hippo] compaction replay: spool file e.a0.json saved; writing its memories failed: boom',
     ].join('\r\n');
-    expect(sleepProblems(log, 0)).toBe('Hippo: 2 compaction replay errors. Run hippo doctor for details.');
+    expect(sleepProblems(log, 0)).toBe('Hippo: 2 errors while saving waiting compaction summaries. Run hippo doctor for details.');
   });
 
-  it('names a failed sleep, replay errors and the .bad count in one line', () => {
+  it('names a failed sleep, the errors and the .bad count in one line, counting a set-aside file once', () => {
     const log = [
-      '[hippo] compaction replay: spool problem: spool file a.a0.json is not readable, set aside as .bad',
+      '[hippo] compaction replay: spool file a.a0.json is not readable, set aside as .bad',
       '[hippo] compaction replay: spool problem: spool file b.a0.json not claimed: EIO: i/o error',
       '[hippo] sleep failed: store locked',
     ].join('\n');
-    expect(sleepProblems(log, 1)).toBe('Hippo: the last sleep failed (store locked); 2 compaction replay errors; 1 compaction summary set aside as .bad. Run hippo doctor for details.');
+    expect(sleepProblems(log, 1)).toBe('Hippo: the last sleep failed (store locked); 1 error while saving waiting compaction summaries; 1 compaction summary set aside as .bad. Run hippo doctor for details.');
     expect(sleepProblems(`[hippo] sleep failed: ${'x'.repeat(300)}`, 3)).toBe(`Hippo: the last sleep failed (${'x'.repeat(120)}); 3 compaction summaries set aside as .bad. Run hippo doctor for details.`);
   });
 });

@@ -232,7 +232,7 @@ describe('failures are counted and set aside', () => {
     expect(logs).toEqual([
       `spool file ${A}.a0.json failed to import (try 1 of 3): blocked`,
       `spool file ${A}.a1.json failed to import (try 2 of 3): blocked`,
-      `spool problem: spool file ${A}.a2.json set aside as .bad after 3 tries: blocked`,
+      `spool file ${A}.a2.json set aside as .bad after 3 tries: blocked`,
     ]);
   });
 
@@ -255,7 +255,7 @@ describe('failures are counted and set aside', () => {
     expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.interrupted.bad`]);
     expect(fs.readFileSync(path.join(spoolDir(), `${A}.interrupted.bad`), 'utf8')).toBe(body);
-    expect(logs).toEqual([`spool problem: spool file ${stale} was claimed by a replayer that never finished 3 times, set aside as .bad`]);
+    expect(logs).toEqual([`spool file ${stale} was claimed by a replayer that never finished 3 times, set aside as .bad`]);
   });
 
   it('EPERM on the .bad write releases the claim and the rest of the spool still imports', () => {
@@ -334,7 +334,7 @@ describe('temp files a spool left', () => {
     expect(replay(collector().importer)).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.unreadable.bad`]);
     expect(fs.readFileSync(path.join(spoolDir(), `${A}.unreadable.bad`), 'utf8')).toBe('{"sessionId": "s1", "summ');
-    expect(logs).toEqual([`spool problem: spool file ${A}.a0.json.tmp was never finished, set aside as .bad`]);
+    expect(logs).toEqual([`spool file ${A}.a0.json.tmp was never finished, set aside as .bad`]);
   });
 
   it('leaves a fresh tmp alone', () => {

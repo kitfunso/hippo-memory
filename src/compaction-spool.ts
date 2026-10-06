@@ -8,7 +8,7 @@ import { isSqliteBusy } from './db/busy.js';
 import { errorMessage } from './log.js';
 
 export const SPOOL_DIR = 'compactions-spool';
-/** Starts every log line about a summary that was set aside or a step that broke, so the session-start banner counts only those. */
+/** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted by its `.bad` name instead. */
 export const SPOOL_PROBLEM = 'spool problem: ';
 const LOCK = 'replay.lock';
 /** Long enough that a live replayer has finished with its claim. */
@@ -270,7 +270,7 @@ function recoverStaleClaims(dir: string, log: Log): void {
         log(`spool file ${claim.name} was claimed by a replayer that never finished, put back (try ${next} of ${MAX_ATTEMPTS})`);
       }
     } else if (moveBad(dir, file, claim.stem, claim.attempt, 'interrupted', log)) {
-      log(`${SPOOL_PROBLEM}spool file ${claim.name} was claimed by a replayer that never finished ${MAX_ATTEMPTS} times, set aside as .bad`);
+      log(`spool file ${claim.name} was claimed by a replayer that never finished ${MAX_ATTEMPTS} times, set aside as .bad`);
     }
   }
 }
@@ -321,7 +321,7 @@ function promoteTmp(dir: string, tenantId: string, log: Log): void {
       if (settle(() => fsx.renameSync(file, file.slice(0, -'.tmp'.length)), log, what) === 'done') log(`spool file ${name} was never renamed into place, promoted`);
     } else if (writeBad(dir, m[1], 'unreadable', text, log, what)) {
       settle(() => fsx.unlinkSync(file), log, what);
-      log(`${SPOOL_PROBLEM}spool file ${name} was never finished, set aside as .bad`);
+      log(`spool file ${name} was never finished, set aside as .bad`);
     }
   }
 }
@@ -359,7 +359,7 @@ function importFailed(dir: string, claim: string, entry: Waiting, text: string, 
     putBack(dir, claim, entry.stem, next, log);
     log(`spool file ${name} failed to import (try ${next} of ${MAX_ATTEMPTS}): ${errorMessage(cause)}`);
   } else if (moveBad(dir, claim, entry.stem, entry.attempt, 'failed', log, text)) {
-    log(`${SPOOL_PROBLEM}spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${errorMessage(cause)}`);
+    log(`spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${errorMessage(cause)}`);
   }
   return 'skipped';
 }
@@ -378,7 +378,7 @@ function importFile(dir: string, entry: Waiting, tenantId: string, log: Log, imp
   if (read !== 'done') return 'skipped';
   const spooled = parseSpooled(text, tenantId);
   if (spooled === null) {
-    if (moveBad(dir, claim, entry.stem, entry.attempt, 'unreadable', log, text)) log(`${SPOOL_PROBLEM}spool file ${name} is not readable, set aside as .bad`);
+    if (moveBad(dir, claim, entry.stem, entry.attempt, 'unreadable', log, text)) log(`spool file ${name} is not readable, set aside as .bad`);
     return 'skipped';
   }
   let recorded = false;
