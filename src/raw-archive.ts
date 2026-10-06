@@ -1,6 +1,6 @@
 import { BadRequestError, NotFoundError } from './api-errors.js';
 import type { DatabaseSyncLike } from './db.js';
-import { isFtsAvailable } from './db.js';
+import { isFtsAvailable, withWriteScope } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 
@@ -86,17 +86,16 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
  *
  * Snapshots the full row into `raw_archive`, flips `kind` to `'archived'` so the
  * append-only trigger lets the delete through, then deletes the row. All in one
- * SAVEPOINT so it can be nested inside an outer transaction (e.g. batchWriteAndDelete).
+ * write scope, which nests inside an outer transaction (e.g. batchWriteAndDelete).
  *
  * Throws if the row does not exist or is not `kind='raw'`.
  */
 export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): void {
   const row = loadRawRow(db, id);
 
-  // SAVEPOINT (not BEGIN) so this works whether or not we're already inside a
-  // transaction. SQLite refuses BEGIN within a transaction; SAVEPOINT nests safely.
-  db.exec('SAVEPOINT archive_raw');
-  try {
+  // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here
+  // rolls back only this archive.
+  withWriteScope(db, 'archive_raw', () => {
     moveRowToArchive(db, id, row, opts);
     auditArchive(db, id, row, opts);
     // Archiving a child under a level-2 summary marks the parent dirty, inside the
@@ -117,12 +116,5 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     if (opts.afterArchive) {
       opts.afterArchive(db, id);
     }
-    db.exec('RELEASE SAVEPOINT archive_raw');
-  } catch (e) {
-    try {
-      db.exec('ROLLBACK TO SAVEPOINT archive_raw');
-      db.exec('RELEASE SAVEPOINT archive_raw');
-    } catch { /* savepoint already discarded; keep the original error */ }
-    throw e;
-  }
+  });
 }

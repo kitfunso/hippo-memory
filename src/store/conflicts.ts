@@ -86,7 +86,7 @@ export function replaceDetectedConflicts(
   const db = openStore(hippoRoot);
 
   try {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
 
     const sameTenant = loadSameTenantCheck(db);
 
@@ -300,7 +300,7 @@ export function resolveConflict(
 
     if (!loserId) return null;
 
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
 
     // Mark conflict as resolved
     db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)

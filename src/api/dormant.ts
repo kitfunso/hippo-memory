@@ -36,9 +36,9 @@ export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMe
 
 /**
  * Bring a dormant memory back into active memory. It returns as if just
- * recalled: `last_retrieved` is now, so it gets a full half-life before it
- * can fade again. Every other field is the snapshot taken when it went
- * dormant.
+ * recalled, with a full half-life. A row audit repair set aside returns
+ * `verified`, so no quality check judges it again. Every other field is the
+ * snapshot taken when it went dormant.
  *
  * Throws when the tenant has no dormant memory with that id (another
  * tenant's id reads the same way), when a live memory already holds the id,
@@ -69,6 +69,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
         ...dormant.entry,
         last_retrieved: now.toISOString(),
       };
+      if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
       restored = stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now) });
       writeEntryDbOnly(db, restored, { actor: ctx.actor.subject });
       deleteDormantRow(db, ctx.tenantId, id);

@@ -20,6 +20,7 @@ import { replayCompactionsAt } from '../compaction-record.js';
 import { log } from '../log.js';
 import { printError } from './output.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
+import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
 import { escapeRegex } from '../escape.js';
 
@@ -375,6 +376,7 @@ export function cmdDailyRunner(): void {
   if (isInitialized(globalRoot)) {
     const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
+    repairQualityOnceAt(globalRoot);
   }
   printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);

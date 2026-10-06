@@ -36,3 +36,25 @@ export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs =
     }
   }
 }
+
+/** Runs `fn` as one write: BEGIN IMMEDIATE on an idle handle, else SAVEPOINT `name` inside the caller's transaction.
+ *  A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's busy_timeout. */
+export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
+  const top = db.isTransaction === false;
+  db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
+  try {
+    const result = fn();
+    db.exec(top ? 'COMMIT' : `RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (error) {
+    try {
+      if (top) {
+        db.exec('ROLLBACK');
+      } else {
+        db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+        db.exec(`RELEASE SAVEPOINT ${name}`);
+      }
+    } catch { /* already rolled back; keep the original error */ }
+    throw error;
+  }
+}

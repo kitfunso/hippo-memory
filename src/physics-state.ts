@@ -138,7 +138,7 @@ export function savePhysicsState(
       updated_at = datetime('now')
   `);
 
-  db.exec('BEGIN');
+  db.exec('BEGIN IMMEDIATE');
   try {
     for (const p of particles) {
       stmt.run(

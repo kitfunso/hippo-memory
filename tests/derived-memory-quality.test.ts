@@ -10,8 +10,9 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { storeExtractedFacts } from '../src/extract.js';
 import { generateDagSummary } from '../src/dag.js';
 import { Layer } from '../src/memory.js';
-import { assessAutomaticMemory } from '../src/automatic-memory-quality.js';
+import { assessAutomaticMemory } from '../src/memory-quality.js';
 
+const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observed' } as const;
 let root: string;
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hippo-derived-quality-'));
@@ -23,18 +24,27 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 describe('quality at automatic derivation boundaries', () => {
   it('keeps incomplete sources out of both merge and extraction without deleting them', async () => {
     const inputs = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'];
-    for (const content of inputs) writeEntry(root, createMemory(content, { layer: Layer.Episodic }));
+    for (const content of inputs) writeEntry(root, createMemory(content, captured));
     const result = await consolidate(root);
     expect(result.merged).toBe(0);
     expect(result.extractionCandidates).toBe(0);
     expect(loadAllEntries(root).map((entry) => entry.content)).toEqual(inputs);
   });
 
+  it("derives from a person's rows whatever the automatic check says of the text", async () => {
+    for (const content of ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy']) {
+      writeEntry(root, createMemory(content, { layer: Layer.Episodic }));
+    }
+    const result = await consolidate(root);
+    expect(result.merged).toBe(2);
+    expect(result.extractionCandidates).toBe(2);
+  });
+
   it('admits complete configuration lessons into consolidation', async () => {
     for (const content of [
       'Production migrations must exclude test schema setup because sorted filenames control application order.',
       'Production migrations must exclude test schema setup because deployment applies the sorted filenames in order.',
-    ]) writeEntry(root, createMemory(content, { layer: Layer.Episodic }));
+    ]) writeEntry(root, createMemory(content, captured));
     const result = await consolidate(root);
     expect(result.merged).toBe(2);
     expect(result.extractionCandidates).toBe(2);
@@ -43,7 +53,7 @@ describe('quality at automatic derivation boundaries', () => {
   it('still derives from short memories the checks are only unsure about', async () => {
     const inputs = ['alice reviews every schema change', 'alice reviews every schema change now'];
     expect(inputs.map((content) => assessAutomaticMemory(content).accepted)).toEqual([false, false]);
-    for (const content of inputs) writeEntry(root, createMemory(content, { layer: Layer.Episodic }));
+    for (const content of inputs) writeEntry(root, createMemory(content, captured));
     const result = await consolidate(root);
     expect(result.merged).toBe(2);
     expect(result.extractionCandidates).toBe(2);

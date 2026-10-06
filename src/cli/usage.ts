@@ -341,12 +341,14 @@ export const VERB_USAGE = {
                            Re-ingest a DLQ entry (--force skips sig check)`],
   audit: [`
   audit [--fix]            Check memory quality (--fix removes junk)
-    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply hides certain defects
-      --json               Report ids, reasons, protections and schema blockers as JSON
+    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply moves certain
+                           defects to dormant storage. Sleep and the daily runner apply it once
+                           per store after an upgrade
+      --json              Report ids, reasons, protections and schema blockers as JSON
       --global             Operate on the global store without changing its schema
-                           Keeps dormant snapshots and a database backup; undo with unreject,
-                           then dormant restore. Sleep's dormant retention still applies;
-                           the database backup remains until you remove it.`, `
+                           Writes a database backup first; undo with hippo dormant restore <id>,
+                           which marks the memory verified so repair leaves it alone. Sleep's
+                           dormant retention still applies; the backup stays until you remove it.`, `
   audit <sub>              Query the append-only audit log (A5 stub auth)
     audit list             List audit events for the active tenant
       --op <op>            Filter by op (remember | recall | promote |
