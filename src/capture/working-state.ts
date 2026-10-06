@@ -19,6 +19,20 @@ export const WORKING_STATE_CAPS = {
   next_step: PRE_COMPACT_NEXT_STEP_CAP,
 } as const;
 
+export type WorkingState = Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>;
+
+/** Each empty field falls back to `existing`'s, since a tool-heavy tail derives no task; null when all are empty, so blanks never replace a snapshot.
+ *  Never across sessions: another session's task saved under this id would pass compact-resume's session check. */
+export function mergeWorkingState(derived: WorkingState, existing: TaskSnapshot | null, sessionId: string | null): WorkingState | null {
+  const fallback = existing !== null && (existing.session_id === null || sessionId === null || existing.session_id === sessionId) ? existing : null;
+  const merged = {
+    task: derived.task || (fallback?.task ?? ''),
+    summary: derived.summary || (fallback?.summary ?? ''),
+    next_step: derived.next_step || (fallback?.next_step ?? ''),
+  };
+  return merged.task || merged.summary || merged.next_step ? merged : null;
+}
+
 /** Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a head cap would drop the newest working state. */
 export function truncateKeepNewest(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;

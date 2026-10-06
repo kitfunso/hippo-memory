@@ -57,6 +57,17 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
 }
 
+/** The outcome logged for a caller's request id, or null, so a retried send finds the first one. */
+export function requestOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string): FailureOutcome | null {
+  return db.prepare(`SELECT outcome FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
+    .get<{ outcome: FailureOutcome } | undefined>(tenantId, requestId)?.outcome ?? null;
+}
+
+/** A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant. */
+export function settleFailureOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string, outcome: FailureOutcome): void {
+  db.prepare(`UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`).run(outcome, tenantId, requestId);
+}
+
 /** Rated failures and repeats in one session, for {@link failuresBySession}. */
 export interface SessionFailures {
   sessionId: string;

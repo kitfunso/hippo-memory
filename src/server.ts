@@ -60,6 +60,13 @@ export { isSharedStore } from './config.js';
 export { ownerOrSubject } from './api.js';
 // A route that writes for a session binds it to the caller's owner first.
 export { bindSessionOwner } from './session-owners.js';
+// A hook route for a caller on another machine: each call binds the session, then writes under the caller's owner and project.
+export { preCompactForCaller, type CallerHookOutput, type CallerPreCompactRequest } from './capture/pre-compact-caller.js';
+export { compactResumeForCaller, type CallerCompactResumeRequest } from './capture/compact-resume-caller.js';
+export { saveCompactionItemsForCaller, type CallerItemsRequest, type CallerItemsResult } from './capture/compaction-items-caller.js';
+export { captureFailureForCaller, type CallerFailureRequest, type CallerFailureResult } from './capture/failure-caller.js';
+export { sessionEndHandoffForCaller, type CallerEvidence, type CallerSessionEndRequest, type CallerSessionEndResult } from './capture/session-end-caller.js';
+export type { WorkingState } from './capture/working-state.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in

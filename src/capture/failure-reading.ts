@@ -24,7 +24,8 @@ interface ToolFailurePayload {
   tool_input?: JsonValue;
 }
 
-const MAX_LEN = 200;
+/** The longest lesson text a reading gives, so a check of a sent one imports it instead of copying it. */
+export const FAILURE_TEXT_MAX_CHARS = 200;
 
 /** The user, a permission prompt or a hook said no: routine, not a lesson. */
 const DECLINED = /user (?:doesn't|does not) want|denied by (?:the )?user|user (?:rejected|declined|denied)|permission to use|was blocked by (?:a )?hook/i;
@@ -74,7 +75,7 @@ export function lessonFromFailure(payload: JsonValue): FailureReading {
   if (!isString(p.error) || p.error.trim().length < 12) return { skip: 'skipped-invalid', text: null, detail: null };
   const tool = isString(p.tool_name) ? p.tool_name : 'tool';
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
-  const text = `${tool}: ${error}`.slice(0, MAX_LEN);
+  const text = `${tool}: ${error}`.slice(0, FAILURE_TEXT_MAX_CHARS);
   const command = isObject(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
   const head = command.trim().split(/\s+/).slice(0, 2).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;

@@ -112,6 +112,11 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   return { summary: truncateCodePointSafe(scrub(body), SUMMARY_MAX_CHARS), items: parsed.items.map(scrub), found: parsed.found };
 }
 
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted. */
+export function scrubCompactionItems(items: readonly string[]): string[] {
+  return items.map(scrub);
+}
+
 function toRecord(row: CompactionRow): CompactionRecord {
   const listed: unknown = row.items_json === null ? [] : JSON.parse(row.items_json);
   return {
@@ -160,6 +165,11 @@ export function startCompaction(db: DatabaseSyncLike, tenantId: string, start: C
 /** A session's newest record, or null. */
 export function latestCompaction(db: DatabaseSyncLike, tenantId: string, sessionId: string): CompactionRecord | null {
   return selectRecords(db, 'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1', tenantId, sessionId)[0] ?? null;
+}
+
+/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record. */
+export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRecord | null {
+  return selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
 }
 
 /** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
