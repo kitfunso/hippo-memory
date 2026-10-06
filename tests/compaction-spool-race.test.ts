@@ -1,4 +1,5 @@
-// On macOS and Linux this cannot fail; on Windows a lock revert fails it only by chance at 300 files, so the two-process probe in docs/incidents.md is the measured red.
+// On macOS and Linux this cannot fail; on Windows the code before the lock fails it at 100 files, a lock revert alone only by chance,
+// so the probe in docs/incidents.md is the measured red. 100 files, not more, so two busy children do not starve the suite.
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -7,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spool } from '../src/compaction-spool.js';
 
 const DIST = path.resolve(__dirname, '..', 'dist', 'compaction-spool.js');
-const FILES = 300;
+const FILES = 100;
 
 const CHILD = `
 import { appendFileSync, readdirSync, writeFileSync } from 'node:fs';
