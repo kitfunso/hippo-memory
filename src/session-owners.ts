@@ -15,7 +15,8 @@ function boundOwner(db: DatabaseSyncLike, tenantId: string, sessionId: string): 
   return row?.owner_subject ?? null;
 }
 
-function insertBinding(db: DatabaseSyncLike, tenantId: string, sessionId: string, owner: string): string | null {
+/** Binds under the write lock and returns the stored owner, which is not `owner` when a concurrent first bind won. */
+export function insertBinding(db: DatabaseSyncLike, tenantId: string, sessionId: string, owner: string): string | null {
   execWithBusyRetry(db, 'BEGIN IMMEDIATE', scopedBusyWait() ?? HOOK_DB_WAIT_MS);
   try {
     const result = db.prepare(`INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`)

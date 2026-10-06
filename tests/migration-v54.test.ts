@@ -1,8 +1,9 @@
 // Schema v54 adds nullable owner and project columns, the session binding table and retry ids, and never raises the floor.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../src/db/continuity.js';
+import { v54 } from '../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../src/db/tables.js';
 import { recordFailure } from '../src/failure-log.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -35,8 +36,8 @@ function indexSql(db: DatabaseSyncLike, name: string): string | undefined {
   return (db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(name) as { sql?: string } | undefined)?.sql;
 }
 
-/** Puts the store back to its v53 shape, keeping every row, with the floor at `floor`. */
-function rewindToV53(floor: string): void {
+/** Puts the store back to its v53 shape, keeping every row, with the floor at `floor`; `alsoRun` changes it further before the close. */
+function rewindToV53(floor: string, alsoRun?: (db: DatabaseSyncLike) => void): void {
   withDb((db) => {
     for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) db.exec(`DROP INDEX IF EXISTS ${idx}`);
     for (const t of OWNER_TABLES) for (const c of ['owner_subject', 'origin_project']) db.exec(`ALTER TABLE ${t} DROP COLUMN ${c}`);
@@ -45,6 +46,7 @@ function rewindToV53(floor: string): void {
     db.prepare(`UPDATE meta SET value = '53' WHERE key = 'schema_version'`).run();
     db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(floor);
     db.exec('PRAGMA user_version = 53');
+    alsoRun?.(db);
   });
 }
 
@@ -89,6 +91,41 @@ describe('schema v54', () => {
       expect(f).toEqual([{ sig_hash: 'abc', owner_subject: null, origin_project: null, request_id: null }]);
       expect(tableExists(db, 'session_owners')).toBe(true);
       for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) expect(indexSql(db, idx)).toBeDefined();
+    });
+  });
+
+  it('a failure inside v54 rolls it back whole: schema 53 and none of its columns', () => {
+    rewindToV53('1.24.0');
+    const up = v54.up;
+    const spy = vi.spyOn(v54, 'up').mockImplementation((db, opts) => {
+      up(db, opts);
+      throw new Error('v54 boom');
+    });
+    try {
+      expect(() => withDb(() => undefined)).toThrow('v54 boom');
+    } finally {
+      spy.mockRestore();
+    }
+    const db = openHippoDbReadOnly(home);
+    try {
+      expect(getSchemaVersion(db)).toBe(53);
+      for (const t of OWNER_TABLES) expect(tableColumns(db, t).has('owner_subject')).toBe(false);
+      for (const t of Object.keys(REQUEST_INDEXES)) expect(tableColumns(db, t).has('request_id')).toBe(false);
+    } finally {
+      closeHippoDb(db);
+    }
+    withDb((d) => expect(getSchemaVersion(d)).toBe(LATEST_SCHEMA_VERSION));
+  });
+
+  it('a v53 store with no failure_log still upgrades, and the other tables get their columns and indexes', () => {
+    rewindToV53('1.24.0', (db) => db.exec('DROP TABLE failure_log'));
+    withDb((db) => {
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(tableExists(db, 'failure_log')).toBe(false);
+      expect(tableColumns(db, 'compactions').has('request_id')).toBe(true);
+      expect(indexSql(db, REQUEST_INDEXES.compactions)).toBeDefined();
+      for (const t of ['task_snapshots', 'session_handoffs']) expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
+      expect(tableExists(db, 'session_owners')).toBe(true);
     });
   });
 
