@@ -50,9 +50,16 @@ function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, les
   }
 }
 
-function storeLesson(hippoRoot: string, tenantId: string, text: string): 'stored' | 'duplicate' {
+/** Who sent a failure from another machine: the audit actor and the project its lesson and repeat check belong to. */
+export interface LessonCaller {
+  actor: string;
+  originProject: string;
+  origins: readonly string[];
+}
+
+export function storeLesson(hippoRoot: string, tenantId: string, text: string, caller?: LessonCaller): 'stored' | 'duplicate' {
   const sig = failureSignature(text);
-  const repeat = loadContentsWithTag(hippoRoot, tenantId, 'auto-captured').some(
+  const repeat = loadContentsWithTag(hippoRoot, tenantId, 'auto-captured', caller?.origins).some(
     (content) => failureSignature(content) === sig,
   );
   if (repeat) return 'duplicate';
@@ -63,6 +70,8 @@ function storeLesson(hippoRoot: string, tenantId: string, text: string): 'stored
     tenantId,
     baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
   });
-  writeEntry(hippoRoot, entry);
+  // A caller's project is its checked one; the store's own folder would name the server.
+  if (caller === undefined) writeEntry(hippoRoot, entry);
+  else writeEntry(hippoRoot, { ...entry, origin_project: caller.originProject }, { actor: caller.actor });
   return 'stored';
 }

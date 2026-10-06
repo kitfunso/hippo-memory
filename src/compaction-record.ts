@@ -196,11 +196,16 @@ export function recordCompactionStart(hippoRoot: string, start: Omit<CompactionS
   }
 }
 
-export function recordSnapshotSaved(hippoRoot: string, recordId: string, log: Log): void {
+/** On the caller's handle and tenant, so a server marks the record under the caller's tenant with its own wait. */
+export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, recordId: string): void {
+  db.prepare(`UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(tenantId, recordId);
+}
+
+export function recordSnapshotSaved(hippoRoot: string, tenantId: string, recordId: string, log: Log): void {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    db.prepare(`UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(resolveTenantId({}), recordId);
+    markSnapshotSaved(db, tenantId, recordId);
   } catch (err) {
     log(`compaction record not marked with its snapshot: ${errorMessage(err)}`);
   } finally {
@@ -213,27 +218,39 @@ export interface CompactionText {
   items: string[];
 }
 
-/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
-function recordSummary(
+/** A caller's checked project, and the id its retries carry so a retry finds this record. */
+export interface SummaryCaller {
+  originProject?: string;
+  requestId?: string;
+}
+
+/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each, plus the request stamp on a `started` record. */
+export function recordSummary(
   db: DatabaseSyncLike,
   hippoRoot: string,
   tenantId: string,
   meta: Omit<CompactionStart, 'originProject'>,
   text: CompactionText,
   at: Date,
+  caller: SummaryCaller = {},
 ): CompactionRecord {
   const now = new Date().toISOString();
   const itemsJson = JSON.stringify(text.items);
+  const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
   if (started && markSummarised(db, tenantId, started.id, text, now)) {
+    if (requestId !== undefined) db.prepare(`UPDATE compactions SET request_id = ? WHERE tenant_id = ? AND id = ?`).run(requestId, tenantId, started.id);
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
-  const originProject = compactionOrigin(hippoRoot, meta.cwd);
+  const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
   const id = generateId('cmp');
+  // Only a caller names the column, so a store from before it was added still takes local writes.
+  const stamp = requestId === undefined ? [] : [requestId];
+  const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
   db.prepare(
-    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised')`,
-  ).run(tenantId, id, meta.sessionId, originProject, meta.trigger, meta.cwd, meta.transcriptPath, at.toISOString(), now, text.summary, itemsJson);
+    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status${col})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
+  ).run(tenantId, id, meta.sessionId, originProject, meta.trigger, meta.cwd, meta.transcriptPath, at.toISOString(), now, text.summary, itemsJson, ...stamp);
   return {
     id, tenantId, sessionId: meta.sessionId, originProject, trigger: meta.trigger, cwd: meta.cwd, transcriptPath: meta.transcriptPath,
     snapshotSaved: false, startedAt: at.toISOString(), summarisedAt: now, summary: text.summary, items: text.items, itemsWritten: 0, status: 'summarised',
@@ -249,6 +266,8 @@ export interface ItemContext {
   /** Where the session ran, so rows held under the project's older folder name count too. */
   cwd: string | null;
   items: string[];
+  /** Set when another machine sent the items: its audit actor and its project's names, since the server's folder is neither. */
+  caller?: { actor: string; origins: readonly string[] };
 }
 
 /** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
@@ -315,8 +334,8 @@ function compactionEntry(text: string, ctx: ItemContext, origin: string | null, 
 /** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
 function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
-  const held = heldRows(db, ctx.tenantId, heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
-  const origin = itemOrigin(hippoRoot, ctx);
+  const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
+  const origin = ctx.caller === undefined ? itemOrigin(hippoRoot, ctx) : ctx.originProject;
   const restated = new Set<string>();
   for (const text of rows) {
     const itemWords = words(text);
@@ -332,7 +351,7 @@ function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext
       continue;
     }
     const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
-    if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
+    if (gatedWrite(db, hippoRoot, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
       out.written.push(entry);
       held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
     } else {

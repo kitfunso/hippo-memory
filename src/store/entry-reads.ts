@@ -3,6 +3,7 @@ import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
 import { escapeLike } from '../escape.js';
+import { originInSql } from '../project-identity.js';
 
 /**
  * Read a memory entry by ID.
@@ -306,15 +307,16 @@ export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: 
   return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
 }
 
-// Content of every tenant row tagged `tag`, without reading the rest of the store.
+// Content of every tenant row tagged `tag`, without reading the rest of the store; `origins` keeps one project's rows and user-global ones.
 // `instr` is a substring prefilter over the raw JSON; `includes` below re-checks exactly.
-export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: string): string[] {
+export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: string, origins?: readonly string[]): string[] {
   const db = openStore(hippoRoot);
   try {
+    const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
     /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
     const rows = db.prepare(
-      `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0`,
-    ).all(tenantId, JSON.stringify(tag)) as Array<{ content: string; tags_json: string }>;
+      `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0${inProject}`,
+    ).all(tenantId, JSON.stringify(tag), ...(origins ?? [])) as Array<{ content: string; tags_json: string }>;
     return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
   } finally {
     closeHippoDb(db);

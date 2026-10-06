@@ -184,7 +184,7 @@ function saveDerivedSnapshot(
         session_id: sessionId,
       });
       appendPreCompactLog(logFile, 'snapshot saved');
-      if (recordId !== null) recordSnapshotSaved(hippoRoot, recordId, (message) => appendPreCompactLog(logFile, message));
+      if (recordId !== null) recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }
