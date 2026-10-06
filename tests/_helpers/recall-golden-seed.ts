@@ -1,7 +1,7 @@
 // The recall golden seed: one local store, one wide store and one global store, copied fresh for each test,
 // so the surface goldens, the port-only parity test and the sqliteStore tests replay the same rows.
 import { vi } from 'vitest';
-import { cpSync, mkdtempSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
@@ -12,6 +12,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { closePrediction, savePrediction } from '../../src/predictions/store.js';
+import type { RecallResult } from '../../src/api.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';
@@ -38,6 +39,25 @@ export const RECALL_INPUTS: readonly [string, Record<string, string | number | b
   ['budget -1', { query: 'deploy', budget: -1 }],
   ['mode bogus', { query: 'deploy', mode: 'bogus' }],
   ['limit 0', { query: 'deploy', limit: 0 }],
+];
+
+type BranchArgs = Record<string, string | number | boolean>;
+
+/** The recall branches the surface goldens skip; HTTP takes strings and MCP takes JSON types, so each names its arguments once per surface. */
+export const RECALL_BRANCHES: readonly { name: string; query: string; http: BranchArgs; mcp: BranchArgs; reaches?: (r: RecallResult) => boolean }[] = [
+  { name: 'include_continuity', query: 'deploy', http: { include_continuity: 'true' }, mcp: { include_continuity: true }, reaches: (r) => r.continuity?.activeSnapshot != null },
+  {
+    name: 'fresh_tail_count 1 with a session',
+    query: 'deploy',
+    http: { fresh_tail_count: '1', fresh_tail_session_id: SESSION, session_id: SESSION },
+    mcp: { fresh_tail_count: 1, fresh_tail_session_id: SESSION, session_id: SESSION },
+    reaches: (r) => r.results.some((x) => x.isFreshTail),
+  },
+  { name: 'summarize_overflow', query: 'deploy', http: { limit: '2', summarize_overflow: 'true' }, mcp: { summarize_overflow: true }, reaches: (r) => r.results.some((x) => x.isSummary) },
+  { name: 'forward claim', query: 'the deploy will take 3 days', http: {}, mcp: {}, reaches: (r) => r.planningFallacyHint !== undefined },
+  { name: 'scope team-alpha', query: 'deploy', http: { scope: 'team-alpha' }, mcp: { scope: 'team-alpha' }, reaches: (r) => r.results.length > 0 },
+  { name: 'no terms', query: '!!', http: {}, mcp: {} },
+  { name: 'LIKE path', query: 'caf', http: {}, mcp: {}, reaches: (r) => r.results.some((x) => x.id === 'mem_x_cafe') },
 ];
 
 export function seeded(content: string, id: string, created: string, extra: Partial<MemoryEntry> = {}, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
@@ -159,4 +179,10 @@ export function rowsOf(root: string) {
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** The stats.json mirror the SQLite store rewrites after each counter bump, or null before the first. */
+export function statsMirror(root: string): string | null {
+  const file = join(root, 'stats.json');
+  return existsSync(file) ? readFileSync(file, 'utf8') : null;
 }

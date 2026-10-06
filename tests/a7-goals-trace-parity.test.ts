@@ -1,7 +1,7 @@
 /**
  * A7 recall-trace — goals.ts parity.
  *
- * `applyGoalStackBoost` with vs without the optional `opts.trace` accumulator
+ * `computeGoalStackBoost` with vs without the optional `opts.trace` accumulator
  * must produce byte-identical ordered output AND identical scores. The trace
  * is a pure side-channel; passing the Map must not perturb the score-multiply
  * or the re-sort. Real SQLite store, no mocks.
@@ -14,12 +14,12 @@ import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { applyGoalStackBoost, pushGoal } from '../src/goals.js';
+import { computeGoalStackBoost, pushGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { MemoryEntry } from '../src/memory.js';
 import type { RerankStep } from '../src/search/types.js';
 
-describe('A7 applyGoalStackBoost trace parity (side-channel)', () => {
+describe('A7 computeGoalStackBoost trace parity (side-channel)', () => {
   let hippoRoot: string;
   const tenantId = 'default';
   const sessionId = 'sess-a7-parity';
@@ -49,11 +49,11 @@ describe('A7 applyGoalStackBoost trace parity (side-channel)', () => {
     const db1 = openHippoDb(hippoRoot);
     let without;
     try {
-      without = applyGoalStackBoost(db1, rows.map((r) => ({ ...r })), {
+      without = computeGoalStackBoost(db1, rows.map((r) => ({ ...r })), {
         sessionId,
         tenantId,
         limit: 10,
-      });
+      }).results;
     } finally {
       closeHippoDb(db1);
     }
@@ -63,12 +63,12 @@ describe('A7 applyGoalStackBoost trace parity (side-channel)', () => {
     const db2 = openHippoDb(hippoRoot);
     let withTrace;
     try {
-      withTrace = applyGoalStackBoost(db2, rows.map((r) => ({ ...r })), {
+      withTrace = computeGoalStackBoost(db2, rows.map((r) => ({ ...r })), {
         sessionId,
         tenantId,
         limit: 10,
         trace,
-      });
+      }).results;
     } finally {
       closeHippoDb(db2);
     }

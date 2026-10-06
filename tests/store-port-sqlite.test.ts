@@ -9,7 +9,7 @@ import { recordTokens } from '../src/api.js';
 import { appendAuditEvent, type AppendAuditOpts } from '../src/audit.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { detectForwardClaim } from '../src/forward-claim-detector.js';
-import { applyGoalStackBoost, getActiveGoalsWithDb, loadGoalPolicies, pushGoal } from '../src/goals.js';
+import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/goals.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { resolveClassFromTokens } from '../src/predictions/planning-fallacy.js';
@@ -22,12 +22,12 @@ import {
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
-import { loadStats, updateStats } from '../src/store/index-and-stats.js';
+import { updateStats } from '../src/store/index-and-stats.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, TENANT, type Store, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 
 type Kind = 'local' | 'wide';
@@ -52,7 +52,7 @@ async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<
   const s = freshStore(templates, kind);
   try {
     const { result, statements } = await recordStatementsAsync(async () => fn(s));
-    const rows = { ...rowsOf(s.root), auditOps: auditOps(s.root) };
+    const rows = { ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) };
     return normalise({ value: result, rows, opens: countMatching(statements, STORE_OPEN) }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
@@ -255,7 +255,13 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
       const [goalRow] = loadEntriesByIds(s.root, ['mem_p_goal']);
       const db = openHippoDb(s.root);
       try {
-        applyGoalStackBoost(db, [{ entry: goalRow!, score: 0.8 }, { entry: globalRow, score: 0.7 }], { sessionId: SESSION, tenantId: TENANT, limit: 10 });
+        const goals = getActiveGoalsWithDb(db, { sessionId: SESSION, tenantId: TENANT });
+        const boost = boostByGoals(
+          [{ entry: goalRow!, score: 0.8 }, { entry: globalRow, score: 0.7 }],
+          { goals, policies: loadGoalPolicies(db, goals) },
+          { sessionId: SESSION, tenantId: TENANT, limit: 10 },
+        );
+        writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));
         for (const event of events) appendAuditEvent(db, event);
       } finally {
         closeHippoDb(db);
@@ -281,12 +287,26 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     }
   });
 
-  it('bumpRecallStats adds to the recall counter and returns every counter, as updateStats leaves them', async () => {
-    const { direct, port } = await parity((s) => {
-      updateStats(s.root, { recalled: 3 });
-      return loadStats(s.root);
-    }, (store) => store.bumpRecallStats(3));
-    expect(direct.rows).toMatchObject({ stats: expect.arrayContaining([{ key: 'total_recalled', value: '3' }]) });
+  it('finishRecall keeps the first log row for a memory and goal, within one batch and across recalls', async () => {
+    const s = freshStore(templates, 'local');
+    try {
+      const store = sqliteStore(s.root);
+      const kept = [{ goal_id: templates.goalId, memory_id: 'mem_p_goal', session_id: SESSION, score: 1.6 }];
+      await store.finishRecall({ goalLog: [logRow('mem_p_goal', 1.6), logRow('mem_p_goal', 0.4)], audit: [] });
+      expect(rowsOf(s.root).goalRecallLog).toEqual(kept);
+      await store.finishRecall({ goalLog: [logRow('mem_p_goal', 2.2)], audit: [] });
+      expect(rowsOf(s.root).goalRecallLog).toEqual(kept);
+    } finally {
+      rmSync(s.home, { recursive: true, force: true });
+    }
+  });
+
+  it('bumpRecallStats adds to the recall counter and rewrites stats.json, as updateStats does', async () => {
+    const { direct, port } = await parity((s) => updateStats(s.root, { recalled: 3 }), (store) => store.bumpRecallStats(3));
+    expect(direct.rows).toMatchObject({
+      stats: expect.arrayContaining([{ key: 'total_recalled', value: '3' }]),
+      statsMirror: expect.stringContaining('"total_recalled": 3'),
+    });
     expect(port.opens).toBe(1);
   });
 
@@ -327,13 +347,13 @@ async function recallOver(url: string, call: Recall): Promise<void> {
 }
 
 describe('hippo.db opens per recall over serve()', () => {
-  // Measured on hippo.db before recall moved behind the port; a recall through the port may not open more.
-  const CEILINGS: readonly [string, number, Recall][] = [
-    ['http, no session', 6, { via: 'http', params: { q: 'deploy' } }],
+  // Exact, so a new open fails here; before recall moved behind the port these were 6, 5, 12, 6 and 6.
+  const OPENS: readonly [string, number, Recall][] = [
+    ['http, no session', 5, { via: 'http', params: { q: 'deploy' } }],
     ['http, a session with active goals', 5, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
-    ['http, continuity and a forward claim', 12, { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } }],
-    ['mcp, no session', 6, { via: 'mcp', args: { query: 'deploy' } }],
-    ['mcp, a session with active goals', 6, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
+    ['http, continuity and a forward claim', 10, { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } }],
+    ['mcp, no session', 3, { via: 'mcp', args: { query: 'deploy' } }],
+    ['mcp, a session with active goals', 4, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
   ];
 
   beforeEach(() => {
@@ -342,16 +362,60 @@ describe('hippo.db opens per recall over serve()', () => {
     lastRecalledIds.clear();
   });
 
-  it.each(CEILINGS)('%s: at most %i opens', async (_name, ceiling, call) => {
+  it.each(OPENS)('%s: %i opens', async (_name, opens, call) => {
     const s = freshStore(templates, 'local');
     try {
       const handle = await serve({ hippoRoot: s.root, port: 0 });
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
-        expect(countMatching(statements, STORE_OPEN)).toBeLessThanOrEqual(ceiling);
+        expect(countMatching(statements, STORE_OPEN)).toBe(opens);
       } finally {
         await handle.stop();
       }
+    } finally {
+      rmSync(s.home, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
+describe('a recall whose store read fails mid-way', () => {
+  beforeEach(() => {
+    __resetSessionRecallHistoryHttp();
+    __resetSessionRecallHistoryMcp();
+    lastRecalledIds.clear();
+  });
+
+  // Continuity is read after the search, the goals and the fresh tail, so the earlier reads have run.
+  it.each([
+    ['http', `/v1/memories?q=deploy&session_id=${SESSION}&include_continuity=true`],
+    ['mcp', '/mcp'],
+  ] as const)('%s writes no row and no stats', async (via, path) => {
+    const s = freshStore(templates, 'local');
+    try {
+      let reads = 0;
+      const store: HippoStore = {
+        ...sqliteStore(s.root),
+        continuity: () => {
+          reads += 1;
+          return Promise.reject(new Error('continuity read failed'));
+        },
+      };
+      const before = { ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) };
+      const handle = await serve({ hippoRoot: s.root, port: 0, store });
+      try {
+        const args = { query: 'deploy', session_id: SESSION, include_continuity: true };
+        const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };
+        const res = via === 'http'
+          ? await fetch(`${handle.url}${path}`)
+          : await fetch(`${handle.url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rpc) });
+        const body: unknown = await res.json();
+        if (via === 'http') expect(res.status).toBe(500);
+        else expect(body).toMatchObject({ error: { code: -32603, message: expect.stringMatching(/^internal server error/) } });
+      } finally {
+        await handle.stop();
+      }
+      expect(reads).toBe(1);
+      expect({ ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) }).toEqual(before);
     } finally {
       rmSync(s.home, { recursive: true, force: true });
     }

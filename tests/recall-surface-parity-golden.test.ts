@@ -227,7 +227,7 @@ describe('recall surface parity goldens', () => {
           query: 'deploy', limit: 50, mode: 'physics', sessionId: SESSION, keepHeldCopies: true, suppressAvailabilityHint: true,
           showRanked: ({ ranked }) => {
             rankedScore = ranked.find((r) => r.entry.id === 'mem_p_goal')?.score ?? 0;
-            return ranked.map((r) => r.entry.id);
+            return { ids: ranked.map((r) => r.entry.id), audit: [] };
           },
         },
       );

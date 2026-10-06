@@ -19,7 +19,6 @@ import {
   RingBuffer,
 } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { storeFor } from '../store-port.js';
 import { estimateTokens } from '../token-ledger.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
 import { mcpActor, isJsonBoolean, type ToolCall } from './protocol.js';
@@ -110,13 +109,14 @@ function parseRecallArgs(args: Record<string, JsonValue>, defaultBudget: number)
   return { query, budget, includeContinuity, explicitScope, sessionId, recallExtra };
 }
 
-/** Builds the showRanked callback that renders the list MCP shows and parks the render in `out`. */
+/** Builds the showRanked callback that renders the list MCP shows, parks the render in `out` and hands back its hint rows. */
 function recallPresenter(
   budget: number,
   includeContinuity: boolean,
   anchorRing: RingBuffer | null,
   queryHash: number,
   out: RenderSlot,
+  hintRows: (rendered: RenderedRecall) => AppendAuditOpts[],
 ): NonNullable<RecallOpts['showRanked']> {
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
@@ -182,18 +182,17 @@ function recallPresenter(
       rendered = render(results);
     }
     out.rendered = rendered;
-    return rendered.list.map((r) => r.entry.id);
+    return { ids: rendered.list.map((r) => r.entry.id), audit: hintRows(rendered) };
   };
 }
 
-async function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer | null, queryHash: number, rendered: RenderedRecall): Promise<void> {
-  const { hippoRoot, tenantId, ctx } = call;
-  const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown } = rendered;
+/** The audit rows for the hints MCP shows, which the recall writes with its own rows so a retry never repeats one. */
+function recallHintRows(call: ToolCall, query: string, hasRing: boolean, rendered: RenderedRecall): AppendAuditOpts[] {
+  const { tenantId, ctx } = call;
+  const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint } = rendered;
   const rows: AppendAuditOpts[] = [];
   if (biasHintEnabled('anchoring')) {
-    if (anchorRing) {
-      // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
-      appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);
+    if (hasRing) {
       if (mcpAnchoringHint?.reason === 'memory_dominance') {
         rows.push({
           tenantId,
@@ -239,7 +238,7 @@ async function auditRecallHints(call: ToolCall, query: string, anchorRing: RingB
       },
     });
   }
-  await storeFor({ hippoRoot, store: ctx?.store }).appendAuditEvents(rows);
+  return rows;
 }
 
 export async function runRecallTool(call: ToolCall): Promise<string> {
@@ -267,12 +266,14 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     suppressAvailabilityHint: true,
     keepHeldCopies: true,
     ...recallExtra,
-    showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out),
+    showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out, (rendered) => recallHintRows(call, query, anchorRing !== null, rendered)),
   });
-  if (!out.rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
-  lastRecalledIds.set(resolveClientKey(ctx), out.rendered.list.map((r) => r.entry.id));
-  await auditRecallHints(call, query, anchorRing, queryHash, out.rendered);
-  return out.rendered.text;
+  const { rendered } = out;
+  if (!rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
+  lastRecalledIds.set(resolveClientKey(ctx), rendered.list.map((r) => r.entry.id));
+  // Appended once the recall's rows are written, after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
+  if (anchorRing) appendRecall(anchorRing, queryHash, rendered.list[0]?.entry.id ?? null, rendered.anchoring?.memoryId);
+  return rendered.text;
 }
 
 export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {

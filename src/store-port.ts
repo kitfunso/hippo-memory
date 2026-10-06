@@ -13,8 +13,7 @@ import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { loadLatestHandoff } from './store/handoffs.js';
-import { bumpStats } from './store/index-and-stats.js';
-import type { LegacyStats } from './store/rows.js';
+import { updateStats } from './store/index-and-stats.js';
 import { loadRecallSearchEntries, type OriginFilter } from './store/search-rows.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
 import { recordTokenUse, type TokenUse } from './token-ledger.js';
@@ -31,11 +30,14 @@ export interface RecallSearchArgs {
 
 /** Everything one recall writes once its reply is decided, so a store writes it on one connection. */
 export interface RecallWrites {
-  /** Earliest boost first, since a re-recall within one goal's life keeps the first row; a row whose memory lives in another store is dropped. */
+  /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate inside this batch included. First drop a row
+   *  whose memory_id is in no memories row of this store, whatever that row's tenant, as `localGoalRecallRows` does. */
   readonly goalLog: readonly GoalRecallLogRow[];
   /** In the order they happened. */
   readonly audit: readonly AppendAuditOpts[];
   readonly trace?: RecallTraceInput;
+  /** Nothing when `recallBoostAblated`. Each id found, in `tenantId` when set, gets the retrieval_count, last_retrieved,
+   *  half_life_days and strength `markRetrieved` computes from the row read before any update, so a repeated id moves once. */
   readonly strengthen?: { readonly ids: readonly string[]; readonly opts: StrengthenOptions };
 }
 
@@ -47,22 +49,26 @@ export interface HippoStore {
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   /** Recall candidates in `loadRecallSearchEntries` order: FTS, then LIKE, then every row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
-  /** The rows among the first 500 ids, oldest first; a tenant narrows them. */
+  /** The rows among the first 500 ids, a tenant narrowing them, ordered by created, then content, then id, all ascending,
+   *  as `loadEntriesByIds` does; the input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId?: string): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
-  /** The newest `count` current raw rows, at most 200; a session id narrows them to that session. */
+  /** The first `count` (at most 200) unsuperseded raw rows, a tenant and a non-empty session id narrowing them, by created
+   *  descending, then content and id ascending, as `loadFreshRawMemories` does. */
   freshRawEntries(count: number, tenantId?: string, sessionId?: string): Promise<MemoryEntry[]>;
-  /** The active snapshot and, for its session only, the latest handoff and newest events; the caller applies scope. */
+  /** The newest active snapshot, then for its session the newest handoff and `eventLimit` newest events returned oldest first,
+   *  each tie broken by the larger id, as `continuityAt` does; the caller applies scope. */
   continuity(tenantId: string, eventLimit: number): Promise<ContinuityBlock>;
   /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit row. */
   planningFallacyEvidence(tenantId: string, classQueryTokens: readonly string[]): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
   appendAuditEvents(events: readonly AppendAuditOpts[]): Promise<void>;
-  /** The goal log and audit rows all or none; then the trace and the strengthen, which log a failure and never fail the recall. */
+  /** Writes the goal log and audit rows in one transaction and rejects with none written if it fails. Then the trace and
+   *  the strengthen, each on its own: a failure there logs and still resolves, since the reply is already decided. */
   finishRecall(writes: RecallWrites): Promise<void>;
-  /** Every counter after adding `recalled`; core still writes the stats mirror file. */
-  bumpRecallStats(recalled: number): Promise<LegacyStats>;
+  /** Adds `recalled` to the one store-wide total_recalled counter, no tenant; the SQLite store also rewrites stats.json. */
+  bumpRecallStats(recalled: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
@@ -120,7 +126,7 @@ export function sqliteStore(hippoRoot: string): HippoStore {
       finishRecallAt(hippoRoot, writes);
     },
     async bumpRecallStats(recalled) {
-      return bumpStats(hippoRoot, { recalled });
+      updateStats(hippoRoot, { recalled });
     },
     async recordTokens(use) {
       onHandle(hippoRoot, (db) => recordTokenUse(db, use));

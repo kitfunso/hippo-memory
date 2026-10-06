@@ -7,6 +7,7 @@ import type { RerankStep, SearchResult } from '../search/types.js';
 import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';
+import type { AppendAuditOpts } from '../audit.js';
 
 // ---------------------------------------------------------------------------
 // recall
@@ -157,7 +158,13 @@ export interface RecallOpts {
    *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
   keepHeldCopies?: boolean;
   /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
-  showRanked?: (ranking: StoreRanking, result: RecallResult) => readonly string[];
+  showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
+}
+
+/** `ids`: what the caller showed; `audit`: its own rows, written after the recall's and in the same transaction, so all land or none. */
+export interface ShownRanking {
+  ids: readonly string[];
+  audit: readonly AppendAuditOpts[];
 }
 
 /** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope filter. */

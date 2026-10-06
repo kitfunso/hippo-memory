@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { STORE_READY_TOOLS } from '../src/mcp/request.js';
 import { TOOLS } from '../src/mcp/tools.js';
@@ -51,12 +52,12 @@ describe('store-ready MCP tools', () => {
     expect(listedNames(res)).toEqual(declared);
   });
 
-  it('a call to any other tool under another store answers an error naming the store, and the tool never runs', async () => {
+  it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
     const unready = declared.filter((name) => !STORE_READY_TOOLS.has(name));
     expect(unready.length).toBeGreaterThan(0);
     for (const name of unready) {
       const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } }, ctxOn('stub'));
-      expect(res).toEqual({ jsonrpc: '2.0', id: 1, error: { code: -32602, message: `${name} is not available on the 'stub' store` } });
+      expect(res).toEqual({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
     }
     expect(readdirSync(root)).toEqual([]);
   });

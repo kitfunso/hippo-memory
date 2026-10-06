@@ -1,6 +1,6 @@
 /**
  * v1.7.4 -- api.recall plumbs RecallOpts.sessionId through to the
- * applyGoalStackBoost helper on its primary BM25 band, BEFORE projection to
+ * boostByGoals helper on its primary BM25 band, BEFORE projection to
  * RecallResultItem and BEFORE fresh-tail / summary appendix rows are
  * appended. Pinned end-to-end through the api surface (not through CLI/MCP/
  * HTTP -- those have their own integration tests).

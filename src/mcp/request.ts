@@ -1,6 +1,7 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
 import { log } from '../log.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { resolveTenantId } from '../tenant.js';
@@ -158,9 +159,9 @@ export async function handleMcpRequest(
       if (!tool) {
         return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
       }
-      const storeKind = otherStoreKind(ctx);
-      if (storeKind && !STORE_READY_TOOLS.has(toolName)) {
-        return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName} is not available on the '${storeKind}' store` } };
+      // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
+      if (otherStoreKind(ctx) && !STORE_READY_TOOLS.has(toolName)) {
+        return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
       }
       const argumentsValue = params?.arguments;
       if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObjectRecord(argumentsValue)) {

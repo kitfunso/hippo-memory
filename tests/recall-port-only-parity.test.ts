@@ -8,7 +8,7 @@ import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import type { RecallResult } from '../src/api.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, seedTemplates, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, seedTemplates, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
 
@@ -20,23 +20,6 @@ interface Scenario { name: string; kind: 'local' | 'wide'; calls: readonly Call[
 
 const on =(via: Surface, query: string, args: Args = {}): Call => ({ via, args: { query, ...args } });
 const SURFACES: readonly Surface[] = ['http', 'mcp'];
-
-// HTTP takes strings and MCP takes JSON types, so each branch names its arguments once per surface.
-const BRANCHES: readonly { name: string; query: string; http: Args; mcp: Args; reaches?: (r: RecallResult) => boolean }[] = [
-  { name: 'include_continuity', query: 'deploy', http: { include_continuity: 'true' }, mcp: { include_continuity: true }, reaches: (r) => r.continuity?.activeSnapshot != null },
-  {
-    name: 'fresh_tail_count 1 with a session',
-    query: 'deploy',
-    http: { fresh_tail_count: '1', fresh_tail_session_id: SESSION, session_id: SESSION },
-    mcp: { fresh_tail_count: 1, fresh_tail_session_id: SESSION, session_id: SESSION },
-    reaches: (r) => r.results.some((x) => x.isFreshTail),
-  },
-  { name: 'summarize_overflow', query: 'deploy', http: { limit: '2', summarize_overflow: 'true' }, mcp: { summarize_overflow: true }, reaches: (r) => r.results.some((x) => x.isSummary) },
-  { name: 'forward claim', query: 'the deploy will take 3 days', http: {}, mcp: {}, reaches: (r) => r.planningFallacyHint !== undefined },
-  { name: 'scope team-alpha', query: 'deploy', http: { scope: 'team-alpha' }, mcp: { scope: 'team-alpha' }, reaches: (r) => r.results.length > 0 },
-  { name: 'no terms', query: '!!', http: {}, mcp: {} },
-  { name: 'LIKE path', query: 'caf', http: {}, mcp: {}, reaches: (r) => r.results.some((x) => x.id === 'mem_x_cafe') },
-];
 
 const SCENARIOS: readonly Scenario[] = [
   ...SURFACES.flatMap((via): Scenario[] => [
@@ -56,7 +39,7 @@ const SCENARIOS: readonly Scenario[] = [
     kind: 'local',
     calls: RECALL_INPUTS.flatMap(([, args]) => SURFACES.map((via): Call => ({ via, args }))),
   },
-  ...BRANCHES.flatMap((b) => SURFACES.map((via): Scenario => ({
+  ...RECALL_BRANCHES.flatMap((b) => SURFACES.map((via): Scenario => ({
     name: `${via}: ${b.name}`,
     kind: 'local',
     calls: [on(via, b.query, b[via])],

@@ -279,7 +279,7 @@ export interface GoalRecallLogRow {
   score: number;
 }
 
-/** Options shared by {@link computeGoalStackBoost} and {@link applyGoalStackBoost}. */
+/** Options shared by {@link computeGoalStackBoost} and {@link boostByGoals}. */
 export interface GoalStackBoostOpts {
   sessionId: string;
   tenantId: string;
@@ -499,22 +499,6 @@ export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalReca
   for (const row of rows) {
     insertLog.run(row.goalId, row.memoryId, row.tenantId, row.sessionId, row.recalledAt, row.score);
   }
-}
-
-/**
- * {@link computeGoalStackBoost} plus {@link writeGoalRecallLog} in one call, for
- * pipelines that boost and log on the same handle.
- *
- * @internal Recall ranking helper. Subject to change.
- */
-export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
-  db: DatabaseSyncLike,
-  results: R[],
-  opts: GoalStackBoostOpts,
-): R[] {
-  const boost = computeGoalStackBoost(db, results, opts);
-  writeGoalRecallLog(db, boost.log);
-  return boost.results;
 }
 
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;

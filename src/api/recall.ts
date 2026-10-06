@@ -54,7 +54,8 @@ export function buildSuppressionSummary(counts: {
 }
 
 /**
- * Domain-level recall. Loads BM25-ranked candidates from SQLite scoped to
+ * Domain-level recall on hippo.db only, never `ctx.store`, since it is synchronous: under another store its first open throws
+ * `SqliteBlockedError`. Loads BM25-ranked candidates from SQLite scoped to
  * `ctx.tenantId` and keeps that order whatever `mode` says; `retrieve` is the
  * mode-aware, strengthening variant the HTTP route uses.
  *
@@ -156,15 +157,15 @@ async function retrieveFromStore(
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
   await store.finishRecall({
     goalLog: [...rankedLog, ...writes.goalLog],
-    audit: writes.audit,
+    audit: [...writes.audit, ...shown.audit],
     trace: opts.suppressRecallTrace ? undefined : {
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId ?? null,
       pipeline: 'mcp',
       query: opts.query,
-      results: shown.map((id) => ({ memoryId: id, score: scores.get(id) ?? 0 })),
+      results: shown.ids.map((id) => ({ memoryId: id, score: scores.get(id) ?? 0 })),
     },
-    strengthen: strengthenOf(ctx, shown),
+    strengthen: strengthenOf(ctx, shown.ids),
   });
   return result;
 }

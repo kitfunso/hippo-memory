@@ -11,7 +11,7 @@ import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { type Actor, authRevoke, type Context, RecallContractError } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
+import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
 import { isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
@@ -52,7 +52,6 @@ export type { ClassResolution, PlanningFallacyEvidence } from './predictions/pla
 export type { PredictionBaserate } from './predictions/store.js';
 export type { RecallTraceInput } from './recall-trace.js';
 export type { StrengthenOptions } from './store/entry-writes.js';
-export type { LegacyStats } from './store/rows.js';
 export type { OriginFilter } from './store/search-rows.js';
 export type { TokenUse } from './token-ledger.js';
 export { StoreBusyError } from './db.js';
@@ -188,10 +187,8 @@ async function dispatchV1Route(r: RouteRequest, method: string, path: string): P
   return false;
 }
 
-const NOT_ON_STORE_MESSAGE = 'not available on this store';
-
 function assertSqliteStore(opts: ResolvedServeOpts): void {
-  if (opts.store.kind !== 'sqlite') throw new HttpError(501, NOT_ON_STORE_MESSAGE);
+  if (opts.store.kind !== 'sqlite') throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
 /** Under another store, a route not yet ported answers 501 without running; the caller is checked first, so a bad key is still a 401. */

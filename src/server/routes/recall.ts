@@ -2,7 +2,6 @@
 import { dirname, resolve } from 'node:path';
 import { resolveProjectIdentity } from '../../project-identity.js';
 import { assembleCost, contextCost, drillCost } from '../../context-render.js';
-import { writeStatsMirror } from '../../store/mirrors.js';
 import { storeFor } from '../../store-port.js';
 import { appendRecall, biasHintEnabled, buildSessionKey, getOrCreateRing, hashQueryText, RingBuffer, snapshotRing } from '../../recall-history.js';
 import { auditQueryFields } from '../../audit.js';
@@ -198,7 +197,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
 
   // Each recall surface counts its own hits; api.recall is no chokepoint,
   // since the CLI never calls it and MCP shows the user a different band.
-  writeStatsMirror(opts.hippoRoot, await storeFor(ctx).bumpRecallStats(result.results.length));
+  await storeFor(ctx).bumpRecallStats(result.results.length);
 
   // Continuity payloads should never be cached. The caller is asking for
   // session-state-aware data; intermediaries must not reuse it across users.

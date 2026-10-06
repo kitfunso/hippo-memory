@@ -123,7 +123,7 @@ describe('serve() under a store that is not hippo.db', () => {
       expect({ route, status: res.status, body: await res.json() }).toEqual({
         route,
         status: 501,
-        body: { error: 'not available on this store' },
+        body: { error: STORE_NOT_PORTED_MESSAGE },
       });
     }
   });
@@ -169,7 +169,7 @@ describe('serve() under a store that is not hippo.db', () => {
     expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
   });
 
-  it('POST /mcp lists only the store-ready tools and refuses the rest by store name', async () => {
+  it('POST /mcp lists only the store-ready tools and refuses the rest with store_not_ported', async () => {
     const post = async (body: string): Promise<{ status: number; body: unknown }> => {
       const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { ...bearer(valid), 'content-type': 'application/json' }, body });
       return { status: res.status, body: await res.json() };
@@ -180,7 +180,7 @@ describe('serve() under a store that is not hippo.db', () => {
     expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(['hippo_recall']);
     expect(await post(rpc('tools/call', { name: 'hippo_status', arguments: {} }))).toEqual({
       status: 200,
-      body: { jsonrpc: '2.0', id: 1, error: { code: -32602, message: "hippo_status is not available on the 'stub' store" } },
+      body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } },
     });
     expect(await post(rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy' } }))).toEqual({
       status: 200,
