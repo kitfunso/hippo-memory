@@ -97,6 +97,7 @@ export interface VerifiedApiKey {
   keyId: string;
   role: 'admin' | 'member';
   scopes: string[];
+  ownerSubject?: string | null;
 }
 
 /** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret, the role and the expiry. */
@@ -108,18 +109,23 @@ export interface ApiKeyRecord {
   scopes: string[];
   /** ISO time the key stops working; null when it never expires. */
   expiresAt: string | null;
+  /** Who minted the key; optional because a store that omits it fails safe to an unowned key. */
+  ownerSubject?: string | null;
 }
 
 /** The api_keys row for `keyId` with its scope grants; null when no row matches. */
 export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
   // SAFETY: row comes from the SELECT above, which projects exactly
-  // key_hash, tenant_id, revoked_at, role, expires_at; `.get` returns undefined when no
+  // key_hash, tenant_id, revoked_at, role, expires_at, owner_subject; `.get` returns undefined when no
   // row matches key_id.
   const row = db
-    .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string; expires_at: string | null } | undefined;
+    .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
+    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string; expires_at: string | null; owner_subject: string | null } | undefined;
   if (!row) return null;
-  return { keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId), expiresAt: row.expires_at };
+  return {
+    keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId),
+    expiresAt: row.expires_at, ownerSubject: row.owner_subject,
+  };
 }
 
 /** When a key stops working, in epoch ms: Infinity for null, and already past for a missing field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
@@ -149,7 +155,10 @@ function checkApiKey(plaintext: string, keyId: string, record: ApiKeyRecord | nu
   if (record.revokedAt || now >= expiresAtMs || !verifyKey(plaintext, record.keyHash)) return null;
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
-  return { key: { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] }, expiresAtMs };
+  const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
+  // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
+  if (typeof record.ownerSubject === 'string' && record.ownerSubject !== '') key.ownerSubject = record.ownerSubject;
+  return { key, expiresAtMs };
 }
 
 /** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */

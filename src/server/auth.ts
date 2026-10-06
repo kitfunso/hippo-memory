@@ -151,6 +151,7 @@ async function askResolver(resolver: AuthResolver, token: string, deadlineMs: nu
 /** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the tag. */
 interface BearerIdentity extends ResolvedBearer {
   viaAuthResolver?: true;
+  owner?: string;
 }
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
@@ -161,11 +162,14 @@ async function resolveBearer(token: string, opts: AuthOpts): Promise<BearerIdent
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
     const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
-    return { ...(await askResolver(opts.authResolver, token, deadlineMs)), viaAuthResolver: true };
+    const clean = await askResolver(opts.authResolver, token, deadlineMs);
+    return { ...clean, viaAuthResolver: true, owner: clean.subject }; // a resolver vouches for a person, never names one
   }
   const key = await verifyApiKeyCached(opts.hippoRoot, token, opts.store);
   if (!key) throw new HttpError(401, 'invalid api key');
-  return { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
+  const id: BearerIdentity = { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
+  if (key.ownerSubject) id.owner = key.ownerSubject;
+  return id;
 }
 
 /**
@@ -184,6 +188,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
   if (auth.kind === 'bearer') {
     const id = await resolveBearer(auth.token, opts);
     const actor: Actor = { subject: id.subject, role: id.role, scopes: id.scopes };
+    if (id.owner !== undefined) actor.owner = id.owner;
     if (id.viaAuthResolver) actor.viaAuthResolver = true;
     // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
     else if (id.role === 'admin' && id.tenantId === resolveTenantId({})) actor.hostAdmin = true;
