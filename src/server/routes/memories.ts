@@ -6,7 +6,7 @@ import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { getCallerProject, getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
@@ -35,6 +35,7 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
     owner: getString(body, 'owner'),
     artifactRef: getString(body, 'artifactRef'),
     tags: getStringArray(body, 'tags'),
+    project: getCallerProject(body),
   });
   sendJson(res, 200, result);
   return;

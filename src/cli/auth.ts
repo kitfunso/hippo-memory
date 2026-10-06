@@ -62,8 +62,9 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
 function formatKeyRow(item: ApiKeyListItem): string {
   const label = item.label ?? '-';
   const created = item.createdAt;
+  const expires = item.expiresAt ?? '-';
   const revoked = item.revokedAt ?? '-';
-  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${revoked}`;
+  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
 function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
@@ -85,11 +86,11 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
   }
 
   if (items.length === 0) {
-    console.log(includeRevoked ? 'No API keys.' : 'No active API keys. (Use --all to include revoked.)');
+    console.log(includeRevoked ? 'No API keys.' : 'No active API keys. (Use --all to include revoked and expired.)');
     return;
   }
 
-  console.log('key_id  tenant  role  label  created  revoked');
+  console.log('key_id  tenant  role  label  created  expires  revoked');
   for (const item of items) {
     console.log(formatKeyRow(item));
   }

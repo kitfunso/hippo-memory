@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { realpathOrResolve, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
 import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks/shared.js';
+import { claudeConfigDir, isJsonObject } from '../hooks/shared.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
@@ -41,7 +41,7 @@ export function claudeFolderName(root: string): string {
 export const claudeCodeAdapter: Adapter = {
   tool: 'claude-code',
   list(ctx, scope) {
-    const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
+    const config = claudeConfigDir(ctx.home, ctx.env);
     const warnings: string[] = [];
     const folders = scope === 'project' ? projectFolders(ctx, config) : userFolders(ctx, config, warnings);
     return { tool: 'claude-code', home: config, containers: readFolders(folders, scope, ctx.platform), warnings };
@@ -50,7 +50,7 @@ export const claudeCodeAdapter: Adapter = {
 
 /** A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time limit. */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
-  const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
+  const config = claudeConfigDir(ctx.home, ctx.env);
   const folder = path.join(path.dirname(transcriptPath), 'memory');
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
 }
