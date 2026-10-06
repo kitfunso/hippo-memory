@@ -112,7 +112,17 @@ describe('schema v54', () => {
     });
   });
 
-  it('REQUIRED_SCHEMA_OBJECTS names session_owners and both indexes', () => {
-    expect(REQUIRED_SCHEMA_OBJECTS).toEqual(expect.arrayContaining(['session_owners', ...OWNER_INDEXES]));
+  it('REQUIRED_SCHEMA_OBJECTS names session_owners, both owner indexes and both request indexes', () => {
+    expect(REQUIRED_SCHEMA_OBJECTS).toEqual(expect.arrayContaining(['session_owners', ...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]));
+  });
+
+  it('a stamped store that lost its request indexes gets them back on the next open', () => {
+    withDb((db) => {
+      for (const idx of Object.values(REQUEST_INDEXES)) db.exec(`DROP INDEX ${idx}`);
+    });
+    withDb((db) => {
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      for (const idx of Object.values(REQUEST_INDEXES)) expect(indexSql(db, idx)).toMatch(/UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/);
+    });
   });
 });
