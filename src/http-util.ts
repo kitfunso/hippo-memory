@@ -29,9 +29,12 @@ export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
 
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Sent as the Retry-After header, so a refused caller knows when to come back. */
+  readonly retryAfterSec: number | undefined;
+  constructor(status: number, message: string, retryAfterSec?: number) {
     super(message);
     this.status = status;
+    this.retryAfterSec = retryAfterSec;
   }
 }
 

@@ -54,7 +54,7 @@ export const DEFAULT_VIEW_LIMIT = 500;
 export function buildGraphModel(
   hippoRoot: string,
   tenantId: string,
-  opts: { entity?: string; limit?: number } = {},
+  opts: { entity?: string; limit?: number; canRead?: (scope: string | null) => boolean } = {},
 ): GraphModel {
   const limit = opts.limit ?? DEFAULT_VIEW_LIMIT;
 

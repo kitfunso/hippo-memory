@@ -412,6 +412,7 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     return;
   }
   if (isStoreBusy(err)) res.setHeader('Retry-After', '1');
+  else if (err instanceof HttpError && err.retryAfterSec !== undefined) res.setHeader('Retry-After', String(err.retryAfterSec));
   if (mapped.status === 500) {
     // The id lets an operator find the logged cause without the client seeing internal text.
     sendJson(res, 500, { error: mapped.message, requestId });
