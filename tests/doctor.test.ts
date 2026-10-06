@@ -3,6 +3,7 @@
  * Real stores, real settings files, the built CLI for the exit code.
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'node:fs';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -13,6 +14,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
 import { startCompaction } from '../src/compaction-record.js';
+import { __setSpoolFs } from '../src/compaction-spool.js';
 import { repairProjects } from '../src/project-merge.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
 
@@ -174,6 +176,23 @@ describe('hippo doctor', () => {
       const { cwd, spoolAt } = setup('doctor-spool-fresh-');
       spoolAt(`${stamp(ago(1))}-aaaaaaa1.a0.json`, ago(1));
       expect(compactions(cwd)).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
+    });
+
+    it('a spool that cannot be listed still shows the database counts', () => {
+      const { cwd, spoolAt } = setup('doctor-spool-unread-');
+      spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
+      __setSpoolFs({
+        ...fs,
+        readdirSync: (dir) => {
+          if (dir.endsWith('compactions-spool')) throw Object.assign(new Error('EPERM: simulated'), { code: 'EPERM' });
+          return fs.readdirSync(dir);
+        },
+      });
+      try {
+        expect(compactions(cwd)).toMatchObject({ status: 'warn', detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated' });
+      } finally {
+        __setSpoolFs(null);
+      }
     });
   });
 

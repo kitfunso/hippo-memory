@@ -82,6 +82,11 @@ interface LockBody {
   token: string | null;
 }
 
+interface HeldLock {
+  token: string;
+  at: number;
+}
+
 const stamp = (ms: number): string => String(Math.trunc(ms)).padStart(13, '0');
 const isTime = <T>(value: T): value is T & number => typeof value === 'number' && Number.isFinite(value);
 const idle = new Int32Array(new SharedArrayBuffer(4));
@@ -217,14 +222,15 @@ function createLock(lock: string, body: string, log: Log): 'taken' | 'exists' | 
   }
 }
 
-/** This run's token once it holds `replay.lock`, else null: another replayer holds it, or it could not be made. */
-function takeLock(dir: string, log: Log): string | null {
+/** This run's token and take time once it holds `replay.lock`, else null: another replayer holds it, or it could not be made. */
+function takeLock(dir: string, log: Log): HeldLock | null {
   const lock = path.join(dir, LOCK);
   const token = randomBytes(8).toString('hex');
-  const body = JSON.stringify({ pid: process.pid, at: Date.now(), token });
+  const at = Date.now();
+  const body = JSON.stringify({ pid: process.pid, at, token });
   for (let tries = 0; tries < 2; tries++) {
     const made = createLock(lock, body, log);
-    if (made === 'taken') return token;
+    if (made === 'taken') return { token, at };
     if (made === 'skip') break;
     const held = readLock(lock, log);
     if (held === 'gone') continue;
@@ -240,19 +246,21 @@ function takeLock(dir: string, log: Log): string | null {
   return null;
 }
 
-/** False, after saying so, once `replay.lock` no longer holds this run's token. */
+/** False, after saying so, once `replay.lock` no longer holds this run's token or cannot be read. */
 function ownsLock(dir: string, token: string, log: Log): boolean {
   const held = readLock(path.join(dir, LOCK), log);
   if (held !== 'gone' && held !== 'busy' && held.token === token) return true;
-  log('spool left to another replayer (lock taken over)');
+  log(held === 'busy' ? 'spool lock could not be read, stopping' : 'spool left to another replayer (lock taken over)');
   return false;
 }
 
 /** Removes `replay.lock` only while it holds this run's token, so a run never deletes a successor's lock. Never throws. */
-function releaseLock(dir: string, token: string, log: Log): void {
+function releaseLock(dir: string, mine: HeldLock, log: Log): void {
   const lock = path.join(dir, LOCK);
   const held = readLock(lock, log);
-  if (held !== 'gone' && held !== 'busy' && held.token === token) settle(() => fsx.unlinkSync(lock), log, 'spool lock not released');
+  // A takeover needs a lock over STALE_MS old, so a busy read of one this run took more recently is still this run's.
+  const ours = held === 'busy' ? Date.now() - mine.at < STALE_MS : held !== 'gone' && held.token === mine.token;
+  if (ours) settle(() => fsx.unlinkSync(lock), log, 'spool lock not released');
 }
 
 /** Claim time sits in the claim's name, so a claim over STALE_MS away from now belongs to a replayer that never finished. */
@@ -406,7 +414,9 @@ function mtimeOf(file: string): number | null {
   try {
     return fsx.statSync(file).mtimeMs;
   } catch (err) {
-    if (errCode(err) === 'ENOENT') return null; // a replay moved it after the listing; it is counted under its new name or not at all
+    const code = errCode(err);
+    // Moved by a replay after the listing, or held by another program: left out of this count rather than failing it.
+    if (code === 'ENOENT' || BUSY_CODES.has(code)) return null;
     throw err;
   }
 }
@@ -437,21 +447,21 @@ export function spoolCounts(hippoRoot: string, now: Date, waitingAfterMs: number
 export function importSpool(hippoRoot: string, tenantId: string, log: Log, deadline: number, importOne: SpoolImporter): number {
   const dir = path.join(hippoRoot, SPOOL_DIR);
   if (!fsx.existsSync(dir)) return 0;
-  const token = takeLock(dir, log);
-  if (token === null) return 0;
+  const mine = takeLock(dir, log);
+  if (mine === null) return 0;
   try {
-    if (!ownsLock(dir, token, log)) return 0;
+    if (!ownsLock(dir, mine.token, log)) return 0;
     promoteTmp(dir, tenantId, log);
     recoverStaleClaims(dir, log);
     let finished = 0;
     for (const entry of waitingFiles(dir)) {
-      if (Date.now() > deadline || !ownsLock(dir, token, log)) break;
+      if (Date.now() > deadline || !ownsLock(dir, mine.token, log)) break;
       const outcome = importFile(dir, entry, tenantId, log, importOne);
       if (outcome === 'imported') finished++;
       if (outcome === 'stop') break;
     }
     return finished;
   } finally {
-    releaseLock(dir, token, log);
+    releaseLock(dir, mine, log);
   }
 }

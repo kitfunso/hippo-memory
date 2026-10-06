@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../src/compaction-record.js';
-import { __setSpoolFs, importSpool, spool, type SpoolFs, type SpoolImporter } from '../src/compaction-spool.js';
+import { __setSpoolFs, importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../src/compaction-spool.js';
 
 let root: string;
 let logs: string[];
@@ -209,6 +209,38 @@ describe('one replayer at a time', () => {
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual([]);
     expect(fs.readdirSync(spoolDir())).toEqual([]);
+  });
+
+  it('a busy lock read stops the run, says so, and leaves no lock behind', () => {
+    put(`${A}.a0.json`, 's1');
+    put(`${B}.a0.json`, 's2');
+    const seen: string[] = [];
+    withFs({
+      readFileSync: (file, encoding) => {
+        if (seen.length > 0 && String(file).endsWith('replay.lock')) throw fsError('EBUSY');
+        return fs.readFileSync(file, encoding);
+      },
+    });
+    expect(replay((spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); })).toBe(1);
+    expect(seen).toEqual(['s1']);
+    expect(logs).toEqual(['spool lock could not be read, stopping']);
+    expect(fs.readdirSync(spoolDir())).toEqual([`${B}.a0.json`]);
+    __setSpoolFs(null);
+    expect(replay(collector().importer)).toBe(1);
+  });
+});
+
+describe('spool counts', () => {
+  it('skips a file whose stat stays busy instead of throwing', () => {
+    const old = new Date(Date.now() - 20 * MINUTE);
+    for (const name of ['s1-1.json', 's2-1.json']) fs.utimesSync(put(name, name), old, old);
+    withFs({
+      statSync: (file) => {
+        if (path.basename(file) === 's1-1.json') throw fsError('EBUSY');
+        return fs.statSync(file);
+      },
+    });
+    expect(spoolCounts(root, new Date(), 10 * MINUTE)).toEqual({ waiting: 1, stale: 0, bad: 0 });
   });
 });
 
