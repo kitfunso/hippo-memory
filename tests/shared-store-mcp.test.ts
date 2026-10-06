@@ -15,8 +15,8 @@ import { clearProjectIdentityCache } from '../src/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
-const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve'];
-const OPEN = new Map<string, Record<string, JsonValue>>([['hippo_peers', {}], ['hippo_predict_baserate', { class_tag: 'gate-check' }]]);
+const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve', 'hippo_peers'];
+const OPEN = new Map<string, Record<string, JsonValue>>([['hippo_predict_baserate', { class_tag: 'gate-check' }]]);
 
 let tmp: string;
 let handle: ServerHandle | null = null;
@@ -114,7 +114,7 @@ describe('MCP writes on a shared store', () => {
 });
 
 describe('the MCP tool gate on a shared store', () => {
-  it('turns learn, share and resolve off, opens peers and baserate, and needs a project for every other tool', async () => {
+  it('turns learn, share, resolve and peers off, opens baserate, and needs a project for every other tool', async () => {
     const store = flaggedStore();
     handle = await serve({ hippoRoot: store, port: 0 });
     const headerSets: Record<string, string>[] = [{}, { 'x-hippo-project': 'acme' }];

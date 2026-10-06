@@ -4,5 +4,5 @@
 
 ### Changed
 
-- **MCP tools on a shared store refuse a caller with no project.** Every tool returns an `isError` reply that names the header, except `hippo_peers` and `hippo_predict_baserate`. `hippo_learn`, `hippo_share` and `hippo_resolve` are off on a shared store, since they read the server's git history, copy into its global store, or tombstone across every project. Stdio MCP is unchanged.
+- **MCP tools on a shared store refuse a caller with no project.** Every tool returns an `isError` reply that names the header, except `hippo_predict_baserate`. `hippo_learn`, `hippo_share`, `hippo_resolve` and `hippo_peers` are off on a shared store, since they read the server's git history, copy into its global store, tombstone across every project, or list the server's own global store instead of the repos that share this one. Stdio MCP is unchanged.
 - **`hippo_context` on a shared store now answers a caller that names its project.** It returns that project's rows with no query, since the server's git state belongs to no caller. Before, it always refused on a shared store.
