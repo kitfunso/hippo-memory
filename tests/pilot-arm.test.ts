@@ -126,10 +126,22 @@ describe('pilot arm helpers', () => {
       withBusyWait(SERVER_DB_WAIT_MS, () => {
         const reader = openHippoDb(root);
         try {
-          const started = Date.now();
-          expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
-          // HOOK_DB_WAIT_MS would take at least 1000 ms; this leaves room for slow busy sleeps on CI.
-          expect(Date.now() - started).toBeLessThan(HOOK_DB_WAIT_MS - 100);
+          // SQLite's own busy sleep overshoots on macOS, so it is off and the retry loop's clock moves 50 ms a try, not with real time.
+          reader.exec('PRAGMA busy_timeout = 0');
+          let clock = 0;
+          const exec = reader.exec.bind(reader);
+          vi.spyOn(reader, 'exec').mockImplementation((sql: string) => {
+            if (sql === 'BEGIN IMMEDIATE') clock += 50;
+            exec(sql);
+          });
+          const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+          try {
+            expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
+          } finally {
+            now.mockRestore();
+          }
+          expect(clock).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
+          expect(clock).toBeLessThan(HOOK_DB_WAIT_MS);
         } finally {
           closeHippoDb(reader);
         }
