@@ -1,4 +1,4 @@
-import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from '../rejection.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
@@ -8,7 +8,8 @@ import { selectEntriesByIds } from './entry-reads.js';
 import { openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../api-errors.js';
-import { isPersonalScope } from '../recall-scope.js';
+import { canTouchScope, isPersonalScope } from '../recall-scope.js';
+import { selectMemoryReach } from './tenant-lookup.js';
 
 function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
   return aId < bId
@@ -72,6 +73,17 @@ export function listMemoryConflicts(
           `).all(status) as MemoryConflictRow[];
     }
     return rows.map(rowToMemoryConflict);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Conflicts whose two rows `actor` may both touch; someone else's personal row hides its whole pair. */
+export function listTouchableConflicts(hippoRoot: string, status: string, tenantId: string, actor: { owner?: string }): MemoryConflict[] {
+  const conflicts = listMemoryConflicts(hippoRoot, status, tenantId);
+  const db = openHippoDb(hippoRoot);
+  try {
+    return conflicts.filter((c) => [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)));
   } finally {
     closeHippoDb(db);
   }

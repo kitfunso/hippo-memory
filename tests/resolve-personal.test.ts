@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listRejections, remember, type Actor, type Context } from '../src/api.js';
+import { resolveOpenConflict } from '../src/dashboard-actions.js';
 import { mapApiError } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
@@ -118,5 +119,16 @@ describe('resolving conflicts next to personal rows', () => {
 
     const resolved = await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: personalId });
     expect(replyText(resolved)).toBe(`Resolved conflict ${conflictId}: kept ${personalId}, weakened ${teamId}`);
+  });
+
+  it('the dashboard resolve answers a pair holding a personal row as it answers a missing conflict, open or resolved', async () => {
+    const { personalId, teamId, conflictId } = personalPair();
+    const missing = resolveOpenConflict(root, 'default', conflictId + 1000, { keep: teamId });
+    expect(missing.status).toBe(404);
+    expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);
+    expect(listMemoryConflicts(root, 'open', 'default').map((c) => c.id)).toEqual([conflictId]);
+
+    await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: personalId });
+    expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);
   });
 });
