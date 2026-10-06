@@ -10,14 +10,29 @@ import { closeHippoDb, openHippoDb } from '../db.js';
 import { NotFoundError } from '../api-errors.js';
 import { canTouchScope } from '../recall-scope.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
-import { mcpActor, type ToolCall } from './protocol.js';
+import type { MemoryConflict } from '../store/rows.js';
+import { mcpActor, type McpContext, type ToolCall } from './protocol.js';
 import { isJsonString } from '../json.js';
+
+const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
 /** The scope of memory `id`, null when it has none or does not exist. */
 function memoryScope(hippoRoot: string, id: string): string | null {
   const db = openHippoDb(hippoRoot);
   try {
     return selectMemoryReach(db, id)?.scope ?? null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Open conflicts whose two rows the caller may both touch; someone else's personal row hides its whole pair. */
+function touchableConflicts(ctx: McpContext | undefined, hippoRoot: string, tenantId: string): MemoryConflict[] {
+  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
+  const actor = mcpActor(ctx);
+  const db = openHippoDb(hippoRoot);
+  try {
+    return conflicts.filter((c) => [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)));
   } finally {
     closeHippoDb(db);
   }
@@ -67,8 +82,8 @@ export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string
   ].join('\n');
 }
 
-export function runConflictsTool({ hippoRoot, tenantId }: ToolCall): string {
-  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
+export function runConflictsTool({ ctx, hippoRoot, tenantId }: ToolCall): string {
+  const conflicts = touchableConflicts(ctx, hippoRoot, tenantId);
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
@@ -83,6 +98,7 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   const rejectLoser = Boolean(args.rejectLoser);
   const reason = isJsonString(args.reason) ? args.reason : undefined;
   if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
+  if (!touchableConflicts(ctx, hippoRoot, tenantId).some((c) => c.id === conflictId)) return NOT_RESOLVED;
   const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
     rejectLoserValue: rejectLoser,
     reason,
@@ -90,7 +106,7 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
     // ctx.actor for HTTP-MCP, 'mcp' for stdio callers, which pass no ctx.
     rejectedBy: ctx?.actor ?? 'mcp',
   });
-  if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
+  if (!result) return NOT_RESOLVED;
   const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
 }

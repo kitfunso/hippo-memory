@@ -7,6 +7,8 @@ import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
+import { BadRequestError } from '../api-errors.js';
+import { isPersonalScope } from '../recall-scope.js';
 
 function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
   return aId < bId
@@ -409,11 +411,11 @@ function removeConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemov
   };
   const { loserId, opts } = t;
 
-  // SAFETY: loserRow's shape matches the three columns named in the
+  // SAFETY: loserRow's shape matches the four columns named in the
   // SELECT above.
   const loserRow = db
-    .prepare(`SELECT kind, content, tenant_id FROM memories WHERE id = ?${t.scope.memScope}`)
-    .get(loserId, ...t.scope.memArgs) as { kind: string; content: string; tenant_id: string } | undefined;
+    .prepare(`SELECT kind, content, tenant_id, scope FROM memories WHERE id = ?${t.scope.memScope}`)
+    .get(loserId, ...t.scope.memArgs) as { kind: string; content: string; tenant_id: string; scope: string | null } | undefined;
 
   if (loserRow) {
     const actor = opts?.rejectedBy ?? 'cli';
@@ -440,10 +442,13 @@ function removeConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemov
 function tombstoneLoserValue(
   db: DatabaseSyncLike,
   t: ResolveTarget,
-  loserRow: { kind: string; content: string; tenant_id: string },
+  loserRow: { kind: string; content: string; tenant_id: string; scope: string | null },
   who: { actor: string; reason: string },
   removal: LoserRemoval,
 ): string {
+  if (isPersonalScope(loserRow.scope)) {
+    throw new BadRequestError(`cannot reject the value of personal memory ${t.loserId}: a rejection reaches the whole tenant, so its reason would show to everyone; resolve with forget instead`);
+  }
   const { actor, reason } = who;
   const rejectedDigest = rejectionDigest(loserRow.content);
   insertRejectedValue(db, {
@@ -469,13 +474,14 @@ function tombstoneLoserValue(
   // to keep it in this same resolution, and this branch must not
   // undo that choice in the same transaction.
   const loserTenantId = loserRow.tenant_id ?? 'default';
-  // SAFETY: dupRows' shape matches the three columns named in the
-  // SELECT above.
+  // SAFETY: dupRows' shape matches the four columns named in the SELECT above.
   const dupRows = db
-    .prepare(`SELECT id, kind, content FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
-    .all(loserTenantId, t.loserId, t.keepId) as Array<{ id: string; kind: string; content: string }>;
+    .prepare(`SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
+    .all(loserTenantId, t.loserId, t.keepId) as Array<{ id: string; kind: string; content: string; scope: string | null }>;
   for (const dup of dupRows) {
     if (rejectionDigest(dup.content) !== rejectedDigest) continue;
+    // Another person's personal row is outside this resolver's reach, as it is outside their recall.
+    if (isPersonalScope(dup.scope) && dup.scope !== loserRow.scope) continue;
     if (dup.kind === 'raw') {
       archiveRawMemory(db, dup.id, { reason, who: actor });
       removal.extraRemovedRawIds.push(dup.id);
