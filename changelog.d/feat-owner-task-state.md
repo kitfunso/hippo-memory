@@ -9,7 +9,8 @@
 ### Changed
 
 - **Schema v54 adds owner columns and a `session_owners` table. The first owner row makes older binaries refuse the store.** Rows from before v54 stay unowned and never reach an owner's read. The first session bind or owner snapshot raises `min_compatible_binary` to `TASK_OWNER_MIN_BINARY`, because an older binary would close other developers' snapshots. Back up the store and upgrade every hippo binary that shares it before developers start using it.
-- **`scripts/check-expiring-keys-floor.mjs` checks `TASK_OWNER_MIN_BINARY` too.** It also fails on a checkout with no git tags, where every tag check would pass by finding nothing.
+- **`scripts/check-expiring-keys-floor.mjs` checks `TASK_OWNER_MIN_BINARY` too.** It also fails on a checkout with no git tags, where every tag check would pass by finding nothing, and on a floor that names no release tag unless it is the package version being released.
+- **Both binary floors are 1.64.0, the first release that ships v53 and v54.** At 1.63.2 they equalled the released binary, which has neither, so the floors shut no older binary out.
 
 ### Fixed
 
