@@ -53,9 +53,9 @@ export interface ServeOpts {
   shutdownDrainMs?: number;
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
+  autoSleep?: false;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
-  autoSleep?: false;
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
 }

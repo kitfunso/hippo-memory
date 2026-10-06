@@ -136,7 +136,7 @@ describe('replay of records a killed hook left', () => {
     );
     fs.writeFileSync(path.join(spool, 's2-1.json'), '{ not json');
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
-    expect(fs.readdirSync(spool).sort()).toEqual(['s2-1.json.bad']);
+    expect(fs.readdirSync(spool).sort()).toEqual(['s2-1.unreadable.bad']);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2, summary: 'the summary' }]);
   });
@@ -293,8 +293,8 @@ describe('two replayers working the same store', () => {
     writeSpool('s1-1.json');
     run(s.hippoRoot, `CREATE TRIGGER block_compaction_insert BEFORE INSERT ON compactions BEGIN SELECT RAISE(ABORT, 'blocked'); END`);
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
-    expect(fs.readdirSync(spoolDir())).toEqual(['s1-1.json']);
-    expect(logs.join('\n')).toContain('spool file s1-1.json not imported');
+    expect(fs.readdirSync(spoolDir())).toEqual(['s1-1.a1.json']);
+    expect(logs.join('\n')).toContain('spool file s1-1.json failed to import (try 1 of 3)');
 
     run(s.hippoRoot, `DROP TRIGGER block_compaction_insert`);
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);

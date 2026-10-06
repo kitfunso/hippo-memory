@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`built CLI help output is byte-identical > hippo __codex-session-end-worker --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo __codex-session-end-worker --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -8,7 +8,7 @@ exports[`built CLI help output is byte-identical > hippo __codex-session-end-wor
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo __session-end-worker --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo __session-end-worker --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -16,7 +16,7 @@ exports[`built CLI help output is byte-identical > hippo __session-end-worker --
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -420,7 +420,7 @@ Commands:
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
     --no-learn             Skip the agent memory import
-  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
@@ -674,7 +674,7 @@ Examples:
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo assemble --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo assemble --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -688,7 +688,7 @@ exports[`built CLI help output is byte-identical > hippo assemble --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo audit --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo audit --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -713,7 +713,7 @@ exports[`built CLI help output is byte-identical > hippo audit --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo audit prune --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo audit prune --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -726,7 +726,7 @@ exports[`built CLI help output is byte-identical > hippo audit prune --help 1`] 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo auth --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo auth --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -754,7 +754,7 @@ exports[`built CLI help output is byte-identical > hippo auth --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo brief --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo brief --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -773,7 +773,7 @@ exports[`built CLI help output is byte-identical > hippo brief --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo capture --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo capture --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -790,7 +790,7 @@ exports[`built CLI help output is byte-identical > hippo capture --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo capture-error --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo capture-error --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -800,7 +800,7 @@ exports[`built CLI help output is byte-identical > hippo capture-error --help 1`
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo card --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo card --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -836,7 +836,7 @@ exports[`built CLI help output is byte-identical > hippo card --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo codex-run --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo codex-run --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -845,7 +845,7 @@ exports[`built CLI help output is byte-identical > hippo codex-run --help 1`] = 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo compact-resume --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo compact-resume --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -854,7 +854,7 @@ exports[`built CLI help output is byte-identical > hippo compact-resume --help 1
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo conflicts --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo conflicts --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -865,7 +865,7 @@ exports[`built CLI help output is byte-identical > hippo conflicts --help 1`] = 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo context --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo context --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -881,7 +881,7 @@ exports[`built CLI help output is byte-identical > hippo context --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo correction-latency --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo correction-latency --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -891,7 +891,7 @@ exports[`built CLI help output is byte-identical > hippo correction-latency --he
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo current --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo current --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -902,7 +902,7 @@ exports[`built CLI help output is byte-identical > hippo current --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo customer-note --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo customer-note --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -919,7 +919,7 @@ exports[`built CLI help output is byte-identical > hippo customer-note --help 1`
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo dag --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo dag --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -929,7 +929,7 @@ exports[`built CLI help output is byte-identical > hippo dag --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo daily-runner --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo daily-runner --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -938,7 +938,7 @@ exports[`built CLI help output is byte-identical > hippo daily-runner --help 1`]
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo dashboard --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo dashboard --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -948,7 +948,7 @@ exports[`built CLI help output is byte-identical > hippo dashboard --help 1`] = 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo decide --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo decide --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -963,7 +963,7 @@ exports[`built CLI help output is byte-identical > hippo decide --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo dedup --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo dedup --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -974,7 +974,7 @@ exports[`built CLI help output is byte-identical > hippo dedup --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo doctor --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo doctor --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -984,7 +984,7 @@ exports[`built CLI help output is byte-identical > hippo doctor --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo dormant --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo dormant --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -999,7 +999,7 @@ exports[`built CLI help output is byte-identical > hippo dormant --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo drill --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo drill --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1011,7 +1011,7 @@ exports[`built CLI help output is byte-identical > hippo drill --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo embed --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo embed --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1021,7 +1021,7 @@ exports[`built CLI help output is byte-identical > hippo embed --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo eval --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo eval --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1042,7 +1042,7 @@ exports[`built CLI help output is byte-identical > hippo eval --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo explain --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo explain --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1057,7 +1057,7 @@ exports[`built CLI help output is byte-identical > hippo explain --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo export --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo export --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1067,7 +1067,7 @@ exports[`built CLI help output is byte-identical > hippo export --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo failures --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo failures --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1080,7 +1080,7 @@ exports[`built CLI help output is byte-identical > hippo failures --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo forget --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo forget --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1091,7 +1091,7 @@ exports[`built CLI help output is byte-identical > hippo forget --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo github --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo github --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1105,7 +1105,7 @@ exports[`built CLI help output is byte-identical > hippo github --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo github backfill --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo github backfill --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1118,7 +1118,7 @@ exports[`built CLI help output is byte-identical > hippo github backfill --help 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo goal --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo goal --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1142,7 +1142,7 @@ exports[`built CLI help output is byte-identical > hippo goal --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo graph --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo graph --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1152,7 +1152,7 @@ exports[`built CLI help output is byte-identical > hippo graph --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo handoff --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo handoff --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1176,7 +1176,7 @@ exports[`built CLI help output is byte-identical > hippo handoff --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo hook --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo hook --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1193,7 +1193,7 @@ exports[`built CLI help output is byte-identical > hippo hook --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo import --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo import --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1218,7 +1218,7 @@ exports[`built CLI help output is byte-identical > hippo import --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo incident --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo incident --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1235,7 +1235,7 @@ exports[`built CLI help output is byte-identical > hippo incident --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo init --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo init --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1252,7 +1252,7 @@ exports[`built CLI help output is byte-identical > hippo init --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo inspect --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo inspect --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1261,7 +1261,7 @@ exports[`built CLI help output is byte-identical > hippo inspect --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo invalidate --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo invalidate --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1283,18 +1283,18 @@ exports[`built CLI help output is byte-identical > hippo invalidate --help 1`] =
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo last-sleep --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo last-sleep --help 1`] = `
 {
   "status": 0,
   "stderr": "",
-  "stdout": "  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  "stdout": "  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
 ",
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo learn --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo learn --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1306,7 +1306,7 @@ exports[`built CLI help output is byte-identical > hippo learn --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo mcp --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo mcp --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1315,7 +1315,7 @@ exports[`built CLI help output is byte-identical > hippo mcp --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo note --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo note --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1332,7 +1332,7 @@ exports[`built CLI help output is byte-identical > hippo note --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo outcome --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo outcome --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1344,7 +1344,7 @@ exports[`built CLI help output is byte-identical > hippo outcome --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo peers --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo peers --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1353,7 +1353,7 @@ exports[`built CLI help output is byte-identical > hippo peers --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo policy --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo policy --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1376,7 +1376,7 @@ exports[`built CLI help output is byte-identical > hippo policy --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo post-compact --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo post-compact --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1387,7 +1387,7 @@ exports[`built CLI help output is byte-identical > hippo post-compact --help 1`]
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo pre-compact --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo pre-compact --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1398,7 +1398,7 @@ exports[`built CLI help output is byte-identical > hippo pre-compact --help 1`] 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo predict --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo predict --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1420,7 +1420,7 @@ exports[`built CLI help output is byte-identical > hippo predict --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo process --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo process --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1439,7 +1439,7 @@ exports[`built CLI help output is byte-identical > hippo process --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo project-brief --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo project-brief --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1458,7 +1458,7 @@ exports[`built CLI help output is byte-identical > hippo project-brief --help 1`
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo projects --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo projects --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1476,7 +1476,7 @@ exports[`built CLI help output is byte-identical > hippo projects --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo promote --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo promote --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1485,7 +1485,7 @@ exports[`built CLI help output is byte-identical > hippo promote --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo provenance --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo provenance --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1496,7 +1496,7 @@ exports[`built CLI help output is byte-identical > hippo provenance --help 1`] =
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo quarantine --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo quarantine --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1510,7 +1510,7 @@ exports[`built CLI help output is byte-identical > hippo quarantine --help 1`] =
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo recall --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo recall --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1603,7 +1603,7 @@ exports[`built CLI help output is byte-identical > hippo recall --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo refine --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo refine --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1618,7 +1618,7 @@ exports[`built CLI help output is byte-identical > hippo refine --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo reject --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo reject --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1631,7 +1631,7 @@ exports[`built CLI help output is byte-identical > hippo reject --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo rejections --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo rejections --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1642,7 +1642,7 @@ exports[`built CLI help output is byte-identical > hippo rejections --help 1`] =
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo remember --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo remember --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1658,7 +1658,7 @@ exports[`built CLI help output is byte-identical > hippo remember --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo resolve --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo resolve --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1671,7 +1671,7 @@ exports[`built CLI help output is byte-identical > hippo resolve --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo serve --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo serve --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1682,7 +1682,7 @@ exports[`built CLI help output is byte-identical > hippo serve --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo session --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo session --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1707,7 +1707,7 @@ exports[`built CLI help output is byte-identical > hippo session --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo session-end --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo session-end --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1719,7 +1719,7 @@ exports[`built CLI help output is byte-identical > hippo session-end --help 1`] 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo setup --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo setup --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1737,7 +1737,7 @@ exports[`built CLI help output is byte-identical > hippo setup --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo share --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo share --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1750,7 +1750,7 @@ exports[`built CLI help output is byte-identical > hippo share --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo skill --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo skill --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1770,7 +1770,7 @@ exports[`built CLI help output is byte-identical > hippo skill --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo slack --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo slack --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1786,7 +1786,7 @@ exports[`built CLI help output is byte-identical > hippo slack --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo slack backfill --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo slack backfill --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1797,7 +1797,7 @@ exports[`built CLI help output is byte-identical > hippo slack backfill --help 1
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo slack workspaces --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo slack workspaces --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1809,7 +1809,7 @@ exports[`built CLI help output is byte-identical > hippo slack workspaces --help
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo sleep --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo sleep --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1824,7 +1824,7 @@ exports[`built CLI help output is byte-identical > hippo sleep --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo snapshot --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo snapshot --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1843,7 +1843,7 @@ exports[`built CLI help output is byte-identical > hippo snapshot --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo status --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo status --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1852,7 +1852,7 @@ exports[`built CLI help output is byte-identical > hippo status --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo supersede --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo supersede --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1864,7 +1864,7 @@ exports[`built CLI help output is byte-identical > hippo supersede --help 1`] = 
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo support-bundle --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo support-bundle --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1876,7 +1876,7 @@ exports[`built CLI help output is byte-identical > hippo support-bundle --help 1
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo sync --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo sync --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1885,7 +1885,7 @@ exports[`built CLI help output is byte-identical > hippo sync --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo tokens --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo tokens --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1901,7 +1901,7 @@ exports[`built CLI help output is byte-identical > hippo tokens --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo trace --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo trace --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1912,7 +1912,7 @@ exports[`built CLI help output is byte-identical > hippo trace --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo unreject --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo unreject --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1922,7 +1922,7 @@ exports[`built CLI help output is byte-identical > hippo unreject --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo watch --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo watch --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1931,7 +1931,7 @@ exports[`built CLI help output is byte-identical > hippo watch --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > hippo wm --help 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > hippo wm --help 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1957,7 +1957,92 @@ exports[`built CLI help output is byte-identical > hippo wm --help 1`] = `
 }
 `;
 
-exports[`built CLI help output is byte-identical > unknown verb: hippo [ 'frobnicate' ] 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > the dispatch table holds the pinned verbs, so a dropped verb fails here 1`] = `
+[
+  "__codex-session-end-worker",
+  "__session-end-worker",
+  "assemble",
+  "audit",
+  "auth",
+  "brief",
+  "capture",
+  "capture-error",
+  "card",
+  "codex-run",
+  "compact-resume",
+  "conflicts",
+  "context",
+  "correction-latency",
+  "current",
+  "customer-note",
+  "dag",
+  "daily-runner",
+  "dashboard",
+  "decide",
+  "dedup",
+  "doctor",
+  "dormant",
+  "drill",
+  "embed",
+  "eval",
+  "explain",
+  "export",
+  "failures",
+  "forget",
+  "github",
+  "goal",
+  "graph",
+  "handoff",
+  "hook",
+  "import",
+  "incident",
+  "init",
+  "inspect",
+  "invalidate",
+  "last-sleep",
+  "learn",
+  "mcp",
+  "note",
+  "outcome",
+  "peers",
+  "policy",
+  "post-compact",
+  "pre-compact",
+  "predict",
+  "process",
+  "project-brief",
+  "projects",
+  "promote",
+  "provenance",
+  "quarantine",
+  "recall",
+  "refine",
+  "reject",
+  "rejections",
+  "remember",
+  "resolve",
+  "serve",
+  "session",
+  "session-end",
+  "setup",
+  "share",
+  "skill",
+  "slack",
+  "sleep",
+  "snapshot",
+  "status",
+  "supersede",
+  "support-bundle",
+  "sync",
+  "tokens",
+  "trace",
+  "unreject",
+  "watch",
+  "wm",
+]
+`;
+
+exports[`CLI help output is byte-identical and runs nothing > unknown verb: hippo [ 'frobnicate' ] 1`] = `
 {
   "status": 1,
   "stderr": "Unknown command: frobnicate
@@ -1966,7 +2051,7 @@ exports[`built CLI help output is byte-identical > unknown verb: hippo [ 'frobni
 }
 `;
 
-exports[`built CLI help output is byte-identical > unknown verb: hippo [ 'frobnicate', '--help' ] 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > unknown verb: hippo [ 'frobnicate', '--help' ] 1`] = `
 {
   "status": 0,
   "stderr": "",
@@ -1974,7 +2059,7 @@ exports[`built CLI help output is byte-identical > unknown verb: hippo [ 'frobni
 }
 `;
 
-exports[`built CLI help output is byte-identical > unknown verb: hippo [ 'frobnicate', '--zzz' ] 1`] = `
+exports[`CLI help output is byte-identical and runs nothing > unknown verb: hippo [ 'frobnicate', '--zzz' ] 1`] = `
 {
   "status": 1,
   "stderr": "hippo: ignoring unknown flag --zzz. A later release will reject it.
