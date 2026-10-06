@@ -52,6 +52,8 @@ export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureRes
 export { sqliteStore, type HippoStore } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 export { StoreBusyError } from './db.js';
+// An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
+export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api.js';
 
 // An add-on that serves a team store checks the flag before it starts.
 export { isSharedStore } from './config.js';
