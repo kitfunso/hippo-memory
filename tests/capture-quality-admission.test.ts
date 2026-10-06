@@ -2,15 +2,22 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extractFromText } from '../src/capture/extract.js';
-import { summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
+import { cmdCapture } from '../src/capture/command.js';
+import { extractFromText, extractFromTexts } from '../src/capture/extract.js';
+import { sessionTail, summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../src/autolearn.js';
 import { getContext, type Context } from '../src/api.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
 import { initStore, openStore } from '../src/store/open.js';
 import { closeHippoDb } from '../src/db.js';
 import { gatedWrite } from '../src/gated-write.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+
+const captureTurns = (turns: readonly SessionTurn[]) => {
+  const { users, assistants } = sessionTail(turns);
+  return extractFromTexts([...users, ...assistants]);
+};
 
 describe('capture retains complete supported assertions', () => {
   it('rejects the reported fragment, outcome and stripped build commit', () => {
@@ -57,10 +64,11 @@ describe('capture retains complete supported assertions', () => {
   it('does not manufacture a source assertion by clipping a transcript turn', () => {
     const user = `Decision: the release app ${'uses the shared configuration '.repeat(22)}because the signed package must match the manifest.`;
     const assistant = `The storage service must ${'retain the source details '.repeat(95)}until verification finishes.`;
-    const summary = summariseSessionTurns([{ role: 'user', text: user }, { role: 'assistant', text: assistant }]);
+    const turns: SessionTurn[] = [{ role: 'user', text: user }, { role: 'assistant', text: assistant }];
+    const summary = summariseSessionTurns(turns);
     expect(summary).toContain(user);
     expect(summary).toContain(assistant);
-    expect(extractFromText(summary)).toEqual([]);
+    expect(captureTurns(turns)).toEqual([]);
   });
 
   it('never joins adjacent transcript turns into one memory', () => {
@@ -72,10 +80,31 @@ describe('capture retains complete supported assertions', () => {
       { role: 'assistant', text: 'succeeds (inserts or updates)' },
       { role: 'assistant', text: 'Here is the file:' },
     ];
-    expect(extractFromText(summariseSessionTurns(turns)).map((item) => item.content)).toEqual([
+    expect(captureTurns(turns).map((item) => item.content)).toEqual([
       'Never edit the lockfile by hand',
       'You must never run the migration twice, because the second run deletes the seed rows',
     ]);
+  });
+
+  it('keeps a fence or a spec heading inside the turn that opened it', () => {
+    const turns: SessionTurn[] = [
+      { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
+      { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
+      { role: 'assistant', text: 'Plan:\n- Move the cache to Redis' },
+      { role: 'assistant', text: '- the deploy script lives in scripts/deploy.sh' },
+    ];
+    expect(captureTurns(turns)).toEqual([
+      { content: 'Never deploy on Fridays because the on-call rota is thin', category: 'rule', tags: ['rule', 'captured'] },
+      { content: 'Move the cache to Redis', category: 'spec', tags: ['spec', 'captured'] },
+    ]);
+  });
+
+  it('stores a statement two turns repeat once', () => {
+    const turns: SessionTurn[] = [
+      { role: 'user', text: 'Never push from the VM to main.' },
+      { role: 'assistant', text: 'Never push from the VM to main.' },
+    ];
+    expect(captureTurns(turns).map((item) => item.content)).toEqual(['Never push from the VM to main']);
   });
 
   it('splits one statement per capitalised line and drops non-statements', () => {
@@ -151,5 +180,14 @@ describe('automatic quality does not govern manual or trusted import storage', (
     for (const entry of manual) writeEntry(root, entry);
     const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
     expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
+  });
+
+  it('session capture stores a rule from the turn after one that left a fence open', () => {
+    const turns: SessionTurn[] = [
+      { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
+      { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
+    ];
+    cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
+    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
   });
 });

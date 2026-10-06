@@ -91,7 +91,7 @@ export function pruneAuditLog(
       .get(opts.tenantId, cutoff) as { c: number | bigint };
     count = Number(row.c);
   } else {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       const result = db
         .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)

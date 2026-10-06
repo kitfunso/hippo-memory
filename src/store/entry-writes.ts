@@ -1,5 +1,5 @@
 import { type MemoryEntry, markRetrieved } from '../memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb } from '../db.js';
+import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db.js';
 import { RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { log } from '../log.js';
@@ -33,7 +33,7 @@ export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: Mem
     opts?.afterCommit?.();
     writeEntryMirrors(hippoRoot, stamped);
   } catch (error) {
-    // writeEntryDbOnly's SAVEPOINT has already unwound here, so the refusal audit lands
+    // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands
     // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
     if (error instanceof RejectedValueError) {
       auditRejectionRefusal(db, error, opts?.actor ?? 'cli');
@@ -43,14 +43,14 @@ export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: Mem
 }
 
 /**
- * DB-only write path. Caller owns the open `db` handle. Runs SAVEPOINT +
- * upsert + afterWrite hook + audit row inside the SAVEPOINT scope. Caller
+ * DB-only write path. Caller owns the open `db` handle. Runs upsert +
+ * afterWrite hook + audit row inside one withWriteScope. Caller
  * is responsible for opening `db`, optionally wrapping in a larger BEGIN/
  * COMMIT (e.g. supersede's BEGIN IMMEDIATE), closing `db`, AND calling
  * `writeEntryMirrors` after the larger tx commits — mirrors must run
  * post-commit so a rolled-back tx never leaves orphan markdown.
  *
- * Audit-order note: the audit row is emitted INSIDE the SAVEPOINT, so audit
+ * Audit-order note: the audit row is emitted INSIDE the write scope, so audit
  * commits atomically with the row INSERT. A subsequent mirror failure cannot
  * leave a recorded audit entry without its corresponding DB row. This is a
  * documented hardening over the prior writeEntry-as-monolith ordering.
@@ -63,12 +63,9 @@ export function writeEntryDbOnly(
     afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
   },
 ): void {
-  // SAVEPOINT (not BEGIN) so this nests safely inside any outer transaction
-  // a caller might hold (e.g. supersede's BEGIN IMMEDIATE). SQLite refuses
-  // BEGIN within a transaction; SAVEPOINT is the only way to scope rollback
-  // without disturbing outers.
-  db.exec('SAVEPOINT write_entry');
-  try {
+  // Inside a caller's transaction (e.g. supersede's BEGIN IMMEDIATE) the scope is a SAVEPOINT,
+  // so a throw here rolls back only this write and leaves the outer open.
+  withWriteScope(db, 'write_entry', () => {
     upsertEntryRow(db, entry);
     if (opts?.afterWrite) {
       opts.afterWrite(db, entry.id);
@@ -89,16 +86,7 @@ export function writeEntryDbOnly(
     if (entry.dag_parent_id) {
       markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, opts?.actor ?? 'cli');
     }
-    db.exec('RELEASE SAVEPOINT write_entry');
-  } catch (e) {
-    try {
-      db.exec('ROLLBACK TO SAVEPOINT write_entry');
-      db.exec('RELEASE SAVEPOINT write_entry');
-    } catch {
-      // Ignore rollback failures — the throw below is what matters.
-    }
-    throw e;
-  }
+  });
 }
 
 /** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */

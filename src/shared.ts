@@ -30,6 +30,7 @@ import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
+import { isReusable } from './memory-quality.js';
 import { log } from './log.js';
 import type { DatabaseSyncLike } from './db.js';
 
@@ -502,7 +503,7 @@ type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAu
 
 function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>, minScore: number, stats: AutoShareStats | undefined): boolean {
   // shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
-  if (isQuarantineScope(entry.scope ?? null)) return false;
+  if (isQuarantineScope(entry.scope ?? null) || !isReusable(entry)) return false;
   // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
   if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;

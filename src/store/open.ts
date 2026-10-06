@@ -77,7 +77,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
   if (legacyEntries.length === 0) return false;
 
-  db.exec('BEGIN');
+  db.exec('BEGIN IMMEDIATE');
   try {
     importLegacyEntries(db, hippoRoot, legacyEntries);
     importLegacyIndexAndStats(db, hippoRoot);

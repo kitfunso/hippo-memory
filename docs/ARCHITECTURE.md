@@ -111,7 +111,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
 
 ### src/audit.ts
-- `CJK_LETTERS`: SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)
 
 ### src/auth.ts
@@ -148,6 +147,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `saveDerivedSnapshot`: Per-field merge (X1): a tool-heavy tail whose only user turns are tool_result arrays derives an empty task even though the summary is non-empty.
 
 ### src/capture/extract.ts
+- `extractFromTexts`: #493 replaced the DF2 clause-bounding below with whole sentences: capture keeps the full sentence a keyword sits in (Intl.Segmenter, with inline code and abbreviation dots masked) and the shared quality gate decides. The follow-up parses each transcript turn on its own, so a fence or spec heading never runs into the next turn, follows CommonMark fence rules, joins wrapped lowercase lines only when the line above has not ended its sentence, and dedupes across turns. The DF2 entries below describe code that no longer exists; T1's negation guarantee holds because the whole sentence is kept.
 - `DECISION_PATTERNS`: T1 (DF2): each pattern now carries TWO capture groups — group 1 is the discriminating keyword (plus its trailing separator, verbatim), group 2 is the content that follows it. Previously only the after-keyword content was captured, so a negation like "never" / "must not" was discarded and a prohibition inverted into an instruction ("Never use X" stored as "use X"). `extractFromPatterns` reassembles group1 + a clause-bounded group2 (T2, via `boundToClause` below) rather than reading a single fixed-width group — group 2's own reach is widened to {1,500} because the true stopping point is now found by content, not counted characters. Keeping the keyword in its own group (rather than folding it into one bigger capture) matters: `boundToClause` must scan for a clause boundary only in group 2, never in group 1 — several keywords end in their own colon ("error:", "rule:", "decision:") which is not a clause boundary in the prose sense and would wrongly truncate the capture down to just the keyword if scanned.
 - `PREFERENCE_PATTERNS`: PREFERENCE_PATTERNS[0] keeps its pre-DF2 two-capture-group shape (match[1]-only, unbounded) — out of scope here, backlogged. See extractFromPatterns' reference check against this exact array element.
 - `boundToClause`: T2 (DF2): bound a keyword+content capture to its clause instead of a fixed character count.
@@ -424,6 +424,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/db/migrations/v48.ts
 - migration v48: Quarantine (src/quarantine.ts, CD5)
 
+### src/db/migrations/v53.ts
+- migration v53: Self-service keys. `api_keys` gains `owner_subject` (the auth-resolver subject that minted the key for itself) and `expires_at`, plus a partial index on live keys per (tenant, owner) for the per-subject cap.
+- migration v53: Does not touch `min_compatible_binary`. A store with no expiring key is safe for an older binary, so it keeps its floor and every binary that shares it keeps working.
+- `authCreateSelf` (src/api/auth.ts): The first write of a non-null `expires_at` raises `min_compatible_binary` to `EXPIRING_KEYS_MIN_BINARY` (src/version.ts), in the same transaction as the key, and never lowers a higher floor. A binary older than that ignores `expires_at` and would keep honouring expired keys, so it must refuse the store from then on.
+- `EXPIRING_KEYS_MIN_BINARY`: Names the first release that ships schema v53, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` runs on `npm version`, `prepublishOnly` and CI: it fails when the constant is above `package.json`'s version, or when a tag `v<constant>` exists whose migration index lacks v53. Until that release the constant equals the dev version, so a dev build never locks itself out.
+- Way back: to let an older binary open a store again, revoke every key that has an `expires_at` (`hippo auth list --all` shows the expires column; `hippo auth revoke <key_id>`), then lower the floor to what it was before, 1.24.0 on most stores (set by v39): `UPDATE meta SET value = '1.24.0' WHERE key = 'min_compatible_binary'`. A revoked key is safe because every binary honours `revoked_at`.
+
 ### src/decisions.ts
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).
@@ -543,6 +550,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/mcp/session-state.ts
 - `sessionRecallHistoryMcp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the MCP pipeline. Separate from CLI/HTTP rings per plan v3 architecture (per-pipeline rings; no IPC).
+
+### src/memory-quality.ts
+- `CJK_LETTERS` (moved from src/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
+- `module header`: #493 moved the audit's text checks here and made them the one gate for automatic memories: capture, git learning, sleep merges, compaction memories, extracted facts and DAG summaries. A person's memory is never judged on its wording. The follow-up split the defects into certain ones (rejected, never reused by sleep or auto-share, set aside by `hippo audit repair`) and uncertain ones (`possible-fragment` is stored and listed for review). Provenance, not text, decides who is held to the gate: `isAutomaticEntry` reads source, tags, `extracted_from`, `dag_level` and confidence.
 
 ### src/memory-value-weights.ts
 - `module header`: LC2-E2 frozen learned memory-value weight vector. GENERATED FROM the E2 frozen artifact

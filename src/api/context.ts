@@ -19,7 +19,7 @@ import { loadLatestHandoff } from '../store/handoffs.js';
 import type { SessionHandoff } from '../handoff.js';
 import { estimateTokens } from '../token-ledger.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
-import { isWorthSurfacing } from '../audit.js';
+import { isWorthSurfacing } from '../memory-quality.js';
 import { getGlobalRoot } from '../shared.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { evalNow, isRecallBoostAblated } from '../ablation.js';

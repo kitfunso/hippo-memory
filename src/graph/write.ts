@@ -376,7 +376,7 @@ export function removeGraphEntitiesForObject(
     assertTenantId('removeGraphEntitiesForObject', tenantId);
     const db = openHippoDb(hippoRoot);
     try {
-      db.exec('BEGIN');
+      db.exec('BEGIN IMMEDIATE');
       db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
         .run(tenantId, sourceObjectType, sourceObjectId);
       db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)

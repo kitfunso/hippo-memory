@@ -8,10 +8,10 @@ import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { type Actor, authRevoke, type Context, RecallContractError } from './api.js';
+import { type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type Context, RecallContractError } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
 import { ForbiddenError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
@@ -32,8 +32,8 @@ import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill
 import { parseJsonBody } from './server/validation.js';
 import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 
-// Add-on packages revoke keys through these without importing the whole api surface.
-export { authRevoke, ForbiddenError, type Context, type Actor };
+// Add-on packages mint and revoke keys through these without importing the whole api surface.
+export { authCreateSelf, authRevoke, ForbiddenError, type AuthCreateSelfOpts, type AuthCreateSelfResult, type Context, type Actor };
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 // The code behind these lives in src/server/; this subpath keeps exporting them.
@@ -384,9 +384,9 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     sendJson(res, 400, { error: err.message, code: err.code });
     return;
   }
+  // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what the client keeps sending.
+  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) res.once('finish', () => closeAfterReply(req));
   sendError(res, mapped.status, mapped.message);
-  // readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
-  if (err instanceof BodyTooLargeError) req.destroy();
 }
 
 function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {

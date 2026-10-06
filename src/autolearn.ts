@@ -7,7 +7,7 @@ import { execSync, execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import { loadAllEntries } from './store/entry-reads.js';
 import { textOverlap } from './tokenize.js';
-import { assessAutomaticMemory } from './automatic-memory-quality.js';
+import { assessAutomaticMemory } from './memory-quality.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { log } from './log.js';
 

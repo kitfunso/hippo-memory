@@ -13,7 +13,7 @@ import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
 import { neverAutoShareTags } from './shared.js';
 import { log } from './log.js';
-import { certainDefect } from './automatic-memory-quality.js';
+import { certainDefect } from './memory-quality.js';
 
 export interface FactCluster {
   label: string;

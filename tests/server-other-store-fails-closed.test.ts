@@ -41,7 +41,7 @@ function newKey(): TestKey {
   const plaintext = `${keyId}.${base32(32)}`;
   const salt = randomBytes(16);
   const keyHash = `scrypt$${salt.toString('hex')}$${scryptSync(plaintext, salt, 32).toString('hex')}`;
-  return { keyId, plaintext, record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [] } };
+  return { keyId, plaintext, record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [], expiresAt: null } };
 }
 
 const bearer = (key: TestKey) => ({ authorization: `Bearer ${key.plaintext}` });
