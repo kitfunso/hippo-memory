@@ -306,6 +306,9 @@ function changeScopeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_
     if (op === 'auth_grant' && row.revokedAt) {
       throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
     }
+    if (op === 'auth_grant' && /^personal:/i.test(scope)) {
+      throw new BadRequestError(`${scope} is a personal scope: only its owner reads it, and no grant can change that`);
+    }
     if (!isRestrictedScope(scope)) {
       throw new BadRequestError(`${scope} is not a restricted scope; it is already readable by default`);
     }
