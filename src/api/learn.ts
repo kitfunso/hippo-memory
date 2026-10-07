@@ -7,6 +7,7 @@ import { embedMemory } from '../embeddings.js';
 import { extractInvalidationTarget, invalidateMatching } from '../invalidation.js';
 import { computeSchemaFit, createMemory, Layer } from '../memory.js';
 import { extractPathTags } from '../path-context.js';
+import { canReadScope, personalScopeOf, touchableScopeSql } from '../recall-scope.js';
 import { RejectedValueError } from '../rejection.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
@@ -65,9 +66,10 @@ export function learn(ctx: Context, opts: LearnOpts): LearnResult {
 function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): LessonCounts {
   const { hippoRoot, tenantId } = ctx;
   const { profile } = opts;
-  // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy.
-  const existing = profile.full ? loadAllEntries(hippoRoot, tenantId) : undefined;
-  const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord)));
+  // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so both read what an admin can.
+  const existing = profile.full ? loadAllEntries(hippoRoot, tenantId).filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
+  const readable = touchableScopeSql('', personalScopeOf(ctx.actor));
+  const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord), undefined, readable));
   const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
   const counts: LessonCounts = { added: 0, skipped: 0, rejected: 0, invalidations: [] };
   for (const lesson of lessons) {

@@ -36,6 +36,7 @@ export function retireHeldTexts(run: SleepRun): void {
     run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
     if (run.dryRun) continue;
     run.pendingDeletes.push(row.id);
+    run.units.push(successor ? [row.id, successor.id] : [row.id]);
     if (successor) {
       run.pendingWrites.push(successor);
       survivors[i] = successor;
@@ -151,6 +152,7 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
 
   if (!dryRun && semantic) {
     run.pendingWrites.push(semantic);
+    run.units.push([semantic.id, ...cluster.map((e) => e.id)]);
     result.semanticCreated++;
 
     // Demote source episodics (they've been compressed into neocortex):

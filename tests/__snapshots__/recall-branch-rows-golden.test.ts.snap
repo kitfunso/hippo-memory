@@ -1830,17 +1830,17 @@ exports[`recall branch replies and rows match the code before the store port > m
     "audit": [
       {
         "actor": "localhost:cli",
-        "metadata_json": "{"query_hash":"7990dd94e0f5e8c5","query_length":27,"results":19}",
-        "op": "recall",
-        "target_id": null,
+        "metadata_json": "{"class_tag":"deploy-duration","detected_phrase":"will take 3 days","n_closed":1,"mean_ratio":1.6666666666666667}",
+        "op": "recall_autodebias_hint",
+        "target_id": "deploy-duration",
         "tenant_id": "default",
         "ts": "<ts>",
       },
       {
         "actor": "localhost:cli",
-        "metadata_json": "{"class_tag":"deploy-duration","detected_phrase":"will take 3 days","n_closed":1,"mean_ratio":1.6666666666666667}",
-        "op": "recall_autodebias_hint",
-        "target_id": "deploy-duration",
+        "metadata_json": "{"query_hash":"7990dd94e0f5e8c5","query_length":27,"results":19}",
+        "op": "recall",
+        "target_id": null,
         "tenant_id": "default",
         "ts": "<ts>",
       },

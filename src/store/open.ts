@@ -29,9 +29,9 @@ export function initStore(hippoRoot: string): void {
 }
 
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
-export function openStore(hippoRoot: string): DatabaseSyncLike {
+export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   ensureMirrorDirectories(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openHippoDb(hippoRoot, opts);
   try {
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {

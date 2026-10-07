@@ -10,6 +10,7 @@ import type { Actor as ApiActor } from '../api.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
 import type { JsonValue } from '../json.js';
+import type { CallerProject } from '../prompt-hook.js';
 import type { HippoStore } from '../store-port.js';
 
 // ── Find hippo root ──
@@ -84,7 +85,10 @@ export interface McpContext {
   viaAuthResolver?: true;
   /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */
   hostAdmin?: true;
+  owner?: string; // copied by mcpActor so MCP task state keys the same as REST
+  project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   store?: HippoStore;
+  autoSleep?: false;
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
@@ -103,6 +107,7 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
   const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
   if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
   if (ctx?.role === undefined || ctx.hostAdmin) actor.hostAdmin = true;
+  if (ctx?.owner !== undefined) actor.owner = ctx.owner;
   return actor;
 }
 

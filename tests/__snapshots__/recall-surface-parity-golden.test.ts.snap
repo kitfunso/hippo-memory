@@ -34,7 +34,7 @@ exports[`recall and context validation drift, MCP vs HTTP > context: limit 0 1`]
     "status": 400,
   },
   "mcp": {
-    "ok": true,
+    "isError": "Invalid arguments for hippo_context: limit must be a positive number",
   },
 }
 `;
@@ -60,7 +60,7 @@ exports[`recall and context validation drift, MCP vs HTTP > context: scope 300 c
     "status": 400,
   },
   "mcp": {
-    "ok": true,
+    "isError": "Invalid arguments for hippo_context: scope exceeds 256-character cap",
   },
 }
 `;
@@ -84,7 +84,7 @@ exports[`recall and context validation drift, MCP vs HTTP > recall: empty query 
     "status": 400,
   },
   "mcp": {
-    "ok": "## Cutoff",
+    "isError": "Invalid arguments for hippo_recall: query is required",
   },
 }
 `;
@@ -97,7 +97,7 @@ exports[`recall and context validation drift, MCP vs HTTP > recall: fresh_tail_c
     "status": 400,
   },
   "mcp": {
-    "ok": "Found 12 memories:",
+    "isError": "Invalid arguments for hippo_recall: fresh_tail_count must be a non-negative number",
   },
 }
 `;
@@ -123,7 +123,7 @@ exports[`recall and context validation drift, MCP vs HTTP > recall: fresh_tail_s
     "status": 400,
   },
   "mcp": {
-    "ok": "Found 12 memories:",
+    "isError": "Invalid arguments for hippo_recall: fresh_tail_session_id exceeds 256-character cap",
   },
 }
 `;
@@ -136,7 +136,7 @@ exports[`recall and context validation drift, MCP vs HTTP > recall: limit 0 1`] 
     "status": 400,
   },
   "mcp": {
-    "ok": "Found 12 memories:",
+    "isError": "Invalid arguments for hippo_recall: limit must be a positive integer <= 1000",
   },
 }
 `;
@@ -149,7 +149,7 @@ exports[`recall and context validation drift, MCP vs HTTP > recall: mode bogus 1
     "status": 400,
   },
   "mcp": {
-    "ok": "Found 12 memories:",
+    "isError": "Invalid arguments for hippo_recall: mode must be 'bm25', 'hybrid', or 'physics'",
   },
 }
 `;
@@ -188,7 +188,7 @@ exports[`recall and context validation drift, MCP vs HTTP > recall: scorer_windo
     "status": 400,
   },
   "mcp": {
-    "ok": "Found 12 memories:",
+    "isError": "Invalid arguments for hippo_recall: scorer_window must be <= 1000",
   },
 }
 `;
@@ -1585,9 +1585,9 @@ exports[`recall surface parity goldens > http: recall with a session that has an
 }
 `;
 
-exports[`recall surface parity goldens > mcp audit counts the window band, not the rows shown 1`] = `
+exports[`recall surface parity goldens > mcp audit counts the rows shown 1`] = `
 {
-  "auditResults": 12,
+  "auditResults": 2,
   "shownHeading": "Found 2 memories",
 }
 `;

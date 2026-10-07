@@ -7,7 +7,8 @@ import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import type { Context } from './types.js';
-import { selectMemoryTenant } from '../store/tenant-lookup.js';
+import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // forget
@@ -30,7 +31,8 @@ export interface ForgetResult {
 export function forget(ctx: Context, id: string): ForgetResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    if (selectMemoryTenant(db, id) !== ctx.tenantId) {
+    const reach = selectMemoryReach(db, id);
+    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
@@ -78,7 +80,7 @@ export interface RejectResult {
  * forms — pass exactly one:
  *  - `memoryId`: reject the CURRENT content of an existing memory. Removes
  *    that row and every other live row in the tenant whose normalized
- *    digest matches (not just the id passed).
+ *    digest matches (not just the id passed), except another person's personal rows.
  *  - `value`: pre-emptive form — tombstone content that may not currently
  *    be stored (or is already gone). Zero removals.
  *
@@ -93,7 +95,8 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     // keeps the error message consistent with the rest of this module.
     const db = openHippoDb(ctx.hippoRoot);
     try {
-      if (selectMemoryTenant(db, opts.memoryId) !== ctx.tenantId) {
+      const reach = selectMemoryReach(db, opts.memoryId);
+      if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
         throw new NotFoundError(`memory not found: ${opts.memoryId}`);
       }
     } finally {
@@ -107,6 +110,7 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     reason: opts.reason,
     memoryId: opts.memoryId,
     value: opts.value,
+    ownScope: personalScopeOf(ctx.actor) ?? undefined,
   });
   return { digest: result.digest, removedIds: result.removedIds };
 }

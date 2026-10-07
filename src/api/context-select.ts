@@ -37,12 +37,15 @@ export interface ContextPlan {
   includeRecent: number;
   activeScope: string;
   exactScope: string | undefined;
+  /** The caller's personal scope, from its authenticated owner; the default deny admits it. */
+  ownScope: string | undefined;
   query: string;
   hasLocal: boolean;
   hasGlobal: boolean;
   globalRoot: string;
   primaryIsGlobal: boolean;
   hasLocalTaskState: boolean;
+  sharedStore: boolean;
   config: HippoConfig;
   currentProject: ProjectRef;
   includeCrossProject: boolean;
@@ -53,13 +56,12 @@ export interface ContextPlan {
   obs: DeliveryObserver | undefined;
 }
 
-/** The ambient admit rules; `digestHidden` is read late because a prompt-recall eligibility check can still set it. */
+/** The ambient admit rules. */
 export interface ContextAdmission {
   ambientAdmit: (e: MemoryEntry) => boolean;
   admit: (e: MemoryEntry) => boolean;
   /** What the two-store search admits: `admit` without the own-session compaction rule. */
   bothStoresAdmit: (e: MemoryEntry) => boolean;
-  digestHidden: () => boolean;
 }
 
 export interface ContextPools {
@@ -106,7 +108,7 @@ interface PromptCandidate {
   isGlobal: boolean;
 }
 
-/** Pins plus the prompt-recall or recent-N backfill; null means the block is empty. */
+/** Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out too. */
 export function selectPinned(
   opts: ContextOpts,
   plan: ContextPlan,
@@ -145,14 +147,6 @@ export function selectPinned(
     backfillRecent(plan, localPool, globalPool, picked, recentBudget, nowP);
   }
 
-  if (
-    pinnedLocal.length === 0 &&
-    pinnedGlobal.length === 0 &&
-    picked.items.length === 0 &&
-    !admission.digestHidden()
-  ) {
-    return null;
-  }
   admitWithinBudget(rankedPinned, picked, effBudget, obs);
   return picked.items;
 }
@@ -402,7 +396,7 @@ async function searchBothStores(
 
 /** The vector arm under the lexical window's own tenant, scope and current-row rules. */
 function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEntry) => boolean): HybridVectorCandidates {
-  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact'), includeSuperseded: false, admit };
+  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope), includeSuperseded: false, admit };
 }
 
 async function searchLocalRows(

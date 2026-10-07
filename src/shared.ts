@@ -16,14 +16,15 @@ import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
 import { tallySources } from './store/candidates.js';
 import { loadIndex } from './store/index-and-stats.js';
-import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
+import { isPersonalScope, passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
 import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';
 import { fitBudget } from './search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
 import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
-import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
+import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
+import { isSharedStore } from './config.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
@@ -78,6 +79,9 @@ export function promoteToGlobal(
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
   }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`);
+  }
 
   // Secret producer veto: promote is a producer path to the global store
   // exactly like shareMemory - same hard rule.
@@ -92,14 +96,12 @@ export function promoteToGlobal(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // Mint a new ID for the global store. origin_project rides along from the
-  // local entry's write-time stamp via the spread; back-stop it for pre-v39
-  // local rows so a promoted copy never lands NULL in the global store.
+  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and the label names no path.
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `promoted:${localRoot}`,
-    origin_project: entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot))),
+    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
+    origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 
   writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: opts?.afterWrite });
@@ -224,7 +226,7 @@ export interface HybridSearchOptions extends SearchOptions {
    *  `null` a different meaning (boost-neutral), so a flat `string | null`
    *  here would overload null with contradictory semantics. Do NOT pass an
    *  empty object casually from non-recall paths. */
-  recallScope?: { requested?: string; additive?: boolean };
+  recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
 /**
@@ -257,13 +259,15 @@ export async function searchBothHybrid(
           root, query, searchWindow, tenantId, recallScope.requested,
           recallScope.additive ? 'additive' : 'exact',
           Boolean(includeSuperseded) || Boolean(asOf),
+          undefined,
+          recallScope.ownScope,
         )
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
   const passesScope = (e: MemoryEntry): boolean =>
     !recallScope || (recallScope.additive
-      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
-      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested));
+      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested) || passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
+      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
   const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
   const localEntries = loadEntries(localRoot).filter(admit);
   const globalEntries = loadEntries(globalRoot).filter(admit);
@@ -271,7 +275,7 @@ export async function searchBothHybrid(
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates = {
     tenantId,
-    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact') : undefined,
+    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope) : undefined,
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
@@ -419,6 +423,9 @@ export function shareMemory(
       `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`);
+  }
 
   const score = transferScore(entry);
   if (score < 0.3 && !options.force) return null;
@@ -426,15 +433,14 @@ export function shareMemory(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // v39: canonical origin comes from the entry's own stamp (write-time,
-  // store-location-derived); the localRoot parent basename is only a
-  // fallback for pre-v39 rows and keeps the legacy source format intact.
+  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as no project.
   const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot)));
+  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
+  const label = originName === '' ? fallbackName : (originName ?? '');
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `shared:${originName === '' ? fallbackName : originName}:${new Date().toISOString()}`,
+    source: `shared:${label}:${new Date().toISOString()}`,
     origin_project: originName,
   };
 
@@ -504,8 +510,8 @@ export function listPeers(
 type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
 
 function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>, minScore: number, stats: AutoShareStats | undefined): boolean {
-  // shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
-  if (isQuarantineScope(entry.scope ?? null) || !isReusable(entry)) return false;
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
+  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) return false;
   // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
   if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
@@ -633,6 +639,9 @@ export function syncGlobalToLocal(
   globalRoot: string,
   opts: { includeCrossProject?: boolean } = {},
 ): number {
+  if (isSharedStore(localRoot)) {
+    throw new BadRequestError(`Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, whose rows would reach every member.`);
+  }
   if (!fs.existsSync(globalRoot)) return 0;
 
   // Host-wide read. syncGlobalToLocal copies the global union into a

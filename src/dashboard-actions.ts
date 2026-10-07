@@ -3,7 +3,7 @@
 import * as api from './api.js';
 import { NotFoundError } from './api-errors.js';
 import type { MemoryEntry } from './memory.js';
-import { listMemoryConflicts, resolveConflict } from './store/conflicts.js';
+import { listTouchableConflicts, resolveConflict } from './store/conflicts.js';
 import { readEntry } from './store/entry-reads.js';
 import { writeEntry } from './store/entry-writes.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
@@ -78,7 +78,8 @@ export function resolveOpenConflict(hippoRoot: string, tenantId: string, conflic
   const { keep } = body;
   if (keep === undefined) throw new ParamError('keep must be a memory id');
   parseMemoryId(keep);
-  const conflict = listMemoryConflicts(hippoRoot, '*', tenantId).find((c) => c.id === conflictId);
+  // The dashboard acts as an unowned admin, so a pair holding a personal row reads as missing, open or resolved.
+  const conflict = listTouchableConflicts(hippoRoot, '*', tenantId, api.adminActor(ACTOR)).find((c) => c.id === conflictId);
   if (!conflict) return notFound();
   const already = (): ActionResult => ({ status: 409, body: { error: 'This conflict is already resolved' }, changed: false });
   if (conflict.status !== 'open') return already();

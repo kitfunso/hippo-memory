@@ -15,7 +15,7 @@ import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entr
 import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
 import { loadRecallSearchEntries, type OriginFilter } from './store/search-rows.js';
-import { listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
+import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
 import { recordTokenUse, type TokenUse } from './token-ledger.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
@@ -26,6 +26,8 @@ export interface RecallSearchArgs {
   readonly explicitScopeMode: 'exact' | 'additive';
   readonly includeSuperseded: boolean;
   readonly originProjects?: OriginFilter;
+  /** The caller's personal scope, which the default deny admits. */
+  readonly ownScope?: string;
 }
 
 /** Everything one recall writes once its reply is decided, so a store writes it on one connection. */
@@ -54,12 +56,12 @@ export interface HippoStore {
   entriesByIds(ids: readonly string[], tenantId?: string): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
-  /** The first `count` (at most 200) unsuperseded raw rows, a tenant and a non-empty session id narrowing them, by created
-   *  descending, then content and id ascending, as `loadFreshRawMemories` does. */
-  freshRawEntries(count: number, tenantId?: string, sessionId?: string): Promise<MemoryEntry[]>;
-  /** The newest active snapshot, then for its session the newest handoff and `eventLimit` newest events returned oldest first,
-   *  each tie broken by the larger id, as `continuityAt` does; the caller applies scope. */
-  continuity(tenantId: string, eventLimit: number): Promise<ContinuityBlock>;
+  /** The first `count` (at most 200) unsuperseded raw rows, a tenant, a non-empty session id and `origins` (those projects and
+   *  user-global rows) narrowing them, by created descending, then content and id ascending, as `loadFreshRawMemories` does. */
+  freshRawEntries(count: number, tenantId?: string, sessionId?: string, origins?: readonly string[]): Promise<MemoryEntry[]>;
+  /** The newest active snapshot, `key` narrowing it to one owner and project, then for its session the newest handoff (same key)
+   *  and `eventLimit` newest events returned oldest first, each tie broken by the larger id, as `continuityAt` does; the caller applies scope. */
+  continuity(tenantId: string, eventLimit: number, key?: ContinuityKey): Promise<ContinuityBlock>;
   /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit row. */
   planningFallacyEvidence(tenantId: string, classQueryTokens: readonly string[]): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
@@ -98,7 +100,7 @@ export function sqliteStore(hippoRoot: string): HippoStore {
     },
     async searchRecallEntries(query, args) {
       return loadRecallSearchEntries(
-        hippoRoot, query, args.limit, args.tenantId, args.requestedScope, args.explicitScopeMode, args.includeSuperseded, args.originProjects,
+        hippoRoot, query, args.limit, args.tenantId, args.requestedScope, args.explicitScopeMode, args.includeSuperseded, args.originProjects, args.ownScope,
       );
     },
     async entriesByIds(ids, tenantId) {
@@ -107,11 +109,11 @@ export function sqliteStore(hippoRoot: string): HippoStore {
     async activeGoals(opts) {
       return activeGoalsWithPolicies(hippoRoot, opts);
     },
-    async freshRawEntries(count, tenantId, sessionId) {
-      return loadFreshRawMemories(hippoRoot, count, tenantId, sessionId);
+    async freshRawEntries(count, tenantId, sessionId, origins) {
+      return loadFreshRawMemories(hippoRoot, count, tenantId, sessionId, origins);
     },
-    async continuity(tenantId, eventLimit) {
-      return continuityAt(hippoRoot, tenantId, eventLimit);
+    async continuity(tenantId, eventLimit, key) {
+      return continuityAt(hippoRoot, tenantId, eventLimit, key);
     },
     async planningFallacyEvidence(tenantId, classQueryTokens) {
       return planningFallacyEvidenceAt(hippoRoot, tenantId, classQueryTokens);
@@ -136,12 +138,12 @@ export function sqliteStore(hippoRoot: string): HippoStore {
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
-export function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number): ContinuityBlock {
-  const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+export function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number, key?: ContinuityKey): ContinuityBlock {
+  const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId, key);
   const sessionId = activeSnapshot?.session_id ?? undefined;
   return {
     activeSnapshot,
-    sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId) : null,
+    sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId, {}, key) : null,
     recentSessionEvents: sessionId ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
   };
 }

@@ -100,6 +100,7 @@ CLI-spawning tests see the fresh `dist/`. Extra arguments pass through to vitest
 `node scripts/check-tests-pass.mjs tests/foo.test.ts` gates on one file; `--outputFile` and
 `--output-file` are the arguments it rejects, because vitest treats them as the same option and the
 gate reserves vitest's JSON report for itself.
+That run leaves out the token-eval harness tests (`tests/token-eval*`); `token-eval.yml` runs them on every push to master, so check it is green on the commit you tag.
 
 Any non-zero vitest exit refuses the publish, and the gate prints the JSON report's counts so the
 log says whether assertions failed or something outside them did. The report covers assertion

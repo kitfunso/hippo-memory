@@ -15,93 +15,14 @@ import {
 } from '../compaction-record.js';
 import { resolveTenantId } from '../tenant.js';
 import { defaultPreCompactLogPath } from '../hooks/shared.js';
-import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
-import { isObjectLike, isStringValue, readClaudeCodePreCompact } from '../capture-contract.js';
+import { readClaudeCodePreCompact } from '../capture-contract.js';
 import { errorMessage } from '../log.js';
-import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from '../transcript-tail.js';
-import { humanUserText, summariseTranscript, resolveLastSessionTranscript } from './transcript.js';
+import { resolveLastSessionTranscript } from './transcript.js';
+import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
 
 // ---------------------------------------------------------------------------
 // `hippo pre-compact` — PreCompact hook producer
 // ---------------------------------------------------------------------------
-
-export const PRE_COMPACT_TASK_CAP = 200;
-export const PRE_COMPACT_SUMMARY_CAP = 2000;
-export const PRE_COMPACT_NEXT_STEP_CAP = 500;
-
-/**
- * Cap from the RECENT end: summariseTranscript emits user turns oldest-to-
- * newest with assistant responses after them, so a head-first cap keeps
- * stale context and drops exactly the newest working state this feature
- * exists to preserve. Keep the LAST maxChars instead, aligned forward to a
- * nearby line start, with a trim marker.
- */
-export function truncateKeepNewest(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  let start = text.length - maxChars;
-  const code = text.charCodeAt(start);
-  if (code >= 0xdc00 && code <= 0xdfff) start += 1; // never start on a low surrogate
-  const nl = text.indexOf('\n', start);
-  if (nl !== -1 && nl + 1 < text.length && nl - start < 200) start = nl + 1;
-  return '[...earlier turns trimmed]\n' + text.slice(start);
-}
-
-/** Most recent plain-text user message in a JSONL tail. Claude Code transcript shape only (PreCompact is claude-code-only). */
-function lastPlainUserMessage(jsonl: string): string {
-  const lines = jsonl.split('\n').filter((l) => l.trim());
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(lines[i]);
-    } catch {
-      continue; // the tail read can start mid-line; skip the torn fragment
-    }
-    if (!isObjectLike(entry)) continue;
-    if (!('type' in entry) || entry.type !== 'user') continue;
-    // Meta/sidechain lines carry type:'user' but are not the human: after a
-    // FIRST compaction the transcript holds the compact summary as an isMeta
-    // user line, and sub-agent turns are isSidechain — deriving "task" from
-    // either yields junk on every later compaction.
-    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
-    const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
-    if (!message) continue;
-    const text = humanUserText(entry, message);
-    if (text) return text;
-  }
-  return '';
-}
-
-/** Last assistant text block in a JSONL tail (skips thinking + tool_use, same as summariseTranscript). */
-function lastAssistantTextBlock(jsonl: string): string {
-  const lines = jsonl.split('\n').filter((l) => l.trim());
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(lines[i]);
-    } catch {
-      continue; // the tail read can start mid-line; skip the torn fragment
-    }
-    if (!isObjectLike(entry)) continue;
-    if (!('type' in entry) || entry.type !== 'assistant') continue;
-    // Same meta/sidechain guard as lastPlainUserMessage: sub-agent turns
-    // (isSidechain) are not this session's next step.
-    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
-    const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
-    if (!message) continue;
-    const content = 'content' in message ? message.content : undefined;
-    if (!Array.isArray(content)) continue;
-    for (let j = content.length - 1; j >= 0; j--) {
-      const block = content[j];
-      if (isObjectLike(block)) {
-        const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-        if (isStringValue(blockText) && blockText.trim()) {
-          return blockText.trim();
-        }
-      }
-    }
-  }
-  return '';
-}
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -149,45 +70,6 @@ function printPreCompactInstruction(logFile: string): void {
   } catch (err) {
     appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`);
   }
-}
-
-/** A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null with a logged reason when nothing is derivable. */
-export function transcriptWorkingState(transcriptPath: string, log: (message: string) => void): Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null {
-  let tail = '';
-  let rawTask = '';
-  let rawNextStep = '';
-  try {
-    // Compaction fires when a big tool_result lands, so the last human and assistant turns can sit
-    // megabytes back: grow the window a bounded number of times until both turns are in it.
-    const size = fs.statSync(transcriptPath).size;
-    for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
-      if (cap > PRE_COMPACT_TAIL_BYTES) log(`tail window grown to ${cap} bytes (last ${rawTask ? 'assistant' : 'user'} turn is further back)`);
-      tail = readTranscriptTail(transcriptPath, cap);
-      rawTask = lastPlainUserMessage(tail);
-      rawNextStep = lastAssistantTextBlock(tail);
-      if ((rawTask && rawNextStep) || size <= cap) break;
-    }
-  } catch (err) {
-    log(`skip: could not read transcript tail: ${errorMessage(err)}`);
-    return null;
-  }
-
-  const rawSummary = summariseTranscript(tail);
-  if (!rawTask.trim() && !rawSummary.trim() && !rawNextStep.trim()) {
-    log('skip: empty summary');
-    return null;
-  }
-
-  // These fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
-  // re-injection token budget and never split a surrogate pair; `hippo snapshot save` stays uncapped.
-  const task = maskEmails(redactSecretsStrict(rawTask));
-  const summary = maskEmails(redactSecretsStrict(rawSummary));
-  const nextStep = maskEmails(redactSecretsStrict(rawNextStep));
-  return {
-    task: task.trim() ? truncateCodePointSafe(task, PRE_COMPACT_TASK_CAP) : '',
-    summary: summary.trim() ? truncateKeepNewest(summary, PRE_COMPACT_SUMMARY_CAP) : '',
-    next_step: nextStep.trim() ? truncateCodePointSafe(nextStep, PRE_COMPACT_NEXT_STEP_CAP) : '',
-  };
 }
 
 /** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
@@ -256,15 +138,10 @@ function saveDerivedSnapshot(
   logFile: string,
   sessionId: string | null,
   recordId: string | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'>,
+  derived: WorkingState,
 ): void {
   const tenantId = resolveTenantId({});
 
-  // Per-field merge: a tool-heavy tail whose only user turns are
-  // tool_result arrays derives an empty task even though the summary is
-  // non-empty. Loading the existing snapshot first lets each field fall
-  // back independently instead of the whole write clobbering a
-  // user-authored field with blank text.
   let existing: TaskSnapshot | null = null;
   try {
     existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
@@ -272,37 +149,15 @@ function saveDerivedSnapshot(
     // No existing snapshot to merge against — proceed with derived-only.
   }
 
-  // Field fallback must never move content across
-  // sessions — session A's task carried into a snapshot saved under session
-  // B's id would pass compact-resume's session gate wearing the wrong
-  // badge. Fall back only when the existing snapshot has no session, this
-  // payload has none, or they match.
-  const fallback =
-    existing !== null &&
-    (existing.session_id === null || sessionId === null || existing.session_id === sessionId)
-      ? existing
-      : null;
-
   // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.
-  const task = derived.task || (fallback?.task ?? '');
-  const summary = derived.summary || (fallback?.summary ?? '');
-  const nextStep = derived.next_step || (fallback?.next_step ?? '');
-
-  // All-empty fields (cross-session tail with nothing derivable) skip the
-  // write so a foreign session's junk never displaces the owning snapshot.
-  if (!task && !summary && !nextStep) {
+  const merged = mergeWorkingState(derived, existing, sessionId);
+  if (merged === null) {
     appendPreCompactLog(logFile, 'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)');
   } else {
     try {
-      saveActiveTaskSnapshot(hippoRoot, tenantId, {
-        task,
-        summary,
-        next_step: nextStep,
-        source: 'pre-compact',
-        session_id: sessionId,
-      });
+      saveActiveTaskSnapshot(hippoRoot, tenantId, { ...merged, source: 'pre-compact', session_id: sessionId });
       appendPreCompactLog(logFile, 'snapshot saved');
-      if (recordId !== null) recordSnapshotSaved(hippoRoot, recordId, (message) => appendPreCompactLog(logFile, message));
+      if (recordId !== null) recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }

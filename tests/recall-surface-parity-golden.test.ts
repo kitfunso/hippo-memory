@@ -2,16 +2,21 @@
 // over one store, so each difference in docs/recall-surface-differences.md is visible here and moves only on purpose.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { cmdRecall, __resetSessionRecallHistoryCli } from '../src/cli/recall.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpResponse } from '../src/mcp/server.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 import { retrieve, RecallContractError, type RecallResult } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, SESSION, seedTemplates, TENANT, type Store, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../src/cli/shared.js';
 
@@ -177,34 +182,31 @@ describe('recall surface parity goldens', () => {
   }, 60_000);
 
   // D2: candidate windows on a store with 230 matching rows.
+  // A store per surface: a recall rewrites the rows it returns, and that write time breaks the next surface's ties.
   it('candidate window per surface', async () => {
-    const got = await onFreshStore('wide', async (s) => {
-      const cli = await viaCli(s, { query: 'deploy', cliFlags: { json: true, why: true } });
-      const mcp = await viaMcp(s, { query: 'deploy' });
-      const http = await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }]);
+    const cli = await onFreshStore('wide', async (s) => {
+      const out = await viaCli(s, { query: 'deploy', cliFlags: { json: true, why: true } });
       // SAFETY: `hippo recall --json` prints one JSON object carrying a RecallResult-shaped suppressionSummary.
-      const cliJson = JSON.parse(cli.output.stdout) as Pick<RecallResult, 'suppressionSummary'>;
-      const windowOf = ({ output: { body } }: HttpRecalled) => ({ windowSize: body.windowSize, summary: body.suppressionSummary, returned: body.results.length });
-      return {
-        cli: cliJson.suppressionSummary,
-        mcpHead: mcp.output.split('\n').slice(0, 4),
-        http: windowOf(http[0]!),
-        httpScorerWindow50: windowOf(http[1]!),
-      };
+      return (JSON.parse(out.output.stdout) as Pick<RecallResult, 'suppressionSummary'>).suppressionSummary;
     });
+    const mcpHead = await onFreshStore('wide', async (s) => (await viaMcp(s, { query: 'deploy' })).output.split('\n').slice(0, 4));
+    const windowOf = ({ output: { body } }: HttpRecalled) => ({ windowSize: body.windowSize, summary: body.suppressionSummary, returned: body.results.length });
+    const [http, httpScorerWindow50] = await onFreshStore('wide', async (s) =>
+      (await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }])).map(windowOf));
+    const got = { cli, mcpHead, http, httpScorerWindow50 };
     expect(got).toMatchSnapshot();
   }, 120_000);
 
-  // D8: MCP's 'recall' audit row counts the window band, not the rows the budget let it show.
-  it('mcp audit counts the window band, not the rows shown', async () => {
+  // D8: MCP's 'recall' audit row counts the rows the budget let it show, as CLI and HTTP count the rows they return.
+  it('mcp audit counts the rows shown', async () => {
     const got = await onFreshStore('local', async (s) => {
       const r = await viaMcp(s, { query: 'deploy', budget: 80 });
       const recallRow = auditOps(s.root).find((a) => a.op === 'recall');
-      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall.ts).
+      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall-record.ts).
       const metadata = JSON.parse(recallRow!.metadata_json) as { results: number };
       return { shownHeading: /Found \d+ memor[a-z]*/.exec(r.output)?.[0] ?? null, auditResults: metadata.results };
     });
-    expect(got.auditResults).toBeGreaterThan(Number(/\d+/.exec(got.shownHeading ?? '0')![0]));
+    expect(got.auditResults).toBe(Number(/\d+/.exec(got.shownHeading ?? '0')![0]));
     expect(got).toMatchSnapshot();
   }, 60_000);
 
@@ -299,5 +301,40 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
   it.each(CONTEXT_INPUTS)('context: %s', async (_name, args) => {
     const got = { mcp: await mcpOutcome(s.root, 'hippo_context', args), http: await httpOutcome(handle, '/v1/context', args) };
     expect(normalise(got, s)).toMatchSnapshot();
+  }, 60_000);
+});
+
+// D18: on a shared store MCP recall keeps to the caller's repo, while GET /v1/memories takes no project.
+describe('shared store recall, MCP vs HTTP', () => {
+  it('MCP hippo_recall shows only the named repo; HTTP GET /v1/memories returns both repos', async () => {
+    for (const k of CLEARED_ENV) vi.stubEnv(k, '');
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    const home = mkdtempSync(join(tmpdir(), 'hippo-parity-shared-'));
+    const root = join(home, 'store');
+    vi.stubEnv('HIPPO_HOME', join(home, 'global'));
+    _resetSharedStoreCacheForTests();
+    let handle: ServerHandle | undefined;
+    try {
+      initStore(root);
+      writeFileSync(join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
+      writeEntry(root, seeded('lighthouse rota for the acme repo', 'mem_d18_acme', '2026-01-20T00:00:00.000Z', { origin_project: 'acme' }));
+      writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
+      const mcp = toolReply(await handleMcpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
+        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', project: { name: 'acme', legacyName: 'acme' } },
+      ));
+      expect(mcp.isError, mcp.text).toBe(false);
+      expect(mcp.text).toContain('the acme repo');
+      expect(mcp.text).not.toContain('the beta repo');
+      handle = await serve({ hippoRoot: root, port: 0 });
+      const http = await viaHttp(handle, { query: 'lighthouse' });
+      expect(http.output.status).toBe(200);
+      expect(http.output.body.results.map((r) => r.id).sort()).toEqual(['mem_d18_acme', 'mem_d18_beta']);
+    } finally {
+      await handle?.stop();
+      vi.unstubAllEnvs();
+      _resetSharedStoreCacheForTests();
+      rmSync(home, { recursive: true, force: true });
+    }
   }, 60_000);
 });

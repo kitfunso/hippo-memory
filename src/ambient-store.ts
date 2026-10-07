@@ -1,6 +1,6 @@
 import { closeHippoDb } from './db.js';
 import { strengthSql } from './memory.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+import { scopeAdmitSql } from './recall-scope.js';
 import { SECRET_TAGS } from './secret-detect.js';
 import { openStore } from './store/open.js';
 import { originInSql } from './project-identity.js';
@@ -9,6 +9,8 @@ import { isErrorTagged, type AmbientTallies } from './ambient.js';
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
 export interface AmbientStoreFilter {
   exactScope?: string;
+  /** The reader's personal scope, which the default deny admits. */
+  ownScope?: string;
   /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
   project?: readonly string[];
   /** The reader's project names: a secret-tagged row counts only inside its own non-empty origin project. */
@@ -28,8 +30,9 @@ function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
     where.push('scope = ?');
     params.push(filter.exactScope);
   } else {
-    where.push(`(scope IS NULL OR (scope NOT IN (${RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ')}) AND scope NOT LIKE '%:private:%'))`);
-    params.push(...RECALL_DEFAULT_DENY_SCOPES);
+    const admit = scopeAdmitSql('', filter.ownScope);
+    where.push(admit.sql);
+    params.push(...admit.params);
   }
   if (filter.project !== undefined) {
     where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);

@@ -1,26 +1,19 @@
-import * as path from 'path';
 import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable } from '../db.js';
-import { deriveOriginProject, originFromSource } from '../project-identity.js';
+import { fallbackOrigin, originFromSource } from '../project-identity.js';
 import { checkRejectionGuard } from '../rejection.js';
 import { log } from '../log.js';
 
-/**
- * `bypassRejectionGuard`: ONLY `batchWriteAndDelete` passes `true`; its merges concatenate
- * already-guarded facts, and it re-probes tombstones in-transaction before each upsert.
- */
-export function upsertEntryRow(
-  db: ReturnType<typeof openHippoDb>,
-  entry: MemoryEntry,
-  bypassRejectionGuard = false,
-): void {
-  if (!bypassRejectionGuard) {
-    checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
-  }
+export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
+  checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+  syncFtsRow(db, entry, upsertMemoryRow(db, entry));
+}
+
+/** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for `batchWriteAndDelete`, which probes tombstones and indexes per batch. Returns whether the row is new. */
+export function upsertMemoryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): boolean {
   const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
   db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
-
-  syncFtsRow(db, entry, isNewRow);
+  return isNewRow;
 }
 
 const UPSERT_MEMORY_SQL = `
@@ -147,6 +140,31 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
   }
 }
 
+/** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one insert per row. */
+export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonly MemoryEntry[], staleIds: readonly string[]): void {
+  if (!isFtsAvailable(db)) return;
+  let kept: ReadonlySet<string> = new Set();
+  if (staleIds.length > 0) {
+    try {
+      db.prepare(`DELETE FROM memories_fts WHERE id IN (SELECT value FROM json_each(?))`).run(JSON.stringify(staleIds));
+    } catch (err) {
+      // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
+      kept = new Set(staleIds);
+      log.warnThenDebug('fts-delete', `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  const toInsert = rows.filter((row) => !kept.has(row.id));
+  if (toInsert.length === 0) return;
+  const insert = db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`);
+  for (const row of toInsert) {
+    try {
+      insert.run(row.id, row.content, row.tags.join(' '));
+    } catch (err) {
+      log.warnThenDebug('fts-sync', `FTS index update failed for ${row.id}; keyword recall may miss it: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
+
 /**
  * Write a memory entry to SQLite and refresh compatibility mirrors.
  *
@@ -169,15 +187,12 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
  * origin (shareMemory, syncGlobalToLocal) set entry.origin_project before
  * writing and this is a no-op. Returns a stamped copy; never mutates.
  *
- * NULL is deliberately PRESERVED, not re-stamped: null means "legacy row the
- * v39 migration found no evidence for" and is deny-by-default in ambient
- * context. A writeback (e.g. markRetrieved on a crossProject-included row)
- * must not launder it into an injectable origin - the migration is the only
- * evidence-based NULL converter.
+ * NULL is PRESERVED, not re-stamped: it means no known project (a legacy row with no evidence, or a write to a
+ * shared store that named none) and ambient context denies it, so a writeback must not launder it.
  */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
-  return { ...entry, origin_project: deriveOriginProject(path.dirname(hippoRoot)) };
+  return { ...entry, origin_project: fallbackOrigin(hippoRoot) };
 }
 
 /**
@@ -194,6 +209,6 @@ export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntr
   const fromSource = originFromSource(entry.source);
   return {
     ...entry,
-    origin_project: fromSource ?? deriveOriginProject(path.dirname(hippoRoot)),
+    origin_project: fromSource ?? fallbackOrigin(hippoRoot),
   };
 }

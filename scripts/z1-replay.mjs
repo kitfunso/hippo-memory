@@ -44,7 +44,7 @@ function parseArgs(argv) {
   return out;
 }
 
-// Z1b tool-failure block: same LEADING_CD as src/capture-error.ts, its cd-stripping is query-only here.
+// Z1b tool-failure block: same LEADING_CD as src/capture/failure-reading.ts, its cd-stripping is query-only here.
 const LEADING_CD = /^\s*(?:(?:cd|pushd)\b[^;&|]*(?:&&|\|\||;)\s*)+/;
 
 // ---------------------------------------------------------------------------

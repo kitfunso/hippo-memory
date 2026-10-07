@@ -106,7 +106,7 @@ function resolveOpencodeConfigPath(): string {
  * must NOT lose the user-authored commands. The migration filters the inner
  * array per-hook, then drops the entry only when its inner array is empty.
  */
-const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)\b/;
+const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
   if (!isJsonObject(hook)) return false;
