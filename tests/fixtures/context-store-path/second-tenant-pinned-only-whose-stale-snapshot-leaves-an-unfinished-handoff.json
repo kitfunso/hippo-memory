@@ -44,7 +44,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9996044462996264,
+        "score": 0.999604446,
         "tokens": 9,
         "isGlobal": false,
         "origin": "proj",
@@ -93,7 +93,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9995253543370601,
+        "score": 0.999525354,
         "tokens": 9,
         "isGlobal": false,
         "origin": "proj",
@@ -142,7 +142,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9994462686325077,
+        "score": 0.999446269,
         "tokens": 9,
         "isGlobal": false,
         "origin": "proj",

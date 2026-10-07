@@ -43,9 +43,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.915397510991371
+          "bm25_score": -0.915397511
         },
-        "score": 0.04412078571409632,
+        "score": 0.044120786,
         "tokens": 9,
         "isGlobal": false,
         "origin": "proj",
@@ -93,9 +93,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8680783717725646
+          "bm25_score": -0.868078372
         },
-        "score": 0.037048189352908226,
+        "score": 0.037048189,
         "tokens": 12,
         "isGlobal": false,
         "origin": "proj",
@@ -143,9 +143,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8680783717725646
+          "bm25_score": -0.868078372
         },
-        "score": 0.0369348692097434,
+        "score": 0.036934869,
         "tokens": 11,
         "isGlobal": false,
         "origin": "proj",
@@ -193,9 +193,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.035112719968948145,
+        "score": 0.03511272,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -243,9 +243,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.035101692866373616,
+        "score": 0.035101693,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -293,9 +293,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.03509068001300153,
+        "score": 0.03509068,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -343,9 +343,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.03507968138858024,
+        "score": 0.035079681,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -393,9 +393,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.035068696972887045,
+        "score": 0.035068697,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -443,9 +443,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.03505772674572821,
+        "score": 0.035057727,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -493,9 +493,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8254108627835249
+          "bm25_score": -0.825410863
         },
-        "score": 0.03489486231873411,
+        "score": 0.034894862,
         "tokens": 11,
         "isGlobal": false,
         "origin": "proj",
@@ -543,9 +543,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.032788296078003744,
+        "score": 0.032788296,
         "tokens": 13,
         "isGlobal": false,
         "origin": null,
@@ -593,9 +593,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.915397510991371
+          "bm25_score": -0.915397511
         },
-        "score": 0.019679160582364758,
+        "score": 0.019679161,
         "tokens": 8,
         "isGlobal": false,
         "origin": "proj",
@@ -643,9 +643,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8680783717725646
+          "bm25_score": -0.868078372
         },
-        "score": 0.019033080316598557,
+        "score": 0.01903308,
         "tokens": 10,
         "isGlobal": false,
         "origin": "proj",
@@ -692,15 +692,15 @@
       }
     ],
     "ambientState": {
-      "tagEntropy": 0.19445040451025855,
-      "avgStrength": 0.9996798756597072,
-      "recencyFreshness": 0.9508196721311475,
-      "emotionalSkew": -0.4672131147540984,
-      "schemaFitRatio": 0.01639344262295082,
-      "errorDensity": 0.01639344262295082,
-      "consolidationRatio": 0.01639344262295082,
-      "conflictIntensity": 0.00819672131147541,
-      "extractionCoverage": 0.016666666666666666,
+      "tagEntropy": 0.194450405,
+      "avgStrength": 0.999679876,
+      "recencyFreshness": 0.950819672,
+      "emotionalSkew": -0.467213115,
+      "schemaFitRatio": 0.016393443,
+      "errorDensity": 0.016393443,
+      "consolidationRatio": 0.016393443,
+      "conflictIntensity": 0.008196721,
+      "extractionCoverage": 0.016666667,
       "dagDepth": 2,
       "totalMemories": 61
     }
@@ -747,79 +747,79 @@
           "trace_id": 1,
           "memory_id": "mem_a_liked",
           "result_rank": 1,
-          "score": 0.04412078571409632
+          "score": 0.044120786
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_alice",
           "result_rank": 2,
-          "score": 0.037048189352908226
+          "score": 0.037048189
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_new",
           "result_rank": 3,
-          "score": 0.0369348692097434
+          "score": 0.036934869
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_0",
           "result_rank": 4,
-          "score": 0.035112719968948145
+          "score": 0.03511272
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_1",
           "result_rank": 5,
-          "score": 0.035101692866373616
+          "score": 0.035101693
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_2",
           "result_rank": 6,
-          "score": 0.03509068001300153
+          "score": 0.03509068
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_3",
           "result_rank": 7,
-          "score": 0.03507968138858024
+          "score": 0.035079681
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_4",
           "result_rank": 8,
-          "score": 0.035068696972887045
+          "score": 0.035068697
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_5",
           "result_rank": 9,
-          "score": 0.03505772674572821
+          "score": 0.035057727
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_team",
           "result_rank": 10,
-          "score": 0.03489486231873411
+          "score": 0.034894862
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_no_origin",
           "result_rank": 11,
-          "score": 0.032788296078003744
+          "score": 0.032788296
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_flat",
           "result_rank": 12,
-          "score": 0.019679160582364758
+          "score": 0.019679161
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_decayed",
           "result_rank": 13,
-          "score": 0.019033080316598557
+          "score": 0.01903308
         }
       ],
       "ledger": [],

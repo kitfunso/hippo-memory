@@ -43,9 +43,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.0000010778097982708937
+          "bm25_score": -0.000001078
         },
-        "score": 0.19730061299890092,
+        "score": 0.197300613,
         "tokens": 10,
         "isGlobal": true,
         "origin": "",
@@ -93,9 +93,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -9.326683291770575e-7
+          "bm25_score": -9.33e-7
         },
-        "score": 0.14980804834029182,
+        "score": 0.149808048,
         "tokens": 14,
         "isGlobal": true,
         "origin": "",
@@ -143,9 +143,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.915397510991371
+          "bm25_score": -0.915397511
         },
-        "score": 0.0616341858086982,
+        "score": 0.061634186,
         "tokens": 9,
         "isGlobal": false,
         "origin": "proj",
@@ -193,9 +193,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8680783717725646
+          "bm25_score": -0.868078372
         },
-        "score": 0.05157035521275841,
+        "score": 0.051570355,
         "tokens": 11,
         "isGlobal": false,
         "origin": "proj",
@@ -243,9 +243,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.04900476968519247,
+        "score": 0.04900477,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -293,9 +293,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.048989379803051826,
+        "score": 0.04898938,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -343,9 +343,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.048974009807689664,
+        "score": 0.04897401,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -393,9 +393,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.04895865967084193,
+        "score": 0.04895866,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -443,9 +443,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.04894332936428501,
+        "score": 0.048943329,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -493,9 +493,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.7867412117300214
+          "bm25_score": -0.786741212
         },
-        "score": 0.04892801885983568,
+        "score": 0.048928019,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -543,9 +543,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8254108627835249
+          "bm25_score": -0.825410863
         },
-        "score": 0.04870071850424331,
+        "score": 0.048700719,
         "tokens": 11,
         "isGlobal": false,
         "origin": "proj",
@@ -593,9 +593,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.915397510991371
+          "bm25_score": -0.915397511
         },
-        "score": 0.02749064914102747,
+        "score": 0.027490649,
         "tokens": 8,
         "isGlobal": false,
         "origin": "proj",
@@ -643,9 +643,9 @@
           "last_rebuilt_at": null,
           "rebuild_count": 0,
           "dag_level_3_built_at": null,
-          "bm25_score": -0.8680783717725646
+          "bm25_score": -0.868078372
         },
-        "score": 0.026588112377389447,
+        "score": 0.026588112,
         "tokens": 10,
         "isGlobal": false,
         "origin": "proj",
@@ -736,15 +736,15 @@
       }
     ],
     "ambientState": {
-      "tagEntropy": 0.4321928094887363,
-      "avgStrength": 0.9994112941551203,
+      "tagEntropy": 0.432192809,
+      "avgStrength": 0.999411294,
       "recencyFreshness": 0.85,
       "emotionalSkew": -0.4,
       "schemaFitRatio": 0.05,
       "errorDensity": 0.05,
       "consolidationRatio": 0.05,
       "conflictIntensity": 0.025,
-      "extractionCoverage": 0.05263157894736842,
+      "extractionCoverage": 0.052631579,
       "dagDepth": 2,
       "totalMemories": 20
     }
@@ -791,79 +791,79 @@
           "trace_id": 1,
           "memory_id": "mem_g_note",
           "result_rank": 1,
-          "score": 0.19730061299890092
+          "score": 0.197300613
         },
         {
           "trace_id": 1,
           "memory_id": "mem_g_pin",
           "result_rank": 2,
-          "score": 0.14980804834029182
+          "score": 0.149808048
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_liked",
           "result_rank": 3,
-          "score": 0.0616341858086982
+          "score": 0.061634186
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_new",
           "result_rank": 4,
-          "score": 0.05157035521275841
+          "score": 0.051570355
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_0",
           "result_rank": 5,
-          "score": 0.04900476968519247
+          "score": 0.04900477
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_1",
           "result_rank": 6,
-          "score": 0.048989379803051826
+          "score": 0.04898938
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_2",
           "result_rank": 7,
-          "score": 0.048974009807689664
+          "score": 0.04897401
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_3",
           "result_rank": 8,
-          "score": 0.04895865967084193
+          "score": 0.04895866
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_4",
           "result_rank": 9,
-          "score": 0.04894332936428501
+          "score": 0.048943329
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_5",
           "result_rank": 10,
-          "score": 0.04892801885983568
+          "score": 0.048928019
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_team",
           "result_rank": 11,
-          "score": 0.04870071850424331
+          "score": 0.048700719
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_flat",
           "result_rank": 12,
-          "score": 0.02749064914102747
+          "score": 0.027490649
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_decayed",
           "result_rank": 13,
-          "score": 0.026588112377389447
+          "score": 0.026588112
         }
       ],
       "ledger": [],

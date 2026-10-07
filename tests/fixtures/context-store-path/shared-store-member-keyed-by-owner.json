@@ -146,7 +146,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9998849136913376,
+        "score": 0.999884914,
         "tokens": 9,
         "isGlobal": false,
         "origin": "proj",
@@ -195,7 +195,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9992090490619828,
+        "score": 0.999209049,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -244,7 +244,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9991299883845349,
+        "score": 0.999129988,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -293,7 +293,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9990509339626257,
+        "score": 0.999050934,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -342,7 +342,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9989718857957599,
+        "score": 0.998971886,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -391,7 +391,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9988928438834429,
+        "score": 0.998892844,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -440,7 +440,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9988138082251796,
+        "score": 0.998813808,
         "tokens": 13,
         "isGlobal": false,
         "origin": "proj",
@@ -489,7 +489,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.998418723727352,
+        "score": 0.998418724,
         "tokens": 14,
         "isGlobal": false,
         "origin": "",
@@ -538,7 +538,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9983397255830211,
+        "score": 0.998339726,
         "tokens": 14,
         "isGlobal": false,
         "origin": "",
@@ -587,7 +587,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.998260733689281,
+        "score": 0.998260734,
         "tokens": 14,
         "isGlobal": false,
         "origin": "",
@@ -636,7 +636,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9976290235012859,
+        "score": 0.997629024,
         "tokens": 11,
         "isGlobal": false,
         "origin": "proj",
@@ -685,7 +685,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9975500878406114,
+        "score": 0.997550088,
         "tokens": 12,
         "isGlobal": false,
         "origin": "proj",
@@ -734,7 +734,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9967610746629147,
+        "score": 0.996761075,
         "tokens": 11,
         "isGlobal": false,
         "origin": "proj",
@@ -783,7 +783,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.996682207677182,
+        "score": 0.996682208,
         "tokens": 12,
         "isGlobal": false,
         "origin": "proj",
@@ -832,7 +832,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9966033469316621,
+        "score": 0.996603347,
         "tokens": 10,
         "isGlobal": false,
         "origin": "proj",
@@ -883,7 +883,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.9965244924258616,
+        "score": 0.996524492,
         "tokens": 12,
         "isGlobal": false,
         "origin": "proj",
@@ -932,7 +932,7 @@
           "rebuild_count": 0,
           "dag_level_3_built_at": null
         },
-        "score": 0.0031003926796253885,
+        "score": 0.003100393,
         "tokens": 10,
         "isGlobal": false,
         "origin": "proj",
@@ -1028,15 +1028,15 @@
       }
     ],
     "ambientState": {
-      "tagEntropy": 0.44715026457300894,
+      "tagEntropy": 0.447150265,
       "avgStrength": 1,
-      "recencyFreshness": 0.8947368421052632,
-      "emotionalSkew": -0.39473684210526316,
-      "schemaFitRatio": 0.05263157894736842,
-      "errorDensity": 0.05263157894736842,
-      "consolidationRatio": 0.05263157894736842,
-      "conflictIntensity": 0.02631578947368421,
-      "extractionCoverage": 0.05555555555555555,
+      "recencyFreshness": 0.894736842,
+      "emotionalSkew": -0.394736842,
+      "schemaFitRatio": 0.052631579,
+      "errorDensity": 0.052631579,
+      "consolidationRatio": 0.052631579,
+      "conflictIntensity": 0.026315789,
+      "extractionCoverage": 0.055555556,
       "dagDepth": 2,
       "totalMemories": 19
     }
@@ -1086,103 +1086,103 @@
           "trace_id": 1,
           "memory_id": "mem_a_liked",
           "result_rank": 3,
-          "score": 0.9998849136913376
+          "score": 0.999884914
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_0",
           "result_rank": 4,
-          "score": 0.9992090490619828
+          "score": 0.999209049
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_1",
           "result_rank": 5,
-          "score": 0.9991299883845349
+          "score": 0.999129988
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_2",
           "result_rank": 6,
-          "score": 0.9990509339626257
+          "score": 0.999050934
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_3",
           "result_rank": 7,
-          "score": 0.9989718857957599
+          "score": 0.998971886
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_4",
           "result_rank": 8,
-          "score": 0.9988928438834429
+          "score": 0.998892844
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_own_5",
           "result_rank": 9,
-          "score": 0.9988138082251796
+          "score": 0.998813808
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_global_0",
           "result_rank": 10,
-          "score": 0.998418723727352
+          "score": 0.998418724
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_global_1",
           "result_rank": 11,
-          "score": 0.9983397255830211
+          "score": 0.998339726
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_global_2",
           "result_rank": 12,
-          "score": 0.998260733689281
+          "score": 0.998260734
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_team",
           "result_rank": 13,
-          "score": 0.9976290235012859
+          "score": 0.997629024
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_alice",
           "result_rank": 14,
-          "score": 0.9975500878406114
+          "score": 0.997550088
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_new",
           "result_rank": 15,
-          "score": 0.9967610746629147
+          "score": 0.996761075
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_blank",
           "result_rank": 16,
-          "score": 0.996682207677182
+          "score": 0.996682208
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_archived",
           "result_rank": 17,
-          "score": 0.9966033469316621
+          "score": 0.996603347
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_secret_own",
           "result_rank": 18,
-          "score": 0.9965244924258616
+          "score": 0.996524492
         },
         {
           "trace_id": 1,
           "memory_id": "mem_a_decayed",
           "result_rank": 19,
-          "score": 0.0031003926796253885
+          "score": 0.003100393
         },
         {
           "trace_id": 1,

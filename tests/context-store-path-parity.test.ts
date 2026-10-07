@@ -261,7 +261,8 @@ describe('getContext on hippo.db matches the golden, with and without the sqlite
   it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
     const direct = await runPass(c, { withGlobal: true, embedded: false });
     c.reaches?.(direct);
-    await expect(asJson(direct)).toMatchFileSnapshot(goldenFile(c));
+    // SQLite's bm25() calls the platform's log(), whose last bit differs on macOS, so the golden holds rounded numbers.
+    await expect(asJson(rounded(direct))).toMatchFileSnapshot(goldenFile(c));
     const viaStore = await runPass(c, { withGlobal: true, embedded: false }, sqliteStore);
     expect(asJson(viaStore)).toBe(asJson(direct));
   }, 120_000);
