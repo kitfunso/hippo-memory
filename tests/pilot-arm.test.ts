@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadConfig } from '../src/config.js';
-import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, SERVER_DB_WAIT_MS, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
@@ -119,11 +119,11 @@ describe('pilot arm helpers', () => {
     expect(armCount()).toBe(0);
   });
 
-  it('a held write lock under a server request waits the request bound, not the hook one', () => {
+  it('a held write lock under a server request waits the request bound, not the hook one', async () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      withBusyWait(SERVER_DB_WAIT_MS, () => {
+      await runWithRequestStores(() => {
         const reader = openHippoDb(root);
         try {
           // SQLite's own busy sleep overshoots on macOS, so it is off and the retry loop's clock moves 50 ms a try, not with real time.
@@ -145,7 +145,7 @@ describe('pilot arm helpers', () => {
         } finally {
           closeHippoDb(reader);
         }
-      });
+      }, { busyWaitMs: SERVER_DB_WAIT_MS });
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

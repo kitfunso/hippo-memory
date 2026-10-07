@@ -49,6 +49,22 @@ function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
   return root;
 }
+/** A legacy store of `n` copies of one 7-day memory, made in SQL so the setup stays fast. */
+function bulkLegacyStore(n: number): string {
+  const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: pragma_table_info yields one row per column with its name.
+    const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]).map((c) => c.name);
+    db.prepare(`
+      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+      INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
+    `).run(n - 1);
+  } finally {
+    closeHippoDb(db);
+  }
+  return root;
+}
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 function byContent(root: string): Map<string, number> {
   return new Map(loadAllEntries(root).map((e) => [e.content, e.half_life_days]));
@@ -165,27 +181,22 @@ describe('default half-life migration', () => {
   });
 
   // The migration holds the write lock throughout, so its audit record must grow with the store, not with its square.
-  it('moves 10,000 memories in under two seconds', () => {
-    const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
-    const db = openHippoDb(root);
-    try {
-      // SAFETY: pragma_table_info yields one row per column with its name.
-      const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]).map((c) => c.name);
-      db.exec(`
-        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
-        INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
-      `);
-    } finally {
-      closeHippoDb(db);
-    }
+  // A ratio, not a wall-clock bound: Windows CI runners took 2.3 to 3.3 s for the linear 10,000-row run.
+  it('takes about 4 times as long for 4 times the memories', () => {
+    const timed = (n: number): number => {
+      const root = bulkLegacyStore(n);
+      const started = performance.now();
+      const r = migrateDefaultHalfLife(root, 365);
+      const elapsed = performance.now() - started;
+      expect(r).toMatchObject({ from: 7, to: 365, rescaled: n });
+      expect(migrateAudits(root)[0]).toHaveProperty('ids.length', n);
+      return elapsed;
+    };
 
-    const started = performance.now();
-    const r = migrateDefaultHalfLife(root, 365);
-    const elapsed = performance.now() - started;
-
-    expect(r).toMatchObject({ from: 7, to: 365, rescaled: 10_000 });
-    expect(migrateAudits(root)[0]).toHaveProperty('ids.length', 10_000);
-    expect(elapsed).toBeLessThan(2_000);
+    const small = timed(2_500);
+    const large = timed(10_000);
+    // Linear work gives about 4; a quadratic audit gives 16.
+    expect(large / small).toBeLessThan(8);
   }, 120_000);
 });
 

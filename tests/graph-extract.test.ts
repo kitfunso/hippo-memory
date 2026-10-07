@@ -19,7 +19,7 @@ import { saveProjectBrief } from '../src/project-briefs.js';
 import { loadEntities, loadRelations, loadNeighborRelations, loadRelationsAmong } from '../src/graph/read.js';
 import type { Entity } from '../src/graph/types.js';
 import { extractGraph, extractGraphChunked } from '../src/graph-extract.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
 import { WRITE_BUDGET, type WriteBudget } from '../src/write-budget.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -332,7 +332,7 @@ describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', 
       await once(holder, 'message');
     });
 
-    const r = await withBusyWait(250, () => extractGraphChunked(home, 'default', holdsOnFirstPause));
+    const r = await runWithRequestStores(() => extractGraphChunked(home, 'default', holdsOnFirstPause), { busyWaitMs: 250 });
 
     expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);

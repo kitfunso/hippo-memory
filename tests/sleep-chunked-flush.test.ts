@@ -17,7 +17,7 @@ import { upsertEntryRow } from '../src/store/entry-row.js';
 import { mergedText } from '../src/same-text.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { closeHippoDb, getHippoDbPath, getMeta, HOOK_DB_WAIT_MS, openHippoDb, withBusyWait, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
+import { closeHippoDb, getHippoDbPath, getMeta, HOOK_DB_WAIT_MS, openHippoDb, runWithRequestStores, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
 import { WRITE_BUDGET, type WriteBudget } from '../src/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
@@ -317,7 +317,7 @@ describe('chunked consolidation flush', () => {
       await once(holder, 'message');
     });
 
-    const result = await withBusyWait(250, () => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }));
+    const result = await runWithRequestStores(() => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }), { busyWaitMs: 250 });
 
     expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);

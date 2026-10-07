@@ -5,7 +5,7 @@ import { STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { resolveTenantId } from '../tenant.js';
-import { rethrowIfSqliteBlocked } from '../db.js';
+import { rethrowIfSqliteBlocked, runWithRequestStores } from '../db.js';
 import { storeFor } from '../store-port.js';
 import { estimateTokens, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -185,12 +185,16 @@ export async function handleMcpRequest(
       if (problems.length > 0) return invalidArgs(id, toolName, problems);
       let output: string;
       try {
-        output = await executeTool(toolName, toolArgs, ctx);
+        // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
+        output = await runWithRequestStores(async () => {
+          const text = await executeTool(toolName, toolArgs, ctx);
+          await recordMcpTokens(toolName, text, ctx);
+          return text;
+        });
       } catch (err) {
         if (!(err instanceof RecallRequestError)) throw err;
         return invalidArgs(id, toolName, [err.message]);
       }
-      await recordMcpTokens(toolName, output, ctx);
       return {
         jsonrpc: '2.0',
         id,

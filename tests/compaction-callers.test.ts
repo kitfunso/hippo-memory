@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadContentsWithTag } from '../src/store/entry-reads.js';
-import { closeHippoDb, isStoreBusy, openHippoDb, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
+import { closeHippoDb, isStoreBusy, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
 import { tableHasColumn } from '../src/db/tables.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
@@ -120,11 +120,11 @@ function failOn(table: string, when: 'INSERT' | 'UPDATE', message: string): () =
 }
 
 /** Runs `fn` while another connection holds the write lock, with a 50 ms wait so busy shows fast. */
-function whileLocked<T>(fn: () => T): T {
+async function whileLocked<T>(fn: () => T): Promise<T> {
   const holder = openHippoDb(root);
   holder.exec('BEGIN IMMEDIATE');
   try {
-    return withBusyWait(50, fn);
+    return await runWithRequestStores(fn, { busyWaitMs: 50 });
   } finally {
     holder.exec('ROLLBACK');
     closeHippoDb(holder);
@@ -317,9 +317,9 @@ describe('preCompactForCaller', () => {
     });
   });
 
-  it('a busy store at startCompaction still returns the instruction (F8)', () => {
+  it('a busy store at startCompaction still returns the instruction (F8)', async () => {
     bindSessionOwner(owned('alice'), 'sA');
-    expect(whileLocked(() => preCompact(owned('alice')))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(await whileLocked(() => preCompact(owned('alice')))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
 
@@ -428,9 +428,9 @@ describe('saveCompactionItemsForCaller', () => {
     withDb((db) => expect(count(db, 'session_owners')).toBe(0));
   });
 
-  it('busy throws, no spool file', () => {
+  it('busy throws, no spool file', async () => {
     bindSessionOwner(owned('alice'), 'sA');
-    const err = whileLocked(() => thrown(() => postCompact(owned('alice'))));
+    const err = await whileLocked(() => thrown(() => postCompact(owned('alice'))));
     expect(isStoreBusy(err)).toBe(true);
     expect(fs.existsSync(path.join(root, 'compactions-spool'))).toBe(false);
     expect(rowCounts()).toMatchObject({ compactions: 0, memories: 0 });

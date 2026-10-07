@@ -11,9 +11,7 @@ export {
   withSharedStoreHandles,
   SERVER_DB_WAIT_MS,
   SLEEP_DB_WAIT_MS,
-  withBusyWait,
   scopedBusyWait,
-  SqliteBlockedError,
   withSqliteBlocked,
   withSqliteAllowed,
   rethrowIfSqliteBlocked,
@@ -21,3 +19,5 @@ export {
   openHippoDbReadOnly,
   closeHippoDb,
 } from './db/open.js';
+export { RequestStores, runWithRequestStores, currentRequestStores, outsideRequestStores } from './db/request-stores.js';
+export { SqliteBlockedError } from './db/sqlite-blocked.js';

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
-import { SqliteBlockedError } from './db/open.js';
+import { SqliteBlockedError } from './db/sqlite-blocked.js';
 import type { JsonValue } from './json.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.

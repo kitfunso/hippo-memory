@@ -14,7 +14,7 @@ import type { SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
 import { isSharedStore, type HippoConfig } from '../config.js';
-import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
 import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
@@ -512,7 +512,7 @@ export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string 
 /** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
 export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
   try {
-    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
+    return await runWithRequestStores(fn, { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true });
   } catch (error) {
     if (!isSqliteBusy(error)) throw error;
     noteStoreBusy('hook skipped');

@@ -2,7 +2,7 @@ import { envPort, envRequireAuth, envV1Rps } from './env.js';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, SERVER_DB_WAIT_MS, withBusyWait, withSqliteBlocked } from './db.js';
+import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from './db.js';
 import { sqliteStore, type HippoStore } from './store-port.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -300,9 +300,24 @@ async function handleRequest(
   enforceRateLimit(req, path, limiter);
 
   const routeRequest: RouteRequest = { req, res, opts, query };
-  if (await dispatchV1Route(routeRequest, method, path)) return;
-  if (dispatchPublicJson(routeRequest, method, path)) return;
-  if (await dispatchAddonRoute(routeRequest, method, path)) return;
+  if (await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
+
+  // Outside the request scope: the heartbeat timer outlives the request. Store-ready: the stream only authenticates, through the port.
+  if (method === 'GET' && path === '/mcp/stream') {
+    await handleMcpStream(req, res, opts, streamSlots);
+    return;
+  }
+
+  res.writeHead(404, JSON_HEADERS);
+  res.end(JSON.stringify({ error: 'not found' }));
+}
+
+/** Every route that runs inside a request scope, so it opens each store once: the /v1 table, public JSON, add-on routes, the webhooks and POST /mcp. */
+async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
+  if (await dispatchV1Route(r, method, path)) return true;
+  if (dispatchPublicJson(r, method, path)) return true;
+  if (await dispatchAddonRoute(r, method, path)) return true;
+  const { req, res, opts } = r;
 
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
     // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
@@ -312,7 +327,7 @@ async function handleRequest(
     }
     assertSqliteStore(opts);
     await handleSlackEventsWebhook({ req, res, opts });
-    return;
+    return true;
   }
 
   if (method === 'POST' && path === '/v1/connectors/github/events') {
@@ -321,23 +336,15 @@ async function handleRequest(
     }
     assertSqliteStore(opts);
     await handleGitHubEventsWebhook({ req, res, opts });
-    return;
+    return true;
   }
 
   // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
   if (method === 'POST' && path === '/mcp') {
     await handleMcpPost(req, res, opts);
-    return;
+    return true;
   }
-
-  // Store-ready: the stream and its heartbeat only authenticate, and auth goes through the port.
-  if (method === 'GET' && path === '/mcp/stream') {
-    await handleMcpStream(req, res, opts, streamSlots);
-    return;
-  }
-
-  res.writeHead(404, JSON_HEADERS);
-  res.end(JSON.stringify({ error: 'not found' }));
+  return false;
 }
 
 function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
@@ -441,7 +448,8 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      heldDb = openHippoDb(hippoRoot);
+      // The 'finish' listener can fire inside a request scope, which would close this connection with the request.
+      heldDb = outsideRequestStores(() => openHippoDb(hippoRoot));
     } catch (err) {
       stopHolding = true;
       log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
@@ -585,7 +593,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     const requestId = resolveRequestId(req.headers['x-request-id']);
     requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
-    const run = (): Promise<void> => withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, served, startedAt, streamSlots, limiter));
+    const run = (): Promise<void> => handleRequest(req, res, served, startedAt, streamSlots, limiter);
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
     (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => replyOrClose(req, res, err, requestId));
   });

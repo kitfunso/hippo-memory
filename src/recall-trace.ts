@@ -379,18 +379,18 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
   }
 }
 
-/** Write on a short-lived connection that waits at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
+/** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
 export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput): number | null {
   let db: DatabaseSyncLike;
   try {
-    db = openHippoDb(root, { busyWaitMs: DELIVERY_LEDGER_WAIT_MS });
+    db = openHippoDb(root);
   } catch (error) {
     // Same hook stderr line as writeDeliveryEvent above.
     console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
   try {
-    return writeDeliveryEvent(db, input);
+    return writeDeliveryEventOnHandle(db, input);
   } finally {
     closeHippoDb(db);
   }

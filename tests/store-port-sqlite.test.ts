@@ -347,13 +347,13 @@ async function recallOver(url: string, call: Recall): Promise<void> {
 }
 
 describe('hippo.db opens per recall over serve()', () => {
-  // Exact, so a new open fails here; before recall moved behind the port these were 6, 5, 12, 6 and 6.
+  // Exact, so a second open fails here: the request scope hands every port call the one handle.
   const OPENS: readonly [string, number, Recall][] = [
-    ['http, no session', 5, { via: 'http', params: { q: 'deploy' } }],
-    ['http, a session with active goals', 5, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
-    ['http, continuity and a forward claim', 10, { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } }],
-    ['mcp, no session', 3, { via: 'mcp', args: { query: 'deploy' } }],
-    ['mcp, a session with active goals', 4, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
+    ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
+    ['http, a session with active goals', 1, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
+    ['http, continuity and a forward claim', 1, { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } }],
+    ['mcp, no session', 1, { via: 'mcp', args: { query: 'deploy' } }],
+    ['mcp, a session with active goals', 1, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
   ];
 
   beforeEach(() => {

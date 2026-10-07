@@ -1,7 +1,7 @@
 // A session id belongs to the first owner that binds it; a second owner gets 409 so its client sets the record aside.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
 import { ConflictError } from '../src/api-errors.js';
 import type { Context } from '../src/api.js';
 import { bindSessionOwner } from '../src/server.js';
@@ -64,15 +64,15 @@ describe('bindSessionOwner', () => {
     expect(bindings().map((b) => b.owner_subject)).toEqual(['alice']);
   });
 
-  it('same owner rebinds with no write', () => {
+  it('same owner rebinds with no write', async () => {
     bindSessionOwner(ctx('alice'), 's1');
     const before = bindings();
     const holder = openHippoDb(home);
     holder.exec('BEGIN IMMEDIATE');
     try {
       // Another connection holds the write lock, so a rebind that asked for it would fail after the short wait.
-      expect(() => withBusyWait(50, () => bindSessionOwner(ctx('alice'), 's1'))).not.toThrow();
-      expect(() => withBusyWait(50, () => bindSessionOwner(ctx('alice'), 's2'))).toThrow();
+      await expect(runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's1'), { busyWaitMs: 50 })).resolves.toBeUndefined();
+      await expect(runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's2'), { busyWaitMs: 50 })).rejects.toThrow();
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

@@ -204,6 +204,8 @@ function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, s
 interface CommandSpec {
   readonly run: (ctx: CommandContext) => void | Promise<void>;
   readonly aliases?: readonly string[];
+  /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
+  readonly scoped?: true;
   // Each block opens with a newline so the full listing is their concatenation.
   readonly usage: readonly string[];
 }
@@ -220,14 +222,17 @@ export const COMMANDS = {
   },
   recall: {
     run: async (c) => { await (await import('./cli/recall.js')).handleRecall(c); },
+    scoped: true,
     usage: VERB_USAGE.recall,
   },
   drill: {
     run: async (c) => { await (await import('./cli/dag.js')).handleDrill(c); },
+    scoped: true,
     usage: VERB_USAGE.drill,
   },
   assemble: {
     run: async (c) => { await (await import('./cli/dag.js')).handleAssemble(c); },
+    scoped: true,
     usage: VERB_USAGE.assemble,
   },
   supersede: {
@@ -236,6 +241,7 @@ export const COMMANDS = {
   },
   explain: {
     run: async (c) => { await (await import('./cli/explain.js')).handleExplain(c); },
+    scoped: true,
     usage: VERB_USAGE.explain,
   },
   eval: {
@@ -252,6 +258,7 @@ export const COMMANDS = {
   },
   sleep: {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.sleep,
   },
   'last-sleep': {
@@ -300,10 +307,12 @@ export const COMMANDS = {
   },
   auth: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/auth.js')).cmdAuth(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.auth,
   },
   goal: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/goals.js')).cmdGoal(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.goal,
   },
   slack: {
@@ -316,6 +325,7 @@ export const COMMANDS = {
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
+    scoped: true,
     usage: VERB_USAGE.audit,
   },
   'correction-latency': {
@@ -332,6 +342,7 @@ export const COMMANDS = {
   },
   outcome: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdOutcome(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.outcome,
   },
   conflicts: {
@@ -356,6 +367,7 @@ export const COMMANDS = {
   },
   dormant: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdDormant(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.dormant,
   },
   projects: {
@@ -364,14 +376,17 @@ export const COMMANDS = {
   },
   quarantine: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.quarantine,
   },
   tokens: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdTokens(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.tokens,
   },
   failures: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdFailures(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.failures,
   },
   doctor: {
@@ -408,6 +423,7 @@ export const COMMANDS = {
   },
   forget: {
     run: async (c) => { await (await import('./cli/curate.js')).handleForget(c); },
+    scoped: true,
     usage: VERB_USAGE.forget,
   },
   inspect: {
@@ -440,10 +456,12 @@ export const COMMANDS = {
   },
   learn: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdLearn(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.learn,
   },
   promote: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePromote(c); },
+    scoped: true,
     usage: VERB_USAGE.promote,
   },
   sync: {
@@ -655,7 +673,8 @@ async function main(
     printUsage();
     process.exit(1);
   }
-  await spec.run({ hippoRoot, args, flags });
+  const run = (): void | Promise<void> => spec.run({ hippoRoot, args, flags });
+  await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
