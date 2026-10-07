@@ -20,7 +20,7 @@
  *    PreCompact and PostCompact entries go in too: the first records the compaction and
  *    asks the summariser for a "Memories for hippo" list, the second saves that list.
  *    Codex's hooks.json gets only two groups (per-prompt memory and
- *    compact-resume); see installCodexHooks.
+ *    compact-resume); see installCodexHooks. Copilot gets a file of its own; see installCopilotHooks.
  *
  * 2. Plugin install (OpenCode only). OpenCode does NOT share Claude Code's
  *    JSON-hook schema — its config has `additionalProperties: false` and no
@@ -37,7 +37,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
-import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, defaultPreCompactLogPath } from './shared.js';
+import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHomeDir, defaultPreCompactLogPath } from './shared.js';
 import { type JsonValue, isJsonString, readJsonFile } from '../json.js';
 import { escapeRegex } from '../escape.js';
 import { errorMessage, log } from '../log.js';
@@ -86,6 +86,12 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
         settings: path.join(codexHomeDir(home), 'hooks.json'),
         logFile: path.join(logsDir, 'codex-sleep.log'),
         display: 'Codex',
+      };
+    case 'copilot':
+      return {
+        settings: path.join(copilotHomeDir(home), 'hooks', 'hippo.json'),
+        logFile: path.join(logsDir, 'copilot-sleep.log'),
+        display: 'Copilot',
       };
   }
 }
@@ -224,11 +230,42 @@ function installCodexHooks(settingsPath: string, settings: JsonValue): InstallRe
   return { ...result, installedUserPromptSubmit, installedCompactResume };
 }
 
+/** One Copilot entry with a PowerShell twin: VS Code runs only `powershell` on Windows, where the execution policy can block npm's hippo.ps1. */
+function copilotCommandHook(args: string, timeoutSec: number, powershellArgs = args): JsonValue[] {
+  return [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${powershellArgs}`, timeoutSec }];
+}
+
+/** The log path is absolute because PowerShell 5.1 hands `~` to a native command unexpanded. */
+function copilotHooksTable(logFile: string): JsonObject {
+  // A quote in the path is closed, escaped and reopened for bash and doubled for PowerShell, so it stays one literal argument.
+  const sessionEnd = (quoted: string): string => `session-end --runtime copilot --log-file '${quoted}'`;
+  return {
+    version: 1,
+    hooks: {
+      sessionStart: copilotCommandHook('context --pinned-only --include-recent 5 --format copilot', 10),
+      postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', 10),
+      preCompact: copilotCommandHook('pre-compact --runtime copilot', 30),
+      sessionEnd: copilotCommandHook(sessionEnd(logFile.replaceAll("'", "'\\''")), 30, sessionEnd(logFile.replaceAll("'", "''"))),
+    },
+  };
+}
+
+/** Hippo owns this whole file, so install writes the full table and a second install changes no byte. */
+function installCopilotHooks(settingsPath: string, logFile: string): InstallResult {
+  const result = nothingInstalled('copilot', settingsPath);
+  const table = copilotHooksTable(logFile);
+  const current = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : null;
+  if (current === JSON.stringify(table, null, 2) + '\n') return result;
+  writeSettingsFile(settingsPath, table);
+  return { ...result, installedSessionStart: true, installedCaptureError: true, installedPreCompact: true, installedSessionEnd: true };
+}
+
 /** Adds hippo's hooks to `target`'s settings file and migrates older hippo entries; a file that is not JSON stays untouched. */
 export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const { settings: settingsPath, logFile } = resolveJsonHookPaths(target);
   const dir = path.dirname(settingsPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (target === 'copilot') return installCopilotHooks(settingsPath, logFile);
 
   let settings: JsonValue = {};
   if (fs.existsSync(settingsPath)) {
@@ -490,6 +527,11 @@ function warnKeptHippoHandlers(settingsPath: string, hooks: JsonObject): void {
 export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return false;
+  if (target === 'copilot') {
+    // Copilot reads every file in its hooks folder, so hippo's own file goes whole and the user's files stay.
+    fs.rmSync(settingsPath, { force: true });
+    return true;
+  }
 
   let settings: JsonValue;
   try {

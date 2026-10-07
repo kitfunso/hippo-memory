@@ -1,0 +1,3 @@
+### Added
+
+- **`hippo setup` now installs hippo for GitHub Copilot.** When `$COPILOT_HOME` or `~/.copilot` exists, setup writes hippo's own `hooks/hippo.json` (sessionStart, postToolUseFailure, preCompact and sessionEnd, each with a `hippo.cmd` PowerShell form), adds a `hippo` server to `mcp-config.json` and puts a block in `copilot-instructions.md` that asks the agent to call `hippo_recall` and `hippo_remember`. `hippo hook install copilot` does the same on demand, and `hippo hook uninstall copilot` removes only what hippo wrote. An `mcp-config.json` with comments or invalid JSON is left as it is, with the entry printed to add by hand. See `integrations/copilot.md`.

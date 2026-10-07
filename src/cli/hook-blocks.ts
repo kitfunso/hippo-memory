@@ -1,5 +1,6 @@
 // The hippo block each agent's instruction file carries, and how init recognises one it wrote earlier.
 import { createHash } from 'node:crypto';
+import { escapeRegex } from '../escape.js';
 
 export const HOOK_MARKERS = {
   start: '<!-- hippo:start -->',
@@ -232,4 +233,13 @@ export function hippoBlock(text: string): { start: number; end: number; eol: str
   const inner = raw.replace(/\r\n/g, '\n').trim();
   const owner = Object.keys(HOOKS).find((k) => HOOKS[k].content === inner) ?? SHIPPED_HOOK_HASHES.get(createHash('sha256').update(inner).digest('hex'));
   return { start, end, eol: raw.includes('\r\n') ? '\r\n' : '\n', inner, owner };
+}
+
+/** `text` with every hippo block and its markers removed, trimmed. */
+export function withoutHookBlock(text: string): string {
+  const re = new RegExp(
+    `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
+    'g'
+  );
+  return text.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }

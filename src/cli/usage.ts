@@ -562,18 +562,22 @@ export const VERB_USAGE = {
   hook: [`
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
+    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
                            claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default); opencode installs a plugin; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
-                           wraps the detected launcher in place; all but claude-code
-                           also patch an existing AGENTS.md
-    hook uninstall <target> Remove hook`],
+                           wraps the detected launcher in place; copilot writes
+                           hooks/hippo.json, the "hippo" MCP server and an instructions
+                           block under $COPILOT_HOME (~/.copilot by default); all but
+                           claude-code and copilot also patch an existing AGENTS.md
+    hook uninstall <target> Remove hook; for copilot, only what hippo wrote`],
   setup: [`
   setup                    One-shot: detect installed AI tools and install their hooks:
                            claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default), opencode a plugin, codex 2 hooks in
-                           its hooks.json plus a launcher wrapper; other tools get a
+                           its hooks.json plus a launcher wrapper, copilot 4 hooks, the
+                           MCP server and an instructions block under $COPILOT_HOME
+                           (~/.copilot by default); other tools get a
                            hint. Then imports each agent's
                            user-level memories into the global store
     --all                  Install for every JSON-hook tool, even if not detected
