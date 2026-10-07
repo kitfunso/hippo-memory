@@ -356,7 +356,7 @@ describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', 
       // Ensures the local vector exists (deterministic, not racing remember's
       // own fire-and-forget embed) and warms the on-disk model cache before
       // promote runs.
-      execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
+      if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
       const promoteOut = execFileSync(
         'node',

@@ -110,7 +110,8 @@ async function loadPipeline(model: string): Promise<any> {
       }
       pipelineFn = mod.pipeline ?? mod.default?.pipeline;
     } catch (err) {
-      const reason = `transformers import failed (${pkg}): ${err instanceof Error ? err.message : String(err)}`;
+      // String(err) keeps a Node error's [ERR_...] code, which callers match on.
+      const reason = `transformers import failed (${pkg}): ${String(err)}`;
       log.debug(reason);
       _pipelineErrors.set(model, reason);
       return null;
@@ -131,7 +132,7 @@ async function loadPipeline(model: string): Promise<any> {
       _pipelineInstances.set(model, instance);
       return instance;
     } catch (err) {
-      const reason = `embedding pipeline load failed (${model}): ${err instanceof Error ? err.message : String(err)}`;
+      const reason = `embedding pipeline load failed (${model}): ${String(err)}`;
       log.debug(reason);
       _pipelineErrors.set(model, reason);
       return null;
