@@ -3,7 +3,7 @@
 This directory lets hippo be scored by Mem0's runner (`mem0ai/memory-benchmarks`) with no change to its code. The plan is `docs/evals/2026-09-24-public-benchmarks-prereg.md`.
 
 - `hippo-mem0-server.mjs`: answers the runner's three HTTP calls with hippo. Use `--arm hippo` for hippo's ranking, or `--arm bm25` for BM25 alone over the same stored turns.
-- `evidence_recall.py`: a free retrieval check on the runner's `--predict-only` output for LoCoMo, with no model calls.
+- `evidence_recall.py`: a free retrieval check on the runner's `--predict-only` output for LoCoMo, with no model calls. `longmemeval_evidence_recall.py` and `beam_evidence_recall.py` do the same for LongMemEval-S and BEAM.
 
 ## Run it (on a machine with an OpenAI key)
 

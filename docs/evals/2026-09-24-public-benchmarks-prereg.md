@@ -136,3 +136,19 @@ The server runs with `--read-only` on a loopback address, so no route can write 
 **Scope.** One agent run per test per arm, so the interval includes the agent's own run-to-run variation. The hook is the adapter's, not hippo's shipped hook (D5). Any claim is limited to hippo's ranking against BM25 as the memory behind this agent. This is not a leaderboard entry (D3). Benchmark-file access is detected, not prevented (D8). The review's probes found two misses: the other arm's live hook file read by a relative path, which the detector now catches through `hooks/<persona>/`, and `grep -rh` over /home, which prints no path and stays a miss. The structural fix is the driver's `run_as_user` (`claude_driver.py:521-531`) with a user that cannot read `/home/<user>` or /mnt/c, set up with one sudo; until then the pilot's hand read of every local tool call is the check, and the full run has only the detector.
 
 **Published whatever the result:** `docs/evals/2026-09-28-dolphinbench-result.md`, with every grade file, the `check` and `compare` output, the smoke and pilot results, the commands, and the transcripts as a compressed archive.
+
+## Amendment 4 (2026-10-07, before any BEAM run): BEAM retrieval, hippo against BM25
+
+**Why.** Other memory systems now publish BEAM results, and hippo has none. BEAM's own score needs a paid answerer and judge, so that lane waits for a yes on its cost. The retrieval lane costs nothing and gives a first read.
+
+**Arms,** as Amendment 2, through `hippo-mem0-server.mjs` on one master build, embeddings off on both: `hippo@365` (the default) and `bm25`.
+
+**Lane R, retrieval (no model calls).** Mem0's runner at `4b61c5d`, unchanged, `--predict-only`, top_k 200, every conversation at every tier: 100K (20 conversations), 500K (35), 1M (35), 10M (10), from `Mohammadta/BEAM` and `Mohammadta/BEAM-10M` on Hugging Face. A question's source turns are the turn ids in its `source_chat_ids` (a list, or a dict of lists for contradiction, knowledge-update and temporal questions). Abstention questions have none and are dropped. Four 1M conversations (indices 4, 25, 32, 33) restart their turn ids part way, so some ids name two turns; a question citing such an id is dropped from both arms and the count reported. The metric is the share of a question's source turns whose stored text appears in the top 10, 50 and 200 memories (`beam_evidence_recall.py`), reported per tier, overall and per question type. **Knowledge-update** is named in advance, as in Amendment 2.
+
+**Primary comparison:** `hippo@365` minus `bm25`, paired by question, 95% bootstrap interval (4,000 draws, seed 1), evidence recall at top 10, read separately at 1M and at 10M, the tiers with the most for a memory to sort. Same reading as Amendment 2. Everything else is secondary and labelled so.
+
+**Checks:** both arms score the same questions at each tier, and the runner logs no failed chunk in either arm.
+
+**Not comparable** to the LLM-judged BEAM scores other systems publish: this measures what retrieval hands the answerer, not the answer.
+
+**Published whatever the result:** `docs/evals/2026-10-07-beam-retrieval.md`, raw output in `benchmarks/public/results/2026-10-07-beam-lane-r/`.
