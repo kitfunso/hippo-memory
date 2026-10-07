@@ -1,8 +1,8 @@
 {
   "name": "hippo-memory",
-  "version": "1.63.0",
+  "version": "1.64.0",
   "type": "module",
-  "description": "Hippo Memory plugin for OpenClaw - biologically-inspired agent memory",
+  "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
   "main": "index.ts",
   "openclaw": {
     "extensions": [

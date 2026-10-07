@@ -2,7 +2,9 @@ import { envHippoHome, envXdgDataHome } from './env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { loadConfig } from './config.js';
+import { BadRequestError } from './api-errors.js';
+import { isSharedStore, loadConfig } from './config.js';
+import { MAX_ID_LEN } from './http-util.js';
 import { log } from './log.js';
 import { originRemoteId, projectFileId } from './project-remote.js';
 
@@ -239,6 +241,23 @@ export function projectNames(project: ProjectRef): readonly string[] {
   return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter((n) => n !== '');
 }
 
+// Each project name is matched against every candidate row, so the caller's list stays short.
+export const MAX_PROJECT_ALIASES = 10;
+export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
+
+/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
+export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
+  const { name, aliases = [] } = project;
+  if (name.trim() === '') throw new BadRequestError('project name must not be blank');
+  if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  if ([name, ...aliases].some((n) => n.length > MAX_ID_LEN)) {
+    throw new BadRequestError(`project names: at most ${MAX_ID_LEN} characters each`);
+  }
+  if ([name, ...aliases].some((n) => n !== n.trim().toLowerCase() || /[:\p{Cc}]/u.test(n))) {
+    throw new BadRequestError('project names: lowercase, not padded, with no colon or control character');
+  }
+}
+
 /** `origin_project IN (?, ...)` with one placeholder per name; an empty list matches nothing. */
 export function originInSql(names: readonly string[], column = 'origin_project'): string {
   return names.length === 0 ? '0' : `${column} IN (${names.map(() => '?').join(', ')})`;
@@ -248,9 +267,9 @@ export function originInSql(names: readonly string[], column = 'origin_project')
  * v39 memory scope isolation: classify a memory's origin_project against the
  * active project. An empty current id means the session is not in a project
  * (home dir or markerless cwd) - everything is in scope there, matching
- * pre-isolation behavior. NULL/undefined origin is a legacy pre-v39 row and
- * is treated as cross-project (deny by default) - the safe direction for a
- * security partition.
+ * pre-isolation behavior. NULL/undefined origin means no known project (a legacy
+ * row, or a shared-store write that named none) and is treated as cross-project
+ * (deny by default) - the safe direction for a security partition.
  */
 export function classifyOriginProject(
   origin: string | null | undefined,
@@ -315,16 +334,16 @@ export function originFromSource(
   return null;
 }
 
-/**
- * The origin project to stamp on a memory written from cwd.
- * Returns the project name, or '' for user-global (written at/under home or
- * in a markerless directory) - injectable everywhere. Write sites must always
- * persist this value; a NULL origin_project column is reserved for legacy
- * pre-migration rows, which ambient context treats as deny.
- */
+/** The origin to stamp on a memory written from cwd: its project name, or '' (user-global, injectable everywhere) outside a project.
+ *  NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny. */
 export function deriveOriginProject(
   cwd?: string,
   opts?: ResolveProjectIdentityOpts,
 ): string {
   return resolveProjectIdentity(cwd, opts).name;
+}
+
+/** The origin for a write that names none: NULL on a shared store, whose folder is no caller's project, else the folder's project. */
+export function fallbackOrigin(hippoRoot: string): string | null {
+  return isSharedStore(hippoRoot) ? null : deriveOriginProject(path.dirname(path.resolve(hippoRoot)));
 }

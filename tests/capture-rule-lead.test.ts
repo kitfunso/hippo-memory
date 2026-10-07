@@ -29,26 +29,23 @@ describe('rule capture keeps its lead', () => {
     }
   });
 
-  it('counts the 200-char bound from the keyword, so a long subject does not cut the object', () => {
+  it('keeps a long subject and its whole object in one sentence', () => {
     const lead = 'When the weekly release train leaves the shared build machine for the storage team we ';
     const object = 'copy the nightly artifacts from the staging bucket into the release bucket after checking the manifest checksum against the signed list the build step publishes for auditors';
-    expect(object.length).toBeLessThan(200);
     expect((lead + object).length).toBeGreaterThan(200);
     const [item] = rules(`${lead}must ${object}.`);
-    expect(item.content.startsWith(lead)).toBe(true);
-    expect(item.content.endsWith('publishes for auditors')).toBe(true);
-    expect(item.content.length).toBeGreaterThan(200);
+    expect(item.content).toBe(`${lead}must ${object}`);
   });
 
-  it('falls back to the keyword-start form after a lead over 300 chars', () => {
-    const lead = 'After the long migration step '.repeat(11);
-    expect(lead.length).toBeGreaterThan(300);
-    const [item] = rules(`${lead}we must never push master to origin before review.`);
-    expect(item.content).toBe('must never push master to origin before review');
+  it('keeps a sentence up to 500 chars whole and skips a longer one', () => {
+    const rule = 'we must never push master to origin before review.';
+    const [kept] = rules(`${'After the long migration step '.repeat(11)}${rule}`);
+    expect(kept.content.endsWith('before review')).toBe(true);
+    expect(kept.content.startsWith('After the long migration step')).toBe(true);
+    expect(rules(`${'After the long migration step '.repeat(18)}${rule}`)).toEqual([]);
   });
 
-  it('falls back to the keyword-start form when the keyword sits inside a bracket', () => {
-    const [item] = rules('The release notes (we must never skip them) live in the wiki.');
-    expect(item.content.startsWith('must never skip them')).toBe(true);
+  it('skips a keyword that sits inside a bracket', () => {
+    expect(rules('The release notes (we must never skip them) live in the wiki.')).toEqual([]);
   });
 });

@@ -9,7 +9,7 @@ export const SCOPED_DIRS = ['src', 'extensions', 'integrations', 'ui', 'python']
 // Lockfile hashes are random base64 and hit `sso` by chance.
 const EXCLUDES = [':(exclude,glob)**/package-lock.json', ':(exclude,glob)**/*.lock'];
 export const OVERRIDE_RE = /^\s*open-core:\s*reviewed\s*$/im;
-const TERM_RE = /saml|scim|siem|oidc[-_ ]?login|(?:^|[^a-z])sso(?:[^a-z]|$)|licen[cs]e[-_ ]?keys?|admin[-_ ]?view|pilot[-_ ]?report/;
+const TERM_RE = /saml|scim|siem|oidc[-_ ]?login|(?:^|[^a-z])sso(?:[^a-z]|$)|licen[cs]e[-_ ]?keys?|admin[-_ ]?view|pilot[-_ ]?report|v1\/hooks/;
 const MARKER_RE = /\/\/\s*commercial\b/i;
 
 // Splits camelCase so `ssoLogin` and `adminView` match while `processor` does not.

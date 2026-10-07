@@ -6,9 +6,10 @@ import { type DormantMove, insertDormantRow } from '../dormant.js';
 import { log } from '../log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
-import { deleteFtsRow, stampOriginProject, upsertEntryRow } from './entry-row.js';
+import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { openStore } from './open.js';
+import { clock } from '../write-budget.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
@@ -18,21 +19,26 @@ const AUTOMATIC_DELETE_SQL = `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map((t
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing from an older schema is skipped. */
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
-  const ids = new Set<string>();
   const db = openHippoDb(hippoRoot);
   try {
-    for (const table of MEMORY_BACKED_TABLES) {
-      try {
-        // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
-        const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
-        for (const r of rows) ids.add(r.memory_id);
-      } catch (err) {
-        // A missing table is an older schema; any other error could hide a backing memory, so the caller stops.
-        if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
-      }
-    }
+    return memoriesBackingObjectsOn(db);
   } finally {
     closeHippoDb(db);
+  }
+}
+
+/** memoriesBackingObjects on the caller's handle. */
+export function memoriesBackingObjectsOn(db: DatabaseSyncLike): Set<string> {
+  const ids = new Set<string>();
+  for (const table of MEMORY_BACKED_TABLES) {
+    try {
+      // SAFETY: SELECT of one nullable TEXT column, filtered to non-null.
+      const rows = db.prepare(`SELECT memory_id FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string }[];
+      for (const r of rows) ids.add(r.memory_id);
+    } catch (err) {
+      // A missing table is an older schema; any other error could hide a backing memory, so the caller stops.
+      if (!(err instanceof Error && err.message.includes('no such table'))) throw err;
+    }
   }
   return ids;
 }
@@ -130,7 +136,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
   return row;
 }
 
-/** Consolidation's flush, one transaction. With `snapshot` (rows as the caller loaded them), a write keeps only
+/** Writes, deletes and dormant moves in one transaction. With `snapshot` (rows as the caller loaded them), a write keeps only
  *  the fields the caller changed, takes the rest from the live row, and never resurrects a row that is gone.
  *
  *  `dormant` (src/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
@@ -143,78 +149,156 @@ export function batchWriteAndDelete(
   toDeleteIds: string[],
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
-  const dormantMoves = opts?.dormant ?? [];
-  if (toWrite.length === 0 && toDeleteIds.length === 0 && dormantMoves.length === 0) return [];
+  const dormant = opts?.dormant ?? [];
+  if (toWrite.length === 0 && toDeleteIds.length === 0 && dormant.length === 0) return [];
 
   const db = openStore(hippoRoot);
   try {
-    // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
-    // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
-    db.exec('BEGIN IMMEDIATE');
-    // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here
-    // every cycle, so without it parents would never be marked dirty for decay, merge or garbage-collect.
-    const dirty: DirtyParents = { parents: new Set<string>(), tenantById: new Map<string, string>() };
-    const deletableIds: string[] = [];
-    if (toDeleteIds.length > 0) {
-      // A row pinned after the caller decided to delete it survives.
-      for (const row of selectAutoDeletableRows(db, toDeleteIds, dirty)) deletableIds.push(row.id);
-    }
-    // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new
-    // memories from ambient context). A row queued twice keeps only its last version, the one the merge compares.
-    const stampedWrites = [...new Map(toWrite.map((e) => [e.id, stampOriginProject(hippoRoot, e)])).values()];
-    const { written, batchRejectedSkips } = applyBatchWrites(db, stampedWrites, opts?.snapshot, dirty);
-    const removedIds = moveDormantAndDelete(db, dormantMoves, deletableIds, dirty);
-    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
-    // dirty flag commits atomically with the writes + deletes.
-    for (const parentId of dirty.parents) {
-      markSummaryDirtyInTx(db, parentId, dirty.tenantById.get(parentId) ?? 'default', 'batch');
-    }
-    db.exec('COMMIT');
-
-    if (batchRejectedSkips > 0) {
-      log.warn(
-        `batchWriteAndDelete: skipped ${batchRejectedSkips} write(s) whose content matches a rejected value (tombstone hit during the batch transaction)`,
-      );
-    }
-
-    // Sync mirrors once after all DB writes. Entries skipped above were
-    // never inserted — writing their markdown mirror would resurrect the
-    // exact content the skip just kept out of the DB.
-    mirrorBestEffort('markdown mirrors', () => {
-      for (const entry of written) writeMarkdownMirror(hippoRoot, entry);
-    });
-    for (const id of removedIds) purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
-    return removedIds;
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
-    throw error;
+    // One component, so every op keeps the statement order this call has always had.
+    const all: FlushComponent = { writes: toWrite, deletes: toDeleteIds, dormant };
+    return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
   } finally {
     closeHippoDb(db);
   }
 }
 
-/** Moves eligible dormant rows out, deletes them with the doomed rows, and returns every removed id. */
+/** Ops that must commit in one transaction, so a flush split across several never lands part of one. */
+export interface FlushComponent {
+  writes: readonly MemoryEntry[];
+  deletes: readonly string[];
+  dormant: readonly DormantMove[];
+}
+
+const failedUnits = new WeakMap<Error, string[]>();
+
+/** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag wins. */
+export function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
+  if (!component || failedUnits.has(err)) return;
+  const ids = [...component.writes.map((e) => e.id), ...component.deletes, ...component.dormant.map((m) => m.entry.id)];
+  failedUnits.set(err, [...new Set(ids)]);
+}
+
+/** The ids noteFailedUnit tagged `err` with, if a flush threw it. */
+export function failedUnitOf(err: Error | null): string[] | undefined {
+  return err ? failedUnits.get(err) : undefined;
+}
+
+/** batchWriteAndDelete on the caller's open store from component `from`, each component whole, closing the transaction at the
+ *  first component boundary after `holdMs`. Returns the next component's index and the ids that left `memories`. */
+export function batchWriteAndDeleteOn(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  components: readonly FlushComponent[],
+  from: number,
+  opts: { snapshot?: ReadonlyMap<string, MemoryEntry>; holdMs: number; clock?: () => number },
+): FlushChunk {
+  const now = opts.clock ?? clock;
+  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
+  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
+  db.exec('BEGIN IMMEDIATE');
+  const begunAt = now();
+  const out: ChunkLog = { written: [], removedIds: [], rejectedSkips: 0, fts: { rows: [], staleIds: [] }, dirty: { parents: new Set(), tenantById: new Map() } };
+  let next = from;
+  try {
+    do {
+      const at = next++;
+      try {
+        applyComponent(db, hippoRoot, components[at], opts.snapshot, out);
+      } catch (err) {
+        if (err instanceof Error) noteFailedUnit(err, components[at]);
+        throw err;
+      }
+    } while (next < components.length && now() - begunAt < opts.holdMs);
+    const removed = new Set(out.removedIds);
+    replaceFtsRows(db, out.fts.rows.filter((row) => !removed.has(row.id)), [...out.fts.staleIds, ...out.removedIds]);
+    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
+    // dirty flag commits atomically with the writes + deletes.
+    for (const parentId of out.dirty.parents) {
+      markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? 'default', 'batch');
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    if (db.isTransaction !== false) {
+      try { db.exec('ROLLBACK'); } catch { /* preserve the original throw and its unit tag */ }
+    }
+    throw error;
+  }
+  reportChunk(hippoRoot, out);
+  return { next, removedIds: out.removedIds };
+}
+
+/** Where the next transaction starts, and the ids this one removed from `memories`. */
+export interface FlushChunk {
+  next: number;
+  removedIds: string[];
+}
+
+/** What one transaction's components did, for its full-text rows, dirty marks, mirrors and warning. */
+interface ChunkLog {
+  written: MemoryEntry[];
+  removedIds: string[];
+  rejectedSkips: number;
+  fts: FtsChanges;
+  dirty: DirtyParents;
+}
+
+/** One component in the open transaction, in the order a single batch always ran: pin-checked deletes, writes, dormant moves, row deletes. */
+function applyComponent(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  component: FlushComponent,
+  snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
+  out: ChunkLog,
+): void {
+  // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here
+  // every cycle, so without it parents would never be marked dirty for decay, merge or garbage-collect.
+  const deletableIds: string[] = [];
+  if (component.deletes.length > 0) {
+    // A row pinned after the caller decided to delete it survives.
+    for (const row of selectAutoDeletableRows(db, component.deletes, out.dirty)) deletableIds.push(row.id);
+  }
+  // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new
+  // memories from ambient context). A row queued twice keeps only its last version, the one the merge compares.
+  const stampedWrites = [...new Map(component.writes.map((e) => [e.id, stampOriginProject(hippoRoot, e)])).values()];
+  applyBatchWrites(db, stampedWrites, snapshot, out);
+  moveDormantAndDelete(db, component.dormant, deletableIds, out);
+}
+
+/** After COMMIT: warn about refused writes, then sync mirrors once for what landed. */
+function reportChunk(hippoRoot: string, out: ChunkLog): void {
+  if (out.rejectedSkips > 0) {
+    log.warn(
+      `batchWriteAndDelete: skipped ${out.rejectedSkips} write(s) whose content matches a rejected value (tombstone hit during the batch transaction)`,
+    );
+  }
+  // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of the DB.
+  mirrorBestEffort('markdown mirrors', () => {
+    for (const entry of out.written) writeMarkdownMirror(hippoRoot, entry);
+  });
+  for (const id of out.removedIds) purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
+}
+
+/** Moves eligible dormant rows out, then deletes them with the doomed rows, recording every removed id. */
 function moveDormantAndDelete(
   db: DatabaseSyncLike,
-  dormantMoves: DormantMove[],
+  dormantMoves: readonly DormantMove[],
   deletableIds: string[],
-  dirty: DirtyParents,
-): string[] {
+  out: ChunkLog,
+): void {
   // Dormant moves: same eligibility and DAG bookkeeping as deletes.
   const movable: DormantMove[] = [];
   if (dormantMoves.length > 0) {
     const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
-    for (const row of selectAutoDeletableRows(db, [...byId.keys()], dirty)) movable.push(byId.get(row.id)!);
+    for (const row of selectAutoDeletableRows(db, [...byId.keys()], out.dirty)) movable.push(byId.get(row.id)!);
   }
   for (const move of movable) {
     insertDormantRow(db, move);
   }
-  const removedIds = [...deletableIds, ...movable.map((m) => m.entry.id)];
-  for (const id of removedIds) {
-    db.prepare('DELETE FROM memories WHERE id = ?').run(id);
-    deleteFtsRow(db, id);
+  const deleteRow = db.prepare('DELETE FROM memories WHERE id = ?');
+  for (const id of [...deletableIds, ...movable.map((m) => m.entry.id)]) {
+    deleteRow.run(id);
+    out.removedIds.push(id);
   }
-  return removedIds;
 }
 
 /** DAG parents to mark dirty inside the batch transaction, with the tenant each belongs to. */
@@ -226,7 +310,7 @@ interface DirtyParents {
 /** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. Placeholders come from `ids` itself. */
 function selectAutoDeletableRows(
   db: DatabaseSyncLike,
-  ids: string[],
+  ids: readonly string[],
   dirty: DirtyParents,
 ): Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }> {
   // SAFETY: rows' shape matches the three columns named in the SELECT.
@@ -246,12 +330,11 @@ function applyBatchWrites(
   db: DatabaseSyncLike,
   stampedWrites: MemoryEntry[],
   snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
-  dirty: DirtyParents,
-) {
+  out: ChunkLog,
+): void {
   // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier
   // on another connection, so a reject committed in between would be re-inserted. Skip, never throw, so the rest lands.
-  let batchRejectedSkips = 0;
-  const written: MemoryEntry[] = [];
+  const { written, fts, dirty } = out;
   const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
   for (const entry of stampedWrites) {
     const base = snapshot?.get(entry.id);
@@ -260,21 +343,31 @@ function applyBatchWrites(
     const live = liveRow ? rowToEntry(liveRow) : undefined;
     const row = base && live ? mergeOwnChanges(base, entry, live) : entry;
     if (isRejectedBatchWrite(db, row)) {
-      batchRejectedSkips++;
+      out.rejectedSkips++;
       continue;
     }
     if (base && !live) continue;
     written.push(row);
     // Bypass the guard: merges concatenate already-guarded facts, the merge pass checks merged content, and
     // the probe above closes the race; a mid-batch refusal would abort the whole consolidation.
-    upsertEntryRow(db, row, true);
+    upsertMemoryRow(db, row);
+    // A decay refresh changes no indexed text, and re-indexing it would cost a full index scan per row.
+    if (!live || row.content !== live.content || row.tags.join(' ') !== live.tags.join(' ')) {
+      fts.rows.push(row);
+      if (live) fts.staleIds.push(row.id);
+    }
     // Hook for writes: a new child, or a change to what its summary reads, marks the parent dirty; decay alone does not.
     if (row.dag_parent_id && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
       dirty.parents.add(row.dag_parent_id);
       dirty.tenantById.set(row.dag_parent_id, row.tenantId);
     }
   }
-  return { written, batchRejectedSkips };
+}
+
+/** Full-text rows a batch must insert, and the ids whose old full-text rows it must delete first. */
+interface FtsChanges {
+  rows: MemoryEntry[];
+  staleIds: string[];
 }
 
 /** True, after auditing the refusal, when the write would introduce a rejected value. */

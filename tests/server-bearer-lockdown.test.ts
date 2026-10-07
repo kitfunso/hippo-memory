@@ -217,6 +217,20 @@ describe('server Bearer lockdown', () => {
     expect(extra, `AUTHED_ROUTES has extra rows not in server.ts: ${extra.join(', ')}`).toEqual([]);
   });
 
+  it('a configured publicJson path needs no Bearer; the unconfigured GET routes beside it still do', async () => {
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson: { '/v1/x-public': { ok: true } } });
+    const publicUrl = `http://127.0.0.1:${handle.port}/v1/x-public`;
+    for (const res of [await fetch(publicUrl), await fetch(publicUrl, { headers: { authorization: 'Bearer hk_invalid.deadbeef' } })]) {
+      expect({ status: res.status, body: await res.text() }).toEqual({ status: 200, body: '{"ok":true}' });
+    }
+    for (const r of AUTHED_ROUTES.filter((route) => route.method === 'GET')) {
+      const path = requestPath(r.pattern, r.query);
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`);
+      expect(res.status, `GET ${path} -> ${res.status}: ${await res.text()}`).toBe(401);
+    }
+  });
+
   it.each(AUTHED_ROUTES)(
     'requires Bearer: $method $pattern (missing header)',
     async (r) => {

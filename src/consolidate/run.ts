@@ -1,5 +1,5 @@
 import { MemoryEntry, type DecayOptions } from '../memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, ftsRowCounts, isFtsAvailable, repairFtsDrift, type DatabaseSyncLike } from '../db.js';
 import { type DormantMove } from '../dormant.js';
 import { loadConfig } from '../config.js';
 import { NO_MERGE_TAGS } from '../shared.js';
@@ -73,7 +73,21 @@ export function lazyConsolidateDb(hippoRoot: string, dryRun: boolean): LazyDb {
   return { get, close };
 }
 
-/** State every sleep stage reads or appends to; the pending lists are flushed in one transaction at the end. */
+/** Re-syncs the full-text index with `memories`; a store open that is already current no longer counts the two. */
+export function syncFtsIndex(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    if (!isFtsAvailable(db)) return;
+    const counts = ftsRowCounts(db);
+    if (counts === null || counts.memories === counts.fts) return;
+    if (!dryRun) repairFtsDrift(db);
+    result.details.push(`  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ${counts.memories} memories)`);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one transaction. */
 export interface SleepRun {
   hippoRoot: string;
   now: Date;
@@ -88,6 +102,7 @@ export interface SleepRun {
   pendingWrites: MemoryEntry[];
   pendingDeletes: string[];
   pendingDormant: DormantMove[];
+  units: string[][];
 }
 
 export function newConsolidationResult(dryRun: boolean): ConsolidationResult {

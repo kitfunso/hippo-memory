@@ -158,6 +158,24 @@ describe('hippo sleep', () => {
     expect(hippo(b, b.project, ['sleep'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
+
+  it('on a shared store, init and sleep skip learning with one line each and import nothing', () => {
+    const b = box();
+    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    const local = join(b.project, '.hippo');
+    writeFileSync(join(local, 'config.json'), JSON.stringify({ sharedStore: true }));
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    note(userNotes(b), 'voice.md', USER_NOTE);
+
+    const skipped = "Shared store: skipped learning from this account's git commits and coding agents' own memories.";
+    for (const args of [['init', '--no-hooks', '--no-schedule'], ['sleep'], ['sleep', '--dry-run']]) {
+      const out = hippo(b, b.project, args);
+      expect(out.split(skipped), args.join(' ')).toHaveLength(2);
+      expect(out).not.toContain('Imported');
+    }
+    expect(imported(local)).toEqual([]);
+    expect(imported(b.global)).toEqual([]);
+  });
 });
 
 describe('hippo import --agents', () => {

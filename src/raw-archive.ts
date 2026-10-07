@@ -1,6 +1,6 @@
 import { BadRequestError, NotFoundError } from './api-errors.js';
 import type { DatabaseSyncLike } from './db.js';
-import { isFtsAvailable } from './db.js';
+import { isFtsAvailable, withWriteScope } from './db.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 
@@ -57,18 +57,8 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
   db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
   db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
-  // FTS5 is a virtual table — no FK CASCADE applies. Purge the FTS row so the
-  // archived content is not searchable after archive. Without this the original
-  // raw text remains in memories_fts until the next DB-open backfill, defeating
-  // GDPR right-to-be-forgotten.
-  if (isFtsAvailable(db)) {
-    try {
-      db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
-    } catch {
-      // Best effort only. The DELETE on memories already succeeded; FTS will
-      // self-heal on next DB open via backfillFtsIndex.
-    }
-  }
+  // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the whole archive.
+  if (isFtsAvailable(db)) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
 }
 
 // Emit the archive_raw audit event inside the SAVEPOINT so the audit row is
@@ -96,17 +86,16 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
  *
  * Snapshots the full row into `raw_archive`, flips `kind` to `'archived'` so the
  * append-only trigger lets the delete through, then deletes the row. All in one
- * SAVEPOINT so it can be nested inside an outer transaction (e.g. batchWriteAndDelete).
+ * write scope, which nests inside an outer transaction (e.g. batchWriteAndDelete).
  *
  * Throws if the row does not exist or is not `kind='raw'`.
  */
 export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): void {
   const row = loadRawRow(db, id);
 
-  // SAVEPOINT (not BEGIN) so this works whether or not we're already inside a
-  // transaction. SQLite refuses BEGIN within a transaction; SAVEPOINT nests safely.
-  db.exec('SAVEPOINT archive_raw');
-  try {
+  // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here
+  // rolls back only this archive.
+  withWriteScope(db, 'archive_raw', () => {
     moveRowToArchive(db, id, row, opts);
     auditArchive(db, id, row, opts);
     // Archiving a child under a level-2 summary marks the parent dirty, inside the
@@ -127,12 +116,5 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     if (opts.afterArchive) {
       opts.afterArchive(db, id);
     }
-    db.exec('RELEASE SAVEPOINT archive_raw');
-  } catch (e) {
-    try {
-      db.exec('ROLLBACK TO SAVEPOINT archive_raw');
-      db.exec('RELEASE SAVEPOINT archive_raw');
-    } catch { /* savepoint already discarded; keep the original error */ }
-    throw e;
-  }
+  });
 }

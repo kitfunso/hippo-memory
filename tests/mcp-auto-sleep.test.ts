@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { sleepRuns } from './_helpers/sleep-runs.js';
 
 const roots: string[] = [];
 
@@ -20,15 +20,6 @@ function remember(hippoRoot: string, text: string) {
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
     { hippoRoot, tenantId: 'default', actor: 'mcp' },
   );
-}
-
-function sleepRuns(hippoRoot: string): number {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get<{ n: number }>().n;
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 describe('MCP auto-sleep', () => {

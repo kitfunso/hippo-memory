@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { PRE_COMPACT_NEXT_STEP_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_TASK_CAP, transcriptWorkingState } from '../src/capture/compact.js';
+import { PRE_COMPACT_NEXT_STEP_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_TASK_CAP, transcriptWorkingState } from '../src/capture/working-state.js';
 import { initStore } from '../src/store/open.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff, saveSessionHandoff, writeSessionEndHandoff } from '../src/store/handoffs.js';

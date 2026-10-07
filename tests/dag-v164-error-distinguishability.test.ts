@@ -75,6 +75,18 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
+
+  it('failure=not_found for a private-scoped leaf, so not_drillable never confirms a hidden row', () => {
+    const leaf = createMemory('secret leaf body content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      confidence: 'observed',
+      dag_level: 0,
+      scope: 'slack:private:CSEC',
+    });
+    writeEntry(root, leaf);
+    expect(drillDown(ctxFor(root), leaf.id)).toEqual({ failure: 'not_found' });
+  });
 });
 
 describe('v1.6.4 Task 1 — HTTP /v1/recall/drill status mapping', () => {

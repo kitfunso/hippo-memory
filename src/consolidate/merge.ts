@@ -9,6 +9,7 @@ import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { derivationScope, derivationPartitionKey } from '../recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
+import { isReusable } from '../memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
@@ -35,6 +36,7 @@ export function retireHeldTexts(run: SleepRun): void {
     run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
     if (run.dryRun) continue;
     run.pendingDeletes.push(row.id);
+    run.units.push(successor ? [row.id, successor.id] : [row.id]);
     if (successor) {
       run.pendingWrites.push(successor);
       survivors[i] = successor;
@@ -60,7 +62,8 @@ export function mergePass(run: SleepRun): number {
   const mergeCandidates = run.survivors.filter(
     (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
       && !e.pinned // a pin merged with a look-alike would read as one of two values
-      && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
+      && tokenize(e.content).length > 0 // two empty token sets overlap 1, so tokenless text would merge with any other
+      && isReusable(e),
   );
   const used = new Set<string>();
 
@@ -149,6 +152,7 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
 
   if (!dryRun && semantic) {
     run.pendingWrites.push(semantic);
+    run.units.push([semantic.id, ...cluster.map((e) => e.id)]);
     result.semanticCreated++;
 
     // Demote source episodics (they've been compressed into neocortex):

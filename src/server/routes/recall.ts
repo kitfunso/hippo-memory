@@ -1,6 +1,7 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
 import { dirname, resolve } from 'node:path';
-import { resolveProjectIdentity } from '../../project-identity.js';
+import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../project-identity.js';
+import { isSharedStore } from '../../config.js';
 import { assembleCost, contextCost, drillCost } from '../../context-render.js';
 import { closeHippoDb, openHippoDb } from '../../db.js';
 import { updateStats } from '../../store/index-and-stats.js';
@@ -187,6 +188,16 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   return;
 }
 
+/** A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none, getContext refuses. */
+function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
+  if (!isSharedStore(hippoRoot)) return resolveProjectIdentity(dirname(resolve(hippoRoot)));
+  const name = query.get('project');
+  if (name === null) return '';
+  const aliases = query.getAll('alias');
+  assertCallerProject({ name, aliases });
+  return { name, legacyName: name, aliases };
+}
+
 // GET /v1/context — assemble a budget-bounded context bundle. Returns
 // ContextResult JSON (entries + tokens + activeSnapshot + sessionHandoff
 // + recentEvents). No server-side rendering; clients render. Tenant-scoped
@@ -197,7 +208,7 @@ export async function handleGetContext({ req, res, opts, query }: RouteRequest):
   const ctx = await buildContextWithAuth(req, opts);
   const result = await getContext(ctx, {
     ...parsed,
-    currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))),
+    currentProject: contextReader(opts.hippoRoot, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
   recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });

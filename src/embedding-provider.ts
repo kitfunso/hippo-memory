@@ -32,6 +32,7 @@ import {
   type EmbeddingRole,
   getEmbedding,
   isEmbeddingAvailable,
+  requireLocalPipeline,
   resolveEmbeddingModel,
   DEFAULT_EMBEDDING_MODEL,
 } from './local-embedding.js';
@@ -89,8 +90,8 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && isEmbeddingAvailable();
   }
   async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
-    // Sequential to preserve the historical single-pipeline behaviour and avoid
-    // contending the one cached pipeline instance with N concurrent calls.
+    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared pipeline.
+    if (texts.length > 0) await requireLocalPipeline(this.model);
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await getEmbedding(text, this.model, role));

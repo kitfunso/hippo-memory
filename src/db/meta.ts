@@ -1,13 +1,16 @@
+import { compareSemver } from '../version.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 
-export function ensureMetaTable(db: DatabaseSyncLike): void {
-  db.exec(`
+export const META_TABLE_DDL = `
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-  `);
+  `;
+
+export function ensureMetaTable(db: DatabaseSyncLike): void {
+  db.exec(META_TABLE_DDL);
 }
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
@@ -33,6 +36,12 @@ export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): strin
 
 export function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
   db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value);
+}
+
+/** Raise min_compatible_binary to `version`; never lowers it, since an older floor would let back in a binary a newer write already shut out. */
+export function raiseMinBinary(db: DatabaseSyncLike, version: string): void {
+  const existing = getMeta(db, 'min_compatible_binary');
+  if (!existing || compareSemver(version, existing) > 0) setMeta(db, 'min_compatible_binary', version);
 }
 
 export function isFtsAvailable(db: DatabaseSyncLike): boolean {

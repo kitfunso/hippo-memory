@@ -13,12 +13,6 @@ import InstallCta from '../components/InstallCta.astro';
 import Footer from '../components/Footer.astro';
 import { faqPick } from '../content/site';
 
-// Homepage-only meta + OG description, carrying the terms people actually search:
-// "open-source", "local-first" and "MCP server". The shared site.description (JSON-LD
-// and every other page) and the visible hero copy are left unchanged on purpose.
-const metaDescription =
-  'Open-source, local-first memory for AI agents, with an MCP server. A memory marked wrong drops out of the top results, and newer facts supersede old ones.';
-
 // The home FAQ is a sample; /faq/ holds every question and the FAQPage markup.
 const homeFaq = faqPick([
   'Is this just RAG?',
@@ -30,7 +24,7 @@ const homeFaq = faqPick([
 ]);
 ---
 
-<Base description={metaDescription}>
+<Base>
   <Nav />
   <main id="main">
     <Hero />

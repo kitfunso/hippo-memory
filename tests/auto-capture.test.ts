@@ -14,7 +14,8 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { extractFromText } from '../src/capture/extract.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/compaction-record.js';
-import { lessonFromFailure, captureToolFailure, failureSignature } from '../src/capture-error.js';
+import { captureToolFailure } from '../src/capture-error.js';
+import { lessonFromFailure, failureSignature } from '../src/capture/failure-reading.js';
 import { initStore, getHippoRoot } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -41,12 +42,9 @@ function run(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string
 }
 
 describe('transcript mining', () => {
-  it('documents a known miss: a comma-split decision is too thin to keep (heuristics, no model)', () => {
-    // Found in the real /compact run on 2026-09-24. Clause bounding cuts this
-    // sentence at its commas, and both halves fall under the quality floor.
-    // LLM extraction (config `extraction`) or better bounding is the fix;
-    // this test fails when that lands, as a reminder to update it.
-    expect(extractFromText('Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.')).toEqual([]);
+  it('keeps a comma-split decision as one whole sentence', () => {
+    expect(extractFromText('Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.').map((i) => i.content))
+      .toEqual(['we use pnpm, never npm, because the lockfile is pnpm-lock.yaml']);
   });
 
   it('SessionEnd capture scrubs a token from a VS Code prompt before it becomes a memory', () => {
