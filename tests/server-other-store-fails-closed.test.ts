@@ -1,16 +1,24 @@
 // Under a store other than hippo.db, a route not yet ported to it answers 501 and no request opens or creates hippo.db.
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { closeHippoDb, openHippoDb, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
+import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
+import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
 import { VERIFIED_KEY_TTL_MS } from '../src/auth.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
+import { physicsSearch } from '../src/search/physics-search.js';
+import { requireVectorReads } from '../src/search/vector.js';
+import { loadEntriesByIds } from '../src/store/entry-reads.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
+import { seeded } from './_helpers/recall-golden-seed.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const serverSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
@@ -293,6 +301,93 @@ describe('serve() under another store reads its folder as shared, though no conf
     expect(res.status).toBe(200);
     expect(keys.at(-1)).toEqual({ owner: 'alice', project: [] });
     expect(await res.json()).toMatchObject({ continuity: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] } });
+  });
+});
+
+describe('a store without the vector reads, under an embedding provider', () => {
+  let root: string;
+  let handle: ServerHandle;
+  let embeddings: HashedEmbeddings;
+  let store: HippoStore;
+
+  beforeAll(async () => {
+    embeddings = await startHashedEmbeddings();
+    root = mkdtempSync(join(tmpdir(), 'hippo-no-vector-reads-'));
+    initStore(root);
+    writeEntry(root, seeded('deploy the api with a blue green rollout', 'mem_deploy', '2026-01-02T00:00:00.000Z'));
+    const embeddingsConfig = { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url };
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }));
+    store = portOnlyStoreWithoutVectorReads(root);
+    handle = await serve({ hippoRoot: root, port: 0, store });
+  });
+
+  beforeEach(() => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_HOME', join(root, 'no-global-store'));
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    await embeddings.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const auditRowCount = (): number => {
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: COUNT(*) AS n is the only column selected.
+      return (db.prepare('SELECT COUNT(*) AS n FROM audit_log').get() as { n: number }).n;
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  it('GET /v1/memories in hybrid and physics mode answers 501 store_not_ported, embeds nothing and writes no audit row', async () => {
+    expect(store.vectors).toBeUndefined();
+    const before = auditRowCount();
+    for (const mode of ['hybrid', 'physics']) {
+      // With no session_id the route owes a recall_anchor_skipped_no_session row; a recall that fails writes none.
+      for (const session of ['', '&session_id=s1']) {
+        const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=${mode}${session}`);
+        expect({ mode, session, status: res.status, body: await res.json() }).toEqual({ mode, session, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+      }
+    }
+    expect(embeddings.requests()).toBe(0);
+    expect(auditRowCount()).toBe(before);
+  });
+
+  it('requireVectorReads names the missing group, and that error still maps to the 501', () => {
+    expect(() => requireVectorReads(store)).toThrow(StoreNotPortedError);
+    expect(() => requireVectorReads(store)).toThrow(SqliteBlockedError);
+    expect(() => requireVectorReads(store)).toThrow("the 'port-only' store has no 'vectors' reads");
+    const err = new StoreNotPortedError('port-only', 'vectors');
+    expect(mapApiError(err)).toEqual({ status: 501, message: STORE_NOT_PORTED_MESSAGE });
+    expect(() => rethrowIfSqliteBlocked(err)).toThrow(err);
+  });
+
+  it('MCP hippo_recall answers -32603 store_not_ported', async () => {
+    const body = rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy' } });
+    // A shared store refuses hippo_recall from a caller that names no project, before the vector arm.
+    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-hippo-project': 'p' }, body });
+    expect(await res.json()).toEqual({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
+    expect(embeddings.requests()).toBe(0);
+  });
+
+  it('with no provider key the vector arm never starts, so recall still answers', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=hybrid`);
+    expect(res.status).toBe(200);
+  });
+
+  it('physicsSearch refuses the store even when the caller brings the query vector', async () => {
+    const entries = loadEntriesByIds(root, ['mem_deploy']);
+    expect(entries).toHaveLength(1);
+    await expect(physicsSearch('deploy', entries, { hippoRoot: root, store, queryEmbedding: hashedVector('deploy') })).rejects.toThrow(SqliteBlockedError);
   });
 });
 

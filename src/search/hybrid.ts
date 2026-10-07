@@ -15,6 +15,7 @@ import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './types.js';
+import type { HippoStore } from '../store-port.js';
 
 export interface HybridSearchOptions {
   budget?: number;
@@ -52,6 +53,8 @@ export interface HybridSearchOptions {
   graphStream?: GraphStreamOptions;
   /** Add the rows nearest the query vector, not only rescore `entries`; without it a row no query word matches cannot surface. */
   vectorCandidates?: HybridVectorCandidates;
+  /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
+  store?: HippoStore;
 }
 
 /** BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency otherwise. */
