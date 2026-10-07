@@ -11,7 +11,7 @@ export class SqliteBlockedError extends Error {
 /** A store that lacks a whole group of port methods; it maps to the same 501, and the log names the group instead of hippo.db. */
 export class StoreNotPortedError extends SqliteBlockedError {
   constructor(storeKind: string, readonly group: string) {
-    super(storeKind, `the '${storeKind}' store has no '${group}' reads; this code path is not ported to the store yet`);
+    super(storeKind, `the '${storeKind}' store has no '${group}' group; this code path is not ported to the store yet`);
     this.name = 'StoreNotPortedError';
   }
 }

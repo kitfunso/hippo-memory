@@ -3,10 +3,14 @@
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import { createApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, grantScope, ungrantScope, type ApiKeyListItem, type ApiKeyListRow, type CreateApiKeyResult, type ListApiKeysOpts } from '../auth.js';
+import {
+  createApiKey, forgetVerifiedKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, grantScope, ungrantScope,
+  type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type CreateApiKeyResult, type ListApiKeysOpts,
+} from '../auth.js';
 import { DAY_MS } from '../dashboard-snapshot.js';
 import type { KeysetPosition } from '../keyset.js';
 import { isRestrictedScope } from '../recall-scope.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
 import { selectApiKeyOwner, type ApiKeyOwner } from '../store/tenant-lookup.js';
 import type { Context } from './types.js';
 
@@ -218,15 +222,44 @@ export interface AuthRevokeResult {
   revokedAt: string;
 }
 
+/** A promise when `ctx` carries a store, since every store method is async; today's plain result when it carries none.
+ *  hippoRoot keeps the second test off TypeScript's weak-type rule, which would fail a ctx that has no store key at all. */
+export type AuthRevokeReply<C extends Context> = C extends { readonly store: HippoStore }
+  ? Promise<AuthRevokeResult>
+  : C extends { readonly hippoRoot: string; readonly store?: undefined } ? AuthRevokeResult : AuthRevokeResult | Promise<AuthRevokeResult>;
+
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it minted.
- *  The auth_revoke row carries the KEY ROW's tenant, as cmdAuthRevoke does, and is skipped for an already-revoked key. */
-export function authRevoke(
-  ctx: Context,
-  keyId: string,
-): AuthRevokeResult {
+ *  With `ctx.store`, its keyAudit group revokes and writes the auth_revoke row; hippo.db is opened only when there is no store. */
+export function authRevoke<C extends Context>(ctx: C, keyId: string): AuthRevokeReply<C> {
+  const reply = ctx.store ? revokeThroughStore(ctx, ctx.store, keyId) : revokeOnHippoDb(ctx, keyId);
+  // SAFETY: a C typed with a store gets the promise its path returns; a C whose type hides a runtime store (a Pick of
+  // Context) is typed as the union, which a caller has to await anyway.
+  return reply as AuthRevokeReply<C>;
+}
+
+function assertMemberKeyRevokesSelf(ctx: Context, keyId: string): void {
   if (ctx.actor.role !== 'admin' && !ctx.actor.viaAuthResolver && keyIdOfSubject(ctx.actor.subject) !== keyId) {
     throw new ForbiddenError('A member key can revoke only itself');
   }
+}
+
+function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
+  return record ? { tenantId: record.tenantId, revokedAt: record.revokedAt, role: record.role, ownerSubject: record.ownerSubject ?? null } : undefined;
+}
+
+/** The store keeps no handle on this process's verified-key cache, so the key leaves it here once the revoke commits. */
+async function revokeThroughStore(ctx: Context, store: HippoStore, keyId: string): Promise<AuthRevokeResult> {
+  const keyAudit = requireGroup(store, 'keyAudit');
+  assertMemberKeyRevokesSelf(ctx, keyId);
+  assertMayRevoke(ctx, keyId, keyOwnerOf(await store.findApiKey(keyId)));
+  const revokedAt = await keyAudit.revokeApiKey({ tenantId: ctx.tenantId, keyId, actor: ctx.actor.subject, at: new Date().toISOString() });
+  forgetVerifiedKey(keyId);
+  return { ok: true, revokedAt };
+}
+
+/** The auth_revoke row carries the KEY ROW's tenant, as cmdAuthRevoke does, and is skipped for an already-revoked key. */
+function revokeOnHippoDb(ctx: Context, keyId: string): AuthRevokeResult {
+  assertMemberKeyRevokesSelf(ctx, keyId);
   const db = openHippoDb(ctx.hippoRoot);
   try {
     const row = selectApiKeyOwner(db, keyId);

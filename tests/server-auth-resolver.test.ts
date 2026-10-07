@@ -413,9 +413,9 @@ describe('exported authRevoke for add-ons', () => {
     }
   }
 
-  it('revokes a member key and audits it under the add-on actor', () => {
+  it('revokes a member key and audits it under the add-on actor', async () => {
     const member = mint('ext-tenant', 'member');
-    expect(authRevoke(ctx('ext-tenant'), member.keyId).ok).toBe(true);
+    expect((await authRevoke(ctx('ext-tenant'), member.keyId)).ok).toBe(true);
     const row = auditRows('ext-tenant').find((r) => r.op === 'auth_revoke');
     expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
   });

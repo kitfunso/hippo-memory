@@ -269,9 +269,14 @@ export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, s
   return found?.key ?? null;
 }
 
-export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {
+export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = new Date().toISOString()): void {
   db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`)
-    .run(new Date().toISOString(), keyId);
+    .run(at, keyId);
+  verifiedKeys.delete(keyId);
+}
+
+/** A store other than hippo.db revokes without this process's cache, so its caller drops the key here once the revoke commits. */
+export function forgetVerifiedKey(keyId: string): void {
   verifiedKeys.delete(keyId);
 }
 

@@ -1,8 +1,9 @@
 // The async seam the server reaches its store through, so an add-on can serve from a database other than hippo.db.
 import { readApiKeyRecord, type ApiKeyRecord } from './auth.js';
-import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
+import { appendAuditEvent, listAuditEventsAfter, type AppendAuditOpts, type AuditEvent, type ListAuditAfterOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
+import { StoreNotPortedError } from './db/sqlite-blocked.js';
 import { embeddingIndexStateAt, loadStoredVectors, type EmbeddingIndexState } from './embeddings.js';
 import {
   activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
@@ -14,6 +15,7 @@ import { loadPhysicsState } from './physics-state.js';
 import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
 import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
+import { auditHighIdAt, revokeKeyAt } from './store/key-audit.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
@@ -46,7 +48,7 @@ export interface RecallWrites {
   readonly strengthen?: { readonly ids: readonly string[]; readonly opts: StrengthenOptions };
 }
 
-/** The reads behind recall's vector arm, one group a store sets in full as `HippoStore.vectors` or leaves unset. */
+/** The reads behind recall's vector arm. */
 export interface VectorReads {
   /** The stored model and whether any vector exists, in one snapshot. */
   embeddingIndexState(): Promise<EmbeddingIndexState>;
@@ -58,8 +60,46 @@ export interface VectorReads {
   physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
 }
 
+export interface KeyRevoke {
+  readonly tenantId: string;
+  readonly keyId: string;
+  readonly actor: string;
+  readonly at: string;
+}
+
+export interface KeyAudit {
+  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key id) in one transaction, then resolves to `at`. A revoked
+   *  key resolves to its own revoked_at and writes nothing; a key missing from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
+  revokeApiKey(revoke: KeyRevoke): Promise<string>;
+  /** As `listAuditEventsAfter`: rows above `afterId` in ascending id order, with its RangeErrors, limit clamp and tenant filter. */
+  auditEventsAfter(opts: ListAuditAfterOpts): Promise<AuditEvent[]>;
+  /** The highest audit id ever assigned, pruned rows included, 0 before the first; a tail that sees it drop knows the log was restored. */
+  auditHighId(): Promise<number>;
+}
+
+/** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
+export interface StoreGroups {
+  /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
+  readonly vectors: VectorReads;
+  readonly keyAudit: KeyAudit;
+}
+
+export type StoreGroup = 'base' | keyof StoreGroups;
+
+export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
+  return group === 'base' || store[group] !== undefined;
+}
+
+/** The group's methods; a store without them throws StoreNotPortedError, which answers 501 as any unported path does. */
+export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, group: G): StoreGroups[G] {
+  const groups: Partial<StoreGroups> = store;
+  const methods = groups[group];
+  if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
+  return methods;
+}
+
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore {
+export interface HippoStore extends Partial<StoreGroups> {
   /** 'sqlite' is hippo.db under the served root. Under any other kind, an unported route answers 501 and a hippo.db open inside a request throws. */
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
@@ -88,8 +128,6 @@ export interface HippoStore {
   bumpRecallStats(recalled: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;
-  /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
-  readonly vectors?: VectorReads;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
   close(): Promise<void>;
 }
@@ -109,7 +147,7 @@ export function storeFor(ctx: { readonly hippoRoot: string; readonly store?: Hip
 }
 
 /** The built-in store: today's synchronous hippo.db functions behind the port, each call on its own short-lived handles, so close has nothing to release. */
-export function sqliteStore(hippoRoot: string): HippoStore & { readonly vectors: VectorReads } {
+export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   return {
     kind: 'sqlite',
     async findApiKey(keyId) {
@@ -165,7 +203,22 @@ export function sqliteStore(hippoRoot: string): HippoStore & { readonly vectors:
         return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadPhysicsState(db, [...ids]));
       },
     } satisfies VectorReads,
+    keyAudit: sqliteKeyAudit(hippoRoot),
     async close(): Promise<void> {},
+  };
+}
+
+function sqliteKeyAudit(hippoRoot: string): KeyAudit {
+  return {
+    async revokeApiKey(revoke) {
+      return onHandle(hippoRoot, (db) => revokeKeyAt(db, revoke));
+    },
+    async auditEventsAfter(opts) {
+      return onHandle(hippoRoot, (db) => listAuditEventsAfter(db, opts));
+    },
+    async auditHighId() {
+      return onHandle(hippoRoot, auditHighIdAt);
+    },
   };
 }
 

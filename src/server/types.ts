@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../api.js';
 import type { JsonValue } from '../json.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { HippoStore } from '../store-port.js';
+import type { HippoStore, StoreGroup } from '../store-port.js';
 
 export interface ServerHandle {
   port: number;
@@ -84,8 +84,8 @@ export interface RouteRequest {
   query: URLSearchParams;
 }
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. `storeReady` routes run under any store. */
-export type Route = { method: string; storeReady?: true } & (
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group. */
+export type Route = { method: string; storeReady?: StoreGroup } & (
   | { path: string; handler: (r: RouteRequest) => Promise<void> }
   | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
   | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }

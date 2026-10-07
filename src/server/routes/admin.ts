@@ -84,7 +84,7 @@ export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest
 export async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyMatch: Record<string, string>): Promise<void> {
   validateIdSegment(keyMatch.keyId!, 'key id');
   const ctx = await buildContextWithAuth(req, opts);
-  const result = authRevoke(ctx, keyMatch.keyId!);
+  const result = await authRevoke(ctx, keyMatch.keyId!);
   sendJson(res, 200, result);
   return;
 }

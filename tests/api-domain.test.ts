@@ -243,7 +243,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
   });
 
-  it('authCreate + authList + authRevoke flow with cross-tenant guard', () => {
+  it('authCreate + authList + authRevoke flow with cross-tenant guard', async () => {
     const ctxA: Context = { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
     const ctxB: Context = { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
 
@@ -261,7 +261,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     expect(activeIds).toEqual([k1.keyId, k2.keyId].sort());
 
     // Revoke k2 as tenant-a.
-    const revoked = authRevoke(ctxA, k2.keyId);
+    const revoked = await authRevoke(ctxA, k2.keyId);
     expect(revoked.ok).toBe(true);
     expect(revoked.revokedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 

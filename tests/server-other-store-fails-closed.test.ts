@@ -23,15 +23,15 @@ import { seeded } from './_helpers/recall-golden-seed.js';
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const serverSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
 
-/** 'METHOD /path' for every V1_ROUTES entry not marked storeReady, each :param and (\d+) slot filled with 1. */
+/** 'METHOD /path' for every V1_ROUTES entry the stub store cannot run (no group named, or one besides 'base'), each :param and (\d+) slot filled with 1. */
 function unportedV1Routes(): string[] {
   const table = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
   const routes: string[] = [];
-  for (const m of table.matchAll(/\{ method: '([A-Z]+)', (?:path|pattern): '([^']+)'(, storeReady: true)?/g)) {
-    if (!m[3]) routes.push(`${m[1]} ${m[2]!.replace(/:\w+/g, '1')}`);
+  for (const m of table.matchAll(/\{ method: '([A-Z]+)', (?:path|pattern): '([^']+)'(?:, storeReady: '(\w+)')?/g)) {
+    if (m[3] !== 'base') routes.push(`${m[1]} ${m[2]!.replace(/:\w+/g, '1')}`);
   }
-  for (const m of table.matchAll(/\{ method: '([A-Z]+)', regex: \/\^(.+?)\$\/(, storeReady: true)?/g)) {
-    if (!m[3]) routes.push(`${m[1]} ${m[2]!.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, '1')}`);
+  for (const m of table.matchAll(/\{ method: '([A-Z]+)', regex: \/\^(.+?)\$\/(?:, storeReady: '(\w+)')?/g)) {
+    if (m[3] !== 'base') routes.push(`${m[1]} ${m[2]!.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, '1')}`);
   }
   return routes;
 }
@@ -364,7 +364,7 @@ describe('a store without the vector reads, under an embedding provider', () => 
   it('requireVectorReads names the missing group, and that error still maps to the 501', () => {
     expect(() => requireVectorReads(store)).toThrow(StoreNotPortedError);
     expect(() => requireVectorReads(store)).toThrow(SqliteBlockedError);
-    expect(() => requireVectorReads(store)).toThrow("the 'port-only' store has no 'vectors' reads");
+    expect(() => requireVectorReads(store)).toThrow("the 'port-only' store has no 'vectors' group");
     const err = new StoreNotPortedError('port-only', 'vectors');
     expect(mapApiError(err)).toEqual({ status: 501, message: STORE_NOT_PORTED_MESSAGE });
     expect(() => rethrowIfSqliteBlocked(err)).toThrow(err);
