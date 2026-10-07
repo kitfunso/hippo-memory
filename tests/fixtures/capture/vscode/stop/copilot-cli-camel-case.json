@@ -1,0 +1,8 @@
+{
+  "stdin": "{\"sessionId\":\"copilot-sess-1\",\"timestamp\":1791374550000,\"cwd\":\"/work/repo\",\"hookEventName\":\"Stop\",\"transcriptPath\":\"/home/u/.copilot/session-state/copilot-sess-1/events.jsonl\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "not a VS Code Stop payload (no snake_case hook_event_name \"Stop\")"
+  }
+}

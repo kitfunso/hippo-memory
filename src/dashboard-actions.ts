@@ -47,7 +47,7 @@ export function pinMemory(hippoRoot: string, tenantId: string, rawId: string, bo
 export function markWrong(hippoRoot: string, tenantId: string, rawId: string): ActionResult {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.Context = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
   // outcome() answers `applied: 0` for a missing or other-tenant id instead of throwing.
   if (api.outcome(ctx, [id], false).applied === 0) return notFound();
   const entry = readEntry(hippoRoot, id, tenantId);
@@ -58,7 +58,7 @@ export function markWrong(hippoRoot: string, tenantId: string, rawId: string): A
 export function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): ActionResult {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.Context = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
   try {
     const done: ForgetResult = api.forget(ctx, id);
     return { status: 200, body: done, changed: true };

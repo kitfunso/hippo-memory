@@ -1,7 +1,7 @@
 // A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), the owner still gets through, and no reject sweep reaches another person's row.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { archiveRaw, forget, listRejections, outcome, promote, reject, remember, supersede, type Actor, type Context } from '../src/api.js';
+import { archiveRaw, forget, listRejections, outcome, promote, reject, remember, supersede, type Actor, type HippoDbContext } from '../src/api.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { insertDormantRow, readDormantSnapshot } from '../src/dormant.js';
 import { mapApiError } from '../src/http-util.js';
@@ -21,7 +21,7 @@ const outsiders: ReadonlyArray<[string, Actor]> = [['another owner', actorB], ['
 
 type ByIdCall = () => void | Promise<McpResponse | null>;
 
-function ctxFor(actor: Actor): Context {
+function ctxFor(actor: Actor): HippoDbContext {
   return { hippoRoot: root, tenantId: 'default', actor };
 }
 
@@ -67,7 +67,7 @@ afterEach(() => {
 });
 
 describe('by-id writes on someone else\'s personal row', () => {
-  const ownerWrites: ReadonlyArray<[string, MemoryKind, (ctx: Context, id: string) => void]> = [
+  const ownerWrites: ReadonlyArray<[string, MemoryKind, (ctx: HippoDbContext, id: string) => void]> = [
     ['forget', 'distilled', (ctx, id) => { forget(ctx, id); }],
     ['archive', 'raw', (ctx, id) => { archiveRaw(ctx, id, 'cleanup'); }],
     ['supersede', 'distilled', (ctx, id) => { supersede(ctx, id, 'a newer version of the note'); }],

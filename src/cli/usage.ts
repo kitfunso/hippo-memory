@@ -265,7 +265,10 @@ export const VERB_USAGE = {
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
     --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and find
                            the Copilot CLI session log by session id; with no --log-file, log to
-                           ~/.hippo/logs/copilot-sleep.log`],
+                           ~/.hippo/logs/copilot-sleep.log
+    --turn                 VS Code Stop hook, after each reply: capture only the new turns, sleep
+                           only at the auto-sleep threshold, and keep the session's snapshot; does
+                           nothing for any other payload`],
   'pre-compact': [`
   pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
                            ask the summariser to end with a "Memories for hippo" list

@@ -8,13 +8,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
-import { remember, getContext, sleep, outcomeForLastRecall, type Context } from '../src/api.js';
+import { remember, getContext, sleep, outcomeForLastRecall, type HippoDbContext } from '../src/api.js';
 
 describe('api result shapes on a real store', () => {
   let home: string;
   let globalHome: string;
   let savedHippoHome: string | undefined;
-  let ctx: Context;
+  let ctx: HippoDbContext;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-api-shapes-'));

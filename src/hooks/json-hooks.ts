@@ -37,7 +37,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
-import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHomeDir, defaultPreCompactLogPath } from './shared.js';
+import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHooksFile, defaultPreCompactLogPath } from './shared.js';
 import { type JsonValue, isJsonString, readJsonFile } from '../json.js';
 import { escapeRegex } from '../escape.js';
 import { errorMessage, log } from '../log.js';
@@ -89,7 +89,7 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
       };
     case 'copilot':
       return {
-        settings: path.join(copilotHomeDir(), 'hooks', 'hippo.json'),
+        settings: copilotHooksFile(),
         logFile: path.join(logsDir, 'copilot-sleep.log'),
         display: 'Copilot',
       };
@@ -243,9 +243,19 @@ function copilotHooksTable(): JsonObject {
       sessionStart: copilotCommandHook('context --pinned-only --include-recent 5 --format copilot', 10),
       postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', 10),
       preCompact: copilotCommandHook('pre-compact --runtime copilot', 30),
+      // VS Code maps no camelCase preCompact. The Copilot CLI may run both names, so pre-compact skips a snapshot saved seconds before.
+      PreCompact: copilotCommandHook('pre-compact --runtime copilot', 30),
+      // VS Code's per-reply Stop. --turn acts on a VS Code payload only, so the Copilot CLI's agentStop does nothing.
+      agentStop: copilotCommandHook('session-end --runtime copilot --turn', 30),
       sessionEnd: copilotCommandHook('session-end --runtime copilot', 30),
     },
   };
+}
+
+/** The events in hippo's Copilot hooks file, in file order, for setup to name. */
+export function copilotHookEvents(): string[] {
+  const hooks = copilotHooksTable().hooks;
+  return isJsonObject(hooks) ? Object.keys(hooks) : [];
 }
 
 /** Hippo owns this whole file, so install writes the full table and a second install changes no byte. */

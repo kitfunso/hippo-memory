@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
@@ -62,7 +62,7 @@ describe("api.remember stamps the caller's project", () => {
   });
 
   /** A store inside a git checkout named `proj`, so the folder stamp is `proj`. */
-  function storeCtx(flagged: boolean): Context {
+  function storeCtx(flagged: boolean): HippoDbContext {
     mkdirSync(join(tmp, 'proj', '.git'), { recursive: true });
     const store = join(tmp, 'proj', '.hippo');
     mkdirSync(store, { recursive: true });
@@ -71,7 +71,7 @@ describe("api.remember stamps the caller's project", () => {
     return { hippoRoot: store, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
   }
 
-  const originOf = (ctx: Context, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
+  const originOf = (ctx: HippoDbContext, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
 
   it('a shared store with no project stamps NULL', () => {
     const ctx = storeCtx(true);

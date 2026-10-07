@@ -89,7 +89,7 @@ function rememberWithEventLog(
   // No `|| 'connector:slack'` fallback: the caller always builds ctx with the connector subject, and with
   // an object-shaped Context.actor an OR-fallback would never fire anyway.
   const result = remember(
-    ctx,
+    { ...ctx, store: undefined }, // the event log row commits with the memory on hippo.db's own handle, never through a store
     {
       ...opts,
       untrusted: true,

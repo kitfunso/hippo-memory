@@ -61,7 +61,7 @@ export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
   'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
   'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
   'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin',
-  'strict', 'suite', 'value-aware', 'verified', 'version', 'why',
+  'strict', 'suite', 'turn', 'value-aware', 'verified', 'version', 'why',
 ]);
 
 // Every flag some command reads. Anything else is a typo that no command would act on.

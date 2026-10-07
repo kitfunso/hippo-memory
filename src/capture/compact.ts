@@ -14,10 +14,11 @@ import {
   COMPACTION_DB_WAIT_MS,
 } from '../compaction-record.js';
 import { resolveTenantId } from '../tenant.js';
-import { defaultPreCompactLogPath } from '../hooks/shared.js';
+import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import { readClaudeCodePreCompact, type HookRuntime } from '../capture-contract.js';
 import { errorMessage } from '../log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
+import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,15 @@ function printPreCompactInstruction(logFile: string): void {
   }
 }
 
+/** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice for one compaction. */
+const TWIN_FIRE_MS = 10_000;
+
+function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean {
+  if (sessionId === null || sessionId === '') return false;
+  const active = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
+  return active?.session_id === sessionId && active.source === 'pre-compact' && Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
+}
+
 /** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
@@ -89,11 +99,21 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
     return;
   }
   const { sessionId, transcriptPath: payloadTranscriptPath, cwd: payloadCwd, trigger: payloadTrigger } = receipt.input;
+  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record, nor reads the summariser text.
+  const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
+  if (vscode && fs.existsSync(vscodeUserHooksFile())) {
+    appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
+    return;
+  }
+  if (runtime === 'copilot' && snapshotJustSaved(hippoRoot, sessionId)) {
+    appendPreCompactLog(logFile, `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`);
+    return;
+  }
 
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
   // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
   let recordId: string | null = null;
-  if (runtime === 'claude-code' && sessionId !== null && sessionId !== '') {
+  if (runtime === 'claude-code' && !vscode && sessionId !== null && sessionId !== '') {
     recordId = recordCompactionStart(
       hippoRoot,
       { sessionId, trigger: payloadTrigger, cwd: payloadCwd, transcriptPath: payloadTranscriptPath },

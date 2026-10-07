@@ -26,7 +26,7 @@ export interface CopilotTurn {
 }
 
 // A session id becomes a folder name, so anything beyond word characters and hyphens could climb out of session-state.
-const SESSION_ID_RE = /^[\w-]+$/;
+export const SESSION_ID_RE = /^[\w-]+$/;
 
 // user.message sources that mark text hippo did not get from the human: a hidden skill injection or another agent's prompt.
 const INJECTED_SOURCE_PREFIXES = ['skill-', 'agent-'];
@@ -36,6 +36,13 @@ export function copilotTranscriptFor(sessionId: string): string | null {
   if (!SESSION_ID_RE.test(sessionId)) return null;
   const file = path.join(copilotHomeDir(), 'session-state', sessionId, 'events.jsonl');
   return fs.existsSync(file) ? file : null;
+}
+
+/** True for VS Code's own chat log, `<workspaceStorage>/<id>/github.copilot-chat/transcripts/<session id>.jsonl`, in either slash and any case. */
+export function isVscodeTranscript(file: string | null): boolean {
+  if (!file) return false;
+  const parts = file.toLowerCase().split(/[\\/]/);
+  return parts.length >= 3 && parts[parts.length - 2] === 'transcripts' && parts[parts.length - 3] === 'github.copilot-chat';
 }
 
 function isSubagentLine(line: CopilotEventLine, data: CopilotMessageData): boolean {

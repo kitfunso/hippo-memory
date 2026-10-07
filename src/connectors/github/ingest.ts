@@ -196,7 +196,7 @@ function rememberWithEventLog(
 ): IngestResult {
   // No `|| 'connector:github'` fallback (see rememberWithEventLog in slack/ingest.ts for rationale).
   const result = remember(
-    ctx,
+    { ...ctx, store: undefined }, // the event log row commits with the memory on hippo.db's own handle, never through a store
     {
       ...opts,
       untrusted: true,

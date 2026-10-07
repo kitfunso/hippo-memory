@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
-import { remember, outcomeForLastRecall, type Context } from '../src/api.js';
+import { remember, outcomeForLastRecall, type HippoDbContext } from '../src/api.js';
 
 function tmpHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-ofr-'));
@@ -46,7 +46,7 @@ describe('api.outcomeForLastRecall', () => {
   it('returns {applied:0, ids:[]} when last_retrieval_ids is empty', () => {
     const home = tmpHome();
     try {
-      const ctx: Context = {
+      const ctx: HippoDbContext = {
         hippoRoot: home,
         tenantId: 'default',
         actor: { subject: 'cli', role: 'admin' },
@@ -66,7 +66,7 @@ describe('api.outcomeForLastRecall', () => {
       const id3 = seedMemory(home, 'last-recall-mem-3');
       seedLastRetrievalIds(home, [id1, id2, id3]);
 
-      const ctx: Context = {
+      const ctx: HippoDbContext = {
         hippoRoot: home,
         tenantId: 'default',
         actor: { subject: 'cli', role: 'admin' },
@@ -93,7 +93,7 @@ describe('api.outcomeForLastRecall', () => {
       const tenantBId = seedMemory(home, 'belongs-to-tenant-b', 'tenant_b');
       seedLastRetrievalIds(home, [tenantBId]);
 
-      const ctxA: Context = {
+      const ctxA: HippoDbContext = {
         hippoRoot: home,
         tenantId: 'tenant_a',
         actor: { subject: 'cli', role: 'admin' },
@@ -117,7 +117,7 @@ describe('api.outcomeForLastRecall', () => {
       const id2 = seedMemory(home, 'audit-target-2');
       seedLastRetrievalIds(home, [id1, id2]);
 
-      const ctx: Context = {
+      const ctx: HippoDbContext = {
         hippoRoot: home,
         tenantId: 'default',
         actor: { subject: 'api_key:hk_ofr_test', role: 'admin' },

@@ -5,11 +5,13 @@ import { openStore } from '../store/open.js';
 import { writeEntryOn } from '../store/entry-writes.js';
 import { selectEntriesByIds } from '../store/entry-reads.js';
 import { loadIndex } from '../store/index-and-stats.js';
-import { applyOutcome, CHURN_STALE_TAG } from '../memory.js';
+import { entryAfterOutcome } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { recordTraceOutcome } from '../recall-trace.js';
-import { canTouchScope } from '../recall-scope.js';
-import type { Context } from './types.js';
+import { canTouchScope, personalScopeOf } from '../recall-scope.js';
+import { SqliteBlockedError } from '../db/sqlite-blocked.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
+import type { Context, HippoDbContext, StoreReply } from './types.js';
 
 // ---------------------------------------------------------------------------
 // outcome
@@ -43,12 +45,28 @@ export interface OutcomeResult {
   applied: number;
   appliedIds: string[];
 }
-export function outcome(
-  ctx: Context,
+export function outcome<C extends Context>(
+  ctx: C,
   ids: ReadonlyArray<string>,
   good: boolean,
   opts?: { traceId?: number },
-): OutcomeResult {
+): StoreReply<C, OutcomeResult> {
+  const reply = ctx.store ? outcomeThroughStore(ctx, ctx.store, ids, good, opts) : outcomeOnHippoDb(ctx, ids, good, opts);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, OutcomeResult>;
+}
+
+/** The rows and their audit rows commit together here; the trace link has no store method, since only the last-recall path sends one. */
+async function outcomeThroughStore(
+  ctx: Context, store: HippoStore, ids: ReadonlyArray<string>, good: boolean, opts?: { traceId?: number },
+): Promise<OutcomeResult> {
+  const entryWrites = requireGroup(store, 'entryWrites');
+  if (opts?.traceId !== undefined) throw new Error('an outcome links its recall trace on hippo.db only, never through a store');
+  const appliedIds = await entryWrites.applyOutcome({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), ids, good });
+  return { applied: appliedIds.length, appliedIds };
+}
+
+function outcomeOnHippoDb(ctx: Context, ids: ReadonlyArray<string>, good: boolean, opts?: { traceId?: number }): OutcomeResult {
   const appliedIds: string[] = [];
   const db = openStore(ctx.hippoRoot);
   try {
@@ -56,10 +74,7 @@ export function outcome(
     for (const id of ids) {
       const entry = live.get(id);
       if (!entry || !canTouchScope(ctx.actor, entry.scope ?? null)) continue;
-      let updated = applyOutcome(entry, good);
-      if (good && updated.tags.includes(CHURN_STALE_TAG)) { // a good outcome reconfirms the entry
-        updated = { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
-      }
+      const updated = entryAfterOutcome(entry, good);
       writeEntryOn(db, ctx.hippoRoot, updated, { actor: ctx.actor.subject });
       live.set(id, updated); // a repeated id builds on its first outcome, as a fresh read would
       appendAuditEvent(db, {
@@ -114,10 +129,22 @@ export interface OutcomeForLastRecallResult {
   applied: number;
   ids: string[];
 }
-export function outcomeForLastRecall(
-  ctx: Context,
+export function outcomeForLastRecall<C extends Context>(
+  ctx: C,
   good: boolean,
-): OutcomeForLastRecallResult {
+): StoreReply<C, OutcomeForLastRecallResult> {
+  const reply = ctx.store ? lastRecallUnderStore(ctx, ctx.store, good) : outcomeForLastRecallOnHippoDb({ ...ctx, store: undefined }, good);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, OutcomeForLastRecallResult>;
+}
+
+/** The last recall's ids and trace sit in hippo.db's meta table, which only the CLI and context write, so no other store holds them. */
+async function lastRecallUnderStore(ctx: Context, store: HippoStore, good: boolean): Promise<OutcomeForLastRecallResult> {
+  if (store.kind !== 'sqlite') throw new SqliteBlockedError(store.kind);
+  return outcomeForLastRecallOnHippoDb({ ...ctx, store: undefined }, good);
+}
+
+function outcomeForLastRecallOnHippoDb(ctx: HippoDbContext, good: boolean): OutcomeForLastRecallResult {
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };

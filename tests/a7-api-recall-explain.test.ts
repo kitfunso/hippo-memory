@@ -11,12 +11,12 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
-import { remember, recall, type Context } from '../src/api.js';
+import { remember, recall, type HippoDbContext } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 
 describe('A7 api.recall explain', () => {
   let hippoRoot: string;
-  let ctx: Context;
+  let ctx: HippoDbContext;
   const tenantId = 'default';
   const sessionId = 'sess-a7-api';
 

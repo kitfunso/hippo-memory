@@ -1,0 +1,8 @@
+{
+  "stdin": "{\"hook_event_name\":\"Stop\",\"session_id\":\"vscode-sess-1\",\"cwd\":\"/work/repo\",\"stop_hook_active\":false}",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "Stop payload names no .jsonl transcript_path"
+  }
+}

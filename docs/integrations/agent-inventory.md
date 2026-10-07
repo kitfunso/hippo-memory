@@ -65,11 +65,11 @@ Website pages are listed in `claims` but not parsed, since they hold no structur
 | `CaptureInput` | What hippo read from one payload, before any write | not stored |
 | `CaptureReceipt` | `received`, `skipped` with a reason, or `unavailable` | the `compactions` row is the receipt record for Claude Code PreCompact; skips go to the pre-compact log |
 | `Checkpoint` | Working state saved before loss; not a lesson | `task_snapshots` |
-| `ProgressCursor` | How far capture has read a session's source, so a retry resumes | not stored yet |
+| `ProgressCursor` | How far capture has read a session's source, so a retry resumes | `~/.hippo/sessions/<session id>.cursor.json`, for VS Code's capture after each reply |
 
 The receipt has no `pending` or `processed` states yet. Those belong to the write side, and AZ4 adds them when a second runtime writes through the contract.
 
-The first reader is `readClaudeCodePreCompact`. `hippo pre-compact` calls it and logs each skip reason word for word.
+The first reader is `readClaudeCodePreCompact`. `hippo pre-compact` calls it and logs each skip reason word for word. The second, `readVscodeStop`, decides whether `hippo session-end --turn` acts on a payload; any skip ends the run silently, since the Copilot CLI's `agentStop` shares the hook line.
 
 ## Conformance fixtures
 

@@ -94,7 +94,12 @@ export function assertClientScope(scope: string | null | undefined): void {
 
 /** True when `actor` may change or delete a row in `scope`: any non-personal scope, or its own personal one. */
 export function canTouchScope(actor: { owner?: string }, scope: string | null): boolean {
-  return !isPersonalScope(scope) || scope === personalScopeOf(actor);
+  return ownScopeTouches(personalScopeOf(actor), scope);
+}
+
+/** canTouchScope for a caller known by its own personal scope, as a store method receives it. */
+export function ownScopeTouches(ownScope: string | null, scope: string | null): boolean {
+  return !isPersonalScope(scope) || scope === ownScope;
 }
 
 /**

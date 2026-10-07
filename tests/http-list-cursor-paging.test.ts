@@ -48,7 +48,7 @@ let handle: ServerHandle;
 let adminKey: CreateApiKeyResult;
 
 function seedTenant(tenantId: string, count: number): void {
-  const ctx: api.Context = { hippoRoot: home, tenantId, actor: api.adminActor('test') };
+  const ctx: api.HippoDbContext = { hippoRoot: home, tenantId, actor: api.adminActor('test') };
   for (let i = 0; i < count; i++) {
     saveDecision(home, tenantId, { decisionText: `${tenantId} decision ${i}` });
     saveIncident(home, tenantId, { incidentText: `${tenantId} incident ${i}` });
@@ -151,7 +151,7 @@ describe.each(ROUTES)('GET $path paging', (route) => {
 });
 
 describe('no paging params: the body a small store got before cursors existed', () => {
-  const ctx = (): api.Context => ({ hippoRoot: home, tenantId: 'default', actor: api.adminActor('test') });
+  const ctx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: api.adminActor('test') });
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
   // Each reference is the store call the route made before paging, with the same arguments.

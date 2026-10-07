@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, expect, it } from 'vitest';
-import { readClaudeCodePreCompact, type CaptureReceipt } from '../src/capture-contract.js';
+import { readClaudeCodePreCompact, readVscodeStop, type CaptureReceipt } from '../src/capture-contract.js';
 
 interface Fixture {
   readonly stdin: string | null;
@@ -13,6 +13,7 @@ interface Fixture {
 // A fixture directory without a reader here fails the suite, so no fixture can sit unexercised.
 const READERS = new Map<string, (fixture: Fixture) => CaptureReceipt>([
   ['claude-code/pre-compact', (f) => readClaudeCodePreCompact(f.stdin ?? undefined, f.timedOut)],
+  ['vscode/stop', (f) => readVscodeStop(f.stdin ?? undefined, f.timedOut)],
 ]);
 
 const ROOT = path.join(fileURLToPath(new URL('.', import.meta.url)), 'fixtures', 'capture');

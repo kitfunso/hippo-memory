@@ -11,7 +11,7 @@ import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { adminActor, type Context } from '../src/api/types.js';
+import { adminActor, type HippoDbContext } from '../src/api/types.js';
 import { outcome } from '../src/api/outcome.js';
 import { quarantineList } from '../src/api/quarantine.js';
 import { drillDown } from '../src/api/drill-down.js';
@@ -35,7 +35,7 @@ function freshRoot(label: string): string {
   return root;
 }
 
-function ctxFor(root: string): Context {
+function ctxFor(root: string): HippoDbContext {
   return { hippoRoot: root, tenantId: 'default', actor: adminActor('test:query-count') };
 }
 

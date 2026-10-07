@@ -38,7 +38,7 @@ function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
   return row;
 }
 
-function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
+function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): string {
   // GDPR: raw_archive stores ONLY metadata, not the original
   // memory content. The audit_log row appended below carries op='archive_raw'
   // for the compliance audit trail. True right-to-be-forgotten — the original
@@ -59,6 +59,7 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
   // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the whole archive.
   if (isFtsAvailable(db)) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
+  return archivedAt;
 }
 
 // Emit the archive_raw audit event inside the SAVEPOINT so the audit row is
@@ -88,15 +89,15 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
  * append-only trigger lets the delete through, then deletes the row. All in one
  * write scope, which nests inside an outer transaction (e.g. batchWriteAndDelete).
  *
- * Throws if the row does not exist or is not `kind='raw'`.
+ * Throws if the row does not exist or is not `kind='raw'`. Returns the archived_at it wrote.
  */
-export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): void {
+export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): string {
   const row = loadRawRow(db, id);
 
   // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here
   // rolls back only this archive.
-  withWriteScope(db, 'archive_raw', () => {
-    moveRowToArchive(db, id, row, opts);
+  return withWriteScope(db, 'archive_raw', () => {
+    const archivedAt = moveRowToArchive(db, id, row, opts);
     auditArchive(db, id, row, opts);
     // Archiving a child under a level-2 summary marks the parent dirty, inside the
     // SAVEPOINT so the dirty-mark commits atomically with the archive.
@@ -116,5 +117,6 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     if (opts.afterArchive) {
       opts.afterArchive(db, id);
     }
+    return archivedAt;
   });
 }
