@@ -66,6 +66,8 @@ export type { OriginFilter } from './store/search-rows.js';
 export type { ContinuityKey } from './store/sessions.js';
 export type { TokenUse } from './token-ledger.js';
 export { StoreBusyError } from './db.js';
+// store copy --db writes the marker and reads the old hippo.db under the waiver.
+export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
 export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api.js';
 
