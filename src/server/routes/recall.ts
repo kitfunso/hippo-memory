@@ -30,7 +30,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const ctx = await buildContextWithAuth(req, opts);
 
   const recallHistory = recallHistoryFor(ctx, sessionId);
-  // Written first in the recall's own write (docs/recall-surface-differences.md D9), so a recall that fails leaves no row.
+  // Written first in the recall's own write, so a recall that fails leaves no row.
   const leadingAudit = sessionId ? [] : anchorSkippedRows({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, q);
   const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory, leadingAudit });
 
