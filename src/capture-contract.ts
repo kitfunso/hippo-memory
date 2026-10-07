@@ -52,13 +52,20 @@ export function isObjectLike<T>(value: T): value is T & object {
   return value !== null && value instanceof Object;
 }
 
-/** Reads a Claude Code PreCompact payload; only an empty stdin counts as a manual run. */
-export function readClaudeCodePreCompact(stdinText: string | undefined, timedOut: boolean): CaptureReceipt {
+/** The hook runtimes a `--runtime` flag names; absent means Claude Code. */
+export type HookRuntime = 'claude-code' | 'copilot';
+
+/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only an empty stdin counts as a manual run. */
+export function readClaudeCodePreCompact(
+  stdinText: string | undefined,
+  timedOut: boolean,
+  runtime: HookRuntime = 'claude-code',
+): CaptureReceipt {
   const empty = !stdinText || stdinText.trim() === '';
   if (timedOut && empty) {
     return { status: 'unavailable', reason: 'no PreCompact payload arrived before the stdin wait window closed' };
   }
-  const base = { runtime: 'claude-code', event: 'pre-compact' as const };
+  const base = { runtime, event: 'pre-compact' as const };
   if (empty) {
     return { status: 'received', input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null } };
   }

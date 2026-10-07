@@ -5,7 +5,7 @@ import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
-export type DeliveryRuntime = 'claude-code' | 'codex' | 'unknown';
+export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
 export type DeliverySurface = 'hook' | 'context';
 export type DeliveryWriteStore = 'local' | 'global';
@@ -139,6 +139,8 @@ export interface DeliveryRecorderInit {
   tenantId: string;
   stdinText?: string;
   envSessionId?: string;
+  /** Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code. */
+  runtime?: DeliveryRuntime;
 }
 
 interface Candidate {
@@ -278,7 +280,7 @@ function buildEvent(
   return {
     ts,
     tenantId: init.tenantId,
-    runtime: payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown',
+    runtime: init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
     eventType: payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual',
     surface: 'hook',
     storeHash: init.storeHash,

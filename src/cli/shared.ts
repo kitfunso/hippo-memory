@@ -9,7 +9,8 @@ import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import { isInitialized } from '../store/open.js';
+import { getHippoRoot, isInitialized } from '../store/open.js';
+import type { HookRuntime } from '../capture-contract.js';
 import type { SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
@@ -17,7 +18,7 @@ import { isSharedStore, type HippoConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
-import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
 import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
@@ -32,7 +33,7 @@ import { resolveTenantId } from '../tenant.js';
 import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
@@ -468,6 +469,25 @@ export function hookStoreRoot(hippoRoot: string): string {
   if (isInitialized(hippoRoot)) return hippoRoot;
   const globalRoot = getGlobalRoot();
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
+}
+
+/** `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag decides, never the payload. */
+export function hookRuntime(flags: CliFlags): HookRuntime {
+  return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
+}
+
+/** A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder; other runtimes keep `hippoRoot`. */
+export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined, runtime: HookRuntime): string {
+  const cwd = runtime === 'copilot' ? hookPayloadString(stdinText, 'cwd') : null;
+  if (cwd === null || cwd.trim() === '') return hippoRoot;
+  try {
+    // Moving, not just re-rooting, keeps project identity, scope, handoff evidence and the session-end worker on that folder too.
+    process.chdir(cwd);
+  } catch (err) {
+    log.warn(`hippo: payload cwd ${cwd} is not usable, so the hook stays in ${process.cwd()}: ${errorMessage(err)}`);
+    return hippoRoot;
+  }
+  return getHippoRoot(process.cwd());
 }
 
 export function learnFromRepo(

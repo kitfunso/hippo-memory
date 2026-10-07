@@ -3,9 +3,10 @@ import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../capture-contract.js';
+import { copilotTurn } from './copilot-transcript.js';
 
 /**
- * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
+ * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
  * thinking blocks, tool_use, and tool_result noise. Capture reads the same
  * turns through `sessionTail`, one text per turn.
@@ -79,6 +80,12 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
     }
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
+
+    const copilot = copilotTurn(entry);
+    if (copilot !== null) {
+      turns.push(copilot);
+      continue;
+    }
 
     if (entry.type === 'user' || entry.type === 'assistant') {
       const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;

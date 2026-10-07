@@ -168,7 +168,8 @@ Commands:
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
-    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
+    --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),
+                           or copilot (Copilot sessionStart hook JSON, from the store of the payload's cwd)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
                            Runs at Claude Code and OpenCode session end and in the daily job.
@@ -269,6 +270,7 @@ Commands:
     quarantine reject <id>  Keep a quarantined memory hidden for good
   capture-error            Store a failed tool call as an error memory (reads the Claude Code
                            PostToolUseFailure hook payload on stdin; skips routine failures)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd
   doctor                   Check the install: Node, store, schema, sleep, agent hooks
     --json                 Machine-readable report (exit code 1 on any failure)
   support-bundle           Write a redacted JSON file for a support ticket: versions, doctor,
@@ -427,9 +429,13 @@ Commands:
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and find
+                           the Copilot CLI session log by session id
   pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
                            ask the summariser to end with a "Memories for hippo" list
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and save
+                           the snapshot only (Copilot has no PostCompact hook to close a record)
   compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old
   post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
                            the next hippo sleep) and print one line saying how many
@@ -796,6 +802,7 @@ exports[`CLI help output is byte-identical and runs nothing > hippo capture-erro
   "stderr": "",
   "stdout": "  capture-error            Store a failed tool call as an error memory (reads the Claude Code
                            PostToolUseFailure hook payload on stdin; skips routine failures)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd
 ",
 }
 `;
@@ -875,7 +882,8 @@ exports[`CLI help output is byte-identical and runs nothing > hippo context --he
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
-    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
+    --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),
+                           or copilot (Copilot sessionStart hook JSON, from the store of the payload's cwd)
     --framing <mode>       Framing: observe (default), suggest, assert
 ",
 }
@@ -1394,6 +1402,8 @@ exports[`CLI help output is byte-identical and runs nothing > hippo pre-compact 
   "stdout": "  pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
                            ask the summariser to end with a "Memories for hippo" list
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and save
+                           the snapshot only (Copilot has no PostCompact hook to close a record)
 ",
 }
 `;
@@ -1715,6 +1725,8 @@ exports[`CLI help output is byte-identical and runs nothing > hippo session-end 
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
     --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and find
+                           the Copilot CLI session log by session id
 ",
 }
 `;

@@ -34,10 +34,11 @@ import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../handoff-evidence.js';
 import { resolveLastSessionTranscript } from '../capture/transcript.js';
+import { copilotTranscriptFor } from '../capture/copilot-transcript.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
-import { readStdinBounded } from '../stdin.js';
+import { readHookStdin } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { withLedgerDb } from '../ledger-db.js';
@@ -49,6 +50,8 @@ import {
   appendSessionEndCloseLog,
   resetHookInjection,
   hookStoreRoot,
+  hookRuntime,
+  payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
 } from './shared.js';
@@ -173,7 +176,10 @@ export async function cmdSessionEnd(
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
-  const { text: stdinText } = await readStdinBounded();
+  const { text: stdinText } = await readHookStdin();
+  const runtime = hookRuntime(flags);
+  // Before the spawn, since the worker finds its store from the folder it inherits.
+  const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   try {
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
@@ -185,8 +191,9 @@ export async function cmdSessionEnd(
     // No stdin, not JSON, or read failure: the snapshot close below will no-op.
   }
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
-  // Always a hook, so never scan: an empty stdin here is not a manual run.
-  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false });
+  // Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so its log is found by id.
+  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false })
+    ?? (runtime === 'copilot' && sessionId ? copilotTranscriptFor(sessionId) : null);
 
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);
@@ -206,7 +213,7 @@ export async function cmdSessionEnd(
     // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;
-    await cmdSessionEndWorker(hippoRoot, flags);
+    await cmdSessionEndWorker(root, flags);
     return;
   }
 }
@@ -562,20 +569,23 @@ export async function cmdCodexSessionEndWorker(
 
 export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
   // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
-  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
+  const runtime = hookRuntime(flags);
+  const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   await runHookWithStores(async () => {
-    resetHookInjection(hippoRoot, stdinText, null);
-    await cmdPreCompact(hookStoreRoot(hippoRoot), {
+    resetHookInjection(root, stdinText, null);
+    await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
       logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+      runtime,
     });
   });
 }
 
 export async function handlePostCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
   // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
-  const { text } = await readStdinBounded();
+  const { text } = await readHookStdin();
   const logFlag = flags['log-file'];
   const store = hookStoreRoot(hippoRoot);
   const line = await runHookWithStores(() => cmdPostCompact(store, {
@@ -592,12 +602,12 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
   if (line !== null && line !== undefined) console.log(line);
 }
 
-export async function handleCaptureError({ hippoRoot }: CommandContext): Promise<void> {
+export async function handleCaptureError({ hippoRoot, flags }: CommandContext): Promise<void> {
   // PostToolUseFailure hook: every path exits 0, and nothing is created
   // when no store exists (the hook fires in every directory).
-  const { text } = await readStdinBounded();
+  const { text } = await readHookStdin();
   try {
-    const root = hookStoreRoot(hippoRoot);
+    const root = hookStoreRoot(payloadCwdRoot(hippoRoot, text, hookRuntime(flags)));
     const payload = (text ?? '').trim();
     if (isInitialized(root) && payload) {
       // SAFETY: JSON.parse returns a JSON value by definition.
@@ -610,7 +620,7 @@ export async function handleCaptureError({ hippoRoot }: CommandContext): Promise
 }
 
 export async function handleCompactResume({ hippoRoot }: CommandContext): Promise<void> {
-  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   await runHookWithStores(() => {
     resetHookInjection(hippoRoot, stdinText, 'compact');
     cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
@@ -639,7 +649,7 @@ export async function handleCapture({ hippoRoot, flags }: CommandContext): Promi
   // Bounded, and only when last-session has no explicit path: the
   // --stdin source keeps its own blocking read in capture.ts by design.
   const bounded = captureSource === 'last-session' && !transcriptPath
-    ? await readStdinBounded()
+    ? await readHookStdin()
     : { text: undefined, timedOut: false };
 
   cmdCapture(hippoRoot, {

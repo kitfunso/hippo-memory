@@ -15,7 +15,7 @@ import {
 } from '../compaction-record.js';
 import { resolveTenantId } from '../tenant.js';
 import { defaultPreCompactLogPath } from '../hooks/shared.js';
-import { readClaudeCodePreCompact } from '../capture-contract.js';
+import { readClaudeCodePreCompact, type HookRuntime } from '../capture-contract.js';
 import { errorMessage } from '../log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
@@ -73,7 +73,8 @@ function printPreCompactInstruction(logFile: string): void {
 }
 
 /** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
-function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean, logFile: string): void {
+function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
+  const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
   // The PreCompact hook fires in every Claude Code project, including
   // ones that never ran `hippo init`, so gate before any store-opening call
   // (saveActiveTaskSnapshot etc. call initStore, which would create one).
@@ -82,7 +83,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
     return;
   }
 
-  const receipt = readClaudeCodePreCompact(stdinText, stdinTimedOut);
+  const receipt = readClaudeCodePreCompact(stdinText, stdinTimedOut, runtime);
   if (receipt.status !== 'received') {
     appendPreCompactLog(logFile, `skip: ${receipt.reason}`);
     return;
@@ -90,8 +91,9 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
   const { sessionId, transcriptPath: payloadTranscriptPath, cwd: payloadCwd, trigger: payloadTrigger } = receipt.input;
 
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
+  // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
   let recordId: string | null = null;
-  if (sessionId !== null && sessionId !== '') {
+  if (runtime === 'claude-code' && sessionId !== null && sessionId !== '') {
     recordId = recordCompactionStart(
       hippoRoot,
       { sessionId, trigger: payloadTrigger, cwd: payloadCwd, transcriptPath: payloadTranscriptPath },
@@ -100,7 +102,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
     printPreCompactInstruction(logFile);
   }
 
-  const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile);
+  const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
   if (!transcriptPath) return;
 
   // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with junk.
@@ -111,7 +113,12 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
 }
 
 /** The transcript to snapshot, or null after logging why there is none. */
-function resolvePreCompactTranscript(payloadTranscriptPath: string | null, stdinText: string | undefined, logFile: string): string | null {
+function resolvePreCompactTranscript(
+  payloadTranscriptPath: string | null,
+  stdinText: string | undefined,
+  logFile: string,
+  runtime: HookRuntime,
+): string | null {
   // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's
   // transcript under THIS payload's session_id, so it runs only on a manual invocation (no payload).
   let transcriptPath: string | null;
@@ -122,6 +129,9 @@ function resolvePreCompactTranscript(payloadTranscriptPath: string | null, stdin
       appendPreCompactLog(logFile, `skip: payload transcript_path unreadable: ${payloadTranscriptPath}`);
       return null;
     }
+  } else if (runtime === 'copilot') {
+    // The scan only knows Claude Code's folders, so a manual Copilot run would snapshot a Claude session.
+    transcriptPath = null;
   } else {
     transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
   }
@@ -168,6 +178,7 @@ export interface PreCompactOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
+  runtime?: HookRuntime;
 }
 
 /**
@@ -180,7 +191,7 @@ export interface PreCompactOptions {
 export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   try {
-    runPreCompact(hippoRoot, options.stdinText, options.stdinTimedOut ?? false, logFile);
+    runPreCompact(hippoRoot, options, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
   }

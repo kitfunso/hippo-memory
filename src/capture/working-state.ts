@@ -6,6 +6,7 @@ import { isObjectLike, isStringValue } from '../capture-contract.js';
 import { errorMessage } from '../log.js';
 import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from '../transcript-tail.js';
 import { humanUserText, summariseTranscript } from './transcript.js';
+import { copilotTurn } from './copilot-transcript.js';
 
 export const PRE_COMPACT_TASK_CAP = 200;
 export const PRE_COMPACT_SUMMARY_CAP = 2000;
@@ -54,7 +55,7 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
   return TRIM_MARKER + text.slice(start);
 }
 
-/** Most recent plain-text user message in a JSONL tail. Claude Code transcript shape only (PreCompact is claude-code-only). */
+/** Most recent plain-text user message in a JSONL tail, from a Claude Code or a Copilot transcript. */
 function lastPlainUserMessage(jsonl: string): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -65,7 +66,10 @@ function lastPlainUserMessage(jsonl: string): string {
       continue; // the tail read can start mid-line; skip the torn fragment
     }
     if (!isObjectLike(entry)) continue;
-    if (!('type' in entry) || entry.type !== 'user') continue;
+    if (!('type' in entry)) continue;
+    const copilot = copilotTurn(entry);
+    if (copilot?.role === 'user') return copilot.text;
+    if (entry.type !== 'user') continue;
     // An isMeta user line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is the human's task.
     if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
     const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
@@ -87,7 +91,10 @@ function lastAssistantTextBlock(jsonl: string): string {
       continue; // the tail read can start mid-line; skip the torn fragment
     }
     if (!isObjectLike(entry)) continue;
-    if (!('type' in entry) || entry.type !== 'assistant') continue;
+    if (!('type' in entry)) continue;
+    const copilot = copilotTurn(entry);
+    if (copilot?.role === 'assistant') return copilot.text;
+    if (entry.type !== 'assistant') continue;
     // Same meta/sidechain guard as lastPlainUserMessage: sub-agent turns
     // (isSidechain) are not this session's next step.
     if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
