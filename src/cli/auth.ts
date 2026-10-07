@@ -33,7 +33,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   // flows through ctx.tenantId, NOT through opts — authCreate's opts no
   // longer accepts a tenantId field, so the HTTP layer cannot smuggle a
   // body.tenantId across.
-  const ctx: api.Context = {
+  const ctx: api.HippoDbContext = {
     hippoRoot: root,
     tenantId: tenantFlag ?? resolveTenantId({}),
     actor: api.adminActor('cli'),
@@ -97,8 +97,8 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-function keyContext(root: string, keyId: string): api.Context {
-  const hostCtx: api.Context = { hippoRoot: root, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
+function keyContext(root: string, keyId: string): api.HippoDbContext {
+  const hostCtx = { hippoRoot: root, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
   const keyTenant = api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     printError(`Unknown key_id: ${keyId}`);

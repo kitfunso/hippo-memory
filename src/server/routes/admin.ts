@@ -50,7 +50,7 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   // bound to the caller's authenticated tenant (ctx.tenantId, resolved
   // from the Bearer token). Forwarding body.tenantId here would let
   // tenant A mint a key for tenant B — see authCreate doc comment.
-  const result = authCreate(ctx, {
+  const result = await authCreate(ctx, {
     label: labelRaw,
     role,
   });
@@ -72,7 +72,7 @@ export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest
   const limit = parseListLimit(query.get('limit'), MAX_AUTH_KEYS_PAGE, MAX_AUTH_KEYS_PAGE);
   const after = parseCursor(query.get('cursor'), 'integer', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
-  const page = pageOf(authListRows(ctx, { active, limit: limit + 1, after }), limit, (r) => ({ key: r.rowId, id: r.rowId }));
+  const page = pageOf(await authListRows(ctx, { active, limit: limit + 1, after }), limit, (r) => ({ key: r.rowId, id: r.rowId }));
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items.map((r) => r.key));
   return;
@@ -84,7 +84,7 @@ export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest
 export async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyMatch: Record<string, string>): Promise<void> {
   validateIdSegment(keyMatch.keyId!, 'key id');
   const ctx = await buildContextWithAuth(req, opts);
-  const result = authRevoke(ctx, keyMatch.keyId!);
+  const result = await authRevoke(ctx, keyMatch.keyId!);
   sendJson(res, 200, result);
   return;
 }

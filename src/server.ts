@@ -3,17 +3,19 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from './db.js';
-import { sqliteStore, type HippoStore } from './store-port.js';
+import { hasGroup, sqliteStore, type HippoStore, type StoreGroup } from './store-port.js';
 import { markSharedStore } from './config.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type Context, RecallContractError } from './api.js';
+import {
+  type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeReply, type AuthRevokeResult, type Context, RecallContractError,
+} from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from './http-util.js';
-import { ForbiddenError } from './api-errors.js';
+import { ForbiddenError, NotFoundError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
@@ -36,7 +38,10 @@ import type { AddonRoute, RateLimitSpec, ResolvedServeOpts, Route, RouteRequest,
 import type { JsonValue } from './json.js';
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.
-export { authCreateSelf, authRevoke, ForbiddenError, type AuthCreateSelfOpts, type AuthCreateSelfResult, type Context, type Actor };
+export {
+  authCreateSelf, authRevoke, ForbiddenError, NotFoundError,
+  type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeReply, type AuthRevokeResult, type Context, type Actor,
+};
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 // The code behind these lives in src/server/; this subpath keeps exporting them.
@@ -51,10 +56,17 @@ export type { JsonValue } from './json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own machine.
 export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
-export { sqliteStore, type HippoStore, type RecallSearchArgs, type RecallWrites, type VectorReads } from './store-port.js';
-export type { ApiKeyRecord } from './auth.js';
-// The types HippoStore's recall methods take and return, so an add-on store can implement them from this subpath.
-export type { AppendAuditOpts } from './audit.js';
+export {
+  hasGroup, sqliteStore,
+  type HippoStore, type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type RecallSearchArgs, type RecallWrites,
+  type SelfKeyMint, type StoreGroup, type StoreGroups, type VectorReads,
+  type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
+} from './store-port.js';
+export type { HippoDbContext, StoreReply } from './api/types.js';
+export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+export type { KeysetPosition } from './keyset.js';
+// The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
+export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './audit.js';
 export type { ContinuityBlock } from './api/recall-types.js';
 export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
 export type { MemoryEntry } from './memory.js';
@@ -68,9 +80,11 @@ export type { TokenUse } from './token-ledger.js';
 export type { EmbeddingIndexState } from './embeddings.js';
 export type { PhysicsParticle } from './physics.js';
 export { StoreBusyError } from './db.js';
-// An add-on store decodes and ranks with hippo.db's own code, so both return the same ids in the same order.
-export { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
-export { bufferToFloat32 } from './physics-state.js';
+// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
+// so both stores keep the same bytes and return the same ids in the same order.
+export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
+export { bufferToFloat32, float32ToBuffer } from './physics-state.js';
+export { replacesIndex } from './embeddings.js';
 // store copy --db writes the marker and reads the old hippo.db under the waiver.
 export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
@@ -128,7 +142,7 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/memories', handler: handleCreateMemory },
   { method: 'GET', path: '/v1/graph', handler: handleGetGraph },
-  { method: 'GET', path: '/v1/memories', storeReady: true, handler: handleRecallMemories },
+  { method: 'GET', path: '/v1/memories', storeReady: 'base', handler: handleRecallMemories },
   { method: 'GET', pattern: '/v1/sessions/:id/assemble', handler: handleAssembleSession },
   { method: 'GET', pattern: '/v1/recall/drill/:id', handler: handleDrillRecall },
   { method: 'POST', pattern: '/v1/memories/:id/archive', handler: handleArchiveMemory },
@@ -138,9 +152,9 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
   { method: 'GET', path: '/v1/context', handler: handleGetContext },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
-  { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
-  { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
-  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', handler: handleRevokeAuthKey },
+  { method: 'POST', path: '/v1/auth/keys', storeReady: 'keyWrites', handler: handleCreateAuthKey },
+  { method: 'GET', path: '/v1/auth/keys', storeReady: 'keyWrites', handler: handleListAuthKeys },
+  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', storeReady: 'keyAudit', handler: handleRevokeAuthKey },
   { method: 'GET', path: '/v1/quarantine', handler: handleListQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/approve', handler: handleApproveQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/reject', handler: handleRejectQuarantine },
@@ -207,7 +221,7 @@ async function dispatchV1Route(r: RouteRequest, method: string, path: string): P
   for (const route of V1_ROUTES) {
     const run = routeMatches(route, method, path);
     if (run === null) continue;
-    if (!route.storeReady) await refuseUnportedRoute(r.req, r.opts);
+    await refuseUnportedRoute(r.req, r.opts, route.storeReady);
     await run(r);
     return true;
   }
@@ -257,7 +271,7 @@ function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>): Read
 async function dispatchAddonRoute({ req, res, opts }: RouteRequest, method: string, path: string): Promise<boolean> {
   const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
   if (!route) return false;
-  await refuseUnportedRoute(req, opts);
+  await refuseUnportedRoute(req, opts, route.storeReady);
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   sendJson(res, 200, await route.handler({ ctx, body }));
@@ -277,9 +291,9 @@ function assertSqliteStore(opts: ResolvedServeOpts): void {
   if (opts.store.kind !== 'sqlite') throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** Under another store, a route not yet ported answers 501 without running; the caller is checked first, so a bad key is still a 401. */
-async function refuseUnportedRoute(req: IncomingMessage, opts: ResolvedServeOpts): Promise<void> {
-  if (opts.store.kind === 'sqlite') return;
+/** Under another store, a route that names no group, or one the store lacks, answers 501 without running; the caller is checked first, so a bad key is still a 401. */
+async function refuseUnportedRoute(req: IncomingMessage, opts: ResolvedServeOpts, group?: StoreGroup): Promise<void> {
+  if (opts.store.kind === 'sqlite' || (group !== undefined && hasGroup(opts.store, group))) return;
   await requireAuth(req, opts);
   assertSqliteStore(opts);
 }
@@ -572,7 +586,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
+  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
   assertAddonRoutes(routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const { perAddress: limiter, callerLimiter, failedAuthLimiter } = bootLimiters(opts.rateLimits);

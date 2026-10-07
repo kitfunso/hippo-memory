@@ -66,18 +66,47 @@ export interface CreateApiKeyResult {
   plaintext: string;
 }
 
-export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): CreateApiKeyResult {
+/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its place. */
+export interface MintedApiKey extends CreateApiKeyResult {
+  keyHash: string;
+}
+
+export function mintApiKey(): MintedApiKey {
   const keyId = `${API_KEY_PREFIX}${randBase32(ID_LEN)}`;
-  const secret = randBase32(SECRET_LEN);
-  const plaintext = `${keyId}.${secret}`;
-  const hash = hashKey(plaintext);
+  const plaintext = `${keyId}.${randBase32(SECRET_LEN)}`;
+  return { keyId, plaintext, keyHash: hashKey(plaintext) };
+}
+
+/** One api_keys row as core hands it to a store: the hash of the secret, never the secret. */
+export interface NewApiKey {
+  readonly keyId: string;
+  readonly keyHash: string;
+  readonly tenantId: string;
+  readonly label: string | null;
+  readonly role: 'admin' | 'member';
+  readonly createdAt: string;
+  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the CLI mints. */
+  readonly ownerSubject: string | null;
+  /** ISO time the key stops working; null means it never expires. */
+  readonly expiresAt: string | null;
+}
+
+export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
   // openHippoDb runs runMigrations synchronously before returning the db handle,
   // so migration v26 (adds role column) is in place before this INSERT runs.
   // An older binary ignores expires_at and would honour an expired key, so the store shuts it out before the first one exists.
-  if (opts.expiresAt !== undefined) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
+  if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   db.prepare(
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(keyId, hash, opts.tenantId, opts.label ?? null, new Date().toISOString(), opts.role ?? 'admin', opts.ownerSubject ?? null, opts.expiresAt ?? null);
+  ).run(key.keyId, key.keyHash, key.tenantId, key.label, key.createdAt, key.role, key.ownerSubject, key.expiresAt);
+}
+
+export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): CreateApiKeyResult {
+  const { keyId, plaintext, keyHash } = mintApiKey();
+  insertApiKey(db, {
+    keyId, keyHash, tenantId: opts.tenantId, label: opts.label ?? null, role: opts.role ?? 'admin', createdAt: new Date().toISOString(),
+    ownerSubject: opts.ownerSubject ?? null, expiresAt: opts.expiresAt ?? null,
+  });
   return { keyId, plaintext };
 }
 
@@ -269,9 +298,14 @@ export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, s
   return found?.key ?? null;
 }
 
-export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {
+export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = new Date().toISOString()): void {
   db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`)
-    .run(new Date().toISOString(), keyId);
+    .run(at, keyId);
+  verifiedKeys.delete(keyId);
+}
+
+/** A store other than hippo.db revokes without this process's cache, so its caller drops the key here once the revoke commits. */
+export function forgetVerifiedKey(keyId: string): void {
   verifiedKeys.delete(keyId);
 }
 

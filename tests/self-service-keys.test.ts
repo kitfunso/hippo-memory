@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { listAuditEventsAfter } from '../src/audit.js';
-import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult } from '../src/api.js';
+import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeResult } from '../src/api.js';
 import { ForbiddenError } from '../src/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -71,7 +71,7 @@ function breakAuditLog(): void {
   withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
 }
 
-const revokeAs = (token: string, keyId: string): ReturnType<typeof authRevoke> => authRevoke({ hippoRoot: home, tenantId: TENANT, actor: actorOf(token) }, keyId);
+const revokeAs = (token: string, keyId: string): AuthRevokeResult => authRevoke({ hippoRoot: home, tenantId: TENANT, actor: actorOf(token) }, keyId);
 
 async function listKeys(token: string): Promise<string[]> {
   const res = await fetch(`${handle!.url}/v1/auth/keys?active=false`, { headers: { authorization: `Bearer ${token}` } });
@@ -257,6 +257,19 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
       expect(() => revokeAs(ALICE, keyId)).toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
     }
     expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
+  });
+});
+
+describe('DELETE /v1/auth/keys/:keyId on hippo.db', () => {
+  it('answers 500 and leaves the key live when the audit write fails', async () => {
+    await start();
+    const own = selfMint();
+    breakAuditLog();
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const res = await fetch(`${handle!.url}/v1/auth/keys/${own.keyId}`, { method: 'DELETE', headers: { authorization: 'Bearer tok.boss' } });
+    expect(res.status).toBe(500);
+    expect(keyRows()).toEqual([expect.objectContaining({ key_id: own.keyId, revoked_at: null })]);
+    expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([]);
   });
 });
 

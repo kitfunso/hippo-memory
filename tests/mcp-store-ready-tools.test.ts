@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { STORE_READY_TOOLS } from '../src/mcp/request.js';
 import { TOOLS } from '../src/mcp/tools.js';
 import { sqliteStore } from '../src/store-port.js';
 
@@ -36,14 +35,8 @@ function listedNames(res: McpResponse | null): string[] {
 const declared = TOOLS.map((t) => t.name);
 
 describe('store-ready MCP tools', () => {
-  it('are all declared in TOOLS, and hippo_recall is one', () => {
-    expect([...STORE_READY_TOOLS].filter((name) => !declared.includes(name))).toEqual([]);
-    expect(STORE_READY_TOOLS.has('hippo_recall')).toBe(true);
-  });
-
-  it('tools/list under another store lists only them, in TOOLS order', async () => {
+  it('tools/list under another store lists only hippo_recall', async () => {
     const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn('stub'));
-    expect(listedNames(res)).toEqual(declared.filter((name) => STORE_READY_TOOLS.has(name)));
     expect(listedNames(res)).toEqual(['hippo_recall']);
   });
 
@@ -53,7 +46,7 @@ describe('store-ready MCP tools', () => {
   });
 
   it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
-    const unready = declared.filter((name) => !STORE_READY_TOOLS.has(name));
+    const unready = declared.filter((name) => name !== 'hippo_recall');
     expect(unready.length).toBeGreaterThan(0);
     for (const name of unready) {
       const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } }, ctxOn('stub'));

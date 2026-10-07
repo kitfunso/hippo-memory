@@ -6,7 +6,7 @@ import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { resolveTenantId } from '../tenant.js';
 import { rethrowIfSqliteBlocked, runWithRequestStores } from '../db.js';
-import { storeFor } from '../store-port.js';
+import { hasGroup, storeFor, type HippoStore, type StoreGroup } from '../store-port.js';
 import { estimateTokens, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
@@ -66,12 +66,12 @@ export async function recordMcpTokens(toolName: string, output: string, ctx?: Mc
 
 interface ToolEntry {
   readonly handler: ToolHandler;
-  /** Reaches its store only through the port, so it runs under a store other than hippo.db. */
-  readonly storeReady?: true;
+  /** The store group it reaches its store through, so it runs under another store that has it; unset means hippo.db only. */
+  readonly storeReady?: StoreGroup;
 }
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
-  ['hippo_recall', { handler: runRecallTool, storeReady: true }],
+  ['hippo_recall', { handler: runRecallTool, storeReady: 'base' }],
   ['hippo_assemble', { handler: runAssembleTool }],
   ['hippo_drill', { handler: runDrillTool }],
   ['hippo_predict_baserate', { handler: runPredictBaserateTool }],
@@ -86,15 +86,15 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_peers', { handler: runPeersTool }],
 ]);
 
-/** The tools listed and run under a store other than hippo.db. */
-export const STORE_READY_TOOLS: ReadonlySet<string> = new Set(
-  [...TOOL_HANDLERS].filter(([, entry]) => entry.storeReady).map(([name]) => name),
-);
+/** The served store when it is not hippo.db, else null. */
+function otherStore(ctx?: McpContext): HippoStore | null {
+  const store = ctx?.store;
+  return store !== undefined && store.kind !== 'sqlite' ? store : null;
+}
 
-/** The served store's kind when it is not hippo.db, else null. */
-function otherStoreKind(ctx?: McpContext): string | null {
-  const kind = ctx?.store?.kind;
-  return kind !== undefined && kind !== 'sqlite' ? kind : null;
+function runsOn(store: HippoStore, toolName: string): boolean {
+  const group = TOOL_HANDLERS.get(toolName)?.storeReady;
+  return group !== undefined && hasGroup(store, group);
 }
 
 async function executeTool(
@@ -160,8 +160,10 @@ export async function handleMcpRequest(
     case 'notifications/initialized':
       return null;
 
-    case 'tools/list':
-      return { jsonrpc: '2.0', id, result: { tools: otherStoreKind(ctx) ? TOOLS.filter((t) => STORE_READY_TOOLS.has(t.name)) : TOOLS } };
+    case 'tools/list': {
+      const other = otherStore(ctx);
+      return { jsonrpc: '2.0', id, result: { tools: other ? TOOLS.filter((t) => runsOn(other, t.name)) : TOOLS } };
+    }
 
     case 'tools/call': {
       const nameValue = params?.name;
@@ -171,7 +173,8 @@ export async function handleMcpRequest(
         return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
       }
       // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
-      if (otherStoreKind(ctx) && !STORE_READY_TOOLS.has(toolName)) {
+      const other = otherStore(ctx);
+      if (other && !runsOn(other, toolName)) {
         return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
       }
       const refusal = sharedStoreRefusal(toolName, ctx);

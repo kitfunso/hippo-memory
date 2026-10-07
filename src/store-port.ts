@@ -1,24 +1,29 @@
 // The async seam the server reaches its store through, so an add-on can serve from a database other than hippo.db.
-import { readApiKeyRecord, type ApiKeyRecord } from './auth.js';
-import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
+import { listApiKeyRows, readApiKeyRecord, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey } from './auth.js';
+import { appendAuditEvent, listAuditEventsAfter, type AppendAuditOpts, type AuditEvent, type ListAuditAfterOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
+import { StoreNotPortedError } from './db/sqlite-blocked.js';
 import { embeddingIndexStateAt, loadStoredVectors, type EmbeddingIndexState } from './embeddings.js';
 import {
   activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
   type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
 } from './goals.js';
+import type { JsonValue } from './json.js';
 import type { MemoryEntry } from './memory.js';
 import type { PhysicsParticle } from './physics.js';
 import { loadPhysicsState } from './physics-state.js';
 import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
 import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
+import { auditHighIdAt, revokeKeyAt } from './store/key-audit.js';
+import { createKeyAt, createSelfKeyAt } from './store/key-writes.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, type OriginFilter, type VectorCandidateSpec } from './store/search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
+import { entriesWithoutVectorAt, writeVectorsAt } from './store/vector-writes.js';
 import { recordTokenUse, type TokenUse } from './token-ledger.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
@@ -46,7 +51,7 @@ export interface RecallWrites {
   readonly strengthen?: { readonly ids: readonly string[]; readonly opts: StrengthenOptions };
 }
 
-/** The reads behind recall's vector arm, one group a store sets in full as `HippoStore.vectors` or leaves unset. */
+/** The reads behind recall's vector arm. */
 export interface VectorReads {
   /** The stored model and whether any vector exists, in one snapshot. */
   embeddingIndexState(): Promise<EmbeddingIndexState>;
@@ -58,8 +63,122 @@ export interface VectorReads {
   physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
 }
 
+/** One memory's vector, computed by the caller's embedding provider. */
+export interface VectorRowWrite {
+  readonly memoryId: string;
+  readonly vector: readonly number[];
+  /** Kept only when the memory has no particle yet, under `memoryId` whatever its own memoryId says. */
+  readonly particle?: PhysicsParticle;
+}
+
+export interface VectorWrite {
+  readonly tenantId: string;
+  /** The index identity the vectors were built by, `embeddingIndexIdentity(provider.id)`. */
+  readonly model: string;
+  /** Set only by embedAll's rebuild, so a write that read the index state before another process rebuilt it cannot drop that rebuild. */
+  readonly replaceIndex: boolean;
+  readonly rows: readonly VectorRowWrite[];
+}
+
+export interface VectorWriteResult {
+  readonly written: number;
+  /** True when another model built the index and `replaceIndex` is false; the store then keeps nothing and `written` is 0. */
+  readonly modelMismatch: boolean;
+}
+
+export interface VectorBackfillQuery {
+  readonly model: string;
+  /** Only ids above this one in byte order; unset starts at the first. */
+  readonly afterId?: string;
+  /** Clamped to 1..500; a non-integer rejects with RangeError `limit must be an integer`. */
+  readonly limit: number;
+  /** Every tenant when unset, since the backfill covers the whole store. */
+  readonly tenantId?: string;
+}
+
+/** The writes behind embed on write and the backfill: core computes each vector, the store only keeps it.
+ *  A store deletes a memory's vector and particle when the memory is deleted (hippo.db does it by trigger and foreign-key cascade). */
+export interface VectorWrites {
+  /** Memories of any kind with no vector stored under `query.model`, by id ascending in byte order. */
+  entriesWithoutVector(query: VectorBackfillQuery): Promise<MemoryEntry[]>;
+  /** In one transaction: refuses with `modelMismatch` if `replacesIndex` and not `replaceIndex`; else, when a row is writable (memory in `tenantId`, vector non-empty
+   *  and finite), drops every vector and particle if `replacesIndex`, keeps each writable row under `model` with its particle where none exists, sets `model`. No audit row. */
+  writeVectors(write: VectorWrite): Promise<VectorWriteResult>;
+}
+
+export interface KeyRevoke {
+  readonly tenantId: string;
+  readonly keyId: string;
+  readonly actor: string;
+  readonly at: string;
+}
+
+export interface KeyAudit {
+  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key id) in one transaction, then resolves to `at`. A revoked
+   *  key resolves to its own revoked_at and writes nothing; a key missing from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
+  revokeApiKey(revoke: KeyRevoke): Promise<string>;
+  /** As `listAuditEventsAfter`: rows above `afterId` in ascending id order, with its RangeErrors, limit clamp and tenant filter. */
+  auditEventsAfter(opts: ListAuditAfterOpts): Promise<AuditEvent[]>;
+  /** The highest audit id ever assigned, pruned rows included, 0 before the first; a tail that sees it drop knows the log was restored. */
+  auditHighId(): Promise<number>;
+}
+
+/** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither holds the plaintext. */
+export interface KeyMint {
+  readonly key: NewApiKey;
+  readonly actor: string;
+  readonly metadata: Readonly<Record<string, JsonValue>>;
+}
+
+export interface SelfKeyMint extends KeyMint {
+  readonly key: NewApiKey & { readonly ownerSubject: string; readonly expiresAt: string };
+  /** Live keys the owner may hold in the tenant once this one is in. */
+  readonly perSubject: number;
+}
+
+/** `listApiKeyRows`'s filters, always inside one tenant. */
+export interface KeyListQuery extends Omit<ListApiKeysOpts, 'tenantId'> {
+  readonly tenantId: string;
+}
+
+export interface KeyWrites {
+  /** Inserts the key and appends its auth_create row in one transaction; with either one failing, neither is written. A key id taken in any tenant
+   *  rejects, since keys are looked up by id alone. */
+  createApiKey(mint: KeyMint): Promise<void>;
+  /** One transaction, serialized per (tenant, owner) before the count (hippo.db BEGIN IMMEDIATE, Postgres pg_advisory_xact_lock on the pair): revoke at `key.createdAt`
+   *  the owner's oldest live keys in the key's tenant down to `perSubject - 1`, insert the key, append an auth_revoke row `{ replacedBy: <new key id> }` per revoked key,
+   *  then the auth_create row; resolves to the revoked ids. Live: unrevoked, expires_at null or Date.parse(expires_at) after createdAt (NaN counts as expired). */
+  createSelfApiKey(mint: SelfKeyMint): Promise<string[]>;
+  /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops revoked rows and an expires_at not above now's toISOString. */
+  listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
+}
+
+/** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
+export interface StoreGroups {
+  /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
+  readonly vectors: VectorReads;
+  readonly keyAudit: KeyAudit;
+  readonly keyWrites: KeyWrites;
+  /** embedMemory and embedAll with a store need it and `vectors`. */
+  readonly vectorWrites: VectorWrites;
+}
+
+export type StoreGroup = 'base' | keyof StoreGroups;
+
+export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
+  return group === 'base' || store[group] !== undefined;
+}
+
+/** The group's methods; a store without them throws StoreNotPortedError, which answers 501 as any unported path does. */
+export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, group: G): StoreGroups[G] {
+  const groups: Partial<StoreGroups> = store;
+  const methods = groups[group];
+  if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
+  return methods;
+}
+
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore {
+export interface HippoStore extends Partial<StoreGroups> {
   /** 'sqlite' is hippo.db under the served root. Under any other kind, an unported route answers 501 and a hippo.db open inside a request throws. */
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
@@ -88,8 +207,6 @@ export interface HippoStore {
   bumpRecallStats(recalled: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;
-  /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
-  readonly vectors?: VectorReads;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
   close(): Promise<void>;
 }
@@ -109,7 +226,7 @@ export function storeFor(ctx: { readonly hippoRoot: string; readonly store?: Hip
 }
 
 /** The built-in store: today's synchronous hippo.db functions behind the port, each call on its own short-lived handles, so close has nothing to release. */
-export function sqliteStore(hippoRoot: string): HippoStore & { readonly vectors: VectorReads } {
+export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   return {
     kind: 'sqlite',
     async findApiKey(keyId) {
@@ -165,7 +282,45 @@ export function sqliteStore(hippoRoot: string): HippoStore & { readonly vectors:
         return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadPhysicsState(db, [...ids]));
       },
     } satisfies VectorReads,
+    keyAudit: sqliteKeyAudit(hippoRoot),
+    keyWrites: sqliteKeyWrites(hippoRoot),
+    vectorWrites: {
+      async entriesWithoutVector(query) {
+        return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
+      },
+      async writeVectors(write) {
+        return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
+      },
+    },
     async close(): Promise<void> {},
+  };
+}
+
+function sqliteKeyWrites(hippoRoot: string): KeyWrites {
+  return {
+    async createApiKey(mint) {
+      onHandle(hippoRoot, (db) => createKeyAt(db, mint));
+    },
+    async createSelfApiKey(mint) {
+      return onHandle(hippoRoot, (db) => createSelfKeyAt(db, mint));
+    },
+    async listApiKeys(query) {
+      return onHandle(hippoRoot, (db) => listApiKeyRows(db, query));
+    },
+  };
+}
+
+function sqliteKeyAudit(hippoRoot: string): KeyAudit {
+  return {
+    async revokeApiKey(revoke) {
+      return onHandle(hippoRoot, (db) => revokeKeyAt(db, revoke));
+    },
+    async auditEventsAfter(opts) {
+      return onHandle(hippoRoot, (db) => listAuditEventsAfter(db, opts));
+    },
+    async auditHighId() {
+      return onHandle(hippoRoot, auditHighIdAt);
+    },
   };
 }
 

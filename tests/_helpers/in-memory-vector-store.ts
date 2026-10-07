@@ -8,7 +8,7 @@ import {
 } from '../../src/server.js';
 import { portOnlyStore } from './port-only-store.js';
 
-interface FilterRow {
+export interface FilterRow {
   readonly tenant_id: string;
   readonly kind: string;
   readonly scope: string | null;
@@ -34,7 +34,7 @@ function passesScope(scope: string | null, filter: RecallScopeFilter | undefined
 }
 
 // The JS twin of loadVectorCandidateEntries' WHERE: a NULL origin_project fails both arms there, so it fails here too.
-function passesSpec(row: FilterRow, spec: VectorCandidateSpec): boolean {
+export function passesSpec(row: FilterRow, spec: VectorCandidateSpec): boolean {
   if (spec.tenantId !== undefined && row.tenant_id !== spec.tenantId) return false;
   if (row.kind === 'archived' || (!spec.includeSuperseded && row.superseded_by !== null)) return false;
   const origins: readonly string[] | undefined = spec.origin === undefined ? undefined : [spec.origin].flat();
