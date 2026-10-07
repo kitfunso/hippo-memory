@@ -3,12 +3,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, __resetSessionRecallHistoryHttp, type HippoStore } from '../src/server.js';
+import { markSharedStore } from '../src/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import type { RecallResult } from '../src/api.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, seedTemplates, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, seedTemplates, TENANT, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
 
@@ -20,6 +22,9 @@ interface Scenario { name: string; kind: 'local' | 'wide'; calls: readonly Call[
 
 const on =(via: Surface, query: string, args: Args = {}): Call => ({ via, args: { query, ...args } });
 const SURFACES: readonly Surface[] = ['http', 'mcp'];
+const KEYED_TASK = 'ship the eu cluster for the loopback caller';
+// The seeded rows sit in a temp folder outside any project, so they are user-global and any project's recall reaches them.
+const PROJECT = 'golden';
 
 const SCENARIOS: readonly Scenario[] = [
   ...SURFACES.flatMap((via): Scenario[] => [
@@ -43,16 +48,22 @@ const SCENARIOS: readonly Scenario[] = [
     name: `${via}: ${b.name}`,
     kind: 'local',
     calls: [on(via, b.query, b[via])],
-    // MCP replies with text, so only the HTTP body proves the branch ran.
-    reaches: via === 'http' && b.reaches
-      ? (replies) => {
-        expect(replies[0]!.status).toBe(200);
-        // SAFETY: a 200 from GET /v1/memories is a serialised RecallResult.
-        expect(b.reaches!(replies[0]!.body as RecallResult)).toBe(true);
-      }
-      : undefined,
+    reaches: branchReached(via, b),
   }))),
 ];
+
+/** MCP replies with text, so only the HTTP body proves a branch ran, except continuity: REST names no project, so a shared store's block is empty. */
+function branchReached(via: Surface, b: (typeof RECALL_BRANCHES)[number]): Scenario['reaches'] {
+  if (b.name === 'include_continuity') {
+    return via === 'mcp' ? (replies) => expect(JSON.stringify(replies[0]!.body)).toContain(KEYED_TASK) : undefined;
+  }
+  if (via === 'mcp' || !b.reaches) return undefined;
+  return (replies) => {
+    expect(replies[0]!.status).toBe(200);
+    // SAFETY: a 200 from GET /v1/memories is a serialised RecallResult.
+    expect(b.reaches!(replies[0]!.body as RecallResult)).toBe(true);
+  };
+}
 
 async function send(url: string, call: Call): Promise<Reply> {
   if (call.via === 'http') {
@@ -62,7 +73,8 @@ async function send(url: string, call: Call): Promise<Reply> {
     return { status: res.status, body: await res.json() };
   }
   const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: call.args } };
-  const res = await fetch(`${url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rpc) });
+  const headers = { 'content-type': 'application/json', 'x-hippo-project': PROJECT };
+  const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
   return { status: res.status, body: await res.json() };
 }
 
@@ -78,6 +90,8 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
   lastRecalledIds.clear();
   const s = freshStore(templates, scenario.kind);
   try {
+    // serve() marks a port store's root shared, so the hippo.db pass must be shared too to compare like with like.
+    markSharedStore(s.root);
     const store = makeStore?.(s.root);
     const handle = await serve({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];
@@ -93,9 +107,15 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
   }
 }
 
+// Seeding three stores row by row ran past the 30 s hook default on windows-latest CI.
 beforeAll(() => {
-  templates = seedTemplates(seedPortBranches);
-});
+  templates = seedTemplates((root) => {
+    seedPortBranches(root);
+    // A shared store reads only the caller's keyed snapshot, and MCP's loopback caller owns by its subject.
+    const key = { owner: 'localhost:cli', project: [PROJECT] };
+    saveActiveTaskSnapshot(root, TENANT, { task: KEYED_TASK, summary: 'cutover planned', next_step: 'run the canary', session_id: SESSION }, key);
+  });
+}, 120_000);
 
 afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });

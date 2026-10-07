@@ -316,15 +316,15 @@ async function readRecall(store: HippoStore, ctx: Context, opts: RecallOpts, pla
   return {
     goals: goals !== undefined ? goals : plan.goalBoost ? await store.activeGoals({ sessionId: plan.goalBoost.sessionId, tenantId }) : null,
     parents: plan.overflow.size > 0 ? await store.entriesByIds([...plan.overflow.keys()], tenantId) : [],
-    freshRaws: freshCount > 0 ? await store.freshRawEntries(freshCount, tenantId, opts.freshTailSessionId, recallOrigin(opts)) : [],
+    freshRaws: freshCount > 0 ? await store.freshRawEntries(freshCount, tenantId, opts.freshTailSessionId, recallOrigin(opts) ?? null) : [],
     continuity: opts.includeContinuity ? await store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuityKey(ctx, opts)) : undefined,
     planning: plan.claim ? await store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens) : null,
   };
 }
 
 // On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
-function continuityKey(ctx: Context, opts: RecallOpts): ContinuityKey | undefined {
-  if (!isSharedStore(ctx.hippoRoot)) return undefined;
+function continuityKey(ctx: Context, opts: RecallOpts): ContinuityKey | null {
+  if (!isSharedStore(ctx.hippoRoot)) return null;
   return { owner: ownerOrSubject(ctx.actor), project: opts.project ? projectNames(opts.project) : [] };
 }
 
@@ -521,7 +521,7 @@ function freshTailBand(
   shownEntries: MemoryEntry[],
   own: string | undefined,
 ): RecallResultItem[] {
-  const recentScoped = recent.filter((m) => passesScopeFilterForRecall(m.scope ?? null, opts.scope, own));
+  const recentScoped = recent.filter((m) => passesScopeFilterForRecall(m.scope ?? null, opts.scope, own) && inCallerProject(m, opts));
   const recentIdSet = new Set(recentScoped.map((m) => m.id));
   for (const r of baseRanked) {
     if (recentIdSet.has(r.id)) r.isFreshTail = true;

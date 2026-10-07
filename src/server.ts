@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from './db.js';
 import { sqliteStore, type HippoStore } from './store-port.js';
+import { markSharedStore } from './config.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
@@ -583,6 +584,8 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     ...opts, routes, publicJsonBodies, store: opts.store ?? sqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
   };
   const { kind } = served.store;
+  // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
+  if (kind !== 'sqlite') markSharedStore(opts.hippoRoot);
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();

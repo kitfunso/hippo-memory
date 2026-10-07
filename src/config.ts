@@ -510,6 +510,11 @@ export function isSharedStore(hippoRoot: string): boolean {
   return true;
 }
 
+/** Reads the root as shared for the rest of this process, whatever its config.json says. */
+export function markSharedStore(hippoRoot: string): void {
+  sharedStoreRoots.add(sharedStoreKey(hippoRoot));
+}
+
 /** Test seam: forget every root seen as shared. */
 export function _resetSharedStoreCacheForTests(): void {
   sharedStoreRoots.clear();
