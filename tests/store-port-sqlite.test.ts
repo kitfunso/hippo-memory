@@ -19,15 +19,15 @@ import { computePredictionBaserate } from '../src/predictions/store.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
-  type ActiveGoals, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
+  type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
   type VectorCandidateSpec, type VectorReads,
 } from '../src/server.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
-import { strengthenRetrieved } from '../src/store/entry-writes.js';
-import { loadLatestHandoff } from '../src/store/handoffs.js';
+import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';
+import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 import { updateStats } from '../src/store/index-and-stats.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries } from '../src/store/search-rows.js';
-import { listSessionEvents, loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { appendSessionEvent, listSessionEvents, loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../src/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
@@ -102,14 +102,45 @@ function seedVectors(root: string): void {
   }
 }
 
+const TEAM = 'team';
+const ALICE_SCOPE = 'personal:private:alice';
+const ALICE_A: ContinuityKey = { owner: 'alice', project: ['proj-a'] };
+
+/** A second tenant where alice and bob share proj-a and alice also works in proj-b, so each narrowed read has rows to skip. */
+function seedTeam(root: string): void {
+  const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) => seeded(content, id, created, { tenantId: TEAM, ...extra });
+  const rows = [
+    team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-a' }),
+    team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-b' }),
+    team('lighthouse notes for every project', 'mem_t_global', '2026-01-20T00:00:00.000Z', { origin_project: '' }),
+    team('lighthouse notes alice keeps to herself', 'mem_t_mine', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-a', scope: ALICE_SCOPE }),
+    team('lighthouse notes bob keeps to himself', 'mem_t_theirs', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-a', scope: 'personal:private:bob' }),
+    team('raw capture in project a', 'mem_t_raw_a', '2026-01-26T00:00:00.000Z', { kind: 'raw', origin_project: 'proj-a' }),
+    team('raw capture in project b', 'mem_t_raw_b', '2026-01-27T00:00:00.000Z', { kind: 'raw', origin_project: 'proj-b' }),
+    team('raw capture outside any project', 'mem_t_raw_global', '2026-01-28T00:00:00.000Z', { kind: 'raw', origin_project: '' }),
+  ];
+  for (const row of rows) writeEntry(root, row);
+  for (const [owner, project] of [['alice', 'proj-a'], ['bob', 'proj-a'], ['alice', 'proj-b']] as const) {
+    const key = { owner, project: [project] };
+    const sessionId = `${owner}-${project}`;
+    saveActiveTaskSnapshot(root, TEAM, { task: `${owner} ships ${project}`, summary: 'in progress', next_step: 'review', session_id: sessionId }, key);
+    saveSessionHandoff(root, TEAM, { version: 1, sessionId, summary: `${owner} hands off ${project}`, nextAction: 'merge' }, key);
+    appendSessionEvent(root, TEAM, { session_id: sessionId, event_type: 'note', content: `${owner} noted ${project}` });
+  }
+  // Newest on alice's session id, so only the key keeps bob's handoff out.
+  saveSessionHandoff(root, TEAM, { version: 1, sessionId: 'alice-proj-a', summary: 'bob hands off on her session', nextAction: 'merge' }, { owner: 'bob', project: ['proj-a'] });
+}
+
 beforeAll(() => {
   templates = seedTemplates((root) => {
     seedPortBranches(root);
+    seedTeam(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.
     pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-beta', policy: { policyType: 'recency-first', weightRecency: 1.5 } });
     seedVectors(root);
   });
-});
+  // The same seed as recall-port-only-parity plus more, which ran past the 30 s hook default on windows-latest CI.
+}, 120_000);
 
 afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });
@@ -129,7 +160,7 @@ afterEach(() => {
 
 describe('sqliteStore reads equal the hippo.db functions they wrap and open no more handles', () => {
   const search = (limit: number, extra: Partial<RecallSearchArgs> = {}): RecallSearchArgs => ({
-    limit, tenantId: TENANT, explicitScopeMode: 'exact', includeSuperseded: false, ...extra,
+    limit, tenantId: TENANT, explicitScopeMode: 'exact', includeSuperseded: false, ownScope: undefined, ...extra,
   });
   const SEARCHES: readonly [string, string, RecallSearchArgs, Kind, (ids: string[]) => boolean][] = [
     ['the FTS path', 'deploy', search(200), 'local', (ids) => ids.includes('mem_p_plain')],
@@ -137,11 +168,20 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['a query with no terms', '!!', search(200), 'local', (ids) => ids.includes('mem_p_noise')],
     ['scope team-alpha, superseded rows kept', 'deploy', search(200, { requestedScope: 'team-alpha', includeSuperseded: true }), 'local', (ids) => ids.join() === 'mem_p_scoped'],
     ['a 50-row window on the wide store', 'deploy', search(50), 'wide', (ids) => ids.length === 50],
+    [
+      'one project and its user-global rows, with the caller\'s own personal row',
+      'lighthouse',
+      search(200, { tenantId: TEAM, originProjects: ['proj-a'], ownScope: ALICE_SCOPE }),
+      'local',
+      (ids) => [...ids].sort().join() === 'mem_t_a,mem_t_global,mem_t_mine',
+    ],
   ];
 
   it.each(SEARCHES)('searchRecallEntries: %s', async (_name, query, args, kind, reached) => {
     const { direct, port } = await parity(
-      (s) => loadRecallSearchEntries(s.root, query, args.limit, args.tenantId, args.requestedScope, args.explicitScopeMode, args.includeSuperseded, args.originProjects),
+      (s) => loadRecallSearchEntries(
+        s.root, query, args.limit, args.tenantId, args.requestedScope, args.explicitScopeMode, args.includeSuperseded, args.originProjects, args.ownScope,
+      ),
       (store) => store.searchRecallEntries(query, args),
       kind,
     );
@@ -175,32 +215,42 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     },
   );
 
-  it.each([['a session', 2, SESSION, ['mem_x_raw']], ['the whole tenant', 5, undefined, ['mem_x_raw']], ['a count of 0', 0, SESSION, []]] as const)(
+  it.each([
+    ['a session', 2, TENANT, SESSION, null, ['mem_x_raw']],
+    ['the whole tenant', 5, TENANT, undefined, null, ['mem_x_raw']],
+    ['a count of 0', 0, TENANT, SESSION, null, []],
+    ['one project and its user-global rows', 5, TEAM, undefined, ['proj-a'], ['mem_t_raw_global', 'mem_t_raw_a']],
+  ] as const)(
     'freshRawEntries for %s',
-    async (_name, count, sessionId, ids) => {
+    async (_name, count, tenantId, sessionId, origins, ids) => {
       const { direct, port } = await parity(
-        (s) => loadFreshRawMemories(s.root, count, TENANT, sessionId),
-        (store) => store.freshRawEntries(count, TENANT, sessionId),
+        (s) => loadFreshRawMemories(s.root, count, tenantId, sessionId, origins ?? undefined),
+        (store) => store.freshRawEntries(count, tenantId, sessionId, origins),
       );
       expect(idsOf(direct.value)).toEqual(ids);
       expect(port.opens).toBe(direct.opens);
     },
   );
 
-  it.each([['an active snapshot', 'local', true], ['no active snapshot', 'wide', false]] as const)('continuity with %s', async (_name, kind, anchored) => {
+  it.each([
+    ['an active snapshot', TENANT, null, 'local', { activeSnapshot: { session_id: SESSION }, sessionHandoff: { sessionId: SESSION }, recentSessionEvents: [{ content: 'canary passed' }] }],
+    ['no active snapshot', TENANT, null, 'wide', { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] }],
+    ['a key for one owner and project', TEAM, ALICE_A, 'local', {
+      activeSnapshot: { task: 'alice ships proj-a' },
+      sessionHandoff: { summary: 'alice hands off proj-a' },
+      recentSessionEvents: [{ content: 'alice noted proj-a' }],
+    }],
+  ] as const)('continuity with %s', async (_name, tenantId, key, kind, block) => {
     // The reads recall made before the port, ahead of its scope filter.
     const { direct, port } = await parity((s) => {
-      const activeSnapshot = loadActiveTaskSnapshot(s.root, TENANT);
+      const activeSnapshot = loadActiveTaskSnapshot(s.root, tenantId, key ?? undefined);
       const sessionId = activeSnapshot?.session_id ?? undefined;
       return {
         activeSnapshot,
-        sessionHandoff: sessionId ? loadLatestHandoff(s.root, TENANT, sessionId) : null,
-        recentSessionEvents: sessionId ? listSessionEvents(s.root, TENANT, { session_id: sessionId, limit: 5 }) : [],
+        sessionHandoff: sessionId ? loadLatestHandoff(s.root, tenantId, sessionId, {}, key ?? undefined) : null,
+        recentSessionEvents: sessionId ? listSessionEvents(s.root, tenantId, { session_id: sessionId, limit: 5 }) : [],
       };
-    }, (store) => store.continuity(TENANT, 5), kind);
-    const block = anchored
-      ? { activeSnapshot: { session_id: SESSION }, sessionHandoff: { sessionId: SESSION }, recentSessionEvents: [{ content: 'canary passed' }] }
-      : { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
+    }, (store) => store.continuity(tenantId, 5, key), kind);
     expect(direct.value).toMatchObject(block);
     expect(port.opens).toBe(direct.opens);
   });

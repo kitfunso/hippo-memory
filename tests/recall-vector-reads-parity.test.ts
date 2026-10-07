@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { markSharedStore } from '../src/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
@@ -27,6 +28,8 @@ const NEAR = hashedVector(QUERY);
 const TIE = hashedVector('redeploy cadence');
 const ORPHAN = 'mem_x_orphan';
 const VECTOR_ONLY = 'mem_v_redeploy';
+// A shared store refuses an MCP recall that names no project; the seeded rows are user-global, so any project reaches them.
+const PROJECT = 'golden';
 
 interface SeedRow { readonly entry: MemoryEntry; readonly vector: readonly number[] }
 
@@ -92,7 +95,8 @@ async function send(url: string, call: Call): Promise<Reply> {
     return { status: res.status, body: await res.json() };
   }
   const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: call.args } };
-  const res = await fetch(`${url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rpc) });
+  const headers = { 'content-type': 'application/json', 'x-hippo-project': PROJECT };
+  const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
   return { status: res.status, body: await res.json() };
 }
 
@@ -118,6 +122,8 @@ async function runPass(calls: readonly Call[], physics: boolean, inMemory: boole
     const embeddingsConfig = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
     writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: physics } }));
     prepare?.(s.root);
+    // serve() marks a port store's root shared, so the hippo.db pass must be shared too to compare like with like.
+    markSharedStore(s.root);
     const memory = inMemory ? inMemoryVectorStore(s.root) : undefined;
     const before = embeddings.requests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {

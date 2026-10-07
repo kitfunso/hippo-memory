@@ -10,7 +10,7 @@ import { VERIFIED_KEY_TTL_MS } from '../src/auth.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
-import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type HippoStore, type ServerHandle } from '../src/server.js';
+import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
 import { resetLogOnce } from '../src/log.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
@@ -144,7 +144,8 @@ describe('serve() under a store that is not hippo.db', () => {
     expect(addonRuns).toBe(0);
   });
 
-  it('checks the caller first, so a bad or missing key is still a 401', async () => {
+  it('a bad key on the store-ready /v1/memories and a missing key on /mcp are still a 401', async () => {
+    // /v1/memories parses its query before it checks the key, so q keeps a parse error from answering first.
     const wrong = await fetch(`${handle.url}/v1/memories?q=deploy`, { headers: bearer(newKey()) });
     expect(wrong.status).toBe(401);
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
@@ -187,7 +188,9 @@ describe('serve() under a store that is not hippo.db', () => {
 
   it('POST /mcp lists only the store-ready tools and refuses the rest with store_not_ported', async () => {
     const post = async (body: string): Promise<{ status: number; body: unknown }> => {
-      const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { ...bearer(valid), 'content-type': 'application/json' }, body });
+      // Another store is shared, and a shared store refuses hippo_recall from a caller that names no project.
+      const headers = { ...bearer(valid), 'content-type': 'application/json', 'x-hippo-project': 'p' };
+      const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
       return { status: res.status, body: await res.json() };
     };
     const list = await post(rpc('tools/list'));
@@ -236,6 +239,67 @@ describe('serve() under a store that is not hippo.db', () => {
   it('leaves nothing under the served root but the pidfile: no hippo.db, no .hippo folder', () => {
     expect(readdirSync(root)).toEqual(['server.pid']);
     expect(existsSync(join(root, '.hippo'))).toBe(false);
+  });
+});
+
+describe('serve() under another store reads its folder as shared, though no config.json says so', () => {
+  let root: string;
+  let handle: ServerHandle;
+  const alice = newKey();
+  const keys: (ContinuityKey | null)[] = [];
+  const snapshot = {
+    id: 1, task: 'ship the eu cluster', summary: 'cutover planned', next_step: 'run the canary', status: 'active', source: 'cli',
+    session_id: 's1', scope: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
+  };
+  const notRead = async (): Promise<never> => {
+    throw new Error('this recall reads nothing else');
+  };
+  const store: HippoStore = {
+    kind: 'stub',
+    findApiKey: async (keyId) => (keyId === alice.keyId ? { ...alice.record, ownerSubject: 'alice' } : null),
+    searchRecallEntries: async () => [],
+    entriesByIds: notRead,
+    activeGoals: notRead,
+    freshRawEntries: notRead,
+    // As continuityWhere: null reads the tenant's newest, and a key missing its owner or project matches nothing.
+    continuity: async (_tenantId, _eventLimit, key) => {
+      keys.push(key);
+      const matches = key === null || (key.owner !== '' && key.project.length > 0);
+      return { activeSnapshot: matches ? snapshot : null, sessionHandoff: null, recentSessionEvents: [] };
+    },
+    planningFallacyEvidence: notRead,
+    appendAuditEvents: async () => {},
+    finishRecall: async () => {},
+    bumpRecallStats: async () => {},
+    recordTokens: async () => {},
+    async close(): Promise<void> {},
+  };
+
+  beforeAll(async () => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    root = mkdtempSync(join(tmpdir(), 'hippo-other-store-shared-'));
+    handle = await serve({ hippoRoot: root, port: 0, store });
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('keys an MCP recall\'s continuity to the caller\'s owner and project', async () => {
+    const headers = { ...bearer(alice), 'content-type': 'application/json', 'x-hippo-project': 'p' };
+    const body = rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy', include_continuity: true } });
+    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
+    expect(JSON.stringify(await res.json())).toContain('ship the eu cluster');
+    expect(keys.at(-1)).toEqual({ owner: 'alice', project: ['p'] });
+  });
+
+  it('hands a REST recall, which names no project, a key that matches nothing, so its block is empty', async () => {
+    const res = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=true`, { headers: bearer(alice) });
+    expect(res.status).toBe(200);
+    expect(keys.at(-1)).toEqual({ owner: 'alice', project: [] });
+    expect(await res.json()).toMatchObject({ continuity: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] } });
   });
 });
 
@@ -291,7 +355,8 @@ describe('a store without the vector reads, under an embedding provider', () => 
 
   it('MCP hippo_recall answers -32603 store_not_ported', async () => {
     const body = rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy' } });
-    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+    // A shared store refuses hippo_recall from a caller that names no project, before the vector arm.
+    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-hippo-project': 'p' }, body });
     expect(await res.json()).toEqual({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
     expect(embeddings.requests()).toBe(0);
   });

@@ -169,7 +169,26 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
   it('charges a V1 route and an add-on route once each, though both answer 501', async () => {
     const key = mint({ ownerSubject: 'oid-stub' });
     const record = await sqliteStore(root).findApiKey(key.slice(0, key.indexOf('.')));
-    const store: HippoStore = { ...sqliteStore(root), kind: 'stub', findApiKey: async () => record };
+    // Stands in for a store method that still opens hippo.db, so the V1 route's 501 is the blocked open, not an accident.
+    const unported = async (): Promise<never> => {
+      closeHippoDb(openHippoDb(root));
+      throw new Error('the stub store does not serve recall');
+    };
+    const store: HippoStore = {
+      kind: 'stub',
+      findApiKey: async () => record,
+      searchRecallEntries: unported,
+      entriesByIds: unported,
+      activeGoals: unported,
+      freshRawEntries: unported,
+      continuity: unported,
+      planningFallacyEvidence: unported,
+      appendAuditEvents: unported,
+      finishRecall: unported,
+      bumpRecallStats: unported,
+      recordTokens: unported,
+      async close(): Promise<void> {},
+    };
     let runs = 0;
     await start({ perCaller: SLOW, perAddress: WIDE }, { store, routes: [addonRoute(() => { runs += 1; })] });
     const v1 = (): Promise<Reply> => recall(bearer(key));
