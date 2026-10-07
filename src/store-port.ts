@@ -23,6 +23,7 @@ import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, type OriginFilter, type VectorCandidateSpec } from './store/search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
+import { entriesWithoutVectorAt, writeVectorsAt } from './store/vector-writes.js';
 import { recordTokenUse, type TokenUse } from './token-ledger.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
@@ -60,6 +61,49 @@ export interface VectorReads {
   nearestEntries(queryVector: readonly number[], spec: VectorCandidateSpec): Promise<MemoryEntry[]>;
   /** The particles of `ids` only; an empty list reads nothing. */
   physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
+}
+
+/** One memory's vector, computed by the caller's embedding provider. */
+export interface VectorRowWrite {
+  readonly memoryId: string;
+  readonly vector: readonly number[];
+  /** Kept only when the memory has no particle yet, under `memoryId` whatever its own memoryId says. */
+  readonly particle?: PhysicsParticle;
+}
+
+export interface VectorWrite {
+  readonly tenantId: string;
+  /** The index identity the vectors were built by, `embeddingIndexIdentity(provider.id)`. */
+  readonly model: string;
+  /** Set only by embedAll's rebuild, so a write that read the index state before another process rebuilt it cannot drop that rebuild. */
+  readonly replaceIndex: boolean;
+  readonly rows: readonly VectorRowWrite[];
+}
+
+export interface VectorWriteResult {
+  readonly written: number;
+  /** True when another model built the index and `replaceIndex` is false; the store then keeps nothing and `written` is 0. */
+  readonly modelMismatch: boolean;
+}
+
+export interface VectorBackfillQuery {
+  readonly model: string;
+  /** Only ids above this one in byte order; unset starts at the first. */
+  readonly afterId?: string;
+  /** Clamped to 1..500; a non-integer rejects with RangeError `limit must be an integer`. */
+  readonly limit: number;
+  /** Every tenant when unset, since the backfill covers the whole store. */
+  readonly tenantId?: string;
+}
+
+/** The writes behind embed on write and the backfill: core computes each vector, the store only keeps it.
+ *  A store deletes a memory's vector and particle when the memory is deleted (hippo.db does it by trigger and foreign-key cascade). */
+export interface VectorWrites {
+  /** Memories of any kind with no vector stored under `query.model`, by id ascending in byte order. */
+  entriesWithoutVector(query: VectorBackfillQuery): Promise<MemoryEntry[]>;
+  /** In one transaction: refuses with `modelMismatch` if `replacesIndex` and not `replaceIndex`; else, when a row is writable (memory in `tenantId`, vector non-empty
+   *  and finite), drops every vector and particle if `replacesIndex`, keeps each writable row under `model` with its particle where none exists, sets `model`. No audit row. */
+  writeVectors(write: VectorWrite): Promise<VectorWriteResult>;
 }
 
 export interface KeyRevoke {
@@ -115,6 +159,8 @@ export interface StoreGroups {
   readonly vectors: VectorReads;
   readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
+  /** embedMemory and embedAll with a store need it and `vectors`. */
+  readonly vectorWrites: VectorWrites;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;
@@ -238,6 +284,14 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     } satisfies VectorReads,
     keyAudit: sqliteKeyAudit(hippoRoot),
     keyWrites: sqliteKeyWrites(hippoRoot),
+    vectorWrites: {
+      async entriesWithoutVector(query) {
+        return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
+      },
+      async writeVectors(write) {
+        return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
+      },
+    },
     async close(): Promise<void> {},
   };
 }
