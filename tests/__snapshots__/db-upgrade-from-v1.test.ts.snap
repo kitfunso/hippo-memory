@@ -4,6 +4,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
 {
   "objects": [
     {
+      "name": "idx_api_keys_live_owner",
+      "sql": "CREATE INDEX idx_api_keys_live_owner ON api_keys(tenant_id, owner_subject) WHERE revoked_at IS NULL",
+      "type": "index",
+    },
+    {
       "name": "idx_api_keys_tenant_active",
       "sql": "CREATE INDEX idx_api_keys_tenant_active
         ON api_keys(tenant_id) WHERE revoked_at IS NULL
@@ -43,6 +48,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "name": "idx_cards_tenant_status",
       "sql": "CREATE INDEX idx_cards_tenant_status
           ON cards(tenant_id, status, updated_at DESC)",
+      "type": "index",
+    },
+    {
+      "name": "idx_compactions_request",
+      "sql": "CREATE UNIQUE INDEX idx_compactions_request ON compactions(tenant_id, request_id) WHERE request_id IS NOT NULL",
       "type": "index",
     },
     {
@@ -132,6 +142,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
     {
       "name": "idx_entities_tenant",
       "sql": "CREATE INDEX idx_entities_tenant ON entities(tenant_id)",
+      "type": "index",
+    },
+    {
+      "name": "idx_failure_log_request",
+      "sql": "CREATE UNIQUE INDEX idx_failure_log_request ON failure_log(tenant_id, request_id) WHERE request_id IS NOT NULL",
       "type": "index",
     },
     {
@@ -401,6 +416,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_session_handoffs_owner",
+      "sql": "CREATE INDEX idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, origin_project, created_at DESC)",
+      "type": "index",
+    },
+    {
       "name": "idx_session_handoffs_session",
       "sql": "CREATE INDEX idx_session_handoffs_session
         ON session_handoffs(session_id, created_at DESC)",
@@ -444,6 +464,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
     {
       "name": "idx_slack_event_log_memory",
       "sql": "CREATE INDEX idx_slack_event_log_memory ON slack_event_log(memory_id) WHERE memory_id IS NOT NULL",
+      "type": "index",
+    },
+    {
+      "name": "idx_task_snapshots_owner",
+      "sql": "CREATE INDEX idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, status, updated_at DESC)",
       "type": "index",
     },
     {
@@ -562,6 +587,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "sqlite_autoindex_session_owners_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
       "name": "sqlite_autoindex_slack_cursors_1",
       "sql": null,
       "type": "index",
@@ -602,7 +632,7 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
           label TEXT,
           created_at TEXT NOT NULL,
           revoked_at TEXT
-        , role TEXT NOT NULL DEFAULT 'admin')",
+        , role TEXT NOT NULL DEFAULT 'admin', owner_subject TEXT, expires_at TEXT)",
       "type": "table",
     },
     {
@@ -694,7 +724,7 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
           summary         TEXT,
           items_json      TEXT,
           items_written   INTEGER NOT NULL DEFAULT 0,
-          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done','no-summary')),
+          status          TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started','summarised','done','no-summary')), request_id TEXT,
           PRIMARY KEY (tenant_id, id)
         )",
       "type": "table",
@@ -851,7 +881,7 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
           skip_rule   TEXT,
           sig_hash    TEXT,
           detail_hash TEXT
-        )",
+        , owner_subject TEXT, origin_project TEXT, request_id TEXT)",
       "type": "table",
     },
     {
@@ -1320,7 +1350,20 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       evidence_json TEXT,
       outcome TEXT,
       target_runtime TEXT,
-      card_id TEXT
+      card_id TEXT,
+      owner_subject TEXT,
+      origin_project TEXT
+    )",
+      "type": "table",
+    },
+    {
+      "name": "session_owners",
+      "sql": "CREATE TABLE session_owners (
+      tenant_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      owner_subject TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, session_id)
     )",
       "type": "table",
     },
@@ -1405,7 +1448,9 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       updated_at TEXT NOT NULL,
       session_id TEXT,
       tenant_id TEXT NOT NULL DEFAULT 'default',
-      scope TEXT
+      scope TEXT,
+      owner_subject TEXT,
+      origin_project TEXT
     )",
       "type": "table",
     },
@@ -2003,6 +2048,6 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
   ],
-  "userVersion": 52,
+  "userVersion": 54,
 }
 `;

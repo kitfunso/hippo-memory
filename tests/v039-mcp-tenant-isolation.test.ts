@@ -5,6 +5,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
+import { lastRecalledIds, MAX_RECALL_CLIENTS } from '../src/mcp/session-state.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 // v0.39 commit 2 regressions:
@@ -21,7 +22,7 @@ function callTool(
   reqId: number,
   name: string,
   args: Record<string, string | number | boolean>,
-  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -237,6 +238,41 @@ describe('v039 mcp tenant + client-key isolation', () => {
     // A's recalled set is intact.
     const aOutcome = await callTool(3, 'hippo_outcome', { good: true }, ctxA);
     expect(extractText(aOutcome)).toMatch(/Applied positive outcome to 1 memories/);
+  });
+
+  // One key held by a session in each repo: the project is part of the outcome key, so beta cannot rate acme's recall.
+  it('one clientKey with two projects keeps a lastRecalledIds entry per project', async () => {
+    apiRemember(
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+      { content: 'per-project outcome key canary', project: { name: 'acme' } },
+    );
+    const base = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:shared-key:1.2.3.4' };
+    const acme: McpContext = { ...base, project: { name: 'acme', legacyName: 'acme' } };
+    const beta: McpContext = { ...base, project: { name: 'beta', legacyName: 'beta' } };
+
+    await callTool(1, 'hippo_recall', { query: 'per-project outcome', budget: 1500 }, acme);
+    expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, beta))).toMatch(/No recent recalls/i);
+    expect(extractText(await callTool(3, 'hippo_outcome', { good: true }, acme))).toMatch(/Applied positive outcome to 1 memories/);
+  });
+
+  it('caps lastRecalledIds at MAX_RECALL_CLIENTS, dropping the client that recalled longest ago', async () => {
+    apiRemember(
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
+      { content: 'recall client cap canary', project: { name: 'acme' } },
+    );
+    lastRecalledIds.clear();
+    try {
+      for (let i = 0; i < MAX_RECALL_CLIENTS; i++) lastRecalledIds.set(`flood:${i}`, []);
+      lastRecalledIds.set('flood:0', []);
+      const acme: McpContext = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:cap-key:1.2.3.4', project: { name: 'acme', legacyName: 'acme' } };
+      await callTool(1, 'hippo_recall', { query: 'client cap canary', budget: 1500 }, acme);
+      expect(lastRecalledIds.size).toBe(MAX_RECALL_CLIENTS);
+      expect(lastRecalledIds.has('flood:1')).toBe(false);
+      expect(lastRecalledIds.has('flood:0')).toBe(true);
+      expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, acme))).toMatch(/Applied positive outcome to 1 memories/);
+    } finally {
+      lastRecalledIds.clear();
+    }
   });
 
   // ---- Test 6: hippo_share cross-tenant denied -----------------------------

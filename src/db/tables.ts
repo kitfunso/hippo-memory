@@ -1,10 +1,15 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 
-export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+/** Column names of one table; empty when the table is missing. */
+export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<string> {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
   // SAFETY: rows' shape matches PRAGMA table_info's documented `name` column.
   const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>;
-  return rows.some((row) => row.name === columnName);
+  return new Set(rows.flatMap((row) => (row.name === undefined ? [] : [row.name])));
+}
+
+export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+  return tableColumns(db, tableName).has(columnName);
 }
 
 export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {

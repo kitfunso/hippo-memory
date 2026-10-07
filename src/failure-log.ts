@@ -1,5 +1,6 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
-import type { CaptureErrorOutcome, RoutineRule } from './capture-error.js';
+import { ConflictError } from './api-errors.js';
+import type { CaptureErrorOutcome, RoutineRule } from './capture/failure-reading.js';
 import type { DatabaseSyncLike } from './db.js';
 
 /** Rows older than this are pruned on write, which also bounds how far back a repeat can be found. */
@@ -24,6 +25,11 @@ export interface FailureEvent {
   sigHash?: string | null;
   /** Hash of the untruncated error plus the command's first two words, finer than `sigHash`. */
   detailHash?: string | null;
+  /** A shared-store caller's owner and project; null on a local store. */
+  ownerSubject?: string | null;
+  originProject?: string | null;
+  /** The client's queue record id, so a retried send finds the earlier row. */
+  requestId?: string | null;
   /** Override the timestamp (tests). ISO string. */
   now?: string;
 }
@@ -33,8 +39,8 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
   // Normalised, because the window and prune compare timestamps as strings.
   const now = new Date(event.now ?? Date.now()).toISOString();
   db.prepare(
-    `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, owner_subject, origin_project, request_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     now,
     event.tenantId,
@@ -44,9 +50,27 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
     event.rule ?? null,
     event.sigHash ?? null,
     event.detailHash ?? null,
+    event.ownerSubject ?? null,
+    event.originProject ?? null,
+    event.requestId ?? null,
   );
   const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * 86_400_000).toISOString();
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
+}
+
+/** The outcome logged for a caller's request id, or null, so a retried send finds the first one; another session's id is a ConflictError. */
+export function requestOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): FailureOutcome | null {
+  const row = db.prepare(`SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
+    .get<{ outcome: FailureOutcome; session_id: string | null } | undefined>(tenantId, requestId);
+  if (row === undefined) return null;
+  // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
+  if (row.session_id !== sessionId.slice(0, MAX_FIELD)) throw new ConflictError('request id belongs to another session');
+  return row.outcome;
+}
+
+/** A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant. */
+export function settleFailureOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string, outcome: FailureOutcome): void {
+  db.prepare(`UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`).run(outcome, tenantId, requestId);
 }
 
 /** Rated failures and repeats in one session, for {@link failuresBySession}. */

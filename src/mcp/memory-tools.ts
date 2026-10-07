@@ -4,6 +4,7 @@ import { log } from '../log.js';
 import { readEntry } from '../store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
 import { consolidate } from '../consolidate/sleep.js';
+import { outsideRequestStores } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN, type Context as ApiContext } from '../api.js';
 import { mcpActor, type ToolCall } from './protocol.js';
@@ -24,16 +25,20 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const result = apiRemember(apiCtx, {
     content: text,
     tags,
+    personal: args.personal === true,
+    project: ctx?.project,
   });
   const entry = readEntry(hippoRoot, result.id, tenantId);
 
   // Auto-sleep: one run per store at a time, triggered by what arrived since the last one.
   // Consolidation is host-wide, so only the host tenant's writes may start it.
   if (
+    ctx?.autoSleep !== false &&
     config.autoSleep.enabled &&
     tenantId === resolveTenantId({}) &&
     !autoSleepInFlight.has(hippoRoot) &&
@@ -41,7 +46,8 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
   ) {
     autoSleepInFlight.add(hippoRoot);
     // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
-    consolidate(hippoRoot)
+    // Outside the call's request scope, which would close a handle the sleep still holds across its pauses.
+    outsideRequestStores(() => consolidate(hippoRoot))
       .catch((err) => {
         log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${err instanceof Error ? err.message : String(err)}`);
       })
@@ -68,6 +74,7 @@ export function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const { applied } = apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
@@ -75,7 +82,7 @@ export function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
 
 export function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
   const days = Number(args.days) || 7;
-  const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx) }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
+  const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';
   const { added, skipped, rejected, lowInfo } = result;

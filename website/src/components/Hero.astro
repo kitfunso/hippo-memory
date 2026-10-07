@@ -15,8 +15,6 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
     <!-- Terminal Native mockup: the pitch and install on the left, the session on the right. -->
     <div class="grid items-start gap-12 lg:grid-cols-[minmax(0,32.5rem)_minmax(0,1fr)]">
       <div class="flex min-w-0 max-w-xl flex-col gap-6">
-        <p class="reveal font-mono text-xs text-zinc-400 sm:text-[13px]" style="animation-delay: 0ms">{site.positioning}</p>
-
         <h1
           class="reveal text-balance text-[2.5rem] leading-[1.1] tracking-[-0.03em] sm:text-5xl lg:text-[3.25rem]"
           style="animation-delay: 60ms"
@@ -25,7 +23,7 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
         </h1>
 
         <p class="reveal text-lg leading-relaxed text-zinc-300" style="animation-delay: 120ms">
-          {site.description}
+          {site.tagline.summary}
         </p>
 
         <div class="reveal" style="animation-delay: 180ms">

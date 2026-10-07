@@ -3,11 +3,31 @@
 import { calculateStrength } from '../memory.js';
 import { evalNow } from '../ablation.js';
 import { loadStrengthRows } from '../store/candidates.js';
-import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
+import { listMemoryConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
 import { computePredictionBaserate } from '../predictions/store.js';
-import { type ToolCall } from './protocol.js';
+import { closeHippoDb, openHippoDb } from '../db.js';
+import { NotFoundError } from '../api-errors.js';
+import { classifyOriginProject } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
+import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
+import { selectEntriesByIds } from '../store/entry-reads.js';
+import type { MemoryConflict } from '../store/rows.js';
+import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../json.js';
+
+const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
+
+/** The scope of memory `id`, null when it has none or does not exist. */
+function memoryScope(hippoRoot: string, id: string): string | null {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return selectMemoryReach(db, id)?.scope ?? null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
 
 export function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
   // Text-only reply, matching the other MCP tools; the helper opens its own db
@@ -53,8 +73,27 @@ export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string
   ].join('\n');
 }
 
-export function runConflictsTool({ hippoRoot, tenantId }: ToolCall): string {
-  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
+/** Pairs whose two rows the caller could recall: its repo or user-global, and no scope it was not asked for. */
+function recallablePairs(call: ToolCall, conflicts: MemoryConflict[], project: CallerProject): MemoryConflict[] {
+  const own = personalScopeOf(mcpActor(call.ctx));
+  const db = openHippoDb(call.hippoRoot);
+  try {
+    const rows = selectEntriesByIds(db, conflicts.flatMap((c) => [c.memory_a_id, c.memory_b_id]), call.tenantId);
+    const shown = (id: string): boolean => {
+      const row = rows.get(id);
+      return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
+        && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
+    };
+    return conflicts.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function runConflictsTool(call: ToolCall): string {
+  const { ctx, hippoRoot, tenantId } = call;
+  const touchable = listTouchableConflicts(hippoRoot, 'open', tenantId, mcpActor(ctx));
+  const conflicts = ctx?.project ? recallablePairs(call, touchable, ctx.project) : touchable;
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
@@ -69,6 +108,7 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   const rejectLoser = Boolean(args.rejectLoser);
   const reason = isJsonString(args.reason) ? args.reason : undefined;
   if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
+  if (!listTouchableConflicts(hippoRoot, 'open', tenantId, mcpActor(ctx)).some((c) => c.id === conflictId)) return NOT_RESOLVED;
   const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
     rejectLoserValue: rejectLoser,
     reason,
@@ -76,15 +116,17 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
     // ctx.actor for HTTP-MCP, 'mcp' for stdio callers, which pass no ctx.
     rejectedBy: ctx?.actor ?? 'mcp',
   });
-  if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
+  if (!result) return NOT_RESOLVED;
   const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
 }
 
-export function runShareTool({ args, hippoRoot, tenantId }: ToolCall): string {
+export function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
+  // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
+  if (!canTouchScope(mcpActor(ctx), memoryScope(hippoRoot, shareId))) throw new NotFoundError(`Memory not found: ${shareId}`);
   // Pass tenantId so shareMemory's readEntry filters by tenant. Without
   // this, a Bearer for tenant A could call hippo_share with tenant B's
   // id and copy the row to the global store. The 'Memory not found'

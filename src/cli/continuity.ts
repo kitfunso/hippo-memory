@@ -11,10 +11,10 @@ import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOut
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../handoff.js';
 import { resolveTenantId } from '../tenant.js';
 import { wmPush, wmRead, wmClear, wmFlush } from '../working-memory.js';
+import { collectHandoffEvidence } from '../handoff-evidence.js';
 import { printError } from './output.js';
 import {
   requireInit,
-  collectHandoffEvidence,
   printActiveTaskSnapshot,
   printSessionEvents,
   printHandoff,

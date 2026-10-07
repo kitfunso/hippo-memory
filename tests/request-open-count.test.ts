@@ -9,8 +9,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getHippoDbPath } from '../src/db.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { recall, remember } from '../src/api.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;
@@ -79,7 +80,12 @@ beforeAll(async () => {
   writeEntry(root, createMemory('deploy windows are Tuesday and Thursday afternoons only', opts));
   spies = countConnections();
   // Boot opens the held connection, so every count below is the requests' own.
-  server = await serve({ hippoRoot: root, port: 0 });
+  // An add-on route that runs two api helpers, as a hook route does.
+  const addon: AddonRoute = { path: '/v1/test/remember-then-recall', handler: async ({ ctx }) => {
+    remember(ctx, { content: 'the release train leaves every second Wednesday' });
+    return { total: recall(ctx, { query: 'release train' }).total };
+  } };
+  server = await serve({ hippoRoot: root, port: 0, routes: [addon] });
 });
 
 afterAll(async () => {
@@ -101,6 +107,10 @@ describe('store opens per request', () => {
 
   it('MCP hippo_recall over POST /mcp opens the store once', async () => {
     expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({ local: 1 });
+  });
+
+  it('an add-on route opens the store once across the api helpers it runs', async () => {
+    expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({ local: 1 });
   });
 
   it('concurrent requests each open their own handle', async () => {

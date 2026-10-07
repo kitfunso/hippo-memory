@@ -4,8 +4,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { currentRequestStores } from '../src/db.js';
+import { sleepRuns } from './_helpers/sleep-runs.js';
 
 const roots: string[] = [];
 
@@ -20,15 +21,6 @@ function remember(hippoRoot: string, text: string) {
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
     { hippoRoot, tenantId: 'default', actor: 'mcp' },
   );
-}
-
-function sleepRuns(hippoRoot: string): number {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get<{ n: number }>().n;
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 describe('MCP auto-sleep', () => {
@@ -57,5 +49,23 @@ describe('MCP auto-sleep', () => {
 
     await remember(root, 'alice reviews every schema change');
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(2));
+  });
+
+  it("runs outside the tool call's request scope, which closes its handles while the sleep still holds one", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-mcp-autosleep-scope-'));
+    roots.push(root);
+    initStore(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
+    const inScope: boolean[] = [];
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      inScope.push(currentRequestStores() !== undefined);
+      return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+    }));
+
+    await remember(root, 'the deploy moved to friday');
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
+    expect(inScope.length).toBeGreaterThan(0);
+    expect(inScope).not.toContain(true);
   });
 });

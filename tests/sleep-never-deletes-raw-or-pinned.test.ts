@@ -14,6 +14,7 @@ import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { sleep, supersede, type Context } from '../src/api.js';
+import { runSleep } from '../src/api/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { renderSleepResult } from '../src/cli/sleep.js';
@@ -124,9 +125,8 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, pinned);
     const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
 
-    const result = await sleep(ctxFor(root), {
-      noShare: true,
-      __phases: { auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }) },
+    const result = await runSleep(ctxFor(root), { noShare: true }, {
+      auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }),
     });
 
     expect(readEntry(root, pinned.id)).not.toBeNull();

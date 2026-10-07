@@ -8,6 +8,7 @@ import { loadIndex } from '../store/index-and-stats.js';
 import { applyOutcome, CHURN_STALE_TAG } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { recordTraceOutcome } from '../recall-trace.js';
+import { canTouchScope } from '../recall-scope.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -17,7 +18,7 @@ import type { Context } from './types.js';
 /**
  * Apply a positive/negative outcome to a list of recently-recalled memory ids.
  * Used by the MCP `hippo_outcome` tool and the HTTP `POST /v1/outcome` route.
- * Tenant-scoped: ids that don't belong to ctx.tenantId are silently skipped
+ * Tenant-scoped: ids outside ctx.tenantId, or in someone else's personal scope, are silently skipped
  * (matches the prior MCP semantics — a stale id from another tenant doesn't
  * crash the call). Each successful outcome emits one audit_log row with
  * op='outcome' tagged with ctx.actor.subject.
@@ -54,7 +55,7 @@ export function outcome(
     const live = selectEntriesByIds(db, ids, ctx.tenantId);
     for (const id of ids) {
       const entry = live.get(id);
-      if (!entry) continue;
+      if (!entry || !canTouchScope(ctx.actor, entry.scope ?? null)) continue;
       let updated = applyOutcome(entry, good);
       if (good && updated.tags.includes(CHURN_STALE_TAG)) { // a good outcome reconfirms the entry
         updated = { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };

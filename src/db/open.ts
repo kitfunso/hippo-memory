@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
@@ -25,14 +26,44 @@ export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>, opts?:
   return runWithRequestStores(fn, { busyWaitMs: opts?.busyWaitMs });
 }
 
+/** Lock wait for each of sleep's short write transactions, even inside a server request: a run stops only on a writer that holds the lock longer. */
+export const SLEEP_DB_WAIT_MS = 5000;
+
+/** The lock wait an open here would get without its own `busyWaitMs`: the request scope's; undefined outside every scope. */
+export function scopedBusyWait(): number | undefined {
+  return currentRequestStores()?.busyWaitMs;
+}
+
+/** Thrown by a hippo.db open inside a request served from another store: the code path is not ported to the store port yet. */
+export class SqliteBlockedError extends Error {
+  constructor(readonly storeKind: string) {
+    super(`hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ported to the store yet`);
+    this.name = 'SqliteBlockedError';
+  }
+}
+
+const sqliteBlockedBy = new AsyncLocalStorage<string>();
+
+/** Runs `fn` so that every hippo.db open inside it, across awaits, throws; otherwise a missed port would create and write a hippo.db nobody reads. */
+export function withSqliteBlocked<T>(storeKind: string, fn: () => T): T {
+  return sqliteBlockedBy.run(storeKind, fn);
+}
+
+function assertSqliteAllowed(): void {
+  const storeKind = sqliteBlockedBy.getStore();
+  if (storeKind !== undefined) throw new SqliteBlockedError(storeKind);
+}
+
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+  assertSqliteAllowed();
   const stores = currentRequestStores();
   return stores ? stores.get(hippoRoot, opts) : connectHippoDb(hippoRoot, opts?.busyWaitMs);
 }
 
 /** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db is missing. */
 export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
+  assertSqliteAllowed();
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
   try {
     db.exec('PRAGMA busy_timeout = 5000');

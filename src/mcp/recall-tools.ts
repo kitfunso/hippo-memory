@@ -6,7 +6,8 @@ import type { SearchResult } from '../search/types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';
-import { resolveProjectIdentity } from '../project-identity.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { isSharedStore } from '../config.js';
 import { appendAuditEvent, auditQueryFields } from '../audit.js';
 import {
   detectAnchoring,
@@ -256,6 +257,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const anchorRing = biasHintEnabled('anchoring') && sessionId
     ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
@@ -272,6 +274,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     // The hint is computed below over the list MCP shows; the window band's copy would emit its audit row twice.
     suppressAvailabilityHint: true,
     keepHeldCopies: true,
+    project: ctx?.project,
     ...recallExtra,
     showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out),
   });
@@ -291,6 +294,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const explicitScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
@@ -301,6 +305,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
   const r = apiAssemble(apiCtx, sessionId, {
     summarizeOlder,
+    project: ctx?.project,
     ...assembleExtra,
     cost: assembleCost(sessionId),
   });
@@ -318,12 +323,13 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const drillExtra: DrillDownExtraOpts = {};
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
   if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, cost: drillCost });
+  const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, project: ctx?.project, cost: drillCost });
   if ('failure' in r) {
     // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
     // missing, because telling scope_blocked apart would leak private-row existence.
@@ -335,7 +341,15 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
   return drillText(r);
 }
 
+// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
+function localProject(hippoRoot: string): ProjectIdentity {
+  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
+  return storeProject.name !== '' ? storeProject : resolveProjectIdentity(process.cwd());
+}
+
 export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
+  // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
+  if (isSharedStore(hippoRoot) && ctx?.project === undefined) return 'hippo_context needs a project on a shared store; use hippo_recall';
   const budget = args.budget === undefined
     ? config.defaultContextBudget
     : Number(args.budget);
@@ -345,15 +359,14 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }:
   const exactScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
     : undefined;
-  // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
-  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   const result = await apiGetContext(
-    { hippoRoot, tenantId, actor: mcpActor(ctx) },
+    { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store },
     {
-      q: autoDetectContext(),
+      // The server's git state is no caller's, so a shared-store caller gets its project's rows without a query.
+      q: ctx?.project ? undefined : autoDetectContext(),
       budget,
       exactScope,
-      currentProject: storeProject.name !== '' ? storeProject : resolveProjectIdentity(process.cwd()),
+      currentProject: ctx?.project ?? localProject(hippoRoot),
       cost: contextCost,
     },
   );
