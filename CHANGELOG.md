@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.67.0 - 2026-10-07
+
+### Added
+
+- **An add-on route can name the store group it needs.** `AddonRoute` gains an optional `storeReady`, as core routes have. Under a store other than hippo.db, an add-on route runs when that store has its group and answers 501 `store_not_ported` before its handler when it does not. A route with no `storeReady` still runs on hippo.db only.
+- **The hook commands now read GitHub Copilot payloads, from the Copilot CLI and from VS Code's Local agent.** `hippo context --format copilot` answers a sessionStart hook with the reply the sender reads: top-level `additionalContext` for a camelCase payload, the nested `hookSpecificOutput` for VS Code's snake_case one. It sends the whole block on every session start, as that is the only injection Copilot gets. `capture-error`, `pre-compact` and `session-end` take `--runtime copilot`; VS Code's Local agent fires only sessionStart and preCompact, so capture-error and session-end serve the Copilot CLI alone. With no `--log-file`, `session-end --runtime copilot` logs to `~/.hippo/logs/copilot-sleep.log`.
+- **A Copilot hook uses the store of the payload's `cwd`.** VS Code runs user-level hooks in the home folder, so the folder a hook starts in says nothing about the project.
+- **Every hook verb maps Copilot's camelCase fields to the snake_case keys hippo reads** (`sessionId`, `transcriptPath`, `toolName`, `hookEventName`, `customInstructions`, and `toolArgs` parsed into `tool_input`). Claude Code and Codex payloads pass through byte for byte.
+- **Session capture and the pre-compact snapshot read Copilot's `events.jsonl` line by line**, skipping sub-agent lines and prompts a skill, another agent or autopilot wrote. `session-end --runtime copilot` finds the Copilot CLI log at `<COPILOT_HOME>/session-state/<id>/events.jsonl`. `pre-compact --runtime copilot` saves the snapshot and opens no compaction record, since Copilot has no PostCompact hook to close one.
+- **A failed Copilot CLI search, or a quiet `grep` exit 1 in its shell tools, no longer becomes an error memory**, as the same failure from Claude Code's tools does not.
+- The delivery ledger books Copilot calls with runtime `copilot`.
+- **`hippo setup` now installs hippo for GitHub Copilot.** When `$COPILOT_HOME` or `~/.copilot` exists, setup writes hippo's own `hooks/hippo.json` (sessionStart, postToolUseFailure, preCompact and sessionEnd, each with a `hippo.cmd` PowerShell form and none naming a path), adds a `hippo` server to `mcp-config.json` and puts a block in `copilot-instructions.md` that asks the agent to call `hippo_recall` and `hippo_remember`. `hippo hook install copilot` does the same on demand, and `hippo hook uninstall copilot` removes only what hippo wrote. See `integrations/copilot.md`.
+- **What each Copilot surface gets.** The Copilot CLI, including its sessions inside VS Code, uses all four hooks, the server and the block. VS Code's Local agent runs only the sessionStart hook and reads neither `mcp-config.json` nor `copilot-instructions.md`. So it has no pre-compact snapshot or end-of-session capture yet, and its recall tools need hippo in VS Code's own `mcp.json`.
+- **Setup leaves what it did not write alone.** An `mcp-config.json` with comments or invalid JSON is left as it is, with the entry printed to add by hand; one that cannot be read or written prints the system's error, and the hooks and the block still install. An instructions block that is not hippo's exact Copilot text stays byte for byte, as does a file with a start marker and no end marker; setup prints one line for each. Uninstall takes out only hippo's block and one line break, keeping the file's line endings.
+- **Revoking a key and reading the audit log now go through the store port, so they can run on a store other than hippo.db.** `HippoStore` gains an optional `keyAudit` member, the exported `KeyAudit` interface, with three methods. `revokeApiKey` revokes one key for a tenant and writes its `auth_revoke` audit row in one transaction. `auditEventsAfter` reads audit rows after an id, in the order and shape of `listAuditEventsAfter`. `auditHighId` returns the highest audit id ever assigned, pruned rows included. A store sets all three or leaves `keyAudit` unset. `sqliteStore` sets them with the queries hippo.db ran before.
+- **Store groups are named, and a route or MCP tool names the group it needs.** `hippo-memory/server` exports `StoreGroups`, `StoreGroup` and `hasGroup`. Under another store, a route or tool whose group that store lacks answers 501 `store_not_ported` (MCP error -32603) before its handler runs. `DELETE /v1/auth/keys/:keyId` needs `keyAudit`, so a store that has it can now serve key revokes. The routes and tools that ran on every store before still do.
+- `hippo-memory/server` also exports `NotFoundError`, `AuthRevokeReply`, `AuthRevokeResult`, `KeyAudit`, `KeyRevoke`, `AuditEvent` and `ListAuditAfterOpts`.
+
+### Changed
+
+- **`authRevoke` with `ctx.store` set revokes through `ctx.store.keyAudit` and never opens hippo.db.** It returns a promise in that case. A store without `keyAudit` rejects with `StoreNotPortedError`. With no store it runs on hippo.db and returns synchronously, as before. Code that types its context as the wide `Context` now gets `AuthRevokeResult | Promise<AuthRevokeResult>` and should `await` the result.
+- On the store path, a failed audit write rolls the revoke back and the caller sees the error. `serve()` always passes a store, `sqliteStore` by default, so `DELETE /v1/auth/keys/:keyId` on hippo.db now answers 500 and leaves the key live when the audit row cannot be written; before, it revoked the key without the row. `hippo auth revoke` and `authRevoke` without a store still keep the revoke and report the audit failure.
+- `StoreNotPortedError` now says "has no '<group>' group" where it said "has no '<group>' reads".
+
+### Tests
+
+- **`tests/key-audit-conformance.test.ts` runs every `KeyAudit` method on hippo.db and on an in-memory store over a two-tenant fixture, and checks that values, errors and audit rows match.** It covers an unknown key, another tenant's key, a key already revoked, a revoke and its row, paging, tenant scoping, the limit clamp and its errors, and the high-water id above a pruned row. The runner lives in `tests/_helpers/store-conformance.ts`, so a later store group can reuse it.
+- `tests/auth-revoke-store.test.ts` checks that `authRevoke` with a store creates no hippo.db, that a store without `keyAudit` is refused before any write, and that a revoked key is refused at once over `serve()`.
+
 ## 1.66.0 - 2026-10-07
 
 ### Added

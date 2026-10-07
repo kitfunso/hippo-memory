@@ -106,7 +106,13 @@ describe('serve() under a store that is not hippo.db', () => {
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     root = mkdtempSync(join(tmpdir(), 'hippo-other-store-'));
-    handle = await serve({ hippoRoot: root, port: 0, store, routes: [{ path: '/v1/x-addon', handler: async () => { addonRuns += 1; return {}; } }] });
+    handle = await serve({
+      hippoRoot: root, port: 0, store, routes: [
+        { path: '/v1/x-addon', handler: async () => { addonRuns += 1; return {}; } },
+        { path: '/v1/x-addon-base', storeReady: 'base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
+        { path: '/v1/x-addon-keyaudit', storeReady: 'keyAudit', handler: async () => { addonRuns += 1; return {}; } },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -142,6 +148,16 @@ describe('serve() under a store that is not hippo.db', () => {
     const res = await send(valid);
     expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
     expect((await send(newKey())).status).toBe(401);
+    expect(addonRuns).toBe(0);
+  });
+
+  it('runs an add-on route whose group the store has, and refuses one whose group it lacks', async () => {
+    const post = async (path: string, key: TestKey) => fetch(`${handle.url}${path}`, { method: 'POST', headers: { ...bearer(key), 'content-type': 'application/json' }, body: '{}' });
+    const ran = await post('/v1/x-addon-base', valid);
+    expect({ status: ran.status, body: await ran.json() }).toEqual({ status: 200, body: { tenant: valid.record.tenantId } });
+    expect((await post('/v1/x-addon-base', newKey())).status).toBe(401);
+    const refused = await post('/v1/x-addon-keyaudit', valid);
+    expect({ status: refused.status, body: await refused.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
     expect(addonRuns).toBe(0);
   });
 
