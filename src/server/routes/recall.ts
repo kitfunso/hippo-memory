@@ -19,11 +19,8 @@ export function __resetSessionRecallHistoryHttp(): void {
 }
 
 // HTTP threads the ring through opts.recallHistory, so the hint retrieve() returns is the one the caller sees.
-async function recallHistoryFor(ctx: Context, q: string, sessionId: string | undefined): Promise<RecallHistorySnapshot | undefined> {
-  if (!biasHintEnabled('anchoring')) return undefined;
-  if (sessionId) return peekSessionRing('http', ctx.tenantId, sessionId);
-  await storeFor(ctx).appendAuditEvents(anchorSkippedRows({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, q));
-  return undefined;
+function recallHistoryFor(ctx: Context, sessionId: string | undefined): RecallHistorySnapshot | undefined {
+  return sessionId && biasHintEnabled('anchoring') ? peekSessionRing('http', ctx.tenantId, sessionId) : undefined;
 }
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
@@ -32,8 +29,10 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const { query: q, includeContinuity, sessionId } = recallOpts;
   const ctx = await buildContextWithAuth(req, opts);
 
-  const recallHistory = await recallHistoryFor(ctx, q, sessionId);
-  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory });
+  const recallHistory = recallHistoryFor(ctx, sessionId);
+  // Written first in the recall's own write (docs/recall-surface-differences.md D9), so a recall that fails leaves no row.
+  const leadingAudit = sessionId ? [] : anchorSkippedRows({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, q);
+  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory, leadingAudit });
 
   // The ring is created only after recall succeeds, so a 400 cannot LRU-evict a live session.
   const ring = sessionRing('http', ctx.tenantId, sessionId);

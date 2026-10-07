@@ -5,13 +5,15 @@ import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { closeHippoDb, openHippoDb, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
+import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
+import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
 import { VERIFIED_KEY_TTL_MS } from '../src/auth.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
 import { physicsSearch } from '../src/search/physics-search.js';
+import { requireVectorReads } from '../src/search/vector.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
@@ -335,13 +337,37 @@ describe('a store without the vector reads, under an embedding provider', () => 
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('GET /v1/memories in hybrid and physics mode answers 501 store_not_ported and embeds nothing', async () => {
+  const auditRowCount = (): number => {
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: COUNT(*) AS n is the only column selected.
+      return (db.prepare('SELECT COUNT(*) AS n FROM audit_log').get() as { n: number }).n;
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  it('GET /v1/memories in hybrid and physics mode answers 501 store_not_ported, embeds nothing and writes no audit row', async () => {
     expect(store.vectors).toBeUndefined();
+    const before = auditRowCount();
     for (const mode of ['hybrid', 'physics']) {
-      const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=${mode}`);
-      expect({ mode, status: res.status, body: await res.json() }).toEqual({ mode, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+      // With no session_id the route owes a recall_anchor_skipped_no_session row; a recall that fails writes none.
+      for (const session of ['', '&session_id=s1']) {
+        const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=${mode}${session}`);
+        expect({ mode, session, status: res.status, body: await res.json() }).toEqual({ mode, session, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+      }
     }
     expect(embeddings.requests()).toBe(0);
+    expect(auditRowCount()).toBe(before);
+  });
+
+  it('requireVectorReads names the missing group, and that error still maps to the 501', () => {
+    expect(() => requireVectorReads(store)).toThrow(StoreNotPortedError);
+    expect(() => requireVectorReads(store)).toThrow(SqliteBlockedError);
+    expect(() => requireVectorReads(store)).toThrow("the 'port-only' store has no 'vectors' reads");
+    const err = new StoreNotPortedError('port-only', 'vectors');
+    expect(mapApiError(err)).toEqual({ status: 501, message: STORE_NOT_PORTED_MESSAGE });
+    expect(() => rethrowIfSqliteBlocked(err)).toThrow(err);
   });
 
   it('MCP hippo_recall answers -32603 store_not_ported', async () => {

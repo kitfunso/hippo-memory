@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- **An HTTP recall that fails writes no audit row.** `GET /v1/memories` with no `session_id` used to commit `recall_anchor_skipped_no_session` before it ranked, so a recall that then answered 501 or 503 left that row behind. The row now goes first in the recall's own write, in the same order as before.
 - **`decodeVector` no longer throws on a Node `Buffer` that starts at an odd byte offset.** Its fallback copied with `slice()`, which on a `Buffer` returns a view at the same offset. It now copies into a new `Uint8Array`.
 
 ### Tests

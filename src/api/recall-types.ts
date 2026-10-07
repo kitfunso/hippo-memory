@@ -159,6 +159,7 @@ export interface RecallOpts {
   /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
    *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
   keepHeldCopies?: boolean;
+  leadingAudit?: readonly AppendAuditOpts[]; // rows this recall writes first in its one write, so a failed recall writes none; the HTTP route sets it, others leave it unset
   /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
   showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
 }

@@ -3,7 +3,7 @@ import { cosineSimilarity, indexedModel, indexNeedsRebuild } from '../embeddings
 import type { VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { rethrowIfSqliteBlocked } from '../db.js';
-import { SqliteBlockedError } from '../db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../db/sqlite-blocked.js';
 import { log } from '../log.js';
 import { sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
 import { redactSecretsStrict } from '../secret-detect.js';
@@ -43,7 +43,7 @@ function reindexHint(storeKind: string): string {
 
 /** The store's vector reads; a store without them answers 501, as any unported path does. */
 export function requireVectorReads(store: HippoStore): VectorReads {
-  if (!store.vectors) throw new SqliteBlockedError(store.kind);
+  if (!store.vectors) throw new StoreNotPortedError(store.kind, 'vectors');
   return store.vectors;
 }
 

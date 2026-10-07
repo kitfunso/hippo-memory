@@ -79,7 +79,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const all = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, recallOrigin(opts), own);
   const plan = planRecall(ctx, opts, all, own);
   const { result, writes } = composeRecall(ctx, opts, windowSize, all, plan, readRecallSync(ctx, opts, plan));
-  finishRecallAt(ctx.hippoRoot, writes);
+  finishRecallAt(ctx.hippoRoot, { ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit] });
   return result;
 }
 
@@ -110,7 +110,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   }
   const plan = planRecall(ctx, opts, candidates, own);
   const { result, writes } = composeRecall(ctx, opts, windowSize, candidates, plan, await readRecall(store, ctx, opts, plan));
-  await store.finishRecall({ ...writes, strengthen: strengthenOf(ctx, result.results.map((r) => r.id)) });
+  await store.finishRecall({ ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id)) });
   return result;
 }
 
@@ -181,7 +181,7 @@ async function retrieveFromStore(
   const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shown.ids.length));
   await store.finishRecall({
     goalLog: [...rankedLog, ...writes.goalLog],
-    audit: [...writes.audit, shownRow, ...shown.audit],
+    audit: [...(opts.leadingAudit ?? []), ...writes.audit, shownRow, ...shown.audit],
     trace: opts.suppressRecallTrace ? undefined : {
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId ?? null,
