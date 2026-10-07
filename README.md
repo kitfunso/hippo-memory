@@ -844,6 +844,8 @@ For Codex, it adds two hooks to `$CODEX_HOME/hooks.json` (else `~/.codex/hooks.j
 
 **Codex runs a new or changed hook only after you trust it, so open `/hooks` in Codex once and trust both;** `hippo doctor` reminds you. The per-prompt hook was checked against a real Codex request; the compaction hook follows Codex's documented `compact` start source and has not been watched end to end in Codex. Each hook also carries a `commandWindows` form (`hippo.cmd ...`), because Codex runs hooks through PowerShell on Windows, where the execution policy can block npm's `hippo.ps1`. hippo only ever appends these two entries and never rewrites one, since Codex treats a changed command as a new hook to trust. To remove: `hippo hook uninstall codex`, which takes out only hippo's exact commands and leaves every other hook, including one of yours that runs hippo.
 
+For GitHub Copilot, once `$COPILOT_HOME` (else `~/.copilot`) exists, `hippo setup` writes hippo's own `hooks/hippo.json`, adds a `hippo` server to `mcp-config.json` and puts a block in `copilot-instructions.md` that asks the agent to call `hippo_recall` and `hippo_remember`. The four hooks, the VS Code `mcp.json` recipe and how to remove it: [integrations/copilot.md](integrations/copilot.md).
+
 ### What the hook adds (Claude Code example)
 
 ````markdown

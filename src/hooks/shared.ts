@@ -10,7 +10,7 @@ export function isJsonObject(value: JsonValue | undefined): value is JsonObject 
   return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
 }
 
-export type JsonHookTarget = 'claude-code' | 'codex';
+export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
 export interface ToolDetection {
   name: string;
@@ -56,6 +56,11 @@ export function isCodexPresent(home: string = homeDir()): boolean {
   return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
 }
 
+/** Copilot counts as installed only when its config folder exists, so setup never creates ~/.copilot on a machine without it. */
+export function isCopilotPresent(home: string = homeDir()): boolean {
+  return fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
+}
+
 /** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says what they would trust. */
 export const CODEX_TRUST_LINE = "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
 
@@ -95,6 +100,7 @@ export function detectInstalledTools(): ToolDetection[] {
     { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
     { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },
+    { name: 'copilot', configDir: copilotHomeDir(home), detected: isCopilotPresent(home), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md' },
     { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
     { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
   ];

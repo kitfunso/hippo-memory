@@ -12,6 +12,7 @@ import {
   uninstallCodexWrapper,
 } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin, uninstallOpencodePlugin, resolveOpencodePluginPath } from '../hooks/opencode.js';
+import { type CopilotInstallResult, type CopilotUninstallResult, type McpMergeStatus, copilotMcpSnippet, copilotPaths, installCopilot, uninstallCopilot } from '../hooks/copilot.js';
 import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../shared.js';
@@ -21,7 +22,7 @@ import { log } from '../log.js';
 import { printError } from './output.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from './hook-blocks.js';
 import { escapeRegex } from '../escape.js';
 
 // ---------------------------------------------------------------------------
@@ -51,14 +52,17 @@ function hookList(): void {
   for (const [name, hook] of Object.entries(HOOKS)) {
     console.log(`  ${name.padEnd(15)} -> ${hook.file} (${hook.description})`);
   }
+  console.log(`  ${'copilot'.padEnd(15)} -> $COPILOT_HOME or ~/.copilot (GitHub Copilot: hooks, MCP server and instructions)`);
   console.log('\nUsage: hippo hook install <name>');
   console.log('       hippo hook uninstall <name>');
 }
 
 function hookInstall(target: string | undefined): void {
+  // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS entry.
+  if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
-    printError(`   Available: ${Object.keys(HOOKS).join(', ')}`);
+    printError(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
     process.exit(1);
   }
   const hook = HOOKS[target];
@@ -166,7 +170,34 @@ function installOpencodeHook(): void {
   }
 }
 
+const MCP_MERGE_LINES = {
+  added: (file: string) => `Added the "hippo" MCP server -> ${file}`,
+  present: (file: string) => `The "hippo" MCP server is already in ${file}`,
+  'user-owned': (file: string) => `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
+  unreadable: (file: string) => `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; add this under "mcpServers" by hand: ${copilotMcpSnippet()}`,
+} as const satisfies Record<McpMergeStatus, (file: string) => string>;
+
+function printCopilotInstall(result: CopilotInstallResult, indent: string): void {
+  const { paths } = result;
+  const hooks = result.hooks ? "Installed hippo's Copilot hooks (sessionStart, postToolUseFailure, preCompact, sessionEnd) ->" : "hippo's Copilot hooks are already in";
+  console.log(`${indent}${hooks} ${paths.hooks}`);
+  console.log(`${indent}${MCP_MERGE_LINES[result.mcp](paths.mcpConfig)}`);
+  console.log(`${indent}${result.instructions ? 'Wrote the hippo block ->' : 'The hippo block is already in'} ${paths.instructions}`);
+  console.log(`${indent}VS Code Copilot runs new hooks in a new chat session.`);
+}
+
+function printCopilotUninstall(result: CopilotUninstallResult): void {
+  const { paths } = result;
+  if (result.hooks) console.log(`Removed hippo's Copilot hooks file ${paths.hooks}`);
+  if (result.mcp === 'removed') console.log(`Removed the "hippo" MCP server from ${paths.mcpConfig}`);
+  if (result.mcp === 'user-owned') console.log(`Left the "hippo" MCP server in ${paths.mcpConfig}: hippo did not write it`);
+  if (result.mcp === 'unreadable') console.log(`WARNING: ${paths.mcpConfig} has comments or is not a JSON object hippo can edit, so it was left unchanged; remove the "hippo" server by hand if hippo added it`);
+  if (result.instructions) console.log(`Removed the hippo block from ${paths.instructions}`);
+  if (!result.hooks && result.mcp === 'absent' && !result.instructions) console.log('No hippo Copilot hooks, MCP server or instructions block found.');
+}
+
 function hookUninstall(target: string | undefined): void {
+  if (target === 'copilot') return printCopilotUninstall(uninstallCopilot());
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
     process.exit(1);
@@ -230,14 +261,6 @@ function removeLegacyCursorRules(): void {
   }
 }
 
-function withoutHookBlock(text: string): string {
-  const re = new RegExp(
-    `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
-    'g'
-  );
-  return text.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in ./hooks.ts.
 
@@ -257,7 +280,7 @@ export function cmdSetup(flags: Record<string, string | boolean | string[]>): vo
   const pluginTools = tools.filter((t) => t.kind === 'plugin' && t.detected);
 
   if (jsonTools.length === 0 && !forceAll) {
-    console.log('No JSON-hook-capable tools detected (checked: claude-code).');
+    console.log('No JSON-hook-capable tools detected (checked: claude-code, copilot).');
     console.log('Run with --all to install hooks anyway.');
   }
 
@@ -301,7 +324,15 @@ export function cmdSetup(flags: Record<string, string | boolean | string[]>): vo
   console.log('Done. Restart your AI tool to activate the hooks.');
 }
 
+function setupCopilot(dryRun: boolean): void {
+  const indent = `  ${'copilot'.padEnd(14)} `;
+  if (!dryRun) return printCopilotInstall(installCopilot(), indent);
+  const { hooks, mcpConfig, instructions } = copilotPaths();
+  console.log(`[dry-run] would install hooks in ${hooks}, the MCP server in ${mcpConfig} and the hippo block in ${instructions}`);
+}
+
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
+  if (tool.name === 'copilot') return setupCopilot(dryRun);
   if (dryRun) {
     // Resolve the real settings path so the filename is right for each tool
     // (claude-code -> settings.json, opencode -> opencode.json).
