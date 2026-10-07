@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { currentRequestStores } from '../src/db.js';
+import { currentRequestStores, runWithRequestStores, type RequestStores } from '../src/db.js';
 import { sleepRuns } from './_helpers/sleep-runs.js';
 
 const roots: string[] = [];
@@ -51,21 +51,31 @@ describe('MCP auto-sleep', () => {
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(2));
   });
 
-  it("runs outside the tool call's request scope, which closes its handles while the sleep still holds one", async () => {
+  it("runs in its own open scope, not the tool call's, with the caller's lock wait", async () => {
     const root = mkdtempSync(join(tmpdir(), 'hippo-mcp-autosleep-scope-'));
     roots.push(root);
     initStore(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    const inScope: boolean[] = [];
+    const seen: { scope: RequestStores | undefined; open: boolean }[] = [];
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
     vi.stubGlobal('fetch', vi.fn(async () => {
-      inScope.push(currentRequestStores() !== undefined);
+      const scope = currentRequestStores();
+      seen.push({ scope, open: scope !== undefined && !scope.closed });
       return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
     }));
 
-    await remember(root, 'the deploy moved to friday');
+    // HTTP POST /mcp wraps the call in a 250 ms scope; the tool call joins it.
+    let callScope: RequestStores | undefined;
+    await runWithRequestStores(async () => {
+      callScope = currentRequestStores();
+      await remember(root, 'the deploy moved to friday');
+    }, { busyWaitMs: 250 });
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
-    expect(inScope.length).toBeGreaterThan(0);
-    expect(inScope).not.toContain(true);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) {
+      expect(s.open).toBe(true);
+      expect(s.scope).not.toBe(callScope);
+      expect(s.scope?.busyWaitMs).toBe(250);
+    }
   });
 });

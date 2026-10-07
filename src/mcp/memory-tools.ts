@@ -4,7 +4,7 @@ import { log } from '../log.js';
 import { readEntry } from '../store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
 import { consolidate } from '../consolidate/sleep.js';
-import { outsideRequestStores } from '../db.js';
+import { outsideRequestStores, runWithRequestStores, scopedBusyWait } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN, type Context as ApiContext } from '../api.js';
 import { mcpActor, type ToolCall } from './protocol.js';
@@ -46,8 +46,9 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
   ) {
     autoSleepInFlight.add(hippoRoot);
     // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
-    // Outside the call's request scope, which would close a handle the sleep still holds across its pauses.
-    outsideRequestStores(() => consolidate(hippoRoot))
+    // Its own scope: the call's closes a handle the sleep still holds across its pauses, but the caller's lock wait carries over.
+    const busyWaitMs = scopedBusyWait();
+    outsideRequestStores(() => runWithRequestStores(() => consolidate(hippoRoot), { busyWaitMs }))
       .catch((err) => {
         log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${err instanceof Error ? err.message : String(err)}`);
       })
