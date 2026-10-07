@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
+import { claudeConfigDir } from './hooks/shared.js';
 
 function main(): void {
   if (envSkipPostinstall()) return;
@@ -40,8 +41,7 @@ function main(): void {
  * middle ground.
  */
 function printClaudeCodeNudge(): void {
-  const home = os.homedir();
-  const claudeDir = path.join(home, '.claude');
+  const claudeDir = claudeConfigDir(os.homedir());
   if (!fs.existsSync(claudeDir)) return; // Claude Code not installed — silent
 
   const settingsPath = path.join(claudeDir, 'settings.json');

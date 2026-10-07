@@ -1,6 +1,7 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
 import { BadRequestError } from '../api-errors.js';
+import type { HippoStore } from '../store-port.js';
 
 /**
  * Actor identity + authorization role for a Context.
@@ -19,12 +20,14 @@ export interface Actor {
   viaAuthResolver?: true;
   /** The host's operator (CLI, stdio MCP, keyless loopback, host-tenant admin key): may act beyond its tenant. */
   hostAdmin?: true;
+  owner?: string; // the person behind the key; task state keys on it
 }
 
 export interface Context {
   hippoRoot: string;
   tenantId: string;
   actor: Actor;
+  store?: HippoStore;
 }
 
 /**
@@ -36,6 +39,11 @@ export interface Context {
  */
 export function adminActor(subject: string): Actor {
   return { subject, role: 'admin', hostAdmin: true };
+}
+
+/** The per-person key: an unowned key gets its own bucket by key id rather than sharing one. */
+export function ownerOrSubject(actor: Actor): string {
+  return actor.owner ?? actor.subject;
 }
 
 /**

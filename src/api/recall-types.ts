@@ -7,6 +7,7 @@ import type { RerankStep, SearchResult } from '../search/types.js';
 import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';
+import type { CallerProject } from '../prompt-hook.js';
 
 // ---------------------------------------------------------------------------
 // recall
@@ -83,8 +84,8 @@ export interface RecallOpts {
    * session handoff, recent session events) on the result. Default false to keep
    * the hot path cheap; agent boot paths should set this to true.
    *
-   * All three lookups are tenant-scoped to ctx.tenantId via the store
-   * helpers. No risk of cross-tenant leak.
+   * All three lookups are tenant-scoped to ctx.tenantId. On a shared store they are
+   * the caller's own, keyed by owner and `project`, and empty without a project.
    *
    * Note: when no active snapshot exists, sessionHandoff is null and
    * recentSessionEvents is []. We deliberately do NOT fall back to the latest
@@ -93,6 +94,7 @@ export interface RecallOpts {
    * `hippo session resume`.
    */
   includeContinuity?: boolean;
+  project?: CallerProject; // keeps rows to this project and user-global ones, and keys the continuity block
   /**
    * When set AND `(ctx.tenantId, sessionId)` has active goals AND
    * `goalTag` is unset, `api.recall` applies the dlPFC goal-stack boost lifted

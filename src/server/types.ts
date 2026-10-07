@@ -1,5 +1,9 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Context } from '../api.js';
+import type { JsonValue } from '../json.js';
+import type { RateLimiter } from '../rate-limit.js';
+import type { HippoStore } from '../store-port.js';
 
 export interface ServerHandle {
   port: number;
@@ -24,6 +28,20 @@ export interface ResolvedBearer {
 /** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so throw only when upstream is down. */
 export type AuthResolver = (token: string) => ResolvedBearer | null | Promise<ResolvedBearer | null>;
 
+/** What an add-on route's handler gets: the caller core authenticated and the parsed JSON body. */
+export interface AddonCall {
+  readonly ctx: Context;
+  readonly body: Readonly<Record<string, JsonValue>>;
+}
+
+/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned value as 200 JSON. */
+export interface AddonRoute {
+  readonly path: string;
+  readonly handler: (call: AddonCall) => Promise<JsonValue>;
+}
+
+export interface RateLimitSpec { ratePerSec: number; burst: number }
+
 export interface ServeOpts {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
@@ -36,18 +54,39 @@ export interface ServeOpts {
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;
+  /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
+  store?: HippoStore;
+  autoSleep?: false;
+  routes?: readonly AddonRoute[];
+  mintBodyDeadlineMs?: number;
+  /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
+  publicJson?: Readonly<Record<string, JsonValue>>;
+  /** Request limits: perCaller after auth; perAddress replaces HIPPO_V1_RPS when set, 'off' disables it; failedAuthPerAddress guards scrypt. */
+  rateLimits?: {
+    perCaller?: RateLimitSpec;
+    perAddress?: RateLimitSpec | 'off';
+    failedAuthPerAddress?: RateLimitSpec;
+  };
 }
+
+export type ResolvedServeOpts = ServeOpts & {
+  store: HippoStore;
+  publicJsonBodies: ReadonlyMap<string, string>;
+  callerLimiter?: RateLimiter;
+  failedAuthLimiter: RateLimiter;
+};
 
 /** Per-request values the /v1 route handlers read. */
 export interface RouteRequest {
   req: IncomingMessage;
   res: ServerResponse;
-  opts: ServeOpts;
+  opts: ResolvedServeOpts;
   query: URLSearchParams;
 }
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. */
-export type Route =
-  | { method: string; path: string; handler: (r: RouteRequest) => Promise<void> }
-  | { method: string; pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
-  | { method: string; regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> };
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. `storeReady` routes run under any store. */
+export type Route = { method: string; storeReady?: true } & (
+  | { path: string; handler: (r: RouteRequest) => Promise<void> }
+  | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
+  | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }
+);

@@ -188,7 +188,10 @@ function writePlan(db: DatabaseSyncLike, plan: readonly MemoryEntry[], old: Read
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of plan) {
     update.run(e.half_life_days, e.id);
-    byTenant.set(e.tenantId, { ...byTenant.get(e.tenantId), [e.id]: old.get(e.id)! });
+    // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
+    let record = byTenant.get(e.tenantId);
+    if (!record) byTenant.set(e.tenantId, (record = {}));
+    record[e.id] = old.get(e.id)!;
   }
   for (const [tenantId, oldHalfLives] of byTenant) {
     appendAuditEvent(db, { tenantId, actor: move.actor, op: 'half_life_migrate', metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives } });

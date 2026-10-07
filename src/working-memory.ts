@@ -80,7 +80,7 @@ export function wmPush(hippoRoot: string, opts: {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
 
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       const result = db.prepare(`
         INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)

@@ -1,6 +1,7 @@
 import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../memory.js';
 import { jaccardMinShared, overlapPartners } from '../overlap-index.js';
 import { isQuarantineScope } from '../quarantine.js';
+import { isPersonalScope } from '../recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 
 // Contradictions should be gated by content overlap, not shared tags. Tags like
@@ -77,6 +78,8 @@ export function detectConflicts(
 
 /** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a project's. */
 function recalledTogether(a: MemoryEntry, b: MemoryEntry): boolean {
+  // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
+  if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
   if (a.tenantId !== b.tenantId) return false;
   const [x, y] = [a.origin_project ?? null, b.origin_project ?? null];
   return x === y || (x === '' && y !== null) || (y === '' && x !== null);

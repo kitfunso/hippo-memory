@@ -79,7 +79,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
   try {
     const queryHash = createHash('sha256').update(input.query).digest('hex').slice(0, 16);
     const ts = new Date().toISOString();
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       const insertTrace = db.prepare(`
         INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count, explain_mode)

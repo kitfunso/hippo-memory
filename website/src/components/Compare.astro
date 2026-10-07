@@ -1,6 +1,5 @@
 ---
 import { compare, comparison } from '../content/site';
-import { mdInline } from '../content/readme';
 
 // Color-code cells for scannability. All tones pass AA contrast on the dark table.
 function cellTone(v: string): string {
@@ -11,10 +10,9 @@ function cellTone(v: string): string {
   return 'text-zinc-300';
 }
 
-// Home shows 6 rows x 4 systems of the README table; the GitHub link carries readers to all 10.
+// Home shows 6 rows x every system of the README table; the GitHub link carries readers to all rows.
 // A cell shows its short verdict, the README cell minus its parenthetical, keeping footnote marks.
 const shortVerdict = (cell: string) => cell.replace(/\s*\(([^)]*)\)/g, (_, inner: string) => inner.match(/\*+/)?.[0] ?? '');
-const homeSystems = ['Hippo', 'Mem0', 'gbrain', 'Zep'];
 const homeFeatures = [
   'Decay by default',
   'Retrieval strengthening',
@@ -23,17 +21,12 @@ const homeFeatures = [
   'Zero runtime deps',
   'LongMemEval (best published)',
 ];
-// A README rename must fail the build here, not drop a column or row from the page.
-const sysIdx = homeSystems.map((n) => {
-  const i = comparison.systems.findIndex((s) => s.name === n);
-  if (i < 0) throw new Error(`README comparison has no "${n}" column`);
-  return i;
-});
-const systems = sysIdx.map((i) => comparison.systems[i]);
+const systems = comparison.systems;
+// A README rename must fail the build here, not drop a row from the page.
 const rows = homeFeatures.map((f) => {
   const row = comparison.rows.find((r) => r.feature === f);
   if (!row) throw new Error(`README comparison has no "${f}" row`);
-  return { feature: row.feature, cells: sysIdx.map((i) => shortVerdict(row.cells[i])) };
+  return { feature: row.feature, cells: row.cells.map(shortVerdict) };
 });
 ---
 
@@ -49,19 +42,19 @@ const rows = homeFeatures.map((f) => {
 
     <!-- trimmed matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
     <div class="relative mt-10">
-      <!-- Equal fixed columns: auto layout let the long LongMemEval cells set every column's width. -->
+      <!-- Equal fixed columns; the table fits without scrolling from lg up, so the feature column only sticks below it. -->
       <div class="overflow-x-auto rounded-2xl glass" data-scroll-x>
-        <table class="w-full min-w-[640px] table-fixed border-collapse text-left text-sm">
+        <table class="w-full min-w-[60rem] table-fixed border-collapse text-left text-sm">
           <thead>
             <tr class="border-b border-white/10">
               <th
                 scope="col"
-                class="sticky left-0 z-20 w-40 border-r border-white/10 bg-zinc-900 px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-400"
+                class="sticky left-0 z-20 w-36 border-r border-white/10 bg-zinc-900 px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-400 sm:w-52 lg:static lg:bg-transparent"
               >
                 Feature
               </th>
               {systems.map((s) => (
-                <th scope="col" class="px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold">
+                <th scope="col" class:list={['px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold leading-tight', s.self ? 'bg-acc-violet/5' : '']}>
                   <a
                     href={s.href}
                     target="_blank"
@@ -77,17 +70,17 @@ const rows = homeFeatures.map((f) => {
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr class:list={['border-b border-white/5', i % 2 === 1 ? 'bg-white/[0.015]' : '']}>
+              <tr class:list={['border-b border-white/5 last:border-b-0', i % 2 === 1 ? 'bg-white/[0.015]' : '']}>
                 <th
                   scope="row"
-                  class="sticky left-0 z-10 w-40 border-r border-white/10 bg-zinc-900 px-4 py-3 text-left font-normal text-zinc-200"
+                  class="sticky left-0 z-10 border-r border-white/10 bg-zinc-900 px-4 py-3 text-left font-normal text-zinc-200 [overflow-wrap:anywhere] lg:static lg:bg-transparent"
                 >
                   {row.feature}
                 </th>
                 {row.cells.map((c, ci) => (
                   <td
                     class:list={[
-                      'min-w-[8.5rem] px-3 py-2.5 text-center align-top text-[13px] leading-snug',
+                      'px-2 py-3 text-center align-middle text-[13px] leading-snug',
                       cellTone(c),
                       ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
                     ]}
@@ -99,18 +92,14 @@ const rows = homeFeatures.map((f) => {
         </table>
       </div>
     </div>
-    <p class="mt-2 font-mono text-xs text-zinc-400 sm:hidden">{compare.scrollCue} →</p>
+    <p class="mt-2 font-mono text-xs text-zinc-400 lg:hidden">{compare.scrollCue} →</p>
 
-    <p class="mt-5 text-sm">
-      <a href={compare.sourceHref} target="_blank" rel="noopener noreferrer" class="link">
-        {compare.sourceLabel} →
-      </a>
-    </p>
-
-    <div class="mt-4 gap-x-12 *:mb-2 lg:columns-2" data-reveal>
-      {comparison.footnotes.map((f) => <p class="copy break-inside-avoid text-sm leading-relaxed text-zinc-400" set:html={mdInline(f)} />)}
-      <p class="break-inside-avoid text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
-      <p class="break-inside-avoid pt-4 text-sm leading-relaxed text-zinc-400">{comparison.closing}</p>
+    <div class="mt-5 max-w-3xl space-y-1.5 text-sm leading-relaxed text-zinc-400" data-reveal>
+      {compare.notes.map((n) => <p>{n}</p>)}
+      <p class="pt-3 text-zinc-300">{comparison.closing}</p>
+      <p class="pt-1">
+        <a href={compare.sourceHref} target="_blank" rel="noopener noreferrer" class="link">{compare.sourceLabel} →</a>
+      </p>
     </div>
   </div>
 </section>

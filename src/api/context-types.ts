@@ -32,7 +32,7 @@ export interface ContextOpts {
   /** Envelope scope to match exactly, as in `recall`: admits that scope even when private, after the actor's scope check. */
   exactScope?: string;
   /** With `pinnedOnly`, also inject the N most recent writes that pass the
-   *  quality floor (`isContentWorthStoring`). Filtering happens BEFORE
+   *  quality floor (`isWorthSurfacing`). Filtering happens BEFORE
    *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
    *  than 5-minus-junk; pinned entries bypass the floor. Entries are only
    *  skipped for this read, never mutated or deleted. Ignored when
@@ -62,6 +62,7 @@ export interface ContextOpts {
   cost?: ContextCost;
   /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with or without it. */
   deliveryObserver?: DeliveryObserver;
+  sharedStore?: true;
 }
 
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */

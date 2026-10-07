@@ -89,7 +89,7 @@ export interface GraphExpandOpts {
    *  (passesCliRecallScopeFilter); additive false/absent with requested set = api
    *  exact-narrowing semantics (passesScopeFilterForRecall). Base results are the
    *  caller's responsibility (they passed through the caller's own scope filter). */
-  recallScope?: { requested?: string; additive?: boolean };
+  recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
 /** Load memories by id in <=500-id chunks (loadEntriesByIds caps each call at 500). */
@@ -104,7 +104,7 @@ function loadByIdsChunked(root: string, tenantId: string, ids: string[]): Memory
 
 type HitOpts = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
   asOfDate: Date | null;
-  recallScope: { requested?: string; additive?: boolean };
+  recallScope: { requested?: string; additive?: boolean; ownScope?: string };
 };
 
 interface RelationWalk {
@@ -180,8 +180,8 @@ function passesRecallFilters(mem: MemoryEntry, via: GraphVia, successorValidFrom
     return false;                                                 // default recall drops superseded
   }
   return recallScope.additive
-    ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested)
-    : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested);
+    ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested) || passesScopeFilterForRecall(mem.scope ?? null, undefined, recallScope.ownScope)
+    : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested, recallScope.ownScope);
 }
 
 /** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`

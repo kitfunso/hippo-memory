@@ -146,6 +146,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
         error: { type: 'boolean', description: 'Mark as error memory (doubles half-life)' },
         pin: { type: 'boolean', description: 'Pin memory (never decays)' },
         tag: { type: 'string', description: 'Optional tag for categorization' },
+        personal: { type: 'boolean', description: 'Store it as your own private memory: only you can recall it, in every project. Needs a key you minted or a sign-in.' },
       },
       required: ['text'],
     },

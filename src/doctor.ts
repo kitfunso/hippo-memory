@@ -11,13 +11,14 @@ import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
 import { loadConfig } from './config.js';
-import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
+import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, ftsRowCounts, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './compaction-spool.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
-import { CODEX_TRUST_LINE, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
+import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
 import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
-import type { JsonValue } from './json.js';
+import { readJsonFile, type JsonValue } from './json.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -43,7 +44,7 @@ export interface DoctorReport {
 /** Inputs for {@link runDoctor}; defaults come from the process. */
 export interface DoctorOpts {
   cwd?: string;
-  /** Home directory used to find agent configuration (~/.claude, ~/.codex). */
+  /** Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set, ~/.codex unless CODEX_HOME is). */
   home?: string;
   version: string;
   nodeVersion?: string;
@@ -66,8 +67,7 @@ function versionAtLeast(actual: string, min: string): boolean {
 
 function readJson(file: string): JsonValue | null {
   try {
-    // SAFETY: JSON.parse returns a JSON value by definition.
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as JsonValue;
+    return readJsonFile(file);
   } catch {
     // A missing or corrupt file is the finding doctor reports, so null is the answer.
     return null;
@@ -136,8 +136,23 @@ function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   }
 }
 
-/** Compaction records the PostCompact hook left unfinished, which `hippo sleep` replays. */
-function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
+interface SpoolRead {
+  counts: SpoolCounts;
+  /** The detail's `; spool not read: <msg>` tail, empty when the spool was read. */
+  unread: string;
+}
+
+/** Spool counts in their own try, so a spool that cannot be read never hides the database counts. */
+function readSpool(store: string, now: Date): SpoolRead {
+  try {
+    return { counts: spoolCounts(store, now, REPLAY_AFTER_MS), unread: '' };
+  } catch (err) {
+    return { counts: { waiting: 0, stale: 0, bad: 0 }, unread: `; spool not read: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+/** Compaction records the PostCompact hook left unfinished and spool files a replay has not finished, which `hippo sleep` replays. */
+function compactionsCheck(db: DatabaseSyncLike, store: string, now: Date): DoctorCheck {
   const stuckBefore = new Date(now.getTime() - REPLAY_AFTER_MS).toISOString();
   const transcriptFloor = new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString();
   try {
@@ -152,13 +167,19 @@ function compactionsCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
     const summarised = Number(row?.summarised ?? 0);
     const started = Number(row?.started ?? 0);
     const stuck = summarised + started;
-    if (stuck === 0) return { id: 'compactions', status: 'pass', detail: `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck` };
-    return {
-      id: 'compactions',
-      status: 'warn',
-      detail: `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`,
-      fix: 'hippo sleep   (replays them)',
-    };
+    const { counts: spool, unread } = readSpool(store, now);
+    const spooled = spool.waiting + spool.stale + spool.bad > 0;
+    const recorded = `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck`;
+    if (stuck === 0 && !spooled && unread === '') return { id: 'compactions', status: 'pass', detail: recorded };
+    const fix = [
+      stuck + spool.waiting + spool.stale > 0 ? 'hippo sleep   (replays them)' : '',
+      spool.bad > 0 ? `open the .bad files in ${path.join(store, SPOOL_DIR)}, save what you still need with hippo remember, then delete them` : '',
+    ].filter((s) => s !== '');
+    const unfinished = stuck === 0
+      ? `${recorded} in the store`
+      : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
+    const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
+    return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return message.includes('no such table')
@@ -234,6 +255,23 @@ function memoriesCheck(db: DatabaseSyncLike): DoctorCheck {
   return memoryCheck;
 }
 
+/** Whether the full-text index still matches `memories`; opening a current store no longer checks, so doctor reports and sleep repairs. */
+function ftsCheck(db: DatabaseSyncLike): DoctorCheck {
+  try {
+    const counts = ftsRowCounts(db);
+    if (counts === null) return { id: 'fts', status: 'info', detail: 'no full-text index; search uses slower LIKE matching' };
+    if (counts.memories === counts.fts) return { id: 'fts', status: 'pass', detail: `full-text index in sync (${counts.fts} rows)` };
+    return {
+      id: 'fts',
+      status: 'warn',
+      detail: `full-text index out of sync: ${counts.fts} indexed rows for ${counts.memories} memories, so search can miss memories or match removed ones`,
+      fix: 'hippo sleep   (re-syncs the index)',
+    };
+  } catch (err) {
+    return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
 function tokensCheck(db: DatabaseSyncLike, since: string): DoctorCheck {
   try {
     // SAFETY: COUNT/SUM aggregate row.
@@ -262,11 +300,12 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     const have = getSchemaVersion(db);
     checks.push(schemaCheck(have, getCurrentSchemaVersion()));
     checks.push(memoriesCheck(db));
+    checks.push(ftsCheck(db));
     const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
     checks.push(tokensCheck(db, since));
     checks.push(failuresCheck(db, since, have));
     checks.push(sleepCheck(db, now));
-    checks.push(compactionsCheck(db, now));
+    checks.push(compactionsCheck(db, store, now));
   } catch (err) {
     checks.push({
       id: 'schema',
@@ -291,7 +330,7 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function claudeCodeCheck(home: string): DoctorCheck {
-  const claudeDir = path.join(home, '.claude');
+  const claudeDir = claudeConfigDir(home);
   if (!fs.existsSync(claudeDir)) {
     return { id: 'claude-code', status: 'info', detail: 'Claude Code not found; other agents can use hippo over MCP (hippo mcp)' };
   }

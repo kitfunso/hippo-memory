@@ -1,6 +1,6 @@
 # hippo-memory-sdk (Python SDK)
 
-Async Python SDK for [hippo-memory](https://github.com/kitfunso/hippo-memory), a biologically-inspired memory system for AI agents. Decay by default, strength through use, sleep consolidation.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 
 This package is a thin async HTTP wrapper. Run `hippo serve` from the npm package alongside, then use this SDK to talk to it from Python.
 

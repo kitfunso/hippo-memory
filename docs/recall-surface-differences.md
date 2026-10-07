@@ -1,6 +1,6 @@
 # Recall surface differences
 
-Recall has three surfaces: CLI `hippo recall` (`src/cli/recall.ts`), MCP `hippo_recall` (`src/mcp/recall-tools.ts`) and HTTP `GET /v1/memories` (`src/server/routes/recall.ts`). The same query on the same store gives a different answer on each one. This file lists the 17 differences found in the code. Each one is pinned by `tests/recall-surface-parity-golden.test.ts`; the test comments name the entries they pin (D1 to D17).
+Recall has three surfaces: CLI `hippo recall` (`src/cli/recall.ts`), MCP `hippo_recall` (`src/mcp/recall-tools.ts`) and HTTP `GET /v1/memories` (`src/server/routes/recall.ts`). The same query on the same store gives a different answer on each one. This file lists the 18 differences found in the code. Each one is pinned by `tests/recall-surface-parity-golden.test.ts`; the test comments name the entries they pin (D1 to D18).
 
 When a change closes a difference, update its entry and the goldens in the same PR, and add one changelog line for each surface whose output moves.
 
@@ -30,4 +30,8 @@ Both surfaces now check recall and context inputs with `parseRecallRequest` and 
 - **D14 `fresh_tail_count`.** Closed. Both reject a negative value.
 - **D15 `fresh_tail_session_id`.** Closed. Both cap it at 256 characters.
 - **D16 Surface-only arguments.** Both check `limit` and `mode` by the same rules, but MCP then ignores them: it ranks a 50-row band in the store's search mode. MCP has `budget` and rejects a negative one; HTTP ignores it. MCP's schema rejects a non-boolean `summarize_overflow`; HTTP reads any value other than `1` or `true` as false. Both cap `session_id` at 256 characters and treat a blank one as absent.
-- **D17 Context.** Both cap `scope` at 256 characters and reject a negative `budget` and a `limit` of 0 or less, with the same messages. MCP `hippo_context` takes no query text, since it reads the task from git, and it ignores `limit`. HTTP caps `q` at 1,024 characters; MCP applies the same cap to a `query` argument it then ignores.
+- **D17 Context.** Both cap `scope` at 256 characters and reject a negative `budget` and a `limit` of 0 or less, with the same messages. MCP `hippo_context` takes no query text: it reads the task from git, or none on a shared store, and it ignores `limit`. HTTP caps `q` at 1,024 characters; MCP applies the same cap to a `query` argument it then ignores. On a store whose `config.json` sets `"sharedStore": true`, HTTP needs the caller's `project` and answers 400 without it. MCP `hippo_context` over HTTP reads the project from the `X-Hippo-Project` header and returns an `isError` refusal without one; over stdio it always refuses and points to `hippo_recall` (pinned by `tests/shared-store-context.test.ts`).
+
+## Shared store, MCP against HTTP
+
+- **D18 Project filter.** On a store whose `config.json` sets `"sharedStore": true`, MCP `hippo_recall` over HTTP shows only the rows of the repo named in `X-Hippo-Project`, plus user-global ones, and refuses a call that names no repo. HTTP `GET /v1/memories` takes no project, so it returns every repo's rows in the tenant. Backlog item E15 adds a project to the HTTP recall routes.

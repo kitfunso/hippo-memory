@@ -90,6 +90,12 @@ export interface InsertEntityOpts {
   sourceObject?: SourceObjectRef;
 }
 
+/** What an in-place entity update may change; type and source object are the row's identity and stay. */
+export interface UpdateEntityOpts {
+  name: string;
+  memoryId?: string | null;
+}
+
 export interface InsertRelationOpts {
   fromEntityId: number;
   toEntityId: number;

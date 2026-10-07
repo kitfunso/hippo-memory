@@ -42,6 +42,7 @@ import {
 import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import { isClefModel } from '../rerankers/clef.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../context-render.js';
+import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
 import {
   parseLimitFlag,
@@ -59,7 +60,6 @@ import {
   hostSessionId,
   captureConsole,
   hookStoreRoot,
-  withLedgerDb,
 } from './shared.js';
 
 // Per-process rings: a single-shot `hippo recall` starts empty, so anchoring only accumulates in long-lived

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { isContentWorthStoring } from '../src/audit.js';
+import { isContentWorthStoring } from '../src/memory-quality.js';
 import {
   MAX_DIGEST_CHARS,
   buildSessionDigest,

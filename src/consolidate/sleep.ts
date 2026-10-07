@@ -10,19 +10,22 @@
 import { evalNow } from '../ablation.js';
 import { MemoryEntry, canAutoDelete, type DecayOptions } from '../memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { batchWriteAndDelete, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { batchWriteAndDeleteOn, type FlushComponent, memoriesBackingObjects, noteFailedUnit } from '../store/delete-and-batch.js';
+import { openStore } from '../store/open.js';
 import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from '../store/index-and-stats.js';
 import { replaceDetectedConflicts } from '../store/conflicts.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { countExpiredDormant, purgeExpiredDormant } from '../dormant.js';
+import { openHippoDb, closeHippoDb, SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../db.js';
+import { deleteExpiredDormantRow, type DormantKey, expiredDormantKeys } from '../dormant.js';
 import { loadConfig } from '../config.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from '../half-life-migration.js';
 import { log } from '../log.js';
+import { WRITE_BUDGET, type WriteBudget } from '../write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
+import { familyUnits, groupFlush } from './flush-units.js';
 import { retireHeldTexts, mergePass } from './merge.js';
 import { detectConflicts } from './conflicts.js';
-import { type ConsolidationResult, lazyConsolidateDb, type SleepRun, newConsolidationResult } from './run.js';
+import { type ConsolidationResult, lazyConsolidateDb, type SleepRun, newConsolidationResult, syncFtsIndex } from './run.js';
 import { promoteSessionTraces, replayPass } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
@@ -32,12 +35,13 @@ import { physicsPass } from './physics-pass.js';
  */
 export async function consolidate(
   hippoRoot: string,
-  options: { dryRun?: boolean; now?: Date; fetcher?: typeof fetch } = {}
+  options: { dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget } = {}
 ): Promise<ConsolidationResult> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
   const result = newConsolidationResult(dryRun);
   const halfLife = migrateHalfLives(hippoRoot, dryRun, result);
+  syncFtsIndex(hippoRoot, dryRun, result);
 
   // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
   // The api.sleep audit row tags this with the admin synthetic actor.
@@ -66,6 +70,7 @@ export async function consolidate(
     pendingWrites: [],
     pendingDeletes: [],
     pendingDormant: [],
+    units: [],
   };
 
   const decay = decayPass(run);
@@ -88,8 +93,9 @@ export async function consolidate(
     );
   }
 
-  flushPending(run, snapshot);
-  expireDormant(run);
+  const budget = options.budget ?? WRITE_BUDGET;
+  await flushPending(run, snapshot, budget);
+  await expireDormant(run, budget);
   if (!dryRun) logRun(run, decay);
   return result;
 }
@@ -107,13 +113,13 @@ function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: Consolidat
   return halfLife;
 }
 
-function flushPending(run: SleepRun, snapshot: Map<string, MemoryEntry>): void {
-  const { result, pendingDeletes, pendingDormant } = run;
+async function flushPending(run: SleepRun, snapshot: Map<string, MemoryEntry>, budget: WriteBudget): Promise<void> {
+  const { result, pendingWrites, pendingDeletes, pendingDormant } = run;
   result.removedIds = pendingDeletes;
-  // One transaction; the snapshot keeps what the DAG passes and other writers changed while sleep ran.
-  // Dormant moves ride in the same transaction (src/dormant.ts).
   if (run.dryRun) return;
-  const left = new Set(batchWriteAndDelete(run.hippoRoot, run.pendingWrites, pendingDeletes, { snapshot, dormant: pendingDormant }));
+  const units = [...run.units, ...familyUnits(pendingWrites, pendingDeletes, pendingDormant, snapshot)];
+  const components = groupFlush(pendingWrites, pendingDeletes, pendingDormant, units);
+  const left = new Set(await commitInChunks(run.hippoRoot, components, snapshot, budget));
   for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
     if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
   }
@@ -122,17 +128,75 @@ function flushPending(run: SleepRun, snapshot: Map<string, MemoryEntry>): void {
   result.dormant = pendingDormant.filter((m) => left.has(m.entry.id)).length;
 }
 
+/** Commits whole components in transactions of about `budget.holdMs`, letting other writers in between; returns the ids that left `memories`.
+ *  The snapshot keeps what the DAG passes and other writers changed while sleep ran. */
+async function commitInChunks(
+  hippoRoot: string,
+  components: readonly FlushComponent[],
+  snapshot: ReadonlyMap<string, MemoryEntry>,
+  budget: WriteBudget,
+): Promise<string[]> {
+  if (components.length === 0) return [];
+  const removed: string[] = [];
+  // Its own wait, not a server request's 250 ms, and an option rather than a PRAGMA so a shared hook handle keeps its own.
+  const db = openStore(hippoRoot, { busyWaitMs: SLEEP_DB_WAIT_MS });
+  let next = 0;
+  try {
+    let committedAt = 0;
+    while (next < components.length) {
+      if (next > 0) await budget.pause(committedAt);
+      const chunk = batchWriteAndDeleteOn(db, hippoRoot, components, next, { snapshot, holdMs: budget.holdMs, clock: budget.clock });
+      committedAt = budget.clock();
+      next = chunk.next;
+      for (const id of chunk.removedIds) removed.push(id);
+    }
+  } catch (err) {
+    // A unit that threw is already tagged; a throw outside one (a pause, BEGIN or COMMIT) names the chunk's first unit.
+    if (err instanceof Error) noteFailedUnit(err, components[next]);
+    throw err;
+  } finally {
+    closeHippoDb(db);
+  }
+  return removed;
+}
+
+/** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between; returns how many went. */
+async function expireInChunks(db: DatabaseSyncLike, keys: readonly DormantKey[], cutoff: string, budget: WriteBudget): Promise<number> {
+  let gone = 0;
+  let next = 0;
+  let committedAt = 0;
+  while (next < keys.length) {
+    if (next > 0) await budget.pause(committedAt);
+    db.exec('BEGIN IMMEDIATE');
+    const begunAt = budget.clock();
+    try {
+      do gone += deleteExpiredDormantRow(db, keys[next++], cutoff);
+      while (next < keys.length && budget.clock() - begunAt < budget.holdMs);
+      db.exec('COMMIT');
+    } catch (err) {
+      if (db.isTransaction !== false) {
+        try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
+      }
+      throw err;
+    }
+    committedAt = budget.clock();
+  }
+  return gone;
+}
+
 // Dormant retention: a dormant memory nobody restored within
 // dormant.retentionDays is deleted for good (0 keeps them forever). Runs
 // even when dormant.enabled is off, so turning it off still ages out what
 // earlier sleeps kept.
-function expireDormant(run: SleepRun): void {
+async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> {
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;
   const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-  const db = openHippoDb(run.hippoRoot);
+  const db = openHippoDb(run.hippoRoot, { busyWaitMs: SLEEP_DB_WAIT_MS });
   try {
-    result.dormantExpired = dryRun ? countExpiredDormant(db, cutoff) : purgeExpiredDormant(db, cutoff);
+    // The keys come from a read, so a sleep with nothing to expire never takes the write lock; one DELETE scanned every stored entry under it.
+    const keys = expiredDormantKeys(db, cutoff);
+    result.dormantExpired = dryRun ? keys.length : await expireInChunks(db, keys, cutoff, budget);
   } finally {
     closeHippoDb(db);
   }
@@ -163,8 +227,7 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
   if (decay.rescuedEntries.length > 0) auditRescues(run, decay);
 }
 
-// One audit row per rescue, written only after batchWriteAndDelete commits: writing earlier
-// would assert rescues for a cycle whose effects never landed if a later phase threw.
+// One audit row per rescue, written only after the last flush chunk commits, so a run stopped mid-flush asserts no rescue.
 function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): void {
   const { result } = run;
   try {
