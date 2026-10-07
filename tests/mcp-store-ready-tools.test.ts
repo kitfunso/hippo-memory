@@ -33,11 +33,13 @@ function listedNames(res: McpResponse | null): string[] {
 }
 
 const declared = TOOLS.map((t) => t.name);
+// The stub carries every group sqliteStore sets, so the tools that name one run on it.
+const ready = declared.filter((name) => ['hippo_recall', 'hippo_remember', 'hippo_outcome'].includes(name));
 
 describe('store-ready MCP tools', () => {
-  it('tools/list under another store lists only hippo_recall', async () => {
+  it('tools/list under another store lists only the tools that name a group it has', async () => {
     const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn('stub'));
-    expect(listedNames(res)).toEqual(['hippo_recall']);
+    expect(listedNames(res)).toEqual(ready);
   });
 
   it.each([['the sqlite store', 'sqlite'], ['a context with no store', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
@@ -46,7 +48,7 @@ describe('store-ready MCP tools', () => {
   });
 
   it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
-    const unready = declared.filter((name) => name !== 'hippo_recall');
+    const unready = declared.filter((name) => !ready.includes(name));
     expect(unready.length).toBeGreaterThan(0);
     for (const name of unready) {
       const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } }, ctxOn('stub'));

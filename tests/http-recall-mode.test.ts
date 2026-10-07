@@ -11,7 +11,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
-import { recall, supersede, type Context } from '../src/api.js';
+import { recall, supersede, type HippoDbContext } from '../src/api.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -61,7 +61,7 @@ describe('GET /v1/memories honours mode and strengthens', () => {
   });
 
   it.each(['bm25', 'hybrid'])('mode=%s and api.recall never return a superseded row', async (mode) => {
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+    const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
     const { newId } = supersede(ctx, weakId, 'alpha epsilon zeta');
     const ids = await recallIds(`q=alpha&mode=${mode}`);
     expect(ids).toContain(newId);

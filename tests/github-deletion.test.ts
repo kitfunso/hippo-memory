@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, recall, type Context } from '../src/api.js';
+import { remember, recall, type HippoDbContext } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 
@@ -12,7 +12,7 @@ const ARTIFACT = 'github://acme/repo/issue/42/comment/123';
 const SCOPE_PUBLIC = 'github:public:acme/repo';
 const SCOPE_PRIVATE = 'github:private:acme/secret';
 
-const ctxFor = (root: string, tenantId = 'default'): Context => ({
+const ctxFor = (root: string, tenantId = 'default'): HippoDbContext => ({
   hippoRoot: root,
   tenantId,
   actor: { subject: 'connector:github', role: 'admin' },

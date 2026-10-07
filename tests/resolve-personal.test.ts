@@ -1,7 +1,7 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listRejections, remember, type Actor, type Context } from '../src/api.js';
+import { listRejections, remember, type Actor, type HippoDbContext } from '../src/api.js';
 import { resolveOpenConflict } from '../src/dashboard-actions.js';
 import { mapApiError } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
@@ -18,7 +18,7 @@ const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
 const unownedAdmin: Actor = { subject: 'api_key:hk_admin', role: 'admin' };
 
-function ctxFor(actor: Actor): Context {
+function ctxFor(actor: Actor): HippoDbContext {
   return { hippoRoot: root, tenantId: 'default', actor };
 }
 

@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { pushGoal, completeGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
@@ -55,7 +55,7 @@ function runRecall(env: TestEnv, query: string, sessionId: string): string {
   );
 }
 
-const ctx = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 describe('B3 /review fixes', () => {
   let env: TestEnv;

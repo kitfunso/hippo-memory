@@ -55,7 +55,7 @@ export function handleMessageDeleted(ctx: Context, input: DeletionInput): Deleti
   // receives the same db handle the archive is using, so the INSERT lives
   // inside the SAVEPOINT.
   archiveRaw(
-    ctx,
+    { ...ctx, store: undefined }, // afterArchive runs on hippo.db's own handle, never through a store
     memoryId,
     `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`,
     {

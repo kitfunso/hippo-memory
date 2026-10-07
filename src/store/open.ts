@@ -50,6 +50,16 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   }
 }
 
+/** One call on a handle of its own, closed after; pass openStore where the call also sets up mirror folders and legacy rows. */
+export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb): T {
+  const db = open(hippoRoot);
+  try {
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** `meta` key holding the default half-life base a store's memories are on (src/half-life-migration.ts). */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */

@@ -449,6 +449,13 @@ export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
   return updated;
 }
 
+/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its churn-stale tag goes. */
+export function entryAfterOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
+  const updated = applyOutcome(entry, good);
+  if (!good || !updated.tags.includes(CHURN_STALE_TAG)) return updated;
+  return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
+}
+
 /**
  * Generate a random memory ID using crypto.randomUUID().
  */

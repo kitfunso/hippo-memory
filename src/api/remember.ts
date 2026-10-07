@@ -2,15 +2,17 @@
 
 import type { DatabaseSyncLike } from '../db.js';
 import { writeEntry } from '../store/entry-writes.js';
+import { stampOriginProject } from '../store/entry-row.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
 import { detectInstruction } from '../instruction-detect.js';
 import { quarantineScopeFor, recordQuarantine } from '../quarantine.js';
-import { createMemory, type MemoryKind } from '../memory.js';
+import { createMemory, type MemoryEntry, type MemoryKind } from '../memory.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { assertCallerProject } from '../project-identity.js';
 import { BadRequestError } from '../api-errors.js';
 import { assertClientScope, personalScopeOf } from '../recall-scope.js';
-import type { Context } from './types.js';
+import type { Context, StoreReply } from './types.js';
 
 export interface RememberOpts {
   content: string;
@@ -61,7 +63,15 @@ function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   return own;
 }
 
-export function remember(ctx: Context, opts: RememberOpts): RememberResult {
+/** The vetted row a remember writes, with its scope and quarantine verdict, decided the same way on both paths. */
+interface PreparedRemember {
+  readonly entry: MemoryEntry;
+  readonly requestedScope: string | null;
+  readonly detection: { readonly flagged: boolean; readonly reason: string | null };
+  readonly warnings: readonly string[];
+}
+
+function prepareRemember(ctx: Context, opts: RememberOpts): PreparedRemember {
   if (opts.project) assertCallerProject(opts.project);
   const requestedScope = rememberScope(ctx, opts);
   const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
@@ -75,6 +85,40 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
     tenantId: ctx.tenantId,
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
+  // Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its owner into every project.
+  const origin = opts.personal ? '' : opts.project?.name;
+  const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
+  return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
+}
+
+function rememberResult(ctx: Context, prepared: PreparedRemember): RememberResult {
+  const { entry, detection, warnings } = prepared;
+  const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
+  if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
+  if (warnings.length > 0) result.warnings = [...warnings];
+  return result;
+}
+
+/** Store one memory. With `ctx.store`, its entryWrites group writes the row and its remember row; hippo.db is opened only when there is no store. */
+export function remember<C extends Context>(ctx: C, opts: RememberOpts): StoreReply<C, RememberResult> {
+  const reply = ctx.store ? rememberThroughStore(ctx, ctx.store, opts) : rememberOnHippoDb(ctx, opts);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, RememberResult>;
+}
+
+/** afterWrite and the quarantine row write on hippo.db's own handle, and only connectors send them, so a store refuses both. */
+async function rememberThroughStore(ctx: Context, store: HippoStore, opts: RememberOpts): Promise<RememberResult> {
+  const entryWrites = requireGroup(store, 'entryWrites');
+  if (opts.afterWrite || opts.untrusted) throw new Error('afterWrite and untrusted content are written to hippo.db only, never through a store');
+  const prepared = prepareRemember(ctx, opts);
+  // The store writes origin_project as given, so the served folder's fallback is stamped here.
+  await entryWrites.writeEntry({ entry: stampOriginProject(ctx.hippoRoot, prepared.entry), actor: ctx.actor.subject });
+  return rememberResult(ctx, prepared);
+}
+
+function rememberOnHippoDb(ctx: Context, opts: RememberOpts): RememberResult {
+  const prepared = prepareRemember(ctx, opts);
+  const { requestedScope, detection } = prepared;
   // writeEntry threads ctx.actor.subject into its internal audit hook, so exactly
   // one 'remember' event lands in the log with the supplied actor.
   const afterWrite = detection.flagged
@@ -89,13 +133,6 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
         opts.afterWrite?.(db, memoryId);
       }
     : opts.afterWrite;
-  // Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its owner into every project.
-  const origin = opts.personal ? '' : opts.project?.name;
-  const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
-  writeEntry(ctx.hippoRoot, stamped, { actor: ctx.actor.subject, afterWrite });
-
-  const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
-  if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
-  if (vetted.warnings.length > 0) result.warnings = vetted.warnings;
-  return result;
+  writeEntry(ctx.hippoRoot, prepared.entry, { actor: ctx.actor.subject, afterWrite });
+  return rememberResult(ctx, prepared);
 }

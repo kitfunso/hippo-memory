@@ -12,7 +12,7 @@ import type { KeysetPosition } from '../keyset.js';
 import { isRestrictedScope } from '../recall-scope.js';
 import { requireGroup, type HippoStore } from '../store-port.js';
 import { selectApiKeyOwner, type ApiKeyOwner } from '../store/tenant-lookup.js';
-import type { Context } from './types.js';
+import type { Context, StoreReply } from './types.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 
@@ -222,11 +222,8 @@ export interface AuthRevokeResult {
   revokedAt: string;
 }
 
-/** A promise when `ctx` carries a store, since every store method is async; today's plain result when it carries none.
- *  hippoRoot keeps the second test off TypeScript's weak-type rule, which would fail a ctx that has no store key at all. */
-export type AuthRevokeReply<C extends Context> = C extends { readonly store: HippoStore }
-  ? Promise<AuthRevokeResult>
-  : C extends { readonly hippoRoot: string; readonly store?: undefined } ? AuthRevokeResult : AuthRevokeResult | Promise<AuthRevokeResult>;
+/** A promise when `ctx` carries a store; today's plain result when it carries none. */
+export type AuthRevokeReply<C extends Context> = StoreReply<C, AuthRevokeResult>;
 
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it minted.
  *  With `ctx.store`, its keyAudit group revokes and writes the auth_revoke row; hippo.db is opened only when there is no store. */

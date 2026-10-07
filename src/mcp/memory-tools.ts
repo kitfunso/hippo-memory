@@ -1,7 +1,7 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
 import { log } from '../log.js';
-import { readEntry } from '../store/entry-reads.js';
+import { storeFor } from '../store-port.js';
 import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { outsideRequestStores, runWithRequestStores, scopedBusyWait } from '../db.js';
@@ -10,7 +10,7 @@ import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_
 import { mcpActor, type ToolCall } from './protocol.js';
 import { lastRecalledIds, autoSleepInFlight, resolveClientKey } from './session-state.js';
 
-export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): string {
+export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
   const text = String(args.text || '');
   if (!text) return 'No text provided.';
   const tags: string[] = [];
@@ -27,17 +27,18 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
     actor: mcpActor(ctx),
     store: ctx?.store,
   };
-  const result = apiRemember(apiCtx, {
+  const result = await apiRemember(apiCtx, {
     content: text,
     tags,
     personal: args.personal === true,
     project: ctx?.project,
   });
-  const entry = readEntry(hippoRoot, result.id, tenantId);
+  const [entry] = await storeFor(apiCtx).entriesByIds([result.id], tenantId);
 
   // Auto-sleep: one run per store at a time, triggered by what arrived since the last one.
-  // Consolidation is host-wide, so only the host tenant's writes may start it.
+  // Consolidation is host-wide, so only the host tenant's writes may start it. It runs on hippo.db, so another store skips it.
   if (
+    (ctx?.store === undefined || ctx.store.kind === 'sqlite') &&
     ctx?.autoSleep !== false &&
     config.autoSleep.enabled &&
     tenantId === resolveTenantId({}) &&
@@ -61,7 +62,7 @@ export function runRememberTool({ args, ctx, hippoRoot, config, tenantId }: Tool
   return `Remembered [${result.id}] (half-life: ${halfLife}d, tags: ${tagStr})${warnings}`;
 }
 
-export function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   const good = Boolean(args.good);
   const clientKey = resolveClientKey(ctx);
   const ids = lastRecalledIds.get(clientKey) ?? [];
@@ -77,7 +78,7 @@ export function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
     actor: mcpActor(ctx),
     store: ctx?.store,
   };
-  const { applied } = apiOutcome(apiCtx, ids, good);
+  const { applied } = await apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 

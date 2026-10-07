@@ -33,7 +33,7 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
   if (personalRaw !== undefined && !isJsonBoolean(personalRaw)) {
     throw new HttpError(400, 'personal must be a boolean');
   }
-  const result = remember(ctx, {
+  const result = await remember(ctx, {
     content,
     kind: kindRaw,
     scope: getString(body, 'scope'),
@@ -75,7 +75,7 @@ export async function handleArchiveMemory({ req, res, opts }: RouteRequest, arch
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
-  const result = archiveRaw(ctx, archiveMatch.id!, reason);
+  const result = await archiveRaw(ctx, archiveMatch.id!, reason);
   sendJson(res, 200, result);
   return;
 }
@@ -88,7 +88,7 @@ export async function handleSupersedeMemory({ req, res, opts }: RouteRequest, su
   if (!content) {
     throw new HttpError(400, 'content is required');
   }
-  const result = supersede(ctx, supersedeMatch.id!, content);
+  const result = await supersede(ctx, supersedeMatch.id!, content);
   sendJson(res, 200, result);
   return;
 }
@@ -104,7 +104,7 @@ export async function handlePromoteMemory({ req, res, opts }: RouteRequest, prom
 export async function handleForgetMemory({ req, res, opts }: RouteRequest, idMatch: Record<string, string>): Promise<void> {
   validateIdSegment(idMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  const result = forget(ctx, idMatch.id!);
+  const result = await forget(ctx, idMatch.id!);
   sendJson(res, 200, result);
   return;
 }
@@ -142,10 +142,12 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     ids = idsRaw;
   }
   if (ids !== undefined) {
-    const { applied } = outcome(ctx, ids, good);
+    const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    const result = outcomeForLastRecall(ctx, good);
+    // The last recall's ids live in hippo.db alone, so a client of another store must send the ids its recall returned.
+    if (ctx.store !== undefined && ctx.store.kind !== 'sqlite') throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
+    const result = await outcomeForLastRecall(ctx, good);
     sendJson(res, 200, result);
   }
   return;

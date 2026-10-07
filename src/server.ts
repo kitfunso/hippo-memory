@@ -58,9 +58,16 @@ export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureRes
 // An add-on serves from another database by passing serve() its own HippoStore.
 export {
   hasGroup, sqliteStore,
-  type HippoStore, type KeyAudit, type KeyRevoke, type RecallSearchArgs, type RecallWrites, type StoreGroup, type StoreGroups, type VectorReads,
+  type EntryRemoval, type EntryTarget, type EntryWrite, type EntryWrites, type HippoStore, type KeyAudit, type KeyRevoke, type OutcomeWrite,
+  type RawArchive, type RecallSearchArgs, type RecallWrites, type StoreGroup, type StoreGroups, type SupersedeWrite, type VectorReads,
   type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
 } from './store-port.js';
+// An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
+export { entryAfterOutcome } from './memory.js';
+export { rejectionDigest, RejectedValueError } from './rejection.js';
+export { ownScopeTouches } from './recall-scope.js';
+export { BadRequestError, ConflictError } from './api-errors.js';
+export type { HippoDbContext, StoreReply } from './api/types.js';
 export type { ApiKeyRecord } from './auth.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
 export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './audit.js';
@@ -137,16 +144,16 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
 const V1_ROUTES: readonly Route[] = [
-  { method: 'POST', path: '/v1/memories', handler: handleCreateMemory },
+  { method: 'POST', path: '/v1/memories', storeReady: 'entryWrites', handler: handleCreateMemory },
   { method: 'GET', path: '/v1/graph', handler: handleGetGraph },
   { method: 'GET', path: '/v1/memories', storeReady: 'base', handler: handleRecallMemories },
   { method: 'GET', pattern: '/v1/sessions/:id/assemble', handler: handleAssembleSession },
   { method: 'GET', pattern: '/v1/recall/drill/:id', handler: handleDrillRecall },
-  { method: 'POST', pattern: '/v1/memories/:id/archive', handler: handleArchiveMemory },
-  { method: 'POST', pattern: '/v1/memories/:id/supersede', handler: handleSupersedeMemory },
+  { method: 'POST', pattern: '/v1/memories/:id/archive', storeReady: 'entryWrites', handler: handleArchiveMemory },
+  { method: 'POST', pattern: '/v1/memories/:id/supersede', storeReady: 'entryWrites', handler: handleSupersedeMemory },
   { method: 'POST', pattern: '/v1/memories/:id/promote', handler: handlePromoteMemory },
-  { method: 'DELETE', pattern: '/v1/memories/:id', handler: handleForgetMemory },
-  { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
+  { method: 'DELETE', pattern: '/v1/memories/:id', storeReady: 'entryWrites', handler: handleForgetMemory },
+  { method: 'POST', path: '/v1/outcome', storeReady: 'entryWrites', handler: handleApplyOutcome },
   { method: 'GET', path: '/v1/context', handler: handleGetContext },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
   { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },

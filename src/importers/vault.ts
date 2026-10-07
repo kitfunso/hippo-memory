@@ -3,7 +3,7 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
 import { initStore } from '../store/open.js';
-import { remember, archiveRaw, isPrivateScope, type Context } from '../api.js';
+import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
 import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
@@ -72,7 +72,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
 
-  const ctx: Context = {
+  const ctx: HippoDbContext = {
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
@@ -127,7 +127,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: Context;
+  ctx: HippoDbContext;
   folderPath: string;
   vaultName: string;
   scope: string | null;

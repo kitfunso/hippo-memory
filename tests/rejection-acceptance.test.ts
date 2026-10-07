@@ -46,7 +46,7 @@ function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function ctx(hippoRoot: string, tenantId: string = 'default'): api.Context {
+function ctx(hippoRoot: string, tenantId: string = 'default'): api.HippoDbContext {
   return { hippoRoot, tenantId, actor: { subject: 'cli', role: 'admin' } };
 }
 

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { remember, type Actor, type Context } from '../src/api.js';
+import { remember, type Actor, type HippoDbContext } from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
 import { createApiKey } from '../src/auth.js';
 import { cmdRemember } from '../src/cli/remember.js';
@@ -19,7 +19,7 @@ const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-
 
 let root: string;
 
-function ctxFor(actor: Actor): Context {
+function ctxFor(actor: Actor): HippoDbContext {
   return { hippoRoot: root, tenantId: 'default', actor };
 }
 

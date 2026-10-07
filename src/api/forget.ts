@@ -6,7 +6,8 @@ import { deleteEntry } from '../store/delete-and-batch.js';
 import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
-import type { Context } from './types.js';
+import type { Context, StoreReply } from './types.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
@@ -28,7 +29,19 @@ export interface ForgetResult {
   ok: true;
   id: string;
 }
-export function forget(ctx: Context, id: string): ForgetResult {
+export function forget<C extends Context>(ctx: C, id: string): StoreReply<C, ForgetResult> {
+  const reply = ctx.store ? forgetThroughStore(ctx, ctx.store, id) : forgetOnHippoDb(ctx, id);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, ForgetResult>;
+}
+
+async function forgetThroughStore(ctx: Context, store: HippoStore, id: string): Promise<ForgetResult> {
+  const entryWrites = requireGroup(store, 'entryWrites');
+  await entryWrites.forget({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id });
+  return { ok: true, id };
+}
+
+function forgetOnHippoDb(ctx: Context, id: string): ForgetResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
     const reach = selectMemoryReach(db, id);

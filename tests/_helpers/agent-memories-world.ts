@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { adminActor, type Context } from '../../src/api.js';
+import { adminActor, type HippoDbContext } from '../../src/api.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
@@ -109,7 +109,7 @@ export const toolTally = (report: ImportReport, tool: ToolId): Tally => report.t
 
 export const tally = (report: ImportReport): Tally => totalTally(report);
 
-export const ctxFor = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') });
+export const ctxFor = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') });
 
 export const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 

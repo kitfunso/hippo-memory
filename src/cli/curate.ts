@@ -37,7 +37,7 @@ export function cmdOutcome(
   }
 
   // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
-  const ctx: api.Context = {
+  const ctx: api.HippoDbContext = {
     hippoRoot,
     tenantId: resolveTenantId({}),
     actor: api.adminActor('cli'),
@@ -70,7 +70,7 @@ function cmdForget(
 ): void {
   requireInit(hippoRoot);
 
-  const ctx: api.Context = {
+  const ctx: api.HippoDbContext = {
     hippoRoot,
     tenantId: resolveTenantId({}),
     actor: api.adminActor('cli'),

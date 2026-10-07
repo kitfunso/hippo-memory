@@ -2,7 +2,7 @@
 import { readApiKeyRecord, type ApiKeyRecord } from './auth.js';
 import { appendAuditEvent, listAuditEventsAfter, type AppendAuditOpts, type AuditEvent, type ListAuditAfterOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
+import { withWriteScope } from './db.js';
 import { StoreNotPortedError } from './db/sqlite-blocked.js';
 import { embeddingIndexStateAt, loadStoredVectors, type EmbeddingIndexState } from './embeddings.js';
 import {
@@ -17,8 +17,10 @@ import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
 import { auditHighIdAt, revokeKeyAt } from './store/key-audit.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
+import { sqliteEntryWrites } from './store/entry-writes-group.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
+import { onHandle } from './store/open.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, type OriginFilter, type VectorCandidateSpec } from './store/search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
 import { entriesWithoutVectorAt, writeVectorsAt } from './store/vector-writes.js';
@@ -121,6 +123,56 @@ export interface KeyAudit {
   auditHighId(): Promise<number>;
 }
 
+export interface EntryWrite {
+  readonly entry: MemoryEntry;
+  readonly actor: string;
+}
+
+/** Who acts on which of a tenant's rows; `ownScope` is the caller's personal scope, so every other personal row is out of reach. */
+export interface EntryTarget {
+  readonly tenantId: string;
+  readonly actor: string;
+  readonly ownScope: string | null;
+}
+
+export interface OutcomeWrite extends EntryTarget {
+  readonly ids: readonly string[];
+  readonly good: boolean;
+}
+
+export interface SupersedeWrite extends EntryTarget {
+  readonly oldId: string;
+  readonly successor: MemoryEntry;
+}
+
+export interface EntryRemoval extends EntryTarget {
+  readonly id: string;
+}
+
+export interface RawArchive extends EntryRemoval {
+  readonly reason: string;
+}
+
+/** The memory-row writes behind remember, outcome, supersede, archive and forget. Each writes its audit rows in the write's own transaction,
+ *  a child row's change marks its level 2 or 3 summary parent dirty (one summary_marked_dirty row on the flip), and the schema's rules hold. */
+export interface EntryWrites {
+  /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's tenant; an id another tenant holds rejects in the transaction with ConflictError `Memory <id>
+   *  belongs to another tenant`. Content the write brings into a tenant that tombstoned it rejects with RejectedValueError and writes one reject_refusal row after the rollback, best effort. */
+  writeEntry(write: EntryWrite): Promise<void>;
+  /** For each id in order, a row of the tenant within reach gets `entryAfterOutcome`, a rewrite as writeEntry does and one outcome row ({good}); other ids are skipped, a repeated id builds
+   *  on its first outcome. Each read holds the row's lock to commit (SELECT ... FOR UPDATE), so a supersede between read and rewrite is not undone. Resolves to the ids applied, repeats kept. */
+  applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
+  /** Sets the old row's superseded_by where it is within reach and not yet superseded, both checked in the transaction, else rejects with NotFoundError `memory not found: <oldId>` or
+   *  ConflictError `Memory <oldId> already superseded by another writer`. Then writes the successor as writeEntry does and one supersede row ({newId}), all or nothing. */
+  supersede(write: SupersedeWrite): Promise<void>;
+  /** Moves a raw row to raw_archive (metadata only, no content), deletes it and its full-text row and writes one archive_raw row ({reason});
+   *  resolves to the archived_at written. A row out of reach rejects with NotFoundError `memory not found: <id>`, any other kind with BadRequestError. */
+  archiveRaw(archive: RawArchive): Promise<string>;
+  /** Deletes the row and its full-text row and writes one forget row; a raw row rejects, being append-only. A row out of reach rejects with
+   *  NotFoundError `memory not found: <id>`. Archive and forget then add one to the store-wide forgotten counter, best effort. */
+  forget(removal: EntryRemoval): Promise<void>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -128,6 +180,7 @@ export interface StoreGroups {
   readonly keyAudit: KeyAudit;
   /** embedMemory and embedAll with a store need it and `vectors`. */
   readonly vectorWrites: VectorWrites;
+  readonly entryWrites: EntryWrites;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;
@@ -176,15 +229,6 @@ export interface HippoStore extends Partial<StoreGroups> {
   recordTokens(use: TokenUse): Promise<void>;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
   close(): Promise<void>;
-}
-
-function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 /** The store a request runs on: the served one, else hippo.db under its root, as the CLI and SDK callers have it. */
@@ -258,6 +302,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
         return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
       },
     },
+    entryWrites: sqliteEntryWrites(hippoRoot),
     async close(): Promise<void> {},
   };
 }
