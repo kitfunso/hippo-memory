@@ -12,7 +12,7 @@ export type CopilotPayloadName =
   | 'postToolUseFailureGrep'
   | 'postToolUseFailureBash'
   | 'postToolUseFailureBuild'
-  | 'PostToolUseFailureTerminal'
+  | 'syntheticClaudeStyleTerminalFailure'
   | 'errorOccurred'
   | 'preCompact'
   | 'sessionEnd';
@@ -35,6 +35,34 @@ export function copilotPayload(name: CopilotPayloadName, cwd: string, transcript
   // SAFETY: hook-payloads.json is an object keyed by every CopilotPayloadName.
   const all = JSON.parse(raw) as { [K in CopilotPayloadName]: JsonValue };
   return JSON.stringify(all[name]);
+}
+
+export const CLAUDE_SESSION = 'claude-sess-1';
+
+/** A Claude Code hook payload in its documented snake_case fields, for the tests that keep Copilot handling off it. */
+export function claudeCodePayload(event: 'PostToolUseFailure' | 'PreCompact' | 'SessionEnd', cwd: string, transcript: string): string {
+  const common = { session_id: CLAUDE_SESSION, transcript_path: transcript, cwd, permission_mode: 'default', hook_event_name: event };
+  if (event === 'PreCompact') return JSON.stringify({ ...common, trigger: 'auto', custom_instructions: '' });
+  if (event === 'SessionEnd') return JSON.stringify({ ...common, reason: 'other' });
+  return JSON.stringify({
+    ...common,
+    tool_name: 'Bash',
+    tool_input: { command: 'npm run build' },
+    tool_use_id: 'toolu_01',
+    error: 'Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts',
+    is_interrupt: false,
+  });
+}
+
+/** A Claude Code transcript of one user turn and one reply, written under `dir`. */
+export function writeClaudeTranscript(dir: string): string {
+  const file = path.join(dir, `${CLAUDE_SESSION}.jsonl`);
+  const lines = [
+    { type: 'user', message: { role: 'user', content: 'fix the flaky login test in auth.spec.ts' } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'The retry is fixed; the test run is next.' }] } },
+  ];
+  fs.writeFileSync(file, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
+  return file;
 }
 
 /** The Copilot event log fixture: VS Code's synthetic lines plus CLI sub-agent and injected-prompt lines. */

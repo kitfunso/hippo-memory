@@ -12,7 +12,7 @@ import {
   uninstallCodexWrapper,
 } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin, uninstallOpencodePlugin, resolveOpencodePluginPath } from '../hooks/opencode.js';
-import { type CopilotInstallResult, type CopilotUninstallResult, type McpMergeStatus, copilotMcpSnippet, copilotPaths, installCopilot, uninstallCopilot } from '../hooks/copilot.js';
+import { type CopilotInstallResult, type CopilotUninstallResult, type InstructionsInstallStatus, type InstructionsRemoveStatus, type McpFailure, type McpMergeStatus, copilotMcpSnippet, copilotPaths, installCopilot, isMcpFailure, uninstallCopilot } from '../hooks/copilot.js';
 import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../shared.js';
@@ -177,23 +177,43 @@ const MCP_MERGE_LINES = {
   unreadable: (file: string) => `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; add this under "mcpServers" by hand: ${copilotMcpSnippet()}`,
 } as const satisfies Record<McpMergeStatus, (file: string) => string>;
 
+const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string => `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
+const unclosedLine = (file: string): string => `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; fix the markers by hand`;
+
+const INSTRUCTIONS_INSTALL_LINES = {
+  written: (file: string) => `Wrote the hippo block -> ${file}`,
+  present: (file: string) => `The hippo block is already in ${file}`,
+  kept: (file: string) => `Kept the hippo block in ${file} as it is: it is not the Copilot text hippo wrote, so it was edited or is another agent's`,
+  unclosed: unclosedLine,
+} as const satisfies Record<InstructionsInstallStatus, (file: string) => string>;
+
+const INSTRUCTIONS_REMOVE_LINES = {
+  removed: (file: string) => `Removed the hippo block from ${file}`,
+  absent: () => '',
+  kept: (file: string) => `Left the hippo block in ${file}: it is not the Copilot text hippo wrote. Delete it by hand if no agent needs it.`,
+  unclosed: unclosedLine,
+} as const satisfies Record<InstructionsRemoveStatus, (file: string) => string>;
+
 function printCopilotInstall(result: CopilotInstallResult, indent: string): void {
-  const { paths } = result;
+  const { paths, mcp } = result;
   const hooks = result.hooks ? "Installed hippo's Copilot hooks (sessionStart, postToolUseFailure, preCompact, sessionEnd) ->" : "hippo's Copilot hooks are already in";
   console.log(`${indent}${hooks} ${paths.hooks}`);
-  console.log(`${indent}${MCP_MERGE_LINES[result.mcp](paths.mcpConfig)}`);
-  console.log(`${indent}${result.instructions ? 'Wrote the hippo block ->' : 'The hippo block is already in'} ${paths.instructions}`);
+  const mcpLine = isMcpFailure(mcp) ? mcpFailureLine(paths.mcpConfig, mcp, `add this under "mcpServers" by hand: ${copilotMcpSnippet()}`) : MCP_MERGE_LINES[mcp](paths.mcpConfig);
+  console.log(`${indent}${mcpLine}`);
+  console.log(`${indent}${INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
   console.log(`${indent}VS Code Copilot runs new hooks in a new chat session.`);
 }
 
 function printCopilotUninstall(result: CopilotUninstallResult): void {
-  const { paths } = result;
+  const { paths, mcp } = result;
   if (result.hooks) console.log(`Removed hippo's Copilot hooks file ${paths.hooks}`);
-  if (result.mcp === 'removed') console.log(`Removed the "hippo" MCP server from ${paths.mcpConfig}`);
-  if (result.mcp === 'user-owned') console.log(`Left the "hippo" MCP server in ${paths.mcpConfig}: hippo did not write it`);
-  if (result.mcp === 'unreadable') console.log(`WARNING: ${paths.mcpConfig} has comments or is not a JSON object hippo can edit, so it was left unchanged; remove the "hippo" server by hand if hippo added it`);
-  if (result.instructions) console.log(`Removed the hippo block from ${paths.instructions}`);
-  if (!result.hooks && result.mcp === 'absent' && !result.instructions) console.log('No hippo Copilot hooks, MCP server or instructions block found.');
+  if (isMcpFailure(mcp)) console.log(mcpFailureLine(paths.mcpConfig, mcp, 'remove the "hippo" server by hand if hippo added it'));
+  if (mcp === 'removed') console.log(`Removed the "hippo" MCP server from ${paths.mcpConfig}`);
+  if (mcp === 'user-owned') console.log(`Left the "hippo" MCP server in ${paths.mcpConfig}: hippo did not write it`);
+  if (mcp === 'unreadable') console.log(`WARNING: ${paths.mcpConfig} has comments or is not a JSON object hippo can edit, so it was left unchanged; remove the "hippo" server by hand if hippo added it`);
+  const instructions = INSTRUCTIONS_REMOVE_LINES[result.instructions](paths.instructions);
+  if (instructions) console.log(instructions);
+  if (!result.hooks && mcp === 'absent' && result.instructions === 'absent') console.log('No hippo Copilot hooks, MCP server or instructions block found.');
 }
 
 function hookUninstall(target: string | undefined): void {

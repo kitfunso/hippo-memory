@@ -5,10 +5,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { JsonValue } from '../src/json.js';
 import { compactionRows, initGlobal, initProject, runHippo } from './_helpers/compaction-hooks.js';
-import { copilotEventsJsonl, copilotPayload, copilotScratch, writeCopilotSessionLog, type CopilotScratch } from './_helpers/copilot-hooks.js';
+import {
+  CLAUDE_SESSION, claudeCodePayload, copilotEventsJsonl, copilotPayload, copilotScratch, writeClaudeTranscript, writeCopilotSessionLog, type CopilotScratch,
+} from './_helpers/copilot-hooks.js';
 
 const CONTEXT_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'copilot'];
 const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth/retry.ts';
@@ -42,8 +44,8 @@ function deliveryEvents(sessionId: string): DeliveryEventRow[] {
 interface LedgerRow { session_id: string | null; event: string }
 interface FailureRow { session_id: string | null; tool: string | null; outcome: string; skip_rule: string | null }
 
-function rows<T>(sql: string): T[] {
-  const db = openHippoDb(s.hippoRoot);
+function rows<T>(sql: string, hippoRoot = s.hippoRoot): T[] {
+  const db = openHippoDb(hippoRoot);
   try {
     // SAFETY: every caller names the columns its row type declares.
     return db.prepare(sql).all() as T[];
@@ -178,6 +180,13 @@ describe('hippo session-end --runtime copilot (critic test 6)', () => {
     expect(log).not.toContain('skip capture');
     expect(loadAllEntries(s.hippoRoot).some((e) => e.content.includes('retry budget at three attempts'))).toBe(true);
   });
+
+  it('with no --log-file logs to copilot-sleep.log under the hippo logs folder, the file the hooks table used to name', async () => {
+    const r = runHippo(['session-end', '--runtime', 'copilot'], s.dir, s.env, copilotPayload('sessionEnd', s.proj));
+    expect(r.status, r.stderr).toBe(0);
+    const log = await waitForLog(path.join(s.dir, '.hippo', 'logs', 'copilot-sleep.log'), WORKER_DONE);
+    expect(log).toContain('consolidating memory...');
+  });
 });
 
 describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
@@ -212,5 +221,46 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).not.toBe('');
     expect(compactionRows(s.hippoRoot)).toHaveLength(1);
+  });
+});
+
+describe('a Claude Code payload run from another folder with no --runtime', () => {
+  // Claude Code runs each hook in its project, so a payload cwd naming a different folder must not move the store.
+  let other: string;
+  let otherRoot: string;
+
+  beforeEach(() => {
+    other = path.join(s.dir, 'other');
+    fs.mkdirSync(path.join(other, '.git'), { recursive: true });
+    expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], other, s.env).status).toBe(0);
+    otherRoot = path.join(other, '.hippo');
+  });
+
+  it('capture-error logs the failure in the store of the folder it runs in', () => {
+    const r = runHippo(['capture-error'], other, s.env, claudeCodePayload('PostToolUseFailure', s.proj, writeClaudeTranscript(s.dir)));
+    expect(r.status, r.stderr).toBe(0);
+    const sql = `SELECT session_id FROM failure_log`;
+    expect(rows<{ session_id: string | null }>(sql, otherRoot)).toEqual([{ session_id: CLAUDE_SESSION }]);
+    expect(rows<{ session_id: string | null }>(sql)).toEqual([]);
+  });
+
+  it('pre-compact opens its record in the store of the folder it runs in', () => {
+    const logFile = path.join(s.dir, 'pre-compact.log');
+    const r = runHippo(['pre-compact', '--log-file', logFile], other, s.env, claudeCodePayload('PreCompact', s.proj, writeClaudeTranscript(s.dir)));
+    expect(r.status, r.stderr).toBe(0);
+    expect(compactionRows(otherRoot)).toHaveLength(1);
+    expect(compactionRows(s.hippoRoot)).toEqual([]);
+  });
+
+  it('session-end closes the snapshot in the store of the folder it runs in and leaves the payload cwd store alone', async () => {
+    for (const root of [otherRoot, s.hippoRoot]) {
+      saveActiveTaskSnapshot(root, 'default', { task: 'fix the flaky login test', summary: 's', next_step: 'n', session_id: CLAUDE_SESSION, source: 'pre-compact' });
+    }
+    const logFile = path.join(s.dir, 'session-end.log');
+    const r = runHippo(['session-end', '--log-file', logFile], other, s.env, claudeCodePayload('SessionEnd', s.proj, writeClaudeTranscript(s.dir)));
+    expect(r.status, r.stderr).toBe(0);
+    await waitForLog(logFile, `closed 1 active snapshot(s) for session ${CLAUDE_SESSION}`);
+    expect(loadActiveTaskSnapshot(otherRoot, 'default')).toBeNull();
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({ session_id: CLAUDE_SESSION, status: 'active' });
   });
 });

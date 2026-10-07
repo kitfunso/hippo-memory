@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
 import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
+import { resolveJsonHookPaths } from '../hooks/json-hooks.js';
 import { SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import {
@@ -172,12 +173,13 @@ export async function cmdSessionEnd(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
+  const runtime = hookRuntime(flags);
+  // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes where the hook table used to point.
+  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : runtime === 'copilot' ? resolveJsonHookPaths('copilot').logFile : null;
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
   const { text: stdinText } = await readHookStdin();
-  const runtime = hookRuntime(flags);
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   try {
@@ -211,6 +213,7 @@ export async function cmdSessionEnd(
     child.unref();
   } catch {
     // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.
+    if (logFile) flags['log-file'] = logFile;
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;
     await cmdSessionEndWorker(root, flags);

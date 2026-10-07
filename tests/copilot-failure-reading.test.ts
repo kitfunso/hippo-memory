@@ -16,7 +16,7 @@ function failure(tool: string, error: string, command?: string): JsonValue {
     : { session_id: 's', tool_name: tool, error, tool_input: { command } };
 }
 
-function fixture(name: 'postToolUseFailureGrep' | 'postToolUseFailureBash' | 'postToolUseFailureBuild' | 'PostToolUseFailureTerminal'): JsonValue {
+function fixture(name: 'postToolUseFailureGrep' | 'postToolUseFailureBash' | 'postToolUseFailureBuild' | 'syntheticClaudeStyleTerminalFailure'): JsonValue {
   const text = normaliseHookPayload(copilotPayload(name, CWD));
   if (text === undefined) throw new Error('normaliser dropped the payload');
   // SAFETY: JSON.parse returns a JSON value by definition.
@@ -55,7 +55,7 @@ describe('Copilot tool names in the routine-failure rules', () => {
 });
 
 describe('the fixture payloads after stdin.ts maps them', () => {
-  // hook-payloads.json: GH hooks reference camelCase postToolUseFailure, and its PascalCase PostToolUseFailure for VS Code.
+  // hook-payloads.json: GH hooks reference camelCase postToolUseFailure, plus a synthetic Claude-style snake_case one, since VS Code's Local agent fires no failure event.
   it('camelCase grep is routine search', () => {
     expect(lessonFromFailure(fixture('postToolUseFailureGrep'))).toMatchObject({ skip: 'skipped-routine', rule: 'search-tool' });
   });
@@ -64,8 +64,8 @@ describe('the fixture payloads after stdin.ts maps them', () => {
     expect(lessonFromFailure(fixture('postToolUseFailureBash'))).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit' });
   });
 
-  it('snake_case run_in_terminal grep exit 1 is a quiet exit', () => {
-    expect(lessonFromFailure(fixture('PostToolUseFailureTerminal'))).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit' });
+  it('a synthetic Claude-style snake_case run_in_terminal grep exit 1 is a quiet exit', () => {
+    expect(lessonFromFailure(fixture('syntheticClaudeStyleTerminalFailure'))).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit' });
   });
 
   it('camelCase build failure is a lesson', () => {

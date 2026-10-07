@@ -8,7 +8,7 @@ import { createDeliveryRecorder, type DeliveryEventInput, type DeliveryRuntime }
 import { readClaudeCodePreCompact } from '../src/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../src/capture/failure-reading.js';
 import type { JsonValue } from '../src/json.js';
-import { copilotPayload } from './_helpers/copilot-hooks.js';
+import { claudeCodePayload, copilotPayload } from './_helpers/copilot-hooks.js';
 
 const CWD = 'C:\\Users\\user\\proj';
 const TRANSCRIPT = 'C:\\Users\\user\\.copilot\\session-state\\copilot-sess-1\\events.jsonl';
@@ -77,11 +77,19 @@ describe('normaliseHookPayload on Copilot camelCase payloads', () => {
 });
 
 describe('normaliseHookPayload leaves other payloads untouched', () => {
-  // Five real Claude Code PostCompact payloads, the same fixture compaction-items.test.ts reads.
+  // Five real Claude Code PostCompact payloads, the same fixture compaction-items.test.ts reads, plus a PostToolUseFailure with its error string.
   it('returns each Claude Code payload byte for byte', () => {
     const lines = fs.readFileSync(CLAUDE_FIXTURE, 'utf8').split('\n').filter(Boolean);
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) expect(normaliseHookPayload(line)).toBe(line);
+    for (const line of [...lines, claudeCodePayload('PostToolUseFailure', CWD, TRANSCRIPT)]) expect(normaliseHookPayload(line)).toBe(line);
+  });
+
+  it('returns a Codex UserPromptSubmit payload byte for byte', () => {
+    const text = JSON.stringify({
+      session_id: 'codex-sess-1', transcript_path: null, cwd: CWD, model: 'gpt-5-codex', permission_mode: 'default',
+      hook_event_name: 'UserPromptSubmit', turn_id: 't1', prompt: 'why does the login test flake?',
+    });
+    expect(normaliseHookPayload(text)).toBe(text);
   });
 
   it('returns a VS Code snake_case payload byte for byte', () => {

@@ -37,9 +37,9 @@
     "toolArgs": "{\"command\":\"npm run build\"}",
     "error": "Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts"
   },
-  "PostToolUseFailureTerminal": {
+  "syntheticClaudeStyleTerminalFailure": {
     "hook_event_name": "PostToolUseFailure",
-    "session_id": "vscode-sess-1",
+    "session_id": "synthetic-sess-1",
     "timestamp": "2026-10-07T12:01:00.000Z",
     "cwd": "<CWD>",
     "tool_name": "run_in_terminal",

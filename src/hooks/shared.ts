@@ -41,8 +41,8 @@ export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<stri
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
-/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot; COPILOT_HOME replaces the whole path, as the Copilot CLI docs describe. */
-export function copilotHomeDir(home: string = homeDir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
+/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the Copilot apps resolve it (a HOME that differs from the profile must not move it). */
+export function copilotHomeDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.COPILOT_HOME || path.join(home, '.copilot');
 }
 
@@ -57,7 +57,7 @@ export function isCodexPresent(home: string = homeDir()): boolean {
 }
 
 /** Copilot counts as installed only when its config folder exists, so setup never creates ~/.copilot on a machine without it. */
-export function isCopilotPresent(home: string = homeDir()): boolean {
+export function isCopilotPresent(home: string = os.homedir()): boolean {
   return fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
 }
 
@@ -100,7 +100,7 @@ export function detectInstalledTools(): ToolDetection[] {
     { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
     { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },
-    { name: 'copilot', configDir: copilotHomeDir(home), detected: isCopilotPresent(home), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md' },
+    { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md' },
     { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
     { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
   ];

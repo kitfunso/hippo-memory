@@ -330,11 +330,11 @@
       "sources": ["src/hooks/copilot.ts", "src/hooks/json-hooks.ts", "integrations/copilot.md"],
       "claims": ["README.md", "ROADMAP.md", "integrations/copilot.md"],
       "routes": {
-        "promptContext": "sessionStart runs hippo context --pinned-only --format copilot; the instructions block asks the agent to call hippo_recall at the start of each task",
-        "toolFailureCapture": "postToolUseFailure runs hippo capture-error --runtime copilot",
-        "preLossSave": "preCompact runs hippo pre-compact --runtime copilot",
+        "promptContext": "sessionStart runs hippo context --pinned-only --format copilot in the Copilot CLI and VS Code's Local agent; in the CLI the instructions block also asks the agent to call hippo_recall at the start of each task",
+        "toolFailureCapture": "postToolUseFailure runs hippo capture-error --runtime copilot, in the Copilot CLI only",
+        "preLossSave": "preCompact runs hippo pre-compact --runtime copilot, in the Copilot CLI only",
         "postCompactExtract": null,
-        "sessionEndCapture": "sessionEnd runs hippo session-end --runtime copilot",
+        "sessionEndCapture": "sessionEnd runs hippo session-end --runtime copilot, in the Copilot CLI only",
         "compactResume": null
       },
       "upstream": { "preLossEvent": "preCompact", "beforeTrimOrReset": null },
@@ -343,12 +343,25 @@
       "maxSaveDelay": null,
       "interface": "Copilot version-1 hooks file with bash and powershell commands, mcp-config.json and copilot-instructions.md",
       "modes": [
-        { "name": "CLI and VS Code Local, hooks from hippo setup", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": ["tests/copilot-setup.test.ts"], "liveEvidence": [] },
+        {
+          "name": "Copilot CLI, and Copilot CLI sessions in VS Code: all four hooks, the MCP server and the instructions block",
+          "checkpointBeforeLoss": "planned",
+          "lessonsBeforeLoss": "planned",
+          "fixtureEvidence": ["tests/copilot-setup.test.ts", "tests/copilot-hooks-cli.test.ts", "tests/copilot-stdin-normaliser.test.ts", "tests/copilot-transcript.test.ts", "tests/copilot-failure-reading.test.ts"],
+          "liveEvidence": []
+        },
+        {
+          "name": "VS Code Local agent: sessionStart only, with hippo added to VS Code's mcp.json for recall",
+          "checkpointBeforeLoss": "planned",
+          "lessonsBeforeLoss": "planned",
+          "fixtureEvidence": ["tests/copilot-setup.test.ts", "tests/copilot-hooks-cli.test.ts", "tests/copilot-stdin-normaliser.test.ts", "tests/copilot-transcript.test.ts"],
+          "liveEvidence": []
+        },
         { "name": "cloud coding agent", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] },
         { "name": "SDK", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
       ],
       "owner": "maintainer",
-      "nextAction": "Extend CD1 with the preCompact contract, normalising camelCase and snake_case fields; verify CLI, cloud and SDK execution separately.",
+      "nextAction": "Watch a live Copilot CLI session and a live VS Code Local agent session end to end. The Local agent reads no preCompact name from a Copilot hooks file, has no session-end or tool-failure event, and reads neither copilot-instructions.md nor mcp-config.json; wire per-turn capture on agentStop (its Stop), a PreCompact entry it reads, an instructions file in ~/.copilot/instructions and hippo in its user mcp.json. Verify cloud and SDK execution separately.",
       "roadmap": "AZ4"
     },
     {

@@ -89,7 +89,7 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
       };
     case 'copilot':
       return {
-        settings: path.join(copilotHomeDir(home), 'hooks', 'hippo.json'),
+        settings: path.join(copilotHomeDir(), 'hooks', 'hippo.json'),
         logFile: path.join(logsDir, 'copilot-sleep.log'),
         display: 'Copilot',
       };
@@ -231,29 +231,27 @@ function installCodexHooks(settingsPath: string, settings: JsonValue): InstallRe
 }
 
 /** One Copilot entry with a PowerShell twin: VS Code runs only `powershell` on Windows, where the execution policy can block npm's hippo.ps1. */
-function copilotCommandHook(args: string, timeoutSec: number, powershellArgs = args): JsonValue[] {
-  return [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${powershellArgs}`, timeoutSec }];
+function copilotCommandHook(args: string, timeoutSec: number): JsonValue[] {
+  return [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec }];
 }
 
-/** The log path is absolute because PowerShell 5.1 hands `~` to a native command unexpanded. */
-function copilotHooksTable(logFile: string): JsonObject {
-  // A quote in the path is closed, escaped and reopened for bash and doubled for PowerShell, so it stays one literal argument.
-  const sessionEnd = (quoted: string): string => `session-end --runtime copilot --log-file '${quoted}'`;
+/** No command names a path, so nothing has to be quoted for bash and PowerShell; session-end --runtime copilot picks its own log file. */
+function copilotHooksTable(): JsonObject {
   return {
     version: 1,
     hooks: {
       sessionStart: copilotCommandHook('context --pinned-only --include-recent 5 --format copilot', 10),
       postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', 10),
       preCompact: copilotCommandHook('pre-compact --runtime copilot', 30),
-      sessionEnd: copilotCommandHook(sessionEnd(logFile.replaceAll("'", "'\\''")), 30, sessionEnd(logFile.replaceAll("'", "''"))),
+      sessionEnd: copilotCommandHook('session-end --runtime copilot', 30),
     },
   };
 }
 
 /** Hippo owns this whole file, so install writes the full table and a second install changes no byte. */
-function installCopilotHooks(settingsPath: string, logFile: string): InstallResult {
+function installCopilotHooks(settingsPath: string): InstallResult {
   const result = nothingInstalled('copilot', settingsPath);
-  const table = copilotHooksTable(logFile);
+  const table = copilotHooksTable();
   const current = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : null;
   if (current === JSON.stringify(table, null, 2) + '\n') return result;
   writeSettingsFile(settingsPath, table);
@@ -265,7 +263,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const { settings: settingsPath, logFile } = resolveJsonHookPaths(target);
   const dir = path.dirname(settingsPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (target === 'copilot') return installCopilotHooks(settingsPath, logFile);
+  if (target === 'copilot') return installCopilotHooks(settingsPath);
 
   let settings: JsonValue = {};
   if (fs.existsSync(settingsPath)) {

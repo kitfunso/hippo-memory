@@ -4,7 +4,7 @@ import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
 import type { JsonObject } from '../working-memory.js';
 import { type JsonValue, readJsonFile } from '../json.js';
-import { HOOK_MARKERS, hippoBlock, withoutHookBlock } from '../cli/hook-blocks.js';
+import { HOOK_MARKERS, hippoBlock } from '../cli/hook-blocks.js';
 import { copilotHomeDir, isJsonObject } from './shared.js';
 import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
@@ -69,8 +69,10 @@ function readMcpConfig(file: string): McpConfig | null {
   if (fs.existsSync(file)) {
     try {
       config = readJsonFile(file);
-    } catch {
-      return null;
+    } catch (err) {
+      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown with its own message.
+      if (err instanceof SyntaxError) return null;
+      throw err;
     }
   }
   if (!isJsonObject(config)) return null;
@@ -108,9 +110,38 @@ export function removeMcpServer(file: string): McpRemoveStatus {
   return 'removed';
 }
 
+/** A filesystem error on mcp-config.json (EACCES, EISDIR, EBUSY), kept as its own message so setup can report it and go on. */
+export interface McpFailure {
+  readonly failed: string;
+}
+
+export function isMcpFailure(status: string | McpFailure): status is McpFailure {
+  return typeof status !== 'string';
+}
+
+function hasErrnoCode(err: Error): err is NodeJS.ErrnoException {
+  return 'code' in err && typeof err.code === 'string';
+}
+
+/** One mcp-config.json step; a filesystem error comes back as a failure, so the hooks file and the block still install. */
+function mcpStep<S extends string>(step: () => S): S | McpFailure {
+  try {
+    return step();
+  } catch (err) {
+    if (err instanceof Error && hasErrnoCode(err)) return { failed: err.message };
+    throw err;
+  }
+}
+
+// A later release adds the hash of each earlier Copilot text here, as SHIPPED_HOOK_HASHES does for the other agents.
+function isCopilotBlock(inner: string): boolean {
+  return inner === COPILOT_INSTRUCTIONS;
+}
+
+type FoundBlock = NonNullable<ReturnType<typeof hippoBlock>>;
+
 /** Replaces only the text between the markers, in the file's own line ending, or appends a block after the user's text. */
-function withCopilotBlock(text: string): string {
-  const found = hippoBlock(text);
+function withCopilotBlock(text: string, found: FoundBlock | null): string {
   if (found !== null) {
     const { start, end, eol } = found;
     return `${text.slice(0, start)}${eol}${COPILOT_INSTRUCTIONS.replace(/\n/g, eol)}${eol}${text.slice(end)}`;
@@ -120,33 +151,52 @@ function withCopilotBlock(text: string): string {
   return `${text}${text.endsWith('\n') ? '\n' : '\n\n'}${block}`;
 }
 
-/** True when the file changed; creates it when missing. */
-export function ensureInstructionsBlock(file: string): boolean {
+/** `kept`: a hippo block that is not the Copilot text (edited, or another agent's in a shared file); `unclosed`: a start marker with no end. */
+export type InstructionsInstallStatus = 'written' | 'present' | 'kept' | 'unclosed';
+
+/** Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file as it is. */
+export function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  const next = withCopilotBlock(old);
-  if (next === old) return false;
+  const found = hippoBlock(old);
+  if (found === null && old.includes(HOOK_MARKERS.start)) return 'unclosed';
+  if (found !== null && !isCopilotBlock(found.inner)) return 'kept';
+  const next = withCopilotBlock(old, found);
+  if (next === old) return 'present';
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, next, 'utf8');
-  return true;
+  return 'written';
 }
 
-/** True when a block was removed; a file left with nothing else in it goes too. */
-export function removeInstructionsBlock(file: string): boolean {
-  if (!fs.existsSync(file)) return false;
+/** `text` without the block and its markers, plus the line break after the end marker, else the one before the start marker. */
+function withoutCopilotBlock(text: string, found: FoundBlock): string {
+  const from = found.start - HOOK_MARKERS.start.length;
+  const to = found.end + HOOK_MARKERS.end.length;
+  const after = text.startsWith('\r\n', to) ? 2 : text.startsWith('\n', to) ? 1 : 0;
+  const before = after > 0 ? 0 : text.endsWith('\r\n', from) ? 2 : text.endsWith('\n', from) ? 1 : 0;
+  return text.slice(0, from - before) + text.slice(to + after);
+}
+
+export type InstructionsRemoveStatus = 'removed' | 'absent' | 'kept' | 'unclosed';
+
+/** Splices out only hippo's own Copilot block and keeps every other byte; a file left with nothing but whitespace goes. */
+export function removeInstructionsBlock(file: string): InstructionsRemoveStatus {
+  if (!fs.existsSync(file)) return 'absent';
   const old = fs.readFileSync(file, 'utf8');
-  if (hippoBlock(old) === null) return false;
-  const left = withoutHookBlock(old);
-  if (left) fs.writeFileSync(file, left + '\n', 'utf8');
-  else fs.rmSync(file);
-  return true;
+  const found = hippoBlock(old);
+  if (found === null) return old.includes(HOOK_MARKERS.start) ? 'unclosed' : 'absent';
+  if (!isCopilotBlock(found.inner)) return 'kept';
+  const left = withoutCopilotBlock(old, found);
+  if (left.trim() === '') fs.rmSync(file);
+  else fs.writeFileSync(file, left, 'utf8');
+  return 'removed';
 }
 
 export interface CopilotInstallResult {
   readonly paths: CopilotPaths;
   /** True when the hooks file was written; false when it already held hippo's current table. */
   readonly hooks: boolean;
-  readonly mcp: McpMergeStatus;
-  readonly instructions: boolean;
+  readonly mcp: McpMergeStatus | McpFailure;
+  readonly instructions: InstructionsInstallStatus;
 }
 
 export function installCopilot(): CopilotInstallResult {
@@ -154,7 +204,7 @@ export function installCopilot(): CopilotInstallResult {
   return {
     paths,
     hooks: installJsonHooks('copilot').installedSessionStart,
-    mcp: mergeMcpServer(paths.mcpConfig),
+    mcp: mcpStep(() => mergeMcpServer(paths.mcpConfig)),
     instructions: ensureInstructionsBlock(paths.instructions),
   };
 }
@@ -162,8 +212,8 @@ export function installCopilot(): CopilotInstallResult {
 export interface CopilotUninstallResult {
   readonly paths: CopilotPaths;
   readonly hooks: boolean;
-  readonly mcp: McpRemoveStatus;
-  readonly instructions: boolean;
+  readonly mcp: McpRemoveStatus | McpFailure;
+  readonly instructions: InstructionsRemoveStatus;
 }
 
 export function uninstallCopilot(): CopilotUninstallResult {
@@ -171,7 +221,7 @@ export function uninstallCopilot(): CopilotUninstallResult {
   return {
     paths,
     hooks: uninstallJsonHooks('copilot'),
-    mcp: removeMcpServer(paths.mcpConfig),
+    mcp: mcpStep(() => removeMcpServer(paths.mcpConfig)),
     instructions: removeInstructionsBlock(paths.instructions),
   };
 }

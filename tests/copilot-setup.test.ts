@@ -4,8 +4,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { detectInstalledTools } from '../src/hooks/shared.js';
-import { COPILOT_INSTRUCTIONS, copilotMcpSnippet, installCopilot, mergeMcpServer, uninstallCopilot } from '../src/hooks/copilot.js';
+import { copilotHomeDir, detectInstalledTools } from '../src/hooks/shared.js';
+import { COPILOT_INSTRUCTIONS, copilotMcpSnippet, copilotPaths, installCopilot, mergeMcpServer, uninstallCopilot } from '../src/hooks/copilot.js';
+import { HOOKS } from '../src/cli/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 import type { JsonValue } from '../src/json.js';
 
@@ -32,22 +33,18 @@ interface CopilotFiles {
   readonly instructions: string;
 }
 
-const entry = (args: string, timeoutSec: number, powershellArgs = args): HookEntry[] => [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${powershellArgs}`, timeoutSec }];
+const entry = (args: string, timeoutSec: number): HookEntry[] => [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec }];
 
-/** The command contract the runtime side implements, with the log path resolved under `home` and a quote in it escaped per shell. */
-function contractHooks(home: string): HooksFile {
-  const log = path.join(home, '.hippo', 'logs', 'copilot-sleep.log');
-  const sessionEnd = (quoted: string): string => `session-end --runtime copilot --log-file '${quoted}'`;
-  return {
-    version: 1,
-    hooks: {
-      sessionStart: entry('context --pinned-only --include-recent 5 --format copilot', 10),
-      postToolUseFailure: entry('capture-error --runtime copilot', 10),
-      preCompact: entry('pre-compact --runtime copilot', 30),
-      sessionEnd: entry(sessionEnd(log.replaceAll("'", "'\\''")), 30, sessionEnd(log.replaceAll("'", "''"))),
-    },
-  };
-}
+/** The command contract the runtime side implements; no command names a path. */
+const CONTRACT_HOOKS: HooksFile = {
+  version: 1,
+  hooks: {
+    sessionStart: entry('context --pinned-only --include-recent 5 --format copilot', 10),
+    postToolUseFailure: entry('capture-error --runtime copilot', 10),
+    preCompact: entry('pre-compact --runtime copilot', 30),
+    sessionEnd: entry('session-end --runtime copilot', 30),
+  },
+};
 
 const read = (file: string): string => fs.readFileSync(file, 'utf8');
 const readJson = (file: string): JsonValue => JSON.parse(read(file));
@@ -56,8 +53,7 @@ function writeFile(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
 }
-/** Every path under `root` with a segment that is exactly `~`; a short name such as KIT~1 is not one. */
-const tildeFolders = (root: string): string[] => fs.readdirSync(root, { recursive: true }).map(String).filter((f) => f.split(/[\\/]/).includes('~'));
+const copilotBlock = (eol = '\n'): string => `${START}${eol}${COPILOT_INSTRUCTIONS.replace(/\n/g, eol)}${eol}${END}`;
 
 describe('installCopilot and uninstallCopilot', () => {
   const prev = { copilot: process.env.COPILOT_HOME, hippo: process.env.HIPPO_HOME };
@@ -78,10 +74,10 @@ describe('installCopilot and uninstallCopilot', () => {
   });
 
   it('writes the contract hooks file, the hippo MCP server and the instructions block into an empty COPILOT_HOME', () => {
-    expect(installCopilot()).toMatchObject({ hooks: true, mcp: 'added', instructions: true });
-    expect(readHooks(files.hooks)).toEqual(contractHooks(fake.home));
+    expect(installCopilot()).toMatchObject({ hooks: true, mcp: 'added', instructions: 'written' });
+    expect(readHooks(files.hooks)).toEqual(CONTRACT_HOOKS);
     expect(readJson(files.mcp)).toEqual({ mcpServers: { hippo: HIPPO_SERVER } });
-    expect(read(files.instructions)).toBe(`${START}\n${COPILOT_INSTRUCTIONS}\n${END}\n`);
+    expect(read(files.instructions)).toBe(`${copilotBlock()}\n`);
     expect(COPILOT_INSTRUCTIONS).toContain('`hippo_recall`');
     expect(COPILOT_INSTRUCTIONS).toContain('`hippo_remember`');
   });
@@ -89,14 +85,27 @@ describe('installCopilot and uninstallCopilot', () => {
   it('changes no byte in any of the three files on a second install', () => {
     installCopilot();
     const once = Object.values(files).map(read);
-    expect(installCopilot()).toMatchObject({ hooks: false, mcp: 'present', instructions: false });
+    expect(installCopilot()).toMatchObject({ hooks: false, mcp: 'present', instructions: 'present' });
     expect(Object.values(files).map(read)).toEqual(once);
   });
 
-  it("rewrites hippo's own hooks file when it holds anything but the current table", () => {
-    writeFile(files.hooks, '{"version":1,"hooks":{"sessionStart":[]}}');
+  it.each([
+    ['a partial table', '{"version":1,"hooks":{"sessionStart":[]}}'],
+    ['the earlier table whose sessionEnd named a quoted log path', JSON.stringify({ version: 1, hooks: { ...CONTRACT_HOOKS.hooks, sessionEnd: entry("session-end --runtime copilot --log-file '/home/you/.hippo/logs/copilot-sleep.log'", 30) } })],
+  ])("rewrites hippo's own hooks file when it holds %s", (_label, text) => {
+    writeFile(files.hooks, text);
     expect(installCopilot().hooks).toBe(true);
-    expect(readHooks(files.hooks)).toEqual(contractHooks(fake.home));
+    expect(readHooks(files.hooks)).toEqual(CONTRACT_HOOKS);
+  });
+
+  it('no hook command names a path, so neither shell has anything to quote', () => {
+    installCopilot();
+    const commands = Object.values(readHooks(files.hooks).hooks).flatMap((hooks) => hooks.flatMap((h) => [h.bash, h.powershell]));
+    expect(commands).toHaveLength(8);
+    for (const command of commands) {
+      expect(command).not.toMatch(/['"\\/]|--log-file/);
+      expect(command).not.toContain(fake.home);
+    }
   });
 
   it("keeps the user's other MCP servers and top-level keys", () => {
@@ -119,11 +128,19 @@ describe('installCopilot and uninstallCopilot', () => {
     ['mcpServers that is not an object', '{"mcpServers":[]}'],
   ])('refuses an mcp-config.json holding %s, leaves it untouched and still installs the rest', (_label, text) => {
     writeFile(files.mcp, text);
-    expect(installCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: true });
+    expect(installCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: 'written' });
     expect(read(files.mcp)).toBe(text);
-    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: true });
+    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: 'removed' });
     expect(read(files.mcp)).toBe(text);
     expect(JSON.parse(`{${copilotMcpSnippet()}}`)).toEqual({ hippo: HIPPO_SERVER });
+  });
+
+  it('reports a filesystem error on mcp-config.json with its own message, not as unreadable JSON, and still installs the rest', () => {
+    fs.mkdirSync(files.mcp, { recursive: true });
+    const failed = { failed: expect.stringContaining('EISDIR') };
+    expect(installCopilot()).toMatchObject({ hooks: true, mcp: failed, instructions: 'written' });
+    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: failed, instructions: 'removed' });
+    expect(fs.statSync(files.mcp).isDirectory()).toBe(true);
   });
 
   it.each([
@@ -146,12 +163,13 @@ describe('installCopilot and uninstallCopilot', () => {
     writeFile(files.instructions, '# My rules\n\nUse tabs.\n');
     installCopilot();
 
-    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'removed', instructions: true });
+    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'removed', instructions: 'removed' });
     expect(fs.existsSync(files.hooks)).toBe(false);
     expect(read(userHooks)).toBe(userHooksText);
     expect(readJson(files.mcp)).toEqual({ mcpServers: { playwright: USER_SERVER } });
-    expect(read(files.instructions)).toBe('# My rules\n\nUse tabs.\n');
-    expect(uninstallCopilot()).toMatchObject({ hooks: false, mcp: 'absent', instructions: false });
+    // The blank line install put before the block stays: uninstall takes the block and one line break, and no other byte.
+    expect(read(files.instructions)).toBe('# My rules\n\nUse tabs.\n\n');
+    expect(uninstallCopilot()).toMatchObject({ hooks: false, mcp: 'absent', instructions: 'absent' });
   });
 
   it('uninstall deletes an instructions file that held only the block, and drops an emptied mcpServers', () => {
@@ -161,37 +179,62 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(readJson(files.mcp)).toEqual({});
   });
 
-  it("replaces only the text between the markers, in the file's own CRLF endings", () => {
-    writeFile(files.instructions, `# My rules\r\n\r\n${START}\r\nold hippo text\r\n${END}\r\nAfter.\r\n`);
-    expect(installCopilot().instructions).toBe(true);
-    expect(read(files.instructions)).toBe(`# My rules\r\n\r\n${START}\r\n${COPILOT_INSTRUCTIONS.replace(/\n/g, '\r\n')}\r\n${END}\r\nAfter.\r\n`);
+  it('uninstall deletes an instructions file left with only whitespace around the block', () => {
+    writeFile(files.instructions, `\n \r\n${copilotBlock()}\n\t\n`);
+    expect(uninstallCopilot().instructions).toBe('removed');
+    expect(fs.existsSync(files.instructions)).toBe(false);
+  });
+
+  it("replaces hippo's own Copilot block in the file's own CRLF endings, and changes no byte outside the markers", () => {
+    const loose = `${START}\r\n\r\n${COPILOT_INSTRUCTIONS.replace(/\n/g, '\r\n')}\r\n\r\n\r\n${END}`;
+    writeFile(files.instructions, `# My rules\r\n\r\n${loose}\r\nAfter.\r\n`);
+    expect(installCopilot().instructions).toBe('written');
+    expect(read(files.instructions)).toBe(`# My rules\r\n\r\n${copilotBlock('\r\n')}\r\nAfter.\r\n`);
   });
 
   it("appends the block after the user's text when the file has none", () => {
     writeFile(files.instructions, '# Mine');
     installCopilot();
-    expect(read(files.instructions)).toBe(`# Mine\n\n${START}\n${COPILOT_INSTRUCTIONS}\n${END}\n`);
+    expect(read(files.instructions)).toBe(`# Mine\n\n${copilotBlock()}\n`);
   });
 
-  it('the PowerShell twin carries the absolute log path in quotes, and install creates no ~ folder', () => {
-    installCopilot();
-    const [sessionEnd] = readHooks(files.hooks).hooks.sessionEnd;
-    const logArg = /--log-file '([^']+)'$/.exec(sessionEnd.powershell)?.[1] ?? '';
-    expect(path.isAbsolute(logArg)).toBe(true);
-    expect(logArg).toBe(path.join(fake.home, '.hippo', 'logs', 'copilot-sleep.log'));
-    expect(tildeFolders(fake.home)).toEqual([]);
-    expect(fs.existsSync(path.join(process.cwd(), '~'))).toBe(false);
+  it.each([
+    ['an edited block', `# Mine\r\n\r\n${START}\r\nmy own hippo notes\r\n${END}\r\nAfter.\r\n`],
+    ["another agent's block in a shared file", `# Shared\n\n${START}\n${HOOKS['claude-code'].content}\n${END}\n`],
+  ])('install and uninstall keep %s byte for byte and add no second block', (_label, text) => {
+    writeFile(files.instructions, text);
+    expect(installCopilot().instructions).toBe('kept');
+    expect(read(files.instructions)).toBe(text);
+    expect(uninstallCopilot().instructions).toBe('kept');
+    expect(read(files.instructions)).toBe(text);
   });
 
-  it('escapes a quote in the home path for each shell, so the log path stays one argument', () => {
-    const home = path.join(fake.home, "o'brien x");
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
-    installCopilot();
-    const [sessionEnd] = readHooks(files.hooks).hooks.sessionEnd;
-    const log = path.join(home, '.hippo', 'logs', 'copilot-sleep.log');
-    expect(sessionEnd.bash).toBe(`hippo session-end --runtime copilot --log-file '${log.replace("'", "'\\''")}'`);
-    expect(sessionEnd.powershell).toBe(`hippo.cmd session-end --runtime copilot --log-file '${log.replace("'", "''")}'`);
+  it('a start marker with no end marker changes nothing on install or uninstall', () => {
+    const text = `# Mine\n\n${START}\nhalf a block\n`;
+    writeFile(files.instructions, text);
+    expect(installCopilot().instructions).toBe('unclosed');
+    expect(read(files.instructions)).toBe(text);
+    expect(uninstallCopilot().instructions).toBe('unclosed');
+    expect(read(files.instructions)).toBe(text);
+  });
+
+  it.each([
+    ['CRLF text either side, extra blank lines kept', `# Mine\r\n\r\n\r\n${copilotBlock('\r\n')}\r\n\r\nAfter.  \r\n\r\n`, '# Mine\r\n\r\n\r\n\r\nAfter.  \r\n\r\n'],
+    ['a block at the end with no line break after it', `Top\n${copilotBlock()}`, 'Top'],
+    ['a block first in the file', `${copilotBlock()}\nBelow.`, 'Below.'],
+  ])('uninstall splices out only the block and one line break: %s', (_label, text, left) => {
+    writeFile(files.instructions, text);
+    expect(uninstallCopilot().instructions).toBe('removed');
+    expect(read(files.instructions)).toBe(left);
+  });
+
+  it('the Copilot folder is $COPILOT_HOME when set, else .copilot under os.homedir() whatever HOME says', () => {
+    expect(copilotPaths().hooks).toBe(files.hooks);
+    expect(copilotHomeDir(undefined, { COPILOT_HOME: copilotHome })).toBe(copilotHome);
+    process.env.COPILOT_HOME = '';
+    process.env.HOME = path.join(fake.home, 'corporate-home');
+    expect(copilotHomeDir()).toBe(path.join(os.homedir(), '.copilot'));
+    expect(copilotPaths().hooks).toBe(path.join(os.homedir(), '.copilot', 'hooks', 'hippo.json'));
   });
 
   it('detects Copilot only when its config folder exists, as a json-hook tool', () => {
@@ -209,27 +252,7 @@ describe('installCopilot and uninstallCopilot', () => {
   });
 });
 
-/** Runs one hook entry the way Copilot does on this OS, through a stub hippo that records its arguments. */
-function runEntryThroughShell(hook: HookEntry, cwd: string, binDir: string): string[] {
-  const out = path.join(binDir, 'argv.json');
-  const record = path.join(binDir, 'record.cjs');
-  fs.writeFileSync(record, "require('fs').writeFileSync(process.env.RECORD_ARGV_TO, JSON.stringify(process.argv.slice(2)));\n");
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of Object.keys(env)) if (/^path$/i.test(key)) delete env[key];
-  Object.assign(env, { RECORD_ARGV_TO: out, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}` });
-  if (process.platform === 'win32') {
-    fs.writeFileSync(path.join(binDir, 'hippo.cmd'), `@"${process.execPath}" "${record}" %*\r\n`);
-    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', hook.powershell], { cwd, env, encoding: 'utf8' });
-    expect(r.status, r.stderr).toBe(0);
-  } else {
-    fs.writeFileSync(path.join(binDir, 'hippo'), `#!/bin/sh\nexec "${process.execPath}" "${record}" "$@"\n`, { mode: 0o755 });
-    const r = spawnSync('bash', ['-c', hook.bash], { cwd, env, encoding: 'utf8' });
-    expect(r.status, r.stderr).toBe(0);
-  }
-  return JSON.parse(read(out));
-}
-
-interface Machine { root: string; home: string; copilot: string; bin: string }
+interface Machine { root: string; home: string; copilot: string }
 const machines: string[] = [];
 afterEach(() => {
   while (machines.length) fs.rmSync(machines.pop()!, { recursive: true, force: true });
@@ -238,8 +261,8 @@ afterEach(() => {
 function machine(): Machine {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-copilot-cli-'));
   machines.push(root);
-  const m = { root, home: path.join(root, "o'brien x"), copilot: path.join(root, 'copilot-home'), bin: path.join(root, 'bin') };
-  for (const dir of [m.home, m.bin, path.join(root, 'empty-path')]) fs.mkdirSync(dir, { recursive: true });
+  const m = { root, home: path.join(root, "o'brien x"), copilot: path.join(root, 'copilot-home') };
+  for (const dir of [m.home, path.join(root, 'empty-path')]) fs.mkdirSync(dir, { recursive: true });
   return m;
 }
 
@@ -271,7 +294,7 @@ describe('hippo setup and hippo hook with Copilot', () => {
     const out = hippo(m, 'setup', '--no-schedule', '--no-learn');
     expect(out).toContain("Installed hippo's Copilot hooks (sessionStart, postToolUseFailure, preCompact, sessionEnd)");
     expect(out).toContain('VS Code Copilot runs new hooks in a new chat session.');
-    expect(readHooks(path.join(m.copilot, 'hooks', 'hippo.json'))).toEqual(contractHooks(m.home));
+    expect(readHooks(path.join(m.copilot, 'hooks', 'hippo.json'))).toEqual(CONTRACT_HOOKS);
     expect(readJson(path.join(m.copilot, 'mcp-config.json'))).toEqual({ mcpServers: { hippo: HIPPO_SERVER } });
     expect(read(path.join(m.copilot, 'copilot-instructions.md'))).toContain(START);
     expect(hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain("hippo's Copilot hooks are already in");
@@ -305,13 +328,24 @@ describe('hippo setup and hippo hook with Copilot', () => {
     expect(hippo(m, 'hook', 'uninstall', 'copilot')).toContain('No hippo Copilot hooks, MCP server or instructions block found.');
   });
 
-  it("the session-end entry hands hippo the absolute log path through this OS's shell, from a home with a quote and a space, and no ~ folder appears", () => {
+  it.each([
+    ['an edited block', `${START}\nmy own hippo notes\n${END}\n`, 'Kept the hippo block in'],
+    ['a start marker with no end', `${START}\nhalf a block\n`, `has ${START} with no ${END}, so hippo left it unchanged`],
+  ])('setup leaves copilot-instructions.md holding %s as it was and says so in one line', (_label, text, line) => {
     const m = machine();
-    fs.mkdirSync(m.copilot);
-    hippo(m, 'setup', '--no-schedule', '--no-learn');
-    const [sessionEnd] = readHooks(path.join(m.copilot, 'hooks', 'hippo.json')).hooks.sessionEnd;
-    const argv = runEntryThroughShell(sessionEnd, m.root, m.bin);
-    expect(argv).toEqual(['session-end', '--runtime', 'copilot', '--log-file', path.join(m.home, '.hippo', 'logs', 'copilot-sleep.log')]);
-    expect(tildeFolders(m.root)).toEqual([]);
+    const file = path.join(m.copilot, 'copilot-instructions.md');
+    writeFile(file, text);
+    const out = hippo(m, 'setup', '--no-schedule', '--no-learn');
+    expect(out.split('\n').filter((l) => l.includes(line))).toHaveLength(1);
+    expect(read(file)).toBe(text);
+  });
+
+  it('setup reports a filesystem error on mcp-config.json with its own message and goes on to finish', () => {
+    const m = machine();
+    fs.mkdirSync(path.join(m.copilot, 'mcp-config.json'), { recursive: true });
+    const out = hippo(m, 'setup', '--no-schedule', '--no-learn');
+    expect(out).toMatch(/WARNING: hippo could not use .*mcp-config\.json \(EISDIR/);
+    expect(out).toContain('Wrote the hippo block ->');
+    expect(out).toContain('Done. Restart your AI tool');
   });
 });
