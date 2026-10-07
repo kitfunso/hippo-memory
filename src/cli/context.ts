@@ -9,7 +9,7 @@ import { isGlobalStoreRoot } from '../project-identity.js';
 import { autoDetectContext } from '../context-auto.js';
 import { detectScope } from '../scope.js';
 import { ledgerRoot, withLedgerDb } from '../ledger-db.js';
-import { readStdinBounded } from '../stdin.js';
+import { readHookStdin } from '../stdin.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { renderAmbientSummary } from '../ambient.js';
@@ -19,6 +19,7 @@ import {
   type ContextView,
   flushDeliveryRecorder,
   hasContextData,
+  sessionStartEnvelope,
   toRenderItems,
 } from '../prompt-hook.js';
 import { printError } from './output.js';
@@ -34,6 +35,8 @@ import {
   hostSessionId,
   captureConsole,
   hookStoreRoot,
+  hookRuntime,
+  payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
 } from './shared.js';
@@ -68,6 +71,7 @@ function startDeliveryRecorder(
       tenantId: resolveTenantId({}),
       stdinText,
       envSessionId: hostSessionId(),
+      runtime: hookRuntime(flags) === 'copilot' ? 'copilot' : undefined,
     });
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
@@ -149,10 +153,11 @@ async function renderContext(
     return;
   }
 
-  const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result };
+  const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
+  const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
   if (format === 'json') {
     renderContextJson(view, query);
-  } else if (format === 'additional-context') {
+  } else if (format === 'additional-context' || format === 'copilot') {
     const stdout = additionalContextOutput(view);
     if (stdout) process.stdout.write(stdout);
   } else {
@@ -207,7 +212,7 @@ function buildContextOpts(flags: Record<string, string | boolean | string[]>, in
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
-    cost: contextCost(input.format === 'additional-context' ? 'additional-context' : 'markdown', input.framing),
+    cost: contextCost(input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown', input.framing),
     deliveryObserver: input.rec ?? undefined,
   };
 }
@@ -293,6 +298,7 @@ export function printContextMarkdown(
 
 export async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
-  const { text: stdinText } = await readStdinBounded();
-  await runHookWithStores(() => cmdContext(hookStoreRoot(hippoRoot), args, flags, stdinText));
+  const { text: stdinText } = await readHookStdin();
+  const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
+  await runHookWithStores(() => cmdContext(hookStoreRoot(root), args, flags, stdinText));
 }

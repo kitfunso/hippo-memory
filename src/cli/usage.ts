@@ -262,18 +262,24 @@ export const VERB_USAGE = {
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
-    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')`],
+    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and find
+                           the Copilot CLI session log by session id; with no --log-file, log to
+                           ~/.hippo/logs/copilot-sleep.log`],
   'pre-compact': [`
   pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
                            ask the summariser to end with a "Memories for hippo" list
-    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)`],
+    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and save
+                           the snapshot only (Copilot has no PostCompact hook to close a record)`],
   'post-compact': [`
   post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
                            the next hippo sleep) and print one line saying how many
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`],
   'capture-error': [`
   capture-error            Store a failed tool call as an error memory (reads the Claude Code
-                           PostToolUseFailure hook payload on stdin; skips routine failures)`],
+                           PostToolUseFailure hook payload on stdin; skips routine failures)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd`],
   'compact-resume': [`
   compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`],
   'codex-run': [`
@@ -551,23 +557,28 @@ export const VERB_USAGE = {
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
-    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
+    --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),
+                           or copilot (Copilot sessionStart hook JSON, from the store of the payload's cwd)
     --framing <mode>       Framing: observe (default), suggest, assert`],
   hook: [`
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
+    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
                            claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default); opencode installs a plugin; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
-                           wraps the detected launcher in place; all but claude-code
-                           also patch an existing AGENTS.md
-    hook uninstall <target> Remove hook`],
+                           wraps the detected launcher in place; copilot writes
+                           hooks/hippo.json, the "hippo" MCP server and an instructions
+                           block under $COPILOT_HOME (~/.copilot by default); all but
+                           claude-code and copilot also patch an existing AGENTS.md
+    hook uninstall <target> Remove hook; for copilot, only what hippo wrote`],
   setup: [`
   setup                    One-shot: detect installed AI tools and install their hooks:
                            claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default), opencode a plugin, codex 2 hooks in
-                           its hooks.json plus a launcher wrapper; other tools get a
+                           its hooks.json plus a launcher wrapper, copilot 4 hooks, the
+                           MCP server and an instructions block under $COPILOT_HOME
+                           (~/.copilot by default); other tools get a
                            hint. Then imports each agent's
                            user-level memories into the global store
     --all                  Install for every JSON-hook tool, even if not detected

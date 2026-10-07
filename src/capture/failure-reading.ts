@@ -43,6 +43,10 @@ const NO_MATCH = /\bno (?:matches|files|results) found\b/i;
 /** Shell commands whose exit code 1 means "nothing found" or "differs", not an error. */
 const QUIET_EXIT_1 = /^\s*(?:grep|rg|egrep|fgrep|find|test|\[|diff|cmp|git diff|git grep)\b/;
 
+// Claude Code's tool names, then the Copilot CLI's and VS Code's; tests/copilot-failure-reading.test.ts cites where each comes from.
+const SEARCH_TOOLS: ReadonlySet<string> = new Set(['Grep', 'Glob', 'grep', 'glob', 'rg', 'grep_search', 'file_search', 'semantic_search']);
+const SHELL_TOOLS: ReadonlySet<string> = new Set(['Bash', 'bash', 'powershell', 'run_in_terminal']);
+
 function isString(v: JsonValue | undefined): v is string {
   return v !== undefined && v !== null && v.constructor === String;
 }
@@ -85,8 +89,8 @@ export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => s
   if (DECLINED.test(error)) return routine('declined');
   if (OS_PERMISSION.test(error)) return routine('os-permission');
   if (NO_MATCH.test(error)) return routine('no-match');
-  if (tool === 'Grep' || tool === 'Glob') return routine('search-tool');
-  if (tool === 'Bash' && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error)) return routine('quiet-exit');
+  if (SEARCH_TOOLS.has(tool)) return routine('search-tool');
+  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error)) return routine('quiet-exit');
   return { text, detail };
 }
 

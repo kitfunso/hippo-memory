@@ -10,7 +10,7 @@ export function isJsonObject(value: JsonValue | undefined): value is JsonObject 
   return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
 }
 
-export type JsonHookTarget = 'claude-code' | 'codex';
+export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
 export interface ToolDetection {
   name: string;
@@ -41,6 +41,11 @@ export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<stri
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
+/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the Copilot apps resolve it (a HOME that differs from the profile must not move it). */
+export function copilotHomeDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
+  return env.COPILOT_HOME || path.join(home, '.copilot');
+}
+
 /** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
 export function claudeConfigDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
@@ -49,6 +54,11 @@ export function claudeConfigDir(home: string = os.homedir(), env: Readonly<Recor
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder. */
 export function isCodexPresent(home: string = homeDir()): boolean {
   return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
+}
+
+/** Copilot counts as installed only when its config folder exists, so setup never creates ~/.copilot on a machine without it. */
+export function isCopilotPresent(home: string = os.homedir()): boolean {
+  return fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
 }
 
 /** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says what they would trust. */
@@ -90,6 +100,7 @@ export function detectInstalledTools(): ToolDetection[] {
     { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
     { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },
+    { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md' },
     { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
     { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
   ];

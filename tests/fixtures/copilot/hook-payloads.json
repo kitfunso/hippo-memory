@@ -1,0 +1,69 @@
+{
+  "sessionStart": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374400000,
+    "cwd": "<CWD>",
+    "source": "startup"
+  },
+  "SessionStart": {
+    "hook_event_name": "SessionStart",
+    "session_id": "vscode-sess-1",
+    "timestamp": "2026-10-07T12:00:00.000Z",
+    "cwd": "<CWD>",
+    "source": "new",
+    "model": "copilot/auto"
+  },
+  "postToolUseFailureGrep": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374460000,
+    "cwd": "<CWD>",
+    "toolName": "grep",
+    "toolArgs": "{\"pattern\":\"retryBudget\",\"path\":\"src/auth\"}",
+    "error": "rg: src/auth: IO error for operation on src/auth"
+  },
+  "postToolUseFailureBash": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374470000,
+    "cwd": "<CWD>",
+    "toolName": "bash",
+    "toolArgs": "{\"command\":\"grep -rn retryBudget src\"}",
+    "error": "Command failed with exit code 1"
+  },
+  "postToolUseFailureBuild": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374480000,
+    "cwd": "<CWD>",
+    "toolName": "bash",
+    "toolArgs": "{\"command\":\"npm run build\"}",
+    "error": "Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts"
+  },
+  "syntheticClaudeStyleTerminalFailure": {
+    "hook_event_name": "PostToolUseFailure",
+    "session_id": "synthetic-sess-1",
+    "timestamp": "2026-10-07T12:01:00.000Z",
+    "cwd": "<CWD>",
+    "tool_name": "run_in_terminal",
+    "tool_input": { "command": "grep -rn retryBudget src" },
+    "error": "Command exited with exit code 1"
+  },
+  "errorOccurred": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374490000,
+    "cwd": "<CWD>",
+    "error": { "message": "Model request timed out after 60s", "name": "TimeoutError" }
+  },
+  "preCompact": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374500000,
+    "cwd": "<CWD>",
+    "transcriptPath": "<TRANSCRIPT>",
+    "trigger": "auto",
+    "customInstructions": ""
+  },
+  "sessionEnd": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374600000,
+    "cwd": "<CWD>",
+    "reason": "user_exit"
+  }
+}

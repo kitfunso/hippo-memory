@@ -13,7 +13,9 @@ import type { MemoryEntry } from './memory.js';
 import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from './project-identity.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-trace.js';
-import { blockHash, estimateTokens, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
+import {
+  blockHash, estimateTokens, hookPayloadString, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface,
+} from './token-ledger.js';
 
 /** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
@@ -41,6 +43,22 @@ export interface ContextView {
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule;
    *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have shown. */
   readonly printedHash?: string | null;
+  /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
+  readonly envelope?: HookEnvelope;
+}
+
+/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code Local reads. */
+export type HookEnvelope = 'user-prompt-submit' | 'copilot-session-start' | 'vscode-session-start';
+
+/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which only the Copilot harness sends. */
+export function sessionStartEnvelope(stdinText: string | undefined): HookEnvelope {
+  return hookPayloadString(stdinText, 'sessionId') !== null ? 'copilot-session-start' : 'vscode-session-start';
+}
+
+function hookReply(envelope: HookEnvelope, additionalContext: string): string {
+  if (envelope === 'copilot-session-start') return JSON.stringify({ additionalContext });
+  const hookEventName = envelope === 'vscode-session-start' ? 'SessionStart' : 'UserPromptSubmit';
+  return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } });
 }
 
 /** A hook render's stdout and the hash of the static block it carries, null when it carries none. */
@@ -107,12 +125,7 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
     return NOTHING_RENDERED;
   }
 
-  const stdout = JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext,
-    },
-  });
+  const stdout = hookReply(view.envelope ?? 'user-prompt-submit', additionalContext);
   rec?.delivered({
     state: staticReused ? 'reused-recall-sent' : 'sent',
     staticHash: staticBlock.trim() ? blockHash(staticBlock) : null,
@@ -131,6 +144,8 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
   const { hippoRoot, payloadSessionId, rec } = view;
   const ledgerOpts = { sharedStore: view.sharedStore };
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
+  // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
+  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
   const injectCfg = loadConfig(hippoRoot).pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
