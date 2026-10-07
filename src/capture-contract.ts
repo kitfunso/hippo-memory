@@ -2,7 +2,7 @@
 // Field meanings, statuses and how to add a runtime: docs/integrations/agent-inventory.md.
 
 /** A host lifecycle moment hippo can capture from. */
-export type CaptureEvent = 'prompt' | 'tool-failure' | 'pre-compact' | 'post-compact' | 'session-start' | 'session-end' | 'reset';
+export type CaptureEvent = 'prompt' | 'tool-failure' | 'pre-compact' | 'post-compact' | 'session-start' | 'session-end' | 'turn-end' | 'reset';
 
 /** What hippo read from one host payload, before anything is written. */
 export interface CaptureInput {
@@ -93,6 +93,42 @@ export function readClaudeCodePreCompact(
       cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
       transcriptPath,
       trigger: 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null,
+    },
+  };
+}
+
+/** Reads VS Code's per-reply Stop payload. Pass the raw stdin: stdin.ts would give a Copilot CLI agentStop the same snake_case keys. */
+export function readVscodeStop(stdinText: string | undefined, timedOut: boolean): CaptureReceipt {
+  if (!stdinText || stdinText.trim() === '') {
+    return timedOut
+      ? { status: 'unavailable', reason: 'no Stop payload arrived before the stdin wait window closed' }
+      : { status: 'skipped', reason: 'no payload: turn capture runs only from a VS Code Stop hook' };
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(stdinText.trim());
+  } catch {
+    // Non-JSON stdin leaves payload undefined, which the shape check rejects.
+  }
+  if (!isObjectLike(payload) || !('hook_event_name' in payload) || payload.hook_event_name !== 'Stop') {
+    return { status: 'skipped', reason: 'not a VS Code Stop payload (no snake_case hook_event_name "Stop")' };
+  }
+  if (!('transcript_path' in payload) || !isStringValue(payload.transcript_path) || !/\.jsonl$/i.test(payload.transcript_path)) {
+    return { status: 'skipped', reason: 'Stop payload names no .jsonl transcript_path' };
+  }
+  if (!('session_id' in payload) || !isStringValue(payload.session_id) || payload.session_id === '') {
+    return { status: 'skipped', reason: 'Stop payload has no session_id' };
+  }
+  return {
+    status: 'received',
+    input: {
+      runtime: 'vscode',
+      event: 'turn-end',
+      manual: false,
+      sessionId: payload.session_id,
+      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
+      transcriptPath: payload.transcript_path,
+      trigger: null,
     },
   };
 }

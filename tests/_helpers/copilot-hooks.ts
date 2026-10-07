@@ -15,7 +15,10 @@ export type CopilotPayloadName =
   | 'syntheticClaudeStyleTerminalFailure'
   | 'errorOccurred'
   | 'preCompact'
-  | 'sessionEnd';
+  | 'sessionEnd'
+  | 'agentStop'
+  | 'Stop'
+  | 'PreCompact';
 
 export interface CopilotScratch extends Scratch {
   copilotHome: string;
@@ -24,7 +27,9 @@ export interface CopilotScratch extends Scratch {
 export function copilotScratch(): CopilotScratch {
   const s = scratch();
   const copilotHome = path.join(s.dir, '.copilot');
-  return { ...s, copilotHome, env: { ...s.env, COPILOT_HOME: copilotHome } };
+  // VS Code's folders too, so no hook run can read a real VS Code User folder.
+  const vscodeFolders = { APPDATA: path.join(s.dir, 'appdata'), XDG_CONFIG_HOME: path.join(s.dir, 'xdg-config') };
+  return { ...s, copilotHome, env: { ...s.env, COPILOT_HOME: copilotHome, ...vscodeFolders } };
 }
 
 /** One payload from hook-payloads.json as hook stdin text, with `<CWD>` and `<TRANSCRIPT>` set to real paths. */

@@ -65,5 +65,28 @@
     "timestamp": 1791374600000,
     "cwd": "<CWD>",
     "reason": "user_exit"
+  },
+  "agentStop": {
+    "sessionId": "copilot-sess-1",
+    "timestamp": 1791374550000,
+    "cwd": "<CWD>",
+    "hookEventName": "Stop",
+    "transcriptPath": "<TRANSCRIPT>"
+  },
+  "Stop": {
+    "hook_event_name": "Stop",
+    "session_id": "vscode-sess-1",
+    "timestamp": "2026-10-07T12:05:00.000Z",
+    "cwd": "<CWD>",
+    "transcript_path": "<TRANSCRIPT>",
+    "stop_hook_active": false
+  },
+  "PreCompact": {
+    "hook_event_name": "PreCompact",
+    "session_id": "vscode-sess-1",
+    "timestamp": "2026-10-07T12:04:00.000Z",
+    "cwd": "<CWD>",
+    "transcript_path": "<TRANSCRIPT>",
+    "trigger": "auto"
   }
 }

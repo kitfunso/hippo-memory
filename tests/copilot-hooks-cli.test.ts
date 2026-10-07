@@ -25,11 +25,15 @@ function pin(text: string, global: boolean): void {
   expect(r.status, r.stderr).toBe(0);
 }
 
-function enableLedger(hippoRoot: string): void {
+function patchConfig(hippoRoot: string, patch: { [key: string]: JsonValue }): void {
   const file = path.join(hippoRoot, 'config.json');
   // SAFETY: config.json is a JSON object hippo init wrote, or absent.
   const config = (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}) as { [key: string]: JsonValue };
-  fs.writeFileSync(file, JSON.stringify({ ...config, deliveryLedger: { enabled: true } }));
+  fs.writeFileSync(file, JSON.stringify({ ...config, ...patch }));
+}
+
+function enableLedger(hippoRoot: string): void {
+  patchConfig(hippoRoot, { deliveryLedger: { enabled: true } });
 }
 
 function deliveryEvents(sessionId: string): DeliveryEventRow[] {
@@ -204,6 +208,19 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     });
   });
 
+  it('skips a second run for the same compaction, as the Copilot CLI may fire both preCompact and PreCompact', () => {
+    const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
+    const logFile = path.join(s.dir, 'pre-compact.log');
+    for (let run = 0; run < 2; run++) {
+      const r = runHippo(['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.dir, s.env, copilotPayload('preCompact', s.proj, transcript));
+      expect(r.status, r.stderr).toBe(0);
+    }
+    const log = fs.readFileSync(logFile, 'utf8');
+    expect(log.match(/snapshot saved/g)).toHaveLength(1);
+    expect(log).toContain(`skip: snapshot for session ${SESSION} saved under 10 s ago`);
+    expect(rows<{ n: number }>(`SELECT COUNT(*) AS n FROM task_snapshots`)).toEqual([{ n: 1 }]);
+  });
+
   it('with no payload it never falls back to scanning Claude Code transcripts', () => {
     const claudeLog = path.join(s.dir, '.claude', 'projects', 'other', 'claude-sess.jsonl');
     fs.mkdirSync(path.dirname(claudeLog), { recursive: true });
@@ -221,6 +238,127 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).not.toBe('');
     expect(compactionRows(s.hippoRoot)).toHaveLength(1);
+  });
+});
+
+const VSCODE_SESSION = 'vscode-sess-1';
+const TURN_DONE = 'skip snapshot close: turn mode';
+const SECOND_TURN = [
+  { type: 'user.message', data: { content: 'now run the auth suite in CI on every pull request', attachments: [] }, id: 'e13', timestamp: '2026-10-07T12:01:00.000Z', parentId: 'e12' },
+  { type: 'assistant.turn_start', data: { turnId: '1.0' }, id: 'e14', timestamp: '2026-10-07T12:01:01.000Z', parentId: 'e13' },
+  { type: 'assistant.message', data: { messageId: 'm5', content: 'We decided to run the auth suite on every pull request in CI.', toolRequests: [] }, id: 'e15', timestamp: '2026-10-07T12:01:02.000Z', parentId: 'e14' },
+  { type: 'assistant.turn_end', data: { turnId: '1.0' }, id: 'e16', timestamp: '2026-10-07T12:01:03.000Z', parentId: 'e15' },
+].map((line) => `${JSON.stringify(line)}\n`).join('');
+
+/** Writes the chat log where VS Code keeps it, `<User>/workspaceStorage/<id>/github.copilot-chat/transcripts/<session id>.jsonl`. */
+function writeVscodeTranscript(text: string): string {
+  const file = path.join(s.dir, 'vscode-data', 'Code', 'User', 'workspaceStorage', 'h1', 'github.copilot-chat', 'transcripts', `${VSCODE_SESSION}.jsonl`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+  return file;
+}
+
+describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', () => {
+  const logFile = (): string => path.join(s.dir, 'turn.log');
+  const memoriesWith = (text: string): number => loadAllEntries(s.hippoRoot).filter((e) => e.content.includes(text)).length;
+
+  /** One reply's Stop hook; the log starts afresh each turn, so the old one goes first. */
+  async function stop(transcript: string): Promise<string> {
+    fs.rmSync(logFile(), { force: true });
+    const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, s.env, copilotPayload('Stop', s.proj, transcript));
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    return waitForLog(logFile(), TURN_DONE);
+  }
+
+  it('captures each reply once, keeps one handoff for the chat, and leaves the snapshot open', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    saveActiveTaskSnapshot(s.hippoRoot, 'default', { task: 't', summary: 's', next_step: 'n', session_id: VSCODE_SESSION, source: 'pre-compact' });
+    let log = await stop(transcript);
+    expect(log).toContain('capturing session...');
+    expect(memoriesWith('retry budget at three attempts')).toBe(1);
+
+    log = await stop(transcript);
+    expect(log).toContain('skip capture: no new turns since the last reply');
+
+    fs.appendFileSync(transcript, SECOND_TURN);
+    log = await stop(transcript);
+    expect(log).toContain('capturing session...');
+    expect(memoriesWith('every pull request in CI')).toBe(1);
+    expect(memoriesWith('retry budget at three attempts')).toBe(1);
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({ session_id: VSCODE_SESSION, status: 'active' });
+  });
+
+  it('rewrites the transcript handoff in place after each reply', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    await stop(transcript);
+    fs.appendFileSync(transcript, SECOND_TURN);
+    const log = await stop(transcript);
+    expect(log).toContain(`wrote handoff for session ${VSCODE_SESSION}`);
+    const sql = `SELECT task_id FROM session_handoffs WHERE session_id = '${VSCODE_SESSION}'`;
+    expect(rows<{ task_id: string | null }>(sql)).toEqual([{ task_id: 'now run the auth suite in CI on every pull request' }]);
+  });
+
+  it.each([
+    ['below the threshold it skips sleep', { enabled: true, threshold: 50 }, /turn close, session vscode-sess-1: skip sleep, \d+ new memories, threshold 50\n/],
+    ['with auto-sleep off it skips sleep', { enabled: false, threshold: 1 }, /turn close, session vscode-sess-1: skip sleep, auto-sleep is off\n/],
+    ['at the threshold it sleeps', { enabled: true, threshold: 1 }, /consolidating memory\.\.\.[\s\S]*turn close, session vscode-sess-1: ran sleep at \d+ new memories \(threshold 1\)\n/],
+  ])('%s', async (_name, autoSleep, line) => {
+    pin(PROJ_PIN, false);
+    patchConfig(s.hippoRoot, { autoSleep });
+    const log = await stop(writeVscodeTranscript(copilotEventsJsonl()));
+    expect(log).toMatch(line);
+    if (!autoSleep.enabled || autoSleep.threshold > 1) expect(log).not.toContain('consolidating memory...');
+  });
+
+  it('does nothing for the Copilot CLI agentStop on the same hook line, or for no payload', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    for (const payload of [copilotPayload('agentStop', s.proj, transcript), '']) {
+      const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, s.env, payload);
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toBe('');
+    }
+    // The parent returns before the spawn, so a worker would have to start within this wait to write anything.
+    await sleepMs(2_000);
+    expect(fs.existsSync(logFile())).toBe(false);
+    expect(fs.existsSync(path.join(s.dir, '.hippo', 'sessions'))).toBe(false);
+  });
+});
+
+describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => {
+  // With chat.useClaudeHooks on, VS Code runs ~/.claude/settings.json hooks too, so Claude Code's PreCompact line fires in Copilot chats.
+  it('with hippo.json installed leaves the chat to the Copilot hook: no record, no summariser text, no snapshot', () => {
+    fs.mkdirSync(path.join(s.copilotHome, 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(s.copilotHome, 'hooks', 'hippo.json'), '{}');
+    const logFile = path.join(s.dir, 'pre-compact.log');
+    const r = runHippo(['pre-compact', '--log-file', logFile], s.proj, s.env, copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())));
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    expect(compactionRows(s.hippoRoot)).toEqual([]);
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('skip: VS Code payload, hippo.json runs pre-compact for this chat');
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toBeNull();
+  });
+
+  it('still saves the snapshot when hippo.json sits under a COPILOT_HOME elsewhere, as VS Code reads only ~/.copilot/hooks', () => {
+    const elsewhere = path.join(s.dir, 'copilot-elsewhere');
+    fs.mkdirSync(path.join(elsewhere, 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(elsewhere, 'hooks', 'hippo.json'), '{}');
+    const logFile = path.join(s.dir, 'pre-compact.log');
+    const env = { ...s.env, COPILOT_HOME: elsewhere };
+    const r = runHippo(['pre-compact', '--log-file', logFile], s.proj, env, copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())));
+    expect(r.status, r.stderr).toBe(0);
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({ session_id: VSCODE_SESSION, source: 'pre-compact' });
+  });
+
+  it('without hippo.json saves the snapshot alone and prints nothing, as no PostCompact will close a record', () => {
+    const logFile = path.join(s.dir, 'pre-compact.log');
+    const r = runHippo(['pre-compact', '--log-file', logFile], s.proj, s.env, copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())));
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    expect(compactionRows(s.hippoRoot)).toEqual([]);
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
+      task: 'fix the flaky login test in auth.spec.ts', session_id: VSCODE_SESSION, source: 'pre-compact',
+    });
   });
 });
 

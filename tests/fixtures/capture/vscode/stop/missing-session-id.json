@@ -1,0 +1,8 @@
+{
+  "stdin": "{\"hook_event_name\":\"Stop\",\"cwd\":\"/work/repo\",\"transcript_path\":\"/home/u/.config/Code/User/workspaceStorage/9b1e/GitHub.copilot-chat/transcripts/vscode-sess-1.jsonl\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "Stop payload has no session_id"
+  }
+}

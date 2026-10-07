@@ -34,12 +34,16 @@ import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../handoff-evidence.js';
-import { resolveLastSessionTranscript } from '../capture/transcript.js';
-import { copilotTranscriptFor } from '../capture/copilot-transcript.js';
+import { resolveLastSessionTranscript, type SessionTurn } from '../capture/transcript.js';
+import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
+import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type WorkerMode } from '../capture/session-worker.js';
+import { isStringValue, readVscodeStop } from '../capture-contract.js';
+import { loadConfig } from '../config.js';
+import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
-import { readHookStdin } from '../stdin.js';
+import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { withLedgerDb } from '../ledger-db.js';
@@ -174,12 +178,16 @@ export async function cmdSessionEnd(
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
   const runtime = hookRuntime(flags);
+  const turn = flags['turn'] === true;
   // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes where the hook table used to point.
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : runtime === 'copilot' ? resolveJsonHookPaths('copilot').logFile : null;
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
-  const { text: stdinText } = await readHookStdin();
+  const raw = await readStdinBounded();
+  // Read before normalising: the Copilot CLI's agentStop shares this hook line, and camelCase keys would pass as VS Code's.
+  if (turn && !isVscodeStopPayload(raw)) return;
+  const stdinText = normaliseHookPayload(raw.text);
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   try {
@@ -201,6 +209,7 @@ export async function cmdSessionEnd(
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
   if (sessionId) workerArgs.push('--session-id', sessionId);
+  if (turn) workerArgs.push('--turn');
 
   try {
     const child = spawn(process.execPath, workerArgs, {
@@ -221,9 +230,24 @@ export async function cmdSessionEnd(
   }
 }
 
+/** A VS Code Stop payload with a session id that can name the lock file; anything else makes turn mode a silent no-op. */
+function isVscodeStopPayload(raw: BoundedStdin): boolean {
+  const receipt = readVscodeStop(raw.text, raw.timedOut);
+  return receipt.status === 'received' && receipt.input.sessionId !== null && SESSION_ID_RE.test(receipt.input.sessionId);
+}
+
 export async function cmdSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
+): Promise<void> {
+  const sessionId = flags['session-id'];
+  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flags['turn'] === true ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
+}
+
+async function sessionEndWork(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+  mode: WorkerMode,
 ): Promise<void> {
   const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
   const closeLogFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
@@ -240,11 +264,14 @@ export async function cmdSessionEndWorker(
     flushRereadLog();
     return;
   }
-  await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+  if (mode === 'turn' && closeSessionId) await sleepIfDue(hippoRoot, flags, closeLogFile, transcriptPath, closeSessionId);
+  else await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
   flushRereadLog();
   const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
   const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
-  captureEndedSession(hippoRoot, store, flags, transcriptPath, scan);
+  const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, store, flags, transcriptPath, turns);
+  if (mode === 'turn') captureNewTurns(transcriptPath, closeSessionId, scan, capture, digestLog);
+  else capture(scan?.turns);
   recordSessionDigest(hippoRoot, scan, {
     key: closeSessionId || path.basename(transcriptPath ?? '', '.jsonl'),
     tenantId: resolveTenantId({}),
@@ -254,7 +281,12 @@ export async function cmdSessionEndWorker(
   // Close only this session's snapshot, after sleep+capture: no snapshot producer runs in session-end, and since
   // session-end may never fire (crash, kill -9) the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
   // The handoff is written first, while the snapshot writeSessionEndHandoff reads is still active.
-  if (closeSessionId) writeEndHandoff(store, closeSessionId, transcriptPath, closeLogFile);
+  if (closeSessionId) writeEndHandoff(store, closeSessionId, transcriptPath, closeLogFile, mode === 'turn');
+  if (mode === 'turn') {
+    // The chat goes on after a reply, so its snapshot stays for the next compaction to restore.
+    appendSessionEndCloseLog(closeLogFile, 'skip snapshot close: turn mode');
+    return;
+  }
   try {
     if (closeSessionId) {
       const closed = closeTaskSnapshotsForSession(store, resolveTenantId({}), closeSessionId);
@@ -287,33 +319,81 @@ async function sleepProjectStore(
   }
 }
 
+/** A close after every reply sleeps only at the MCP server's auto-sleep threshold; each line starts the log afresh, as a sleep does. */
+async function sleepIfDue(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+  closeLogFile: string | null,
+  transcriptPath: string | undefined,
+  sessionId: string,
+): Promise<void> {
+  if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+  const prefix = `turn close, session ${sessionId}`;
+  try {
+    const { enabled, threshold } = loadConfig(hippoRoot).autoSleep;
+    const count = enabled ? countCreatedSinceLastSleep(hippoRoot, resolveTenantId({})) : 0;
+    if (!enabled || count < threshold) {
+      const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
+      appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });
+      return;
+    }
+    await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+    appendSessionEndCloseLog(closeLogFile, `${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
+  } catch (err) {
+    appendSessionEndCloseLog(closeLogFile, `${prefix}: sleep check failed: ${errorMessage(err)}`, { startFresh: true });
+  }
+}
+
+/** Captures only the turns after this session's cursor, then moves the cursor, so each reply is extracted once. */
+function captureNewTurns(
+  transcriptPath: string | undefined,
+  sessionId: string | null,
+  scan: ReturnType<typeof readSessionScan>,
+  capture: (turns: readonly SessionTurn[]) => boolean,
+  log: (message: string) => void,
+): void {
+  if (!transcriptPath || !sessionId || !scan) {
+    log('skip capture: no readable transcript for this session');
+    return;
+  }
+  const fresh = turnsAfter(scan.turns, loadTurnPosition(sessionId, transcriptPath));
+  if (fresh.length === 0) {
+    log('skip capture: no new turns since the last reply');
+    return;
+  }
+  if (capture(fresh)) saveTurnPosition(sessionId, transcriptPath, scan.turns, log);
+}
+
+/** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 function captureEndedSession(
   hippoRoot: string,
   store: string,
   flags: Record<string, string | boolean | string[]>,
   transcriptPath: string | undefined,
-  scan: ReturnType<typeof readSessionScan>,
-): void {
+  turns: readonly SessionTurn[] | undefined,
+): boolean {
   try {
     const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
     // With no stdin of its own, capture would read this as a manual run and scan every project.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
-    } else {
-      cmdCapture(store, {
-        source: 'last-session',
-        transcriptPath,
-        logFile,
-        dryRun: false,
-        global: false,
-        tenantId: resolveTenantId({}),
-        // In the global store, rows would otherwise read as user-global and show up in every project.
-        originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
-        sessionTurns: scan?.turns,
-      });
+      return false;
     }
+    cmdCapture(store, {
+      source: 'last-session',
+      transcriptPath,
+      logFile,
+      dryRun: false,
+      global: false,
+      tenantId: resolveTenantId({}),
+      // In the global store, rows would otherwise read as user-global and show up in every project.
+      originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
+      sessionTurns: turns,
+    });
+    return true;
   } catch {
     // Same treatment — the failure line is already in the log.
+    return false;
   }
 }
 
@@ -322,6 +402,7 @@ function writeEndHandoff(
   closeSessionId: string,
   transcriptPath: string | undefined,
   closeLogFile: string | null,
+  inPlace = false,
 ): void {
   try {
     const tenantId = resolveTenantId({});
@@ -334,7 +415,7 @@ function writeEndHandoff(
       appendSessionEndCloseLog(closeLogFile, 'skip: no snapshot or transcript for session');
     } else {
       const evidence = collectHandoffEvidence(process.cwd(), 'unknown');
-      const handoff = writeSessionEndHandoff(store, tenantId, closeSessionId, evidence, derived);
+      const handoff = writeSessionEndHandoff(store, tenantId, closeSessionId, evidence, derived, undefined, { inPlace });
       appendSessionEndCloseLog(
         closeLogFile,
         handoff ? `wrote handoff for session ${closeSessionId}` : `skip: kept the existing handoff for session ${closeSessionId}`,
