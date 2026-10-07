@@ -20,7 +20,7 @@ import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
   type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
-  type VectorCandidateSpec, type VectorReads,
+  type VectorCandidateSpec,
 } from '../src/server.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';
@@ -67,7 +67,7 @@ async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<
 /** The direct hippo.db call on one copy and the store method on another must return the same value and leave the same rows. */
 async function parity<D, P>(
   direct: (s: Store) => D | Promise<D>,
-  port: (store: HippoStore & VectorReads) => Promise<P>,
+  port: (store: ReturnType<typeof sqliteStore>) => Promise<P>,
   kind: Kind = 'local',
 ): Promise<{ direct: Outcome<D>; port: Outcome<P> }> {
   const a = await onCopy(kind, direct);
@@ -283,14 +283,14 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       } finally {
         closeHippoDb(db);
       }
-    }, (store) => store.embeddingIndexState(), kind);
+    }, (store) => store.vectors.embeddingIndexState(), kind);
     expect(direct.value).toEqual(state);
     expect([direct.opens, port.opens]).toEqual([1, 1]);
   });
 
   it('storedVectors returns what loadStoredVectors does, an 8-dim row and a vector without a row included', async () => {
     const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
-    const { direct, port } = await parity((s) => entriesOf(loadStoredVectors(s.root, ids)), async (store) => entriesOf(await store.storedVectors(ids)));
+    const { direct, port } = await parity((s) => entriesOf(loadStoredVectors(s.root, ids)), async (store) => entriesOf(await store.vectors.storedVectors(ids)));
     expect(direct.value.map(([id, v]) => [id, v.length])).toEqual([['mem_p_noise', 8], ['mem_p_plain', 16], ['mem_x_orphan', 16]]);
     expect(port.opens).toBe(direct.opens);
   });
@@ -305,7 +305,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
   ];
 
   it.each(NEAREST)('nearestEntries: %s', async (_name, spec, ids) => {
-    const { direct, port } = await parity((s) => loadVectorCandidateEntries(s.root, nearTo, spec), (store) => store.nearestEntries(nearTo, spec));
+    const { direct, port } = await parity((s) => loadVectorCandidateEntries(s.root, nearTo, spec), (store) => store.vectors.nearestEntries(nearTo, spec));
     expect([...idsOf(direct.value)].sort()).toEqual(ids);
     expect(port.opens).toBe(direct.opens);
   });
@@ -319,10 +319,10 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       } finally {
         closeHippoDb(db);
       }
-    }, async (store) => entriesOf(await store.physicsParticles(ids)));
+    }, async (store) => entriesOf(await store.vectors.physicsParticles(ids)));
     expect(direct.value.map(([id]) => id)).toEqual(['mem_p_noise', 'mem_p_plain']);
     expect(port.opens).toBe(direct.opens);
-    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).physicsParticles([])).size);
+    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).vectors.physicsParticles([])).size);
     expect([none.value, none.opens]).toEqual([0, 0]);
   });
 });

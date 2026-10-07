@@ -63,14 +63,14 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
   if (options.asOf) return hybridSearch(query, entries, options);
   const root = options.hippoRoot;
-  const anyStore = options.store ?? sqliteStore(root);
+  const store = options.store ?? sqliteStore(root);
 
-  const queryVector = await physicsQueryVector(query, root, anyStore, options.queryEmbedding);
+  const queryVector = await physicsQueryVector(query, root, store, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, options);
   // Checked here too, since a caller's own query vector skips the check inside physicsQueryVector.
-  const store = requireVectorReads(anyStore);
-  const pool = currentEntries(await withVectorCandidates(store, entries, queryVector, options.vectorCandidates), options);
-  const physicsMap = await loadCandidateParticles(store, pool);
+  const reads = requireVectorReads(store);
+  const pool = currentEntries(await withVectorCandidates(reads, entries, queryVector, options.vectorCandidates), options);
+  const physicsMap = await loadCandidateParticles(reads, pool);
   if (!physicsMap) return hybridSearch(query, pool, options);
 
   const pools = splitByParticle(pool, physicsMap, queryVector, now);
@@ -102,11 +102,11 @@ async function physicsQueryVector(query: string, root: string, store: HippoStore
 }
 
 async function withVectorCandidates(
-  store: VectorReads, entries: MemoryEntry[], queryVector: number[], spec: HybridVectorCandidates | undefined,
+  reads: VectorReads, entries: MemoryEntry[], queryVector: number[], spec: HybridVectorCandidates | undefined,
 ): Promise<MemoryEntry[]> {
   if (!spec) return entries;
   try {
-    return [...entries, ...await vectorCandidatesOutside(store, entries, queryVector, spec)];
+    return [...entries, ...await vectorCandidatesOutside(reads, entries, queryVector, spec)];
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.warn(`physics search ranked the lexical pool only; the vector lookup failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -115,9 +115,9 @@ async function withVectorCandidates(
 }
 
 /** Particles for the candidate rows only, so one tenant's search never reads every tenant's physics state. */
-async function loadCandidateParticles(store: VectorReads, pool: MemoryEntry[]): Promise<Map<string, PhysicsParticle> | null> {
+async function loadCandidateParticles(reads: VectorReads, pool: MemoryEntry[]): Promise<Map<string, PhysicsParticle> | null> {
   try {
-    return await store.physicsParticles(pool.map((e) => e.id));
+    return await reads.physicsParticles(pool.map((e) => e.id));
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.debug(`physics search: state load failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);

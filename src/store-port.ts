@@ -8,7 +8,6 @@ import {
   activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
   type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
 } from './goals.js';
-import { log } from './log.js';
 import type { MemoryEntry } from './memory.js';
 import type { PhysicsParticle } from './physics.js';
 import { loadPhysicsState } from './physics-state.js';
@@ -47,7 +46,7 @@ export interface RecallWrites {
   readonly strengthen?: { readonly ids: readonly string[]; readonly opts: StrengthenOptions };
 }
 
-/** The reads behind recall's vector arm, optional on HippoStore since an add-on built before them lacks them; reach them through `vectorReads`. */
+/** The reads behind recall's vector arm, one group a store sets in full as `HippoStore.vectors` or leaves unset. */
 export interface VectorReads {
   /** The stored model and whether any vector exists, in one snapshot. */
   embeddingIndexState(): Promise<EmbeddingIndexState>;
@@ -58,17 +57,8 @@ export interface VectorReads {
   physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
 }
 
-const VECTOR_READS = ['embeddingIndexState', 'storedVectors', 'nearestEntries', 'physicsParticles'] as const;
-
-/** Logs the vector reads a store lacks, once per store kind. */
-export function vectorReads(store: HippoStore): store is HippoStore & VectorReads {
-  const missing = VECTOR_READS.filter((name) => store[name] === undefined);
-  if (missing.length > 0) log.once(`store.vector-reads.${store.kind}`, 'warn', `the '${store.kind}' store lacks ${missing.join(', ')}, so recall's vector arm cannot run on it`);
-  return missing.length === 0;
-}
-
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore extends Partial<VectorReads> {
+export interface HippoStore {
   /** 'sqlite' is hippo.db under the served root. Under any other kind, an unported route answers 501 and a hippo.db open inside a request throws. */
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
@@ -97,6 +87,8 @@ export interface HippoStore extends Partial<VectorReads> {
   bumpRecallStats(recalled: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;
+  /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
+  readonly vectors?: VectorReads;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
   close(): Promise<void>;
 }
@@ -116,7 +108,7 @@ export function storeFor(ctx: { readonly hippoRoot: string; readonly store?: Hip
 }
 
 /** The built-in store: today's synchronous hippo.db functions behind the port, each call on its own short-lived handles, so close has nothing to release. */
-export function sqliteStore(hippoRoot: string): HippoStore & VectorReads {
+export function sqliteStore(hippoRoot: string): HippoStore & { readonly vectors: VectorReads } {
   return {
     kind: 'sqlite',
     async findApiKey(keyId) {
@@ -157,19 +149,21 @@ export function sqliteStore(hippoRoot: string): HippoStore & VectorReads {
     async recordTokens(use) {
       onHandle(hippoRoot, (db) => recordTokenUse(db, use));
     },
-    async embeddingIndexState() {
-      return embeddingIndexStateAt(hippoRoot);
-    },
-    async storedVectors(ids) {
-      return loadStoredVectors(hippoRoot, ids);
-    },
-    async nearestEntries(queryVector, spec) {
-      return loadVectorCandidateEntries(hippoRoot, queryVector, spec);
-    },
-    async physicsParticles(ids) {
-      // loadPhysicsState reads every row for an empty list.
-      return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadPhysicsState(db, [...ids]));
-    },
+    vectors: {
+      async embeddingIndexState() {
+        return embeddingIndexStateAt(hippoRoot);
+      },
+      async storedVectors(ids) {
+        return loadStoredVectors(hippoRoot, ids);
+      },
+      async nearestEntries(queryVector, spec) {
+        return loadVectorCandidateEntries(hippoRoot, queryVector, spec);
+      },
+      async physicsParticles(ids) {
+        // loadPhysicsState reads every row for an empty list.
+        return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadPhysicsState(db, [...ids]));
+      },
+    } satisfies VectorReads,
     async close(): Promise<void> {},
   };
 }

@@ -27,13 +27,15 @@ export function portOnlyStoreWithoutVectorReads(hippoRoot: string): HippoStore {
   };
 }
 
-export function portOnlyStore(hippoRoot: string): HippoStore & VectorReads {
-  const inner = sqliteStore(hippoRoot);
+export function portOnlyStore(hippoRoot: string): HippoStore & { readonly vectors: VectorReads } {
+  const { vectors } = sqliteStore(hippoRoot);
   return {
     ...portOnlyStoreWithoutVectorReads(hippoRoot),
-    embeddingIndexState: allowed(inner.embeddingIndexState),
-    storedVectors: allowed(inner.storedVectors),
-    nearestEntries: allowed(inner.nearestEntries),
-    physicsParticles: allowed(inner.physicsParticles),
+    vectors: {
+      embeddingIndexState: allowed(vectors.embeddingIndexState),
+      storedVectors: allowed(vectors.storedVectors),
+      nearestEntries: allowed(vectors.nearestEntries),
+      physicsParticles: allowed(vectors.physicsParticles),
+    },
   };
 }

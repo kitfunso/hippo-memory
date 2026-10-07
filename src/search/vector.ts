@@ -5,7 +5,7 @@ import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { rethrowIfSqliteBlocked } from '../db.js';
 import { SqliteBlockedError } from '../db/sqlite-blocked.js';
 import { log } from '../log.js';
-import { sqliteStore, vectorReads, type HippoStore, type VectorReads } from '../store-port.js';
+import { sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
@@ -42,17 +42,17 @@ function reindexHint(storeKind: string): string {
 }
 
 /** The store's vector reads; a store without them answers 501, as any unported path does. */
-export function requireVectorReads(store: HippoStore): HippoStore & VectorReads {
-  if (!vectorReads(store)) throw new SqliteBlockedError(store.kind);
-  return store;
+export function requireVectorReads(store: HippoStore): VectorReads {
+  if (!store.vectors) throw new SqliteBlockedError(store.kind);
+  return store.vectors;
 }
 
 /** The nearest admitted rows not already in `entries`. */
 export async function vectorCandidatesOutside(
-  store: VectorReads, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
+  reads: VectorReads, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
 ): Promise<MemoryEntry[]> {
   const inPool = new Set(entries.map((e) => e.id));
-  return (await store.nearestEntries(queryVector, spec)).filter((e) => !inPool.has(e.id) && (spec.admit?.(e) ?? true));
+  return (await reads.nearestEntries(queryVector, spec)).filter((e) => !inPool.has(e.id) && (spec.admit?.(e) ?? true));
 }
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */
@@ -71,14 +71,15 @@ export async function resolveVectorArm(query: string, entries: MemoryEntry[], op
 async function fillVectorArm(arm: VectorArm, query: string, root: string, options: VectorArmOptions): Promise<void> {
   const provider = resolveEmbeddingProvider(root);
   if (!provider.isAvailable()) return;
-  const store = requireVectorReads(options.store ?? sqliteStore(root));
-  const index = await store.embeddingIndexState();
+  const store = options.store ?? sqliteStore(root);
+  const reads = requireVectorReads(store);
+  const index = await reads.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {
     warnBm25Fallback('reindex', reindexHint(store.kind));
     return;
   }
   const spec = options.vectorCandidates;
-  const vectors = await store.storedVectors(arm.entries.map((e) => e.id));
+  const vectors = await reads.storedVectors(arm.entries.map((e) => e.id));
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const [vec] = await provider.embed([query], 'query');
@@ -87,11 +88,11 @@ async function fillVectorArm(arm: VectorArm, query: string, root: string, option
     warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
     return;
   }
-  const added = spec ? await vectorCandidatesOutside(store, arm.entries, arm.queryVector, spec) : [];
+  const added = spec ? await vectorCandidatesOutside(reads, arm.entries, arm.queryVector, spec) : [];
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await store.storedVectors(added.map((e) => e.id))) vectors.set(id, v);
+    for (const [id, v] of await reads.storedVectors(added.map((e) => e.id))) vectors.set(id, v);
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;

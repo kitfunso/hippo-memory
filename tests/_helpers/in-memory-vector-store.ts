@@ -43,7 +43,7 @@ function passesSpec(row: FilterRow, spec: VectorCandidateSpec): boolean {
 }
 
 export interface InMemoryVectorStore {
-  readonly store: HippoStore & VectorReads;
+  readonly store: HippoStore & { readonly vectors: VectorReads };
   /** Each vector read's name, in call order. */
   readonly calls: string[];
 }
@@ -80,36 +80,38 @@ export function inMemoryVectorStore(hippoRoot: string): InMemoryVectorStore {
   }]));
   const port = portOnlyStore(hippoRoot);
   const calls: string[] = [];
-  const store: HippoStore & VectorReads = {
+  const store: InMemoryVectorStore['store'] = {
     ...port,
     kind: 'in-memory',
-    async embeddingIndexState() {
-      calls.push('embeddingIndexState');
-      return { storedModel, hasVectors: vectors.length > 0 };
-    },
-    async storedVectors(ids) {
-      calls.push('storedVectors');
-      return new Map(ids.flatMap((id): [string, number[]][] => {
-        const v = vectorById.get(id);
-        return v ? [[id, Array.from(v)]] : [];
-      }));
-    },
-    async nearestEntries(queryVector, spec) {
-      calls.push('nearestEntries');
-      const admitted = vectors.filter((r) => {
-        const row = filters.get(r.id);
-        return row !== undefined && passesSpec(row, spec);
-      });
-      const matches = rankVectorRows(queryVector, admitted, spec.limit ?? 50);
-      const rows = new Map((await port.entriesByIds(matches.map((m) => m.id), spec.tenantId)).map((e) => [e.id, e]));
-      return matches.flatMap((m) => rows.get(m.id) ?? []);
-    },
-    async physicsParticles(ids) {
-      calls.push('physicsParticles');
-      return new Map(ids.flatMap((id): [string, PhysicsParticle][] => {
-        const p = particles.get(id);
-        return p ? [[id, p]] : [];
-      }));
+    vectors: {
+      async embeddingIndexState() {
+        calls.push('embeddingIndexState');
+        return { storedModel, hasVectors: vectors.length > 0 };
+      },
+      async storedVectors(ids) {
+        calls.push('storedVectors');
+        return new Map(ids.flatMap((id): [string, number[]][] => {
+          const v = vectorById.get(id);
+          return v ? [[id, Array.from(v)]] : [];
+        }));
+      },
+      async nearestEntries(queryVector, spec) {
+        calls.push('nearestEntries');
+        const admitted = vectors.filter((r) => {
+          const row = filters.get(r.id);
+          return row !== undefined && passesSpec(row, spec);
+        });
+        const matches = rankVectorRows(queryVector, admitted, spec.limit ?? 50);
+        const rows = new Map((await port.entriesByIds(matches.map((m) => m.id), spec.tenantId)).map((e) => [e.id, e]));
+        return matches.flatMap((m) => rows.get(m.id) ?? []);
+      },
+      async physicsParticles(ids) {
+        calls.push('physicsParticles');
+        return new Map(ids.flatMap((id): [string, PhysicsParticle][] => {
+          const p = particles.get(id);
+          return p ? [[id, p]] : [];
+        }));
+      },
     },
   };
   return { store, calls };

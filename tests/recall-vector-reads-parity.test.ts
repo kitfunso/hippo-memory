@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
 import { markSharedStore } from '../src/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
@@ -232,17 +232,17 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
 });
 
 describe('the in-memory vector reads answer as sqliteStore does', () => {
-  let sqlite: HippoStore & VectorReads;
-  let memory: HippoStore & VectorReads;
+  let sqlite: VectorReads;
+  let memory: VectorReads;
 
   beforeAll(() => {
     const root = join(templates.dir, 'local');
-    sqlite = sqliteStore(root);
-    memory = inMemoryVectorStore(root).store;
+    sqlite = sqliteStore(root).vectors;
+    memory = inMemoryVectorStore(root).store.vectors;
   });
 
-  const ids = async (store: VectorReads, q: readonly number[], spec: VectorCandidateSpec): Promise<string[]> =>
-    (await store.nearestEntries(q, spec)).map((e) => e.id);
+  const ids = async (reads: VectorReads, q: readonly number[], spec: VectorCandidateSpec): Promise<string[]> =>
+    (await reads.nearestEntries(q, spec)).map((e) => e.id);
 
   it.each([
     ['tenant, default-deny scope, current rows', NEAR, { tenantId: 'default', scope: { mode: 'default-deny' }, includeSuperseded: false }],

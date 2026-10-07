@@ -11,7 +11,6 @@ import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
-import { resetLogOnce } from '../src/log.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -308,7 +307,6 @@ describe('a store without the vector reads, under an embedding provider', () => 
   let handle: ServerHandle;
   let embeddings: HashedEmbeddings;
   let store: HippoStore;
-  const stderr: string[] = [];
 
   beforeAll(async () => {
     embeddings = await startHashedEmbeddings();
@@ -325,16 +323,9 @@ describe('a store without the vector reads, under an embedding provider', () => 
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global-store'));
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-    resetLogOnce();
-    stderr.length = 0;
-    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
-      stderr.push(String(chunk));
-      return true;
-    });
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
 
@@ -344,12 +335,12 @@ describe('a store without the vector reads, under an embedding provider', () => 
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('GET /v1/memories in hybrid and physics mode answers 501 store_not_ported, names what is missing and embeds nothing', async () => {
+  it('GET /v1/memories in hybrid and physics mode answers 501 store_not_ported and embeds nothing', async () => {
+    expect(store.vectors).toBeUndefined();
     for (const mode of ['hybrid', 'physics']) {
       const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=${mode}`);
       expect({ mode, status: res.status, body: await res.json() }).toEqual({ mode, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
     }
-    expect(stderr.join('')).toContain("the 'port-only' store lacks embeddingIndexState, storedVectors, nearestEntries, physicsParticles");
     expect(embeddings.requests()).toBe(0);
   });
 
@@ -365,7 +356,6 @@ describe('a store without the vector reads, under an embedding provider', () => 
     vi.stubEnv('OPENAI_API_KEY', '');
     const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=hybrid`);
     expect(res.status).toBe(200);
-    expect(stderr.join('')).not.toContain('lacks');
   });
 
   it('physicsSearch refuses the store even when the caller brings the query vector', async () => {
