@@ -59,6 +59,7 @@ export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureRes
 export {
   hasGroup, sqliteStore,
   type HippoStore, type KeyAudit, type KeyRevoke, type RecallSearchArgs, type RecallWrites, type StoreGroup, type StoreGroups, type VectorReads,
+  type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
 } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
@@ -76,9 +77,11 @@ export type { TokenUse } from './token-ledger.js';
 export type { EmbeddingIndexState } from './embeddings.js';
 export type { PhysicsParticle } from './physics.js';
 export { StoreBusyError } from './db.js';
-// An add-on store decodes and ranks with hippo.db's own code, so both return the same ids in the same order.
-export { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
-export { bufferToFloat32 } from './physics-state.js';
+// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
+// so both stores keep the same bytes and return the same ids in the same order.
+export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
+export { bufferToFloat32, float32ToBuffer } from './physics-state.js';
+export { replacesIndex } from './embeddings.js';
 // store copy --db writes the marker and reads the old hippo.db under the waiver.
 export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
