@@ -1,7 +1,7 @@
 // The async seam the server reaches its store through, so an add-on can serve from a database other than hippo.db.
 import type { AmbientTallies } from './ambient.js';
 import { loadAmbientTallies, type AmbientStoreFilter } from './ambient-store.js';
-import { readApiKeyRecord, type ApiKeyRecord } from './auth.js';
+import { listApiKeyRows, readApiKeyRecord, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey } from './auth.js';
 import { appendAuditEvent, listAuditEventsAfter, type AppendAuditOpts, type AuditEvent, type ListAuditAfterOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
@@ -12,6 +12,7 @@ import {
   type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
 } from './goals.js';
 import type { SessionHandoff } from './handoff.js';
+import type { JsonValue } from './json.js';
 import type { MemoryEntry } from './memory.js';
 import type { PhysicsParticle } from './physics.js';
 import { loadPhysicsState } from './physics-state.js';
@@ -23,6 +24,7 @@ import {
 } from './store/candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
 import { auditHighIdAt, revokeKeyAt } from './store/key-audit.js';
+import { createKeyAt, createSelfKeyAt } from './store/key-writes.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
@@ -152,11 +154,42 @@ export interface ContextReads {
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
 }
 
+/** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither holds the plaintext. */
+export interface KeyMint {
+  readonly key: NewApiKey;
+  readonly actor: string;
+  readonly metadata: Readonly<Record<string, JsonValue>>;
+}
+
+export interface SelfKeyMint extends KeyMint {
+  readonly key: NewApiKey & { readonly ownerSubject: string; readonly expiresAt: string };
+  /** Live keys the owner may hold in the tenant once this one is in. */
+  readonly perSubject: number;
+}
+
+/** `listApiKeyRows`'s filters, always inside one tenant. */
+export interface KeyListQuery extends Omit<ListApiKeysOpts, 'tenantId'> {
+  readonly tenantId: string;
+}
+
+export interface KeyWrites {
+  /** Inserts the key and appends its auth_create row in one transaction; with either one failing, neither is written. A key id taken in any tenant
+   *  rejects, since keys are looked up by id alone. */
+  createApiKey(mint: KeyMint): Promise<void>;
+  /** One transaction, serialized per (tenant, owner) before the count (hippo.db BEGIN IMMEDIATE, Postgres pg_advisory_xact_lock on the pair): revoke at `key.createdAt`
+   *  the owner's oldest live keys in the key's tenant down to `perSubject - 1`, insert the key, append an auth_revoke row `{ replacedBy: <new key id> }` per revoked key,
+   *  then the auth_create row; resolves to the revoked ids. Live: unrevoked, expires_at null or Date.parse(expires_at) after createdAt (NaN counts as expired). */
+  createSelfApiKey(mint: SelfKeyMint): Promise<string[]>;
+  /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops revoked rows and an expires_at not above now's toISOString. */
+  listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
   readonly vectors: VectorReads;
   readonly keyAudit: KeyAudit;
+  readonly keyWrites: KeyWrites;
   /** embedMemory and embedAll with a store need it and `vectors`. */
   readonly vectorWrites: VectorWrites;
   readonly contextReads: ContextReads;
@@ -282,6 +315,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       },
     } satisfies VectorReads,
     keyAudit: sqliteKeyAudit(hippoRoot),
+    keyWrites: sqliteKeyWrites(hippoRoot),
     vectorWrites: {
       async entriesWithoutVector(query) {
         return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
@@ -308,6 +342,20 @@ function sqliteContextReads(hippoRoot: string): ContextReads {
     },
     async ambientTallies(tenantId, filter) {
       return loadAmbientTallies(hippoRoot, tenantId, filter);
+    },
+  };
+}
+
+function sqliteKeyWrites(hippoRoot: string): KeyWrites {
+  return {
+    async createApiKey(mint) {
+      onHandle(hippoRoot, (db) => createKeyAt(db, mint));
+    },
+    async createSelfApiKey(mint) {
+      return onHandle(hippoRoot, (db) => createSelfKeyAt(db, mint));
+    },
+    async listApiKeys(query) {
+      return onHandle(hippoRoot, (db) => listApiKeyRows(db, query));
     },
   };
 }
