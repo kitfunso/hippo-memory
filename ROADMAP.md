@@ -285,9 +285,9 @@ API keys + audit log of every read/write/promote/supersede. Tenant scoping added
 **v2 sub-2 next (next minor):** L9 background pipelines tenant-scoping across 8 files (`consolidate.ts`, `embeddings.ts`, `invalidation.ts`, `refine-llm.ts`, `autolearn.ts`, `capture.ts`, `importers.ts`, `shared.ts`). Closes the unscoped `readEntry` / `loadSearchEntries` residue from v1.11.0; unblocked by sub-1's Actor shape.
 **v2 deferred to TODOS.md:** `hippo auth create-key --role` CLI flag (programmatic API works); `hippo auth list` role column display; `auth create`/`list` are unauthenticated locally (FS access is the trust boundary); audit-log retention/rotation; SSO/SCIM; OAuth scoped tokens; full multi-tenant org > team > project > scope hierarchy.
 
-### A6. Postgres backend [planned]
-For shared deployments only. SQLite stays the local default.
-**Effort:** 3-4w. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
+### A6. Postgres backend [in progress: recall port shipped in 1.65.0]
+For shared deployments only. SQLite stays the local default. The Postgres store lives in hippo-enterprise and plugs into core's store port; recall reads and writes go through that port since 1.65.0 (#515).
+**Effort:** the parity program is 54 PRs, about 37,250 lines with tests; the pilot cut is 26 PRs, about 15,350 lines. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
 
 ### A7. Observability [partial: audit + rate-limit shipped; dashboard pending]
 Per-query cost, retrieval traces, decay/strengthening rates, conflict counts, sleep-cycle metrics.
