@@ -2,8 +2,16 @@
 
 /** Thrown by a hippo.db open inside a request served from another store: the code path is not ported to the store port yet. */
 export class SqliteBlockedError extends Error {
-  constructor(readonly storeKind: string) {
-    super(`hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ported to the store yet`);
+  constructor(readonly storeKind: string, message = `hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ported to the store yet`) {
+    super(message);
     this.name = 'SqliteBlockedError';
+  }
+}
+
+/** Thrown by a hippo.db open in a folder whose marker file names the store that holds its memories, from the CLI as from a request. */
+export class OtherStoreFolderError extends SqliteBlockedError {
+  constructor(storeKind: string, readonly markerPath: string) {
+    super(storeKind, `This folder's memories live in the '${storeKind}' store, so hippo.db is not used here (marker: ${markerPath})`);
+    this.name = 'OtherStoreFolderError';
   }
 }
