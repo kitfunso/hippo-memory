@@ -2,7 +2,7 @@
   "id": "hippo-memory",
   "name": "Hippo Memory",
   "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
-  "version": "1.68.0",
+  "version": "1.69.0",
 
   "configSchema": {
     "type": "object",

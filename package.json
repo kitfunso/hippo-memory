@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.68.0",
+  "version": "1.69.0",
   "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
