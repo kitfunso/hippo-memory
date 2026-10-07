@@ -58,10 +58,13 @@ export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureRes
 // An add-on serves from another database by passing serve() its own HippoStore.
 export {
   hasGroup, sqliteStore,
-  type HippoStore, type KeyAudit, type KeyRevoke, type RecallSearchArgs, type RecallWrites, type StoreGroup, type StoreGroups, type VectorReads,
+  type HippoStore, type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type RecallSearchArgs, type RecallWrites,
+  type SelfKeyMint, type StoreGroup, type StoreGroups, type VectorReads,
   type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
 } from './store-port.js';
-export type { ApiKeyRecord } from './auth.js';
+export type { HippoDbContext, StoreReply } from './api/types.js';
+export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+export type { KeysetPosition } from './keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
 export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './audit.js';
 export type { ContinuityBlock } from './api/recall-types.js';
@@ -149,8 +152,8 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
   { method: 'GET', path: '/v1/context', handler: handleGetContext },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
-  { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
-  { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
+  { method: 'POST', path: '/v1/auth/keys', storeReady: 'keyWrites', handler: handleCreateAuthKey },
+  { method: 'GET', path: '/v1/auth/keys', storeReady: 'keyWrites', handler: handleListAuthKeys },
   { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', storeReady: 'keyAudit', handler: handleRevokeAuthKey },
   { method: 'GET', path: '/v1/quarantine', handler: handleListQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/approve', handler: handleApproveQuarantine },

@@ -16,7 +16,7 @@
  * an ESM `import` can resolve cleanly, and a hardcoded constant survives
  * any packager that drops .json files.
  */
-export const PACKAGE_VERSION = '1.67.0';
+export const PACKAGE_VERSION = '1.68.0';
 
 /** The floor a store takes on its first expiring key: the first release with schema v53, set by hand in that release; scripts/check-expiring-keys-floor.mjs gates it. */
 export const EXPIRING_KEYS_MIN_BINARY = '1.64.0';
