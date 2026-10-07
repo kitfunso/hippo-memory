@@ -265,7 +265,7 @@ function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>): Read
 async function dispatchAddonRoute({ req, res, opts }: RouteRequest, method: string, path: string): Promise<boolean> {
   const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
   if (!route) return false;
-  await refuseUnportedRoute(req, opts);
+  await refuseUnportedRoute(req, opts, route.storeReady);
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   sendJson(res, 200, await route.handler({ ctx, body }));
@@ -580,7 +580,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler }) => Object.freeze({ path, handler })));
+  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
   assertAddonRoutes(routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const { perAddress: limiter, callerLimiter, failedAuthLimiter } = bootLimiters(opts.rateLimits);
