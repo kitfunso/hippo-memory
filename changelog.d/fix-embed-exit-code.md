@@ -1,3 +1,0 @@
-### Fixed
-
-- **`hippo embed` now exits 1 and prints the reason when the local model cannot load, instead of "Done. 0 new embeddings created" with exit 0.** The local provider turned a model that would not load (a cold cache, a failed download, an offline cache without the model) into an empty vector per memory, so the command reported success while embedding nothing; the reason only showed at debug level. A model that cannot load now fails the whole call, as an API outage already did, and search still falls back to BM25. `hippo embed` also exits 1 when any memory is left unembedded after a run, or when no local embedding package is installed.
